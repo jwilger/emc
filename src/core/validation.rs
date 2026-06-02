@@ -1763,6 +1763,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_view_command_board_connections(document)?;
 
+    validate_read_model_view_board_connections(document)?;
+
     validate_command_sourced_event_attributes(document)?;
 
     validate_command_legacy_read_model_reads(document)?;
@@ -3759,6 +3761,16 @@ fn validate_view_command_board_connections(
     })
 }
 
+fn validate_read_model_view_board_connections(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    read_model_board_element_feeding_view_without_update(document).map_or(Ok(()), |element_id| {
+        Err(validation_issue(format!(
+            "read_model board element '{element_id}' has no incoming event/update"
+        )))
+    })
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct InvalidBoardConnection {
     from: DefinitionName,
@@ -4155,6 +4167,43 @@ fn view_invokes_board_command(
 ) -> bool {
     view_definition(document, view_name)
         .is_some_and(|view| view_invokes_command(view, command_name))
+}
+
+fn read_model_board_element_feeding_view_without_update(
+    document: &EventModelDocument,
+) -> Option<DefinitionName> {
+    document.board_slices.iter().find_map(|board_slice| {
+        board_slice
+            .elements
+            .iter()
+            .filter(|element| element.kind == BoardElementKind::ReadModel)
+            .find(|element| {
+                read_model_board_element_feeds_view(board_slice, element)
+                    && !read_model_board_element_has_incoming_update(board_slice, element)
+            })
+            .map(|element| element.id.clone())
+    })
+}
+
+fn read_model_board_element_feeds_view(
+    board_slice: &BoardSliceGraph,
+    element: &BoardElement,
+) -> bool {
+    board_slice.connections.iter().any(|connection| {
+        connection.from == element.id
+            && board_element_kind_by_id(board_slice, &connection.to) == Some(BoardElementKind::View)
+    })
+}
+
+fn read_model_board_element_has_incoming_update(
+    board_slice: &BoardSliceGraph,
+    element: &BoardElement,
+) -> bool {
+    board_slice.connections.iter().any(|connection| {
+        connection.to == element.id
+            && board_element_kind_by_id(board_slice, &connection.from)
+                == Some(BoardElementKind::Event)
+    })
 }
 
 fn declared_external_event_name(document: &EventModelDocument, name: &DefinitionName) -> bool {

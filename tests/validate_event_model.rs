@@ -647,6 +647,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_read_model_to_view_board_connections_without_incoming_update()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("read-model-feeds-view-without-update.eventmodel.json"),
+            "{\"name\":\"Repair queue\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\",\"name\":\"People, Views, and Translations\"},{\"id\":\"actions\",\"name\":\"Commands and Projections\"},{\"id\":\"events\",\"name\":\"Stored Facts\"}],\"slices\":[{\"name\":\"Repair queue\",\"elements\":[{\"id\":\"repair_queue\",\"kind\":\"read_model\",\"lane\":\"actions\",\"name\":\"repair_queue\"},{\"id\":\"repair_queue_screen\",\"kind\":\"view\",\"lane\":\"ux\",\"name\":\"repair_queue_screen\"}],\"connections\":[{\"from\":\"repair_queue\",\"to\":\"repair_queue_screen\"}]}]},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[{\"name\":\"repair_queue\",\"fields\":[]}],\"views\":[{\"name\":\"repair_queue_screen\",\"uses_read_models\":[\"repair_queue\"]}],\"slices\":[{\"name\":\"Repair queue\",\"type\":\"state_view\",\"views\":[\"repair_queue_screen\"],\"acceptance_scenarios\":[{\"name\":\"show empty repair queue\",\"given\":[],\"when\":{},\"read_model_states\":{\"repair_queue\":\"empty\"},\"then\":[\"empty queue is visible\"]}],\"contract_scenarios\":[{\"name\":\"repair queue projector\",\"given\":[],\"when\":{},\"read_model_states\":{\"repair_queue\":\"empty\"},\"then\":[\"repair_queue is empty\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "read_model board element 'repair_queue' has no incoming event/update",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_command_names() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
