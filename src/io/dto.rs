@@ -13,8 +13,8 @@ use crate::core::types::{
 };
 use crate::core::validation::{
     DefinitionKind, DefinitionName, EventModelDocument, EventModelFileKind, LegacyScenariosField,
-    NamedDefinition, ScenarioStepField, SliceDefinition, SliceDefinitionCount, SliceScenario,
-    TopLevelKey, empty_top_level_key_issue, model_must_be_object_issue,
+    NamedDefinition, ScenarioSetKind, ScenarioStepField, SliceDefinition, SliceDefinitionCount,
+    SliceScenario, TopLevelKey, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -263,17 +263,17 @@ fn slice_scenarios_from_json_slice(
 ) -> Result<Vec<SliceScenario>, BoundaryParseError> {
     first_class_scenario_fields()
         .iter()
-        .map(|field| slice_scenarios_from_json_field(slice, field))
+        .map(|spec| slice_scenarios_from_json_field(slice, spec))
         .collect::<Result<Vec<_>, _>>()
         .map(|scenarios| scenarios.into_iter().flatten().collect())
 }
 
 fn slice_scenarios_from_json_field(
     slice: &Value,
-    field: &str,
+    spec: &ScenarioFieldSpec,
 ) -> Result<Vec<SliceScenario>, BoundaryParseError> {
     slice
-        .get(field)
+        .get(spec.key)
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
@@ -287,7 +287,9 @@ fn slice_scenarios_from_json_field(
                         BoundaryParseError::new(format!("invalid scenario name: {error}"))
                     })
                 })
-                .map(|name| SliceScenario::new(name, scenario_step_field(scenario, "when")))
+                .map(|name| {
+                    SliceScenario::new(name, scenario_step_field(scenario, "when"), spec.kind)
+                })
         })
         .collect()
 }
@@ -300,8 +302,22 @@ fn scenario_step_field(scenario: &Value, field: &str) -> ScenarioStepField {
     }
 }
 
-fn first_class_scenario_fields() -> &'static [&'static str] {
-    &["acceptance_scenarios", "contract_scenarios"]
+struct ScenarioFieldSpec {
+    key: &'static str,
+    kind: ScenarioSetKind,
+}
+
+fn first_class_scenario_fields() -> &'static [ScenarioFieldSpec] {
+    &[
+        ScenarioFieldSpec {
+            key: "acceptance_scenarios",
+            kind: ScenarioSetKind::Acceptance,
+        },
+        ScenarioFieldSpec {
+            key: "contract_scenarios",
+            kind: ScenarioSetKind::Contract,
+        },
+    ]
 }
 
 fn named_definitions_from_json_object(

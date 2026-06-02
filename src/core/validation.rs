@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use nutype::nutype;
 
@@ -54,6 +54,12 @@ pub enum ScenarioStepField {
     Present,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ScenarioSetKind {
+    Acceptance,
+    Contract,
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub enum DefinitionKind {
     Command,
@@ -107,11 +113,20 @@ impl SliceDefinition {
 pub struct SliceScenario {
     name: DefinitionName,
     when_field: ScenarioStepField,
+    scenario_set: ScenarioSetKind,
 }
 
 impl SliceScenario {
-    pub fn new(name: DefinitionName, when_field: ScenarioStepField) -> Self {
-        Self { name, when_field }
+    pub fn new(
+        name: DefinitionName,
+        when_field: ScenarioStepField,
+        scenario_set: ScenarioSetKind,
+    ) -> Self {
+        Self {
+            name,
+            when_field,
+            scenario_set,
+        }
     }
 }
 
@@ -155,7 +170,9 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_no_legacy_slice_scenarios(document)?;
 
-    validate_scenario_when_fields(document)
+    validate_scenario_when_fields(document)?;
+
+    validate_duplicate_scenario_names(document)
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -264,4 +281,57 @@ fn validate_scenario_when_fields(document: &EventModelDocument) -> Result<(), Va
                 slice.name, scenario.name
             )))
         })
+}
+
+fn validate_duplicate_scenario_names(document: &EventModelDocument) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .find_map(duplicate_scenario_name)
+        .map_or(Ok(()), |duplicate| {
+            Err(validation_issue(format!(
+                "slice '{}' has duplicate scenario name '{}'{}",
+                duplicate.slice_name,
+                duplicate.scenario_name,
+                duplicate_scenario_suffix(duplicate.duplicate_kind)
+            )))
+        })
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum DuplicateScenarioKind {
+    AcrossFirstClassFields,
+    WithinField,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct DuplicateScenario {
+    slice_name: DefinitionName,
+    scenario_name: DefinitionName,
+    duplicate_kind: DuplicateScenarioKind,
+}
+
+fn duplicate_scenario_name(slice: &SliceDefinition) -> Option<DuplicateScenario> {
+    let mut seen = BTreeMap::new();
+    slice.scenarios.iter().find_map(|scenario| {
+        seen.insert(scenario.name.clone(), scenario.scenario_set)
+            .map(|existing_scenario_set| DuplicateScenario {
+                slice_name: slice.name.clone(),
+                scenario_name: scenario.name.clone(),
+                duplicate_kind: if existing_scenario_set == scenario.scenario_set {
+                    DuplicateScenarioKind::WithinField
+                } else {
+                    DuplicateScenarioKind::AcrossFirstClassFields
+                },
+            })
+    })
+}
+
+fn duplicate_scenario_suffix(duplicate_kind: DuplicateScenarioKind) -> &'static str {
+    match duplicate_kind {
+        DuplicateScenarioKind::AcrossFirstClassFields => {
+            " across acceptance_scenarios and contract_scenarios"
+        }
+        DuplicateScenarioKind::WithinField => "",
+    }
 }
