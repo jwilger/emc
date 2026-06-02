@@ -213,6 +213,7 @@ fn event_model_document_from_json(
             let event_definitions = event_definitions_from_json_object(object)?;
             let command_definitions = command_definitions_from_json_object(object)?;
             let read_model_definitions = read_model_definitions_from_json_object(object)?;
+            let workflow_transition_errors = workflow_transition_errors_from_json_object(object)?;
             let board_read_model_command_dependencies =
                 board_read_model_command_dependencies_from_json_object(object)?;
             let command_produced_events = command_produced_events_from_json_object(object)?;
@@ -235,7 +236,8 @@ fn event_model_document_from_json(
                         )
                         .with_slice_count(slice_definition_count(&slice_definitions))
                         .with_slice_definitions(slice_definitions)
-                        .with_view_definitions(view_definitions),
+                        .with_view_definitions(view_definitions)
+                        .with_workflow_transition_errors(workflow_transition_errors),
                 )
             })
         })
@@ -247,6 +249,32 @@ fn slice_definition_count(slice_definitions: &[SliceDefinition]) -> SliceDefinit
         1 => SliceDefinitionCount::One,
         _ => SliceDefinitionCount::Multiple,
     }
+}
+
+fn workflow_transition_errors_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
+    object
+        .get("steps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .flat_map(workflow_transition_errors_from_json_step)
+        .map(|error_name| {
+            DefinitionName::try_new(error_name.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid workflow transition error: {error}"))
+            })
+        })
+        .collect()
+}
+
+fn workflow_transition_errors_from_json_step(step: &Value) -> Vec<&str> {
+    step.get("transitions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|transition| transition.get("via_error").and_then(Value::as_str))
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

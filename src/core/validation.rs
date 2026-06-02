@@ -18,6 +18,7 @@ pub struct EventModelDocument {
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
+    workflow_transition_errors: BTreeSet<DefinitionName>,
 }
 
 impl EventModelDocument {
@@ -37,6 +38,7 @@ impl EventModelDocument {
             slice_count: parts.slice_count,
             slice_definitions: parts.slice_definitions,
             view_definitions: parts.view_definitions,
+            workflow_transition_errors: parts.workflow_transition_errors,
         }
     }
 }
@@ -57,6 +59,7 @@ pub struct EventModelDocumentParts {
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
+    workflow_transition_errors: BTreeSet<DefinitionName>,
 }
 
 impl EventModelDocumentParts {
@@ -76,6 +79,7 @@ impl EventModelDocumentParts {
             slice_count: SliceDefinitionCount::Zero,
             slice_definitions: Vec::new(),
             view_definitions: Vec::new(),
+            workflow_transition_errors: BTreeSet::new(),
         }
     }
 
@@ -153,6 +157,14 @@ impl EventModelDocumentParts {
 
     pub fn with_view_definitions(mut self, view_definitions: Vec<ViewDefinition>) -> Self {
         self.view_definitions = view_definitions;
+        self
+    }
+
+    pub fn with_workflow_transition_errors(
+        mut self,
+        workflow_transition_errors: BTreeSet<DefinitionName>,
+    ) -> Self {
+        self.workflow_transition_errors = workflow_transition_errors;
         self
     }
 }
@@ -1185,6 +1197,12 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    workflow_transition_command_error(documents).map_or(Ok(()), |error_name| {
+        Err(validation_issue(format!(
+            "workflow transition cannot use command-local error '{error_name}' as a business outcome"
+        )))
+    })?;
+
     duplicate_slice_view_definition(documents).map_or(Ok(()), |view_name| {
         Err(validation_issue(format!(
             "view '{view_name}' is defined by more than one slice"
@@ -1204,6 +1222,20 @@ fn top_level_key(raw: &str) -> TopLevelKey {
     TopLevelKey::try_new(raw.to_owned()).unwrap_or_else(|error| {
         unreachable!("EMC required top-level key must be valid: {error}");
     })
+}
+
+fn workflow_transition_command_error(documents: &[EventModelDocument]) -> Option<DefinitionName> {
+    let command_errors = documents
+        .iter()
+        .flat_map(|document| document.command_definitions.iter())
+        .flat_map(|command| command.errors.iter())
+        .collect::<BTreeSet<_>>();
+
+    documents
+        .iter()
+        .flat_map(|document| document.workflow_transition_errors.iter())
+        .find(|error_name| command_errors.contains(error_name))
+        .cloned()
 }
 
 fn validation_issue(value: impl Into<String>) -> ValidationIssue {
