@@ -223,27 +223,21 @@ pub struct SliceDefinition {
     owned_events: Vec<DefinitionName>,
     outcome_labels: Vec<DefinitionName>,
     legacy_scenarios: LegacyScenariosField,
+    singleton_behavior: SingletonBehavior,
     scenarios: Vec<SliceScenario>,
 }
 
 impl SliceDefinition {
-    pub fn new(
-        name: DefinitionName,
-        slice_type: SliceType,
-        owned_views: Vec<DefinitionName>,
-        owned_events: Vec<DefinitionName>,
-        outcome_labels: Vec<DefinitionName>,
-        legacy_scenarios: LegacyScenariosField,
-        scenarios: Vec<SliceScenario>,
-    ) -> Self {
+    pub fn new(parts: SliceDefinitionParts) -> Self {
         Self {
-            name,
-            slice_type,
-            owned_views,
-            owned_events,
-            outcome_labels,
-            legacy_scenarios,
-            scenarios,
+            name: parts.name,
+            slice_type: parts.slice_type,
+            owned_views: parts.owned_views,
+            owned_events: parts.owned_events,
+            outcome_labels: parts.outcome_labels,
+            legacy_scenarios: parts.legacy_scenarios,
+            singleton_behavior: parts.singleton_behavior,
+            scenarios: parts.scenarios,
         }
     }
 
@@ -254,6 +248,70 @@ impl SliceDefinition {
     pub fn owned_events(&self) -> &[DefinitionName] {
         &self.owned_events
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct SliceDefinitionParts {
+    name: DefinitionName,
+    slice_type: SliceType,
+    owned_views: Vec<DefinitionName>,
+    owned_events: Vec<DefinitionName>,
+    outcome_labels: Vec<DefinitionName>,
+    legacy_scenarios: LegacyScenariosField,
+    singleton_behavior: SingletonBehavior,
+    scenarios: Vec<SliceScenario>,
+}
+
+impl SliceDefinitionParts {
+    pub fn new(name: DefinitionName, slice_type: SliceType) -> Self {
+        Self {
+            name,
+            slice_type,
+            owned_views: Vec::new(),
+            owned_events: Vec::new(),
+            outcome_labels: Vec::new(),
+            legacy_scenarios: LegacyScenariosField::Absent,
+            singleton_behavior: SingletonBehavior::NotSingleton,
+            scenarios: Vec::new(),
+        }
+    }
+
+    pub fn with_owned_views(mut self, owned_views: Vec<DefinitionName>) -> Self {
+        self.owned_views = owned_views;
+        self
+    }
+
+    pub fn with_owned_events(mut self, owned_events: Vec<DefinitionName>) -> Self {
+        self.owned_events = owned_events;
+        self
+    }
+
+    pub fn with_outcome_labels(mut self, outcome_labels: Vec<DefinitionName>) -> Self {
+        self.outcome_labels = outcome_labels;
+        self
+    }
+
+    pub fn with_legacy_scenarios(mut self, legacy_scenarios: LegacyScenariosField) -> Self {
+        self.legacy_scenarios = legacy_scenarios;
+        self
+    }
+
+    pub fn with_singleton_behavior(mut self, singleton_behavior: SingletonBehavior) -> Self {
+        self.singleton_behavior = singleton_behavior;
+        self
+    }
+
+    pub fn with_scenarios(mut self, scenarios: Vec<SliceScenario>) -> Self {
+        self.scenarios = scenarios;
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum SingletonBehavior {
+    NotSingleton,
+    MissingRepeatBehavior,
+    DeclaresRepeatBehavior,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -542,6 +600,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_event_producers(document)?;
 
     validate_state_change_scenario_given_streams(document)?;
+
+    validate_singleton_state_change_repeat_behavior(document)?;
 
     validate_command_sourced_event_attributes(document)?;
 
@@ -883,6 +943,22 @@ fn event_stream(
         .iter()
         .find(|event| event.name == *event_name)
         .and_then(|event| event.stream.clone())
+}
+
+fn validate_singleton_state_change_repeat_behavior(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::StateChange)
+        .find(|slice| slice.singleton_behavior == SingletonBehavior::MissingRepeatBehavior)
+        .map_or(Ok(()), |slice| {
+            Err(validation_issue(format!(
+                "singleton state_change slice '{}' must declare already-exists or idempotent behavior",
+                slice.name
+            )))
+        })
 }
 
 fn validate_command_sourced_event_attributes(

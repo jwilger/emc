@@ -17,9 +17,9 @@ use crate::core::validation::{
     EventModelDocument, EventModelDocumentParts, EventModelFileKind, ExternalInputSchema,
     LegacyScenariosField, NamedDefinition, ReadModelDefinition, ReadModelField,
     ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
-    ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SliceDefinition,
-    SliceDefinitionCount, SliceScenario, SliceType, TopLevelKey, ViewDefinition,
-    empty_top_level_key_issue, model_must_be_object_issue,
+    ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
+    SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceType,
+    TopLevelKey, ViewDefinition, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -266,19 +266,48 @@ fn slice_definitions_from_json_object(
                     let outcome_labels = outcome_labels_from_json_slice(slice)?;
                     slice_scenarios_from_json_slice(slice).map(|scenarios| {
                         SliceDefinition::new(
-                            name,
-                            slice_type_from_json_slice(slice),
-                            owned_views,
-                            owned_events,
-                            outcome_labels,
-                            legacy_scenarios_field_from_json_slice(slice),
-                            scenarios,
+                            SliceDefinitionParts::new(name, slice_type_from_json_slice(slice))
+                                .with_owned_views(owned_views)
+                                .with_owned_events(owned_events)
+                                .with_outcome_labels(outcome_labels)
+                                .with_legacy_scenarios(legacy_scenarios_field_from_json_slice(
+                                    slice,
+                                ))
+                                .with_singleton_behavior(singleton_behavior_from_json_slice(slice))
+                                .with_scenarios(scenarios),
                         )
                     })
                 })
                 .and_then(|slice_definition| slice_definition)
         })
         .collect()
+}
+
+fn singleton_behavior_from_json_slice(slice: &Value) -> SingletonBehavior {
+    slice
+        .get("singleton")
+        .and_then(Value::as_bool)
+        .filter(|singleton| *singleton)
+        .map_or(SingletonBehavior::NotSingleton, |_| {
+            if slice_declares_repeat_behavior(slice) {
+                SingletonBehavior::DeclaresRepeatBehavior
+            } else {
+                SingletonBehavior::MissingRepeatBehavior
+            }
+        })
+}
+
+fn slice_declares_repeat_behavior(slice: &Value) -> bool {
+    first_class_scenario_fields()
+        .iter()
+        .filter_map(|spec| slice.get(spec.key).and_then(Value::as_array))
+        .flatten()
+        .map(|scenario| scenario.to_string().to_lowercase())
+        .any(|scenario_text| {
+            scenario_text.contains("already-exists")
+                || scenario_text.contains("already exists")
+                || scenario_text.contains("idempotent")
+        })
 }
 
 fn legacy_scenarios_field_from_json_slice(slice: &Value) -> LegacyScenariosField {
