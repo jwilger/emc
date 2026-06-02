@@ -262,6 +262,7 @@ pub struct SliceDefinition {
     owned_views: Vec<DefinitionName>,
     owned_events: Vec<DefinitionName>,
     outcome_labels: Vec<DefinitionName>,
+    outcomes: Vec<OutcomeDefinition>,
     legacy_scenarios: LegacyScenariosField,
     singleton_behavior: SingletonBehavior,
     automation_trigger: AutomationTrigger,
@@ -283,6 +284,7 @@ impl SliceDefinition {
             owned_views: parts.owned_views,
             owned_events: parts.owned_events,
             outcome_labels: parts.outcome_labels,
+            outcomes: parts.outcomes,
             legacy_scenarios: parts.legacy_scenarios,
             singleton_behavior: parts.singleton_behavior,
             automation_trigger: parts.automation_trigger,
@@ -313,6 +315,7 @@ pub struct SliceDefinitionParts {
     owned_views: Vec<DefinitionName>,
     owned_events: Vec<DefinitionName>,
     outcome_labels: Vec<DefinitionName>,
+    outcomes: Vec<OutcomeDefinition>,
     legacy_scenarios: LegacyScenariosField,
     singleton_behavior: SingletonBehavior,
     automation_trigger: AutomationTrigger,
@@ -334,6 +337,7 @@ impl SliceDefinitionParts {
             owned_views: Vec::new(),
             owned_events: Vec::new(),
             outcome_labels: Vec::new(),
+            outcomes: Vec::new(),
             legacy_scenarios: LegacyScenariosField::Absent,
             singleton_behavior: SingletonBehavior::NotSingleton,
             automation_trigger: AutomationTrigger::NotAutomation,
@@ -383,6 +387,11 @@ impl SliceDefinitionParts {
 
     pub fn with_outcome_labels(mut self, outcome_labels: Vec<DefinitionName>) -> Self {
         self.outcome_labels = outcome_labels;
+        self
+    }
+
+    pub fn with_outcomes(mut self, outcomes: Vec<OutcomeDefinition>) -> Self {
+        self.outcomes = outcomes;
         self
     }
 
@@ -446,6 +455,18 @@ pub enum TranslationContract {
     NotTranslation,
     MissingExternalContract,
     DeclaresExternalContract,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct OutcomeDefinition {
+    label: DefinitionName,
+    events: Vec<DefinitionName>,
+}
+
+impl OutcomeDefinition {
+    pub fn new(label: DefinitionName, events: Vec<DefinitionName>) -> Self {
+        Self { label, events }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -816,6 +837,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_state_view_projector_contract_scenarios(document)?;
 
     validate_duplicate_outcome_labels(document)?;
+
+    validate_duplicate_outcome_event_sets(document)?;
 
     validate_event_stream_references(document)?;
 
@@ -1380,6 +1403,45 @@ fn duplicate_outcome_label(slice: &SliceDefinition) -> Option<(&SliceDefinition,
             Some((slice, outcome_label.clone()))
         }
     })
+}
+
+fn validate_duplicate_outcome_event_sets(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .find_map(duplicate_outcome_event_set)
+        .map_or(Ok(()), |duplicate| {
+            Err(validation_issue(format!(
+                "outcomes '{}' and '{}' use the same event set",
+                duplicate.first_label, duplicate.second_label
+            )))
+        })
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct DuplicateOutcomeEventSet {
+    first_label: DefinitionName,
+    second_label: DefinitionName,
+}
+
+fn duplicate_outcome_event_set(slice: &SliceDefinition) -> Option<DuplicateOutcomeEventSet> {
+    slice
+        .outcomes
+        .iter()
+        .enumerate()
+        .find_map(|(index, outcome)| {
+            slice
+                .outcomes
+                .iter()
+                .skip(index + 1)
+                .find(|candidate| outcome.events == candidate.events)
+                .map(|candidate| DuplicateOutcomeEventSet {
+                    first_label: outcome.label.clone(),
+                    second_label: candidate.label.clone(),
+                })
+        })
 }
 
 fn validate_event_stream_references(document: &EventModelDocument) -> Result<(), ValidationIssue> {
