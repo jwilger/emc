@@ -24,6 +24,7 @@ pub struct EventModelDocument {
     workflow_steps: Vec<WorkflowStep>,
     workflow_event_transitions: Vec<WorkflowEventTransition>,
     workflow_command_transitions: Vec<WorkflowCommandTransition>,
+    workflow_navigation_transitions: Vec<WorkflowNavigationTransition>,
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
@@ -55,6 +56,7 @@ impl EventModelDocument {
             workflow_steps: parts.workflow_steps,
             workflow_event_transitions: parts.workflow_event_transitions,
             workflow_command_transitions: parts.workflow_command_transitions,
+            workflow_navigation_transitions: parts.workflow_navigation_transitions,
             duplicate_workflow_step_slice: parts.duplicate_workflow_step_slice,
             workflow_composition: parts.workflow_composition,
             workflow_entry_step_count: parts.workflow_entry_step_count,
@@ -87,6 +89,7 @@ pub struct EventModelDocumentParts {
     workflow_steps: Vec<WorkflowStep>,
     workflow_event_transitions: Vec<WorkflowEventTransition>,
     workflow_command_transitions: Vec<WorkflowCommandTransition>,
+    workflow_navigation_transitions: Vec<WorkflowNavigationTransition>,
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
@@ -118,6 +121,7 @@ impl EventModelDocumentParts {
             workflow_steps: Vec::new(),
             workflow_event_transitions: Vec::new(),
             workflow_command_transitions: Vec::new(),
+            workflow_navigation_transitions: Vec::new(),
             duplicate_workflow_step_slice: None,
             workflow_composition: WorkflowComposition::NotComposition,
             workflow_entry_step_count: WorkflowEntryStepCount::NotComposition,
@@ -243,6 +247,14 @@ impl EventModelDocumentParts {
         workflow_command_transitions: Vec<WorkflowCommandTransition>,
     ) -> Self {
         self.workflow_command_transitions = workflow_command_transitions;
+        self
+    }
+
+    pub fn with_workflow_navigation_transitions(
+        mut self,
+        workflow_navigation_transitions: Vec<WorkflowNavigationTransition>,
+    ) -> Self {
+        self.workflow_navigation_transitions = workflow_navigation_transitions;
         self
     }
 
@@ -512,6 +524,27 @@ impl WorkflowCommandTransition {
             source_slice,
             target_slice,
             command,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowNavigationTransition {
+    source_slice: DefinitionName,
+    target_slice: DefinitionName,
+    navigation_target: DefinitionName,
+}
+
+impl WorkflowNavigationTransition {
+    pub fn new(
+        source_slice: DefinitionName,
+        target_slice: DefinitionName,
+        navigation_target: DefinitionName,
+    ) -> Self {
+        Self {
+            source_slice,
+            target_slice,
+            navigation_target,
         }
     }
 }
@@ -1630,6 +1663,13 @@ pub fn validate_event_model_corpus(
         },
     )?;
 
+    workflow_navigation_transition_not_owned_by_source_view(documents).map_or(Ok(()), |issue| {
+        Err(validation_issue(format!(
+            "navigation transition to '{}' is not owned by source view '{}'",
+            issue.transition.navigation_target, issue.source_view
+        )))
+    })?;
+
     unhandled_workflow_slice_outcome(documents).map_or(Ok(()), |unhandled| {
         Err(validation_issue(format!(
             "workflow '{}' does not handle outcome '{}' from slice '{}'",
@@ -1861,6 +1901,55 @@ fn workflow_transition_slice_owns_command(
 ) -> bool {
     application_entry_slice_by_slug(documents, slice_slug)
         .is_some_and(|slice| slice.issued_commands.contains(command))
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowNavigationTransitionSourceIssue {
+    transition: WorkflowNavigationTransition,
+    source_view: DefinitionName,
+}
+
+fn workflow_navigation_transition_not_owned_by_source_view(
+    documents: &[EventModelDocument],
+) -> Option<WorkflowNavigationTransitionSourceIssue> {
+    documents
+        .iter()
+        .flat_map(|document| document.workflow_navigation_transitions.iter())
+        .find_map(|transition| {
+            if workflow_navigation_transition_has_source_control(documents, transition) {
+                None
+            } else {
+                Some(WorkflowNavigationTransitionSourceIssue {
+                    transition: transition.clone(),
+                    source_view: workflow_navigation_transition_source_view(documents, transition),
+                })
+            }
+        })
+}
+
+fn workflow_navigation_transition_has_source_control(
+    documents: &[EventModelDocument],
+    transition: &WorkflowNavigationTransition,
+) -> bool {
+    workflow_transition_source_views(documents, &transition.source_slice)
+        .iter()
+        .any(|view| view_navigates_to(view, &transition.navigation_target))
+}
+
+fn view_navigates_to(view: &ViewDefinition, navigation_target: &DefinitionName) -> bool {
+    view.controls
+        .iter()
+        .any(|control| control.navigation_target.as_ref() == Some(navigation_target))
+}
+
+fn workflow_navigation_transition_source_view(
+    documents: &[EventModelDocument],
+    transition: &WorkflowNavigationTransition,
+) -> DefinitionName {
+    workflow_transition_source_views(documents, &transition.source_slice)
+        .first()
+        .map(|view| view.name.clone())
+        .unwrap_or_else(|| transition.source_slice.clone())
 }
 
 fn workflow_command_transition_has_source_control(
