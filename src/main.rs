@@ -20,6 +20,7 @@ enum Command {
     Check,
     ImportEMC { source: PathBuf },
     Init { name: String },
+    Validate { target: PathBuf },
 }
 
 fn main() -> ExitCode {
@@ -52,6 +53,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
             let project_name = ProjectName::try_new(name).map_err(ShellError::project_name)?;
             interpret(init_project(project_name))
         }
+        Command::Validate { target } => validate_target(&target),
     }
 }
 
@@ -72,8 +74,31 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         [command, name_flag, name] if command == "init" && name_flag == "--name" => Ok(Cli {
             command: Command::Init { name: name.clone() },
         }),
+        [command, target] if command == "validate" => Ok(Cli {
+            command: Command::Validate {
+                target: PathBuf::from(target),
+            },
+        }),
         _ => Err(ShellError::message("usage: emc init --name <project-name>")),
     }
+}
+
+fn validate_target(target: &Path) -> Result<(), ShellError> {
+    event_model_files(target)?
+        .into_iter()
+        .map(|path| validate_event_model_file(&path))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(())
+}
+
+fn validate_event_model_file(path: &Path) -> Result<(), ShellError> {
+    let source =
+        fs::read_to_string(path).map_err(|error| ShellError::message(error.to_string()))?;
+    serde_json::from_str::<serde_json::Value>(&source)
+        .map(|_| ())
+        .map_err(|error| {
+            ShellError::message(format!("invalid JSON in {}: {error}", path.display()))
+        })
 }
 
 fn load_emc_import(source: &Path) -> Result<EMCWorkflowImport, ShellError> {
