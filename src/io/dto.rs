@@ -20,8 +20,8 @@ use crate::core::validation::{
     ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
     ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
     SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceScenarioParts,
-    SliceType, TopLevelKey, TranslationContract, ViewControlDefinition, ViewDefinition,
-    ViewWireframe, empty_top_level_key_issue, model_must_be_object_issue,
+    SliceType, TopLevelKey, TranslationContract, ViewControlDefinition, ViewControlDefinitionParts,
+    ViewDefinition, ViewWireframe, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -830,11 +830,41 @@ fn view_control_definitions_from_json_view(
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter_map(|control| control.get("label").and_then(Value::as_str))
-        .map(|label| {
+        .filter_map(|control| {
+            control
+                .get("label")
+                .and_then(Value::as_str)
+                .map(|label| (control, label))
+        })
+        .map(|(control, label)| {
+            let command = optional_definition_name_from_json_field(control, "command", "command")?;
+            let handled_command_errors = control_handled_command_errors_from_json_control(control)?;
             DefinitionName::try_new(label.to_owned())
-                .map(ViewControlDefinition::new)
+                .map(|label| {
+                    ViewControlDefinition::new(
+                        ViewControlDefinitionParts::new(label)
+                            .with_command(command)
+                            .with_handled_command_errors(handled_command_errors),
+                    )
+                })
                 .map_err(|error| BoundaryParseError::new(format!("invalid control label: {error}")))
+        })
+        .collect()
+}
+
+fn control_handled_command_errors_from_json_control(
+    control: &Value,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    control
+        .get("error_handling")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|handling| handling.get("error").and_then(Value::as_str))
+        .map(|error_name| {
+            DefinitionName::try_new(error_name.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid control command error: {error}"))
+            })
         })
         .collect()
 }
