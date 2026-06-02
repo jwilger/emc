@@ -1755,6 +1755,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_board_connection_kinds(document)?;
 
+    validate_command_board_triggers(document)?;
+
     validate_command_sourced_event_attributes(document)?;
 
     validate_command_legacy_read_model_reads(document)?;
@@ -3710,6 +3712,14 @@ fn validate_board_connection_kinds(document: &EventModelDocument) -> Result<(), 
     })
 }
 
+fn validate_command_board_triggers(document: &EventModelDocument) -> Result<(), ValidationIssue> {
+    command_board_element_without_incoming_trigger(document).map_or(Ok(()), |element_id| {
+        Err(validation_issue(format!(
+            "command board element '{element_id}' has no incoming trigger"
+        )))
+    })
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct InvalidBoardConnection {
     from: DefinitionName,
@@ -3884,6 +3894,51 @@ fn board_connection_kind_is_causal(from: BoardElementKind, to: BoardElementKind)
             | (BoardElementKind::ReadModel, BoardElementKind::Automation)
             | (BoardElementKind::ReadModel, BoardElementKind::View)
             | (BoardElementKind::View, BoardElementKind::Command)
+    )
+}
+
+fn command_board_element_without_incoming_trigger(
+    document: &EventModelDocument,
+) -> Option<DefinitionName> {
+    document.board_slices.iter().find_map(|board_slice| {
+        board_slice
+            .elements
+            .iter()
+            .filter(|element| element.kind == BoardElementKind::Command)
+            .find(|element| {
+                !command_board_element_has_incoming_trigger(document, board_slice, element)
+            })
+            .map(|element| element.id.clone())
+    })
+}
+
+fn command_board_element_has_incoming_trigger(
+    document: &EventModelDocument,
+    board_slice: &BoardSliceGraph,
+    element: &BoardElement,
+) -> bool {
+    board_slice_has_explicit_workflow_trigger(document, board_slice)
+        || board_slice.connections.iter().any(|connection| {
+            connection.to == element.id
+                && board_element_kind_by_id(board_slice, &connection.from)
+                    .is_some_and(board_element_kind_triggers_command)
+        })
+}
+
+fn board_slice_has_explicit_workflow_trigger(
+    document: &EventModelDocument,
+    board_slice: &BoardSliceGraph,
+) -> bool {
+    document
+        .workflow_steps
+        .iter()
+        .any(|step| step.has_trigger() && board_slice.has_slug(step.slice()))
+}
+
+fn board_element_kind_triggers_command(kind: BoardElementKind) -> bool {
+    matches!(
+        kind,
+        BoardElementKind::Automation | BoardElementKind::ExternalEvent | BoardElementKind::View
     )
 }
 

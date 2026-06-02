@@ -555,6 +555,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_command_board_elements_without_incoming_triggers()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("command-without-trigger.eventmodel.json"),
+            "{\"name\":\"Open repair ticket\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\",\"name\":\"People, Views, and Translations\"},{\"id\":\"actions\",\"name\":\"Commands and Projections\"},{\"id\":\"events\",\"name\":\"Stored Facts\"}],\"slices\":[{\"name\":\"Open repair ticket\",\"elements\":[{\"id\":\"cmd-open-ticket\",\"kind\":\"command\",\"lane\":\"actions\",\"name\":\"OpenRepairTicket\"}],\"connections\":[]}]},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"OpenRepairTicket\",\"inputs\":[],\"produces\":[]}],\"read_models\":[],\"slices\":[{\"name\":\"Open repair ticket\",\"type\":\"state_change\",\"commands\":[\"OpenRepairTicket\"],\"acceptance_scenarios\":[{\"name\":\"open repair ticket\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "command board element 'cmd-open-ticket' has no incoming trigger",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_command_names() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
