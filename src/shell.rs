@@ -48,6 +48,16 @@ fn interpret_effect(effect: &Effect) -> Result<(), ShellError> {
         Effect::EnsureDirectory(path) => {
             fs::create_dir_all(Path::new(path.as_ref())).map_err(ShellError::io)
         }
+        Effect::RequireFile(path) => {
+            if Path::new(path.as_ref()).is_file() {
+                Ok(())
+            } else {
+                Err(ShellError::message(format!(
+                    "missing required project artifact {}",
+                    path.as_ref()
+                )))
+            }
+        }
         Effect::WriteFile(path, contents) => write_file(path.as_ref(), contents.as_ref()),
         Effect::WriteFileIfMissing(path, contents) => {
             if Path::new(path.as_ref()).exists() {
