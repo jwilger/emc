@@ -786,6 +786,32 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_duplicate_read_models_across_slice_files() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("lesson-context.eventmodel.json"),
+            "{\"name\":\"Lesson context workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[{\"name\":\"lesson_submission_context\",\"fields\":[]}],\"slices\":[{\"name\":\"Show lesson context\",\"read_models\":[\"lesson_submission_context\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+        )?;
+        write(
+            slices.join("review-context.eventmodel.json"),
+            "{\"name\":\"Review context workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[{\"name\":\"lesson_submission_context\",\"fields\":[]}],\"slices\":[{\"name\":\"Review lesson context\",\"read_models\":[\"lesson_submission_context\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "read model 'lesson_submission_context' is defined by more than one slice",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_undeclared_board_automation_between_read_model_and_command()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;

@@ -404,6 +404,8 @@ fn slice_definitions_from_json_object(
                     let issued_commands =
                         definition_names_from_json_array_field(slice, "commands", "command")?;
                     let handled_command_errors = handled_command_errors_from_json_slice(slice)?;
+                    let owned_read_models =
+                        definition_names_from_json_array_field(slice, "read_models", "read model")?;
                     let owned_views =
                         definition_names_from_json_array_field(slice, "views", "view")?;
                     let owned_events =
@@ -414,6 +416,7 @@ fn slice_definitions_from_json_object(
                             SliceDefinitionParts::new(name, slice_type_from_json_slice(slice))
                                 .with_issued_commands(issued_commands)
                                 .with_handled_command_errors(handled_command_errors)
+                                .with_owned_read_models(owned_read_models)
                                 .with_owned_views(owned_views)
                                 .with_owned_events(owned_events)
                                 .with_outcome_labels(outcome_labels)
