@@ -559,15 +559,30 @@ fn event_attributes_from_json_event(
 }
 
 fn event_attribute_source_from_json(attribute: &Value) -> EventAttributeSource {
-    attribute
-        .get("source")
-        .and_then(Value::as_str)
-        .and_then(|source| source.strip_prefix("command."))
+    let source = attribute.get("source").and_then(Value::as_str);
+
+    source
+        .and_then(command_attribute_source)
+        .or_else(|| source.and_then(external_attribute_source))
+        .unwrap_or(EventAttributeSource::Other)
+}
+
+fn command_attribute_source(source: &str) -> Option<EventAttributeSource> {
+    source
+        .strip_prefix("command.")
         .and_then(|input_name| DefinitionName::try_new(input_name.to_owned()).ok())
-        .map_or(
-            EventAttributeSource::Other,
-            EventAttributeSource::CommandInput,
-        )
+        .map(EventAttributeSource::CommandInput)
+}
+
+fn external_attribute_source(source: &str) -> Option<EventAttributeSource> {
+    let external_reference = source.strip_prefix("external.")?;
+    let (payload_name, field_name) = external_reference.split_once('.')?;
+    DefinitionName::try_new(payload_name.to_owned())
+        .ok()
+        .zip(DefinitionName::try_new(field_name.to_owned()).ok())
+        .map(|(payload_name, field_name)| {
+            EventAttributeSource::ExternalField(payload_name, field_name)
+        })
 }
 
 fn command_definitions_from_json_object(
@@ -580,8 +595,13 @@ fn command_definitions_from_json_object(
         .flatten()
         .map(|command| {
             let inputs = definition_names_from_json_array_field(command, "inputs", "input")?;
+            let external_inputs = definition_names_from_json_array_field(
+                command,
+                "external_inputs",
+                "external input",
+            )?;
             definition_names_from_json_array_field(command, "produces", "event")
-                .map(|produces| CommandDefinition::new(inputs, produces))
+                .map(|produces| CommandDefinition::new(inputs, external_inputs, produces))
         })
         .collect()
 }

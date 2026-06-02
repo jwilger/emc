@@ -312,18 +312,28 @@ impl EventAttribute {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum EventAttributeSource {
     CommandInput(DefinitionName),
+    ExternalField(DefinitionName, DefinitionName),
     Other,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CommandDefinition {
     inputs: Vec<DefinitionName>,
+    external_inputs: Vec<DefinitionName>,
     produces: Vec<DefinitionName>,
 }
 
 impl CommandDefinition {
-    pub fn new(inputs: Vec<DefinitionName>, produces: Vec<DefinitionName>) -> Self {
-        Self { inputs, produces }
+    pub fn new(
+        inputs: Vec<DefinitionName>,
+        external_inputs: Vec<DefinitionName>,
+        produces: Vec<DefinitionName>,
+    ) -> Self {
+        Self {
+            inputs,
+            external_inputs,
+            produces,
+        }
     }
 }
 
@@ -387,7 +397,9 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_event_producers(document)?;
 
-    validate_command_sourced_event_attributes(document)
+    validate_command_sourced_event_attributes(document)?;
+
+    validate_external_sourced_event_attributes(document)
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -710,5 +722,43 @@ fn event_has_producer_input(
 ) -> bool {
     document.command_definitions.iter().any(|command| {
         command.produces.contains(&event.name) && command.inputs.contains(input_name)
+    })
+}
+
+fn validate_external_sourced_event_attributes(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .event_definitions
+        .iter()
+        .flat_map(|event| {
+            event.attributes.iter().filter_map(move |attribute| {
+                if let EventAttributeSource::ExternalField(payload_name, field_name) =
+                    &attribute.source
+                {
+                    Some((event, attribute, payload_name, field_name))
+                } else {
+                    None
+                }
+            })
+        })
+        .find(|(event, _, payload_name, _)| {
+            !event_has_producer_external_input(document, event, payload_name)
+        })
+        .map_or(Ok(()), |(event, attribute, payload_name, field_name)| {
+            Err(validation_issue(format!(
+                "event '{}' attribute '{}' has invalid source 'external.{}.{}'",
+                event.name, attribute.name, payload_name, field_name
+            )))
+        })
+}
+
+fn event_has_producer_external_input(
+    document: &EventModelDocument,
+    event: &EventDefinition,
+    payload_name: &DefinitionName,
+) -> bool {
+    document.command_definitions.iter().any(|command| {
+        command.produces.contains(&event.name) && command.external_inputs.contains(payload_name)
     })
 }
