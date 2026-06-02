@@ -256,6 +256,7 @@ pub struct SliceDefinition {
     slice_type: SliceType,
     issued_commands: Vec<DefinitionName>,
     handled_command_errors: Vec<DefinitionName>,
+    owned_automations: Vec<DefinitionName>,
     owned_read_models: Vec<DefinitionName>,
     owned_views: Vec<DefinitionName>,
     owned_events: Vec<DefinitionName>,
@@ -275,6 +276,7 @@ impl SliceDefinition {
             slice_type: parts.slice_type,
             issued_commands: parts.issued_commands,
             handled_command_errors: parts.handled_command_errors,
+            owned_automations: parts.owned_automations,
             owned_read_models: parts.owned_read_models,
             owned_views: parts.owned_views,
             owned_events: parts.owned_events,
@@ -303,6 +305,7 @@ pub struct SliceDefinitionParts {
     slice_type: SliceType,
     issued_commands: Vec<DefinitionName>,
     handled_command_errors: Vec<DefinitionName>,
+    owned_automations: Vec<DefinitionName>,
     owned_read_models: Vec<DefinitionName>,
     owned_views: Vec<DefinitionName>,
     owned_events: Vec<DefinitionName>,
@@ -322,6 +325,7 @@ impl SliceDefinitionParts {
             slice_type,
             issued_commands: Vec::new(),
             handled_command_errors: Vec::new(),
+            owned_automations: Vec::new(),
             owned_read_models: Vec::new(),
             owned_views: Vec::new(),
             owned_events: Vec::new(),
@@ -345,6 +349,11 @@ impl SliceDefinitionParts {
         handled_command_errors: Vec<DefinitionName>,
     ) -> Self {
         self.handled_command_errors = handled_command_errors;
+        self
+    }
+
+    pub fn with_owned_automations(mut self, owned_automations: Vec<DefinitionName>) -> Self {
+        self.owned_automations = owned_automations;
         self
     }
 
@@ -848,6 +857,12 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    duplicate_slice_automation_definition(documents).map_or(Ok(()), |automation_name| {
+        Err(validation_issue(format!(
+            "automation '{automation_name}' is defined by more than one slice"
+        )))
+    })?;
+
     duplicate_slice_view_definition(documents).map_or(Ok(()), |view_name| {
         Err(validation_issue(format!(
             "view '{view_name}' is defined by more than one slice"
@@ -943,6 +958,27 @@ fn duplicate_slice_read_model_definition(
             seen.insert(read_model_name.clone(), slice.name.clone())
                 .filter(|previous_slice_name| *previous_slice_name != slice.name)
                 .map(|_| read_model_name.clone())
+        })
+}
+
+fn duplicate_slice_automation_definition(
+    documents: &[EventModelDocument],
+) -> Option<DefinitionName> {
+    let mut seen = BTreeMap::new();
+    documents
+        .iter()
+        .filter(|document| document.file_kind == EventModelFileKind::Slice)
+        .flat_map(|document| document.slice_definitions.iter())
+        .flat_map(|slice| {
+            slice
+                .owned_automations
+                .iter()
+                .map(move |automation_name| (slice, automation_name))
+        })
+        .find_map(|(slice, automation_name)| {
+            seen.insert(automation_name.clone(), slice.name.clone())
+                .filter(|previous_slice_name| *previous_slice_name != slice.name)
+                .map(|_| automation_name.clone())
         })
 }
 
