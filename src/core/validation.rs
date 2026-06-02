@@ -6,6 +6,7 @@ use nutype::nutype;
 pub struct EventModelDocument {
     file_kind: EventModelFileKind,
     top_level_keys: BTreeSet<TopLevelKey>,
+    event_names: BTreeSet<DefinitionName>,
     named_definitions: Vec<NamedDefinition>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
@@ -15,6 +16,7 @@ impl EventModelDocument {
     pub fn new(
         file_kind: EventModelFileKind,
         top_level_keys: BTreeSet<TopLevelKey>,
+        event_names: BTreeSet<DefinitionName>,
         named_definitions: Vec<NamedDefinition>,
         slice_count: SliceDefinitionCount,
         slice_definitions: Vec<SliceDefinition>,
@@ -22,6 +24,7 @@ impl EventModelDocument {
         Self {
             file_kind,
             top_level_keys,
+            event_names,
             named_definitions,
             slice_count,
             slice_definitions,
@@ -86,6 +89,10 @@ impl NamedDefinition {
     pub fn new(kind: DefinitionKind, name: DefinitionName) -> Self {
         Self { kind, name }
     }
+
+    pub fn into_name(self) -> DefinitionName {
+        self.name
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -114,6 +121,7 @@ pub struct SliceScenario {
     name: DefinitionName,
     when_field: ScenarioStepField,
     scenario_set: ScenarioSetKind,
+    referenced_events: Vec<DefinitionName>,
 }
 
 impl SliceScenario {
@@ -121,11 +129,13 @@ impl SliceScenario {
         name: DefinitionName,
         when_field: ScenarioStepField,
         scenario_set: ScenarioSetKind,
+        referenced_events: Vec<DefinitionName>,
     ) -> Self {
         Self {
             name,
             when_field,
             scenario_set,
+            referenced_events,
         }
     }
 }
@@ -172,7 +182,9 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_scenario_when_fields(document)?;
 
-    validate_duplicate_scenario_names(document)
+    validate_duplicate_scenario_names(document)?;
+
+    validate_acceptance_scenario_boundaries(document)
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -334,4 +346,32 @@ fn duplicate_scenario_suffix(duplicate_kind: DuplicateScenarioKind) -> &'static 
         }
         DuplicateScenarioKind::WithinField => "",
     }
+}
+
+fn validate_acceptance_scenario_boundaries(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .flat_map(|slice| {
+            slice
+                .scenarios
+                .iter()
+                .filter(|scenario| scenario.scenario_set == ScenarioSetKind::Acceptance)
+                .flat_map(move |scenario| {
+                    scenario
+                        .referenced_events
+                        .iter()
+                        .filter(|event_name| document.event_names.contains(*event_name))
+                        .map(move |event_name| (slice, scenario, event_name))
+                })
+        })
+        .next()
+        .map_or(Ok(()), |(slice, scenario, event_name)| {
+            Err(validation_issue(format!(
+                "slice '{}' acceptance scenario '{}' references event '{}'; acceptance_scenarios must describe user-facing behavior only",
+                slice.name, scenario.name, event_name
+            )))
+        })
 }
