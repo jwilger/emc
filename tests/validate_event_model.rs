@@ -890,6 +890,32 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_duplicate_translations_across_slice_files() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("checkpoint-translation.eventmodel.json"),
+            "{\"name\":\"Checkpoint translation workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Record checkpoint result owner\",\"translations\":[\"Record checkpoint result\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+        )?;
+        write(
+            slices.join("retry-checkpoint-translation.eventmodel.json"),
+            "{\"name\":\"Retry checkpoint translation workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Retry record checkpoint result owner\",\"translations\":[\"Record checkpoint result\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "translation 'Record checkpoint result' is defined by more than one slice",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_undeclared_board_automation_between_read_model_and_command()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
