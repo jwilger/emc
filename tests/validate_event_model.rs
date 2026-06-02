@@ -1272,6 +1272,37 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_workflow_command_transitions_not_invoked_by_source_view()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("lesson-01.eventmodel.json"),
+            "{\"name\":\"Lesson 01\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[],\"slice_files\":[\"./show-lesson.eventmodel.json\",\"./submit-lesson.eventmodel.json\"],\"steps\":[{\"slice\":\"show-lesson\",\"name\":\"Show lesson\",\"type\":\"state_view\",\"relationship\":\"entry\",\"transitions\":[{\"to\":\"submit-lesson\",\"via_command\":\"SubmitLessonForReview\"}]},{\"slice\":\"submit-lesson\",\"name\":\"Submit lesson\",\"type\":\"state_change\",\"relationship\":\"main\"}]}",
+        )?;
+        write(
+            workflows.join("show-lesson.eventmodel.json"),
+            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[]}],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"controls\":[]}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+        write(
+            workflows.join("submit-lesson.eventmodel.json"),
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lessons\"}],\"events\":[{\"name\":\"LessonSubmittedForReview\",\"stream\":\"lessons\",\"attributes\":[]}],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[\"LessonSubmittedForReview\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_change\",\"commands\":[\"SubmitLessonForReview\"],\"events\":[\"LessonSubmittedForReview\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"submit lesson\",\"given\":[],\"given_streams\":[{\"stream\":\"lessons\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"LessonSubmittedForReview\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "transition command 'SubmitLessonForReview' is not invoked by source view 'lesson_screen'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_automation_slices_without_trigger() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
