@@ -622,6 +622,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_translation_slice_external_contracts(document)?;
 
+    validate_translation_slice_view_ownership(document)?;
+
     validate_command_sourced_event_attributes(document)?;
 
     validate_command_legacy_read_model_reads(document)?;
@@ -992,6 +994,28 @@ fn validate_translation_slice_external_contracts(
             Err(validation_issue(format!(
                 "translation slice '{}' must declare an external event or payload contract",
                 slice.name
+            )))
+        })
+}
+
+fn validate_translation_slice_view_ownership(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::Translation)
+        .flat_map(|slice| {
+            slice
+                .owned_views
+                .iter()
+                .map(move |view_name| (slice, view_name))
+        })
+        .next()
+        .map_or(Ok(()), |(slice, view_name)| {
+            Err(validation_issue(format!(
+                "translation slice '{}' must not own view '{}'",
+                slice.name, view_name
             )))
         })
 }
