@@ -1743,6 +1743,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_board_read_model_to_command_intermediates(document)?;
 
+    validate_external_events_not_modeled_as_automation(document)?;
+
     validate_board_automation_references(document)?;
 
     validate_unnamed_board_automation_references(document)?;
@@ -3653,6 +3655,16 @@ fn validate_board_automation_references(
     })
 }
 
+fn validate_external_events_not_modeled_as_automation(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    external_event_modeled_as_automation(document).map_or(Ok(()), |external_event| {
+        Err(validation_issue(format!(
+            "external event '{external_event}' must not be modeled as automation"
+        )))
+    })
+}
+
 fn validate_unnamed_board_automation_references(
     document: &EventModelDocument,
 ) -> Result<(), ValidationIssue> {
@@ -3753,6 +3765,17 @@ fn unknown_board_automation_reference(
             kind: element.kind,
             name: name.clone(),
         })
+}
+
+fn external_event_modeled_as_automation(document: &EventModelDocument) -> Option<DefinitionName> {
+    document
+        .board_slices
+        .iter()
+        .flat_map(|board_slice| board_slice.elements.iter())
+        .filter(|element| element.kind == BoardElementKind::Automation)
+        .map(|element| element.name.as_ref().unwrap_or(&element.id))
+        .find(|candidate| declared_external_event_name(document, candidate))
+        .cloned()
 }
 
 fn undeclared_unnamed_board_automation(document: &EventModelDocument) -> Option<DefinitionName> {
