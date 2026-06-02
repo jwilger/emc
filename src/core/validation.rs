@@ -324,6 +324,7 @@ pub struct WorkflowStep {
     trigger: WorkflowStepTrigger,
     workflow_exit: WorkflowStepExit,
     transition_targets: BTreeSet<DefinitionName>,
+    selected_scenario: Option<DefinitionName>,
 }
 
 impl WorkflowStep {
@@ -333,6 +334,7 @@ impl WorkflowStep {
         trigger: WorkflowStepTrigger,
         workflow_exit: WorkflowStepExit,
         transition_targets: BTreeSet<DefinitionName>,
+        selected_scenario: Option<DefinitionName>,
     ) -> Self {
         Self {
             slice,
@@ -340,6 +342,7 @@ impl WorkflowStep {
             trigger,
             workflow_exit,
             transition_targets,
+            selected_scenario,
         }
     }
 
@@ -349,6 +352,10 @@ impl WorkflowStep {
 
     fn transition_targets(&self) -> &BTreeSet<DefinitionName> {
         &self.transition_targets
+    }
+
+    fn selected_scenario(&self) -> Option<&DefinitionName> {
+        self.selected_scenario.as_ref()
     }
 
     fn requires_incoming_transition(&self) -> bool {
@@ -1285,6 +1292,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_workflow_internal_definitions(document)?;
 
+    validate_workflow_steps_compose_whole_slices(document)?;
+
     validate_workflow_steps_reference_composed_slices(document)?;
 
     validate_workflow_referenced_slices_are_used(document)?;
@@ -1822,6 +1831,27 @@ fn validate_workflow_internal_definitions(
     } else {
         Ok(())
     }
+}
+
+fn validate_workflow_steps_compose_whole_slices(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    if document.workflow_composition != WorkflowComposition::DeclaresSteps {
+        return Ok(());
+    }
+
+    document
+        .workflow_steps
+        .iter()
+        .find_map(|step| {
+            step.selected_scenario()
+                .map(|scenario| (step.slice(), scenario))
+        })
+        .map_or(Ok(()), |(step_slice, scenario)| {
+            Err(validation_issue(format!(
+                "workflow step '{step_slice}' must compose the whole slice, not scenario '{scenario}'"
+            )))
+        })
 }
 
 fn validate_workflow_steps_reference_composed_slices(
