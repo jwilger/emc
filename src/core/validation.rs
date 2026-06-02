@@ -401,7 +401,8 @@ pub enum ReadModelFieldDerivation {
 pub enum ReadModelFieldAbsenceDefault {
     NotDefaulted,
     DefaultedWithoutAbsenceEvent,
-    DefaultedWithAbsenceEvent,
+    DefaultedWithoutScenarios,
+    DefaultedComplete,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -508,6 +509,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_derived_read_model_field_provenance(document))
         .and_then(|()| validate_derived_read_model_field_scenarios(document))
         .and_then(|()| validate_absence_default_read_model_field_events(document))
+        .and_then(|()| validate_absence_default_read_model_field_scenarios(document))
         .and_then(|()| validate_transitive_read_model_derivation(document))
         .and_then(|()| validate_read_model_field_event_sources(document))
 }
@@ -1058,6 +1060,26 @@ fn validate_absence_default_read_model_field_events(
         .map_or(Ok(()), |field| {
             Err(validation_issue(format!(
                 "absence/default field '{}' must declare the event absence it derives from",
+                field.name
+            )))
+        })
+}
+
+fn validate_absence_default_read_model_field_scenarios(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .read_model_definitions
+        .iter()
+        .flat_map(|read_model| {
+            read_model.fields.iter().filter(|field| {
+                field.absence_default == ReadModelFieldAbsenceDefault::DefaultedWithoutScenarios
+            })
+        })
+        .next()
+        .map_or(Ok(()), |field| {
+            Err(validation_issue(format!(
+                "absence/default field '{}' must have an absence scenario",
                 field.name
             )))
         })
