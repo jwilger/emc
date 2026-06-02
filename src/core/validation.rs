@@ -1757,6 +1757,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_command_board_triggers(document)?;
 
+    validate_command_event_board_connections(document)?;
+
     validate_command_sourced_event_attributes(document)?;
 
     validate_command_legacy_read_model_reads(document)?;
@@ -3720,12 +3722,29 @@ fn validate_command_board_triggers(document: &EventModelDocument) -> Result<(), 
     })
 }
 
+fn validate_command_event_board_connections(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    command_event_board_connection_without_producer(document).map_or(Ok(()), |issue| {
+        Err(validation_issue(format!(
+            "board connects command '{}' to event '{}' that it does not produce",
+            issue.command, issue.event
+        )))
+    })
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct InvalidBoardConnection {
     from: DefinitionName,
     from_kind: BoardElementKind,
     to: DefinitionName,
     to_kind: BoardElementKind,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct CommandEventBoardConnectionIssue {
+    command: DefinitionName,
+    event: DefinitionName,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -3963,11 +3982,54 @@ fn board_element_kind_by_id(
     board_slice: &BoardSliceGraph,
     element_id: &DefinitionName,
 ) -> Option<BoardElementKind> {
+    board_element_by_id(board_slice, element_id).map(|element| element.kind)
+}
+
+fn board_element_by_id<'a>(
+    board_slice: &'a BoardSliceGraph,
+    element_id: &DefinitionName,
+) -> Option<&'a BoardElement> {
     board_slice
         .elements
         .iter()
         .find(|element| &element.id == element_id)
-        .map(|element| element.kind)
+}
+
+fn command_event_board_connection_without_producer(
+    document: &EventModelDocument,
+) -> Option<CommandEventBoardConnectionIssue> {
+    document.board_slices.iter().find_map(|board_slice| {
+        board_slice.connections.iter().find_map(|connection| {
+            let command_element = board_element_by_id(board_slice, &connection.from)?;
+            let event_element = board_element_by_id(board_slice, &connection.to)?;
+            (command_element.kind == BoardElementKind::Command
+                && event_element.kind == BoardElementKind::Event)
+                .then(|| {
+                    let command = board_element_definition_name(command_element);
+                    let event = board_element_definition_name(event_element);
+                    (!command_produces_event(document, command, event)).then(|| {
+                        CommandEventBoardConnectionIssue {
+                            command: command.clone(),
+                            event: event.clone(),
+                        }
+                    })
+                })
+                .flatten()
+        })
+    })
+}
+
+fn board_element_definition_name(element: &BoardElement) -> &DefinitionName {
+    element.name.as_ref().unwrap_or(&element.id)
+}
+
+fn command_produces_event(
+    document: &EventModelDocument,
+    command_name: &DefinitionName,
+    event_name: &DefinitionName,
+) -> bool {
+    command_definition(document, command_name)
+        .is_some_and(|command| command.produces.contains(event_name))
 }
 
 fn declared_external_event_name(document: &EventModelDocument, name: &DefinitionName) -> bool {
