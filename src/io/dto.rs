@@ -12,13 +12,14 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    CommandDefinition, CommandInputSource, CommandInputSourceKind, DefinitionKind, DefinitionName,
-    EventAttribute, EventAttributeSource, EventDefinition, EventModelDocument,
-    EventModelDocumentParts, EventModelFileKind, ExternalInputSchema, LegacyScenariosField,
-    NamedDefinition, ReadModelDefinition, ReadModelField, ReadModelFieldAbsenceDefault,
-    ReadModelFieldDerivation, ReadModelFieldSource, ReadModelTransitiveDerivation, ScenarioSetKind,
-    ScenarioStepField, SliceDefinition, SliceDefinitionCount, SliceScenario, SliceType,
-    TopLevelKey, ViewDefinition, empty_top_level_key_issue, model_must_be_object_issue,
+    CommandDefinition, CommandInputSource, CommandInputSourceKind, CommandReadModelReads,
+    DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource, EventDefinition,
+    EventModelDocument, EventModelDocumentParts, EventModelFileKind, ExternalInputSchema,
+    LegacyScenariosField, NamedDefinition, ReadModelDefinition, ReadModelField,
+    ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
+    ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SliceDefinition,
+    SliceDefinitionCount, SliceScenario, SliceType, TopLevelKey, ViewDefinition,
+    empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -805,8 +806,10 @@ fn command_definitions_from_json_object(
         .into_iter()
         .flatten()
         .map(|command| {
+            let name = optional_definition_name_from_json_field(command, "name", "command")?;
             let inputs = definition_names_from_json_array_field(command, "inputs", "input")?;
             let input_sources = command_input_sources_from_json_command(command)?;
+            let read_model_reads = command_read_model_reads_from_json_command(command);
             let external_inputs = definition_names_from_json_array_field(
                 command,
                 "external_inputs",
@@ -815,8 +818,10 @@ fn command_definitions_from_json_object(
             let external_input_schemas = external_input_schemas_from_json_command(command)?;
             definition_names_from_json_array_field(command, "produces", "event").map(|produces| {
                 CommandDefinition::new(
+                    name,
                     inputs,
                     input_sources,
+                    read_model_reads,
                     external_inputs,
                     external_input_schemas,
                     produces,
@@ -824,6 +829,16 @@ fn command_definitions_from_json_object(
             })
         })
         .collect()
+}
+
+fn command_read_model_reads_from_json_command(command: &Value) -> CommandReadModelReads {
+    command
+        .get("reads")
+        .and_then(Value::as_array)
+        .filter(|reads| !reads.is_empty())
+        .map_or(CommandReadModelReads::Absent, |_| {
+            CommandReadModelReads::Present
+        })
 }
 
 fn command_input_sources_from_json_command(
