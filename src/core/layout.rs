@@ -1,3 +1,4 @@
+use crate::core::emc::artifact_digest;
 use crate::core::effect::{Effect, EffectPlan, ProjectPath, ReportLine};
 use crate::core::project::ProjectName;
 use crate::core::types::{ModelName, WorkflowSlug};
@@ -43,6 +44,8 @@ pub fn check_project(
 }
 
 fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
+    let workflow_name = workflow.name.as_ref().to_owned();
+    let digest = artifact_digest(workflow.name.clone());
     let module_name = module_name_from_model(workflow.name);
     let workflow_slug = workflow.slug.as_ref();
 
@@ -52,6 +55,20 @@ fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
         ))),
         Effect::RequireFile(project_path(format!("model/lean/{module_name}.lean"))),
         Effect::RequireFile(project_path(format!("model/quint/{module_name}.qnt"))),
+        Effect::RequireDigest(
+            project_path(format!("model/lean/{module_name}.lean")),
+            digest.clone(),
+            report_line(format!(
+                "artifact digest mismatch for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireDigest(
+            project_path(format!("model/quint/{module_name}.qnt")),
+            digest,
+            report_line(format!(
+                "artifact digest mismatch for workflow {workflow_name}"
+            )),
+        ),
     ]
 }
 

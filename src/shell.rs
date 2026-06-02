@@ -48,6 +48,14 @@ fn interpret_effect(effect: &Effect) -> Result<(), ShellError> {
         Effect::EnsureDirectory(path) => {
             fs::create_dir_all(Path::new(path.as_ref())).map_err(ShellError::io)
         }
+        Effect::RequireDigest(path, digest, message) => {
+            let contents = fs::read_to_string(Path::new(path.as_ref())).map_err(ShellError::io)?;
+            if contents.contains(digest.as_ref()) {
+                Ok(())
+            } else {
+                Err(ShellError::message(message.as_ref().to_owned()))
+            }
+        }
         Effect::RequireFile(path) => {
             if Path::new(path.as_ref()).is_file() {
                 Ok(())

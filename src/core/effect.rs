@@ -3,6 +3,7 @@ use nutype::nutype;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Effect {
     EnsureDirectory(ProjectPath),
+    RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
     WriteFile(ProjectPath, FileContents),
     WriteFileIfMissing(ProjectPath, FileContents),
@@ -40,3 +41,10 @@ pub struct FileContents(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef)
 )]
 pub struct ReportLine(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef)
+)]
+pub struct ArtifactDigest(String);
