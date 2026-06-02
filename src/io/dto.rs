@@ -15,9 +15,10 @@ use crate::core::validation::{
     CommandDefinition, DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource,
     EventDefinition, EventModelDocument, EventModelDocumentParts, EventModelFileKind,
     ExternalInputSchema, LegacyScenariosField, NamedDefinition, ReadModelDefinition,
-    ReadModelField, ReadModelFieldDerivation, ReadModelFieldSource, ReadModelTransitiveDerivation,
-    ScenarioSetKind, ScenarioStepField, SliceDefinition, SliceDefinitionCount, SliceScenario,
-    SliceType, TopLevelKey, ViewDefinition, empty_top_level_key_issue, model_must_be_object_issue,
+    ReadModelField, ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
+    ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SliceDefinition,
+    SliceDefinitionCount, SliceScenario, SliceType, TopLevelKey, ViewDefinition,
+    empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -496,6 +497,7 @@ fn read_model_fields_from_json_read_model(
                         name,
                         read_model_field_source_from_json(field),
                         read_model_field_derivation_from_json(field),
+                        read_model_field_absence_default_from_json(field),
                     )
                 })
         })
@@ -557,6 +559,27 @@ fn read_model_field_has_derivation_scenarios(field: &Value) -> bool {
         .get("derivation_scenarios")
         .and_then(Value::as_array)
         .is_some_and(|scenarios| !scenarios.is_empty())
+}
+
+fn read_model_field_absence_default_from_json(field: &Value) -> ReadModelFieldAbsenceDefault {
+    field
+        .get("defaulted_from_absence")
+        .and_then(Value::as_bool)
+        .filter(|defaulted| *defaulted)
+        .map_or(ReadModelFieldAbsenceDefault::NotDefaulted, |_| {
+            if read_model_field_has_absence_event(field) {
+                ReadModelFieldAbsenceDefault::DefaultedWithAbsenceEvent
+            } else {
+                ReadModelFieldAbsenceDefault::DefaultedWithoutAbsenceEvent
+            }
+        })
+}
+
+fn read_model_field_has_absence_event(field: &Value) -> bool {
+    field
+        .get("absence_event")
+        .and_then(Value::as_str)
+        .is_some_and(|event| !event.is_empty())
 }
 
 fn read_model_transitive_derivation_from_json(

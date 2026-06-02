@@ -363,6 +363,7 @@ pub struct ReadModelField {
     name: DefinitionName,
     source: ReadModelFieldSource,
     derivation: ReadModelFieldDerivation,
+    absence_default: ReadModelFieldAbsenceDefault,
 }
 
 impl ReadModelField {
@@ -370,11 +371,13 @@ impl ReadModelField {
         name: DefinitionName,
         source: ReadModelFieldSource,
         derivation: ReadModelFieldDerivation,
+        absence_default: ReadModelFieldAbsenceDefault,
     ) -> Self {
         Self {
             name,
             source,
             derivation,
+            absence_default,
         }
     }
 }
@@ -392,6 +395,13 @@ pub enum ReadModelFieldDerivation {
     DerivedWithoutProvenance,
     DerivedWithoutScenarios,
     DerivedComplete,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ReadModelFieldAbsenceDefault {
+    NotDefaulted,
+    DefaultedWithoutAbsenceEvent,
+    DefaultedWithAbsenceEvent,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -497,6 +507,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_generated_event_attribute_sources(document))
         .and_then(|()| validate_derived_read_model_field_provenance(document))
         .and_then(|()| validate_derived_read_model_field_scenarios(document))
+        .and_then(|()| validate_absence_default_read_model_field_events(document))
         .and_then(|()| validate_transitive_read_model_derivation(document))
         .and_then(|()| validate_read_model_field_event_sources(document))
 }
@@ -1027,6 +1038,26 @@ fn validate_derived_read_model_field_scenarios(
         .map_or(Ok(()), |field| {
             Err(validation_issue(format!(
                 "derived read model field '{}' must have a derivation scenario",
+                field.name
+            )))
+        })
+}
+
+fn validate_absence_default_read_model_field_events(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .read_model_definitions
+        .iter()
+        .flat_map(|read_model| {
+            read_model.fields.iter().filter(|field| {
+                field.absence_default == ReadModelFieldAbsenceDefault::DefaultedWithoutAbsenceEvent
+            })
+        })
+        .next()
+        .map_or(Ok(()), |field| {
+            Err(validation_issue(format!(
+                "absence/default field '{}' must declare the event absence it derives from",
                 field.name
             )))
         })
