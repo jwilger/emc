@@ -486,6 +486,7 @@ pub struct ViewDefinition {
     name: DefinitionName,
     read_models: Vec<DefinitionName>,
     controls: Vec<ViewControlDefinition>,
+    wireframe: ViewWireframe,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -497,6 +498,12 @@ impl ViewControlDefinition {
     pub fn new(label: DefinitionName) -> Self {
         Self { label }
     }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ViewWireframe {
+    Absent,
+    Present,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -749,11 +756,13 @@ impl ViewDefinition {
         name: DefinitionName,
         read_models: Vec<DefinitionName>,
         controls: Vec<ViewControlDefinition>,
+        wireframe: ViewWireframe,
     ) -> Self {
         Self {
             name,
             read_models,
             controls,
+            wireframe,
         }
     }
 }
@@ -884,6 +893,12 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    duplicate_slice_wireframe_definition(documents).map_or(Ok(()), |view_name| {
+        Err(validation_issue(format!(
+            "wireframe for view '{view_name}' is defined by more than one slice"
+        )))
+    })?;
+
     duplicate_slice_view_definition(documents).map_or(Ok(()), |view_name| {
         Err(validation_issue(format!(
             "view '{view_name}' is defined by more than one slice"
@@ -979,6 +994,29 @@ fn duplicate_slice_read_model_definition(
             seen.insert(read_model_name.clone(), slice.name.clone())
                 .filter(|previous_slice_name| *previous_slice_name != slice.name)
                 .map(|_| read_model_name.clone())
+        })
+}
+
+fn duplicate_slice_wireframe_definition(
+    documents: &[EventModelDocument],
+) -> Option<DefinitionName> {
+    let mut seen = BTreeMap::new();
+    documents
+        .iter()
+        .filter(|document| document.file_kind == EventModelFileKind::Slice)
+        .flat_map(|document| {
+            document.slice_definitions.iter().flat_map(move |slice| {
+                slice.owned_views.iter().filter_map(move |view_name| {
+                    view_definition(document, view_name)
+                        .filter(|view| view.wireframe == ViewWireframe::Present)
+                        .map(|view| (slice, view))
+                })
+            })
+        })
+        .find_map(|(slice, view)| {
+            seen.insert(view.name.clone(), slice.name.clone())
+                .filter(|previous_slice_name| *previous_slice_name != slice.name)
+                .map(|_| view.name.clone())
         })
 }
 

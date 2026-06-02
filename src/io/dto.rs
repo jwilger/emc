@@ -20,7 +20,7 @@ use crate::core::validation::{
     ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
     ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
     SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceType,
-    TopLevelKey, TranslationContract, ViewControlDefinition, ViewDefinition,
+    TopLevelKey, TranslationContract, ViewControlDefinition, ViewDefinition, ViewWireframe,
     empty_top_level_key_issue, model_must_be_object_issue,
 };
 
@@ -750,11 +750,21 @@ fn view_definitions_from_json_object(
                 })
                 .and_then(|name| {
                     let controls = view_control_definitions_from_json_view(view)?;
+                    let wireframe = view_wireframe_from_json_view(view);
                     definition_names_from_json_array_field(view, "uses_read_models", "read model")
-                        .map(|read_models| ViewDefinition::new(name, read_models, controls))
+                        .map(|read_models| {
+                            ViewDefinition::new(name, read_models, controls, wireframe)
+                        })
                 })
         })
         .collect()
+}
+
+fn view_wireframe_from_json_view(view: &Value) -> ViewWireframe {
+    view.get("wireframe")
+        .and_then(Value::as_str)
+        .filter(|wireframe| !wireframe.trim().is_empty())
+        .map_or(ViewWireframe::Absent, |_| ViewWireframe::Present)
 }
 
 fn view_control_definitions_from_json_view(
