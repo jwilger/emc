@@ -555,6 +555,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_read_model_to_command_board_connections() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("read-model-feeds-command.eventmodel.json"),
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\",\"name\":\"People, Views, and Translations\"},{\"id\":\"actions\",\"name\":\"Commands and Projections\"},{\"id\":\"events\",\"name\":\"Stored Facts\"}],\"slices\":[{\"name\":\"Submit lesson\",\"elements\":[{\"id\":\"rm-context\",\"kind\":\"read_model\",\"lane\":\"actions\",\"name\":\"lesson_submission_context\"},{\"id\":\"cmd-submit\",\"kind\":\"command\",\"lane\":\"actions\",\"name\":\"SubmitLessonForReview\"}],\"connections\":[{\"from\":\"rm-context\",\"to\":\"cmd-submit\"}]}]},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[]}],\"read_models\":[{\"name\":\"lesson_submission_context\",\"fields\":[]}],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_change\",\"commands\":[\"SubmitLessonForReview\"],\"acceptance_scenarios\":[{\"name\":\"submit lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "invalid board connection 'rm-context' (read_model) -> 'cmd-submit' (command)",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_command_board_elements_without_incoming_triggers()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
