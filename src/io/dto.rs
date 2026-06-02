@@ -19,7 +19,8 @@ use crate::core::validation::{
     ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
     ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
     SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceType,
-    TopLevelKey, ViewDefinition, empty_top_level_key_issue, model_must_be_object_issue,
+    TopLevelKey, TranslationContract, ViewDefinition, empty_top_level_key_issue,
+    model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -274,6 +275,9 @@ fn slice_definitions_from_json_object(
                                     slice,
                                 ))
                                 .with_singleton_behavior(singleton_behavior_from_json_slice(slice))
+                                .with_translation_contract(translation_contract_from_json_slice(
+                                    slice,
+                                ))
                                 .with_scenarios(scenarios),
                         )
                     })
@@ -281,6 +285,29 @@ fn slice_definitions_from_json_object(
                 .and_then(|slice_definition| slice_definition)
         })
         .collect()
+}
+
+fn translation_contract_from_json_slice(slice: &Value) -> TranslationContract {
+    if slice_type_from_json_slice(slice) == SliceType::Translation {
+        if slice_has_external_contract(slice) {
+            TranslationContract::DeclaresExternalContract
+        } else {
+            TranslationContract::MissingExternalContract
+        }
+    } else {
+        TranslationContract::NotTranslation
+    }
+}
+
+fn slice_has_external_contract(slice: &Value) -> bool {
+    slice
+        .get("external_event")
+        .and_then(Value::as_str)
+        .is_some_and(|external_event| !external_event.is_empty())
+        || slice
+            .get("external_input_schemas")
+            .and_then(Value::as_array)
+            .is_some_and(|schemas| !schemas.is_empty())
 }
 
 fn singleton_behavior_from_json_slice(slice: &Value) -> SingletonBehavior {
@@ -479,6 +506,7 @@ fn slice_type_from_json_slice(slice: &Value) -> SliceType {
     match slice.get("type").and_then(Value::as_str) {
         Some("state_change") => SliceType::StateChange,
         Some("state_view") => SliceType::StateView,
+        Some("translation") => SliceType::Translation,
         _ => SliceType::Other,
     }
 }

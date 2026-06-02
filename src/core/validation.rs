@@ -181,6 +181,7 @@ pub enum SliceType {
     Other,
     StateChange,
     StateView,
+    Translation,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
@@ -224,6 +225,7 @@ pub struct SliceDefinition {
     outcome_labels: Vec<DefinitionName>,
     legacy_scenarios: LegacyScenariosField,
     singleton_behavior: SingletonBehavior,
+    translation_contract: TranslationContract,
     scenarios: Vec<SliceScenario>,
 }
 
@@ -237,6 +239,7 @@ impl SliceDefinition {
             outcome_labels: parts.outcome_labels,
             legacy_scenarios: parts.legacy_scenarios,
             singleton_behavior: parts.singleton_behavior,
+            translation_contract: parts.translation_contract,
             scenarios: parts.scenarios,
         }
     }
@@ -259,6 +262,7 @@ pub struct SliceDefinitionParts {
     outcome_labels: Vec<DefinitionName>,
     legacy_scenarios: LegacyScenariosField,
     singleton_behavior: SingletonBehavior,
+    translation_contract: TranslationContract,
     scenarios: Vec<SliceScenario>,
 }
 
@@ -272,6 +276,7 @@ impl SliceDefinitionParts {
             outcome_labels: Vec::new(),
             legacy_scenarios: LegacyScenariosField::Absent,
             singleton_behavior: SingletonBehavior::NotSingleton,
+            translation_contract: TranslationContract::NotTranslation,
             scenarios: Vec::new(),
         }
     }
@@ -301,6 +306,11 @@ impl SliceDefinitionParts {
         self
     }
 
+    pub fn with_translation_contract(mut self, translation_contract: TranslationContract) -> Self {
+        self.translation_contract = translation_contract;
+        self
+    }
+
     pub fn with_scenarios(mut self, scenarios: Vec<SliceScenario>) -> Self {
         self.scenarios = scenarios;
         self
@@ -312,6 +322,13 @@ pub enum SingletonBehavior {
     NotSingleton,
     MissingRepeatBehavior,
     DeclaresRepeatBehavior,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum TranslationContract {
+    NotTranslation,
+    MissingExternalContract,
+    DeclaresExternalContract,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -602,6 +619,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_state_change_scenario_given_streams(document)?;
 
     validate_singleton_state_change_repeat_behavior(document)?;
+
+    validate_translation_slice_external_contracts(document)?;
 
     validate_command_sourced_event_attributes(document)?;
 
@@ -956,6 +975,22 @@ fn validate_singleton_state_change_repeat_behavior(
         .map_or(Ok(()), |slice| {
             Err(validation_issue(format!(
                 "singleton state_change slice '{}' must declare already-exists or idempotent behavior",
+                slice.name
+            )))
+        })
+}
+
+fn validate_translation_slice_external_contracts(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::Translation)
+        .find(|slice| slice.translation_contract == TranslationContract::MissingExternalContract)
+        .map_or(Ok(()), |slice| {
+            Err(validation_issue(format!(
+                "translation slice '{}' must declare an external event or payload contract",
                 slice.name
             )))
         })

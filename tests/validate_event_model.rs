@@ -645,4 +645,27 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_translation_slices_without_external_signal_or_payload_contract()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("translation-without-external-contract.eventmodel.json"),
+            "{\"name\":\"Record SCIM member provisioning\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"member\"}],\"events\":[{\"name\":\"SCIMMemberProvisioned\",\"stream\":\"member\",\"attributes\":[]}],\"commands\":[{\"name\":\"RecordSCIMMemberProvisioning\",\"inputs\":[],\"produces\":[\"SCIMMemberProvisioned\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Record SCIM member provisioning\",\"type\":\"translation\",\"events\":[\"SCIMMemberProvisioned\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"record scim member\",\"given\":[],\"when\":{},\"then\":[\"SCIMMemberProvisioned\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "translation slice 'Record SCIM member provisioning' must declare an external event or payload contract",
+            ));
+
+        Ok(())
+    }
 }
