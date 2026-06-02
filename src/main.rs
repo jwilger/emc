@@ -6,9 +6,10 @@ use std::process::ExitCode;
 use emc::core::emc::{EMCWorkflowImport, import_emc_workflow};
 use emc::core::layout::check_project;
 use emc::core::project::{ProjectName, init_project};
+use emc::core::validation::validate_event_model;
 use emc::io::dto::{
     parse_browser_index_workflows, parse_emc_slice_import, parse_emc_workflow_import,
-    parse_project_manifest_name, parse_slice_slug, parse_workflow_slug,
+    parse_event_model_document, parse_project_manifest_name, parse_slice_slug, parse_workflow_slug,
 };
 use emc::shell::{ShellError, interpret};
 
@@ -94,11 +95,10 @@ fn validate_target(target: &Path) -> Result<(), ShellError> {
 fn validate_event_model_file(path: &Path) -> Result<(), ShellError> {
     let source =
         fs::read_to_string(path).map_err(|error| ShellError::message(error.to_string()))?;
-    serde_json::from_str::<serde_json::Value>(&source)
-        .map(|_| ())
-        .map_err(|error| {
-            ShellError::message(format!("invalid JSON in {}: {error}", path.display()))
-        })
+    let document = parse_event_model_document(&source)
+        .map_err(|error| ShellError::message(format!("{} in {}", error, path.display())))?;
+    validate_event_model(&document)
+        .map_err(|issue| ShellError::message(format!("{} in {}", issue, path.display())))
 }
 
 fn load_emc_import(source: &Path) -> Result<EMCWorkflowImport, ShellError> {
