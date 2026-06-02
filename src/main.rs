@@ -1,7 +1,10 @@
 use std::env;
+use std::fs;
 use std::process::ExitCode;
 
+use emc::core::layout::check_project;
 use emc::core::project::{ProjectName, init_project};
+use emc::io::dto::parse_project_manifest_name;
 use emc::shell::{ShellError, interpret};
 
 struct Cli {
@@ -9,6 +12,7 @@ struct Cli {
 }
 
 enum Command {
+    Check,
     Init { name: String },
 }
 
@@ -24,6 +28,13 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<(), ShellError> {
     match cli.command {
+        Command::Check => {
+            let manifest = fs::read_to_string("emc.toml")
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let project_name =
+                parse_project_manifest_name(&manifest).map_err(ShellError::project_name)?;
+            interpret(check_project(project_name))
+        }
         Command::Init { name } => {
             let project_name = ProjectName::try_new(name).map_err(ShellError::project_name)?;
             interpret(init_project(project_name))
@@ -33,6 +44,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
 
 fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
     match arguments.as_slice() {
+        [command] if command == "check" => Ok(Cli {
+            command: Command::Check,
+        }),
         [command, name_flag, name] if command == "init" && name_flag == "--name" => Ok(Cli {
             command: Command::Init { name: name.clone() },
         }),

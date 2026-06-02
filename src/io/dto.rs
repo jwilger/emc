@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
+use crate::core::project::ProjectName;
 use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
@@ -29,6 +30,19 @@ impl Error for BoundaryParseError {}
 pub fn parse_model_name(raw: &str) -> Result<ModelName, BoundaryParseError> {
     ModelName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid model name: {error}")))
+}
+
+pub fn parse_project_name(raw: &str) -> Result<ProjectName, BoundaryParseError> {
+    ProjectName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid project name: {error}")))
+}
+
+pub fn parse_project_manifest_name(raw: &str) -> Result<ProjectName, BoundaryParseError> {
+    raw.lines()
+        .find_map(|line| line.trim().strip_prefix("name = "))
+        .and_then(quoted_value)
+        .ok_or_else(|| BoundaryParseError::new("emc.toml is missing project name"))
+        .and_then(parse_project_name)
 }
 
 pub fn parse_workflow_slug(raw: &str) -> Result<WorkflowSlug, BoundaryParseError> {
@@ -74,4 +88,8 @@ fn slugify(raw: &str) -> String {
             },
         )
         .0
+}
+
+fn quoted_value(raw: &str) -> Option<&str> {
+    raw.strip_prefix('"')?.strip_suffix('"')
 }
