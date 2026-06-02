@@ -24,8 +24,8 @@ use crate::core::validation::{
     SliceScenarioParts, SliceType, TopLevelKey, TranslationContract, ViewControlDefinition,
     ViewControlDefinitionParts, ViewDefinition, ViewWireframe, WorkflowComposition,
     WorkflowEntryStepCount, WorkflowInternalDefinitions, WorkflowStep, WorkflowStepExit,
-    WorkflowStepRelationship, WorkflowStepTrigger, empty_top_level_key_issue,
-    model_must_be_object_issue,
+    WorkflowStepLifecycleRole, WorkflowStepRelationship, WorkflowStepTrigger,
+    empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -358,6 +358,7 @@ fn workflow_step_from_json_object(
     let workflow_exit = workflow_step_exit_from_json_object(object);
     let transition_targets = workflow_step_transition_targets_from_json_object(object)?;
     let selected_scenario = workflow_step_selected_scenario_from_json_object(object)?;
+    let lifecycle_role = workflow_step_lifecycle_role_from_json_object(object);
 
     Ok(WorkflowStep::new(
         slice,
@@ -366,6 +367,7 @@ fn workflow_step_from_json_object(
         workflow_exit,
         transition_targets,
         selected_scenario,
+        lifecycle_role,
     ))
 }
 
@@ -381,6 +383,47 @@ fn workflow_step_selected_scenario_from_json_object(
             })
         })
         .transpose()
+}
+
+fn workflow_step_lifecycle_role_from_json_object(
+    object: &Map<String, Value>,
+) -> WorkflowStepLifecycleRole {
+    let label = workflow_step_label_from_json_object(object);
+    if object
+        .get("type")
+        .and_then(Value::as_str)
+        .is_some_and(|step_type| step_type == "state_change")
+        && object
+            .get("relationship")
+            .and_then(Value::as_str)
+            .is_some_and(|relationship| relationship == "entry")
+        && label.contains("bootstrap")
+        && label.contains("root")
+    {
+        WorkflowStepLifecycleRole::BootstrapRootEntryStateChange
+    } else if object
+        .get("type")
+        .and_then(Value::as_str)
+        .is_some_and(|step_type| step_type == "state_view")
+        && (label.contains("application entry") || label.contains("root bootstrap"))
+    {
+        WorkflowStepLifecycleRole::ApplicationEntryStateView
+    } else {
+        WorkflowStepLifecycleRole::Other
+    }
+}
+
+fn workflow_step_label_from_json_object(object: &Map<String, Value>) -> String {
+    ["slice", "name", "relationship"]
+        .into_iter()
+        .filter_map(|key| object.get(key).and_then(Value::as_str))
+        .fold(String::new(), |label, value| {
+            if label.is_empty() {
+                value.to_lowercase()
+            } else {
+                format!("{label} {}", value.to_lowercase())
+            }
+        })
 }
 
 fn workflow_step_relationship_from_json_object(
