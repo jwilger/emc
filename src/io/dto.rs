@@ -528,10 +528,12 @@ fn read_model_field_derivation_from_json(field: &Value) -> ReadModelFieldDerivat
         .and_then(Value::as_bool)
         .filter(|derived| *derived)
         .map_or(ReadModelFieldDerivation::NotDerived, |_| {
-            if read_model_field_has_derivation_provenance(field) {
-                ReadModelFieldDerivation::DerivedWithProvenance
-            } else {
+            if !read_model_field_has_derivation_provenance(field) {
                 ReadModelFieldDerivation::DerivedWithoutProvenance
+            } else if !read_model_field_has_derivation_scenarios(field) {
+                ReadModelFieldDerivation::DerivedWithoutScenarios
+            } else {
+                ReadModelFieldDerivation::DerivedComplete
             }
         })
 }
@@ -545,6 +547,13 @@ fn read_model_field_has_derivation_provenance(field: &Value) -> bool {
             .get("derivation_description")
             .and_then(Value::as_str)
             .is_some_and(|description| !description.is_empty())
+}
+
+fn read_model_field_has_derivation_scenarios(field: &Value) -> bool {
+    field
+        .get("derivation_scenarios")
+        .and_then(Value::as_array)
+        .is_some_and(|scenarios| !scenarios.is_empty())
 }
 
 fn definition_names_from_json_array_field(
