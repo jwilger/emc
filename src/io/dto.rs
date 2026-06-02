@@ -23,8 +23,8 @@ use crate::core::validation::{
     SingletonBehavior, SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario,
     SliceScenarioParts, SliceType, TopLevelKey, TranslationContract, ViewControlDefinition,
     ViewControlDefinitionParts, ViewDefinition, ViewWireframe, WorkflowComposition,
-    WorkflowEntryStepCount, WorkflowInternalDefinitions, WorkflowStep, WorkflowStepExit,
-    WorkflowStepLifecycleRole, WorkflowStepRelationship, WorkflowStepTrigger,
+    WorkflowEntryStepCount, WorkflowEventTransition, WorkflowInternalDefinitions, WorkflowStep,
+    WorkflowStepExit, WorkflowStepLifecycleRole, WorkflowStepRelationship, WorkflowStepTrigger,
     empty_top_level_key_issue, model_must_be_object_issue,
 };
 
@@ -219,6 +219,7 @@ fn event_model_document_from_json(
             let workflow_slice_references = workflow_slice_references_from_json_object(object)?;
             let workflow_step_slices = workflow_step_slices_from_json_object(object)?;
             let workflow_steps = workflow_steps_from_json_object(object)?;
+            let workflow_event_transitions = workflow_event_transitions_from_json_object(object)?;
             let duplicate_workflow_step_slice =
                 duplicate_workflow_step_slice_from_json_object(object)?;
             let workflow_composition = workflow_composition_from_json_object(object);
@@ -256,6 +257,7 @@ fn event_model_document_from_json(
                         .with_workflow_slice_references(workflow_slice_references)
                         .with_workflow_step_slices(workflow_step_slices)
                         .with_workflow_steps(workflow_steps)
+                        .with_workflow_event_transitions(workflow_event_transitions)
                         .with_duplicate_workflow_step_slice(duplicate_workflow_step_slice)
                         .with_workflow_composition(workflow_composition)
                         .with_workflow_entry_step_count(workflow_entry_step_count)
@@ -482,6 +484,77 @@ fn workflow_step_transition_targets_from_json_object(
             DefinitionName::try_new(target.to_owned()).map_err(|error| {
                 BoundaryParseError::new(format!("invalid workflow transition target: {error}"))
             })
+        })
+        .collect()
+}
+
+fn workflow_event_transitions_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<WorkflowEventTransition>, BoundaryParseError> {
+    object
+        .get("steps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .map(workflow_event_transitions_from_json_step)
+        .collect::<Result<Vec<_>, _>>()
+        .map(|transitions| transitions.into_iter().flatten().collect())
+}
+
+fn workflow_event_transitions_from_json_step(
+    step: &Map<String, Value>,
+) -> Result<Vec<WorkflowEventTransition>, BoundaryParseError> {
+    let Some(source_slice) = step.get("slice").and_then(Value::as_str) else {
+        return Ok(Vec::new());
+    };
+    let source_slice = DefinitionName::try_new(source_slice.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid workflow transition source: {error}"))
+    })?;
+
+    step.get("transitions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .filter(|transition| {
+            transition
+                .get("via_event")
+                .and_then(Value::as_str)
+                .is_some()
+        })
+        .map(|transition| {
+            let target_slice = transition
+                .get("to")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    BoundaryParseError::new("workflow event transition is missing target")
+                })
+                .and_then(|target| {
+                    DefinitionName::try_new(target.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!(
+                            "invalid workflow transition target: {error}"
+                        ))
+                    })
+                })?;
+            let event = transition
+                .get("via_event")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    BoundaryParseError::new("workflow event transition is missing event")
+                })
+                .and_then(|event| {
+                    DefinitionName::try_new(event.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!(
+                            "invalid workflow transition event: {error}"
+                        ))
+                    })
+                })?;
+            Ok(WorkflowEventTransition::new(
+                source_slice.clone(),
+                target_slice,
+                event,
+            ))
         })
         .collect()
 }
