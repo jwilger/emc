@@ -564,7 +564,7 @@ pub struct ViewDefinition {
 pub struct ViewControlDefinition {
     label: DefinitionName,
     command: Option<DefinitionName>,
-    handled_command_errors: Vec<DefinitionName>,
+    command_error_handling: Vec<ControlCommandErrorHandling>,
 }
 
 impl ViewControlDefinition {
@@ -572,7 +572,7 @@ impl ViewControlDefinition {
         Self {
             label: parts.label,
             command: parts.command,
-            handled_command_errors: parts.handled_command_errors,
+            command_error_handling: parts.command_error_handling,
         }
     }
 }
@@ -581,7 +581,7 @@ impl ViewControlDefinition {
 pub struct ViewControlDefinitionParts {
     label: DefinitionName,
     command: Option<DefinitionName>,
-    handled_command_errors: Vec<DefinitionName>,
+    command_error_handling: Vec<ControlCommandErrorHandling>,
 }
 
 impl ViewControlDefinitionParts {
@@ -589,7 +589,7 @@ impl ViewControlDefinitionParts {
         Self {
             label,
             command: None,
-            handled_command_errors: Vec::new(),
+            command_error_handling: Vec::new(),
         }
     }
 
@@ -598,13 +598,37 @@ impl ViewControlDefinitionParts {
         self
     }
 
-    pub fn with_handled_command_errors(
+    pub fn with_command_error_handling(
         mut self,
-        handled_command_errors: Vec<DefinitionName>,
+        command_error_handling: Vec<ControlCommandErrorHandling>,
     ) -> Self {
-        self.handled_command_errors = handled_command_errors;
+        self.command_error_handling = command_error_handling;
         self
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ControlCommandErrorHandling {
+    error_name: DefinitionName,
+    recovery_behavior: ControlErrorRecoveryBehavior,
+}
+
+impl ControlCommandErrorHandling {
+    pub fn new(
+        error_name: DefinitionName,
+        recovery_behavior: ControlErrorRecoveryBehavior,
+    ) -> Self {
+        Self {
+            error_name,
+            recovery_behavior,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ControlErrorRecoveryBehavior {
+    Missing,
+    Present,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -955,6 +979,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_state_change_command_error_scenarios(document)?;
 
     validate_control_command_error_handling(document)?;
+
+    validate_control_error_handling_recovery(document)?;
 
     validate_board_read_model_to_command_intermediates(document)?;
 
@@ -1925,7 +1951,7 @@ fn unhandled_control_command_error(
                 command
                     .errors
                     .iter()
-                    .find(|error_name| !control.handled_command_errors.contains(error_name))
+                    .find(|error_name| !control_handles_command_error(control, error_name))
                     .map(|error_name| UnhandledControlCommandError {
                         control_label: control.label.clone(),
                         error_name: error_name.clone(),
@@ -1933,6 +1959,33 @@ fn unhandled_control_command_error(
             })
         })
     })
+}
+
+fn control_handles_command_error(
+    control: &ViewControlDefinition,
+    error_name: &DefinitionName,
+) -> bool {
+    control
+        .command_error_handling
+        .iter()
+        .any(|handling| handling.error_name == *error_name)
+}
+
+fn validate_control_error_handling_recovery(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .flat_map(|view| view.controls.iter())
+        .flat_map(|control| control.command_error_handling.iter())
+        .find(|handling| handling.recovery_behavior == ControlErrorRecoveryBehavior::Missing)
+        .map_or(Ok(()), |handling| {
+            Err(validation_issue(format!(
+                "error handling for '{}' must describe recovery behavior",
+                handling.error_name
+            )))
+        })
 }
 
 fn validate_board_read_model_to_command_intermediates(
