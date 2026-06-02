@@ -21,6 +21,7 @@ pub struct EventModelDocument {
     view_definitions: Vec<ViewDefinition>,
     workflow_slice_references: BTreeSet<DefinitionName>,
     workflow_step_slices: BTreeSet<DefinitionName>,
+    workflow_steps: Vec<WorkflowStep>,
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
@@ -48,6 +49,7 @@ impl EventModelDocument {
             view_definitions: parts.view_definitions,
             workflow_slice_references: parts.workflow_slice_references,
             workflow_step_slices: parts.workflow_step_slices,
+            workflow_steps: parts.workflow_steps,
             duplicate_workflow_step_slice: parts.duplicate_workflow_step_slice,
             workflow_composition: parts.workflow_composition,
             workflow_entry_step_count: parts.workflow_entry_step_count,
@@ -76,6 +78,7 @@ pub struct EventModelDocumentParts {
     view_definitions: Vec<ViewDefinition>,
     workflow_slice_references: BTreeSet<DefinitionName>,
     workflow_step_slices: BTreeSet<DefinitionName>,
+    workflow_steps: Vec<WorkflowStep>,
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
@@ -103,6 +106,7 @@ impl EventModelDocumentParts {
             view_definitions: Vec::new(),
             workflow_slice_references: BTreeSet::new(),
             workflow_step_slices: BTreeSet::new(),
+            workflow_steps: Vec::new(),
             duplicate_workflow_step_slice: None,
             workflow_composition: WorkflowComposition::NotComposition,
             workflow_entry_step_count: WorkflowEntryStepCount::NotComposition,
@@ -209,6 +213,11 @@ impl EventModelDocumentParts {
         self
     }
 
+    pub fn with_workflow_steps(mut self, workflow_steps: Vec<WorkflowStep>) -> Self {
+        self.workflow_steps = workflow_steps;
+        self
+    }
+
     pub fn with_duplicate_workflow_step_slice(
         mut self,
         duplicate_workflow_step_slice: Option<DefinitionName>,
@@ -265,6 +274,77 @@ pub enum WorkflowEntryStepCount {
     NotComposition,
     NotOne,
     One,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum WorkflowStepRelationship {
+    Alternate,
+    Branch,
+    Entry,
+    Main,
+    Other,
+    Supporting,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum WorkflowStepTrigger {
+    Absent,
+    Present,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum WorkflowStepExit {
+    Absent,
+    Present,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowStep {
+    slice: DefinitionName,
+    relationship: WorkflowStepRelationship,
+    trigger: WorkflowStepTrigger,
+    workflow_exit: WorkflowStepExit,
+    transition_targets: BTreeSet<DefinitionName>,
+}
+
+impl WorkflowStep {
+    pub fn new(
+        slice: DefinitionName,
+        relationship: WorkflowStepRelationship,
+        trigger: WorkflowStepTrigger,
+        workflow_exit: WorkflowStepExit,
+        transition_targets: BTreeSet<DefinitionName>,
+    ) -> Self {
+        Self {
+            slice,
+            relationship,
+            trigger,
+            workflow_exit,
+            transition_targets,
+        }
+    }
+
+    fn slice(&self) -> &DefinitionName {
+        &self.slice
+    }
+
+    fn transition_targets(&self) -> &BTreeSet<DefinitionName> {
+        &self.transition_targets
+    }
+
+    fn requires_incoming_transition(&self) -> bool {
+        !matches!(
+            (self.relationship, self.trigger, self.workflow_exit),
+            (
+                WorkflowStepRelationship::Entry
+                    | WorkflowStepRelationship::Branch
+                    | WorkflowStepRelationship::Supporting,
+                _,
+                _,
+            ) | (_, WorkflowStepTrigger::Present, _)
+                | (_, _, WorkflowStepExit::Present)
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -1167,6 +1247,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_duplicate_workflow_step_slices(document)?;
 
+    validate_workflow_step_incoming_reachability(document)?;
+
     validate_no_legacy_slice_scenarios(document)?;
 
     validate_scenario_when_fields(document)?;
@@ -1722,6 +1804,35 @@ fn validate_duplicate_workflow_step_slices(
                 "workflow step slice '{step_slice}' is duplicated"
             )))
         })
+}
+
+fn validate_workflow_step_incoming_reachability(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    if document.workflow_composition != WorkflowComposition::DeclaresSteps {
+        return Ok(());
+    }
+
+    let incoming_step_slices = workflow_incoming_step_slices(&document.workflow_steps);
+    document
+        .workflow_steps
+        .iter()
+        .find(|step| {
+            step.requires_incoming_transition() && !incoming_step_slices.contains(step.slice())
+        })
+        .map_or(Ok(()), |step| {
+            Err(validation_issue(format!(
+                "workflow step '{}' has no incoming transition",
+                step.slice()
+            )))
+        })
+}
+
+fn workflow_incoming_step_slices(workflow_steps: &[WorkflowStep]) -> BTreeSet<DefinitionName> {
+    workflow_steps
+        .iter()
+        .flat_map(|step| step.transition_targets().iter().cloned())
+        .collect()
 }
 
 fn validate_no_legacy_slice_scenarios(

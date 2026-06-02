@@ -23,7 +23,8 @@ use crate::core::validation::{
     SingletonBehavior, SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario,
     SliceScenarioParts, SliceType, TopLevelKey, TranslationContract, ViewControlDefinition,
     ViewControlDefinitionParts, ViewDefinition, ViewWireframe, WorkflowComposition,
-    WorkflowEntryStepCount, empty_top_level_key_issue, model_must_be_object_issue,
+    WorkflowEntryStepCount, WorkflowStep, WorkflowStepExit, WorkflowStepRelationship,
+    WorkflowStepTrigger, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -216,6 +217,7 @@ fn event_model_document_from_json(
             let read_model_definitions = read_model_definitions_from_json_object(object)?;
             let workflow_slice_references = workflow_slice_references_from_json_object(object)?;
             let workflow_step_slices = workflow_step_slices_from_json_object(object)?;
+            let workflow_steps = workflow_steps_from_json_object(object)?;
             let duplicate_workflow_step_slice =
                 duplicate_workflow_step_slice_from_json_object(object)?;
             let workflow_composition = workflow_composition_from_json_object(object);
@@ -250,6 +252,7 @@ fn event_model_document_from_json(
                         .with_view_definitions(view_definitions)
                         .with_workflow_slice_references(workflow_slice_references)
                         .with_workflow_step_slices(workflow_step_slices)
+                        .with_workflow_steps(workflow_steps)
                         .with_duplicate_workflow_step_slice(duplicate_workflow_step_slice)
                         .with_workflow_composition(workflow_composition)
                         .with_workflow_entry_step_count(workflow_entry_step_count)
@@ -315,6 +318,105 @@ fn workflow_step_slices_from_json_object(
         .map(|step_slice| {
             DefinitionName::try_new(step_slice.to_owned()).map_err(|error| {
                 BoundaryParseError::new(format!("invalid workflow step slice: {error}"))
+            })
+        })
+        .collect()
+}
+
+fn workflow_steps_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<WorkflowStep>, BoundaryParseError> {
+    object
+        .get("steps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .filter(|step| step.get("slice").and_then(Value::as_str).is_some())
+        .map(workflow_step_from_json_object)
+        .collect()
+}
+
+fn workflow_step_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<WorkflowStep, BoundaryParseError> {
+    let slice = object
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| BoundaryParseError::new("workflow step is missing slice"))
+        .and_then(|slice| {
+            DefinitionName::try_new(slice.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid workflow step slice: {error}"))
+            })
+        })?;
+    let relationship = workflow_step_relationship_from_json_object(object);
+    let trigger = workflow_step_trigger_from_json_object(object);
+    let workflow_exit = workflow_step_exit_from_json_object(object);
+    let transition_targets = workflow_step_transition_targets_from_json_object(object)?;
+
+    Ok(WorkflowStep::new(
+        slice,
+        relationship,
+        trigger,
+        workflow_exit,
+        transition_targets,
+    ))
+}
+
+fn workflow_step_relationship_from_json_object(
+    object: &Map<String, Value>,
+) -> WorkflowStepRelationship {
+    match object.get("relationship").and_then(Value::as_str) {
+        Some("alternate") => WorkflowStepRelationship::Alternate,
+        Some("branch") => WorkflowStepRelationship::Branch,
+        Some("entry") => WorkflowStepRelationship::Entry,
+        Some("main") => WorkflowStepRelationship::Main,
+        Some("supporting") => WorkflowStepRelationship::Supporting,
+        Some(_) | None => WorkflowStepRelationship::Other,
+    }
+}
+
+fn workflow_step_trigger_from_json_object(object: &Map<String, Value>) -> WorkflowStepTrigger {
+    if object.get("trigger").and_then(Value::as_str).is_some() {
+        WorkflowStepTrigger::Present
+    } else {
+        WorkflowStepTrigger::Absent
+    }
+}
+
+fn workflow_step_exit_from_json_object(object: &Map<String, Value>) -> WorkflowStepExit {
+    if object
+        .get("transitions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .any(|transition| {
+            transition
+                .get("to_workflow")
+                .and_then(Value::as_str)
+                .is_some()
+        })
+    {
+        WorkflowStepExit::Present
+    } else {
+        WorkflowStepExit::Absent
+    }
+}
+
+fn workflow_step_transition_targets_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
+    object
+        .get("transitions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .filter_map(|transition| transition.get("to").and_then(Value::as_str))
+        .map(|target| {
+            DefinitionName::try_new(target.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid workflow transition target: {error}"))
             })
         })
         .collect()
