@@ -259,6 +259,7 @@ pub struct SliceDefinition {
     outcome_labels: Vec<DefinitionName>,
     legacy_scenarios: LegacyScenariosField,
     singleton_behavior: SingletonBehavior,
+    automation_trigger: AutomationTrigger,
     translation_contract: TranslationContract,
     scenarios: Vec<SliceScenario>,
 }
@@ -273,6 +274,7 @@ impl SliceDefinition {
             outcome_labels: parts.outcome_labels,
             legacy_scenarios: parts.legacy_scenarios,
             singleton_behavior: parts.singleton_behavior,
+            automation_trigger: parts.automation_trigger,
             translation_contract: parts.translation_contract,
             scenarios: parts.scenarios,
         }
@@ -296,6 +298,7 @@ pub struct SliceDefinitionParts {
     outcome_labels: Vec<DefinitionName>,
     legacy_scenarios: LegacyScenariosField,
     singleton_behavior: SingletonBehavior,
+    automation_trigger: AutomationTrigger,
     translation_contract: TranslationContract,
     scenarios: Vec<SliceScenario>,
 }
@@ -310,6 +313,7 @@ impl SliceDefinitionParts {
             outcome_labels: Vec::new(),
             legacy_scenarios: LegacyScenariosField::Absent,
             singleton_behavior: SingletonBehavior::NotSingleton,
+            automation_trigger: AutomationTrigger::NotAutomation,
             translation_contract: TranslationContract::NotTranslation,
             scenarios: Vec::new(),
         }
@@ -340,6 +344,11 @@ impl SliceDefinitionParts {
         self
     }
 
+    pub fn with_automation_trigger(mut self, automation_trigger: AutomationTrigger) -> Self {
+        self.automation_trigger = automation_trigger;
+        self
+    }
+
     pub fn with_translation_contract(mut self, translation_contract: TranslationContract) -> Self {
         self.translation_contract = translation_contract;
         self
@@ -356,6 +365,13 @@ pub enum SingletonBehavior {
     NotSingleton,
     MissingRepeatBehavior,
     DeclaresRepeatBehavior,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum AutomationTrigger {
+    NotAutomation,
+    MissingTrigger,
+    DeclaresTrigger,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -657,6 +673,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_translation_slice_external_contracts(document)?;
 
     validate_translation_slice_view_ownership(document)?;
+
+    validate_automation_slice_triggers(document)?;
 
     validate_board_read_model_to_command_intermediates(document)?;
 
@@ -1052,6 +1070,22 @@ fn validate_translation_slice_view_ownership(
             Err(validation_issue(format!(
                 "translation slice '{}' must not own view '{}'",
                 slice.name, view_name
+            )))
+        })
+}
+
+fn validate_automation_slice_triggers(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::Automation)
+        .find(|slice| slice.automation_trigger == AutomationTrigger::MissingTrigger)
+        .map_or(Ok(()), |slice| {
+            Err(validation_issue(format!(
+                "automation slice '{}' must declare a trigger",
+                slice.name
             )))
         })
 }

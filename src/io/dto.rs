@@ -12,14 +12,14 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    BoardReadModelCommandDependency, CommandDefinition, CommandInputSource, CommandInputSourceKind,
-    CommandReadModelReads, DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource,
-    EventDefinition, EventModelDocument, EventModelDocumentParts, EventModelFileKind,
-    ExternalInputSchema, LegacyScenariosField, NamedDefinition, ReadModelDefinition,
-    ReadModelField, ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
-    ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
-    SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceType,
-    TopLevelKey, TranslationContract, ViewDefinition, empty_top_level_key_issue,
+    AutomationTrigger, BoardReadModelCommandDependency, CommandDefinition, CommandInputSource,
+    CommandInputSourceKind, CommandReadModelReads, DefinitionKind, DefinitionName, EventAttribute,
+    EventAttributeSource, EventDefinition, EventModelDocument, EventModelDocumentParts,
+    EventModelFileKind, ExternalInputSchema, LegacyScenariosField, NamedDefinition,
+    ReadModelDefinition, ReadModelField, ReadModelFieldAbsenceDefault, ReadModelFieldDerivation,
+    ReadModelFieldSource, ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField,
+    SingletonBehavior, SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario,
+    SliceType, TopLevelKey, TranslationContract, ViewDefinition, empty_top_level_key_issue,
     model_must_be_object_issue,
 };
 
@@ -415,6 +415,7 @@ fn slice_definitions_from_json_object(
                                     slice,
                                 ))
                                 .with_singleton_behavior(singleton_behavior_from_json_slice(slice))
+                                .with_automation_trigger(automation_trigger_from_json_slice(slice))
                                 .with_translation_contract(translation_contract_from_json_slice(
                                     slice,
                                 ))
@@ -425,6 +426,23 @@ fn slice_definitions_from_json_object(
                 .and_then(|slice_definition| slice_definition)
         })
         .collect()
+}
+
+fn automation_trigger_from_json_slice(slice: &Value) -> AutomationTrigger {
+    if slice_type_from_json_slice(slice) == SliceType::Automation {
+        if slice_declares_automation_trigger(slice) {
+            AutomationTrigger::DeclaresTrigger
+        } else {
+            AutomationTrigger::MissingTrigger
+        }
+    } else {
+        AutomationTrigger::NotAutomation
+    }
+}
+
+fn slice_declares_automation_trigger(slice: &Value) -> bool {
+    slice_has_non_empty_string(slice, "trigger")
+        || slice_has_non_empty_string(slice, "external_event")
 }
 
 fn translation_contract_from_json_slice(slice: &Value) -> TranslationContract {
@@ -440,14 +458,18 @@ fn translation_contract_from_json_slice(slice: &Value) -> TranslationContract {
 }
 
 fn slice_has_external_contract(slice: &Value) -> bool {
-    slice
-        .get("external_event")
-        .and_then(Value::as_str)
-        .is_some_and(|external_event| !external_event.is_empty())
+    slice_has_non_empty_string(slice, "external_event")
         || slice
             .get("external_input_schemas")
             .and_then(Value::as_array)
             .is_some_and(|schemas| !schemas.is_empty())
+}
+
+fn slice_has_non_empty_string(slice: &Value, key: &str) -> bool {
+    slice
+        .get(key)
+        .and_then(Value::as_str)
+        .is_some_and(|value| !value.trim().is_empty())
 }
 
 fn singleton_behavior_from_json_slice(slice: &Value) -> SingletonBehavior {
