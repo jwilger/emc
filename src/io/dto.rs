@@ -14,8 +14,9 @@ use crate::core::types::{
 use crate::core::validation::{
     CommandDefinition, DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource,
     EventDefinition, EventModelDocument, EventModelDocumentParts, EventModelFileKind,
-    ExternalInputSchema, LegacyScenariosField, NamedDefinition, ScenarioSetKind, ScenarioStepField,
-    SliceDefinition, SliceDefinitionCount, SliceScenario, SliceType, TopLevelKey, ViewDefinition,
+    ExternalInputSchema, LegacyScenariosField, NamedDefinition, ReadModelDefinition,
+    ReadModelField, ReadModelFieldSource, ScenarioSetKind, ScenarioStepField, SliceDefinition,
+    SliceDefinitionCount, SliceScenario, SliceType, TopLevelKey, ViewDefinition,
     empty_top_level_key_issue, model_must_be_object_issue,
 };
 
@@ -205,6 +206,7 @@ fn event_model_document_from_json(
             let stream_names = stream_names_from_json_object(object)?;
             let event_definitions = event_definitions_from_json_object(object)?;
             let command_definitions = command_definitions_from_json_object(object)?;
+            let read_model_definitions = read_model_definitions_from_json_object(object)?;
             let command_produced_events = command_produced_events_from_json_object(object)?;
             let state_view_observed_events =
                 state_view_observed_events_from_slices(&slice_definitions);
@@ -219,6 +221,7 @@ fn event_model_document_from_json(
                         .with_command_produced_events(command_produced_events)
                         .with_state_view_observed_events(state_view_observed_events)
                         .with_named_definitions(named_definitions)
+                        .with_read_model_definitions(read_model_definitions)
                         .with_slice_count(slice_definition_count(&slice_definitions))
                         .with_slice_definitions(slice_definitions)
                         .with_view_definitions(view_definitions),
@@ -439,6 +442,73 @@ fn view_definitions_from_json_object(
                 })
         })
         .collect()
+}
+
+fn read_model_definitions_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<ReadModelDefinition>, BoundaryParseError> {
+    object
+        .get("read_models")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|read_model| {
+            read_model
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BoundaryParseError::new("read model is missing name"))
+                .and_then(|name| {
+                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!("invalid read model name: {error}"))
+                    })
+                })
+                .and_then(|name| {
+                    read_model_fields_from_json_read_model(read_model)
+                        .map(|fields| ReadModelDefinition::new(name, fields))
+                })
+        })
+        .collect()
+}
+
+fn read_model_fields_from_json_read_model(
+    read_model: &Value,
+) -> Result<Vec<ReadModelField>, BoundaryParseError> {
+    read_model
+        .get("fields")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|field| {
+            field
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BoundaryParseError::new("read model field is missing name"))
+                .and_then(|name| {
+                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!("invalid read model field name: {error}"))
+                    })
+                })
+                .map(|name| ReadModelField::new(name, read_model_field_source_from_json(field)))
+        })
+        .collect()
+}
+
+fn read_model_field_source_from_json(field: &Value) -> ReadModelFieldSource {
+    field
+        .get("source")
+        .and_then(Value::as_str)
+        .and_then(read_model_event_attribute_source)
+        .unwrap_or(ReadModelFieldSource::Other)
+}
+
+fn read_model_event_attribute_source(source: &str) -> Option<ReadModelFieldSource> {
+    let (event_name, attribute_name) = source.split_once('.')?;
+    DefinitionName::try_new(event_name.to_owned())
+        .ok()
+        .zip(DefinitionName::try_new(attribute_name.to_owned()).ok())
+        .map(|(event_name, attribute_name)| {
+            ReadModelFieldSource::EventAttribute(event_name, attribute_name)
+        })
 }
 
 fn definition_names_from_json_array_field(

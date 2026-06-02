@@ -13,6 +13,7 @@ pub struct EventModelDocument {
     command_produced_events: BTreeSet<DefinitionName>,
     state_view_observed_events: BTreeSet<DefinitionName>,
     named_definitions: Vec<NamedDefinition>,
+    read_model_definitions: Vec<ReadModelDefinition>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
@@ -30,6 +31,7 @@ impl EventModelDocument {
             command_produced_events: parts.command_produced_events,
             state_view_observed_events: parts.state_view_observed_events,
             named_definitions: parts.named_definitions,
+            read_model_definitions: parts.read_model_definitions,
             slice_count: parts.slice_count,
             slice_definitions: parts.slice_definitions,
             view_definitions: parts.view_definitions,
@@ -48,6 +50,7 @@ pub struct EventModelDocumentParts {
     command_produced_events: BTreeSet<DefinitionName>,
     state_view_observed_events: BTreeSet<DefinitionName>,
     named_definitions: Vec<NamedDefinition>,
+    read_model_definitions: Vec<ReadModelDefinition>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
@@ -65,6 +68,7 @@ impl EventModelDocumentParts {
             command_produced_events: BTreeSet::new(),
             state_view_observed_events: BTreeSet::new(),
             named_definitions: Vec::new(),
+            read_model_definitions: Vec::new(),
             slice_count: SliceDefinitionCount::Zero,
             slice_definitions: Vec::new(),
             view_definitions: Vec::new(),
@@ -114,6 +118,14 @@ impl EventModelDocumentParts {
 
     pub fn with_named_definitions(mut self, named_definitions: Vec<NamedDefinition>) -> Self {
         self.named_definitions = named_definitions;
+        self
+    }
+
+    pub fn with_read_model_definitions(
+        mut self,
+        read_model_definitions: Vec<ReadModelDefinition>,
+    ) -> Self {
+        self.read_model_definitions = read_model_definitions;
         self
     }
 
@@ -319,6 +331,36 @@ pub enum EventAttributeSource {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ReadModelDefinition {
+    name: DefinitionName,
+    fields: Vec<ReadModelField>,
+}
+
+impl ReadModelDefinition {
+    pub fn new(name: DefinitionName, fields: Vec<ReadModelField>) -> Self {
+        Self { name, fields }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ReadModelField {
+    name: DefinitionName,
+    source: ReadModelFieldSource,
+}
+
+impl ReadModelField {
+    pub fn new(name: DefinitionName, source: ReadModelFieldSource) -> Self {
+        Self { name, source }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ReadModelFieldSource {
+    EventAttribute(DefinitionName, DefinitionName),
+    Other,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CommandDefinition {
     inputs: Vec<DefinitionName>,
     external_inputs: Vec<DefinitionName>,
@@ -419,6 +461,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_external_sourced_event_attributes(document)
         .and_then(|()| validate_read_model_sourced_event_attributes(document))
         .and_then(|()| validate_generated_event_attribute_sources(document))
+        .and_then(|()| validate_read_model_field_event_sources(document))
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -881,5 +924,50 @@ fn validate_generated_event_attribute_sources(
                 "event '{}' attribute '{}' has invalid source 'generated.'",
                 event.name, attribute.name
             )))
+        })
+}
+
+fn validate_read_model_field_event_sources(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .read_model_definitions
+        .iter()
+        .flat_map(|read_model| {
+            read_model.fields.iter().filter_map(move |field| {
+                if let ReadModelFieldSource::EventAttribute(event_name, attribute_name) =
+                    &field.source
+                {
+                    Some((read_model, field, event_name, attribute_name))
+                } else {
+                    None
+                }
+            })
+        })
+        .find(|(_, _, event_name, attribute_name)| {
+            !event_attribute_exists(document, event_name, attribute_name)
+        })
+        .map_or(Ok(()), |(read_model, field, event_name, attribute_name)| {
+            Err(validation_issue(format!(
+                "read model '{}' field '{}' references unknown event attribute '{}.{}'",
+                read_model.name, field.name, event_name, attribute_name
+            )))
+        })
+}
+
+fn event_attribute_exists(
+    document: &EventModelDocument,
+    event_name: &DefinitionName,
+    attribute_name: &DefinitionName,
+) -> bool {
+    document
+        .event_definitions
+        .iter()
+        .find(|event| event.name == *event_name)
+        .is_some_and(|event| {
+            event
+                .attributes
+                .iter()
+                .any(|attribute| attribute.name == *attribute_name)
         })
 }
