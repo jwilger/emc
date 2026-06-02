@@ -797,6 +797,16 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_read_model_field_event_sources(document))
 }
 
+pub fn validate_event_model_corpus(
+    documents: &[EventModelDocument],
+) -> Result<(), ValidationIssue> {
+    duplicate_slice_command_definition(documents).map_or(Ok(()), |command_name| {
+        Err(validation_issue(format!(
+            "command '{command_name}' is defined by more than one slice"
+        )))
+    })
+}
+
 pub fn model_must_be_object_issue() -> ValidationIssue {
     validation_issue("model must be a JSON object")
 }
@@ -846,6 +856,25 @@ fn duplicate_named_definition(document: &EventModelDocument) -> Option<NamedDefi
             Some(definition.clone())
         }
     })
+}
+
+fn duplicate_slice_command_definition(documents: &[EventModelDocument]) -> Option<DefinitionName> {
+    let mut seen = BTreeMap::new();
+    documents
+        .iter()
+        .filter(|document| document.file_kind == EventModelFileKind::Slice)
+        .flat_map(|document| document.slice_definitions.iter())
+        .flat_map(|slice| {
+            slice
+                .issued_commands
+                .iter()
+                .map(move |command_name| (slice, command_name))
+        })
+        .find_map(|(slice, command_name)| {
+            seen.insert(command_name.clone(), slice.name.clone())
+                .filter(|previous_slice_name| *previous_slice_name != slice.name)
+                .map(|_| command_name.clone())
+        })
 }
 
 fn definition_kind_label(kind: DefinitionKind) -> &'static str {

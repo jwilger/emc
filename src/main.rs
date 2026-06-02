@@ -6,7 +6,9 @@ use std::process::ExitCode;
 use emc::core::emc::{EMCWorkflowImport, import_emc_workflow};
 use emc::core::layout::check_project;
 use emc::core::project::{ProjectName, init_project};
-use emc::core::validation::{EventModelFileKind, validate_event_model};
+use emc::core::validation::{
+    EventModelDocument, EventModelFileKind, validate_event_model, validate_event_model_corpus,
+};
 use emc::io::dto::{
     parse_browser_index_workflows, parse_emc_slice_import, parse_emc_workflow_import,
     parse_event_model_document, parse_project_manifest_name, parse_slice_slug, parse_workflow_slug,
@@ -85,20 +87,22 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
 }
 
 fn validate_target(target: &Path) -> Result<(), ShellError> {
-    event_model_files(target)?
+    let documents = event_model_files(target)?
         .into_iter()
-        .map(|path| validate_event_model_file(&path))
+        .map(|path| parse_and_validate_event_model_file(&path))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(())
+    validate_event_model_corpus(&documents)
+        .map_err(|issue| ShellError::message(format!("{} in {}", issue, target.display())))
 }
 
-fn validate_event_model_file(path: &Path) -> Result<(), ShellError> {
+fn parse_and_validate_event_model_file(path: &Path) -> Result<EventModelDocument, ShellError> {
     let source =
         fs::read_to_string(path).map_err(|error| ShellError::message(error.to_string()))?;
     let document = parse_event_model_document(&source, event_model_file_kind(path))
         .map_err(|error| ShellError::message(format!("{} in {}", error, path.display())))?;
     validate_event_model(&document)
-        .map_err(|issue| ShellError::message(format!("{} in {}", issue, path.display())))
+        .map_err(|issue| ShellError::message(format!("{} in {}", issue, path.display())))?;
+    Ok(document)
 }
 
 fn event_model_file_kind(path: &Path) -> EventModelFileKind {

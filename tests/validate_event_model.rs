@@ -760,6 +760,32 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_duplicate_commands_across_slice_files() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("submit-lesson.eventmodel.json"),
+            "{\"name\":\"Submit lesson workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson_submission\"}],\"events\":[{\"name\":\"LessonSubmittedForReview\",\"stream\":\"lesson_submission\",\"attributes\":[]}],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[\"LessonSubmittedForReview\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_change\",\"commands\":[\"SubmitLessonForReview\"],\"events\":[\"LessonSubmittedForReview\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"submit lesson\",\"given\":[],\"given_streams\":[{\"stream\":\"lesson_submission\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"LessonSubmittedForReview\"]}]}]}",
+        )?;
+        write(
+            slices.join("resubmit-lesson.eventmodel.json"),
+            "{\"name\":\"Resubmit lesson workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson_resubmission\"}],\"events\":[{\"name\":\"LessonResubmittedForReview\",\"stream\":\"lesson_resubmission\",\"attributes\":[]}],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[\"LessonResubmittedForReview\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Resubmit lesson\",\"type\":\"state_change\",\"commands\":[\"SubmitLessonForReview\"],\"events\":[\"LessonResubmittedForReview\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"resubmit lesson\",\"given\":[],\"given_streams\":[{\"stream\":\"lesson_resubmission\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"LessonResubmittedForReview\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "command 'SubmitLessonForReview' is defined by more than one slice",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_undeclared_board_automation_between_read_model_and_command()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
