@@ -569,6 +569,8 @@ pub struct ViewControlDefinition {
     navigation_target: Option<DefinitionName>,
     navigation_type: NavigationType,
     workflow_target: Option<DefinitionName>,
+    external_system: Option<DefinitionName>,
+    payload_contract: Option<DefinitionName>,
 }
 
 impl ViewControlDefinition {
@@ -580,6 +582,8 @@ impl ViewControlDefinition {
             navigation_target: parts.navigation_target,
             navigation_type: parts.navigation_type,
             workflow_target: parts.workflow_target,
+            external_system: parts.external_system,
+            payload_contract: parts.payload_contract,
         }
     }
 }
@@ -592,6 +596,8 @@ pub struct ViewControlDefinitionParts {
     navigation_target: Option<DefinitionName>,
     navigation_type: NavigationType,
     workflow_target: Option<DefinitionName>,
+    external_system: Option<DefinitionName>,
+    payload_contract: Option<DefinitionName>,
 }
 
 impl ViewControlDefinitionParts {
@@ -603,6 +609,8 @@ impl ViewControlDefinitionParts {
             navigation_target: None,
             navigation_type: NavigationType::Absent,
             workflow_target: None,
+            external_system: None,
+            payload_contract: None,
         }
     }
 
@@ -631,6 +639,16 @@ impl ViewControlDefinitionParts {
 
     pub fn with_workflow_target(mut self, workflow_target: Option<DefinitionName>) -> Self {
         self.workflow_target = workflow_target;
+        self
+    }
+
+    pub fn with_external_system(mut self, external_system: Option<DefinitionName>) -> Self {
+        self.external_system = external_system;
+        self
+    }
+
+    pub fn with_payload_contract(mut self, payload_contract: Option<DefinitionName>) -> Self {
+        self.payload_contract = payload_contract;
         self
     }
 }
@@ -1028,6 +1046,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_local_view_state_navigation_targets(document)?;
 
     validate_external_workflow_navigation_targets(document)?;
+
+    validate_external_system_navigation_targets(document)?;
 
     validate_board_read_model_to_command_intermediates(document)?;
 
@@ -2127,6 +2147,24 @@ fn validate_external_workflow_navigation_targets(
         .map_or(Ok(()), |_| {
             Err(validation_issue(
                 "external workflow navigation must name the target workflow",
+            ))
+        })
+}
+
+fn validate_external_system_navigation_targets(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .flat_map(|view| view.controls.iter())
+        .find(|control| {
+            control.navigation_type == NavigationType::ExternalSystem
+                && (control.external_system.is_none() || control.payload_contract.is_none())
+        })
+        .map_or(Ok(()), |_| {
+            Err(validation_issue(
+                "external system navigation must name the external system and returned payload contract",
             ))
         })
 }

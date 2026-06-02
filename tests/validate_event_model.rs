@@ -1032,6 +1032,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_external_system_navigation_without_system_or_payload_contract()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("external-system-navigation-without-contract.eventmodel.json"),
+            "{\"name\":\"Repair queue\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"repair_queue_screen\",\"wireframe\":\"<button data-ref=\\\"Run checkpoint\\\"></button>\",\"uses_read_models\":[],\"controls\":[{\"label\":\"Run checkpoint\",\"navigation\":\"checkpoint\",\"navigation_type\":\"external_system\"}]}],\"slices\":[{\"name\":\"Show repair queue\",\"type\":\"state_view\",\"views\":[\"repair_queue_screen\"],\"acceptance_scenarios\":[{\"name\":\"show queue\",\"given\":[\"queue exists\"],\"when\":{},\"then\":[\"queue shown\"]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "external system navigation must name the external system and returned payload contract",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_commands_across_slice_files() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");
