@@ -1566,6 +1566,13 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    workflow_event_transition_unavailable_from_source(documents).map_or(Ok(()), |transition| {
+        Err(validation_issue(format!(
+            "transition event '{}' is not available from source slice '{}'",
+            transition.event, transition.source_slice
+        )))
+    })?;
+
     unhandled_workflow_slice_outcome(documents).map_or(Ok(()), |unhandled| {
         Err(validation_issue(format!(
             "workflow '{}' does not handle outcome '{}' from slice '{}'",
@@ -1703,6 +1710,22 @@ fn unshared_workflow_event_transition(
             ) && !workflow_transition_slice_has_event(
                 documents,
                 &transition.target_slice,
+                &transition.event,
+            )
+        })
+        .cloned()
+}
+
+fn workflow_event_transition_unavailable_from_source(
+    documents: &[EventModelDocument],
+) -> Option<WorkflowEventTransition> {
+    documents
+        .iter()
+        .flat_map(|document| document.workflow_event_transitions.iter())
+        .find(|transition| {
+            !workflow_transition_slice_has_event(
+                documents,
+                &transition.source_slice,
                 &transition.event,
             )
         })
