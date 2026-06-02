@@ -485,4 +485,27 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_transitive_read_models_without_derivation_rule_and_examples()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("transitive-read-model-without-rule.eventmodel.json"),
+            "{\"name\":\"Manager progress visibility\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"report_visibility\"}],\"events\":[{\"name\":\"ReportVisibilityGranted\",\"stream\":\"report_visibility\",\"attributes\":[{\"name\":\"report_user_id\",\"source\":\"command.report_user_id\"}]}],\"commands\":[{\"name\":\"GrantReportVisibility\",\"inputs\":[\"report_user_id\"],\"produces\":[\"ReportVisibilityGranted\"]}],\"read_models\":[{\"name\":\"manager_progress_visibility\",\"transitive\":true,\"fields\":[{\"name\":\"visible_report_user_id\",\"source\":\"ReportVisibilityGranted.report_user_id\"}]}],\"slices\":[]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "transitive read model 'manager_progress_visibility' must declare source fields, derivation rule, and scenarios",
+            ));
+
+        Ok(())
+    }
 }

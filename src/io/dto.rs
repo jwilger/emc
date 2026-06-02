@@ -15,9 +15,9 @@ use crate::core::validation::{
     CommandDefinition, DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource,
     EventDefinition, EventModelDocument, EventModelDocumentParts, EventModelFileKind,
     ExternalInputSchema, LegacyScenariosField, NamedDefinition, ReadModelDefinition,
-    ReadModelField, ReadModelFieldDerivation, ReadModelFieldSource, ScenarioSetKind,
-    ScenarioStepField, SliceDefinition, SliceDefinitionCount, SliceScenario, SliceType,
-    TopLevelKey, ViewDefinition, empty_top_level_key_issue, model_must_be_object_issue,
+    ReadModelField, ReadModelFieldDerivation, ReadModelFieldSource, ReadModelTransitiveDerivation,
+    ScenarioSetKind, ScenarioStepField, SliceDefinition, SliceDefinitionCount, SliceScenario,
+    SliceType, TopLevelKey, ViewDefinition, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -463,8 +463,11 @@ fn read_model_definitions_from_json_object(
                     })
                 })
                 .and_then(|name| {
-                    read_model_fields_from_json_read_model(read_model)
-                        .map(|fields| ReadModelDefinition::new(name, fields))
+                    read_model_fields_from_json_read_model(read_model).map(|fields| {
+                        let transitive_derivation =
+                            read_model_transitive_derivation_from_json(read_model, &fields);
+                        ReadModelDefinition::new(name, fields, transitive_derivation)
+                    })
                 })
         })
         .collect()
@@ -554,6 +557,50 @@ fn read_model_field_has_derivation_scenarios(field: &Value) -> bool {
         .get("derivation_scenarios")
         .and_then(Value::as_array)
         .is_some_and(|scenarios| !scenarios.is_empty())
+}
+
+fn read_model_transitive_derivation_from_json(
+    read_model: &Value,
+    fields: &[ReadModelField],
+) -> ReadModelTransitiveDerivation {
+    read_model
+        .get("transitive")
+        .and_then(Value::as_bool)
+        .filter(|transitive| *transitive)
+        .map_or(ReadModelTransitiveDerivation::NotTransitive, |_| {
+            if read_model_has_complete_transitive_derivation(read_model, fields) {
+                ReadModelTransitiveDerivation::TransitiveComplete
+            } else {
+                ReadModelTransitiveDerivation::TransitiveWithoutRule
+            }
+        })
+}
+
+fn read_model_has_complete_transitive_derivation(
+    read_model: &Value,
+    fields: &[ReadModelField],
+) -> bool {
+    read_model
+        .get("fields")
+        .and_then(Value::as_array)
+        .is_some_and(|field_records| {
+            field_records.len() == fields.len()
+                && field_records
+                    .iter()
+                    .all(read_model_field_has_complete_transitive_derivation)
+        })
+}
+
+fn read_model_field_has_complete_transitive_derivation(field: &Value) -> bool {
+    field
+        .get("source_relationship_fields")
+        .and_then(Value::as_array)
+        .is_some_and(|source_fields| !source_fields.is_empty())
+        && field
+            .get("transitive_derivation_rule")
+            .and_then(Value::as_str)
+            .is_some_and(|rule| !rule.is_empty())
+        && read_model_field_has_derivation_scenarios(field)
 }
 
 fn definition_names_from_json_array_field(
