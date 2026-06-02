@@ -324,6 +324,37 @@ pub enum WorkflowStepLifecycleRole {
     Other,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum ApplicationEntryState {
+    AlreadyInitializedAndAuthenticated,
+    AlreadyInitializedAndUnauthenticated,
+    FreshAndUninitialized,
+    FullyConfigured,
+    PartiallyConfigured,
+}
+
+impl ApplicationEntryState {
+    fn required_states() -> [Self; 5] {
+        [
+            Self::FreshAndUninitialized,
+            Self::AlreadyInitializedAndUnauthenticated,
+            Self::AlreadyInitializedAndAuthenticated,
+            Self::PartiallyConfigured,
+            Self::FullyConfigured,
+        ]
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::AlreadyInitializedAndAuthenticated => "already initialized and authenticated",
+            Self::AlreadyInitializedAndUnauthenticated => "already initialized and unauthenticated",
+            Self::FreshAndUninitialized => "fresh and uninitialized",
+            Self::FullyConfigured => "fully configured",
+            Self::PartiallyConfigured => "partially configured",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct WorkflowStep {
     slice: DefinitionName,
@@ -374,6 +405,11 @@ impl WorkflowStep {
 
     fn is_bootstrap_root_entry_state_change(&self) -> bool {
         self.lifecycle_role == WorkflowStepLifecycleRole::BootstrapRootEntryStateChange
+    }
+
+    fn application_entry_slice(&self) -> Option<&DefinitionName> {
+        self.is_application_entry_state_view()
+            .then_some(&self.slice)
     }
 
     fn requires_incoming_transition(&self) -> bool {
@@ -553,6 +589,18 @@ impl SliceDefinition {
 
     pub fn owned_events(&self) -> &[DefinitionName] {
         &self.owned_events
+    }
+
+    fn has_slug(&self, slug: &DefinitionName) -> bool {
+        slugified_definition_name(&self.name)
+            .as_ref()
+            .is_some_and(|slice_slug| slice_slug == slug)
+    }
+
+    fn covers_application_entry_state(&self, state: ApplicationEntryState) -> bool {
+        self.scenarios
+            .iter()
+            .any(|scenario| scenario.references_text(state.label()))
     }
 }
 
@@ -772,6 +820,14 @@ impl SliceScenario {
             read_model_states: parts.read_model_states,
             read_model_state_values: parts.read_model_state_values,
         }
+    }
+
+    fn references_text(&self, expected_text: &str) -> bool {
+        definition_name_contains(&self.name, expected_text)
+            || self
+                .scenario_step_references
+                .iter()
+                .any(|reference| definition_name_contains(reference, expected_text))
     }
 }
 
@@ -1462,6 +1518,14 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    application_entry_state_coverage_issue(documents).map_or(Ok(()), |issue| {
+        Err(validation_issue(format!(
+            "application entry slice '{}' must cover {} state",
+            issue.slice_slug,
+            issue.missing_state.label()
+        )))
+    })?;
+
     unhandled_workflow_slice_outcome(documents).map_or(Ok(()), |unhandled| {
         Err(validation_issue(format!(
             "workflow '{}' does not handle outcome '{}' from slice '{}'",
@@ -1496,6 +1560,33 @@ fn top_level_key(raw: &str) -> TopLevelKey {
     })
 }
 
+fn slugified_definition_name(name: &DefinitionName) -> Option<DefinitionName> {
+    DefinitionName::try_new(
+        name.as_ref()
+            .chars()
+            .fold(
+                (String::new(), false),
+                |(mut slug, pending_dash), character| {
+                    if character.is_ascii_alphanumeric() {
+                        if pending_dash && !slug.is_empty() {
+                            slug.push('-');
+                        }
+                        slug.push(character.to_ascii_lowercase());
+                        (slug, false)
+                    } else {
+                        (slug, true)
+                    }
+                },
+            )
+            .0,
+    )
+    .ok()
+}
+
+fn definition_name_contains(name: &DefinitionName, expected_text: &str) -> bool {
+    name.as_ref().to_ascii_lowercase().contains(expected_text)
+}
+
 fn workflow_transition_command_error(documents: &[EventModelDocument]) -> Option<DefinitionName> {
     let command_errors = documents
         .iter()
@@ -1508,6 +1599,54 @@ fn workflow_transition_command_error(documents: &[EventModelDocument]) -> Option
         .flat_map(|document| document.workflow_transition_errors.iter())
         .find(|error_name| command_errors.contains(error_name))
         .cloned()
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct ApplicationEntryStateCoverageIssue {
+    slice_slug: DefinitionName,
+    missing_state: ApplicationEntryState,
+}
+
+fn application_entry_state_coverage_issue(
+    documents: &[EventModelDocument],
+) -> Option<ApplicationEntryStateCoverageIssue> {
+    documents
+        .iter()
+        .flat_map(application_entry_step_slices)
+        .find_map(|slice_slug| {
+            application_entry_slice_by_slug(documents, slice_slug).and_then(|slice| {
+                missing_application_entry_state(slice).map(|missing_state| {
+                    ApplicationEntryStateCoverageIssue {
+                        slice_slug: slice_slug.clone(),
+                        missing_state,
+                    }
+                })
+            })
+        })
+}
+
+fn application_entry_step_slices(document: &EventModelDocument) -> Vec<&DefinitionName> {
+    document
+        .workflow_steps
+        .iter()
+        .filter_map(WorkflowStep::application_entry_slice)
+        .collect()
+}
+
+fn application_entry_slice_by_slug<'a>(
+    documents: &'a [EventModelDocument],
+    slice_slug: &DefinitionName,
+) -> Option<&'a SliceDefinition> {
+    documents
+        .iter()
+        .flat_map(|document| document.slice_definitions.iter())
+        .find(|slice| slice.has_slug(slice_slug))
+}
+
+fn missing_application_entry_state(slice: &SliceDefinition) -> Option<ApplicationEntryState> {
+    ApplicationEntryState::required_states()
+        .into_iter()
+        .find(|state| !slice.covers_application_entry_state(*state))
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

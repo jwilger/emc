@@ -1152,6 +1152,33 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_application_entry_slices_without_lifecycle_state_coverage()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("organization-access.eventmodel.json"),
+            "{\"name\":\"Organization access\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[],\"slice_files\":[\"./resolve-application-entry.eventmodel.json\"],\"steps\":[{\"slice\":\"resolve-application-entry\",\"name\":\"Resolve application entry\",\"type\":\"state_view\",\"relationship\":\"entry\"}]}",
+        )?;
+        write(
+            workflows.join("resolve-application-entry.eventmodel.json"),
+            "{\"name\":\"Resolve application entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Resolve application entry\",\"type\":\"state_view\",\"views\":[\"resolve_application_entry_screen\"],\"acceptance_scenarios\":[{\"name\":\"already initialized and unauthenticated\",\"given\":[],\"when\":{},\"then\":[]},{\"name\":\"already initialized and authenticated\",\"given\":[],\"when\":{},\"then\":[]},{\"name\":\"partially configured\",\"given\":[],\"when\":{},\"then\":[]},{\"name\":\"fully configured\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "application entry slice 'resolve-application-entry' must cover fresh and uninitialized state",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_automation_slices_without_trigger() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
