@@ -9,6 +9,7 @@ pub struct EventModelDocument {
     event_names: BTreeSet<DefinitionName>,
     stream_names: BTreeSet<DefinitionName>,
     event_definitions: Vec<EventDefinition>,
+    command_definitions: Vec<CommandDefinition>,
     command_produced_events: BTreeSet<DefinitionName>,
     state_view_observed_events: BTreeSet<DefinitionName>,
     named_definitions: Vec<NamedDefinition>,
@@ -25,6 +26,7 @@ impl EventModelDocument {
             event_names: parts.event_names,
             stream_names: parts.stream_names,
             event_definitions: parts.event_definitions,
+            command_definitions: parts.command_definitions,
             command_produced_events: parts.command_produced_events,
             state_view_observed_events: parts.state_view_observed_events,
             named_definitions: parts.named_definitions,
@@ -42,6 +44,7 @@ pub struct EventModelDocumentParts {
     event_names: BTreeSet<DefinitionName>,
     stream_names: BTreeSet<DefinitionName>,
     event_definitions: Vec<EventDefinition>,
+    command_definitions: Vec<CommandDefinition>,
     command_produced_events: BTreeSet<DefinitionName>,
     state_view_observed_events: BTreeSet<DefinitionName>,
     named_definitions: Vec<NamedDefinition>,
@@ -58,6 +61,7 @@ impl EventModelDocumentParts {
             event_names: BTreeSet::new(),
             stream_names: BTreeSet::new(),
             event_definitions: Vec::new(),
+            command_definitions: Vec::new(),
             command_produced_events: BTreeSet::new(),
             state_view_observed_events: BTreeSet::new(),
             named_definitions: Vec::new(),
@@ -84,6 +88,11 @@ impl EventModelDocumentParts {
 
     pub fn with_event_definitions(mut self, event_definitions: Vec<EventDefinition>) -> Self {
         self.event_definitions = event_definitions;
+        self
+    }
+
+    pub fn with_command_definitions(mut self, command_definitions: Vec<CommandDefinition>) -> Self {
+        self.command_definitions = command_definitions;
         self
     }
 
@@ -271,11 +280,50 @@ pub struct ViewDefinition {
 pub struct EventDefinition {
     name: DefinitionName,
     stream: Option<DefinitionName>,
+    attributes: Vec<EventAttribute>,
 }
 
 impl EventDefinition {
-    pub fn new(name: DefinitionName, stream: Option<DefinitionName>) -> Self {
-        Self { name, stream }
+    pub fn new(
+        name: DefinitionName,
+        stream: Option<DefinitionName>,
+        attributes: Vec<EventAttribute>,
+    ) -> Self {
+        Self {
+            name,
+            stream,
+            attributes,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct EventAttribute {
+    name: DefinitionName,
+    source: EventAttributeSource,
+}
+
+impl EventAttribute {
+    pub fn new(name: DefinitionName, source: EventAttributeSource) -> Self {
+        Self { name, source }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum EventAttributeSource {
+    CommandInput(DefinitionName),
+    Other,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CommandDefinition {
+    inputs: Vec<DefinitionName>,
+    produces: Vec<DefinitionName>,
+}
+
+impl CommandDefinition {
+    pub fn new(inputs: Vec<DefinitionName>, produces: Vec<DefinitionName>) -> Self {
+        Self { inputs, produces }
     }
 }
 
@@ -337,7 +385,9 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_event_stream_references(document)?;
 
-    validate_event_producers(document)
+    validate_event_producers(document)?;
+
+    validate_command_sourced_event_attributes(document)
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -627,4 +677,38 @@ fn validate_event_producers(document: &EventModelDocument) -> Result<(), Validat
                 event.name
             )))
         })
+}
+
+fn validate_command_sourced_event_attributes(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .event_definitions
+        .iter()
+        .flat_map(|event| {
+            event.attributes.iter().filter_map(move |attribute| {
+                if let EventAttributeSource::CommandInput(input_name) = &attribute.source {
+                    Some((event, attribute, input_name))
+                } else {
+                    None
+                }
+            })
+        })
+        .find(|(event, _, input_name)| !event_has_producer_input(document, event, input_name))
+        .map_or(Ok(()), |(event, attribute, input_name)| {
+            Err(validation_issue(format!(
+                "event '{}' attribute '{}' has invalid source 'command.{}'",
+                event.name, attribute.name, input_name
+            )))
+        })
+}
+
+fn event_has_producer_input(
+    document: &EventModelDocument,
+    event: &EventDefinition,
+    input_name: &DefinitionName,
+) -> bool {
+    document.command_definitions.iter().any(|command| {
+        command.produces.contains(&event.name) && command.inputs.contains(input_name)
+    })
 }
