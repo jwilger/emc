@@ -1130,6 +1130,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_workflow_steps_reference_composed_slices(document)?;
 
+    validate_workflow_referenced_slices_are_used(document)?;
+
     validate_no_legacy_slice_scenarios(document)?;
 
     validate_scenario_when_fields(document)?;
@@ -1637,6 +1639,24 @@ fn validate_workflow_steps_reference_composed_slices(
             .map_or(Ok(()), |step_slice| {
                 Err(validation_issue(format!(
                     "workflow step '{step_slice}' does not reference a composed slice"
+                )))
+            })
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_workflow_referenced_slices_are_used(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    if document.workflow_composition == WorkflowComposition::DeclaresSteps {
+        document
+            .workflow_slice_references
+            .iter()
+            .find(|slice_reference| !document.workflow_step_slices.contains(slice_reference))
+            .map_or(Ok(()), |slice_reference| {
+                Err(validation_issue(format!(
+                    "referenced slice '{slice_reference}' is not used by workflow steps"
                 )))
             })
     } else {
