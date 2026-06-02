@@ -1753,6 +1753,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_undeclared_external_event_bridges(document)?;
 
+    validate_external_event_board_connections(document)?;
+
     validate_command_sourced_event_attributes(document)?;
 
     validate_command_legacy_read_model_reads(document)?;
@@ -3696,6 +3698,28 @@ fn validate_undeclared_external_event_bridges(
     })
 }
 
+fn validate_external_event_board_connections(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    invalid_external_event_board_connection(document).map_or(Ok(()), |connection| {
+        Err(validation_issue(format!(
+            "invalid board connection '{}' ({}) -> '{}' ({})",
+            connection.from,
+            board_element_kind_label(connection.from_kind),
+            connection.to,
+            board_element_kind_label(connection.to_kind)
+        )))
+    })
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct InvalidBoardConnection {
+    from: DefinitionName,
+    from_kind: BoardElementKind,
+    to: DefinitionName,
+    to_kind: BoardElementKind,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct UnknownBoardElementReference {
     element_id: DefinitionName,
@@ -3834,6 +3858,24 @@ fn undeclared_external_event_bridge_in_slice(
         })
         .find(|element| board_element_bridges_read_model_to_command(board_slice, element))
         .map(|element| element.id.clone())
+}
+
+fn invalid_external_event_board_connection(
+    document: &EventModelDocument,
+) -> Option<InvalidBoardConnection> {
+    document.board_slices.iter().find_map(|board_slice| {
+        board_slice.connections.iter().find_map(|connection| {
+            let from_kind = board_element_kind_by_id(board_slice, &connection.from)?;
+            let to_kind = board_element_kind_by_id(board_slice, &connection.to)?;
+            (from_kind == BoardElementKind::ExternalEvent && to_kind == BoardElementKind::ReadModel)
+                .then(|| InvalidBoardConnection {
+                    from: connection.from.clone(),
+                    from_kind,
+                    to: connection.to.clone(),
+                    to_kind,
+                })
+        })
+    })
 }
 
 fn board_element_bridges_read_model_to_command(
