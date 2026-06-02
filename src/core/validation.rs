@@ -16,6 +16,7 @@ pub struct EventModelDocument {
     named_definitions: Vec<NamedDefinition>,
     read_model_definitions: Vec<ReadModelDefinition>,
     board_read_model_command_dependencies: Vec<BoardReadModelCommandDependency>,
+    board_slices: Vec<BoardSliceGraph>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
@@ -50,6 +51,7 @@ impl EventModelDocument {
             named_definitions: parts.named_definitions,
             read_model_definitions: parts.read_model_definitions,
             board_read_model_command_dependencies: parts.board_read_model_command_dependencies,
+            board_slices: parts.board_slices,
             slice_count: parts.slice_count,
             slice_definitions: parts.slice_definitions,
             view_definitions: parts.view_definitions,
@@ -85,6 +87,7 @@ pub struct EventModelDocumentParts {
     named_definitions: Vec<NamedDefinition>,
     read_model_definitions: Vec<ReadModelDefinition>,
     board_read_model_command_dependencies: Vec<BoardReadModelCommandDependency>,
+    board_slices: Vec<BoardSliceGraph>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
@@ -119,6 +122,7 @@ impl EventModelDocumentParts {
             named_definitions: Vec::new(),
             read_model_definitions: Vec::new(),
             board_read_model_command_dependencies: Vec::new(),
+            board_slices: Vec::new(),
             slice_count: SliceDefinitionCount::Zero,
             slice_definitions: Vec::new(),
             view_definitions: Vec::new(),
@@ -203,6 +207,11 @@ impl EventModelDocumentParts {
         board_read_model_command_dependencies: Vec<BoardReadModelCommandDependency>,
     ) -> Self {
         self.board_read_model_command_dependencies = board_read_model_command_dependencies;
+        self
+    }
+
+    pub fn with_board_slices(mut self, board_slices: Vec<BoardSliceGraph>) -> Self {
+        self.board_slices = board_slices;
         self
     }
 
@@ -699,6 +708,45 @@ impl BoardReadModelCommandDependency {
             command,
             intermediate_automation,
         }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BoardSliceGraph {
+    name: DefinitionName,
+    element_ids: BTreeSet<DefinitionName>,
+    connections: Vec<BoardGraphConnection>,
+}
+
+impl BoardSliceGraph {
+    pub fn new(
+        name: DefinitionName,
+        element_ids: BTreeSet<DefinitionName>,
+        connections: Vec<BoardGraphConnection>,
+    ) -> Self {
+        Self {
+            name,
+            element_ids,
+            connections,
+        }
+    }
+
+    fn has_slug(&self, slug: &DefinitionName) -> bool {
+        slugified_definition_name(&self.name)
+            .as_ref()
+            .is_some_and(|slice_slug| slice_slug == slug)
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BoardGraphConnection {
+    from: DefinitionName,
+    to: DefinitionName,
+}
+
+impl BoardGraphConnection {
+    pub fn new(from: DefinitionName, to: DefinitionName) -> Self {
+        Self { from, to }
     }
 }
 
@@ -1772,6 +1820,13 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    disconnected_main_workflow_board_slice(documents).map_or(Ok(()), |board_slice| {
+        Err(validation_issue(format!(
+            "board slice '{}' has disconnected main-path elements",
+            board_slice.name
+        )))
+    })?;
+
     unhandled_workflow_slice_outcome(documents).map_or(Ok(()), |unhandled| {
         Err(validation_issue(format!(
             "workflow '{}' does not handle outcome '{}' from slice '{}'",
@@ -2106,6 +2161,80 @@ fn workflow_exit_without_rationale(
         .flat_map(|document| document.workflow_exit_transitions.iter())
         .find(|transition| transition.rationale == WorkflowExitRationale::Missing)
         .cloned()
+}
+
+fn disconnected_main_workflow_board_slice(
+    documents: &[EventModelDocument],
+) -> Option<BoardSliceGraph> {
+    documents
+        .iter()
+        .flat_map(|document| document.workflow_steps.iter())
+        .filter(|step| step.is_main())
+        .filter_map(|step| board_slice_by_slug(documents, step.slice()))
+        .find(|board_slice| board_slice_has_disconnected_elements(board_slice))
+        .cloned()
+}
+
+fn board_slice_by_slug<'a>(
+    documents: &'a [EventModelDocument],
+    slice_slug: &DefinitionName,
+) -> Option<&'a BoardSliceGraph> {
+    documents
+        .iter()
+        .flat_map(|document| document.board_slices.iter())
+        .find(|board_slice| board_slice.has_slug(slice_slug))
+}
+
+fn board_slice_has_disconnected_elements(board_slice: &BoardSliceGraph) -> bool {
+    let Some(first) = board_slice.element_ids.iter().next() else {
+        return false;
+    };
+    if board_slice.element_ids.len() < 2 {
+        return false;
+    }
+
+    let adjacency = board_slice_adjacency(board_slice);
+    let mut seen = BTreeSet::from([first.clone()]);
+    let mut pending = VecDeque::from([first.clone()]);
+    while let Some(current) = pending.pop_front() {
+        for next in adjacency.get(&current).into_iter().flatten() {
+            if seen.insert(next.clone()) {
+                pending.push_back(next.clone());
+            }
+        }
+    }
+    seen.len() != board_slice.element_ids.len()
+}
+
+fn board_slice_adjacency(
+    board_slice: &BoardSliceGraph,
+) -> BTreeMap<DefinitionName, BTreeSet<DefinitionName>> {
+    board_slice
+        .connections
+        .iter()
+        .filter(|connection| {
+            board_slice.element_ids.contains(&connection.from)
+                && board_slice.element_ids.contains(&connection.to)
+        })
+        .fold(
+            board_slice
+                .element_ids
+                .iter()
+                .cloned()
+                .map(|element_id| (element_id, BTreeSet::new()))
+                .collect::<BTreeMap<_, _>>(),
+            |mut adjacency, connection| {
+                adjacency
+                    .entry(connection.from.clone())
+                    .or_default()
+                    .insert(connection.to.clone());
+                adjacency
+                    .entry(connection.to.clone())
+                    .or_default()
+                    .insert(connection.from.clone());
+                adjacency
+            },
+        )
 }
 
 fn workflow_navigation_transition_has_source_control(
