@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-    use std::fs::remove_file;
+    use std::fs::{remove_file, write};
     use std::path::PathBuf;
 
     use assert_cmd::Command;
@@ -99,6 +99,41 @@ mod tests {
             .failure()
             .stderr(predicate::str::contains(
                 "missing required project artifact model/lean/OrganizationAccess.lean",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_imported_workflow_artifact_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let emc_event_model = workspace_root().join("../emc/docs/event-model");
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["import", "emc", "--source"])
+            .arg(&emc_event_model)
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        write(
+            temp_dir.path().join("model/lean/OrganizationAccess.lean"),
+            "namespace OrganizationAccess\n\ndef workflowName := \"Changed\"\n\nend OrganizationAccess\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "artifact digest mismatch for workflow Organization access",
             ));
 
         Ok(())
