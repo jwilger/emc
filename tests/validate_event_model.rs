@@ -443,6 +443,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_automation_board_elements_not_declared_by_automation_slices()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("board-automation-element-undeclared.eventmodel.json"),
+            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\",\"name\":\"People, Views, and Translations\"},{\"id\":\"actions\",\"name\":\"Commands and Projections\"},{\"id\":\"events\",\"name\":\"Stored Facts\"}],\"slices\":[{\"name\":\"Review lesson\",\"elements\":[{\"id\":\"fake-dependency\",\"kind\":\"automation\",\"lane\":\"ux\"}],\"connections\":[]}]},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"acceptance_scenarios\":[{\"name\":\"show review\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "automation board element 'fake-dependency' is not declared by an automation slice",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_command_names() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
