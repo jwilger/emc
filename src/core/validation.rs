@@ -258,6 +258,7 @@ pub struct SliceDefinition {
     handled_command_errors: Vec<DefinitionName>,
     owned_automations: Vec<DefinitionName>,
     owned_read_models: Vec<DefinitionName>,
+    owned_translations: Vec<DefinitionName>,
     owned_views: Vec<DefinitionName>,
     owned_events: Vec<DefinitionName>,
     outcome_labels: Vec<DefinitionName>,
@@ -278,6 +279,7 @@ impl SliceDefinition {
             handled_command_errors: parts.handled_command_errors,
             owned_automations: parts.owned_automations,
             owned_read_models: parts.owned_read_models,
+            owned_translations: parts.owned_translations,
             owned_views: parts.owned_views,
             owned_events: parts.owned_events,
             outcome_labels: parts.outcome_labels,
@@ -307,6 +309,7 @@ pub struct SliceDefinitionParts {
     handled_command_errors: Vec<DefinitionName>,
     owned_automations: Vec<DefinitionName>,
     owned_read_models: Vec<DefinitionName>,
+    owned_translations: Vec<DefinitionName>,
     owned_views: Vec<DefinitionName>,
     owned_events: Vec<DefinitionName>,
     outcome_labels: Vec<DefinitionName>,
@@ -327,6 +330,7 @@ impl SliceDefinitionParts {
             handled_command_errors: Vec::new(),
             owned_automations: Vec::new(),
             owned_read_models: Vec::new(),
+            owned_translations: Vec::new(),
             owned_views: Vec::new(),
             owned_events: Vec::new(),
             outcome_labels: Vec::new(),
@@ -359,6 +363,11 @@ impl SliceDefinitionParts {
 
     pub fn with_owned_read_models(mut self, owned_read_models: Vec<DefinitionName>) -> Self {
         self.owned_read_models = owned_read_models;
+        self
+    }
+
+    pub fn with_owned_translations(mut self, owned_translations: Vec<DefinitionName>) -> Self {
+        self.owned_translations = owned_translations;
         self
     }
 
@@ -863,6 +872,12 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    duplicate_slice_translation_definition(documents).map_or(Ok(()), |translation_name| {
+        Err(validation_issue(format!(
+            "translation '{translation_name}' is defined by more than one slice"
+        )))
+    })?;
+
     duplicate_slice_view_definition(documents).map_or(Ok(()), |view_name| {
         Err(validation_issue(format!(
             "view '{view_name}' is defined by more than one slice"
@@ -958,6 +973,27 @@ fn duplicate_slice_read_model_definition(
             seen.insert(read_model_name.clone(), slice.name.clone())
                 .filter(|previous_slice_name| *previous_slice_name != slice.name)
                 .map(|_| read_model_name.clone())
+        })
+}
+
+fn duplicate_slice_translation_definition(
+    documents: &[EventModelDocument],
+) -> Option<DefinitionName> {
+    let mut seen = BTreeMap::new();
+    documents
+        .iter()
+        .filter(|document| document.file_kind == EventModelFileKind::Slice)
+        .flat_map(|document| document.slice_definitions.iter())
+        .flat_map(|slice| {
+            slice
+                .owned_translations
+                .iter()
+                .map(move |translation_name| (slice, translation_name))
+        })
+        .find_map(|(slice, translation_name)| {
+            seen.insert(translation_name.clone(), slice.name.clone())
+                .filter(|previous_slice_name| *previous_slice_name != slice.name)
+                .map(|_| translation_name.clone())
         })
 }
 
