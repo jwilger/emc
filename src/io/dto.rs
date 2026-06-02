@@ -564,6 +564,7 @@ fn event_attribute_source_from_json(attribute: &Value) -> EventAttributeSource {
     source
         .and_then(command_attribute_source)
         .or_else(|| source.and_then(external_attribute_source))
+        .or_else(|| source.and_then(generated_attribute_source))
         .or_else(|| source.and_then(read_model_attribute_source))
         .unwrap_or(EventAttributeSource::Other)
 }
@@ -595,6 +596,10 @@ fn read_model_attribute_source(source: &str) -> Option<EventAttributeSource> {
         .map(|(read_model_name, field_name)| {
             EventAttributeSource::ReadModelField(read_model_name, field_name)
         })
+}
+
+fn generated_attribute_source(source: &str) -> Option<EventAttributeSource> {
+    (source == "generated.").then_some(EventAttributeSource::GeneratedEmpty)
 }
 
 fn command_definitions_from_json_object(
