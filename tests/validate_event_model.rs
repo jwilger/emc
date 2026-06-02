@@ -282,6 +282,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_slice_outcomes_without_events() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("outcome-without-events.eventmodel.json"),
+            "{\"name\":\"Activate member workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"member\"}],\"events\":[{\"name\":\"OrganizationMemberActivated\",\"stream\":\"member\",\"attributes\":[]}],\"commands\":[{\"name\":\"ActivateMember\",\"inputs\":[],\"produces\":[\"OrganizationMemberActivated\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Activate member\",\"type\":\"state_change\",\"commands\":[\"ActivateMember\"],\"events\":[\"OrganizationMemberActivated\"],\"outcomes\":[{\"label\":\"activated\",\"events\":[]}],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"activate member\",\"given\":[],\"given_streams\":[{\"stream\":\"member\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"OrganizationMemberActivated\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "outcome 'activated' must declare at least one event",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_events_that_reference_unknown_streams() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");

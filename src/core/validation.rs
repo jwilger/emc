@@ -838,6 +838,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_duplicate_outcome_labels(document)?;
 
+    validate_outcome_event_sets_not_empty(document)?;
+
     validate_duplicate_outcome_event_sets(document)?;
 
     validate_event_stream_references(document)?;
@@ -1403,6 +1405,22 @@ fn duplicate_outcome_label(slice: &SliceDefinition) -> Option<(&SliceDefinition,
             Some((slice, outcome_label.clone()))
         }
     })
+}
+
+fn validate_outcome_event_sets_not_empty(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .flat_map(|slice| slice.outcomes.iter())
+        .find(|outcome| outcome.events.is_empty())
+        .map_or(Ok(()), |outcome| {
+            Err(validation_issue(format!(
+                "outcome '{}' must declare at least one event",
+                outcome.label
+            )))
+        })
 }
 
 fn validate_duplicate_outcome_event_sets(
