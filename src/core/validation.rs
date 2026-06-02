@@ -916,6 +916,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_scenario_command_errors_are_declared(document)?;
 
+    validate_state_change_command_error_scenarios(document)?;
+
     validate_board_read_model_to_command_intermediates(document)?;
 
     validate_command_sourced_event_attributes(document)?;
@@ -1818,6 +1820,40 @@ fn slice_command_errors(
         .flat_map(|command| command.errors.iter())
         .cloned()
         .collect()
+}
+
+fn validate_state_change_command_error_scenarios(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::StateChange)
+        .find_map(|slice| uncovered_state_change_command_error(document, slice))
+        .map_or(Ok(()), |error_name| {
+            Err(validation_issue(format!(
+                "command error '{error_name}' must be covered by a state-change scenario"
+            )))
+        })
+}
+
+fn uncovered_state_change_command_error(
+    document: &EventModelDocument,
+    slice: &SliceDefinition,
+) -> Option<DefinitionName> {
+    slice_command_errors(document, slice)
+        .into_iter()
+        .find(|error_name| !state_change_slice_covers_command_error(slice, error_name))
+}
+
+fn state_change_slice_covers_command_error(
+    slice: &SliceDefinition,
+    error_name: &DefinitionName,
+) -> bool {
+    slice
+        .scenarios
+        .iter()
+        .any(|scenario| scenario.command_errors.contains(error_name))
 }
 
 fn validate_board_read_model_to_command_intermediates(
