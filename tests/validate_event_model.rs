@@ -348,4 +348,27 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_external_event_attributes_with_undeclared_payload_field()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("undeclared-external-field.eventmodel.json"),
+            "{\"name\":\"Record payment\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"payment\"}],\"events\":[{\"name\":\"PaymentRecorded\",\"stream\":\"payment\",\"attributes\":[{\"name\":\"provider_status\",\"source\":\"external.payment_webhook.status\"}]}],\"commands\":[{\"name\":\"RecordPayment\",\"inputs\":[],\"external_inputs\":[\"payment_webhook\"],\"external_input_schemas\":[{\"name\":\"payment_webhook\",\"fields\":[{\"name\":\"payment_id\"}]}],\"produces\":[\"PaymentRecorded\"]}],\"read_models\":[],\"slices\":[]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "event 'PaymentRecorded' attribute 'provider_status' references undeclared external input field 'status'",
+            ));
+
+        Ok(())
+    }
 }

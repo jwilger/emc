@@ -320,6 +320,7 @@ pub enum EventAttributeSource {
 pub struct CommandDefinition {
     inputs: Vec<DefinitionName>,
     external_inputs: Vec<DefinitionName>,
+    external_input_schemas: Vec<ExternalInputSchema>,
     produces: Vec<DefinitionName>,
 }
 
@@ -327,13 +328,27 @@ impl CommandDefinition {
     pub fn new(
         inputs: Vec<DefinitionName>,
         external_inputs: Vec<DefinitionName>,
+        external_input_schemas: Vec<ExternalInputSchema>,
         produces: Vec<DefinitionName>,
     ) -> Self {
         Self {
             inputs,
             external_inputs,
+            external_input_schemas,
             produces,
         }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ExternalInputSchema {
+    name: DefinitionName,
+    fields: Vec<DefinitionName>,
+}
+
+impl ExternalInputSchema {
+    pub fn new(name: DefinitionName, fields: Vec<DefinitionName>) -> Self {
+        Self { name, fields }
     }
 }
 
@@ -745,12 +760,15 @@ fn validate_external_sourced_event_attributes(
         .find(|(event, _, payload_name, _)| {
             !event_has_producer_external_input(document, event, payload_name)
         })
-        .map_or(Ok(()), |(event, attribute, payload_name, field_name)| {
-            Err(validation_issue(format!(
-                "event '{}' attribute '{}' has invalid source 'external.{}.{}'",
-                event.name, attribute.name, payload_name, field_name
-            )))
-        })
+        .map_or_else(
+            || validate_external_sourced_event_attribute_fields(document),
+            |(event, attribute, payload_name, field_name)| {
+                Err(validation_issue(format!(
+                    "event '{}' attribute '{}' has invalid source 'external.{}.{}'",
+                    event.name, attribute.name, payload_name, field_name
+                )))
+            },
+        )
 }
 
 fn event_has_producer_external_input(
@@ -761,4 +779,56 @@ fn event_has_producer_external_input(
     document.command_definitions.iter().any(|command| {
         command.produces.contains(&event.name) && command.external_inputs.contains(payload_name)
     })
+}
+
+fn validate_external_sourced_event_attribute_fields(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .event_definitions
+        .iter()
+        .flat_map(|event| {
+            event.attributes.iter().filter_map(move |attribute| {
+                if let EventAttributeSource::ExternalField(payload_name, field_name) =
+                    &attribute.source
+                {
+                    Some((event, attribute, payload_name, field_name))
+                } else {
+                    None
+                }
+            })
+        })
+        .find(|(event, _, payload_name, field_name)| {
+            !event_has_producer_external_field(document, event, payload_name, field_name)
+        })
+        .map_or(Ok(()), |(event, attribute, _, field_name)| {
+            Err(validation_issue(format!(
+                "event '{}' attribute '{}' references undeclared external input field '{}'",
+                event.name, attribute.name, field_name
+            )))
+        })
+}
+
+fn event_has_producer_external_field(
+    document: &EventModelDocument,
+    event: &EventDefinition,
+    payload_name: &DefinitionName,
+    field_name: &DefinitionName,
+) -> bool {
+    document.command_definitions.iter().any(|command| {
+        command.produces.contains(&event.name)
+            && external_field_is_declared(command, payload_name, field_name)
+    })
+}
+
+fn external_field_is_declared(
+    command: &CommandDefinition,
+    payload_name: &DefinitionName,
+    field_name: &DefinitionName,
+) -> bool {
+    command
+        .external_input_schemas
+        .iter()
+        .find(|schema| schema.name == *payload_name)
+        .is_some_and(|schema| schema.fields.contains(field_name))
 }
