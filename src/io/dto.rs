@@ -12,7 +12,7 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    AutomationCommandPolicy, AutomationTrigger, BoardGraphConnection,
+    AutomationCommandPolicy, AutomationTrigger, BoardGraphConnection, BoardLane,
     BoardReadModelCommandDependency, BoardSliceGraph, CommandDefinition, CommandDefinitionParts,
     CommandInputSource, CommandInputSourceKind, CommandReadModelReads, ControlCommandErrorHandling,
     ControlErrorRecoveryBehavior, DefinitionKind, DefinitionName, EventAttribute,
@@ -241,6 +241,7 @@ fn event_model_document_from_json(
                 workflow_transition_outcomes_from_json_object(object)?;
             let board_read_model_command_dependencies =
                 board_read_model_command_dependencies_from_json_object(object)?;
+            let board_lanes = board_lanes_from_json_object(object)?;
             let board_slices = board_slices_from_json_object(object)?;
             let command_produced_events = command_produced_events_from_json_object(object)?;
             let state_view_observed_events =
@@ -261,6 +262,7 @@ fn event_model_document_from_json(
                         .with_board_read_model_command_dependencies(
                             board_read_model_command_dependencies,
                         )
+                        .with_board_lanes(board_lanes)
                         .with_board_slices(board_slices)
                         .with_slice_count(slice_definition_count(&slice_definitions))
                         .with_slice_definitions(slice_definitions)
@@ -1030,6 +1032,27 @@ fn board_read_model_command_dependencies_from_json_slice(
             board_read_model_command_dependency_from_connection(&elements, &connections, connection)
         })
         .collect())
+}
+
+fn board_lanes_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<BoardLane>, BoundaryParseError> {
+    object
+        .get("board")
+        .and_then(|board| board.get("lanes"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|lane| lane.get("id").and_then(Value::as_str).map(|id| (lane, id)))
+        .map(|(lane, id)| {
+            DefinitionName::try_new(id.to_owned())
+                .map_err(|error| BoundaryParseError::new(format!("invalid board lane: {error}")))
+                .and_then(|id| {
+                    optional_definition_name_from_json_field(lane, "name", "board lane name")
+                        .map(|name| BoardLane::new(id, name))
+                })
+        })
+        .collect()
 }
 
 fn board_slices_from_json_object(

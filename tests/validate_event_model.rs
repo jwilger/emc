@@ -82,6 +82,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_non_canonical_board_lane_ids() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("board-canonical-lane-ids.eventmodel.json"),
+            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"external\",\"name\":\"External\"}],\"slices\":[]},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "board lanes must be exactly ux, actions, and events",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_command_names() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");

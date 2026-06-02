@@ -16,6 +16,7 @@ pub struct EventModelDocument {
     named_definitions: Vec<NamedDefinition>,
     read_model_definitions: Vec<ReadModelDefinition>,
     board_read_model_command_dependencies: Vec<BoardReadModelCommandDependency>,
+    board_lanes: Vec<BoardLane>,
     board_slices: Vec<BoardSliceGraph>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
@@ -51,6 +52,7 @@ impl EventModelDocument {
             named_definitions: parts.named_definitions,
             read_model_definitions: parts.read_model_definitions,
             board_read_model_command_dependencies: parts.board_read_model_command_dependencies,
+            board_lanes: parts.board_lanes,
             board_slices: parts.board_slices,
             slice_count: parts.slice_count,
             slice_definitions: parts.slice_definitions,
@@ -87,6 +89,7 @@ pub struct EventModelDocumentParts {
     named_definitions: Vec<NamedDefinition>,
     read_model_definitions: Vec<ReadModelDefinition>,
     board_read_model_command_dependencies: Vec<BoardReadModelCommandDependency>,
+    board_lanes: Vec<BoardLane>,
     board_slices: Vec<BoardSliceGraph>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
@@ -122,6 +125,7 @@ impl EventModelDocumentParts {
             named_definitions: Vec::new(),
             read_model_definitions: Vec::new(),
             board_read_model_command_dependencies: Vec::new(),
+            board_lanes: Vec::new(),
             board_slices: Vec::new(),
             slice_count: SliceDefinitionCount::Zero,
             slice_definitions: Vec::new(),
@@ -207,6 +211,11 @@ impl EventModelDocumentParts {
         board_read_model_command_dependencies: Vec<BoardReadModelCommandDependency>,
     ) -> Self {
         self.board_read_model_command_dependencies = board_read_model_command_dependencies;
+        self
+    }
+
+    pub fn with_board_lanes(mut self, board_lanes: Vec<BoardLane>) -> Self {
+        self.board_lanes = board_lanes;
         self
     }
 
@@ -708,6 +717,18 @@ impl BoardReadModelCommandDependency {
             command,
             intermediate_automation,
         }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BoardLane {
+    id: DefinitionName,
+    name: Option<DefinitionName>,
+}
+
+impl BoardLane {
+    pub fn new(id: DefinitionName, name: Option<DefinitionName>) -> Self {
+        Self { id, name }
     }
 }
 
@@ -1669,6 +1690,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_external_workflow_navigation_targets(document)?;
 
     validate_external_system_navigation_targets(document)?;
+
+    validate_board_lane_ids(document)?;
 
     validate_board_read_model_to_command_intermediates(document)?;
 
@@ -3402,6 +3425,24 @@ fn validate_translation_slice_payload_variant_scenarios(
                 missing.slice_name, missing.variant
             )))
         })
+}
+
+fn validate_board_lane_ids(document: &EventModelDocument) -> Result<(), ValidationIssue> {
+    document
+        .board_lanes
+        .iter()
+        .find(|lane| !is_canonical_board_lane_id(&lane.id))
+        .map_or(Ok(()), |_| {
+            Err(validation_issue(
+                "board lanes must be exactly ux, actions, and events",
+            ))
+        })
+}
+
+fn is_canonical_board_lane_id(lane_id: &DefinitionName) -> bool {
+    ["ux", "actions", "events"]
+        .into_iter()
+        .any(|canonical| lane_id.as_ref() == canonical)
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
