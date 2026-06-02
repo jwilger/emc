@@ -12,15 +12,15 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    AutomationTrigger, BoardReadModelCommandDependency, CommandDefinition, CommandInputSource,
-    CommandInputSourceKind, CommandReadModelReads, DefinitionKind, DefinitionName, EventAttribute,
-    EventAttributeSource, EventDefinition, EventModelDocument, EventModelDocumentParts,
-    EventModelFileKind, ExternalInputSchema, LegacyScenariosField, NamedDefinition,
-    ReadModelDefinition, ReadModelField, ReadModelFieldAbsenceDefault, ReadModelFieldDerivation,
-    ReadModelFieldSource, ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField,
-    SingletonBehavior, SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario,
-    SliceType, TopLevelKey, TranslationContract, ViewDefinition, empty_top_level_key_issue,
-    model_must_be_object_issue,
+    AutomationCommandPolicy, AutomationTrigger, BoardReadModelCommandDependency, CommandDefinition,
+    CommandInputSource, CommandInputSourceKind, CommandReadModelReads, DefinitionKind,
+    DefinitionName, EventAttribute, EventAttributeSource, EventDefinition, EventModelDocument,
+    EventModelDocumentParts, EventModelFileKind, ExternalInputSchema, LegacyScenariosField,
+    NamedDefinition, ReadModelDefinition, ReadModelField, ReadModelFieldAbsenceDefault,
+    ReadModelFieldDerivation, ReadModelFieldSource, ReadModelTransitiveDerivation, ScenarioSetKind,
+    ScenarioStepField, SingletonBehavior, SliceDefinition, SliceDefinitionCount,
+    SliceDefinitionParts, SliceScenario, SliceType, TopLevelKey, TranslationContract,
+    ViewDefinition, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -416,6 +416,9 @@ fn slice_definitions_from_json_object(
                                 ))
                                 .with_singleton_behavior(singleton_behavior_from_json_slice(slice))
                                 .with_automation_trigger(automation_trigger_from_json_slice(slice))
+                                .with_automation_command_policy(
+                                    automation_command_policy_from_json_slice(slice),
+                                )
                                 .with_translation_contract(translation_contract_from_json_slice(
                                     slice,
                                 ))
@@ -426,6 +429,25 @@ fn slice_definitions_from_json_object(
                 .and_then(|slice_definition| slice_definition)
         })
         .collect()
+}
+
+fn automation_command_policy_from_json_slice(slice: &Value) -> AutomationCommandPolicy {
+    if slice_type_from_json_slice(slice) == SliceType::Automation {
+        if slice_command_count(slice) > 1 {
+            AutomationCommandPolicy::MultipleCommands
+        } else {
+            AutomationCommandPolicy::SingleCommand
+        }
+    } else {
+        AutomationCommandPolicy::NotAutomation
+    }
+}
+
+fn slice_command_count(slice: &Value) -> usize {
+    slice
+        .get("commands")
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len)
 }
 
 fn automation_trigger_from_json_slice(slice: &Value) -> AutomationTrigger {

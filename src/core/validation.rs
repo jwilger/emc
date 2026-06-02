@@ -260,6 +260,7 @@ pub struct SliceDefinition {
     legacy_scenarios: LegacyScenariosField,
     singleton_behavior: SingletonBehavior,
     automation_trigger: AutomationTrigger,
+    automation_command_policy: AutomationCommandPolicy,
     translation_contract: TranslationContract,
     scenarios: Vec<SliceScenario>,
 }
@@ -275,6 +276,7 @@ impl SliceDefinition {
             legacy_scenarios: parts.legacy_scenarios,
             singleton_behavior: parts.singleton_behavior,
             automation_trigger: parts.automation_trigger,
+            automation_command_policy: parts.automation_command_policy,
             translation_contract: parts.translation_contract,
             scenarios: parts.scenarios,
         }
@@ -299,6 +301,7 @@ pub struct SliceDefinitionParts {
     legacy_scenarios: LegacyScenariosField,
     singleton_behavior: SingletonBehavior,
     automation_trigger: AutomationTrigger,
+    automation_command_policy: AutomationCommandPolicy,
     translation_contract: TranslationContract,
     scenarios: Vec<SliceScenario>,
 }
@@ -314,6 +317,7 @@ impl SliceDefinitionParts {
             legacy_scenarios: LegacyScenariosField::Absent,
             singleton_behavior: SingletonBehavior::NotSingleton,
             automation_trigger: AutomationTrigger::NotAutomation,
+            automation_command_policy: AutomationCommandPolicy::NotAutomation,
             translation_contract: TranslationContract::NotTranslation,
             scenarios: Vec::new(),
         }
@@ -349,6 +353,14 @@ impl SliceDefinitionParts {
         self
     }
 
+    pub fn with_automation_command_policy(
+        mut self,
+        automation_command_policy: AutomationCommandPolicy,
+    ) -> Self {
+        self.automation_command_policy = automation_command_policy;
+        self
+    }
+
     pub fn with_translation_contract(mut self, translation_contract: TranslationContract) -> Self {
         self.translation_contract = translation_contract;
         self
@@ -372,6 +384,13 @@ pub enum AutomationTrigger {
     NotAutomation,
     MissingTrigger,
     DeclaresTrigger,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum AutomationCommandPolicy {
+    NotAutomation,
+    SingleCommand,
+    MultipleCommands,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -675,6 +694,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_translation_slice_view_ownership(document)?;
 
     validate_automation_slice_triggers(document)?;
+
+    validate_automation_slice_command_policy(document)?;
 
     validate_board_read_model_to_command_intermediates(document)?;
 
@@ -1085,6 +1106,22 @@ fn validate_automation_slice_triggers(
         .map_or(Ok(()), |slice| {
             Err(validation_issue(format!(
                 "automation slice '{}' must declare a trigger",
+                slice.name
+            )))
+        })
+}
+
+fn validate_automation_slice_command_policy(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::Automation)
+        .find(|slice| slice.automation_command_policy == AutomationCommandPolicy::MultipleCommands)
+        .map_or(Ok(()), |slice| {
+            Err(validation_issue(format!(
+                "automation slice '{}' must issue one command per operation",
                 slice.name
             )))
         })
