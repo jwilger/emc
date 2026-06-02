@@ -8,6 +8,7 @@ pub struct EventModelDocument {
     top_level_keys: BTreeSet<TopLevelKey>,
     named_definitions: Vec<NamedDefinition>,
     slice_count: SliceDefinitionCount,
+    slice_definitions: Vec<SliceDefinition>,
 }
 
 impl EventModelDocument {
@@ -16,12 +17,14 @@ impl EventModelDocument {
         top_level_keys: BTreeSet<TopLevelKey>,
         named_definitions: Vec<NamedDefinition>,
         slice_count: SliceDefinitionCount,
+        slice_definitions: Vec<SliceDefinition>,
     ) -> Self {
         Self {
             file_kind,
             top_level_keys,
             named_definitions,
             slice_count,
+            slice_definitions,
         }
     }
 }
@@ -37,6 +40,12 @@ pub enum SliceDefinitionCount {
     Multiple,
     One,
     Zero,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum LegacyScenariosField {
+    Absent,
+    Present,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
@@ -64,6 +73,21 @@ pub struct NamedDefinition {
 impl NamedDefinition {
     pub fn new(kind: DefinitionKind, name: DefinitionName) -> Self {
         Self { kind, name }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct SliceDefinition {
+    name: DefinitionName,
+    legacy_scenarios: LegacyScenariosField,
+}
+
+impl SliceDefinition {
+    pub fn new(name: DefinitionName, legacy_scenarios: LegacyScenariosField) -> Self {
+        Self {
+            name,
+            legacy_scenarios,
+        }
     }
 }
 
@@ -103,7 +127,9 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         )))
     })?;
 
-    validate_slice_file_count(document)
+    validate_slice_file_count(document)?;
+
+    validate_no_legacy_slice_scenarios(document)
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -178,4 +204,19 @@ fn validate_slice_file_count(document: &EventModelDocument) -> Result<(), Valida
             "slice file must contain exactly one slice",
         )),
     }
+}
+
+fn validate_no_legacy_slice_scenarios(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .find(|slice| slice.legacy_scenarios == LegacyScenariosField::Present)
+        .map_or(Ok(()), |slice| {
+            Err(validation_issue(format!(
+                "slice '{}' uses legacy 'scenarios'; use 'acceptance_scenarios' and 'contract_scenarios'",
+                slice.name
+            )))
+        })
 }

@@ -12,8 +12,9 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    DefinitionKind, DefinitionName, EventModelDocument, EventModelFileKind, NamedDefinition,
-    SliceDefinitionCount, TopLevelKey, empty_top_level_key_issue, model_must_be_object_issue,
+    DefinitionKind, DefinitionName, EventModelDocument, EventModelFileKind, LegacyScenariosField,
+    NamedDefinition, SliceDefinition, SliceDefinitionCount, TopLevelKey, empty_top_level_key_issue,
+    model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -196,27 +197,57 @@ fn event_model_document_from_json(
         })
         .collect::<Result<BTreeSet<_>, _>>()
         .and_then(|top_level_keys| {
+            let slice_definitions = slice_definitions_from_json_object(object)?;
             named_definitions_from_json_object(object).map(|named_definitions| {
                 EventModelDocument::new(
                     file_kind,
                     top_level_keys,
                     named_definitions,
-                    slice_definition_count(object),
+                    slice_definition_count(&slice_definitions),
+                    slice_definitions,
                 )
             })
         })
 }
 
-fn slice_definition_count(object: &Map<String, Value>) -> SliceDefinitionCount {
-    match object
-        .get("slices")
-        .and_then(Value::as_array)
-        .map(Vec::len)
-        .unwrap_or_default()
-    {
+fn slice_definition_count(slice_definitions: &[SliceDefinition]) -> SliceDefinitionCount {
+    match slice_definitions.len() {
         0 => SliceDefinitionCount::Zero,
         1 => SliceDefinitionCount::One,
         _ => SliceDefinitionCount::Multiple,
+    }
+}
+
+fn slice_definitions_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<SliceDefinition>, BoundaryParseError> {
+    object
+        .get("slices")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|slice| {
+            slice
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BoundaryParseError::new("slice is missing name"))
+                .and_then(|name| {
+                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!("invalid slice name: {error}"))
+                    })
+                })
+                .map(|name| {
+                    SliceDefinition::new(name, legacy_scenarios_field_from_json_slice(slice))
+                })
+        })
+        .collect()
+}
+
+fn legacy_scenarios_field_from_json_slice(slice: &Value) -> LegacyScenariosField {
+    if slice.get("scenarios").is_some() {
+        LegacyScenariosField::Present
+    } else {
+        LegacyScenariosField::Absent
     }
 }
 
