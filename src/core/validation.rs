@@ -179,6 +179,7 @@ pub enum ScenarioSetKind {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum SliceType {
     Other,
+    StateChange,
     StateView,
 }
 
@@ -261,6 +262,8 @@ pub struct SliceScenario {
     when_field: ScenarioStepField,
     scenario_set: ScenarioSetKind,
     referenced_events: Vec<DefinitionName>,
+    then_events: Vec<DefinitionName>,
+    given_streams: Vec<DefinitionName>,
     read_model_states: Vec<DefinitionName>,
 }
 
@@ -270,6 +273,8 @@ impl SliceScenario {
         when_field: ScenarioStepField,
         scenario_set: ScenarioSetKind,
         referenced_events: Vec<DefinitionName>,
+        then_events: Vec<DefinitionName>,
+        given_streams: Vec<DefinitionName>,
         read_model_states: Vec<DefinitionName>,
     ) -> Self {
         Self {
@@ -277,6 +282,8 @@ impl SliceScenario {
             when_field,
             scenario_set,
             referenced_events,
+            then_events,
+            given_streams,
             read_model_states,
         }
     }
@@ -533,6 +540,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_event_stream_references(document)?;
 
     validate_event_producers(document)?;
+
+    validate_state_change_scenario_given_streams(document)?;
 
     validate_command_sourced_event_attributes(document)?;
 
@@ -837,6 +846,43 @@ fn validate_event_producers(document: &EventModelDocument) -> Result<(), Validat
                 event.name
             )))
         })
+}
+
+fn validate_state_change_scenario_given_streams(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::StateChange)
+        .flat_map(|slice| {
+            slice.scenarios.iter().filter_map(move |scenario| {
+                scenario
+                    .then_events
+                    .iter()
+                    .filter_map(|event_name| event_stream(document, event_name))
+                    .find(|stream_name| !scenario.given_streams.contains(stream_name))
+                    .map(|stream_name| (scenario, stream_name))
+            })
+        })
+        .next()
+        .map_or(Ok(()), |(scenario, stream_name)| {
+            Err(validation_issue(format!(
+                "state-change scenario '{}' writes stream '{}' but does not name it in given_streams",
+                scenario.name, stream_name
+            )))
+        })
+}
+
+fn event_stream(
+    document: &EventModelDocument,
+    event_name: &DefinitionName,
+) -> Option<DefinitionName> {
+    document
+        .event_definitions
+        .iter()
+        .find(|event| event.name == *event_name)
+        .and_then(|event| event.stream.clone())
 }
 
 fn validate_command_sourced_event_attributes(

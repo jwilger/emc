@@ -336,17 +336,38 @@ fn slice_scenarios_from_json_field(
                 })
                 .map(|name| {
                     let read_model_states = read_model_states_from_json_scenario(scenario)?;
+                    let then_events = event_references_from_json_field(scenario, "then")?;
+                    let given_streams = given_streams_from_json_scenario(scenario)?;
                     event_references_from_json_scenario(scenario).map(|referenced_events| {
                         SliceScenario::new(
                             name,
                             scenario_step_field(scenario, "when"),
                             spec.kind,
                             referenced_events,
+                            then_events,
+                            given_streams,
                             read_model_states,
                         )
                     })
                 })
                 .and_then(|scenario| scenario)
+        })
+        .collect()
+}
+
+fn given_streams_from_json_scenario(
+    scenario: &Value,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    scenario
+        .get("given_streams")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|given_stream| given_stream.get("stream").and_then(Value::as_str))
+        .map(|stream| {
+            DefinitionName::try_new(stream.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid given stream reference: {error}"))
+            })
         })
         .collect()
 }
@@ -372,7 +393,19 @@ fn event_references_from_json_scenario(
 ) -> Result<Vec<DefinitionName>, BoundaryParseError> {
     scenario_reference_fields()
         .iter()
-        .flat_map(|field| scenario.get(field).and_then(Value::as_array))
+        .map(|field| event_references_from_json_field(scenario, field))
+        .collect::<Result<Vec<_>, _>>()
+        .map(|references| references.into_iter().flatten().collect())
+}
+
+fn event_references_from_json_field(
+    scenario: &Value,
+    field: &str,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    scenario
+        .get(field)
+        .and_then(Value::as_array)
+        .into_iter()
         .flatten()
         .filter_map(Value::as_str)
         .map(|reference| {
@@ -414,11 +447,11 @@ fn first_class_scenario_fields() -> &'static [ScenarioFieldSpec] {
 }
 
 fn slice_type_from_json_slice(slice: &Value) -> SliceType {
-    slice
-        .get("type")
-        .and_then(Value::as_str)
-        .filter(|slice_type| *slice_type == "state_view")
-        .map_or(SliceType::Other, |_| SliceType::StateView)
+    match slice.get("type").and_then(Value::as_str) {
+        Some("state_change") => SliceType::StateChange,
+        Some("state_view") => SliceType::StateView,
+        _ => SliceType::Other,
+    }
 }
 
 fn view_definitions_from_json_object(
