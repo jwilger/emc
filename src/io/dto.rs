@@ -1102,8 +1102,20 @@ fn board_graph_elements_from_json_slice(
                 })
                 .and_then(|id| {
                     optional_definition_name_from_json_field(element, "lane", "board element lane")
-                        .map(|lane| {
-                            BoardElement::new(id, board_element_kind_from_json(element), lane)
+                        .and_then(|lane| {
+                            optional_definition_name_from_json_field(
+                                element,
+                                "name",
+                                "board element name",
+                            )
+                            .map(|name| {
+                                BoardElement::new(
+                                    id,
+                                    board_element_kind_from_json(element),
+                                    lane,
+                                    name,
+                                )
+                            })
                         })
                 })
         })
