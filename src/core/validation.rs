@@ -1670,6 +1670,16 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    workflow_navigation_transition_not_resolved_by_target_step(documents).map_or(
+        Ok(()),
+        |transition| {
+            Err(validation_issue(format!(
+                "navigation target '{}' does not resolve to target step '{}'",
+                transition.navigation_target, transition.target_slice
+            )))
+        },
+    )?;
+
     unhandled_workflow_slice_outcome(documents).map_or(Ok(()), |unhandled| {
         Err(validation_issue(format!(
             "workflow '{}' does not handle outcome '{}' from slice '{}'",
@@ -1925,6 +1935,50 @@ fn workflow_navigation_transition_not_owned_by_source_view(
                 })
             }
         })
+}
+
+fn workflow_navigation_transition_not_resolved_by_target_step(
+    documents: &[EventModelDocument],
+) -> Option<WorkflowNavigationTransition> {
+    documents
+        .iter()
+        .flat_map(|document| document.workflow_navigation_transitions.iter())
+        .find(|transition| !workflow_navigation_transition_resolves_target(documents, transition))
+        .cloned()
+}
+
+fn workflow_navigation_transition_resolves_target(
+    documents: &[EventModelDocument],
+    transition: &WorkflowNavigationTransition,
+) -> bool {
+    target_slice_owns_navigation_view(documents, transition)
+        || target_state_change_exposes_navigation_view(documents, transition)
+}
+
+fn target_slice_owns_navigation_view(
+    documents: &[EventModelDocument],
+    transition: &WorkflowNavigationTransition,
+) -> bool {
+    application_entry_slice_by_slug(documents, &transition.target_slice).is_some_and(|slice| {
+        slice
+            .owned_views
+            .iter()
+            .any(|view| view == &transition.navigation_target)
+    })
+}
+
+fn target_state_change_exposes_navigation_view(
+    documents: &[EventModelDocument],
+    transition: &WorkflowNavigationTransition,
+) -> bool {
+    documents.iter().any(|document| {
+        document.slice_definitions.iter().any(|slice| {
+            slice.has_slug(&transition.target_slice) && {
+                slice.slice_type == SliceType::StateChange
+                    && view_exists(document, &transition.navigation_target)
+            }
+        })
+    })
 }
 
 fn workflow_navigation_transition_has_source_control(
