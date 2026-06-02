@@ -599,4 +599,27 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_state_change_scenarios_without_written_stream_in_given_streams()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("state-change-missing-given-stream.eventmodel.json"),
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson_submission\"}],\"events\":[{\"name\":\"LessonSubmittedForReview\",\"stream\":\"lesson_submission\",\"attributes\":[]}],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[\"LessonSubmittedForReview\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_change\",\"events\":[\"LessonSubmittedForReview\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"submit lesson\",\"given\":[],\"given_streams\":[],\"when\":{},\"then\":[\"LessonSubmittedForReview\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "state-change scenario 'submit lesson' writes stream 'lesson_submission' but does not name it in given_streams",
+            ));
+
+        Ok(())
+    }
 }
