@@ -1749,6 +1749,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_board_external_event_references(document)?;
 
+    validate_undeclared_external_event_bridges(document)?;
+
     validate_command_sourced_event_attributes(document)?;
 
     validate_command_legacy_read_model_reads(document)?;
@@ -3672,6 +3674,16 @@ fn validate_board_external_event_references(
     })
 }
 
+fn validate_undeclared_external_event_bridges(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    undeclared_external_event_bridge(document).map_or(Ok(()), |element_id| {
+        Err(validation_issue(format!(
+            "board element '{element_id}' is not declared"
+        )))
+    })
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct UnknownBoardElementReference {
     element_id: DefinitionName,
@@ -3777,6 +3789,62 @@ fn unknown_board_external_event_reference(
             kind: element.kind,
             name: name.clone(),
         })
+}
+
+fn undeclared_external_event_bridge(document: &EventModelDocument) -> Option<DefinitionName> {
+    document
+        .board_slices
+        .iter()
+        .find_map(|board_slice| undeclared_external_event_bridge_in_slice(document, board_slice))
+}
+
+fn undeclared_external_event_bridge_in_slice(
+    document: &EventModelDocument,
+    board_slice: &BoardSliceGraph,
+) -> Option<DefinitionName> {
+    board_slice
+        .elements
+        .iter()
+        .filter(|element| element.kind == BoardElementKind::ExternalEvent)
+        .filter(|element| {
+            !declared_external_event_name(document, element.name.as_ref().unwrap_or(&element.id))
+        })
+        .find(|element| board_element_bridges_read_model_to_command(board_slice, element))
+        .map(|element| element.id.clone())
+}
+
+fn board_element_bridges_read_model_to_command(
+    board_slice: &BoardSliceGraph,
+    element: &BoardElement,
+) -> bool {
+    let has_read_model_input = board_slice.connections.iter().any(|connection| {
+        connection.to == element.id
+            && board_element_kind_by_id(board_slice, &connection.from)
+                == Some(BoardElementKind::ReadModel)
+    });
+    let has_command_output = board_slice.connections.iter().any(|connection| {
+        connection.from == element.id
+            && board_element_kind_by_id(board_slice, &connection.to)
+                == Some(BoardElementKind::Command)
+    });
+    has_read_model_input && has_command_output
+}
+
+fn board_element_kind_by_id(
+    board_slice: &BoardSliceGraph,
+    element_id: &DefinitionName,
+) -> Option<BoardElementKind> {
+    board_slice
+        .elements
+        .iter()
+        .find(|element| &element.id == element_id)
+        .map(|element| element.kind)
+}
+
+fn declared_external_event_name(document: &EventModelDocument, name: &DefinitionName) -> bool {
+    document.slice_definitions.iter().any(|slice| {
+        slice.slice_type == SliceType::Translation && slice.external_triggers.contains(name)
+    })
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

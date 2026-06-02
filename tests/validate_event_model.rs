@@ -466,6 +466,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_undeclared_external_event_board_elements_used_as_dependency_bridges()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("undeclared-external-event-bridge.eventmodel.json"),
+            "{\"name\":\"Record checkpoint\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\",\"name\":\"People, Views, and Translations\"},{\"id\":\"actions\",\"name\":\"Commands and Projections\"},{\"id\":\"events\",\"name\":\"Stored Facts\"}],\"slices\":[{\"name\":\"Record checkpoint\",\"elements\":[{\"id\":\"lesson_state\",\"kind\":\"read_model\",\"lane\":\"actions\",\"name\":\"lesson_state\"},{\"id\":\"fake-dependency\",\"kind\":\"external_event\",\"lane\":\"ux\"},{\"id\":\"record_checkpoint\",\"kind\":\"command\",\"lane\":\"actions\",\"name\":\"RecordCheckpoint\"}],\"connections\":[{\"from\":\"lesson_state\",\"to\":\"fake-dependency\"},{\"from\":\"fake-dependency\",\"to\":\"record_checkpoint\"}]}]},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"RecordCheckpoint\",\"inputs\":[],\"produces\":[]}],\"read_models\":[{\"name\":\"lesson_state\",\"fields\":[]}],\"slices\":[{\"name\":\"Record checkpoint\",\"type\":\"state_view\",\"acceptance_scenarios\":[{\"name\":\"show checkpoint\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "board element 'fake-dependency' is not declared",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_command_names() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
