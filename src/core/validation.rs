@@ -563,11 +563,47 @@ pub struct ViewDefinition {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ViewControlDefinition {
     label: DefinitionName,
+    command: Option<DefinitionName>,
+    handled_command_errors: Vec<DefinitionName>,
 }
 
 impl ViewControlDefinition {
+    pub fn new(parts: ViewControlDefinitionParts) -> Self {
+        Self {
+            label: parts.label,
+            command: parts.command,
+            handled_command_errors: parts.handled_command_errors,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ViewControlDefinitionParts {
+    label: DefinitionName,
+    command: Option<DefinitionName>,
+    handled_command_errors: Vec<DefinitionName>,
+}
+
+impl ViewControlDefinitionParts {
     pub fn new(label: DefinitionName) -> Self {
-        Self { label }
+        Self {
+            label,
+            command: None,
+            handled_command_errors: Vec::new(),
+        }
+    }
+
+    pub fn with_command(mut self, command: Option<DefinitionName>) -> Self {
+        self.command = command;
+        self
+    }
+
+    pub fn with_handled_command_errors(
+        mut self,
+        handled_command_errors: Vec<DefinitionName>,
+    ) -> Self {
+        self.handled_command_errors = handled_command_errors;
+        self
     }
 }
 
@@ -917,6 +953,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_scenario_command_errors_are_declared(document)?;
 
     validate_state_change_command_error_scenarios(document)?;
+
+    validate_control_command_error_handling(document)?;
 
     validate_board_read_model_to_command_intermediates(document)?;
 
@@ -1854,6 +1892,47 @@ fn state_change_slice_covers_command_error(
         .scenarios
         .iter()
         .any(|scenario| scenario.command_errors.contains(error_name))
+}
+
+fn validate_control_command_error_handling(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .find_map(|view| unhandled_control_command_error(document, view))
+        .map_or(Ok(()), |unhandled| {
+            Err(validation_issue(format!(
+                "control '{}' does not handle command error '{}'",
+                unhandled.control_label, unhandled.error_name
+            )))
+        })
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct UnhandledControlCommandError {
+    control_label: DefinitionName,
+    error_name: DefinitionName,
+}
+
+fn unhandled_control_command_error(
+    document: &EventModelDocument,
+    view: &ViewDefinition,
+) -> Option<UnhandledControlCommandError> {
+    view.controls.iter().find_map(|control| {
+        control.command.as_ref().and_then(|command_name| {
+            command_definition(document, command_name).and_then(|command| {
+                command
+                    .errors
+                    .iter()
+                    .find(|error_name| !control.handled_command_errors.contains(error_name))
+                    .map(|error_name| UnhandledControlCommandError {
+                        control_label: control.label.clone(),
+                        error_name: error_name.clone(),
+                    })
+            })
+        })
+    })
 }
 
 fn validate_board_read_model_to_command_intermediates(
