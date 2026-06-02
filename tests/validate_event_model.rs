@@ -304,6 +304,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_slice_outcomes_that_reference_events_outside_the_slice()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("outcome-with-external-event.eventmodel.json"),
+            "{\"name\":\"Activate member workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"member\"}],\"events\":[{\"name\":\"OrganizationMemberActivated\",\"stream\":\"member\",\"attributes\":[]},{\"name\":\"OrganizationMemberInvited\",\"stream\":\"member\",\"attributes\":[]}],\"commands\":[{\"name\":\"ActivateMember\",\"inputs\":[],\"produces\":[\"OrganizationMemberActivated\",\"OrganizationMemberInvited\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Activate member\",\"type\":\"state_change\",\"commands\":[\"ActivateMember\"],\"events\":[\"OrganizationMemberActivated\"],\"outcomes\":[{\"label\":\"already_invited\",\"events\":[\"OrganizationMemberInvited\"]}],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"activate member\",\"given\":[],\"given_streams\":[{\"stream\":\"member\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"OrganizationMemberActivated\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "slice 'Activate member' outcome 'already_invited' references event 'OrganizationMemberInvited' outside the slice event set",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_events_that_reference_unknown_streams() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");

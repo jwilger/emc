@@ -840,6 +840,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_outcome_event_sets_not_empty(document)?;
 
+    validate_outcome_events_belong_to_slice(document)?;
+
     validate_duplicate_outcome_event_sets(document)?;
 
     validate_event_stream_references(document)?;
@@ -1421,6 +1423,42 @@ fn validate_outcome_event_sets_not_empty(
                 outcome.label
             )))
         })
+}
+
+fn validate_outcome_events_belong_to_slice(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .find_map(outcome_event_outside_slice)
+        .map_or(Ok(()), |reference| {
+            Err(validation_issue(format!(
+                "slice '{}' outcome '{}' references event '{}' outside the slice event set",
+                reference.slice_name, reference.outcome_label, reference.event_name
+            )))
+        })
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct OutcomeEventOutsideSlice {
+    slice_name: DefinitionName,
+    outcome_label: DefinitionName,
+    event_name: DefinitionName,
+}
+
+fn outcome_event_outside_slice(slice: &SliceDefinition) -> Option<OutcomeEventOutsideSlice> {
+    slice.outcomes.iter().find_map(|outcome| {
+        outcome
+            .events
+            .iter()
+            .find(|event_name| !slice.owned_events.contains(event_name))
+            .map(|event_name| OutcomeEventOutsideSlice {
+                slice_name: slice.name.clone(),
+                outcome_label: outcome.label.clone(),
+                event_name: event_name.clone(),
+            })
+    })
 }
 
 fn validate_duplicate_outcome_event_sets(
