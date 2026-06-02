@@ -206,6 +206,7 @@ fn event_model_document_from_json(
         })
         .collect::<Result<BTreeSet<_>, _>>()
         .and_then(|top_level_keys| {
+            let name = optional_definition_name_from_json_object(object, "name", "model")?;
             let slice_definitions = slice_definitions_from_json_object(object)?;
             let event_names = event_names_from_json_object(object)?;
             let view_definitions = view_definitions_from_json_object(object)?;
@@ -214,6 +215,8 @@ fn event_model_document_from_json(
             let command_definitions = command_definitions_from_json_object(object)?;
             let read_model_definitions = read_model_definitions_from_json_object(object)?;
             let workflow_transition_errors = workflow_transition_errors_from_json_object(object)?;
+            let workflow_transition_outcomes =
+                workflow_transition_outcomes_from_json_object(object)?;
             let board_read_model_command_dependencies =
                 board_read_model_command_dependencies_from_json_object(object)?;
             let command_produced_events = command_produced_events_from_json_object(object)?;
@@ -222,6 +225,7 @@ fn event_model_document_from_json(
             named_definitions_from_json_object(object).map(|named_definitions| {
                 EventModelDocument::new(
                     EventModelDocumentParts::new(file_kind)
+                        .with_name(name)
                         .with_top_level_keys(top_level_keys)
                         .with_event_names(event_names)
                         .with_stream_names(stream_names)
@@ -237,7 +241,8 @@ fn event_model_document_from_json(
                         .with_slice_count(slice_definition_count(&slice_definitions))
                         .with_slice_definitions(slice_definitions)
                         .with_view_definitions(view_definitions)
-                        .with_workflow_transition_errors(workflow_transition_errors),
+                        .with_workflow_transition_errors(workflow_transition_errors)
+                        .with_workflow_transition_outcomes(workflow_transition_outcomes),
                 )
             })
         })
@@ -254,26 +259,47 @@ fn slice_definition_count(slice_definitions: &[SliceDefinition]) -> SliceDefinit
 fn workflow_transition_errors_from_json_object(
     object: &Map<String, Value>,
 ) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
+    workflow_transition_references_from_json_object(
+        object,
+        "via_error",
+        "workflow transition error",
+    )
+}
+
+fn workflow_transition_outcomes_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
+    workflow_transition_references_from_json_object(
+        object,
+        "via_outcome",
+        "workflow transition outcome",
+    )
+}
+
+fn workflow_transition_references_from_json_object(
+    object: &Map<String, Value>,
+    field: &str,
+    label: &str,
+) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
     object
         .get("steps")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .flat_map(workflow_transition_errors_from_json_step)
-        .map(|error_name| {
-            DefinitionName::try_new(error_name.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid workflow transition error: {error}"))
-            })
+        .flat_map(|step| workflow_transition_references_from_json_step(step, field))
+        .map(|reference| {
+            DefinitionName::try_new(reference.to_owned())
+                .map_err(|error| BoundaryParseError::new(format!("invalid {label}: {error}")))
         })
         .collect()
 }
 
-fn workflow_transition_errors_from_json_step(step: &Value) -> Vec<&str> {
+fn workflow_transition_references_from_json_step<'a>(step: &'a Value, field: &str) -> Vec<&'a str> {
     step.get("transitions")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter_map(|transition| transition.get("via_error").and_then(Value::as_str))
+        .filter_map(|transition| transition.get(field).and_then(Value::as_str))
         .collect()
 }
 
@@ -1683,6 +1709,22 @@ fn state_view_observed_events_from_slices(
 
 fn optional_definition_name_from_json_field(
     object: &Value,
+    field: &str,
+    label: &str,
+) -> Result<Option<DefinitionName>, BoundaryParseError> {
+    object
+        .get(field)
+        .and_then(Value::as_str)
+        .map(|value| {
+            DefinitionName::try_new(value.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid {label} reference: {error}"))
+            })
+        })
+        .transpose()
+}
+
+fn optional_definition_name_from_json_object(
+    object: &Map<String, Value>,
     field: &str,
     label: &str,
 ) -> Result<Option<DefinitionName>, BoundaryParseError> {

@@ -4,6 +4,7 @@ use nutype::nutype;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct EventModelDocument {
+    name: Option<DefinitionName>,
     file_kind: EventModelFileKind,
     top_level_keys: BTreeSet<TopLevelKey>,
     event_names: BTreeSet<DefinitionName>,
@@ -19,11 +20,13 @@ pub struct EventModelDocument {
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
     workflow_transition_errors: BTreeSet<DefinitionName>,
+    workflow_transition_outcomes: BTreeSet<DefinitionName>,
 }
 
 impl EventModelDocument {
     pub fn new(parts: EventModelDocumentParts) -> Self {
         Self {
+            name: parts.name,
             file_kind: parts.file_kind,
             top_level_keys: parts.top_level_keys,
             event_names: parts.event_names,
@@ -39,12 +42,14 @@ impl EventModelDocument {
             slice_definitions: parts.slice_definitions,
             view_definitions: parts.view_definitions,
             workflow_transition_errors: parts.workflow_transition_errors,
+            workflow_transition_outcomes: parts.workflow_transition_outcomes,
         }
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct EventModelDocumentParts {
+    name: Option<DefinitionName>,
     file_kind: EventModelFileKind,
     top_level_keys: BTreeSet<TopLevelKey>,
     event_names: BTreeSet<DefinitionName>,
@@ -60,11 +65,13 @@ pub struct EventModelDocumentParts {
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
     workflow_transition_errors: BTreeSet<DefinitionName>,
+    workflow_transition_outcomes: BTreeSet<DefinitionName>,
 }
 
 impl EventModelDocumentParts {
     pub fn new(file_kind: EventModelFileKind) -> Self {
         Self {
+            name: None,
             file_kind,
             top_level_keys: BTreeSet::new(),
             event_names: BTreeSet::new(),
@@ -80,7 +87,13 @@ impl EventModelDocumentParts {
             slice_definitions: Vec::new(),
             view_definitions: Vec::new(),
             workflow_transition_errors: BTreeSet::new(),
+            workflow_transition_outcomes: BTreeSet::new(),
         }
+    }
+
+    pub fn with_name(mut self, name: Option<DefinitionName>) -> Self {
+        self.name = name;
+        self
     }
 
     pub fn with_top_level_keys(mut self, top_level_keys: BTreeSet<TopLevelKey>) -> Self {
@@ -165,6 +178,14 @@ impl EventModelDocumentParts {
         workflow_transition_errors: BTreeSet<DefinitionName>,
     ) -> Self {
         self.workflow_transition_errors = workflow_transition_errors;
+        self
+    }
+
+    pub fn with_workflow_transition_outcomes(
+        mut self,
+        workflow_transition_outcomes: BTreeSet<DefinitionName>,
+    ) -> Self {
+        self.workflow_transition_outcomes = workflow_transition_outcomes;
         self
     }
 }
@@ -1197,6 +1218,13 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    unhandled_workflow_slice_outcome(documents).map_or(Ok(()), |unhandled| {
+        Err(validation_issue(format!(
+            "workflow '{}' does not handle outcome '{}' from slice '{}'",
+            unhandled.workflow_name, unhandled.outcome_label, unhandled.slice_name
+        )))
+    })?;
+
     workflow_transition_command_error(documents).map_or(Ok(()), |error_name| {
         Err(validation_issue(format!(
             "workflow transition cannot use command-local error '{error_name}' as a business outcome"
@@ -1236,6 +1264,41 @@ fn workflow_transition_command_error(documents: &[EventModelDocument]) -> Option
         .flat_map(|document| document.workflow_transition_errors.iter())
         .find(|error_name| command_errors.contains(error_name))
         .cloned()
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct UnhandledWorkflowSliceOutcome {
+    workflow_name: DefinitionName,
+    slice_name: DefinitionName,
+    outcome_label: DefinitionName,
+}
+
+fn unhandled_workflow_slice_outcome(
+    documents: &[EventModelDocument],
+) -> Option<UnhandledWorkflowSliceOutcome> {
+    let workflow = documents
+        .iter()
+        .find(|document| !document.workflow_transition_outcomes.is_empty())?;
+    let workflow_name = workflow.name.clone()?;
+
+    documents
+        .iter()
+        .flat_map(|document| document.slice_definitions.iter())
+        .find_map(|slice| {
+            slice
+                .outcomes
+                .iter()
+                .find(|outcome| {
+                    !workflow
+                        .workflow_transition_outcomes
+                        .contains(&outcome.label)
+                })
+                .map(|outcome| UnhandledWorkflowSliceOutcome {
+                    workflow_name: workflow_name.clone(),
+                    slice_name: slice.name.clone(),
+                    outcome_label: outcome.label.clone(),
+                })
+        })
 }
 
 fn validation_issue(value: impl Into<String>) -> ValidationIssue {

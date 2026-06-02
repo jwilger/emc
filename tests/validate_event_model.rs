@@ -832,6 +832,33 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_workflows_that_do_not_handle_slice_outcomes() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("organization-access.eventmodel.json"),
+            "{\"name\":\"Organization access\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[],\"steps\":[{\"slice\":\"entry\",\"name\":\"Entry\",\"type\":\"state_view\",\"relationship\":\"entry\",\"transitions\":[{\"to\":\"activate-member\"}]},{\"slice\":\"activate-member\",\"name\":\"Activate member\",\"type\":\"state_change\",\"relationship\":\"main\",\"transitions\":[{\"to_workflow\":\"member-access\",\"via_outcome\":\"activated\",\"exit_reason\":\"activated members continue to member access\"}]}]}",
+        )?;
+        write(
+            workflows.join("activate-member.eventmodel.json"),
+            "{\"name\":\"Activate member\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"members\"}],\"events\":[{\"name\":\"OrganizationMemberActivated\",\"stream\":\"members\",\"attributes\":[]},{\"name\":\"MemberActivationNotAuthorized\",\"stream\":\"members\",\"attributes\":[]}],\"commands\":[{\"name\":\"ActivateMember\",\"inputs\":[],\"produces\":[\"OrganizationMemberActivated\",\"MemberActivationNotAuthorized\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Activate member\",\"type\":\"state_change\",\"commands\":[\"ActivateMember\"],\"events\":[\"OrganizationMemberActivated\",\"MemberActivationNotAuthorized\"],\"outcomes\":[{\"label\":\"activated\",\"events\":[\"OrganizationMemberActivated\"]},{\"label\":\"not_authorized\",\"events\":[\"MemberActivationNotAuthorized\"]}],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"activate succeeds\",\"given\":[\"member exists\"],\"given_streams\":[{\"stream\":\"members\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"OrganizationMemberActivated\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow 'Organization access' does not handle outcome 'not_authorized' from slice 'Activate member'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_automation_slices_without_trigger() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
