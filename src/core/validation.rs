@@ -3627,7 +3627,9 @@ fn validate_board_element_references(document: &EventModelDocument) -> Result<()
     unknown_board_element_reference(document).map_or(Ok(()), |reference| {
         Err(validation_issue(format!(
             "board element '{}' references unknown {} '{}'",
-            reference.element_id, reference.label, reference.name
+            reference.element_id,
+            board_element_kind_label(reference.kind),
+            reference.name
         )))
     })
 }
@@ -3635,7 +3637,7 @@ fn validate_board_element_references(document: &EventModelDocument) -> Result<()
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct UnknownBoardElementReference {
     element_id: DefinitionName,
-    label: &'static str,
+    kind: BoardElementKind,
     name: DefinitionName,
 }
 
@@ -3661,9 +3663,9 @@ fn unknown_board_element_reference(
                 .any(|definition| &definition.kind == definition_kind && &definition.name == *name)
         })
         .map(
-            |(element, name, definition_kind)| UnknownBoardElementReference {
+            |(element, name, _definition_kind)| UnknownBoardElementReference {
                 element_id: element.id.clone(),
-                label: definition_kind_label(definition_kind),
+                kind: element.kind,
                 name: name.clone(),
             },
         )
@@ -3673,11 +3675,11 @@ fn board_element_reference_definition_kind(kind: BoardElementKind) -> Option<Def
     match kind {
         BoardElementKind::Command => Some(DefinitionKind::Command),
         BoardElementKind::Event => Some(DefinitionKind::Event),
+        BoardElementKind::ReadModel => Some(DefinitionKind::ReadModel),
         BoardElementKind::View => Some(DefinitionKind::View),
         BoardElementKind::Automation
         | BoardElementKind::ExternalEvent
-        | BoardElementKind::Other
-        | BoardElementKind::ReadModel => None,
+        | BoardElementKind::Other => None,
     }
 }
 
