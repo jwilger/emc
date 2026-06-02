@@ -3592,10 +3592,8 @@ fn expected_board_element_lane(kind: BoardElementKind) -> Option<&'static str> {
         BoardElementKind::Automation | BoardElementKind::ExternalEvent | BoardElementKind::View => {
             Some("ux")
         }
-        BoardElementKind::Command
-        | BoardElementKind::Event
-        | BoardElementKind::Other
-        | BoardElementKind::ReadModel => None,
+        BoardElementKind::ReadModel => Some("actions"),
+        BoardElementKind::Command | BoardElementKind::Event | BoardElementKind::Other => None,
     }
 }
 
