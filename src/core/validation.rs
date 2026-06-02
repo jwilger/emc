@@ -33,7 +33,13 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .find(|key| !document.top_level_keys.contains(*key))
         .map_or(Ok(()), |key| {
             Err(validation_issue(format!("missing top-level key '{key}'")))
-        })
+        })?;
+
+    document
+        .top_level_keys
+        .contains(&explicit_board_key())
+        .then_some(())
+        .ok_or_else(|| validation_issue("missing explicit board"))
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -69,4 +75,8 @@ fn required_top_level_keys() -> Vec<TopLevelKey> {
     .iter()
     .map(|key| top_level_key(key))
     .collect()
+}
+
+fn explicit_board_key() -> TopLevelKey {
+    top_level_key("board")
 }
