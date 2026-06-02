@@ -568,6 +568,7 @@ pub struct ViewControlDefinition {
     command_error_handling: Vec<ControlCommandErrorHandling>,
     navigation_target: Option<DefinitionName>,
     navigation_type: NavigationType,
+    workflow_target: Option<DefinitionName>,
 }
 
 impl ViewControlDefinition {
@@ -578,6 +579,7 @@ impl ViewControlDefinition {
             command_error_handling: parts.command_error_handling,
             navigation_target: parts.navigation_target,
             navigation_type: parts.navigation_type,
+            workflow_target: parts.workflow_target,
         }
     }
 }
@@ -589,6 +591,7 @@ pub struct ViewControlDefinitionParts {
     command_error_handling: Vec<ControlCommandErrorHandling>,
     navigation_target: Option<DefinitionName>,
     navigation_type: NavigationType,
+    workflow_target: Option<DefinitionName>,
 }
 
 impl ViewControlDefinitionParts {
@@ -599,6 +602,7 @@ impl ViewControlDefinitionParts {
             command_error_handling: Vec::new(),
             navigation_target: None,
             navigation_type: NavigationType::Absent,
+            workflow_target: None,
         }
     }
 
@@ -622,6 +626,11 @@ impl ViewControlDefinitionParts {
 
     pub fn with_navigation_type(mut self, navigation_type: NavigationType) -> Self {
         self.navigation_type = navigation_type;
+        self
+    }
+
+    pub fn with_workflow_target(mut self, workflow_target: Option<DefinitionName>) -> Self {
+        self.workflow_target = workflow_target;
         self
     }
 }
@@ -1017,6 +1026,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_modeled_view_navigation_targets(document)?;
 
     validate_local_view_state_navigation_targets(document)?;
+
+    validate_external_workflow_navigation_targets(document)?;
 
     validate_board_read_model_to_command_intermediates(document)?;
 
@@ -2100,6 +2111,24 @@ fn undeclared_local_view_state_navigation_target(
                 navigation_target: navigation_target.clone(),
             },
         )
+}
+
+fn validate_external_workflow_navigation_targets(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .flat_map(|view| view.controls.iter())
+        .find(|control| {
+            control.navigation_type == NavigationType::ExternalWorkflow
+                && control.workflow_target.is_none()
+        })
+        .map_or(Ok(()), |_| {
+            Err(validation_issue(
+                "external workflow navigation must name the target workflow",
+            ))
+        })
 }
 
 fn validate_board_read_model_to_command_intermediates(

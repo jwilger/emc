@@ -852,6 +852,8 @@ fn view_control_definitions_from_json_view(
             let command = optional_definition_name_from_json_field(control, "command", "command")?;
             let navigation_target =
                 optional_definition_name_from_json_field(control, "navigation", "navigation")?;
+            let workflow_target =
+                optional_definition_name_from_json_field(control, "workflow_target", "workflow")?;
             let navigation_type = navigation_type_from_json_control(control);
             let command_error_handling = command_error_handling_from_json_control(control)?;
             DefinitionName::try_new(label.to_owned())
@@ -861,7 +863,8 @@ fn view_control_definitions_from_json_view(
                             .with_command(command)
                             .with_command_error_handling(command_error_handling)
                             .with_navigation_target(navigation_target)
-                            .with_navigation_type(navigation_type),
+                            .with_navigation_type(navigation_type)
+                            .with_workflow_target(workflow_target),
                     )
                 })
                 .map_err(|error| BoundaryParseError::new(format!("invalid control label: {error}")))
