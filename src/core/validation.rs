@@ -467,6 +467,18 @@ impl SliceScenario {
 pub struct ViewDefinition {
     name: DefinitionName,
     read_models: Vec<DefinitionName>,
+    controls: Vec<ViewControlDefinition>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ViewControlDefinition {
+    label: DefinitionName,
+}
+
+impl ViewControlDefinition {
+    pub fn new(label: DefinitionName) -> Self {
+        Self { label }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -715,8 +727,16 @@ impl ExternalInputSchema {
 }
 
 impl ViewDefinition {
-    pub fn new(name: DefinitionName, read_models: Vec<DefinitionName>) -> Self {
-        Self { name, read_models }
+    pub fn new(
+        name: DefinitionName,
+        read_models: Vec<DefinitionName>,
+        controls: Vec<ViewControlDefinition>,
+    ) -> Self {
+        Self {
+            name,
+            read_models,
+            controls,
+        }
     }
 }
 
@@ -821,6 +841,13 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    duplicate_slice_control_definition(documents).map_or(Ok(()), |duplicate| {
+        Err(validation_issue(format!(
+            "control '{}' on view '{}' is defined by more than one slice",
+            duplicate.control_name, duplicate.view_name
+        )))
+    })?;
+
     duplicate_slice_view_definition(documents).map_or(Ok(()), |view_name| {
         Err(validation_issue(format!(
             "view '{view_name}' is defined by more than one slice"
@@ -917,6 +944,53 @@ fn duplicate_slice_read_model_definition(
                 .filter(|previous_slice_name| *previous_slice_name != slice.name)
                 .map(|_| read_model_name.clone())
         })
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct DuplicateControlDefinition {
+    view_name: DefinitionName,
+    control_name: DefinitionName,
+}
+
+fn duplicate_slice_control_definition(
+    documents: &[EventModelDocument],
+) -> Option<DuplicateControlDefinition> {
+    let mut seen = BTreeMap::new();
+    documents
+        .iter()
+        .filter(|document| document.file_kind == EventModelFileKind::Slice)
+        .flat_map(|document| {
+            document.slice_definitions.iter().flat_map(move |slice| {
+                slice.owned_views.iter().flat_map(move |view_name| {
+                    view_definition(document, view_name)
+                        .into_iter()
+                        .flat_map(move |view| {
+                            view.controls
+                                .iter()
+                                .map(move |control| (slice, view, control))
+                        })
+                })
+            })
+        })
+        .find_map(|(slice, view, control)| {
+            let key = (view.name.clone(), control.label.clone());
+            seen.insert(key, slice.name.clone())
+                .filter(|previous_slice_name| *previous_slice_name != slice.name)
+                .map(|_| DuplicateControlDefinition {
+                    view_name: view.name.clone(),
+                    control_name: control.label.clone(),
+                })
+        })
+}
+
+fn view_definition<'a>(
+    document: &'a EventModelDocument,
+    view_name: &DefinitionName,
+) -> Option<&'a ViewDefinition> {
+    document
+        .view_definitions
+        .iter()
+        .find(|view| view.name == *view_name)
 }
 
 fn duplicate_slice_view_definition(documents: &[EventModelDocument]) -> Option<DefinitionName> {

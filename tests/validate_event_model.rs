@@ -838,6 +838,32 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_duplicate_controls_across_slice_files() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("submit-control.eventmodel.json"),
+            "{\"name\":\"Submit control workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"controls\":[{\"label\":\"Submit for review\",\"description\":\"Submit the lesson.\"}]}],\"slices\":[{\"name\":\"Submit lesson control\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+        )?;
+        write(
+            slices.join("review-control.eventmodel.json"),
+            "{\"name\":\"Review control workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"controls\":[{\"label\":\"Submit for review\",\"description\":\"Request review.\"}]}],\"slices\":[{\"name\":\"Review lesson control\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "control 'Submit for review' on view 'lesson_screen' is defined by more than one slice",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_undeclared_board_automation_between_read_model_and_command()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;

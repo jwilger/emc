@@ -20,8 +20,8 @@ use crate::core::validation::{
     ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
     ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
     SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceType,
-    TopLevelKey, TranslationContract, ViewDefinition, empty_top_level_key_issue,
-    model_must_be_object_issue,
+    TopLevelKey, TranslationContract, ViewControlDefinition, ViewDefinition,
+    empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -740,9 +740,26 @@ fn view_definitions_from_json_object(
                     })
                 })
                 .and_then(|name| {
+                    let controls = view_control_definitions_from_json_view(view)?;
                     definition_names_from_json_array_field(view, "uses_read_models", "read model")
-                        .map(|read_models| ViewDefinition::new(name, read_models))
+                        .map(|read_models| ViewDefinition::new(name, read_models, controls))
                 })
+        })
+        .collect()
+}
+
+fn view_control_definitions_from_json_view(
+    view: &Value,
+) -> Result<Vec<ViewControlDefinition>, BoundaryParseError> {
+    view.get("controls")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|control| control.get("label").and_then(Value::as_str))
+        .map(|label| {
+            DefinitionName::try_new(label.to_owned())
+                .map(ViewControlDefinition::new)
+                .map_err(|error| BoundaryParseError::new(format!("invalid control label: {error}")))
         })
         .collect()
 }
