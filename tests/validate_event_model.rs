@@ -168,4 +168,27 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_duplicate_scenario_names_across_first_class_fields()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("duplicate-scenarios.eventmodel.json"),
+            "{\"name\":\"Submit lesson workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Submit lesson\",\"acceptance_scenarios\":[{\"name\":\"duplicate scenario\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[{\"name\":\"duplicate scenario\",\"given\":[],\"when\":{},\"then\":[]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "slice 'Submit lesson' has duplicate scenario name 'duplicate scenario' across acceptance_scenarios and contract_scenarios",
+            ));
+
+        Ok(())
+    }
 }
