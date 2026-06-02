@@ -17,7 +17,7 @@ use crate::core::validation::{
     ControlCommandErrorHandling, ControlErrorRecoveryBehavior, DefinitionKind, DefinitionName,
     EventAttribute, EventAttributeSource, EventDefinition, EventModelDocument,
     EventModelDocumentParts, EventModelFileKind, ExternalInputSchema, LegacyScenariosField,
-    NamedDefinition, OutcomeDefinition, ReadModelDefinition, ReadModelField,
+    NamedDefinition, NavigationType, OutcomeDefinition, ReadModelDefinition, ReadModelField,
     ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
     ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
     SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceScenarioParts,
@@ -839,18 +839,33 @@ fn view_control_definitions_from_json_view(
         })
         .map(|(control, label)| {
             let command = optional_definition_name_from_json_field(control, "command", "command")?;
+            let navigation_target =
+                optional_definition_name_from_json_field(control, "navigation", "navigation")?;
+            let navigation_type = navigation_type_from_json_control(control);
             let command_error_handling = command_error_handling_from_json_control(control)?;
             DefinitionName::try_new(label.to_owned())
                 .map(|label| {
                     ViewControlDefinition::new(
                         ViewControlDefinitionParts::new(label)
                             .with_command(command)
-                            .with_command_error_handling(command_error_handling),
+                            .with_command_error_handling(command_error_handling)
+                            .with_navigation_target(navigation_target)
+                            .with_navigation_type(navigation_type),
                     )
                 })
                 .map_err(|error| BoundaryParseError::new(format!("invalid control label: {error}")))
         })
         .collect()
+}
+
+fn navigation_type_from_json_control(control: &Value) -> NavigationType {
+    match control.get("navigation_type").and_then(Value::as_str) {
+        Some("modeled_view") => NavigationType::ModeledView,
+        Some("local_view_state") => NavigationType::LocalViewState,
+        Some("external_system") => NavigationType::ExternalSystem,
+        Some("external_workflow") => NavigationType::ExternalWorkflow,
+        _ => NavigationType::Absent,
+    }
 }
 
 fn command_error_handling_from_json_control(

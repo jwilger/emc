@@ -565,6 +565,8 @@ pub struct ViewControlDefinition {
     label: DefinitionName,
     command: Option<DefinitionName>,
     command_error_handling: Vec<ControlCommandErrorHandling>,
+    navigation_target: Option<DefinitionName>,
+    navigation_type: NavigationType,
 }
 
 impl ViewControlDefinition {
@@ -573,6 +575,8 @@ impl ViewControlDefinition {
             label: parts.label,
             command: parts.command,
             command_error_handling: parts.command_error_handling,
+            navigation_target: parts.navigation_target,
+            navigation_type: parts.navigation_type,
         }
     }
 }
@@ -582,6 +586,8 @@ pub struct ViewControlDefinitionParts {
     label: DefinitionName,
     command: Option<DefinitionName>,
     command_error_handling: Vec<ControlCommandErrorHandling>,
+    navigation_target: Option<DefinitionName>,
+    navigation_type: NavigationType,
 }
 
 impl ViewControlDefinitionParts {
@@ -590,6 +596,8 @@ impl ViewControlDefinitionParts {
             label,
             command: None,
             command_error_handling: Vec::new(),
+            navigation_target: None,
+            navigation_type: NavigationType::Absent,
         }
     }
 
@@ -605,6 +613,25 @@ impl ViewControlDefinitionParts {
         self.command_error_handling = command_error_handling;
         self
     }
+
+    pub fn with_navigation_target(mut self, navigation_target: Option<DefinitionName>) -> Self {
+        self.navigation_target = navigation_target;
+        self
+    }
+
+    pub fn with_navigation_type(mut self, navigation_type: NavigationType) -> Self {
+        self.navigation_type = navigation_type;
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum NavigationType {
+    Absent,
+    ModeledView,
+    LocalViewState,
+    ExternalSystem,
+    ExternalWorkflow,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -981,6 +1008,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_control_command_error_handling(document)?;
 
     validate_control_error_handling_recovery(document)?;
+
+    validate_navigation_controls_declare_type(document)?;
 
     validate_board_read_model_to_command_intermediates(document)?;
 
@@ -1985,6 +2014,23 @@ fn validate_control_error_handling_recovery(
                 "error handling for '{}' must describe recovery behavior",
                 handling.error_name
             )))
+        })
+}
+
+fn validate_navigation_controls_declare_type(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .flat_map(|view| view.controls.iter())
+        .find(|control| {
+            control.navigation_target.is_some() && control.navigation_type == NavigationType::Absent
+        })
+        .map_or(Ok(()), |_| {
+            Err(validation_issue(
+                "navigation target must be classified as modeled_view, local_view_state, external_system, or external_workflow",
+            ))
         })
 }
 
