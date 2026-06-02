@@ -22,6 +22,7 @@ pub struct EventModelDocument {
     workflow_slice_references: BTreeSet<DefinitionName>,
     workflow_step_slices: BTreeSet<DefinitionName>,
     workflow_steps: Vec<WorkflowStep>,
+    workflow_event_transitions: Vec<WorkflowEventTransition>,
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
@@ -51,6 +52,7 @@ impl EventModelDocument {
             workflow_slice_references: parts.workflow_slice_references,
             workflow_step_slices: parts.workflow_step_slices,
             workflow_steps: parts.workflow_steps,
+            workflow_event_transitions: parts.workflow_event_transitions,
             duplicate_workflow_step_slice: parts.duplicate_workflow_step_slice,
             workflow_composition: parts.workflow_composition,
             workflow_entry_step_count: parts.workflow_entry_step_count,
@@ -81,6 +83,7 @@ pub struct EventModelDocumentParts {
     workflow_slice_references: BTreeSet<DefinitionName>,
     workflow_step_slices: BTreeSet<DefinitionName>,
     workflow_steps: Vec<WorkflowStep>,
+    workflow_event_transitions: Vec<WorkflowEventTransition>,
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
@@ -110,6 +113,7 @@ impl EventModelDocumentParts {
             workflow_slice_references: BTreeSet::new(),
             workflow_step_slices: BTreeSet::new(),
             workflow_steps: Vec::new(),
+            workflow_event_transitions: Vec::new(),
             duplicate_workflow_step_slice: None,
             workflow_composition: WorkflowComposition::NotComposition,
             workflow_entry_step_count: WorkflowEntryStepCount::NotComposition,
@@ -219,6 +223,14 @@ impl EventModelDocumentParts {
 
     pub fn with_workflow_steps(mut self, workflow_steps: Vec<WorkflowStep>) -> Self {
         self.workflow_steps = workflow_steps;
+        self
+    }
+
+    pub fn with_workflow_event_transitions(
+        mut self,
+        workflow_event_transitions: Vec<WorkflowEventTransition>,
+    ) -> Self {
+        self.workflow_event_transitions = workflow_event_transitions;
         self
     }
 
@@ -447,6 +459,27 @@ impl WorkflowStep {
             self.relationship,
             WorkflowStepRelationship::AsyncLifecycle | WorkflowStepRelationship::Supporting
         )
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowEventTransition {
+    source_slice: DefinitionName,
+    target_slice: DefinitionName,
+    event: DefinitionName,
+}
+
+impl WorkflowEventTransition {
+    pub fn new(
+        source_slice: DefinitionName,
+        target_slice: DefinitionName,
+        event: DefinitionName,
+    ) -> Self {
+        Self {
+            source_slice,
+            target_slice,
+            event,
+        }
     }
 }
 
@@ -1526,6 +1559,13 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    unshared_workflow_event_transition(documents).map_or(Ok(()), |transition| {
+        Err(validation_issue(format!(
+            "transition event '{}' is not shared by source and target slices",
+            transition.event
+        )))
+    })?;
+
     unhandled_workflow_slice_outcome(documents).map_or(Ok(()), |unhandled| {
         Err(validation_issue(format!(
             "workflow '{}' does not handle outcome '{}' from slice '{}'",
@@ -1647,6 +1687,35 @@ fn missing_application_entry_state(slice: &SliceDefinition) -> Option<Applicatio
     ApplicationEntryState::required_states()
         .into_iter()
         .find(|state| !slice.covers_application_entry_state(*state))
+}
+
+fn unshared_workflow_event_transition(
+    documents: &[EventModelDocument],
+) -> Option<WorkflowEventTransition> {
+    documents
+        .iter()
+        .flat_map(|document| document.workflow_event_transitions.iter())
+        .find(|transition| {
+            !workflow_transition_slice_has_event(
+                documents,
+                &transition.source_slice,
+                &transition.event,
+            ) && !workflow_transition_slice_has_event(
+                documents,
+                &transition.target_slice,
+                &transition.event,
+            )
+        })
+        .cloned()
+}
+
+fn workflow_transition_slice_has_event(
+    documents: &[EventModelDocument],
+    slice_slug: &DefinitionName,
+    event: &DefinitionName,
+) -> bool {
+    application_entry_slice_by_slug(documents, slice_slug)
+        .is_some_and(|slice| slice.owned_events.contains(event))
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

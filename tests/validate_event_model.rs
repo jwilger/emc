@@ -1179,6 +1179,37 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_workflow_event_transitions_not_shared_by_adjacent_slices()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("lesson-01.eventmodel.json"),
+            "{\"name\":\"Lesson 01\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[],\"slice_files\":[\"./entry.eventmodel.json\",\"./submit-lesson.eventmodel.json\",\"./review-lesson.eventmodel.json\"],\"steps\":[{\"slice\":\"entry\",\"name\":\"Entry\",\"type\":\"state_view\",\"relationship\":\"entry\",\"transitions\":[{\"to\":\"submit-lesson\"}]},{\"slice\":\"submit-lesson\",\"name\":\"Submit lesson\",\"type\":\"state_change\",\"relationship\":\"main\",\"transitions\":[{\"to\":\"review-lesson\",\"via_event\":\"LessonSubmittedForReview\"}]},{\"slice\":\"review-lesson\",\"name\":\"Review lesson\",\"type\":\"state_view\",\"relationship\":\"main\"}]}",
+        )?;
+        write(
+            workflows.join("submit-lesson.eventmodel.json"),
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_change\",\"events\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+        )?;
+        write(
+            workflows.join("review-lesson.eventmodel.json"),
+            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"events\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "transition event 'LessonSubmittedForReview' is not shared by source and target slices",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_automation_slices_without_trigger() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
