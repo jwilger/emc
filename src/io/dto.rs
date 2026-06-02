@@ -12,10 +12,10 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    DefinitionKind, DefinitionName, EventModelDocument, EventModelFileKind, LegacyScenariosField,
-    NamedDefinition, ScenarioSetKind, ScenarioStepField, SliceDefinition, SliceDefinitionCount,
-    SliceScenario, SliceType, TopLevelKey, ViewDefinition, empty_top_level_key_issue,
-    model_must_be_object_issue,
+    DefinitionKind, DefinitionName, EventDefinition, EventModelDocument, EventModelDocumentParts,
+    EventModelFileKind, LegacyScenariosField, NamedDefinition, ScenarioSetKind, ScenarioStepField,
+    SliceDefinition, SliceDefinitionCount, SliceScenario, SliceType, TopLevelKey, ViewDefinition,
+    empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -201,15 +201,19 @@ fn event_model_document_from_json(
             let slice_definitions = slice_definitions_from_json_object(object)?;
             let event_names = event_names_from_json_object(object)?;
             let view_definitions = view_definitions_from_json_object(object)?;
+            let stream_names = stream_names_from_json_object(object)?;
+            let event_definitions = event_definitions_from_json_object(object)?;
             named_definitions_from_json_object(object).map(|named_definitions| {
                 EventModelDocument::new(
-                    file_kind,
-                    top_level_keys,
-                    event_names,
-                    named_definitions,
-                    slice_definition_count(&slice_definitions),
-                    slice_definitions,
-                    view_definitions,
+                    EventModelDocumentParts::new(file_kind)
+                        .with_top_level_keys(top_level_keys)
+                        .with_event_names(event_names)
+                        .with_stream_names(stream_names)
+                        .with_event_definitions(event_definitions)
+                        .with_named_definitions(named_definitions)
+                        .with_slice_count(slice_definition_count(&slice_definitions))
+                        .with_slice_definitions(slice_definitions)
+                        .with_view_definitions(view_definitions),
                 )
             })
         })
@@ -472,6 +476,67 @@ fn event_names_from_json_object(
             .map(NamedDefinition::into_name)
             .collect()
     })
+}
+
+fn stream_names_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
+    named_definitions_for_spec(
+        object,
+        &NamedDefinitionSpec {
+            key: "streams",
+            label: "stream",
+            kind: DefinitionKind::Stream,
+        },
+    )
+    .map(|definitions| {
+        definitions
+            .into_iter()
+            .map(NamedDefinition::into_name)
+            .collect()
+    })
+}
+
+fn event_definitions_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<EventDefinition>, BoundaryParseError> {
+    object
+        .get("events")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|event| {
+            event
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BoundaryParseError::new("event is missing name"))
+                .and_then(|name| {
+                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!("invalid event name: {error}"))
+                    })
+                })
+                .and_then(|name| {
+                    optional_definition_name_from_json_field(event, "stream", "stream")
+                        .map(|stream| EventDefinition::new(name, stream))
+                })
+        })
+        .collect()
+}
+
+fn optional_definition_name_from_json_field(
+    object: &Value,
+    field: &str,
+    label: &str,
+) -> Result<Option<DefinitionName>, BoundaryParseError> {
+    object
+        .get(field)
+        .and_then(Value::as_str)
+        .map(|value| {
+            DefinitionName::try_new(value.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid {label} reference: {error}"))
+            })
+        })
+        .transpose()
 }
 
 fn named_definitions_for_spec(

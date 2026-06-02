@@ -258,4 +258,26 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_events_that_reference_unknown_streams() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("unknown-stream.eventmodel.json"),
+            "{\"name\":\"Open repair ticket\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[{\"name\":\"RepairTicketOpened\",\"stream\":\"missing_stream\"}],\"commands\":[],\"read_models\":[],\"slices\":[]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "event 'RepairTicketOpened' references unknown stream 'missing_stream'",
+            ));
+
+        Ok(())
+    }
 }

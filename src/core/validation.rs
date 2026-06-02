@@ -7,6 +7,8 @@ pub struct EventModelDocument {
     file_kind: EventModelFileKind,
     top_level_keys: BTreeSet<TopLevelKey>,
     event_names: BTreeSet<DefinitionName>,
+    stream_names: BTreeSet<DefinitionName>,
+    event_definitions: Vec<EventDefinition>,
     named_definitions: Vec<NamedDefinition>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
@@ -14,24 +16,87 @@ pub struct EventModelDocument {
 }
 
 impl EventModelDocument {
-    pub fn new(
-        file_kind: EventModelFileKind,
-        top_level_keys: BTreeSet<TopLevelKey>,
-        event_names: BTreeSet<DefinitionName>,
-        named_definitions: Vec<NamedDefinition>,
-        slice_count: SliceDefinitionCount,
-        slice_definitions: Vec<SliceDefinition>,
-        view_definitions: Vec<ViewDefinition>,
-    ) -> Self {
+    pub fn new(parts: EventModelDocumentParts) -> Self {
+        Self {
+            file_kind: parts.file_kind,
+            top_level_keys: parts.top_level_keys,
+            event_names: parts.event_names,
+            stream_names: parts.stream_names,
+            event_definitions: parts.event_definitions,
+            named_definitions: parts.named_definitions,
+            slice_count: parts.slice_count,
+            slice_definitions: parts.slice_definitions,
+            view_definitions: parts.view_definitions,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct EventModelDocumentParts {
+    file_kind: EventModelFileKind,
+    top_level_keys: BTreeSet<TopLevelKey>,
+    event_names: BTreeSet<DefinitionName>,
+    stream_names: BTreeSet<DefinitionName>,
+    event_definitions: Vec<EventDefinition>,
+    named_definitions: Vec<NamedDefinition>,
+    slice_count: SliceDefinitionCount,
+    slice_definitions: Vec<SliceDefinition>,
+    view_definitions: Vec<ViewDefinition>,
+}
+
+impl EventModelDocumentParts {
+    pub fn new(file_kind: EventModelFileKind) -> Self {
         Self {
             file_kind,
-            top_level_keys,
-            event_names,
-            named_definitions,
-            slice_count,
-            slice_definitions,
-            view_definitions,
+            top_level_keys: BTreeSet::new(),
+            event_names: BTreeSet::new(),
+            stream_names: BTreeSet::new(),
+            event_definitions: Vec::new(),
+            named_definitions: Vec::new(),
+            slice_count: SliceDefinitionCount::Zero,
+            slice_definitions: Vec::new(),
+            view_definitions: Vec::new(),
         }
+    }
+
+    pub fn with_top_level_keys(mut self, top_level_keys: BTreeSet<TopLevelKey>) -> Self {
+        self.top_level_keys = top_level_keys;
+        self
+    }
+
+    pub fn with_event_names(mut self, event_names: BTreeSet<DefinitionName>) -> Self {
+        self.event_names = event_names;
+        self
+    }
+
+    pub fn with_stream_names(mut self, stream_names: BTreeSet<DefinitionName>) -> Self {
+        self.stream_names = stream_names;
+        self
+    }
+
+    pub fn with_event_definitions(mut self, event_definitions: Vec<EventDefinition>) -> Self {
+        self.event_definitions = event_definitions;
+        self
+    }
+
+    pub fn with_named_definitions(mut self, named_definitions: Vec<NamedDefinition>) -> Self {
+        self.named_definitions = named_definitions;
+        self
+    }
+
+    pub fn with_slice_count(mut self, slice_count: SliceDefinitionCount) -> Self {
+        self.slice_count = slice_count;
+        self
+    }
+
+    pub fn with_slice_definitions(mut self, slice_definitions: Vec<SliceDefinition>) -> Self {
+        self.slice_definitions = slice_definitions;
+        self
+    }
+
+    pub fn with_view_definitions(mut self, view_definitions: Vec<ViewDefinition>) -> Self {
+        self.view_definitions = view_definitions;
+        self
     }
 }
 
@@ -167,6 +232,18 @@ pub struct ViewDefinition {
     read_models: Vec<DefinitionName>,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct EventDefinition {
+    name: DefinitionName,
+    stream: Option<DefinitionName>,
+}
+
+impl EventDefinition {
+    pub fn new(name: DefinitionName, stream: Option<DefinitionName>) -> Self {
+        Self { name, stream }
+    }
+}
+
 impl ViewDefinition {
     pub fn new(name: DefinitionName, read_models: Vec<DefinitionName>) -> Self {
         Self { name, read_models }
@@ -221,7 +298,9 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_state_view_projector_contract_scenarios(document)?;
 
-    validate_duplicate_outcome_labels(document)
+    validate_duplicate_outcome_labels(document)?;
+
+    validate_event_stream_references(document)
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -481,4 +560,18 @@ fn duplicate_outcome_label(slice: &SliceDefinition) -> Option<(&SliceDefinition,
             Some((slice, outcome_label.clone()))
         }
     })
+}
+
+fn validate_event_stream_references(document: &EventModelDocument) -> Result<(), ValidationIssue> {
+    document
+        .event_definitions
+        .iter()
+        .filter_map(|event| event.stream.as_ref().map(|stream| (event, stream)))
+        .find(|(_, stream)| !document.stream_names.contains(*stream))
+        .map_or(Ok(()), |(event, stream)| {
+            Err(validation_issue(format!(
+                "event '{}' references unknown stream '{}'",
+                event.name, stream
+            )))
+        })
 }
