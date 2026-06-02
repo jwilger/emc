@@ -357,6 +357,7 @@ fn workflow_step_from_json_object(
     let trigger = workflow_step_trigger_from_json_object(object);
     let workflow_exit = workflow_step_exit_from_json_object(object);
     let transition_targets = workflow_step_transition_targets_from_json_object(object)?;
+    let selected_scenario = workflow_step_selected_scenario_from_json_object(object)?;
 
     Ok(WorkflowStep::new(
         slice,
@@ -364,7 +365,22 @@ fn workflow_step_from_json_object(
         trigger,
         workflow_exit,
         transition_targets,
+        selected_scenario,
     ))
+}
+
+fn workflow_step_selected_scenario_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Option<DefinitionName>, BoundaryParseError> {
+    object
+        .get("scenario")
+        .and_then(Value::as_str)
+        .map(|scenario| {
+            DefinitionName::try_new(scenario.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid workflow step scenario: {error}"))
+            })
+        })
+        .transpose()
 }
 
 fn workflow_step_relationship_from_json_object(
