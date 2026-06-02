@@ -4,6 +4,7 @@ use nutype::nutype;
 pub enum Effect {
     EnsureDirectory(ProjectPath),
     WriteFile(ProjectPath, FileContents),
+    WriteFileIfMissing(ProjectPath, FileContents),
     Report(ReportLine),
 }
 
