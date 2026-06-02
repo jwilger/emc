@@ -622,4 +622,27 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_singleton_state_change_slices_without_repeat_behavior()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("singleton-state-change-without-repeat.eventmodel.json"),
+            "{\"name\":\"Bootstrap root organization\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"organization\"}],\"events\":[{\"name\":\"RootOrganizationBootstrapped\",\"stream\":\"organization\",\"attributes\":[]}],\"commands\":[{\"name\":\"BootstrapRootOrganization\",\"inputs\":[],\"produces\":[\"RootOrganizationBootstrapped\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Bootstrap Root organization\",\"type\":\"state_change\",\"singleton\":true,\"events\":[\"RootOrganizationBootstrapped\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"bootstrap root organization\",\"given\":[],\"given_streams\":[{\"stream\":\"organization\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"RootOrganizationBootstrapped\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "singleton state_change slice 'Bootstrap Root organization' must declare already-exists or idempotent behavior",
+            ));
+
+        Ok(())
+    }
 }
