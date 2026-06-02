@@ -214,6 +214,8 @@ fn event_model_document_from_json(
             let event_definitions = event_definitions_from_json_object(object)?;
             let command_definitions = command_definitions_from_json_object(object)?;
             let read_model_definitions = read_model_definitions_from_json_object(object)?;
+            let workflow_slice_references = workflow_slice_references_from_json_object(object)?;
+            let workflow_step_slices = workflow_step_slices_from_json_object(object)?;
             let workflow_composition = workflow_composition_from_json_object(object);
             let workflow_transition_errors = workflow_transition_errors_from_json_object(object)?;
             let workflow_transition_outcomes =
@@ -242,6 +244,8 @@ fn event_model_document_from_json(
                         .with_slice_count(slice_definition_count(&slice_definitions))
                         .with_slice_definitions(slice_definitions)
                         .with_view_definitions(view_definitions)
+                        .with_workflow_slice_references(workflow_slice_references)
+                        .with_workflow_step_slices(workflow_step_slices)
                         .with_workflow_composition(workflow_composition)
                         .with_workflow_transition_errors(workflow_transition_errors)
                         .with_workflow_transition_outcomes(workflow_transition_outcomes),
@@ -272,6 +276,47 @@ fn workflow_composition_from_json_object(object: &Map<String, Value>) -> Workflo
     } else {
         WorkflowComposition::NotComposition
     }
+}
+
+fn workflow_slice_references_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
+    object
+        .get("slice_files")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(workflow_slice_reference_from_path)
+        .collect()
+}
+
+fn workflow_slice_reference_from_path(path: &str) -> Result<DefinitionName, BoundaryParseError> {
+    let file_name = path
+        .rsplit('/')
+        .next()
+        .and_then(|file_name| file_name.strip_suffix(".eventmodel.json"))
+        .unwrap_or(path);
+    DefinitionName::try_new(file_name.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid workflow slice reference: {error}"))
+    })
+}
+
+fn workflow_step_slices_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
+    object
+        .get("steps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|step| step.get("slice").and_then(Value::as_str))
+        .map(|step_slice| {
+            DefinitionName::try_new(step_slice.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid workflow step slice: {error}"))
+            })
+        })
+        .collect()
 }
 
 fn workflow_transition_errors_from_json_object(

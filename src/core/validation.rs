@@ -19,6 +19,8 @@ pub struct EventModelDocument {
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
+    workflow_slice_references: BTreeSet<DefinitionName>,
+    workflow_step_slices: BTreeSet<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_transition_errors: BTreeSet<DefinitionName>,
     workflow_transition_outcomes: BTreeSet<DefinitionName>,
@@ -42,6 +44,8 @@ impl EventModelDocument {
             slice_count: parts.slice_count,
             slice_definitions: parts.slice_definitions,
             view_definitions: parts.view_definitions,
+            workflow_slice_references: parts.workflow_slice_references,
+            workflow_step_slices: parts.workflow_step_slices,
             workflow_composition: parts.workflow_composition,
             workflow_transition_errors: parts.workflow_transition_errors,
             workflow_transition_outcomes: parts.workflow_transition_outcomes,
@@ -66,6 +70,8 @@ pub struct EventModelDocumentParts {
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
+    workflow_slice_references: BTreeSet<DefinitionName>,
+    workflow_step_slices: BTreeSet<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_transition_errors: BTreeSet<DefinitionName>,
     workflow_transition_outcomes: BTreeSet<DefinitionName>,
@@ -89,6 +95,8 @@ impl EventModelDocumentParts {
             slice_count: SliceDefinitionCount::Zero,
             slice_definitions: Vec::new(),
             view_definitions: Vec::new(),
+            workflow_slice_references: BTreeSet::new(),
+            workflow_step_slices: BTreeSet::new(),
             workflow_composition: WorkflowComposition::NotComposition,
             workflow_transition_errors: BTreeSet::new(),
             workflow_transition_outcomes: BTreeSet::new(),
@@ -174,6 +182,22 @@ impl EventModelDocumentParts {
 
     pub fn with_view_definitions(mut self, view_definitions: Vec<ViewDefinition>) -> Self {
         self.view_definitions = view_definitions;
+        self
+    }
+
+    pub fn with_workflow_slice_references(
+        mut self,
+        workflow_slice_references: BTreeSet<DefinitionName>,
+    ) -> Self {
+        self.workflow_slice_references = workflow_slice_references;
+        self
+    }
+
+    pub fn with_workflow_step_slices(
+        mut self,
+        workflow_step_slices: BTreeSet<DefinitionName>,
+    ) -> Self {
+        self.workflow_step_slices = workflow_step_slices;
         self
     }
 
@@ -1104,6 +1128,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_workflow_composition_steps(document)?;
 
+    validate_workflow_steps_reference_composed_slices(document)?;
+
     validate_no_legacy_slice_scenarios(document)?;
 
     validate_scenario_when_fields(document)?;
@@ -1595,6 +1621,24 @@ fn validate_workflow_composition_steps(
 ) -> Result<(), ValidationIssue> {
     if document.workflow_composition == WorkflowComposition::MissingSteps {
         Err(validation_issue("workflow composition must declare steps"))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_workflow_steps_reference_composed_slices(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    if document.workflow_composition == WorkflowComposition::DeclaresSteps {
+        document
+            .workflow_step_slices
+            .iter()
+            .find(|step_slice| !document.workflow_slice_references.contains(step_slice))
+            .map_or(Ok(()), |step_slice| {
+                Err(validation_issue(format!(
+                    "workflow step '{step_slice}' does not reference a composed slice"
+                )))
+            })
     } else {
         Ok(())
     }
