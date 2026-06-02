@@ -601,6 +601,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_event_to_read_model_board_connections_not_projected()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("event-connected-to-unprojected-read-model.eventmodel.json"),
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\",\"name\":\"People, Views, and Translations\"},{\"id\":\"actions\",\"name\":\"Commands and Projections\"},{\"id\":\"events\",\"name\":\"Stored Facts\"}],\"slices\":[{\"name\":\"Submit lesson\",\"elements\":[{\"id\":\"lesson_screen\",\"kind\":\"view\",\"lane\":\"ux\",\"name\":\"lesson_screen\"},{\"id\":\"accept_lesson\",\"kind\":\"command\",\"lane\":\"actions\",\"name\":\"AcceptLesson\"},{\"id\":\"lesson_accepted\",\"kind\":\"event\",\"lane\":\"events\",\"name\":\"LessonAccepted\"},{\"id\":\"lesson_submission_context\",\"kind\":\"read_model\",\"lane\":\"actions\",\"name\":\"lesson_submission_context\"}],\"connections\":[{\"from\":\"lesson_screen\",\"to\":\"accept_lesson\"},{\"from\":\"accept_lesson\",\"to\":\"lesson_accepted\"},{\"from\":\"lesson_accepted\",\"to\":\"lesson_submission_context\"}]}]},\"streams\":[{\"name\":\"lesson_review\"}],\"events\":[{\"name\":\"LessonAccepted\",\"stream\":\"lesson_review\",\"attributes\":[]}],\"commands\":[{\"name\":\"AcceptLesson\",\"inputs\":[],\"produces\":[\"LessonAccepted\"]}],\"read_models\":[{\"name\":\"lesson_submission_context\",\"fields\":[]}],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"controls\":[{\"label\":\"Accept lesson\",\"command\":\"AcceptLesson\"}]}],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "board connects event 'LessonAccepted' to read model 'lesson_submission_context' but the read model does not project that event",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_command_names() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
