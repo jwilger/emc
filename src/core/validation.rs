@@ -26,6 +26,7 @@ pub struct EventModelDocument {
     workflow_command_transitions: Vec<WorkflowCommandTransition>,
     workflow_navigation_transitions: Vec<WorkflowNavigationTransition>,
     workflow_external_trigger_transitions: Vec<WorkflowExternalTriggerTransition>,
+    workflow_exit_transitions: Vec<WorkflowExitTransition>,
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
@@ -59,6 +60,7 @@ impl EventModelDocument {
             workflow_command_transitions: parts.workflow_command_transitions,
             workflow_navigation_transitions: parts.workflow_navigation_transitions,
             workflow_external_trigger_transitions: parts.workflow_external_trigger_transitions,
+            workflow_exit_transitions: parts.workflow_exit_transitions,
             duplicate_workflow_step_slice: parts.duplicate_workflow_step_slice,
             workflow_composition: parts.workflow_composition,
             workflow_entry_step_count: parts.workflow_entry_step_count,
@@ -93,6 +95,7 @@ pub struct EventModelDocumentParts {
     workflow_command_transitions: Vec<WorkflowCommandTransition>,
     workflow_navigation_transitions: Vec<WorkflowNavigationTransition>,
     workflow_external_trigger_transitions: Vec<WorkflowExternalTriggerTransition>,
+    workflow_exit_transitions: Vec<WorkflowExitTransition>,
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
@@ -126,6 +129,7 @@ impl EventModelDocumentParts {
             workflow_command_transitions: Vec::new(),
             workflow_navigation_transitions: Vec::new(),
             workflow_external_trigger_transitions: Vec::new(),
+            workflow_exit_transitions: Vec::new(),
             duplicate_workflow_step_slice: None,
             workflow_composition: WorkflowComposition::NotComposition,
             workflow_entry_step_count: WorkflowEntryStepCount::NotComposition,
@@ -267,6 +271,14 @@ impl EventModelDocumentParts {
         workflow_external_trigger_transitions: Vec<WorkflowExternalTriggerTransition>,
     ) -> Self {
         self.workflow_external_trigger_transitions = workflow_external_trigger_transitions;
+        self
+    }
+
+    pub fn with_workflow_exit_transitions(
+        mut self,
+        workflow_exit_transitions: Vec<WorkflowExitTransition>,
+    ) -> Self {
+        self.workflow_exit_transitions = workflow_exit_transitions;
         self
     }
 
@@ -580,6 +592,27 @@ impl WorkflowExternalTriggerTransition {
             external_trigger,
         }
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowExitTransition {
+    workflow: DefinitionName,
+    rationale: WorkflowExitRationale,
+}
+
+impl WorkflowExitTransition {
+    pub fn new(workflow: DefinitionName, rationale: WorkflowExitRationale) -> Self {
+        Self {
+            workflow,
+            rationale,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum WorkflowExitRationale {
+    Missing,
+    Present,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -1732,6 +1765,13 @@ pub fn validate_event_model_corpus(
         },
     )?;
 
+    workflow_exit_without_rationale(documents).map_or(Ok(()), |transition| {
+        Err(validation_issue(format!(
+            "workflow exit to '{}' must declare why the exit is reached",
+            transition.workflow
+        )))
+    })?;
+
     unhandled_workflow_slice_outcome(documents).map_or(Ok(()), |unhandled| {
         Err(validation_issue(format!(
             "workflow '{}' does not handle outcome '{}' from slice '{}'",
@@ -2056,6 +2096,16 @@ fn workflow_transition_slice_declares_external_trigger(
 ) -> bool {
     application_entry_slice_by_slug(documents, slice_slug)
         .is_some_and(|slice| slice.external_triggers.contains(external_trigger))
+}
+
+fn workflow_exit_without_rationale(
+    documents: &[EventModelDocument],
+) -> Option<WorkflowExitTransition> {
+    documents
+        .iter()
+        .flat_map(|document| document.workflow_exit_transitions.iter())
+        .find(|transition| transition.rationale == WorkflowExitRationale::Missing)
+        .cloned()
 }
 
 fn workflow_navigation_transition_has_source_control(
