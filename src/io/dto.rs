@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::core::emc::{EMCSliceImport, EMCWorkflowImport};
 use crate::core::effect::FileContents;
@@ -12,7 +12,8 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    EventModelDocument, TopLevelKey, empty_top_level_key_issue, model_must_be_object_issue,
+    DefinitionKind, DefinitionName, EventModelDocument, NamedDefinition, TopLevelKey,
+    empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -188,5 +189,78 @@ fn event_model_document_from_json(value: Value) -> Result<EventModelDocument, Bo
                 .map_err(|_| BoundaryParseError::new(empty_top_level_key_issue().to_string()))
         })
         .collect::<Result<BTreeSet<_>, _>>()
-        .map(EventModelDocument::new)
+        .and_then(|top_level_keys| {
+            named_definitions_from_json_object(object)
+                .map(|named_definitions| EventModelDocument::new(top_level_keys, named_definitions))
+        })
+}
+
+fn named_definitions_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<NamedDefinition>, BoundaryParseError> {
+    named_definition_specs()
+        .iter()
+        .map(|spec| named_definitions_for_spec(object, spec))
+        .collect::<Result<Vec<_>, _>>()
+        .map(|definitions| definitions.into_iter().flatten().collect())
+}
+
+fn named_definitions_for_spec(
+    object: &Map<String, Value>,
+    spec: &NamedDefinitionSpec,
+) -> Result<Vec<NamedDefinition>, BoundaryParseError> {
+    object
+        .get(spec.key)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|definition| {
+            definition
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BoundaryParseError::new(format!("{} is missing name", spec.label)))
+                .and_then(|name| {
+                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!("invalid {} name: {error}", spec.label))
+                    })
+                })
+                .map(|name| NamedDefinition::new(spec.kind, name))
+        })
+        .collect()
+}
+
+struct NamedDefinitionSpec {
+    key: &'static str,
+    label: &'static str,
+    kind: DefinitionKind,
+}
+
+fn named_definition_specs() -> &'static [NamedDefinitionSpec] {
+    &[
+        NamedDefinitionSpec {
+            key: "streams",
+            label: "stream",
+            kind: DefinitionKind::Stream,
+        },
+        NamedDefinitionSpec {
+            key: "events",
+            label: "event",
+            kind: DefinitionKind::Event,
+        },
+        NamedDefinitionSpec {
+            key: "commands",
+            label: "command",
+            kind: DefinitionKind::Command,
+        },
+        NamedDefinitionSpec {
+            key: "read_models",
+            label: "read model",
+            kind: DefinitionKind::ReadModel,
+        },
+        NamedDefinitionSpec {
+            key: "views",
+            label: "view",
+            kind: DefinitionKind::View,
+        },
+    ]
 }
