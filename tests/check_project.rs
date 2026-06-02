@@ -2,6 +2,7 @@
 mod tests {
     use std::error::Error;
     use std::fs::remove_file;
+    use std::path::PathBuf;
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -69,5 +70,41 @@ mod tests {
             ));
 
         Ok(())
+    }
+
+    #[test]
+    fn check_reports_missing_imported_workflow_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let emc_event_model = workspace_root().join("../emc/docs/event-model");
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["import", "emc", "--source"])
+            .arg(&emc_event_model)
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        remove_file(temp_dir.path().join("model/lean/OrganizationAccess.lean"))?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "missing required project artifact model/lean/OrganizationAccess.lean",
+            ));
+
+        Ok(())
+    }
+
+    fn workspace_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
     }
 }
