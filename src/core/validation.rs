@@ -14,6 +14,7 @@ pub struct EventModelDocument {
     state_view_observed_events: BTreeSet<DefinitionName>,
     named_definitions: Vec<NamedDefinition>,
     read_model_definitions: Vec<ReadModelDefinition>,
+    board_read_model_command_dependencies: Vec<BoardReadModelCommandDependency>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
@@ -32,6 +33,7 @@ impl EventModelDocument {
             state_view_observed_events: parts.state_view_observed_events,
             named_definitions: parts.named_definitions,
             read_model_definitions: parts.read_model_definitions,
+            board_read_model_command_dependencies: parts.board_read_model_command_dependencies,
             slice_count: parts.slice_count,
             slice_definitions: parts.slice_definitions,
             view_definitions: parts.view_definitions,
@@ -51,6 +53,7 @@ pub struct EventModelDocumentParts {
     state_view_observed_events: BTreeSet<DefinitionName>,
     named_definitions: Vec<NamedDefinition>,
     read_model_definitions: Vec<ReadModelDefinition>,
+    board_read_model_command_dependencies: Vec<BoardReadModelCommandDependency>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
@@ -69,6 +72,7 @@ impl EventModelDocumentParts {
             state_view_observed_events: BTreeSet::new(),
             named_definitions: Vec::new(),
             read_model_definitions: Vec::new(),
+            board_read_model_command_dependencies: Vec::new(),
             slice_count: SliceDefinitionCount::Zero,
             slice_definitions: Vec::new(),
             view_definitions: Vec::new(),
@@ -129,6 +133,14 @@ impl EventModelDocumentParts {
         self
     }
 
+    pub fn with_board_read_model_command_dependencies(
+        mut self,
+        board_read_model_command_dependencies: Vec<BoardReadModelCommandDependency>,
+    ) -> Self {
+        self.board_read_model_command_dependencies = board_read_model_command_dependencies;
+        self
+    }
+
     pub fn with_slice_count(mut self, slice_count: SliceDefinitionCount) -> Self {
         self.slice_count = slice_count;
         self
@@ -178,6 +190,7 @@ pub enum ScenarioSetKind {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum SliceType {
+    Automation,
     Other,
     StateChange,
     StateView,
@@ -213,6 +226,27 @@ impl NamedDefinition {
 
     pub fn into_name(self) -> DefinitionName {
         self.name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BoardReadModelCommandDependency {
+    read_model: DefinitionName,
+    command: DefinitionName,
+    intermediate_automation: DefinitionName,
+}
+
+impl BoardReadModelCommandDependency {
+    pub fn new(
+        read_model: DefinitionName,
+        command: DefinitionName,
+        intermediate_automation: DefinitionName,
+    ) -> Self {
+        Self {
+            read_model,
+            command,
+            intermediate_automation,
+        }
     }
 }
 
@@ -624,6 +658,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_translation_slice_view_ownership(document)?;
 
+    validate_board_read_model_to_command_intermediates(document)?;
+
     validate_command_sourced_event_attributes(document)?;
 
     validate_command_legacy_read_model_reads(document)?;
@@ -1018,6 +1054,31 @@ fn validate_translation_slice_view_ownership(
                 slice.name, view_name
             )))
         })
+}
+
+fn validate_board_read_model_to_command_intermediates(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .board_read_model_command_dependencies
+        .iter()
+        .find(|dependency| !automation_slice_exists(document, &dependency.intermediate_automation))
+        .map_or(Ok(()), |dependency| {
+            Err(validation_issue(format!(
+                "board element between read model '{}' and command '{}' is not a declared automation",
+                dependency.read_model, dependency.command
+            )))
+        })
+}
+
+fn automation_slice_exists(
+    document: &EventModelDocument,
+    automation_name: &DefinitionName,
+) -> bool {
+    document
+        .slice_definitions
+        .iter()
+        .any(|slice| slice.slice_type == SliceType::Automation && slice.name == *automation_name)
 }
 
 fn validate_command_sourced_event_attributes(

@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
@@ -12,11 +12,11 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    CommandDefinition, CommandInputSource, CommandInputSourceKind, CommandReadModelReads,
-    DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource, EventDefinition,
-    EventModelDocument, EventModelDocumentParts, EventModelFileKind, ExternalInputSchema,
-    LegacyScenariosField, NamedDefinition, ReadModelDefinition, ReadModelField,
-    ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
+    BoardReadModelCommandDependency, CommandDefinition, CommandInputSource, CommandInputSourceKind,
+    CommandReadModelReads, DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource,
+    EventDefinition, EventModelDocument, EventModelDocumentParts, EventModelFileKind,
+    ExternalInputSchema, LegacyScenariosField, NamedDefinition, ReadModelDefinition,
+    ReadModelField, ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
     ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
     SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceType,
     TopLevelKey, TranslationContract, ViewDefinition, empty_top_level_key_issue,
@@ -210,6 +210,8 @@ fn event_model_document_from_json(
             let event_definitions = event_definitions_from_json_object(object)?;
             let command_definitions = command_definitions_from_json_object(object)?;
             let read_model_definitions = read_model_definitions_from_json_object(object)?;
+            let board_read_model_command_dependencies =
+                board_read_model_command_dependencies_from_json_object(object)?;
             let command_produced_events = command_produced_events_from_json_object(object)?;
             let state_view_observed_events =
                 state_view_observed_events_from_slices(&slice_definitions);
@@ -225,6 +227,9 @@ fn event_model_document_from_json(
                         .with_state_view_observed_events(state_view_observed_events)
                         .with_named_definitions(named_definitions)
                         .with_read_model_definitions(read_model_definitions)
+                        .with_board_read_model_command_dependencies(
+                            board_read_model_command_dependencies,
+                        )
                         .with_slice_count(slice_definition_count(&slice_definitions))
                         .with_slice_definitions(slice_definitions)
                         .with_view_definitions(view_definitions),
@@ -239,6 +244,141 @@ fn slice_definition_count(slice_definitions: &[SliceDefinition]) -> SliceDefinit
         1 => SliceDefinitionCount::One,
         _ => SliceDefinitionCount::Multiple,
     }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum BoardElementKind {
+    Automation,
+    Command,
+    Other,
+    ReadModel,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct BoardElement {
+    kind: BoardElementKind,
+    name: DefinitionName,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct BoardConnection {
+    from: String,
+    to: String,
+}
+
+fn board_read_model_command_dependencies_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<BoardReadModelCommandDependency>, BoundaryParseError> {
+    object
+        .get("board")
+        .and_then(|board| board.get("slices"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(board_read_model_command_dependencies_from_json_slice)
+        .collect::<Result<Vec<_>, _>>()
+        .map(|dependencies| dependencies.into_iter().flatten().collect())
+}
+
+fn board_read_model_command_dependencies_from_json_slice(
+    board_slice: &Value,
+) -> Result<Vec<BoardReadModelCommandDependency>, BoundaryParseError> {
+    let elements = board_elements_from_json_slice(board_slice)?;
+    let connections = board_connections_from_json_slice(board_slice);
+    Ok(connections
+        .iter()
+        .flat_map(|connection| {
+            board_read_model_command_dependency_from_connection(&elements, &connections, connection)
+        })
+        .collect())
+}
+
+fn board_elements_from_json_slice(
+    board_slice: &Value,
+) -> Result<BTreeMap<String, BoardElement>, BoundaryParseError> {
+    board_slice
+        .get("elements")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|element| {
+            element
+                .get("id")
+                .and_then(Value::as_str)
+                .zip(element.get("name").and_then(Value::as_str))
+                .map(|(id, name)| (id, name, board_element_kind_from_json(element)))
+        })
+        .map(|(id, name, kind)| {
+            DefinitionName::try_new(name.to_owned())
+                .map(|name| (id.to_owned(), BoardElement { kind, name }))
+                .map_err(|error| {
+                    BoundaryParseError::new(format!("invalid board element name: {error}"))
+                })
+        })
+        .collect()
+}
+
+fn board_element_kind_from_json(element: &Value) -> BoardElementKind {
+    match element.get("kind").and_then(Value::as_str) {
+        Some("automation") => BoardElementKind::Automation,
+        Some("command") => BoardElementKind::Command,
+        Some("read_model") => BoardElementKind::ReadModel,
+        _ => BoardElementKind::Other,
+    }
+}
+
+fn board_connections_from_json_slice(board_slice: &Value) -> Vec<BoardConnection> {
+    board_slice
+        .get("connections")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|connection| {
+            connection
+                .get("from")
+                .and_then(Value::as_str)
+                .zip(connection.get("to").and_then(Value::as_str))
+                .map(|(from, to)| BoardConnection {
+                    from: from.to_owned(),
+                    to: to.to_owned(),
+                })
+        })
+        .collect()
+}
+
+fn board_read_model_command_dependency_from_connection(
+    elements: &BTreeMap<String, BoardElement>,
+    connections: &[BoardConnection],
+    connection: &BoardConnection,
+) -> Vec<BoardReadModelCommandDependency> {
+    let Some(read_model) = elements
+        .get(&connection.from)
+        .filter(|element| element.kind == BoardElementKind::ReadModel)
+    else {
+        return Vec::new();
+    };
+    let Some(intermediate) = elements
+        .get(&connection.to)
+        .filter(|element| element.kind == BoardElementKind::Automation)
+    else {
+        return Vec::new();
+    };
+    connections
+        .iter()
+        .filter(|candidate| candidate.from == connection.to)
+        .filter_map(|candidate| {
+            elements
+                .get(&candidate.to)
+                .filter(|command| command.kind == BoardElementKind::Command)
+                .map(|command| {
+                    BoardReadModelCommandDependency::new(
+                        read_model.name.clone(),
+                        command.name.clone(),
+                        intermediate.name.clone(),
+                    )
+                })
+        })
+        .collect()
 }
 
 fn slice_definitions_from_json_object(
@@ -504,6 +644,7 @@ fn first_class_scenario_fields() -> &'static [ScenarioFieldSpec] {
 
 fn slice_type_from_json_slice(slice: &Value) -> SliceType {
     match slice.get("type").and_then(Value::as_str) {
+        Some("automation") => SliceType::Automation,
         Some("state_change") => SliceType::StateChange,
         Some("state_view") => SliceType::StateView,
         Some("translation") => SliceType::Translation,
