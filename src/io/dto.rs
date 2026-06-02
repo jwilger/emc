@@ -12,22 +12,22 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    AutomationCommandPolicy, AutomationTrigger, BoardReadModelCommandDependency, CommandDefinition,
-    CommandDefinitionParts, CommandInputSource, CommandInputSourceKind, CommandReadModelReads,
-    ControlCommandErrorHandling, ControlErrorRecoveryBehavior, DefinitionKind, DefinitionName,
-    EventAttribute, EventAttributeSource, EventDefinition, EventModelDocument,
-    EventModelDocumentParts, EventModelFileKind, ExternalInputSchema, ExternalPayloadVariant,
-    LegacyScenariosField, NamedDefinition, NavigationType, OutcomeDefinition, ReadModelDefinition,
-    ReadModelField, ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
-    ReadModelState, ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField,
-    SingletonBehavior, SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario,
-    SliceScenarioParts, SliceType, TopLevelKey, TranslationContract, ViewControlDefinition,
-    ViewControlDefinitionParts, ViewDefinition, ViewWireframe, WorkflowCommandTransition,
-    WorkflowComposition, WorkflowEntryStepCount, WorkflowEventTransition, WorkflowExitRationale,
-    WorkflowExitTransition, WorkflowExternalTriggerTransition, WorkflowInternalDefinitions,
-    WorkflowNavigationTransition, WorkflowStep, WorkflowStepExit, WorkflowStepLifecycleRole,
-    WorkflowStepRelationship, WorkflowStepTrigger, empty_top_level_key_issue,
-    model_must_be_object_issue,
+    AutomationCommandPolicy, AutomationTrigger, BoardGraphConnection,
+    BoardReadModelCommandDependency, BoardSliceGraph, CommandDefinition, CommandDefinitionParts,
+    CommandInputSource, CommandInputSourceKind, CommandReadModelReads, ControlCommandErrorHandling,
+    ControlErrorRecoveryBehavior, DefinitionKind, DefinitionName, EventAttribute,
+    EventAttributeSource, EventDefinition, EventModelDocument, EventModelDocumentParts,
+    EventModelFileKind, ExternalInputSchema, ExternalPayloadVariant, LegacyScenariosField,
+    NamedDefinition, NavigationType, OutcomeDefinition, ReadModelDefinition, ReadModelField,
+    ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource, ReadModelState,
+    ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
+    SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceScenarioParts,
+    SliceType, TopLevelKey, TranslationContract, ViewControlDefinition, ViewControlDefinitionParts,
+    ViewDefinition, ViewWireframe, WorkflowCommandTransition, WorkflowComposition,
+    WorkflowEntryStepCount, WorkflowEventTransition, WorkflowExitRationale, WorkflowExitTransition,
+    WorkflowExternalTriggerTransition, WorkflowInternalDefinitions, WorkflowNavigationTransition,
+    WorkflowStep, WorkflowStepExit, WorkflowStepLifecycleRole, WorkflowStepRelationship,
+    WorkflowStepTrigger, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -241,6 +241,7 @@ fn event_model_document_from_json(
                 workflow_transition_outcomes_from_json_object(object)?;
             let board_read_model_command_dependencies =
                 board_read_model_command_dependencies_from_json_object(object)?;
+            let board_slices = board_slices_from_json_object(object)?;
             let command_produced_events = command_produced_events_from_json_object(object)?;
             let state_view_observed_events =
                 state_view_observed_events_from_slices(&slice_definitions);
@@ -260,6 +261,7 @@ fn event_model_document_from_json(
                         .with_board_read_model_command_dependencies(
                             board_read_model_command_dependencies,
                         )
+                        .with_board_slices(board_slices)
                         .with_slice_count(slice_definition_count(&slice_definitions))
                         .with_slice_definitions(slice_definitions)
                         .with_view_definitions(view_definitions)
@@ -1028,6 +1030,83 @@ fn board_read_model_command_dependencies_from_json_slice(
             board_read_model_command_dependency_from_connection(&elements, &connections, connection)
         })
         .collect())
+}
+
+fn board_slices_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<BoardSliceGraph>, BoundaryParseError> {
+    object
+        .get("board")
+        .and_then(|board| board.get("slices"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|board_slice| {
+            board_slice
+                .get("name")
+                .and_then(Value::as_str)
+                .map(|name| (board_slice, name))
+        })
+        .map(|(board_slice, name)| {
+            DefinitionName::try_new(name.to_owned())
+                .map_err(|error| BoundaryParseError::new(format!("invalid board slice: {error}")))
+                .and_then(|name| {
+                    board_element_ids_from_json_slice(board_slice).and_then(|element_ids| {
+                        board_graph_connections_from_json_slice(board_slice)
+                            .map(|connections| BoardSliceGraph::new(name, element_ids, connections))
+                    })
+                })
+        })
+        .collect()
+}
+
+fn board_element_ids_from_json_slice(
+    board_slice: &Value,
+) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
+    board_slice
+        .get("elements")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|element| element.get("id").and_then(Value::as_str))
+        .map(|id| {
+            DefinitionName::try_new(id.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid board element id: {error}"))
+            })
+        })
+        .collect()
+}
+
+fn board_graph_connections_from_json_slice(
+    board_slice: &Value,
+) -> Result<Vec<BoardGraphConnection>, BoundaryParseError> {
+    board_slice
+        .get("connections")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|connection| {
+            connection
+                .get("from")
+                .and_then(Value::as_str)
+                .zip(connection.get("to").and_then(Value::as_str))
+        })
+        .map(|(from, to)| {
+            DefinitionName::try_new(from.to_owned())
+                .map_err(|error| {
+                    BoundaryParseError::new(format!("invalid board connection source: {error}"))
+                })
+                .and_then(|from| {
+                    DefinitionName::try_new(to.to_owned())
+                        .map(|to| BoardGraphConnection::new(from, to))
+                        .map_err(|error| {
+                            BoundaryParseError::new(format!(
+                                "invalid board connection target: {error}"
+                            ))
+                        })
+                })
+        })
+        .collect()
 }
 
 fn board_elements_from_json_slice(
