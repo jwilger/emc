@@ -14,6 +14,7 @@ use emc::io::dto::{
     parse_event_model_document, parse_project_manifest_name, parse_slice_slug, parse_workflow_slug,
 };
 use emc::shell::{ShellError, interpret};
+use serde_json::Value;
 
 struct Cli {
     command: Command,
@@ -87,12 +88,16 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
 }
 
 fn validate_target(target: &Path) -> Result<(), ShellError> {
-    let documents = event_model_files(target)?
-        .into_iter()
-        .map(|path| parse_and_validate_event_model_file(&path))
+    let files = event_model_files(target)?;
+    let documents = files
+        .iter()
+        .map(|path| parse_and_validate_event_model_file(path))
         .collect::<Result<Vec<_>, _>>()?;
     validate_event_model_corpus(&documents)
-        .map_err(|issue| ShellError::message(format!("{} in {}", issue, target.display())))
+        .map_err(|issue| ShellError::message(format!("{} in {}", issue, target.display())))?;
+    files
+        .iter()
+        .try_for_each(|path| validate_workflow_referenced_slice_files(path))
 }
 
 fn parse_and_validate_event_model_file(path: &Path) -> Result<EventModelDocument, ShellError> {
@@ -103,6 +108,33 @@ fn parse_and_validate_event_model_file(path: &Path) -> Result<EventModelDocument
     validate_event_model(&document)
         .map_err(|issue| ShellError::message(format!("{} in {}", issue, path.display())))?;
     Ok(document)
+}
+
+fn validate_workflow_referenced_slice_files(path: &Path) -> Result<(), ShellError> {
+    if event_model_file_kind(path) != EventModelFileKind::Workflow {
+        return Ok(());
+    }
+
+    let source =
+        fs::read_to_string(path).map_err(|error| ShellError::message(error.to_string()))?;
+    let value = serde_json::from_str::<Value>(&source)
+        .map_err(|error| ShellError::message(format!("{} in {}", error, path.display())))?;
+    let Some(slice_files) = value.get("slice_files").and_then(Value::as_array) else {
+        return Ok(());
+    };
+    let base_path = path.parent().unwrap_or_else(|| Path::new(""));
+    slice_files
+        .iter()
+        .filter_map(Value::as_str)
+        .map(|slice_file| base_path.join(slice_file))
+        .find(|slice_file| !slice_file.is_file())
+        .map_or(Ok(()), |slice_file| {
+            Err(ShellError::message(format!(
+                "missing referenced slice file {} in {}",
+                slice_file.display(),
+                path.display()
+            )))
+        })
 }
 
 fn event_model_file_kind(path: &Path) -> EventModelFileKind {
