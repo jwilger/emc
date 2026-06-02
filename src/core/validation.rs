@@ -407,8 +407,10 @@ pub enum ReadModelFieldAbsenceDefault {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CommandDefinition {
+    name: Option<DefinitionName>,
     inputs: Vec<DefinitionName>,
     input_sources: Vec<CommandInputSource>,
+    read_model_reads: CommandReadModelReads,
     external_inputs: Vec<DefinitionName>,
     external_input_schemas: Vec<ExternalInputSchema>,
     produces: Vec<DefinitionName>,
@@ -416,15 +418,19 @@ pub struct CommandDefinition {
 
 impl CommandDefinition {
     pub fn new(
+        name: Option<DefinitionName>,
         inputs: Vec<DefinitionName>,
         input_sources: Vec<CommandInputSource>,
+        read_model_reads: CommandReadModelReads,
         external_inputs: Vec<DefinitionName>,
         external_input_schemas: Vec<ExternalInputSchema>,
         produces: Vec<DefinitionName>,
     ) -> Self {
         Self {
+            name,
             inputs,
             input_sources,
+            read_model_reads,
             external_inputs,
             external_input_schemas,
             produces,
@@ -448,6 +454,12 @@ impl CommandInputSource {
 pub enum CommandInputSourceKind {
     ExternalField(DefinitionName, DefinitionName),
     Other,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum CommandReadModelReads {
+    Absent,
+    Present,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -523,6 +535,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_event_producers(document)?;
 
     validate_command_sourced_event_attributes(document)?;
+
+    validate_command_legacy_read_model_reads(document)?;
 
     validate_external_sourced_event_attributes(document)
         .and_then(|()| validate_read_model_sourced_event_attributes(document))
@@ -857,6 +871,21 @@ fn event_has_producer_input(
     document.command_definitions.iter().any(|command| {
         command.produces.contains(&event.name) && command.inputs.contains(input_name)
     })
+}
+
+fn validate_command_legacy_read_model_reads(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .command_definitions
+        .iter()
+        .find(|command| command.read_model_reads == CommandReadModelReads::Present)
+        .and_then(|command| command.name.as_ref())
+        .map_or(Ok(()), |command_name| {
+            Err(validation_issue(format!(
+                "command '{command_name}' uses legacy read-model reads"
+            )))
+        })
 }
 
 fn validate_external_sourced_event_attributes(

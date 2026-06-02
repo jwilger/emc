@@ -577,4 +577,26 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_commands_with_legacy_read_model_reads() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("legacy-command-reads.eventmodel.json"),
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson_submission\"}],\"events\":[{\"name\":\"LessonSubmittedForReview\",\"stream\":\"lesson_submission\",\"attributes\":[]}],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"reads\":[\"lesson_submission_context\"],\"produces\":[\"LessonSubmittedForReview\"]}],\"read_models\":[{\"name\":\"lesson_submission_context\",\"fields\":[]}],\"slices\":[]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "command 'SubmitLessonForReview' uses legacy read-model reads",
+            ));
+
+        Ok(())
+    }
 }
