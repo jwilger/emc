@@ -1084,6 +1084,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_workflow_files_with_internal_definitions() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("lesson-01.eventmodel.json"),
+            "{\"name\":\"Lesson 01\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"produces\":[]}],\"read_models\":[],\"slices\":[],\"slice_files\":[\"./course-submit-lesson-for-review.eventmodel.json\"],\"steps\":[{\"slice\":\"course-submit-lesson-for-review\",\"name\":\"Submit lesson\",\"type\":\"state_change\",\"relationship\":\"entry\"}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow files must not define commands, views, read models, automations, or scenarios",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_automation_slices_without_trigger() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
