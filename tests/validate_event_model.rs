@@ -942,6 +942,32 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_duplicate_wireframes_across_slice_files() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("lesson-wireframe.eventmodel.json"),
+            "{\"name\":\"Lesson wireframe workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson-screen-v1\"}],\"slices\":[{\"name\":\"Show lesson wireframe\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+        )?;
+        write(
+            slices.join("review-wireframe.eventmodel.json"),
+            "{\"name\":\"Review wireframe workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson-screen-v2\"}],\"slices\":[{\"name\":\"Review lesson wireframe\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "wireframe for view 'lesson_screen' is defined by more than one slice",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_undeclared_board_automation_between_read_model_and_command()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
