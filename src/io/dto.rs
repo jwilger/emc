@@ -23,7 +23,7 @@ use crate::core::validation::{
     SingletonBehavior, SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario,
     SliceScenarioParts, SliceType, TopLevelKey, TranslationContract, ViewControlDefinition,
     ViewControlDefinitionParts, ViewDefinition, ViewWireframe, WorkflowComposition,
-    empty_top_level_key_issue, model_must_be_object_issue,
+    WorkflowEntryStepCount, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -217,6 +217,8 @@ fn event_model_document_from_json(
             let workflow_slice_references = workflow_slice_references_from_json_object(object)?;
             let workflow_step_slices = workflow_step_slices_from_json_object(object)?;
             let workflow_composition = workflow_composition_from_json_object(object);
+            let workflow_entry_step_count =
+                workflow_entry_step_count_from_json_object(object, workflow_composition);
             let workflow_transition_errors = workflow_transition_errors_from_json_object(object)?;
             let workflow_transition_outcomes =
                 workflow_transition_outcomes_from_json_object(object)?;
@@ -247,6 +249,7 @@ fn event_model_document_from_json(
                         .with_workflow_slice_references(workflow_slice_references)
                         .with_workflow_step_slices(workflow_step_slices)
                         .with_workflow_composition(workflow_composition)
+                        .with_workflow_entry_step_count(workflow_entry_step_count)
                         .with_workflow_transition_errors(workflow_transition_errors)
                         .with_workflow_transition_outcomes(workflow_transition_outcomes),
                 )
@@ -317,6 +320,33 @@ fn workflow_step_slices_from_json_object(
             })
         })
         .collect()
+}
+
+fn workflow_entry_step_count_from_json_object(
+    object: &Map<String, Value>,
+    workflow_composition: WorkflowComposition,
+) -> WorkflowEntryStepCount {
+    if workflow_composition != WorkflowComposition::DeclaresSteps {
+        WorkflowEntryStepCount::NotComposition
+    } else if workflow_entry_steps_from_json_object(object) == 1 {
+        WorkflowEntryStepCount::One
+    } else {
+        WorkflowEntryStepCount::NotOne
+    }
+}
+
+fn workflow_entry_steps_from_json_object(object: &Map<String, Value>) -> usize {
+    object
+        .get("steps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|step| {
+            step.get("relationship")
+                .and_then(Value::as_str)
+                .is_some_and(|relationship| relationship == "entry")
+        })
+        .count()
 }
 
 fn workflow_transition_errors_from_json_object(
