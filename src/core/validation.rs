@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use nutype::nutype;
 
@@ -279,6 +279,7 @@ pub enum WorkflowEntryStepCount {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum WorkflowStepRelationship {
     Alternate,
+    AsyncLifecycle,
     Branch,
     Entry,
     Main,
@@ -343,6 +344,17 @@ impl WorkflowStep {
                 _,
             ) | (_, WorkflowStepTrigger::Present, _)
                 | (_, _, WorkflowStepExit::Present)
+        )
+    }
+
+    fn is_entry(&self) -> bool {
+        self.relationship == WorkflowStepRelationship::Entry
+    }
+
+    fn is_exempt_from_entry_reachability(&self) -> bool {
+        matches!(
+            self.relationship,
+            WorkflowStepRelationship::AsyncLifecycle | WorkflowStepRelationship::Supporting
         )
     }
 }
@@ -1249,6 +1261,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_workflow_step_incoming_reachability(document)?;
 
+    validate_workflow_steps_reachable_from_entry(document)?;
+
     validate_no_legacy_slice_scenarios(document)?;
 
     validate_scenario_when_fields(document)?;
@@ -1832,6 +1846,71 @@ fn workflow_incoming_step_slices(workflow_steps: &[WorkflowStep]) -> BTreeSet<De
     workflow_steps
         .iter()
         .flat_map(|step| step.transition_targets().iter().cloned())
+        .collect()
+}
+
+fn validate_workflow_steps_reachable_from_entry(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    if document.workflow_composition != WorkflowComposition::DeclaresSteps {
+        return Ok(());
+    }
+
+    workflow_entry_step_slice(&document.workflow_steps).map_or(Ok(()), |entry_slice| {
+        let reachable_step_slices =
+            reachable_workflow_step_slices_from_entry(entry_slice, &document.workflow_steps);
+        document
+            .workflow_steps
+            .iter()
+            .find(|step| {
+                !step.is_exempt_from_entry_reachability()
+                    && !reachable_step_slices.contains(step.slice())
+            })
+            .map_or(Ok(()), |step| {
+                Err(validation_issue(format!(
+                    "workflow step '{}' is not reachable from entry step '{entry_slice}'",
+                    step.slice()
+                )))
+            })
+    })
+}
+
+fn workflow_entry_step_slice(workflow_steps: &[WorkflowStep]) -> Option<&DefinitionName> {
+    workflow_steps
+        .iter()
+        .find(|step| step.is_entry())
+        .map(WorkflowStep::slice)
+}
+
+fn reachable_workflow_step_slices_from_entry(
+    entry_slice: &DefinitionName,
+    workflow_steps: &[WorkflowStep],
+) -> BTreeSet<DefinitionName> {
+    let transitions_by_slice = workflow_transitions_by_slice(workflow_steps);
+    let mut reachable_step_slices = BTreeSet::from([entry_slice.clone()]);
+    let mut pending_step_slices = VecDeque::from([entry_slice.clone()]);
+
+    while let Some(current_step_slice) = pending_step_slices.pop_front() {
+        for target_step_slice in transitions_by_slice
+            .get(&current_step_slice)
+            .into_iter()
+            .flatten()
+        {
+            if reachable_step_slices.insert(target_step_slice.clone()) {
+                pending_step_slices.push_back(target_step_slice.clone());
+            }
+        }
+    }
+
+    reachable_step_slices
+}
+
+fn workflow_transitions_by_slice(
+    workflow_steps: &[WorkflowStep],
+) -> BTreeMap<DefinitionName, BTreeSet<DefinitionName>> {
+    workflow_steps
+        .iter()
+        .map(|step| (step.slice().clone(), step.transition_targets().clone()))
         .collect()
 }
 

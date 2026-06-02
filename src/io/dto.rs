@@ -368,6 +368,7 @@ fn workflow_step_relationship_from_json_object(
 ) -> WorkflowStepRelationship {
     match object.get("relationship").and_then(Value::as_str) {
         Some("alternate") => WorkflowStepRelationship::Alternate,
+        Some("async_lifecycle") => WorkflowStepRelationship::AsyncLifecycle,
         Some("branch") => WorkflowStepRelationship::Branch,
         Some("entry") => WorkflowStepRelationship::Entry,
         Some("main") => WorkflowStepRelationship::Main,
