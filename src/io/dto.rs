@@ -14,9 +14,10 @@ use crate::core::types::{
 use crate::core::validation::{
     AutomationCommandPolicy, AutomationTrigger, BoardReadModelCommandDependency, CommandDefinition,
     CommandDefinitionParts, CommandInputSource, CommandInputSourceKind, CommandReadModelReads,
-    DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource, EventDefinition,
-    EventModelDocument, EventModelDocumentParts, EventModelFileKind, ExternalInputSchema,
-    LegacyScenariosField, NamedDefinition, OutcomeDefinition, ReadModelDefinition, ReadModelField,
+    ControlCommandErrorHandling, ControlErrorRecoveryBehavior, DefinitionKind, DefinitionName,
+    EventAttribute, EventAttributeSource, EventDefinition, EventModelDocument,
+    EventModelDocumentParts, EventModelFileKind, ExternalInputSchema, LegacyScenariosField,
+    NamedDefinition, OutcomeDefinition, ReadModelDefinition, ReadModelField,
     ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
     ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
     SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceScenarioParts,
@@ -838,13 +839,13 @@ fn view_control_definitions_from_json_view(
         })
         .map(|(control, label)| {
             let command = optional_definition_name_from_json_field(control, "command", "command")?;
-            let handled_command_errors = control_handled_command_errors_from_json_control(control)?;
+            let command_error_handling = command_error_handling_from_json_control(control)?;
             DefinitionName::try_new(label.to_owned())
                 .map(|label| {
                     ViewControlDefinition::new(
                         ViewControlDefinitionParts::new(label)
                             .with_command(command)
-                            .with_handled_command_errors(handled_command_errors),
+                            .with_command_error_handling(command_error_handling),
                     )
                 })
                 .map_err(|error| BoundaryParseError::new(format!("invalid control label: {error}")))
@@ -852,21 +853,75 @@ fn view_control_definitions_from_json_view(
         .collect()
 }
 
-fn control_handled_command_errors_from_json_control(
+fn command_error_handling_from_json_control(
     control: &Value,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+) -> Result<Vec<ControlCommandErrorHandling>, BoundaryParseError> {
     control
         .get("error_handling")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter_map(|handling| handling.get("error").and_then(Value::as_str))
-        .map(|error_name| {
-            DefinitionName::try_new(error_name.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid control command error: {error}"))
-            })
+        .filter_map(|handling| {
+            handling
+                .get("error")
+                .and_then(Value::as_str)
+                .map(|error_name| (handling, error_name))
+        })
+        .map(|(handling, error_name)| {
+            DefinitionName::try_new(error_name.to_owned())
+                .map_err(|error| {
+                    BoundaryParseError::new(format!("invalid control command error: {error}"))
+                })
+                .map(|error_name| {
+                    ControlCommandErrorHandling::new(
+                        error_name,
+                        control_error_recovery_behavior_from_json_handling(handling),
+                    )
+                })
         })
         .collect()
+}
+
+fn control_error_recovery_behavior_from_json_handling(
+    handling: &Value,
+) -> ControlErrorRecoveryBehavior {
+    if handling_has_recovery_action(handling)
+        || handling_has_navigation_target(handling)
+        || handling_has_retry(handling)
+        || handling_stays_on_screen(handling)
+    {
+        ControlErrorRecoveryBehavior::Present
+    } else {
+        ControlErrorRecoveryBehavior::Missing
+    }
+}
+
+fn handling_has_recovery_action(handling: &Value) -> bool {
+    handling
+        .get("recovery_action")
+        .and_then(Value::as_str)
+        .is_some_and(|recovery_action| !recovery_action.trim().is_empty())
+}
+
+fn handling_has_navigation_target(handling: &Value) -> bool {
+    handling
+        .get("navigation")
+        .and_then(Value::as_str)
+        .is_some_and(|navigation| !navigation.trim().is_empty())
+}
+
+fn handling_has_retry(handling: &Value) -> bool {
+    handling
+        .get("retry")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+fn handling_stays_on_screen(handling: &Value) -> bool {
+    handling
+        .get("stay_on_screen")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 fn read_model_definitions_from_json_object(
