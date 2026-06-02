@@ -313,6 +313,7 @@ impl EventAttribute {
 pub enum EventAttributeSource {
     CommandInput(DefinitionName),
     ExternalField(DefinitionName, DefinitionName),
+    ReadModelField(DefinitionName, DefinitionName),
     Other,
 }
 
@@ -415,6 +416,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_command_sourced_event_attributes(document)?;
 
     validate_external_sourced_event_attributes(document)
+        .and_then(|()| validate_read_model_sourced_event_attributes(document))
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -831,4 +833,30 @@ fn external_field_is_declared(
         .iter()
         .find(|schema| schema.name == *payload_name)
         .is_some_and(|schema| schema.fields.contains(field_name))
+}
+
+fn validate_read_model_sourced_event_attributes(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .event_definitions
+        .iter()
+        .flat_map(|event| {
+            event.attributes.iter().filter_map(move |attribute| {
+                if let EventAttributeSource::ReadModelField(read_model_name, field_name) =
+                    &attribute.source
+                {
+                    Some((event, attribute, read_model_name, field_name))
+                } else {
+                    None
+                }
+            })
+        })
+        .next()
+        .map_or(Ok(()), |(event, attribute, read_model_name, field_name)| {
+            Err(validation_issue(format!(
+                "event '{}' attribute '{}' has invalid source 'read_model.{}.{}'",
+                event.name, attribute.name, read_model_name, field_name
+            )))
+        })
 }
