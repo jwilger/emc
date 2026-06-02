@@ -21,6 +21,7 @@ pub struct EventModelDocument {
     view_definitions: Vec<ViewDefinition>,
     workflow_slice_references: BTreeSet<DefinitionName>,
     workflow_step_slices: BTreeSet<DefinitionName>,
+    duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
     workflow_transition_errors: BTreeSet<DefinitionName>,
@@ -47,6 +48,7 @@ impl EventModelDocument {
             view_definitions: parts.view_definitions,
             workflow_slice_references: parts.workflow_slice_references,
             workflow_step_slices: parts.workflow_step_slices,
+            duplicate_workflow_step_slice: parts.duplicate_workflow_step_slice,
             workflow_composition: parts.workflow_composition,
             workflow_entry_step_count: parts.workflow_entry_step_count,
             workflow_transition_errors: parts.workflow_transition_errors,
@@ -74,6 +76,7 @@ pub struct EventModelDocumentParts {
     view_definitions: Vec<ViewDefinition>,
     workflow_slice_references: BTreeSet<DefinitionName>,
     workflow_step_slices: BTreeSet<DefinitionName>,
+    duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
     workflow_transition_errors: BTreeSet<DefinitionName>,
@@ -100,6 +103,7 @@ impl EventModelDocumentParts {
             view_definitions: Vec::new(),
             workflow_slice_references: BTreeSet::new(),
             workflow_step_slices: BTreeSet::new(),
+            duplicate_workflow_step_slice: None,
             workflow_composition: WorkflowComposition::NotComposition,
             workflow_entry_step_count: WorkflowEntryStepCount::NotComposition,
             workflow_transition_errors: BTreeSet::new(),
@@ -202,6 +206,14 @@ impl EventModelDocumentParts {
         workflow_step_slices: BTreeSet<DefinitionName>,
     ) -> Self {
         self.workflow_step_slices = workflow_step_slices;
+        self
+    }
+
+    pub fn with_duplicate_workflow_step_slice(
+        mut self,
+        duplicate_workflow_step_slice: Option<DefinitionName>,
+    ) -> Self {
+        self.duplicate_workflow_step_slice = duplicate_workflow_step_slice;
         self
     }
 
@@ -1153,6 +1165,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_workflow_referenced_slices_are_used(document)?;
 
+    validate_duplicate_workflow_step_slices(document)?;
+
     validate_no_legacy_slice_scenarios(document)?;
 
     validate_scenario_when_fields(document)?;
@@ -1695,6 +1709,19 @@ fn validate_workflow_referenced_slices_are_used(
     } else {
         Ok(())
     }
+}
+
+fn validate_duplicate_workflow_step_slices(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .duplicate_workflow_step_slice
+        .as_ref()
+        .map_or(Ok(()), |step_slice| {
+            Err(validation_issue(format!(
+                "workflow step slice '{step_slice}' is duplicated"
+            )))
+        })
 }
 
 fn validate_no_legacy_slice_scenarios(

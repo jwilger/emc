@@ -948,6 +948,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_duplicate_workflow_step_slices() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("lesson-01.eventmodel.json"),
+            "{\"name\":\"Lesson 01\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[],\"slice_files\":[\"./show-lesson.eventmodel.json\"],\"steps\":[{\"slice\":\"show-lesson\",\"name\":\"Show lesson\",\"type\":\"state_view\",\"relationship\":\"entry\"},{\"slice\":\"show-lesson\",\"name\":\"Show lesson again\",\"type\":\"state_view\",\"relationship\":\"main\",\"trigger\":\"manual_retry\"}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow step slice 'show-lesson' is duplicated",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_automation_slices_without_trigger() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
