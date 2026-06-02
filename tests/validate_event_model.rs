@@ -1396,6 +1396,37 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_workflow_external_triggers_not_declared_by_target_slice()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("lesson-01.eventmodel.json"),
+            "{\"name\":\"Lesson 01\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[],\"slice_files\":[\"./entry.eventmodel.json\",\"./record-checkpoint.eventmodel.json\"],\"steps\":[{\"slice\":\"entry\",\"name\":\"Entry\",\"type\":\"state_view\",\"relationship\":\"entry\",\"transitions\":[{\"to\":\"record-checkpoint\",\"via_external_trigger\":\"lesson_checkpoint_result\"}]},{\"slice\":\"record-checkpoint\",\"name\":\"Record checkpoint\",\"type\":\"translation\",\"relationship\":\"alternate\",\"trigger\":\"lesson_checkpoint_result\"}]}",
+        )?;
+        write(
+            workflows.join("entry.eventmodel.json"),
+            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+        write(
+            workflows.join("record-checkpoint.eventmodel.json"),
+            "{\"name\":\"Record checkpoint\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Record checkpoint\",\"type\":\"translation\",\"external_event\":\"different_event\",\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"record\",\"given\":[],\"when\":{},\"then\":[]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "external trigger 'lesson_checkpoint_result' is not declared by target slice 'record-checkpoint'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_automation_slices_without_trigger() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
