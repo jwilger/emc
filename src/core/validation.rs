@@ -346,18 +346,35 @@ impl ReadModelDefinition {
 pub struct ReadModelField {
     name: DefinitionName,
     source: ReadModelFieldSource,
+    derivation: ReadModelFieldDerivation,
 }
 
 impl ReadModelField {
-    pub fn new(name: DefinitionName, source: ReadModelFieldSource) -> Self {
-        Self { name, source }
+    pub fn new(
+        name: DefinitionName,
+        source: ReadModelFieldSource,
+        derivation: ReadModelFieldDerivation,
+    ) -> Self {
+        Self {
+            name,
+            source,
+            derivation,
+        }
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ReadModelFieldSource {
     EventAttribute(DefinitionName, DefinitionName),
+    Derivation(DefinitionName),
     Other,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ReadModelFieldDerivation {
+    NotDerived,
+    DerivedWithoutProvenance,
+    DerivedWithProvenance,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -461,6 +478,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_external_sourced_event_attributes(document)
         .and_then(|()| validate_read_model_sourced_event_attributes(document))
         .and_then(|()| validate_generated_event_attribute_sources(document))
+        .and_then(|()| validate_derived_read_model_field_provenance(document))
         .and_then(|()| validate_read_model_field_event_sources(document))
 }
 
@@ -951,6 +969,26 @@ fn validate_read_model_field_event_sources(
             Err(validation_issue(format!(
                 "read model '{}' field '{}' references unknown event attribute '{}.{}'",
                 read_model.name, field.name, event_name, attribute_name
+            )))
+        })
+}
+
+fn validate_derived_read_model_field_provenance(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .read_model_definitions
+        .iter()
+        .flat_map(|read_model| {
+            read_model.fields.iter().filter(|field| {
+                field.derivation == ReadModelFieldDerivation::DerivedWithoutProvenance
+            })
+        })
+        .next()
+        .map_or(Ok(()), |field| {
+            Err(validation_issue(format!(
+                "derived read model field '{}' must declare source fields and derivation",
+                field.name
             )))
         })
 }
