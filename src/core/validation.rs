@@ -1745,6 +1745,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_board_automation_references(document)?;
 
+    validate_board_external_event_references(document)?;
+
     validate_command_sourced_event_attributes(document)?;
 
     validate_command_legacy_read_model_reads(document)?;
@@ -3647,6 +3649,17 @@ fn validate_board_automation_references(
     })
 }
 
+fn validate_board_external_event_references(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    unknown_board_external_event_reference(document).map_or(Ok(()), |reference| {
+        Err(validation_issue(format!(
+            "board element '{}' references unknown external_event '{}'",
+            reference.element_id, reference.name
+        )))
+    })
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct UnknownBoardElementReference {
     element_id: DefinitionName,
@@ -3710,6 +3723,27 @@ fn unknown_board_automation_reference(
                 .slice_definitions
                 .iter()
                 .any(|slice| slice.slice_type == SliceType::Automation && &slice.name == *name)
+        })
+        .map(|(element, name)| UnknownBoardElementReference {
+            element_id: element.id.clone(),
+            kind: element.kind,
+            name: name.clone(),
+        })
+}
+
+fn unknown_board_external_event_reference(
+    document: &EventModelDocument,
+) -> Option<UnknownBoardElementReference> {
+    document
+        .board_slices
+        .iter()
+        .flat_map(|board_slice| board_slice.elements.iter())
+        .filter(|element| element.kind == BoardElementKind::ExternalEvent)
+        .filter_map(|element| element.name.as_ref().map(|name| (element, name)))
+        .find(|(_element, name)| {
+            !document.slice_definitions.iter().any(|slice| {
+                slice.slice_type == SliceType::Translation && slice.external_triggers.contains(name)
+            })
         })
         .map(|(element, name)| UnknownBoardElementReference {
             element_id: element.id.clone(),
