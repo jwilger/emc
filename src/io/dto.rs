@@ -19,9 +19,9 @@ use crate::core::validation::{
     LegacyScenariosField, NamedDefinition, OutcomeDefinition, ReadModelDefinition, ReadModelField,
     ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
     ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
-    SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceType,
-    TopLevelKey, TranslationContract, ViewControlDefinition, ViewDefinition, ViewWireframe,
-    empty_top_level_key_issue, model_must_be_object_issue,
+    SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceScenarioParts,
+    SliceType, TopLevelKey, TranslationContract, ViewControlDefinition, ViewDefinition,
+    ViewWireframe, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -642,16 +642,20 @@ fn slice_scenarios_from_json_field(
                 .map(|name| {
                     let read_model_states = read_model_states_from_json_scenario(scenario)?;
                     let then_events = event_references_from_json_field(scenario, "then")?;
+                    let command_errors = command_errors_from_json_scenario(scenario)?;
                     let given_streams = given_streams_from_json_scenario(scenario)?;
                     event_references_from_json_scenario(scenario).map(|referenced_events| {
                         SliceScenario::new(
-                            name,
-                            scenario_step_field(scenario, "when"),
-                            spec.kind,
-                            referenced_events,
-                            then_events,
-                            given_streams,
-                            read_model_states,
+                            SliceScenarioParts::new(
+                                name,
+                                scenario_step_field(scenario, "when"),
+                                spec.kind,
+                            )
+                            .with_referenced_events(referenced_events)
+                            .with_then_events(then_events)
+                            .with_command_errors(command_errors)
+                            .with_given_streams(given_streams)
+                            .with_read_model_states(read_model_states),
                         )
                     })
                 })
@@ -659,7 +663,6 @@ fn slice_scenarios_from_json_field(
         })
         .collect()
 }
-
 fn given_streams_from_json_scenario(
     scenario: &Value,
 ) -> Result<Vec<DefinitionName>, BoundaryParseError> {
@@ -691,6 +694,29 @@ fn read_model_states_from_json_scenario(
             })
         })
         .collect()
+}
+
+fn command_errors_from_json_scenario(
+    scenario: &Value,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    scenario_reference_fields()
+        .iter()
+        .filter_map(|field| scenario.get(field).and_then(Value::as_array))
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter_map(command_error_from_scenario_reference)
+        .map(|error_name| {
+            DefinitionName::try_new(error_name.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid scenario command error: {error}"))
+            })
+        })
+        .collect()
+}
+
+fn command_error_from_scenario_reference(reference: &str) -> Option<&str> {
+    reference
+        .strip_prefix("error ")
+        .and_then(|raw_error| raw_error.strip_suffix(" is returned"))
 }
 
 fn event_references_from_json_scenario(
