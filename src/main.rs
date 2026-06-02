@@ -7,8 +7,8 @@ use emc::core::emc::{EMCWorkflowImport, import_emc_workflow};
 use emc::core::layout::check_project;
 use emc::core::project::{ProjectName, init_project};
 use emc::io::dto::{
-    parse_emc_slice_import, parse_emc_workflow_import, parse_project_manifest_name,
-    parse_slice_slug, parse_workflow_slug,
+    parse_browser_index_workflows, parse_emc_slice_import, parse_emc_workflow_import,
+    parse_project_manifest_name, parse_slice_slug, parse_workflow_slug,
 };
 use emc::shell::{ShellError, interpret};
 
@@ -39,7 +39,11 @@ fn run(cli: Cli) -> Result<(), ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let project_name =
                 parse_project_manifest_name(&manifest).map_err(ShellError::project_name)?;
-            interpret(check_project(project_name))
+            let index = fs::read_to_string("model/browser/data/index.json")
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let imported_workflows = parse_browser_index_workflows(&index)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret(check_project(project_name, imported_workflows))
         }
         Command::ImportEMC { source } => {
             interpret(import_emc_workflow(load_emc_import(&source)?))
