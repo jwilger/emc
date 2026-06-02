@@ -12,19 +12,20 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    AutomationCommandPolicy, AutomationTrigger, BoardGraphConnection, BoardLane, BoardLanes,
-    BoardReadModelCommandDependency, BoardSliceGraph, CommandDefinition, CommandDefinitionParts,
-    CommandInputSource, CommandInputSourceKind, CommandReadModelReads, ControlCommandErrorHandling,
-    ControlErrorRecoveryBehavior, DefinitionKind, DefinitionName, EventAttribute,
-    EventAttributeSource, EventDefinition, EventModelDocument, EventModelDocumentParts,
-    EventModelFileKind, ExternalInputSchema, ExternalPayloadVariant, LegacyScenariosField,
-    NamedDefinition, NavigationType, OutcomeDefinition, ReadModelDefinition, ReadModelField,
-    ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource, ReadModelState,
-    ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
-    SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceScenarioParts,
-    SliceType, TopLevelKey, TranslationContract, ViewControlDefinition, ViewControlDefinitionParts,
-    ViewDefinition, ViewWireframe, WorkflowCommandTransition, WorkflowComposition,
-    WorkflowEntryStepCount, WorkflowEventTransition, WorkflowExitRationale, WorkflowExitTransition,
+    AutomationCommandPolicy, AutomationTrigger, BoardElement, BoardElementKind,
+    BoardGraphConnection, BoardLane, BoardLanes, BoardReadModelCommandDependency, BoardSliceGraph,
+    CommandDefinition, CommandDefinitionParts, CommandInputSource, CommandInputSourceKind,
+    CommandReadModelReads, ControlCommandErrorHandling, ControlErrorRecoveryBehavior,
+    DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource, EventDefinition,
+    EventModelDocument, EventModelDocumentParts, EventModelFileKind, ExternalInputSchema,
+    ExternalPayloadVariant, LegacyScenariosField, NamedDefinition, NavigationType,
+    OutcomeDefinition, ReadModelDefinition, ReadModelField, ReadModelFieldAbsenceDefault,
+    ReadModelFieldDerivation, ReadModelFieldSource, ReadModelState, ReadModelTransitiveDerivation,
+    ScenarioSetKind, ScenarioStepField, SingletonBehavior, SliceDefinition, SliceDefinitionCount,
+    SliceDefinitionParts, SliceScenario, SliceScenarioParts, SliceType, TopLevelKey,
+    TranslationContract, ViewControlDefinition, ViewControlDefinitionParts, ViewDefinition,
+    ViewWireframe, WorkflowCommandTransition, WorkflowComposition, WorkflowEntryStepCount,
+    WorkflowEventTransition, WorkflowExitRationale, WorkflowExitTransition,
     WorkflowExternalTriggerTransition, WorkflowInternalDefinitions, WorkflowNavigationTransition,
     WorkflowStep, WorkflowStepExit, WorkflowStepLifecycleRole, WorkflowStepRelationship,
     WorkflowStepTrigger, empty_top_level_key_issue, model_must_be_object_issue,
@@ -987,16 +988,8 @@ fn workflow_transition_references_from_json_step<'a>(step: &'a Value, field: &st
         .collect()
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum BoardElementKind {
-    Automation,
-    Command,
-    Other,
-    ReadModel,
-}
-
 #[derive(Debug, Clone, Eq, PartialEq)]
-struct BoardElement {
+struct BoardDependencyElement {
     kind: BoardElementKind,
     name: DefinitionName,
 }
@@ -1079,28 +1072,40 @@ fn board_slices_from_json_object(
             DefinitionName::try_new(name.to_owned())
                 .map_err(|error| BoundaryParseError::new(format!("invalid board slice: {error}")))
                 .and_then(|name| {
-                    board_element_ids_from_json_slice(board_slice).and_then(|element_ids| {
+                    board_graph_elements_from_json_slice(board_slice).and_then(|elements| {
                         board_graph_connections_from_json_slice(board_slice)
-                            .map(|connections| BoardSliceGraph::new(name, element_ids, connections))
+                            .map(|connections| BoardSliceGraph::new(name, elements, connections))
                     })
                 })
         })
         .collect()
 }
 
-fn board_element_ids_from_json_slice(
+fn board_graph_elements_from_json_slice(
     board_slice: &Value,
-) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
+) -> Result<Vec<BoardElement>, BoundaryParseError> {
     board_slice
         .get("elements")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .filter_map(|element| element.get("id").and_then(Value::as_str))
-        .map(|id| {
-            DefinitionName::try_new(id.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid board element id: {error}"))
-            })
+        .filter_map(|element| {
+            element
+                .get("id")
+                .and_then(Value::as_str)
+                .map(|id| (element, id))
+        })
+        .map(|(element, id)| {
+            DefinitionName::try_new(id.to_owned())
+                .map_err(|error| {
+                    BoundaryParseError::new(format!("invalid board element id: {error}"))
+                })
+                .and_then(|id| {
+                    optional_definition_name_from_json_field(element, "lane", "board element lane")
+                        .map(|lane| {
+                            BoardElement::new(id, board_element_kind_from_json(element), lane)
+                        })
+                })
         })
         .collect()
 }
@@ -1139,7 +1144,7 @@ fn board_graph_connections_from_json_slice(
 
 fn board_elements_from_json_slice(
     board_slice: &Value,
-) -> Result<BTreeMap<String, BoardElement>, BoundaryParseError> {
+) -> Result<BTreeMap<String, BoardDependencyElement>, BoundaryParseError> {
     board_slice
         .get("elements")
         .and_then(Value::as_array)
@@ -1154,7 +1159,7 @@ fn board_elements_from_json_slice(
         })
         .map(|(id, name, kind)| {
             DefinitionName::try_new(name.to_owned())
-                .map(|name| (id.to_owned(), BoardElement { kind, name }))
+                .map(|name| (id.to_owned(), BoardDependencyElement { kind, name }))
                 .map_err(|error| {
                     BoundaryParseError::new(format!("invalid board element name: {error}"))
                 })
@@ -1166,7 +1171,10 @@ fn board_element_kind_from_json(element: &Value) -> BoardElementKind {
     match element.get("kind").and_then(Value::as_str) {
         Some("automation") => BoardElementKind::Automation,
         Some("command") => BoardElementKind::Command,
+        Some("event") => BoardElementKind::Event,
+        Some("external_event") => BoardElementKind::ExternalEvent,
         Some("read_model") => BoardElementKind::ReadModel,
+        Some("view") => BoardElementKind::View,
         _ => BoardElementKind::Other,
     }
 }
@@ -1191,7 +1199,7 @@ fn board_connections_from_json_slice(board_slice: &Value) -> Vec<BoardConnection
 }
 
 fn board_read_model_command_dependency_from_connection(
-    elements: &BTreeMap<String, BoardElement>,
+    elements: &BTreeMap<String, BoardDependencyElement>,
     connections: &[BoardConnection],
     connection: &BoardConnection,
 ) -> Vec<BoardReadModelCommandDependency> {
