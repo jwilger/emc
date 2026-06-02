@@ -12,7 +12,7 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    AutomationCommandPolicy, AutomationTrigger, BoardGraphConnection, BoardLane,
+    AutomationCommandPolicy, AutomationTrigger, BoardGraphConnection, BoardLane, BoardLanes,
     BoardReadModelCommandDependency, BoardSliceGraph, CommandDefinition, CommandDefinitionParts,
     CommandInputSource, CommandInputSourceKind, CommandReadModelReads, ControlCommandErrorHandling,
     ControlErrorRecoveryBehavior, DefinitionKind, DefinitionName, EventAttribute,
@@ -1036,13 +1036,17 @@ fn board_read_model_command_dependencies_from_json_slice(
 
 fn board_lanes_from_json_object(
     object: &Map<String, Value>,
-) -> Result<Vec<BoardLane>, BoundaryParseError> {
-    object
+) -> Result<BoardLanes, BoundaryParseError> {
+    let Some(lanes) = object
         .get("board")
         .and_then(|board| board.get("lanes"))
         .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
+    else {
+        return Ok(BoardLanes::Absent);
+    };
+
+    lanes
+        .iter()
         .filter_map(|lane| lane.get("id").and_then(Value::as_str).map(|id| (lane, id)))
         .map(|(lane, id)| {
             DefinitionName::try_new(id.to_owned())
@@ -1052,7 +1056,8 @@ fn board_lanes_from_json_object(
                         .map(|name| BoardLane::new(id, name))
                 })
         })
-        .collect()
+        .collect::<Result<Vec<_>, _>>()
+        .map(BoardLanes::Present)
 }
 
 fn board_slices_from_json_object(

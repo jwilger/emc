@@ -16,7 +16,7 @@ pub struct EventModelDocument {
     named_definitions: Vec<NamedDefinition>,
     read_model_definitions: Vec<ReadModelDefinition>,
     board_read_model_command_dependencies: Vec<BoardReadModelCommandDependency>,
-    board_lanes: Vec<BoardLane>,
+    board_lanes: BoardLanes,
     board_slices: Vec<BoardSliceGraph>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
@@ -89,7 +89,7 @@ pub struct EventModelDocumentParts {
     named_definitions: Vec<NamedDefinition>,
     read_model_definitions: Vec<ReadModelDefinition>,
     board_read_model_command_dependencies: Vec<BoardReadModelCommandDependency>,
-    board_lanes: Vec<BoardLane>,
+    board_lanes: BoardLanes,
     board_slices: Vec<BoardSliceGraph>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
@@ -125,7 +125,7 @@ impl EventModelDocumentParts {
             named_definitions: Vec::new(),
             read_model_definitions: Vec::new(),
             board_read_model_command_dependencies: Vec::new(),
-            board_lanes: Vec::new(),
+            board_lanes: BoardLanes::Absent,
             board_slices: Vec::new(),
             slice_count: SliceDefinitionCount::Zero,
             slice_definitions: Vec::new(),
@@ -214,7 +214,7 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_board_lanes(mut self, board_lanes: Vec<BoardLane>) -> Self {
+    pub fn with_board_lanes(mut self, board_lanes: BoardLanes) -> Self {
         self.board_lanes = board_lanes;
         self
     }
@@ -730,6 +730,12 @@ impl BoardLane {
     pub fn new(id: DefinitionName, name: Option<DefinitionName>) -> Self {
         Self { id, name }
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum BoardLanes {
+    Absent,
+    Present(Vec<BoardLane>),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -3428,21 +3434,37 @@ fn validate_translation_slice_payload_variant_scenarios(
 }
 
 fn validate_board_lane_ids(document: &EventModelDocument) -> Result<(), ValidationIssue> {
-    document
-        .board_lanes
+    let BoardLanes::Present(board_lanes) = &document.board_lanes else {
+        return Ok(());
+    };
+
+    if board_lanes
         .iter()
-        .find(|lane| !is_canonical_board_lane_id(&lane.id))
-        .map_or(Ok(()), |_| {
-            Err(validation_issue(
-                "board lanes must be exactly ux, actions, and events",
-            ))
+        .any(|lane| !is_canonical_board_lane_id(&lane.id))
+    {
+        return Err(validation_issue(
+            "board lanes must be exactly ux, actions, and events",
+        ));
+    }
+
+    required_board_lane_ids()
+        .into_iter()
+        .find(|lane_id| !board_lanes.iter().any(|lane| lane.id.as_ref() == *lane_id))
+        .map_or(Ok(()), |lane_id| {
+            Err(validation_issue(format!(
+                "board lanes must include canonical lane '{lane_id}'"
+            )))
         })
 }
 
 fn is_canonical_board_lane_id(lane_id: &DefinitionName) -> bool {
-    ["ux", "actions", "events"]
+    required_board_lane_ids()
         .into_iter()
         .any(|canonical| lane_id.as_ref() == canonical)
+}
+
+fn required_board_lane_ids() -> [&'static str; 3] {
+    ["ux", "actions", "events"]
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
