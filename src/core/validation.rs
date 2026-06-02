@@ -1761,6 +1761,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_event_read_model_board_connections(document)?;
 
+    validate_view_command_board_connections(document)?;
+
     validate_command_sourced_event_attributes(document)?;
 
     validate_command_legacy_read_model_reads(document)?;
@@ -3746,6 +3748,17 @@ fn validate_event_read_model_board_connections(
     })
 }
 
+fn validate_view_command_board_connections(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    view_command_board_connection_without_control(document).map_or(Ok(()), |issue| {
+        Err(validation_issue(format!(
+            "board connects view '{}' to command '{}' without an owned control",
+            issue.view, issue.command
+        )))
+    })
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct InvalidBoardConnection {
     from: DefinitionName,
@@ -3764,6 +3777,12 @@ struct CommandEventBoardConnectionIssue {
 struct EventReadModelBoardConnectionIssue {
     event: DefinitionName,
     read_model: DefinitionName,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct ViewCommandBoardConnectionIssue {
+    view: DefinitionName,
+    command: DefinitionName,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -4103,6 +4122,39 @@ fn read_model_definition<'a>(
         .read_model_definitions
         .iter()
         .find(|read_model| &read_model.name == read_model_name)
+}
+
+fn view_command_board_connection_without_control(
+    document: &EventModelDocument,
+) -> Option<ViewCommandBoardConnectionIssue> {
+    document.board_slices.iter().find_map(|board_slice| {
+        board_slice.connections.iter().find_map(|connection| {
+            let view_element = board_element_by_id(board_slice, &connection.from)?;
+            let command_element = board_element_by_id(board_slice, &connection.to)?;
+            (view_element.kind == BoardElementKind::View
+                && command_element.kind == BoardElementKind::Command)
+                .then(|| {
+                    let view = board_element_definition_name(view_element);
+                    let command = board_element_definition_name(command_element);
+                    (!view_invokes_board_command(document, view, command)).then(|| {
+                        ViewCommandBoardConnectionIssue {
+                            view: view.clone(),
+                            command: command.clone(),
+                        }
+                    })
+                })
+                .flatten()
+        })
+    })
+}
+
+fn view_invokes_board_command(
+    document: &EventModelDocument,
+    view_name: &DefinitionName,
+    command_name: &DefinitionName,
+) -> bool {
+    view_definition(document, view_name)
+        .is_some_and(|view| view_invokes_command(view, command_name))
 }
 
 fn declared_external_event_name(document: &EventModelDocument, name: &DefinitionName) -> bool {
