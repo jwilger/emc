@@ -535,6 +535,26 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_command_to_read_model_board_connections() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("command-updates-read-model.eventmodel.json"),
+            "{\"name\":\"Open repair ticket\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\",\"name\":\"People, Views, and Translations\"},{\"id\":\"actions\",\"name\":\"Commands and Projections\"},{\"id\":\"events\",\"name\":\"Stored Facts\"}],\"slices\":[{\"name\":\"Open repair ticket\",\"elements\":[{\"id\":\"open_repair_ticket\",\"kind\":\"command\",\"lane\":\"actions\",\"name\":\"OpenRepairTicket\"},{\"id\":\"repair_queue\",\"kind\":\"read_model\",\"lane\":\"actions\",\"name\":\"repair_queue\"}],\"connections\":[{\"from\":\"open_repair_ticket\",\"to\":\"repair_queue\"}]}]},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"OpenRepairTicket\",\"inputs\":[],\"produces\":[]}],\"read_models\":[{\"name\":\"repair_queue\",\"fields\":[]}],\"slices\":[{\"name\":\"Open repair ticket\",\"type\":\"state_view\",\"acceptance_scenarios\":[{\"name\":\"open repair ticket\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("invalid board connection"));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_command_names() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
