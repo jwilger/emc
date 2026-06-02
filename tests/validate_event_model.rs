@@ -668,4 +668,26 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_translation_slices_that_own_views() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("translation-owning-view.eventmodel.json"),
+            "{\"name\":\"Activate member from SAML claim\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"member\"}],\"events\":[{\"name\":\"MemberActivatedFromSAMLClaim\",\"stream\":\"member\",\"attributes\":[]}],\"commands\":[{\"name\":\"ActivateMemberFromSAMLClaim\",\"inputs\":[],\"produces\":[\"MemberActivatedFromSAMLClaim\"]}],\"read_models\":[],\"views\":[{\"name\":\"organization_sign_in_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Activate member from SAML claim\",\"type\":\"translation\",\"external_event\":\"SAMLClaimReceived\",\"views\":[\"organization_sign_in_screen\"],\"events\":[\"MemberActivatedFromSAMLClaim\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"activate member from saml claim\",\"given\":[],\"when\":{},\"then\":[\"MemberActivatedFromSAMLClaim\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "translation slice 'Activate member from SAML claim' must not own view 'organization_sign_in_screen'",
+            ));
+
+        Ok(())
+    }
 }
