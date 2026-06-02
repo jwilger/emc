@@ -13,14 +13,15 @@ use crate::core::types::{
 };
 use crate::core::validation::{
     AutomationCommandPolicy, AutomationTrigger, BoardReadModelCommandDependency, CommandDefinition,
-    CommandInputSource, CommandInputSourceKind, CommandReadModelReads, DefinitionKind,
-    DefinitionName, EventAttribute, EventAttributeSource, EventDefinition, EventModelDocument,
-    EventModelDocumentParts, EventModelFileKind, ExternalInputSchema, LegacyScenariosField,
-    NamedDefinition, ReadModelDefinition, ReadModelField, ReadModelFieldAbsenceDefault,
-    ReadModelFieldDerivation, ReadModelFieldSource, ReadModelTransitiveDerivation, ScenarioSetKind,
-    ScenarioStepField, SingletonBehavior, SliceDefinition, SliceDefinitionCount,
-    SliceDefinitionParts, SliceScenario, SliceType, TopLevelKey, TranslationContract,
-    ViewDefinition, empty_top_level_key_issue, model_must_be_object_issue,
+    CommandDefinitionParts, CommandInputSource, CommandInputSourceKind, CommandReadModelReads,
+    DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource, EventDefinition,
+    EventModelDocument, EventModelDocumentParts, EventModelFileKind, ExternalInputSchema,
+    LegacyScenariosField, NamedDefinition, ReadModelDefinition, ReadModelField,
+    ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
+    ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
+    SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceType,
+    TopLevelKey, TranslationContract, ViewDefinition, empty_top_level_key_issue,
+    model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -400,6 +401,9 @@ fn slice_definitions_from_json_object(
                     })
                 })
                 .map(|name| {
+                    let issued_commands =
+                        definition_names_from_json_array_field(slice, "commands", "command")?;
+                    let handled_command_errors = handled_command_errors_from_json_slice(slice)?;
                     let owned_views =
                         definition_names_from_json_array_field(slice, "views", "view")?;
                     let owned_events =
@@ -408,6 +412,8 @@ fn slice_definitions_from_json_object(
                     slice_scenarios_from_json_slice(slice).map(|scenarios| {
                         SliceDefinition::new(
                             SliceDefinitionParts::new(name, slice_type_from_json_slice(slice))
+                                .with_issued_commands(issued_commands)
+                                .with_handled_command_errors(handled_command_errors)
                                 .with_owned_views(owned_views)
                                 .with_owned_events(owned_events)
                                 .with_outcome_labels(outcome_labels)
@@ -427,6 +433,23 @@ fn slice_definitions_from_json_object(
                     })
                 })
                 .and_then(|slice_definition| slice_definition)
+        })
+        .collect()
+}
+
+fn handled_command_errors_from_json_slice(
+    slice: &Value,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    slice
+        .get("error_handling")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|handling| handling.get("error").and_then(Value::as_str))
+        .map(|error| {
+            DefinitionName::try_new(error.to_owned()).map_err(|parse_error| {
+                BoundaryParseError::new(format!("invalid handled command error: {parse_error}"))
+            })
         })
         .collect()
 }
@@ -1091,19 +1114,43 @@ fn command_definitions_from_json_object(
                 "external input",
             )?;
             let external_input_schemas = external_input_schemas_from_json_command(command)?;
+            let command_errors = command_errors_from_json_command(command)?;
             definition_names_from_json_array_field(command, "produces", "event").map(|produces| {
                 CommandDefinition::new(
-                    name,
-                    inputs,
-                    input_sources,
-                    read_model_reads,
-                    external_inputs,
-                    external_input_schemas,
-                    produces,
+                    CommandDefinitionParts::new(name)
+                        .with_inputs(inputs)
+                        .with_input_sources(input_sources)
+                        .with_read_model_reads(read_model_reads)
+                        .with_external_inputs(external_inputs)
+                        .with_external_input_schemas(external_input_schemas)
+                        .with_produces(produces)
+                        .with_errors(command_errors),
                 )
             })
         })
         .collect()
+}
+
+fn command_errors_from_json_command(
+    command: &Value,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    command
+        .get("errors")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(command_error_name)
+        .map(|error_name| {
+            DefinitionName::try_new(error_name.to_owned())
+                .map_err(|error| BoundaryParseError::new(format!("invalid command error: {error}")))
+        })
+        .collect()
+}
+
+fn command_error_name(error: &Value) -> Option<&str> {
+    error
+        .as_str()
+        .or_else(|| error.get("name").and_then(Value::as_str))
 }
 
 fn command_read_model_reads_from_json_command(command: &Value) -> CommandReadModelReads {

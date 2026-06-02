@@ -254,6 +254,8 @@ impl BoardReadModelCommandDependency {
 pub struct SliceDefinition {
     name: DefinitionName,
     slice_type: SliceType,
+    issued_commands: Vec<DefinitionName>,
+    handled_command_errors: Vec<DefinitionName>,
     owned_views: Vec<DefinitionName>,
     owned_events: Vec<DefinitionName>,
     outcome_labels: Vec<DefinitionName>,
@@ -270,6 +272,8 @@ impl SliceDefinition {
         Self {
             name: parts.name,
             slice_type: parts.slice_type,
+            issued_commands: parts.issued_commands,
+            handled_command_errors: parts.handled_command_errors,
             owned_views: parts.owned_views,
             owned_events: parts.owned_events,
             outcome_labels: parts.outcome_labels,
@@ -295,6 +299,8 @@ impl SliceDefinition {
 pub struct SliceDefinitionParts {
     name: DefinitionName,
     slice_type: SliceType,
+    issued_commands: Vec<DefinitionName>,
+    handled_command_errors: Vec<DefinitionName>,
     owned_views: Vec<DefinitionName>,
     owned_events: Vec<DefinitionName>,
     outcome_labels: Vec<DefinitionName>,
@@ -311,6 +317,8 @@ impl SliceDefinitionParts {
         Self {
             name,
             slice_type,
+            issued_commands: Vec::new(),
+            handled_command_errors: Vec::new(),
             owned_views: Vec::new(),
             owned_events: Vec::new(),
             outcome_labels: Vec::new(),
@@ -321,6 +329,19 @@ impl SliceDefinitionParts {
             translation_contract: TranslationContract::NotTranslation,
             scenarios: Vec::new(),
         }
+    }
+
+    pub fn with_issued_commands(mut self, issued_commands: Vec<DefinitionName>) -> Self {
+        self.issued_commands = issued_commands;
+        self
+    }
+
+    pub fn with_handled_command_errors(
+        mut self,
+        handled_command_errors: Vec<DefinitionName>,
+    ) -> Self {
+        self.handled_command_errors = handled_command_errors;
+        self
     }
 
     pub fn with_owned_views(mut self, owned_views: Vec<DefinitionName>) -> Self {
@@ -565,27 +586,86 @@ pub struct CommandDefinition {
     external_inputs: Vec<DefinitionName>,
     external_input_schemas: Vec<ExternalInputSchema>,
     produces: Vec<DefinitionName>,
+    errors: Vec<DefinitionName>,
 }
 
 impl CommandDefinition {
-    pub fn new(
-        name: Option<DefinitionName>,
-        inputs: Vec<DefinitionName>,
-        input_sources: Vec<CommandInputSource>,
-        read_model_reads: CommandReadModelReads,
-        external_inputs: Vec<DefinitionName>,
-        external_input_schemas: Vec<ExternalInputSchema>,
-        produces: Vec<DefinitionName>,
-    ) -> Self {
+    pub fn new(parts: CommandDefinitionParts) -> Self {
+        Self {
+            name: parts.name,
+            inputs: parts.inputs,
+            input_sources: parts.input_sources,
+            read_model_reads: parts.read_model_reads,
+            external_inputs: parts.external_inputs,
+            external_input_schemas: parts.external_input_schemas,
+            produces: parts.produces,
+            errors: parts.errors,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CommandDefinitionParts {
+    name: Option<DefinitionName>,
+    inputs: Vec<DefinitionName>,
+    input_sources: Vec<CommandInputSource>,
+    read_model_reads: CommandReadModelReads,
+    external_inputs: Vec<DefinitionName>,
+    external_input_schemas: Vec<ExternalInputSchema>,
+    produces: Vec<DefinitionName>,
+    errors: Vec<DefinitionName>,
+}
+
+impl CommandDefinitionParts {
+    pub fn new(name: Option<DefinitionName>) -> Self {
         Self {
             name,
-            inputs,
-            input_sources,
-            read_model_reads,
-            external_inputs,
-            external_input_schemas,
-            produces,
+            inputs: Vec::new(),
+            input_sources: Vec::new(),
+            read_model_reads: CommandReadModelReads::Absent,
+            external_inputs: Vec::new(),
+            external_input_schemas: Vec::new(),
+            produces: Vec::new(),
+            errors: Vec::new(),
         }
+    }
+
+    pub fn with_inputs(mut self, inputs: Vec<DefinitionName>) -> Self {
+        self.inputs = inputs;
+        self
+    }
+
+    pub fn with_input_sources(mut self, input_sources: Vec<CommandInputSource>) -> Self {
+        self.input_sources = input_sources;
+        self
+    }
+
+    pub fn with_read_model_reads(mut self, read_model_reads: CommandReadModelReads) -> Self {
+        self.read_model_reads = read_model_reads;
+        self
+    }
+
+    pub fn with_external_inputs(mut self, external_inputs: Vec<DefinitionName>) -> Self {
+        self.external_inputs = external_inputs;
+        self
+    }
+
+    pub fn with_external_input_schemas(
+        mut self,
+        external_input_schemas: Vec<ExternalInputSchema>,
+    ) -> Self {
+        self.external_input_schemas = external_input_schemas;
+        self
+    }
+
+    pub fn with_produces(mut self, produces: Vec<DefinitionName>) -> Self {
+        self.produces = produces;
+        self
+    }
+
+    pub fn with_errors(mut self, errors: Vec<DefinitionName>) -> Self {
+        self.errors = errors;
+        self
     }
 }
 
@@ -696,6 +776,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_automation_slice_triggers(document)?;
 
     validate_automation_slice_command_policy(document)?;
+
+    validate_automation_slice_command_error_handling(document)?;
 
     validate_board_read_model_to_command_intermediates(document)?;
 
@@ -1125,6 +1207,48 @@ fn validate_automation_slice_command_policy(
                 slice.name
             )))
         })
+}
+
+fn validate_automation_slice_command_error_handling(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::Automation)
+        .find_map(|slice| {
+            unhandled_automation_command_error(document, slice)
+                .map(|error_name| (slice, error_name))
+        })
+        .map_or(Ok(()), |(slice, error_name)| {
+            Err(validation_issue(format!(
+                "automation slice '{}' does not handle command error '{}'",
+                slice.name, error_name
+            )))
+        })
+}
+
+fn unhandled_automation_command_error(
+    document: &EventModelDocument,
+    slice: &SliceDefinition,
+) -> Option<DefinitionName> {
+    slice
+        .issued_commands
+        .iter()
+        .filter_map(|command_name| command_definition(document, command_name))
+        .flat_map(|command| command.errors.iter())
+        .find(|error_name| !slice.handled_command_errors.contains(error_name))
+        .cloned()
+}
+
+fn command_definition<'a>(
+    document: &'a EventModelDocument,
+    command_name: &DefinitionName,
+) -> Option<&'a CommandDefinition> {
+    document
+        .command_definitions
+        .iter()
+        .find(|command| command.name.as_ref() == Some(command_name))
 }
 
 fn validate_board_read_model_to_command_intermediates(
