@@ -14,7 +14,8 @@ use crate::core::types::{
 use crate::core::validation::{
     DefinitionKind, DefinitionName, EventModelDocument, EventModelFileKind, LegacyScenariosField,
     NamedDefinition, ScenarioSetKind, ScenarioStepField, SliceDefinition, SliceDefinitionCount,
-    SliceScenario, TopLevelKey, empty_top_level_key_issue, model_must_be_object_issue,
+    SliceScenario, SliceType, TopLevelKey, ViewDefinition, empty_top_level_key_issue,
+    model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -199,6 +200,7 @@ fn event_model_document_from_json(
         .and_then(|top_level_keys| {
             let slice_definitions = slice_definitions_from_json_object(object)?;
             let event_names = event_names_from_json_object(object)?;
+            let view_definitions = view_definitions_from_json_object(object)?;
             named_definitions_from_json_object(object).map(|named_definitions| {
                 EventModelDocument::new(
                     file_kind,
@@ -207,6 +209,7 @@ fn event_model_document_from_json(
                     named_definitions,
                     slice_definition_count(&slice_definitions),
                     slice_definitions,
+                    view_definitions,
                 )
             })
         })
@@ -239,9 +242,13 @@ fn slice_definitions_from_json_object(
                     })
                 })
                 .map(|name| {
+                    let owned_views =
+                        definition_names_from_json_array_field(slice, "views", "view")?;
                     slice_scenarios_from_json_slice(slice).map(|scenarios| {
                         SliceDefinition::new(
                             name,
+                            slice_type_from_json_slice(slice),
+                            owned_views,
                             legacy_scenarios_field_from_json_slice(slice),
                             scenarios,
                         )
@@ -290,16 +297,34 @@ fn slice_scenarios_from_json_field(
                     })
                 })
                 .map(|name| {
+                    let read_model_states = read_model_states_from_json_scenario(scenario)?;
                     event_references_from_json_scenario(scenario).map(|referenced_events| {
                         SliceScenario::new(
                             name,
                             scenario_step_field(scenario, "when"),
                             spec.kind,
                             referenced_events,
+                            read_model_states,
                         )
                     })
                 })
                 .and_then(|scenario| scenario)
+        })
+        .collect()
+}
+
+fn read_model_states_from_json_scenario(
+    scenario: &Value,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    scenario
+        .get("read_model_states")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flat_map(Map::keys)
+        .map(|read_model| {
+            DefinitionName::try_new(read_model.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid read model state name: {error}"))
+            })
         })
         .collect()
 }
@@ -348,6 +373,58 @@ fn first_class_scenario_fields() -> &'static [ScenarioFieldSpec] {
             kind: ScenarioSetKind::Contract,
         },
     ]
+}
+
+fn slice_type_from_json_slice(slice: &Value) -> SliceType {
+    slice
+        .get("type")
+        .and_then(Value::as_str)
+        .filter(|slice_type| *slice_type == "state_view")
+        .map_or(SliceType::Other, |_| SliceType::StateView)
+}
+
+fn view_definitions_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<ViewDefinition>, BoundaryParseError> {
+    object
+        .get("views")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|view| {
+            view.get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BoundaryParseError::new("view is missing name"))
+                .and_then(|name| {
+                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!("invalid view name: {error}"))
+                    })
+                })
+                .and_then(|name| {
+                    definition_names_from_json_array_field(view, "uses_read_models", "read model")
+                        .map(|read_models| ViewDefinition::new(name, read_models))
+                })
+        })
+        .collect()
+}
+
+fn definition_names_from_json_array_field(
+    object: &Value,
+    field: &str,
+    label: &str,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    object
+        .get(field)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(|value| {
+            DefinitionName::try_new(value.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid {label} reference: {error}"))
+            })
+        })
+        .collect()
 }
 
 fn named_definitions_from_json_object(
