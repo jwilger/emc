@@ -963,6 +963,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_modeled_view_navigation_targets_that_do_not_exist()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("modeled-view-navigation-missing-target.eventmodel.json"),
+            "{\"name\":\"Lesson workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"wireframe\":\"<button data-ref=\\\"Open settings\\\"></button>\",\"uses_read_models\":[],\"controls\":[{\"label\":\"Open settings\",\"navigation\":\"missing_settings_screen\",\"navigation_type\":\"modeled_view\"}]}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[\"lesson exists\"],\"when\":{},\"then\":[\"lesson shown\"]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "references unknown modeled view navigation target 'missing_settings_screen'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_commands_across_slice_files() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");
