@@ -13,8 +13,8 @@ use crate::core::types::{
 };
 use crate::core::validation::{
     DefinitionKind, DefinitionName, EventModelDocument, EventModelFileKind, LegacyScenariosField,
-    NamedDefinition, SliceDefinition, SliceDefinitionCount, TopLevelKey, empty_top_level_key_issue,
-    model_must_be_object_issue,
+    NamedDefinition, ScenarioStepField, SliceDefinition, SliceDefinitionCount, SliceScenario,
+    TopLevelKey, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -237,8 +237,15 @@ fn slice_definitions_from_json_object(
                     })
                 })
                 .map(|name| {
-                    SliceDefinition::new(name, legacy_scenarios_field_from_json_slice(slice))
+                    slice_scenarios_from_json_slice(slice).map(|scenarios| {
+                        SliceDefinition::new(
+                            name,
+                            legacy_scenarios_field_from_json_slice(slice),
+                            scenarios,
+                        )
+                    })
                 })
+                .and_then(|slice_definition| slice_definition)
         })
         .collect()
 }
@@ -249,6 +256,52 @@ fn legacy_scenarios_field_from_json_slice(slice: &Value) -> LegacyScenariosField
     } else {
         LegacyScenariosField::Absent
     }
+}
+
+fn slice_scenarios_from_json_slice(
+    slice: &Value,
+) -> Result<Vec<SliceScenario>, BoundaryParseError> {
+    first_class_scenario_fields()
+        .iter()
+        .map(|field| slice_scenarios_from_json_field(slice, field))
+        .collect::<Result<Vec<_>, _>>()
+        .map(|scenarios| scenarios.into_iter().flatten().collect())
+}
+
+fn slice_scenarios_from_json_field(
+    slice: &Value,
+    field: &str,
+) -> Result<Vec<SliceScenario>, BoundaryParseError> {
+    slice
+        .get(field)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|scenario| {
+            scenario
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BoundaryParseError::new("scenario is missing name"))
+                .and_then(|name| {
+                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!("invalid scenario name: {error}"))
+                    })
+                })
+                .map(|name| SliceScenario::new(name, scenario_step_field(scenario, "when")))
+        })
+        .collect()
+}
+
+fn scenario_step_field(scenario: &Value, field: &str) -> ScenarioStepField {
+    if scenario.get(field).is_some() {
+        ScenarioStepField::Present
+    } else {
+        ScenarioStepField::Absent
+    }
+}
+
+fn first_class_scenario_fields() -> &'static [&'static str] {
+    &["acceptance_scenarios", "contract_scenarios"]
 }
 
 fn named_definitions_from_json_object(

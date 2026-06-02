@@ -48,6 +48,12 @@ pub enum LegacyScenariosField {
     Present,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ScenarioStepField {
+    Absent,
+    Present,
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub enum DefinitionKind {
     Command,
@@ -80,14 +86,32 @@ impl NamedDefinition {
 pub struct SliceDefinition {
     name: DefinitionName,
     legacy_scenarios: LegacyScenariosField,
+    scenarios: Vec<SliceScenario>,
 }
 
 impl SliceDefinition {
-    pub fn new(name: DefinitionName, legacy_scenarios: LegacyScenariosField) -> Self {
+    pub fn new(
+        name: DefinitionName,
+        legacy_scenarios: LegacyScenariosField,
+        scenarios: Vec<SliceScenario>,
+    ) -> Self {
         Self {
             name,
             legacy_scenarios,
+            scenarios,
         }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct SliceScenario {
+    name: DefinitionName,
+    when_field: ScenarioStepField,
+}
+
+impl SliceScenario {
+    pub fn new(name: DefinitionName, when_field: ScenarioStepField) -> Self {
+        Self { name, when_field }
     }
 }
 
@@ -129,7 +153,9 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_slice_file_count(document)?;
 
-    validate_no_legacy_slice_scenarios(document)
+    validate_no_legacy_slice_scenarios(document)?;
+
+    validate_scenario_when_fields(document)
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -217,6 +243,25 @@ fn validate_no_legacy_slice_scenarios(
             Err(validation_issue(format!(
                 "slice '{}' uses legacy 'scenarios'; use 'acceptance_scenarios' and 'contract_scenarios'",
                 slice.name
+            )))
+        })
+}
+
+fn validate_scenario_when_fields(document: &EventModelDocument) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .flat_map(|slice| {
+            slice
+                .scenarios
+                .iter()
+                .map(move |scenario| (slice, scenario))
+        })
+        .find(|(_, scenario)| scenario.when_field == ScenarioStepField::Absent)
+        .map_or(Ok(()), |(slice, scenario)| {
+            Err(validation_issue(format!(
+                "slice '{}' scenario '{}' is missing 'when'",
+                slice.name, scenario.name
             )))
         })
 }
