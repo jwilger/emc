@@ -554,4 +554,27 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_command_input_sources_with_undeclared_external_fields()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("command-input-undeclared-external-field.eventmodel.json"),
+            "{\"name\":\"Record checkpoint result\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"checkpoint\"}],\"events\":[{\"name\":\"CheckpointResultRecorded\",\"stream\":\"checkpoint\",\"attributes\":[{\"name\":\"output_excerpt\",\"source\":\"command.output_excerpt\"}]}],\"commands\":[{\"name\":\"RecordCheckpointResult\",\"inputs\":[\"output_excerpt\"],\"input_sources\":[{\"name\":\"output_excerpt\",\"source\":\"external.lesson_checkpoint_result.output_excerpt\"}],\"external_inputs\":[\"lesson_checkpoint_result\"],\"external_input_schemas\":[{\"name\":\"lesson_checkpoint_result\",\"fields\":[{\"name\":\"score\"}]}],\"produces\":[\"CheckpointResultRecorded\"]}],\"read_models\":[],\"slices\":[]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "command input 'output_excerpt' references undeclared external input field 'output_excerpt'",
+            ));
+
+        Ok(())
+    }
 }
