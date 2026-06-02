@@ -5,11 +5,46 @@ use nutype::nutype;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct EventModelDocument {
     top_level_keys: BTreeSet<TopLevelKey>,
+    named_definitions: Vec<NamedDefinition>,
 }
 
 impl EventModelDocument {
-    pub fn new(top_level_keys: BTreeSet<TopLevelKey>) -> Self {
-        Self { top_level_keys }
+    pub fn new(
+        top_level_keys: BTreeSet<TopLevelKey>,
+        named_definitions: Vec<NamedDefinition>,
+    ) -> Self {
+        Self {
+            top_level_keys,
+            named_definitions,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub enum DefinitionKind {
+    Command,
+    Event,
+    ReadModel,
+    Stream,
+    View,
+}
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, AsRef, Display)
+)]
+pub struct DefinitionName(String);
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NamedDefinition {
+    kind: DefinitionKind,
+    name: DefinitionName,
+}
+
+impl NamedDefinition {
+    pub fn new(kind: DefinitionKind, name: DefinitionName) -> Self {
+        Self { kind, name }
     }
 }
 
@@ -39,7 +74,15 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .top_level_keys
         .contains(&explicit_board_key())
         .then_some(())
-        .ok_or_else(|| validation_issue("missing explicit board"))
+        .ok_or_else(|| validation_issue("missing explicit board"))?;
+
+    duplicate_named_definition(document).map_or(Ok(()), |definition| {
+        Err(validation_issue(format!(
+            "duplicate {} name '{}'",
+            definition_kind_label(definition.kind),
+            definition.name
+        )))
+    })
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -79,4 +122,26 @@ fn required_top_level_keys() -> Vec<TopLevelKey> {
 
 fn explicit_board_key() -> TopLevelKey {
     top_level_key("board")
+}
+
+fn duplicate_named_definition(document: &EventModelDocument) -> Option<NamedDefinition> {
+    let mut seen = BTreeSet::new();
+    document.named_definitions.iter().find_map(|definition| {
+        let key = (definition.kind, definition.name.clone());
+        if seen.insert(key) {
+            None
+        } else {
+            Some(definition.clone())
+        }
+    })
+}
+
+fn definition_kind_label(kind: DefinitionKind) -> &'static str {
+    match kind {
+        DefinitionKind::Command => "command",
+        DefinitionKind::Event => "event",
+        DefinitionKind::ReadModel => "read model",
+        DefinitionKind::Stream => "stream",
+        DefinitionKind::View => "view",
+    }
 }
