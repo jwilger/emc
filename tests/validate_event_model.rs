@@ -690,4 +690,27 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_undeclared_board_automation_between_read_model_and_command()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("undeclared-board-automation.eventmodel.json"),
+            "{\"name\":\"Record SCIM member provisioning\",\"version\":\"0.1.0\",\"board\":{\"slices\":[{\"name\":\"Record SCIM member provisioning\",\"elements\":[{\"id\":\"scim_configuration\",\"kind\":\"read_model\",\"name\":\"scim_configuration\"},{\"id\":\"fake_automation\",\"kind\":\"automation\",\"name\":\"Undeclared automation\"},{\"id\":\"record_scim_member\",\"kind\":\"command\",\"name\":\"RecordSCIMMember\"}],\"connections\":[{\"from\":\"scim_configuration\",\"to\":\"fake_automation\"},{\"from\":\"fake_automation\",\"to\":\"record_scim_member\"}]}]},\"streams\":[{\"name\":\"member\"}],\"events\":[{\"name\":\"SCIMMemberRecorded\",\"stream\":\"member\",\"attributes\":[]}],\"commands\":[{\"name\":\"RecordSCIMMember\",\"inputs\":[],\"produces\":[\"SCIMMemberRecorded\"]}],\"read_models\":[{\"name\":\"scim_configuration\",\"fields\":[]}],\"slices\":[{\"name\":\"Record SCIM member provisioning\",\"type\":\"translation\",\"external_event\":\"SCIMMemberProvisioned\",\"events\":[\"SCIMMemberRecorded\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"record scim member\",\"given\":[],\"when\":{},\"then\":[\"SCIMMemberRecorded\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "board element between read model 'scim_configuration' and command 'RecordSCIMMember' is not a declared automation",
+            ));
+
+        Ok(())
+    }
 }
