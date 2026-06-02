@@ -12,9 +12,10 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    DefinitionKind, DefinitionName, EventDefinition, EventModelDocument, EventModelDocumentParts,
-    EventModelFileKind, LegacyScenariosField, NamedDefinition, ScenarioSetKind, ScenarioStepField,
-    SliceDefinition, SliceDefinitionCount, SliceScenario, SliceType, TopLevelKey, ViewDefinition,
+    CommandDefinition, DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource,
+    EventDefinition, EventModelDocument, EventModelDocumentParts, EventModelFileKind,
+    LegacyScenariosField, NamedDefinition, ScenarioSetKind, ScenarioStepField, SliceDefinition,
+    SliceDefinitionCount, SliceScenario, SliceType, TopLevelKey, ViewDefinition,
     empty_top_level_key_issue, model_must_be_object_issue,
 };
 
@@ -203,6 +204,7 @@ fn event_model_document_from_json(
             let view_definitions = view_definitions_from_json_object(object)?;
             let stream_names = stream_names_from_json_object(object)?;
             let event_definitions = event_definitions_from_json_object(object)?;
+            let command_definitions = command_definitions_from_json_object(object)?;
             let command_produced_events = command_produced_events_from_json_object(object)?;
             let state_view_observed_events =
                 state_view_observed_events_from_slices(&slice_definitions);
@@ -213,6 +215,7 @@ fn event_model_document_from_json(
                         .with_event_names(event_names)
                         .with_stream_names(stream_names)
                         .with_event_definitions(event_definitions)
+                        .with_command_definitions(command_definitions)
                         .with_command_produced_events(command_produced_events)
                         .with_state_view_observed_events(state_view_observed_events)
                         .with_named_definitions(named_definitions)
@@ -524,9 +527,61 @@ fn event_definitions_from_json_object(
                     })
                 })
                 .and_then(|name| {
+                    let attributes = event_attributes_from_json_event(event)?;
                     optional_definition_name_from_json_field(event, "stream", "stream")
-                        .map(|stream| EventDefinition::new(name, stream))
+                        .map(|stream| EventDefinition::new(name, stream, attributes))
                 })
+        })
+        .collect()
+}
+
+fn event_attributes_from_json_event(
+    event: &Value,
+) -> Result<Vec<EventAttribute>, BoundaryParseError> {
+    event
+        .get("attributes")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|attribute| {
+            attribute
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BoundaryParseError::new("event attribute is missing name"))
+                .and_then(|name| {
+                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!("invalid event attribute name: {error}"))
+                    })
+                })
+                .map(|name| EventAttribute::new(name, event_attribute_source_from_json(attribute)))
+        })
+        .collect()
+}
+
+fn event_attribute_source_from_json(attribute: &Value) -> EventAttributeSource {
+    attribute
+        .get("source")
+        .and_then(Value::as_str)
+        .and_then(|source| source.strip_prefix("command."))
+        .and_then(|input_name| DefinitionName::try_new(input_name.to_owned()).ok())
+        .map_or(
+            EventAttributeSource::Other,
+            EventAttributeSource::CommandInput,
+        )
+}
+
+fn command_definitions_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<CommandDefinition>, BoundaryParseError> {
+    object
+        .get("commands")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|command| {
+            let inputs = definition_names_from_json_array_field(command, "inputs", "input")?;
+            definition_names_from_json_array_field(command, "produces", "event")
+                .map(|produces| CommandDefinition::new(inputs, produces))
         })
         .collect()
 }
