@@ -1620,6 +1620,16 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    workflow_command_transition_not_owned_by_target_slice(documents).map_or(
+        Ok(()),
+        |transition| {
+            Err(validation_issue(format!(
+                "transition command '{}' is not owned by target slice '{}'",
+                transition.command, transition.target_slice
+            )))
+        },
+    )?;
+
     unhandled_workflow_slice_outcome(documents).map_or(Ok(()), |unhandled| {
         Err(validation_issue(format!(
             "workflow '{}' does not handle outcome '{}' from slice '{}'",
@@ -1826,6 +1836,31 @@ fn workflow_command_transition_not_invoked_by_source_view(
                 })
             }
         })
+}
+
+fn workflow_command_transition_not_owned_by_target_slice(
+    documents: &[EventModelDocument],
+) -> Option<WorkflowCommandTransition> {
+    documents
+        .iter()
+        .flat_map(|document| document.workflow_command_transitions.iter())
+        .find(|transition| {
+            !workflow_transition_slice_owns_command(
+                documents,
+                &transition.target_slice,
+                &transition.command,
+            )
+        })
+        .cloned()
+}
+
+fn workflow_transition_slice_owns_command(
+    documents: &[EventModelDocument],
+    slice_slug: &DefinitionName,
+    command: &DefinitionName,
+) -> bool {
+    application_entry_slice_by_slug(documents, slice_slug)
+        .is_some_and(|slice| slice.issued_commands.contains(command))
 }
 
 fn workflow_command_transition_has_source_control(
