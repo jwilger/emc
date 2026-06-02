@@ -9,6 +9,8 @@ pub struct EventModelDocument {
     event_names: BTreeSet<DefinitionName>,
     stream_names: BTreeSet<DefinitionName>,
     event_definitions: Vec<EventDefinition>,
+    command_produced_events: BTreeSet<DefinitionName>,
+    state_view_observed_events: BTreeSet<DefinitionName>,
     named_definitions: Vec<NamedDefinition>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
@@ -23,6 +25,8 @@ impl EventModelDocument {
             event_names: parts.event_names,
             stream_names: parts.stream_names,
             event_definitions: parts.event_definitions,
+            command_produced_events: parts.command_produced_events,
+            state_view_observed_events: parts.state_view_observed_events,
             named_definitions: parts.named_definitions,
             slice_count: parts.slice_count,
             slice_definitions: parts.slice_definitions,
@@ -38,6 +42,8 @@ pub struct EventModelDocumentParts {
     event_names: BTreeSet<DefinitionName>,
     stream_names: BTreeSet<DefinitionName>,
     event_definitions: Vec<EventDefinition>,
+    command_produced_events: BTreeSet<DefinitionName>,
+    state_view_observed_events: BTreeSet<DefinitionName>,
     named_definitions: Vec<NamedDefinition>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
@@ -52,6 +58,8 @@ impl EventModelDocumentParts {
             event_names: BTreeSet::new(),
             stream_names: BTreeSet::new(),
             event_definitions: Vec::new(),
+            command_produced_events: BTreeSet::new(),
+            state_view_observed_events: BTreeSet::new(),
             named_definitions: Vec::new(),
             slice_count: SliceDefinitionCount::Zero,
             slice_definitions: Vec::new(),
@@ -76,6 +84,22 @@ impl EventModelDocumentParts {
 
     pub fn with_event_definitions(mut self, event_definitions: Vec<EventDefinition>) -> Self {
         self.event_definitions = event_definitions;
+        self
+    }
+
+    pub fn with_command_produced_events(
+        mut self,
+        command_produced_events: BTreeSet<DefinitionName>,
+    ) -> Self {
+        self.command_produced_events = command_produced_events;
+        self
+    }
+
+    pub fn with_state_view_observed_events(
+        mut self,
+        state_view_observed_events: BTreeSet<DefinitionName>,
+    ) -> Self {
+        self.state_view_observed_events = state_view_observed_events;
         self
     }
 
@@ -174,6 +198,7 @@ pub struct SliceDefinition {
     name: DefinitionName,
     slice_type: SliceType,
     owned_views: Vec<DefinitionName>,
+    owned_events: Vec<DefinitionName>,
     outcome_labels: Vec<DefinitionName>,
     legacy_scenarios: LegacyScenariosField,
     scenarios: Vec<SliceScenario>,
@@ -184,6 +209,7 @@ impl SliceDefinition {
         name: DefinitionName,
         slice_type: SliceType,
         owned_views: Vec<DefinitionName>,
+        owned_events: Vec<DefinitionName>,
         outcome_labels: Vec<DefinitionName>,
         legacy_scenarios: LegacyScenariosField,
         scenarios: Vec<SliceScenario>,
@@ -192,10 +218,19 @@ impl SliceDefinition {
             name,
             slice_type,
             owned_views,
+            owned_events,
             outcome_labels,
             legacy_scenarios,
             scenarios,
         }
+    }
+
+    pub fn is_state_view(&self) -> bool {
+        self.slice_type == SliceType::StateView
+    }
+
+    pub fn owned_events(&self) -> &[DefinitionName] {
+        &self.owned_events
     }
 }
 
@@ -300,7 +335,9 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_duplicate_outcome_labels(document)?;
 
-    validate_event_stream_references(document)
+    validate_event_stream_references(document)?;
+
+    validate_event_producers(document)
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -572,6 +609,22 @@ fn validate_event_stream_references(document: &EventModelDocument) -> Result<(),
             Err(validation_issue(format!(
                 "event '{}' references unknown stream '{}'",
                 event.name, stream
+            )))
+        })
+}
+
+fn validate_event_producers(document: &EventModelDocument) -> Result<(), ValidationIssue> {
+    document
+        .event_definitions
+        .iter()
+        .find(|event| {
+            !document.command_produced_events.contains(&event.name)
+                && !document.state_view_observed_events.contains(&event.name)
+        })
+        .map_or(Ok(()), |event| {
+            Err(validation_issue(format!(
+                "event '{}' is not produced by any command",
+                event.name
             )))
         })
 }
