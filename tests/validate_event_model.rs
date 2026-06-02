@@ -371,4 +371,26 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_event_attributes_sourced_from_read_models() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("read-model-event-source.eventmodel.json"),
+            "{\"name\":\"Escalate repair ticket\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"repair_ticket\"}],\"events\":[{\"name\":\"RepairTicketEscalated\",\"stream\":\"repair_ticket\",\"attributes\":[{\"name\":\"priority\",\"source\":\"read_model.repair_ticket_summary.priority\"}]}],\"commands\":[{\"name\":\"EscalateRepairTicket\",\"inputs\":[],\"produces\":[\"RepairTicketEscalated\"]}],\"read_models\":[{\"name\":\"repair_ticket_summary\"}],\"slices\":[]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "event 'RepairTicketEscalated' attribute 'priority' has invalid source 'read_model.repair_ticket_summary.priority'",
+            ));
+
+        Ok(())
+    }
 }

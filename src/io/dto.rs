@@ -564,6 +564,7 @@ fn event_attribute_source_from_json(attribute: &Value) -> EventAttributeSource {
     source
         .and_then(command_attribute_source)
         .or_else(|| source.and_then(external_attribute_source))
+        .or_else(|| source.and_then(read_model_attribute_source))
         .unwrap_or(EventAttributeSource::Other)
 }
 
@@ -582,6 +583,17 @@ fn external_attribute_source(source: &str) -> Option<EventAttributeSource> {
         .zip(DefinitionName::try_new(field_name.to_owned()).ok())
         .map(|(payload_name, field_name)| {
             EventAttributeSource::ExternalField(payload_name, field_name)
+        })
+}
+
+fn read_model_attribute_source(source: &str) -> Option<EventAttributeSource> {
+    let read_model_reference = source.strip_prefix("read_model.")?;
+    let (read_model_name, field_name) = read_model_reference.split_once('.')?;
+    DefinitionName::try_new(read_model_name.to_owned())
+        .ok()
+        .zip(DefinitionName::try_new(field_name.to_owned()).ok())
+        .map(|(read_model_name, field_name)| {
+            EventAttributeSource::ReadModelField(read_model_name, field_name)
         })
 }
 
