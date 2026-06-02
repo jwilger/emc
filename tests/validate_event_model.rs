@@ -993,6 +993,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_workflow_steps_unreachable_from_entry() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("lesson-01.eventmodel.json"),
+            "{\"name\":\"Lesson 01\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[],\"slice_files\":[\"./entry.eventmodel.json\",\"./submit.eventmodel.json\",\"./review.eventmodel.json\"],\"steps\":[{\"slice\":\"entry\",\"name\":\"Entry\",\"type\":\"state_view\",\"relationship\":\"entry\"},{\"slice\":\"submit\",\"name\":\"Submit\",\"type\":\"state_view\",\"relationship\":\"main\",\"transitions\":[{\"to\":\"review\"}]},{\"slice\":\"review\",\"name\":\"Review\",\"type\":\"state_view\",\"relationship\":\"main\",\"transitions\":[{\"to\":\"submit\"}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow step 'submit' is not reachable from entry step 'entry'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_automation_slices_without_trigger() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
