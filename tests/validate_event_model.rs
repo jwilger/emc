@@ -624,6 +624,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_view_to_command_board_connections_without_owned_control()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("view-connected-to-command-without-control.eventmodel.json"),
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\",\"name\":\"People, Views, and Translations\"},{\"id\":\"actions\",\"name\":\"Commands and Projections\"},{\"id\":\"events\",\"name\":\"Stored Facts\"}],\"slices\":[{\"name\":\"Submit lesson\",\"elements\":[{\"id\":\"lesson_screen\",\"kind\":\"view\",\"lane\":\"ux\",\"name\":\"lesson_screen\"},{\"id\":\"submit_lesson\",\"kind\":\"command\",\"lane\":\"actions\",\"name\":\"SubmitLessonForReview\"},{\"id\":\"lesson_submitted\",\"kind\":\"event\",\"lane\":\"events\",\"name\":\"LessonSubmittedForReview\"}],\"connections\":[{\"from\":\"lesson_screen\",\"to\":\"submit_lesson\"},{\"from\":\"submit_lesson\",\"to\":\"lesson_submitted\"}]}]},\"streams\":[{\"name\":\"lesson_review\"}],\"events\":[{\"name\":\"LessonSubmittedForReview\",\"stream\":\"lesson_review\",\"attributes\":[]}],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[\"LessonSubmittedForReview\"]}],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"controls\":[]}],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "board connects view 'lesson_screen' to command 'SubmitLessonForReview' without an owned control",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_command_names() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
