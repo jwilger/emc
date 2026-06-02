@@ -1759,6 +1759,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_command_event_board_connections(document)?;
 
+    validate_event_read_model_board_connections(document)?;
+
     validate_command_sourced_event_attributes(document)?;
 
     validate_command_legacy_read_model_reads(document)?;
@@ -3733,6 +3735,17 @@ fn validate_command_event_board_connections(
     })
 }
 
+fn validate_event_read_model_board_connections(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    event_read_model_board_connection_without_projection(document).map_or(Ok(()), |issue| {
+        Err(validation_issue(format!(
+            "board connects event '{}' to read model '{}' but the read model does not project that event",
+            issue.event, issue.read_model
+        )))
+    })
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct InvalidBoardConnection {
     from: DefinitionName,
@@ -3745,6 +3758,12 @@ struct InvalidBoardConnection {
 struct CommandEventBoardConnectionIssue {
     command: DefinitionName,
     event: DefinitionName,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct EventReadModelBoardConnectionIssue {
+    event: DefinitionName,
+    read_model: DefinitionName,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -4030,6 +4049,60 @@ fn command_produces_event(
 ) -> bool {
     command_definition(document, command_name)
         .is_some_and(|command| command.produces.contains(event_name))
+}
+
+fn event_read_model_board_connection_without_projection(
+    document: &EventModelDocument,
+) -> Option<EventReadModelBoardConnectionIssue> {
+    document.board_slices.iter().find_map(|board_slice| {
+        board_slice.connections.iter().find_map(|connection| {
+            let event_element = board_element_by_id(board_slice, &connection.from)?;
+            let read_model_element = board_element_by_id(board_slice, &connection.to)?;
+            (event_element.kind == BoardElementKind::Event
+                && read_model_element.kind == BoardElementKind::ReadModel)
+                .then(|| {
+                    let event = board_element_definition_name(event_element);
+                    let read_model = board_element_definition_name(read_model_element);
+                    (!read_model_projects_event(document, read_model, event)).then(|| {
+                        EventReadModelBoardConnectionIssue {
+                            event: event.clone(),
+                            read_model: read_model.clone(),
+                        }
+                    })
+                })
+                .flatten()
+        })
+    })
+}
+
+fn read_model_projects_event(
+    document: &EventModelDocument,
+    read_model_name: &DefinitionName,
+    event_name: &DefinitionName,
+) -> bool {
+    read_model_definition(document, read_model_name).is_some_and(|read_model| {
+        read_model
+            .fields
+            .iter()
+            .any(|field| read_model_field_sources_event(field, event_name))
+    })
+}
+
+fn read_model_field_sources_event(field: &ReadModelField, event_name: &DefinitionName) -> bool {
+    matches!(
+        &field.source,
+        ReadModelFieldSource::EventAttribute(source_event, _) if source_event == event_name
+    )
+}
+
+fn read_model_definition<'a>(
+    document: &'a EventModelDocument,
+    read_model_name: &DefinitionName,
+) -> Option<&'a ReadModelDefinition> {
+    document
+        .read_model_definitions
+        .iter()
+        .find(|read_model| &read_model.name == read_model_name)
 }
 
 fn declared_external_event_name(document: &EventModelDocument, name: &DefinitionName) -> bool {
