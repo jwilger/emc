@@ -738,22 +738,49 @@ pub enum BoardLanes {
     Present(Vec<BoardLane>),
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BoardElementKind {
+    Automation,
+    Command,
+    Event,
+    ExternalEvent,
+    Other,
+    ReadModel,
+    View,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BoardElement {
+    id: DefinitionName,
+    kind: BoardElementKind,
+    lane: Option<DefinitionName>,
+}
+
+impl BoardElement {
+    pub fn new(id: DefinitionName, kind: BoardElementKind, lane: Option<DefinitionName>) -> Self {
+        Self { id, kind, lane }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BoardSliceGraph {
     name: DefinitionName,
     element_ids: BTreeSet<DefinitionName>,
+    elements: Vec<BoardElement>,
     connections: Vec<BoardGraphConnection>,
 }
 
 impl BoardSliceGraph {
     pub fn new(
         name: DefinitionName,
-        element_ids: BTreeSet<DefinitionName>,
+        elements: Vec<BoardElement>,
         connections: Vec<BoardGraphConnection>,
     ) -> Self {
+        let element_ids = elements.iter().map(|element| element.id.clone()).collect();
         Self {
             name,
             element_ids,
+            elements,
             connections,
         }
     }
@@ -1698,6 +1725,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_external_system_navigation_targets(document)?;
 
     validate_board_lane_ids(document)?;
+
+    validate_board_element_lanes(document)?;
 
     validate_board_read_model_to_command_intermediates(document)?;
 
@@ -3517,6 +3546,68 @@ fn canonical_board_lane_name(lane_id: &DefinitionName) -> Option<&'static str> {
         "actions" => Some("Commands and Projections"),
         "events" => Some("Stored Facts"),
         _ => None,
+    }
+}
+
+fn validate_board_element_lanes(document: &EventModelDocument) -> Result<(), ValidationIssue> {
+    board_element_lane_mismatch(document).map_or(Ok(()), |mismatch| {
+        Err(validation_issue(format!(
+            "board element '{}' of kind '{}' must be on lane '{}'",
+            mismatch.element_id,
+            board_element_kind_label(mismatch.kind),
+            mismatch.expected_lane
+        )))
+    })
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct BoardElementLaneMismatch {
+    element_id: DefinitionName,
+    kind: BoardElementKind,
+    expected_lane: &'static str,
+}
+
+fn board_element_lane_mismatch(document: &EventModelDocument) -> Option<BoardElementLaneMismatch> {
+    document
+        .board_slices
+        .iter()
+        .flat_map(|board_slice| board_slice.elements.iter())
+        .find_map(|element| {
+            expected_board_element_lane(element.kind).and_then(|expected_lane| {
+                element
+                    .lane
+                    .as_ref()
+                    .filter(|actual_lane| actual_lane.as_ref() != expected_lane)
+                    .map(|_actual_lane| BoardElementLaneMismatch {
+                        element_id: element.id.clone(),
+                        kind: element.kind,
+                        expected_lane,
+                    })
+            })
+        })
+}
+
+fn expected_board_element_lane(kind: BoardElementKind) -> Option<&'static str> {
+    match kind {
+        BoardElementKind::View => Some("ux"),
+        BoardElementKind::Automation
+        | BoardElementKind::Command
+        | BoardElementKind::Event
+        | BoardElementKind::ExternalEvent
+        | BoardElementKind::Other
+        | BoardElementKind::ReadModel => None,
+    }
+}
+
+fn board_element_kind_label(kind: BoardElementKind) -> &'static str {
+    match kind {
+        BoardElementKind::Automation => "automation",
+        BoardElementKind::Command => "command",
+        BoardElementKind::Event => "event",
+        BoardElementKind::ExternalEvent => "external_event",
+        BoardElementKind::Other => "other",
+        BoardElementKind::ReadModel => "read_model",
+        BoardElementKind::View => "view",
     }
 }
 
