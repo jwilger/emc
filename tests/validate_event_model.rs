@@ -420,6 +420,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_board_external_event_elements_that_reference_unknown_external_events()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("board-external-event-element-unknown-reference.eventmodel.json"),
+            "{\"name\":\"Record checkpoint\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\",\"name\":\"People, Views, and Translations\"},{\"id\":\"actions\",\"name\":\"Commands and Projections\"},{\"id\":\"events\",\"name\":\"Stored Facts\"}],\"slices\":[{\"name\":\"Record checkpoint\",\"elements\":[{\"id\":\"external-checkpoint\",\"kind\":\"external_event\",\"lane\":\"ux\",\"name\":\"MissingDeclaration\"}],\"connections\":[]}]},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Record checkpoint\",\"type\":\"state_view\",\"acceptance_scenarios\":[{\"name\":\"show checkpoint\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "board element 'external-checkpoint' references unknown external_event 'MissingDeclaration'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_command_names() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
