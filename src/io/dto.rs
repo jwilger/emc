@@ -18,7 +18,7 @@ use crate::core::validation::{
     EventAttribute, EventAttributeSource, EventDefinition, EventModelDocument,
     EventModelDocumentParts, EventModelFileKind, ExternalInputSchema, LegacyScenariosField,
     NamedDefinition, NavigationType, OutcomeDefinition, ReadModelDefinition, ReadModelField,
-    ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
+    ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource, ReadModelState,
     ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
     SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceScenarioParts,
     SliceType, TopLevelKey, TranslationContract, ViewControlDefinition, ViewControlDefinitionParts,
@@ -642,6 +642,8 @@ fn slice_scenarios_from_json_field(
                 })
                 .map(|name| {
                     let read_model_states = read_model_states_from_json_scenario(scenario)?;
+                    let read_model_state_values =
+                        read_model_state_values_from_json_scenario(scenario)?;
                     let then_events = event_references_from_json_field(scenario, "then")?;
                     let command_errors = command_errors_from_json_scenario(scenario)?;
                     let given_streams = given_streams_from_json_scenario(scenario)?;
@@ -656,7 +658,8 @@ fn slice_scenarios_from_json_field(
                             .with_then_events(then_events)
                             .with_command_errors(command_errors)
                             .with_given_streams(given_streams)
-                            .with_read_model_states(read_model_states),
+                            .with_read_model_states(read_model_states)
+                            .with_read_model_state_values(read_model_state_values),
                         )
                     })
                 })
@@ -693,6 +696,31 @@ fn read_model_states_from_json_scenario(
             DefinitionName::try_new(read_model.to_owned()).map_err(|error| {
                 BoundaryParseError::new(format!("invalid read model state name: {error}"))
             })
+        })
+        .collect()
+}
+
+fn read_model_state_values_from_json_scenario(
+    scenario: &Value,
+) -> Result<Vec<ReadModelState>, BoundaryParseError> {
+    scenario
+        .get("read_model_states")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flat_map(Map::iter)
+        .map(|(read_model, state)| {
+            let read_model = DefinitionName::try_new(read_model.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid read model state name: {error}"))
+            })?;
+            let state = state
+                .as_str()
+                .ok_or_else(|| BoundaryParseError::new("read model state value must be a string"))
+                .and_then(|state| {
+                    DefinitionName::try_new(state.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!("invalid read model state value: {error}"))
+                    })
+                })?;
+            Ok(ReadModelState::new(read_model, state))
         })
         .collect()
 }

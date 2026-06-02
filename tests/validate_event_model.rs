@@ -1055,6 +1055,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_state_view_slices_without_empty_read_model_state()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("state-view-without-empty-state.eventmodel.json"),
+            "{\"name\":\"Lesson workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson\"}],\"events\":[{\"name\":\"LessonCreated\",\"stream\":\"lesson\",\"attributes\":[{\"name\":\"title\",\"source\":\"command.title\"}]}],\"commands\":[{\"name\":\"CreateLesson\",\"inputs\":[\"title\"],\"produces\":[\"LessonCreated\"]}],\"read_models\":[{\"name\":\"lesson_read_model\",\"fields\":[{\"name\":\"title\",\"source\":\"LessonCreated.title\"}]}],\"views\":[{\"name\":\"lesson_screen\",\"wireframe\":\"<div data-ref=\\\"title\\\"></div>\",\"uses_read_models\":[\"lesson_read_model\"]}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"events\":[\"LessonCreated\"],\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"populated lesson\",\"given\":[\"lesson exists\"],\"when\":{},\"then\":[\"lesson shown\"],\"read_model_states\":{\"lesson_read_model\":\"populated\"}}],\"contract_scenarios\":[{\"name\":\"lesson projector\",\"given\":[\"LessonCreated\"],\"when\":{},\"read_model_states\":{\"lesson_read_model\":\"populated\"},\"then\":[\"lesson_read_model is populated\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "state-view slice 'Show lesson' must include a scenario for empty state of read model 'lesson_read_model'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_commands_across_slice_files() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");

@@ -479,6 +479,7 @@ pub struct SliceScenario {
     command_errors: Vec<DefinitionName>,
     given_streams: Vec<DefinitionName>,
     read_model_states: Vec<DefinitionName>,
+    read_model_state_values: Vec<ReadModelState>,
 }
 
 impl SliceScenario {
@@ -492,6 +493,7 @@ impl SliceScenario {
             command_errors: parts.command_errors,
             given_streams: parts.given_streams,
             read_model_states: parts.read_model_states,
+            read_model_state_values: parts.read_model_state_values,
         }
     }
 }
@@ -506,6 +508,7 @@ pub struct SliceScenarioParts {
     command_errors: Vec<DefinitionName>,
     given_streams: Vec<DefinitionName>,
     read_model_states: Vec<DefinitionName>,
+    read_model_state_values: Vec<ReadModelState>,
 }
 
 impl SliceScenarioParts {
@@ -523,6 +526,7 @@ impl SliceScenarioParts {
             command_errors: Vec::new(),
             given_streams: Vec::new(),
             read_model_states: Vec::new(),
+            read_model_state_values: Vec::new(),
         }
     }
 
@@ -549,6 +553,26 @@ impl SliceScenarioParts {
     pub fn with_read_model_states(mut self, read_model_states: Vec<DefinitionName>) -> Self {
         self.read_model_states = read_model_states;
         self
+    }
+
+    pub fn with_read_model_state_values(
+        mut self,
+        read_model_state_values: Vec<ReadModelState>,
+    ) -> Self {
+        self.read_model_state_values = read_model_state_values;
+        self
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ReadModelState {
+    read_model: DefinitionName,
+    state: DefinitionName,
+}
+
+impl ReadModelState {
+    pub fn new(read_model: DefinitionName, state: DefinitionName) -> Self {
+        Self { read_model, state }
     }
 }
 
@@ -1002,6 +1026,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_acceptance_scenario_boundaries(document)?;
 
     validate_state_view_projector_contract_scenarios(document)?;
+
+    validate_state_view_empty_read_model_state_scenarios(document)?;
 
     validate_duplicate_outcome_labels(document)?;
 
@@ -1569,6 +1595,54 @@ fn slice_has_contract_state(slice: &SliceDefinition, read_model: &DefinitionName
     slice.scenarios.iter().any(|scenario| {
         scenario.scenario_set == ScenarioSetKind::Contract
             && scenario.read_model_states.contains(read_model)
+    })
+}
+
+fn validate_state_view_empty_read_model_state_scenarios(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::StateView)
+        .find_map(|slice| missing_state_view_empty_state(document, slice))
+        .map_or(Ok(()), |missing| {
+            Err(validation_issue(format!(
+                "state-view slice '{}' must include a scenario for empty state of read model '{}'",
+                missing.slice_name, missing.read_model
+            )))
+        })
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct MissingStateViewEmptyState {
+    slice_name: DefinitionName,
+    read_model: DefinitionName,
+}
+
+fn missing_state_view_empty_state(
+    document: &EventModelDocument,
+    slice: &SliceDefinition,
+) -> Option<MissingStateViewEmptyState> {
+    read_models_for_slice_views(document, slice)
+        .into_iter()
+        .find(|read_model| !slice_has_read_model_state(slice, read_model, "empty"))
+        .map(|read_model| MissingStateViewEmptyState {
+            slice_name: slice.name.clone(),
+            read_model,
+        })
+}
+
+fn slice_has_read_model_state(
+    slice: &SliceDefinition,
+    read_model: &DefinitionName,
+    expected_state: &str,
+) -> bool {
+    slice.scenarios.iter().any(|scenario| {
+        scenario
+            .read_model_state_values
+            .iter()
+            .any(|state| state.read_model == *read_model && state.state.as_ref() == expected_state)
     })
 }
 
