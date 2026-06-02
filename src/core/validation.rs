@@ -1011,6 +1011,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_navigation_controls_declare_type(document)?;
 
+    validate_modeled_view_navigation_targets(document)?;
+
     validate_board_read_model_to_command_intermediates(document)?;
 
     validate_command_sourced_event_attributes(document)?;
@@ -2032,6 +2034,30 @@ fn validate_navigation_controls_declare_type(
                 "navigation target must be classified as modeled_view, local_view_state, external_system, or external_workflow",
             ))
         })
+}
+
+fn validate_modeled_view_navigation_targets(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .flat_map(|view| view.controls.iter())
+        .filter(|control| control.navigation_type == NavigationType::ModeledView)
+        .filter_map(|control| control.navigation_target.as_ref())
+        .find(|navigation_target| !view_exists(document, navigation_target))
+        .map_or(Ok(()), |navigation_target| {
+            Err(validation_issue(format!(
+                "references unknown modeled view navigation target '{navigation_target}'"
+            )))
+        })
+}
+
+fn view_exists(document: &EventModelDocument, view_name: &DefinitionName) -> bool {
+    document
+        .view_definitions
+        .iter()
+        .any(|view| view.name == *view_name)
 }
 
 fn validate_board_read_model_to_command_intermediates(
