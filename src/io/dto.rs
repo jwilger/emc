@@ -807,10 +807,21 @@ fn view_definitions_from_json_object(
                 })
                 .and_then(|name| {
                     let controls = view_control_definitions_from_json_view(view)?;
+                    let local_states = definition_names_from_json_array_field(
+                        view,
+                        "local_states",
+                        "local state",
+                    )?;
                     let wireframe = view_wireframe_from_json_view(view);
                     definition_names_from_json_array_field(view, "uses_read_models", "read model")
                         .map(|read_models| {
-                            ViewDefinition::new(name, read_models, controls, wireframe)
+                            ViewDefinition::new(
+                                name,
+                                read_models,
+                                controls,
+                                local_states,
+                                wireframe,
+                            )
                         })
                 })
         })

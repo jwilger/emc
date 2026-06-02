@@ -557,6 +557,7 @@ pub struct ViewDefinition {
     name: DefinitionName,
     read_models: Vec<DefinitionName>,
     controls: Vec<ViewControlDefinition>,
+    local_states: Vec<DefinitionName>,
     wireframe: ViewWireframe,
 }
 
@@ -914,12 +915,14 @@ impl ViewDefinition {
         name: DefinitionName,
         read_models: Vec<DefinitionName>,
         controls: Vec<ViewControlDefinition>,
+        local_states: Vec<DefinitionName>,
         wireframe: ViewWireframe,
     ) -> Self {
         Self {
             name,
             read_models,
             controls,
+            local_states,
             wireframe,
         }
     }
@@ -1012,6 +1015,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_navigation_controls_declare_type(document)?;
 
     validate_modeled_view_navigation_targets(document)?;
+
+    validate_local_view_state_navigation_targets(document)?;
 
     validate_board_read_model_to_command_intermediates(document)?;
 
@@ -2058,6 +2063,43 @@ fn view_exists(document: &EventModelDocument, view_name: &DefinitionName) -> boo
         .view_definitions
         .iter()
         .any(|view| view.name == *view_name)
+}
+
+fn validate_local_view_state_navigation_targets(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .find_map(undeclared_local_view_state_navigation_target)
+        .map_or(Ok(()), |target| {
+            Err(validation_issue(format!(
+                "local view state navigation target '{}' is not declared by view '{}'",
+                target.navigation_target, target.view_name
+            )))
+        })
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct UndeclaredLocalViewStateNavigationTarget {
+    view_name: DefinitionName,
+    navigation_target: DefinitionName,
+}
+
+fn undeclared_local_view_state_navigation_target(
+    view: &ViewDefinition,
+) -> Option<UndeclaredLocalViewStateNavigationTarget> {
+    view.controls
+        .iter()
+        .filter(|control| control.navigation_type == NavigationType::LocalViewState)
+        .filter_map(|control| control.navigation_target.as_ref())
+        .find(|navigation_target| !view.local_states.contains(navigation_target))
+        .map(
+            |navigation_target| UndeclaredLocalViewStateNavigationTarget {
+                view_name: view.name.clone(),
+                navigation_target: navigation_target.clone(),
+            },
+        )
 }
 
 fn validate_board_read_model_to_command_intermediates(
