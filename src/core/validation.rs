@@ -754,11 +754,22 @@ pub struct BoardElement {
     id: DefinitionName,
     kind: BoardElementKind,
     lane: Option<DefinitionName>,
+    name: Option<DefinitionName>,
 }
 
 impl BoardElement {
-    pub fn new(id: DefinitionName, kind: BoardElementKind, lane: Option<DefinitionName>) -> Self {
-        Self { id, kind, lane }
+    pub fn new(
+        id: DefinitionName,
+        kind: BoardElementKind,
+        lane: Option<DefinitionName>,
+        name: Option<DefinitionName>,
+    ) -> Self {
+        Self {
+            id,
+            kind,
+            lane,
+            name,
+        }
     }
 }
 
@@ -1727,6 +1738,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_board_lane_ids(document)?;
 
     validate_board_element_lanes(document)?;
+
+    validate_board_element_references(document)?;
 
     validate_board_read_model_to_command_intermediates(document)?;
 
@@ -3608,6 +3621,41 @@ fn board_element_kind_label(kind: BoardElementKind) -> &'static str {
         BoardElementKind::ReadModel => "read_model",
         BoardElementKind::View => "view",
     }
+}
+
+fn validate_board_element_references(document: &EventModelDocument) -> Result<(), ValidationIssue> {
+    unknown_board_command_reference(document).map_or(Ok(()), |reference| {
+        Err(validation_issue(format!(
+            "board element '{}' references unknown command '{}'",
+            reference.element_id, reference.name
+        )))
+    })
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct UnknownBoardElementReference {
+    element_id: DefinitionName,
+    name: DefinitionName,
+}
+
+fn unknown_board_command_reference(
+    document: &EventModelDocument,
+) -> Option<UnknownBoardElementReference> {
+    document
+        .board_slices
+        .iter()
+        .flat_map(|board_slice| board_slice.elements.iter())
+        .filter(|element| element.kind == BoardElementKind::Command)
+        .filter_map(|element| element.name.as_ref().map(|name| (element, name)))
+        .find(|(_element, name)| {
+            !document.named_definitions.iter().any(|definition| {
+                definition.kind == DefinitionKind::Command && &definition.name == *name
+            })
+        })
+        .map(|(element, name)| UnknownBoardElementReference {
+            element_id: element.id.clone(),
+            name: name.clone(),
+        })
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
