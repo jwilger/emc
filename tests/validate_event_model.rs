@@ -489,6 +489,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_external_events_modeled_as_automation_board_elements()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("external-event-modeled-as-automation.eventmodel.json"),
+            "{\"name\":\"Record checkpoint\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\",\"name\":\"People, Views, and Translations\"},{\"id\":\"actions\",\"name\":\"Commands and Projections\"},{\"id\":\"events\",\"name\":\"Stored Facts\"}],\"slices\":[{\"name\":\"Record checkpoint\",\"elements\":[{\"id\":\"lesson_checkpoint_result\",\"kind\":\"automation\",\"lane\":\"ux\"}],\"connections\":[]}]},\"streams\":[{\"name\":\"checkpoint\"}],\"events\":[{\"name\":\"CheckpointRecorded\",\"stream\":\"checkpoint\",\"attributes\":[]}],\"commands\":[{\"name\":\"RecordCheckpoint\",\"inputs\":[],\"produces\":[\"CheckpointRecorded\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Record checkpoint\",\"type\":\"translation\",\"external_event\":\"lesson_checkpoint_result\",\"events\":[\"CheckpointRecorded\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"record checkpoint\",\"given\":[\"lesson_checkpoint_result\"],\"when\":{},\"then\":[\"CheckpointRecorded\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "external event 'lesson_checkpoint_result' must not be modeled as automation",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_command_names() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
