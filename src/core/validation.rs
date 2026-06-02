@@ -819,6 +819,12 @@ pub fn validate_event_model_corpus(
         Err(validation_issue(format!(
             "read model '{read_model_name}' is defined by more than one slice"
         )))
+    })?;
+
+    duplicate_slice_view_definition(documents).map_or(Ok(()), |view_name| {
+        Err(validation_issue(format!(
+            "view '{view_name}' is defined by more than one slice"
+        )))
     })
 }
 
@@ -910,6 +916,25 @@ fn duplicate_slice_read_model_definition(
             seen.insert(read_model_name.clone(), slice.name.clone())
                 .filter(|previous_slice_name| *previous_slice_name != slice.name)
                 .map(|_| read_model_name.clone())
+        })
+}
+
+fn duplicate_slice_view_definition(documents: &[EventModelDocument]) -> Option<DefinitionName> {
+    let mut seen = BTreeMap::new();
+    documents
+        .iter()
+        .filter(|document| document.file_kind == EventModelFileKind::Slice)
+        .flat_map(|document| document.slice_definitions.iter())
+        .flat_map(|slice| {
+            slice
+                .owned_views
+                .iter()
+                .map(move |view_name| (slice, view_name))
+        })
+        .find_map(|(slice, view_name)| {
+            seen.insert(view_name.clone(), slice.name.clone())
+                .filter(|previous_slice_name| *previous_slice_name != slice.name)
+                .map(|_| view_name.clone())
         })
 }
 
