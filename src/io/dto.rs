@@ -244,11 +244,13 @@ fn slice_definitions_from_json_object(
                 .map(|name| {
                     let owned_views =
                         definition_names_from_json_array_field(slice, "views", "view")?;
+                    let outcome_labels = outcome_labels_from_json_slice(slice)?;
                     slice_scenarios_from_json_slice(slice).map(|scenarios| {
                         SliceDefinition::new(
                             name,
                             slice_type_from_json_slice(slice),
                             owned_views,
+                            outcome_labels,
                             legacy_scenarios_field_from_json_slice(slice),
                             scenarios,
                         )
@@ -275,6 +277,22 @@ fn slice_scenarios_from_json_slice(
         .map(|spec| slice_scenarios_from_json_field(slice, spec))
         .collect::<Result<Vec<_>, _>>()
         .map(|scenarios| scenarios.into_iter().flatten().collect())
+}
+
+fn outcome_labels_from_json_slice(
+    slice: &Value,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    slice
+        .get("outcomes")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|outcome| outcome.get("label").and_then(Value::as_str))
+        .map(|label| {
+            DefinitionName::try_new(label.to_owned())
+                .map_err(|error| BoundaryParseError::new(format!("invalid outcome label: {error}")))
+        })
+        .collect()
 }
 
 fn slice_scenarios_from_json_field(

@@ -109,6 +109,7 @@ pub struct SliceDefinition {
     name: DefinitionName,
     slice_type: SliceType,
     owned_views: Vec<DefinitionName>,
+    outcome_labels: Vec<DefinitionName>,
     legacy_scenarios: LegacyScenariosField,
     scenarios: Vec<SliceScenario>,
 }
@@ -118,6 +119,7 @@ impl SliceDefinition {
         name: DefinitionName,
         slice_type: SliceType,
         owned_views: Vec<DefinitionName>,
+        outcome_labels: Vec<DefinitionName>,
         legacy_scenarios: LegacyScenariosField,
         scenarios: Vec<SliceScenario>,
     ) -> Self {
@@ -125,6 +127,7 @@ impl SliceDefinition {
             name,
             slice_type,
             owned_views,
+            outcome_labels,
             legacy_scenarios,
             scenarios,
         }
@@ -216,7 +219,9 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_acceptance_scenario_boundaries(document)?;
 
-    validate_state_view_projector_contract_scenarios(document)
+    validate_state_view_projector_contract_scenarios(document)?;
+
+    validate_duplicate_outcome_labels(document)
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -451,5 +456,29 @@ fn slice_has_contract_state(slice: &SliceDefinition, read_model: &DefinitionName
     slice.scenarios.iter().any(|scenario| {
         scenario.scenario_set == ScenarioSetKind::Contract
             && scenario.read_model_states.contains(read_model)
+    })
+}
+
+fn validate_duplicate_outcome_labels(document: &EventModelDocument) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .find_map(duplicate_outcome_label)
+        .map_or(Ok(()), |(slice, outcome_label)| {
+            Err(validation_issue(format!(
+                "slice '{}' has duplicate outcome label '{}'",
+                slice.name, outcome_label
+            )))
+        })
+}
+
+fn duplicate_outcome_label(slice: &SliceDefinition) -> Option<(&SliceDefinition, DefinitionName)> {
+    let mut seen = BTreeSet::new();
+    slice.outcome_labels.iter().find_map(|outcome_label| {
+        if seen.insert(outcome_label.clone()) {
+            None
+        } else {
+            Some((slice, outcome_label.clone()))
+        }
     })
 }
