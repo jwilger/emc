@@ -355,6 +355,10 @@ impl WorkflowStep {
         self.relationship == WorkflowStepRelationship::Alternate
     }
 
+    fn is_main(&self) -> bool {
+        self.relationship == WorkflowStepRelationship::Main
+    }
+
     fn has_trigger(&self) -> bool {
         self.trigger == WorkflowStepTrigger::Present
     }
@@ -1271,6 +1275,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_alternate_workflow_step_rationale(document)?;
 
+    validate_async_lifecycle_steps_not_main(document)?;
+
     validate_workflow_step_incoming_reachability(document)?;
 
     validate_workflow_steps_reachable_from_entry(document)?;
@@ -1876,6 +1882,25 @@ fn validate_alternate_workflow_step_rationale(
         .map_or(Ok(()), |step| {
             Err(validation_issue(format!(
                 "alternate workflow step '{}' must declare a trigger or incoming transition",
+                step.slice()
+            )))
+        })
+}
+
+fn validate_async_lifecycle_steps_not_main(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    if document.workflow_composition != WorkflowComposition::DeclaresSteps {
+        return Ok(());
+    }
+
+    document
+        .workflow_steps
+        .iter()
+        .find(|step| step.is_main() && step.has_trigger())
+        .map_or(Ok(()), |step| {
+            Err(validation_issue(format!(
+                "async lifecycle step '{}' must be alternate or async_lifecycle",
                 step.slice()
             )))
         })
