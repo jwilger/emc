@@ -14,8 +14,8 @@ use crate::core::types::{
 use crate::core::validation::{
     CommandDefinition, DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource,
     EventDefinition, EventModelDocument, EventModelDocumentParts, EventModelFileKind,
-    LegacyScenariosField, NamedDefinition, ScenarioSetKind, ScenarioStepField, SliceDefinition,
-    SliceDefinitionCount, SliceScenario, SliceType, TopLevelKey, ViewDefinition,
+    ExternalInputSchema, LegacyScenariosField, NamedDefinition, ScenarioSetKind, ScenarioStepField,
+    SliceDefinition, SliceDefinitionCount, SliceScenario, SliceType, TopLevelKey, ViewDefinition,
     empty_top_level_key_issue, model_must_be_object_issue,
 };
 
@@ -600,8 +600,64 @@ fn command_definitions_from_json_object(
                 "external_inputs",
                 "external input",
             )?;
-            definition_names_from_json_array_field(command, "produces", "event")
-                .map(|produces| CommandDefinition::new(inputs, external_inputs, produces))
+            let external_input_schemas = external_input_schemas_from_json_command(command)?;
+            definition_names_from_json_array_field(command, "produces", "event").map(|produces| {
+                CommandDefinition::new(inputs, external_inputs, external_input_schemas, produces)
+            })
+        })
+        .collect()
+}
+
+fn external_input_schemas_from_json_command(
+    command: &Value,
+) -> Result<Vec<ExternalInputSchema>, BoundaryParseError> {
+    command
+        .get("external_input_schemas")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|schema| {
+            schema
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BoundaryParseError::new("external input schema is missing name"))
+                .and_then(|name| {
+                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!(
+                            "invalid external input schema name: {error}"
+                        ))
+                    })
+                })
+                .and_then(|name| {
+                    schema_fields_from_json_schema(schema)
+                        .map(|fields| ExternalInputSchema::new(name, fields))
+                })
+        })
+        .collect()
+}
+
+fn schema_fields_from_json_schema(
+    schema: &Value,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    schema
+        .get("fields")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|field| {
+            field
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    BoundaryParseError::new("external input schema field is missing name")
+                })
+                .and_then(|name| {
+                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!(
+                            "invalid external input schema field name: {error}"
+                        ))
+                    })
+                })
         })
         .collect()
 }
