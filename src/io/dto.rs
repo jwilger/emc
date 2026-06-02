@@ -203,6 +203,9 @@ fn event_model_document_from_json(
             let view_definitions = view_definitions_from_json_object(object)?;
             let stream_names = stream_names_from_json_object(object)?;
             let event_definitions = event_definitions_from_json_object(object)?;
+            let command_produced_events = command_produced_events_from_json_object(object)?;
+            let state_view_observed_events =
+                state_view_observed_events_from_slices(&slice_definitions);
             named_definitions_from_json_object(object).map(|named_definitions| {
                 EventModelDocument::new(
                     EventModelDocumentParts::new(file_kind)
@@ -210,6 +213,8 @@ fn event_model_document_from_json(
                         .with_event_names(event_names)
                         .with_stream_names(stream_names)
                         .with_event_definitions(event_definitions)
+                        .with_command_produced_events(command_produced_events)
+                        .with_state_view_observed_events(state_view_observed_events)
                         .with_named_definitions(named_definitions)
                         .with_slice_count(slice_definition_count(&slice_definitions))
                         .with_slice_definitions(slice_definitions)
@@ -248,12 +253,15 @@ fn slice_definitions_from_json_object(
                 .map(|name| {
                     let owned_views =
                         definition_names_from_json_array_field(slice, "views", "view")?;
+                    let owned_events =
+                        definition_names_from_json_array_field(slice, "events", "event")?;
                     let outcome_labels = outcome_labels_from_json_slice(slice)?;
                     slice_scenarios_from_json_slice(slice).map(|scenarios| {
                         SliceDefinition::new(
                             name,
                             slice_type_from_json_slice(slice),
                             owned_views,
+                            owned_events,
                             outcome_labels,
                             legacy_scenarios_field_from_json_slice(slice),
                             scenarios,
@@ -520,6 +528,30 @@ fn event_definitions_from_json_object(
                         .map(|stream| EventDefinition::new(name, stream))
                 })
         })
+        .collect()
+}
+
+fn command_produced_events_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
+    object
+        .get("commands")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|command| definition_names_from_json_array_field(command, "produces", "event"))
+        .collect::<Result<Vec<_>, _>>()
+        .map(|events| events.into_iter().flatten().collect())
+}
+
+fn state_view_observed_events_from_slices(
+    slice_definitions: &[SliceDefinition],
+) -> BTreeSet<DefinitionName> {
+    slice_definitions
+        .iter()
+        .filter(|slice| slice.is_state_view())
+        .flat_map(SliceDefinition::owned_events)
+        .cloned()
         .collect()
 }
 
