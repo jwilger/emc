@@ -1019,6 +1019,60 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_shared_event_definitions_with_different_streams()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("course-progress-accepted.eventmodel.json"),
+            "{\"name\":\"Course progress accepted workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"course_progress\"}],\"events\":[{\"name\":\"LessonAccepted\",\"stream\":\"course_progress\",\"attributes\":[{\"name\":\"learner_id\",\"source\":\"command.learner_id\"}]}],\"commands\":[{\"name\":\"AcceptCourseLesson\",\"inputs\":[\"learner_id\"],\"produces\":[\"LessonAccepted\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Accept course lesson\",\"type\":\"state_change\",\"commands\":[\"AcceptCourseLesson\"],\"events\":[\"LessonAccepted\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"accept course lesson\",\"given\":[],\"given_streams\":[{\"stream\":\"course_progress\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"LessonAccepted\"]}]}]}",
+        )?;
+        write(
+            slices.join("lesson-progress-accepted.eventmodel.json"),
+            "{\"name\":\"Lesson progress accepted workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson_progress\"}],\"events\":[{\"name\":\"LessonAccepted\",\"stream\":\"lesson_progress\",\"attributes\":[{\"name\":\"learner_id\",\"source\":\"command.learner_id\"}]}],\"commands\":[{\"name\":\"AcceptLessonProgress\",\"inputs\":[\"learner_id\"],\"produces\":[\"LessonAccepted\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Accept lesson progress\",\"type\":\"state_change\",\"commands\":[\"AcceptLessonProgress\"],\"events\":[\"LessonAccepted\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"accept lesson progress\",\"given\":[],\"given_streams\":[{\"stream\":\"lesson_progress\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"LessonAccepted\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "event 'LessonAccepted' has conflicting definitions across slices",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn validate_rejects_shared_event_definitions_with_different_source_provenance()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("command-sourced-lesson-accepted.eventmodel.json"),
+            "{\"name\":\"Command sourced lesson accepted workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson_progress\"}],\"events\":[{\"name\":\"LessonAccepted\",\"stream\":\"lesson_progress\",\"attributes\":[{\"name\":\"learner_id\",\"source\":\"command.learner_id\"}]}],\"commands\":[{\"name\":\"AcceptLessonFromCommand\",\"inputs\":[\"learner_id\"],\"produces\":[\"LessonAccepted\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Accept command lesson\",\"type\":\"state_change\",\"commands\":[\"AcceptLessonFromCommand\"],\"events\":[\"LessonAccepted\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"accept command lesson\",\"given\":[],\"given_streams\":[{\"stream\":\"lesson_progress\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"LessonAccepted\"]}]}]}",
+        )?;
+        write(
+            slices.join("external-sourced-lesson-accepted.eventmodel.json"),
+            "{\"name\":\"External sourced lesson accepted workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson_progress\"}],\"events\":[{\"name\":\"LessonAccepted\",\"stream\":\"lesson_progress\",\"attributes\":[{\"name\":\"learner_id\",\"source\":\"external.review_packet.learner_id\"}]}],\"commands\":[{\"name\":\"AcceptLessonFromPacket\",\"inputs\":[],\"external_inputs\":[\"review_packet\"],\"external_input_schemas\":[{\"name\":\"review_packet\",\"fields\":[{\"name\":\"learner_id\"}]}],\"produces\":[\"LessonAccepted\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Accept packet lesson\",\"type\":\"state_change\",\"commands\":[\"AcceptLessonFromPacket\"],\"events\":[\"LessonAccepted\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"accept packet lesson\",\"given\":[],\"given_streams\":[{\"stream\":\"lesson_progress\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"LessonAccepted\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "event 'LessonAccepted' has conflicting definitions across slices",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_undeclared_board_automation_between_read_model_and_command()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
