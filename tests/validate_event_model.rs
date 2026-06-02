@@ -995,6 +995,30 @@ mod tests {
     }
 
     #[test]
+    fn validate_allows_identical_event_definitions_across_slice_files() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("lesson-accepted.eventmodel.json"),
+            "{\"name\":\"Lesson accepted workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson_progress\"}],\"events\":[{\"name\":\"LessonAccepted\",\"stream\":\"lesson_progress\",\"attributes\":[{\"name\":\"learner_id\",\"source\":\"command.learner_id\"}]}],\"commands\":[{\"name\":\"AcceptLesson\",\"inputs\":[\"learner_id\"],\"produces\":[\"LessonAccepted\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Accept lesson\",\"type\":\"state_change\",\"commands\":[\"AcceptLesson\"],\"events\":[\"LessonAccepted\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"accept lesson\",\"given\":[],\"given_streams\":[{\"stream\":\"lesson_progress\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"LessonAccepted\"]}]}]}",
+        )?;
+        write(
+            slices.join("lesson-accepted-repeat.eventmodel.json"),
+            "{\"name\":\"Lesson accepted repeat workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson_progress\"}],\"events\":[{\"name\":\"LessonAccepted\",\"stream\":\"lesson_progress\",\"attributes\":[{\"name\":\"learner_id\",\"source\":\"command.learner_id\"}]}],\"commands\":[{\"name\":\"RepeatLessonAcceptance\",\"inputs\":[\"learner_id\"],\"produces\":[\"LessonAccepted\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Repeat lesson acceptance\",\"type\":\"state_change\",\"commands\":[\"RepeatLessonAcceptance\"],\"events\":[\"LessonAccepted\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"repeat lesson acceptance\",\"given\":[],\"given_streams\":[{\"stream\":\"lesson_progress\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"LessonAccepted\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_undeclared_board_automation_between_read_model_and_command()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
