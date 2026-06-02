@@ -25,6 +25,7 @@ pub struct EventModelDocument {
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
+    workflow_internal_definitions: WorkflowInternalDefinitions,
     workflow_transition_errors: BTreeSet<DefinitionName>,
     workflow_transition_outcomes: BTreeSet<DefinitionName>,
 }
@@ -53,6 +54,7 @@ impl EventModelDocument {
             duplicate_workflow_step_slice: parts.duplicate_workflow_step_slice,
             workflow_composition: parts.workflow_composition,
             workflow_entry_step_count: parts.workflow_entry_step_count,
+            workflow_internal_definitions: parts.workflow_internal_definitions,
             workflow_transition_errors: parts.workflow_transition_errors,
             workflow_transition_outcomes: parts.workflow_transition_outcomes,
         }
@@ -82,6 +84,7 @@ pub struct EventModelDocumentParts {
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
+    workflow_internal_definitions: WorkflowInternalDefinitions,
     workflow_transition_errors: BTreeSet<DefinitionName>,
     workflow_transition_outcomes: BTreeSet<DefinitionName>,
 }
@@ -110,6 +113,7 @@ impl EventModelDocumentParts {
             duplicate_workflow_step_slice: None,
             workflow_composition: WorkflowComposition::NotComposition,
             workflow_entry_step_count: WorkflowEntryStepCount::NotComposition,
+            workflow_internal_definitions: WorkflowInternalDefinitions::Absent,
             workflow_transition_errors: BTreeSet::new(),
             workflow_transition_outcomes: BTreeSet::new(),
         }
@@ -239,6 +243,14 @@ impl EventModelDocumentParts {
         self
     }
 
+    pub fn with_workflow_internal_definitions(
+        mut self,
+        workflow_internal_definitions: WorkflowInternalDefinitions,
+    ) -> Self {
+        self.workflow_internal_definitions = workflow_internal_definitions;
+        self
+    }
+
     pub fn with_workflow_transition_errors(
         mut self,
         workflow_transition_errors: BTreeSet<DefinitionName>,
@@ -274,6 +286,12 @@ pub enum WorkflowEntryStepCount {
     NotComposition,
     NotOne,
     One,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum WorkflowInternalDefinitions {
+    Absent,
+    Present,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -1265,6 +1283,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_workflow_entry_step_count(document)?;
 
+    validate_workflow_internal_definitions(document)?;
+
     validate_workflow_steps_reference_composed_slices(document)?;
 
     validate_workflow_referenced_slices_are_used(document)?;
@@ -1783,6 +1803,21 @@ fn validate_workflow_entry_step_count(
     if document.workflow_entry_step_count == WorkflowEntryStepCount::NotOne {
         Err(validation_issue(
             "workflow must declare exactly one entry step",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_workflow_internal_definitions(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    if document.file_kind == EventModelFileKind::Workflow
+        && document.workflow_composition != WorkflowComposition::NotComposition
+        && document.workflow_internal_definitions == WorkflowInternalDefinitions::Present
+    {
+        Err(validation_issue(
+            "workflow files must not define commands, views, read models, automations, or scenarios",
         ))
     } else {
         Ok(())

@@ -23,8 +23,9 @@ use crate::core::validation::{
     SingletonBehavior, SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario,
     SliceScenarioParts, SliceType, TopLevelKey, TranslationContract, ViewControlDefinition,
     ViewControlDefinitionParts, ViewDefinition, ViewWireframe, WorkflowComposition,
-    WorkflowEntryStepCount, WorkflowStep, WorkflowStepExit, WorkflowStepRelationship,
-    WorkflowStepTrigger, empty_top_level_key_issue, model_must_be_object_issue,
+    WorkflowEntryStepCount, WorkflowInternalDefinitions, WorkflowStep, WorkflowStepExit,
+    WorkflowStepRelationship, WorkflowStepTrigger, empty_top_level_key_issue,
+    model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -223,6 +224,8 @@ fn event_model_document_from_json(
             let workflow_composition = workflow_composition_from_json_object(object);
             let workflow_entry_step_count =
                 workflow_entry_step_count_from_json_object(object, workflow_composition);
+            let workflow_internal_definitions =
+                workflow_internal_definitions_from_json_object(object);
             let workflow_transition_errors = workflow_transition_errors_from_json_object(object)?;
             let workflow_transition_outcomes =
                 workflow_transition_outcomes_from_json_object(object)?;
@@ -256,6 +259,7 @@ fn event_model_document_from_json(
                         .with_duplicate_workflow_step_slice(duplicate_workflow_step_slice)
                         .with_workflow_composition(workflow_composition)
                         .with_workflow_entry_step_count(workflow_entry_step_count)
+                        .with_workflow_internal_definitions(workflow_internal_definitions)
                         .with_workflow_transition_errors(workflow_transition_errors)
                         .with_workflow_transition_outcomes(workflow_transition_outcomes),
                 )
@@ -479,6 +483,29 @@ fn workflow_entry_steps_from_json_object(object: &Map<String, Value>) -> usize {
                 .is_some_and(|relationship| relationship == "entry")
         })
         .count()
+}
+
+fn workflow_internal_definitions_from_json_object(
+    object: &Map<String, Value>,
+) -> WorkflowInternalDefinitions {
+    if [
+        "commands",
+        "views",
+        "read_models",
+        "automations",
+        "scenarios",
+    ]
+    .into_iter()
+    .any(|key| {
+        object
+            .get(key)
+            .and_then(Value::as_array)
+            .is_some_and(|definitions| !definitions.is_empty())
+    }) {
+        WorkflowInternalDefinitions::Present
+    } else {
+        WorkflowInternalDefinitions::Absent
+    }
 }
 
 fn workflow_transition_errors_from_json_object(
