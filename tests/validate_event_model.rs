@@ -531,4 +531,27 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_absence_default_fields_without_absence_scenarios()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("absence-default-without-scenarios.eventmodel.json"),
+            "{\"name\":\"Application entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"organization\"}],\"events\":[{\"name\":\"RootOrganizationBootstrapped\",\"stream\":\"organization\",\"attributes\":[]}],\"commands\":[{\"name\":\"BootstrapRootOrganization\",\"inputs\":[],\"produces\":[\"RootOrganizationBootstrapped\"]}],\"read_models\":[{\"name\":\"application_entry_state\",\"fields\":[{\"name\":\"is_bootstrapped\",\"source\":\"absence\",\"defaulted_from_absence\":true,\"absence_event\":\"RootOrganizationBootstrapped\"}]}],\"slices\":[]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "absence/default field 'is_bootstrapped' must have an absence scenario",
+            ));
+
+        Ok(())
+    }
 }

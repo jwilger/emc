@@ -567,10 +567,12 @@ fn read_model_field_absence_default_from_json(field: &Value) -> ReadModelFieldAb
         .and_then(Value::as_bool)
         .filter(|defaulted| *defaulted)
         .map_or(ReadModelFieldAbsenceDefault::NotDefaulted, |_| {
-            if read_model_field_has_absence_event(field) {
-                ReadModelFieldAbsenceDefault::DefaultedWithAbsenceEvent
-            } else {
+            if !read_model_field_has_absence_event(field) {
                 ReadModelFieldAbsenceDefault::DefaultedWithoutAbsenceEvent
+            } else if !read_model_field_has_absence_scenarios(field) {
+                ReadModelFieldAbsenceDefault::DefaultedWithoutScenarios
+            } else {
+                ReadModelFieldAbsenceDefault::DefaultedComplete
             }
         })
 }
@@ -580,6 +582,13 @@ fn read_model_field_has_absence_event(field: &Value) -> bool {
         .get("absence_event")
         .and_then(Value::as_str)
         .is_some_and(|event| !event.is_empty())
+}
+
+fn read_model_field_has_absence_scenarios(field: &Value) -> bool {
+    field
+        .get("absence_scenarios")
+        .and_then(Value::as_array)
+        .is_some_and(|scenarios| !scenarios.is_empty())
 }
 
 fn read_model_transitive_derivation_from_json(
