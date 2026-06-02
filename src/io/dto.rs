@@ -12,8 +12,8 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    DefinitionKind, DefinitionName, EventModelDocument, NamedDefinition, TopLevelKey,
-    empty_top_level_key_issue, model_must_be_object_issue,
+    DefinitionKind, DefinitionName, EventModelDocument, EventModelFileKind, NamedDefinition,
+    SliceDefinitionCount, TopLevelKey, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -42,10 +42,13 @@ pub fn parse_model_name(raw: &str) -> Result<ModelName, BoundaryParseError> {
         .map_err(|error| BoundaryParseError::new(format!("invalid model name: {error}")))
 }
 
-pub fn parse_event_model_document(raw: &str) -> Result<EventModelDocument, BoundaryParseError> {
+pub fn parse_event_model_document(
+    raw: &str,
+    file_kind: EventModelFileKind,
+) -> Result<EventModelDocument, BoundaryParseError> {
     serde_json::from_str::<Value>(raw)
         .map_err(|error| BoundaryParseError::new(format!("invalid JSON: {error}")))
-        .and_then(event_model_document_from_json)
+        .and_then(|value| event_model_document_from_json(value, file_kind))
 }
 
 pub fn parse_project_name(raw: &str) -> Result<ProjectName, BoundaryParseError> {
@@ -178,7 +181,10 @@ fn quoted_value(raw: &str) -> Option<&str> {
     raw.strip_prefix('"')?.strip_suffix('"')
 }
 
-fn event_model_document_from_json(value: Value) -> Result<EventModelDocument, BoundaryParseError> {
+fn event_model_document_from_json(
+    value: Value,
+    file_kind: EventModelFileKind,
+) -> Result<EventModelDocument, BoundaryParseError> {
     let object = value
         .as_object()
         .ok_or_else(|| BoundaryParseError::new(model_must_be_object_issue().to_string()))?;
@@ -190,9 +196,28 @@ fn event_model_document_from_json(value: Value) -> Result<EventModelDocument, Bo
         })
         .collect::<Result<BTreeSet<_>, _>>()
         .and_then(|top_level_keys| {
-            named_definitions_from_json_object(object)
-                .map(|named_definitions| EventModelDocument::new(top_level_keys, named_definitions))
+            named_definitions_from_json_object(object).map(|named_definitions| {
+                EventModelDocument::new(
+                    file_kind,
+                    top_level_keys,
+                    named_definitions,
+                    slice_definition_count(object),
+                )
+            })
         })
+}
+
+fn slice_definition_count(object: &Map<String, Value>) -> SliceDefinitionCount {
+    match object
+        .get("slices")
+        .and_then(Value::as_array)
+        .map(Vec::len)
+        .unwrap_or_default()
+    {
+        0 => SliceDefinitionCount::Zero,
+        1 => SliceDefinitionCount::One,
+        _ => SliceDefinitionCount::Multiple,
+    }
 }
 
 fn named_definitions_from_json_object(

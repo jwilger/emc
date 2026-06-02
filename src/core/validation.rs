@@ -4,20 +4,39 @@ use nutype::nutype;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct EventModelDocument {
+    file_kind: EventModelFileKind,
     top_level_keys: BTreeSet<TopLevelKey>,
     named_definitions: Vec<NamedDefinition>,
+    slice_count: SliceDefinitionCount,
 }
 
 impl EventModelDocument {
     pub fn new(
+        file_kind: EventModelFileKind,
         top_level_keys: BTreeSet<TopLevelKey>,
         named_definitions: Vec<NamedDefinition>,
+        slice_count: SliceDefinitionCount,
     ) -> Self {
         Self {
+            file_kind,
             top_level_keys,
             named_definitions,
+            slice_count,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum EventModelFileKind {
+    Slice,
+    Workflow,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum SliceDefinitionCount {
+    Multiple,
+    One,
+    Zero,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
@@ -82,7 +101,9 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
             definition_kind_label(definition.kind),
             definition.name
         )))
-    })
+    })?;
+
+    validate_slice_file_count(document)
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -143,5 +164,18 @@ fn definition_kind_label(kind: DefinitionKind) -> &'static str {
         DefinitionKind::ReadModel => "read model",
         DefinitionKind::Stream => "stream",
         DefinitionKind::View => "view",
+    }
+}
+
+fn validate_slice_file_count(document: &EventModelDocument) -> Result<(), ValidationIssue> {
+    match (document.file_kind, document.slice_count) {
+        (EventModelFileKind::Slice, SliceDefinitionCount::One)
+        | (EventModelFileKind::Workflow, _) => Ok(()),
+        (
+            EventModelFileKind::Slice,
+            SliceDefinitionCount::Multiple | SliceDefinitionCount::Zero,
+        ) => Err(validation_issue(
+            "slice file must contain exactly one slice",
+        )),
     }
 }
