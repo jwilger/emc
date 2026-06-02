@@ -1753,7 +1753,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_undeclared_external_event_bridges(document)?;
 
-    validate_external_event_board_connections(document)?;
+    validate_board_connection_kinds(document)?;
 
     validate_command_sourced_event_attributes(document)?;
 
@@ -3698,10 +3698,8 @@ fn validate_undeclared_external_event_bridges(
     })
 }
 
-fn validate_external_event_board_connections(
-    document: &EventModelDocument,
-) -> Result<(), ValidationIssue> {
-    invalid_external_event_board_connection(document).map_or(Ok(()), |connection| {
+fn validate_board_connection_kinds(document: &EventModelDocument) -> Result<(), ValidationIssue> {
+    invalid_board_connection(document).map_or(Ok(()), |connection| {
         Err(validation_issue(format!(
             "invalid board connection '{}' ({}) -> '{}' ({})",
             connection.from,
@@ -3860,22 +3858,33 @@ fn undeclared_external_event_bridge_in_slice(
         .map(|element| element.id.clone())
 }
 
-fn invalid_external_event_board_connection(
-    document: &EventModelDocument,
-) -> Option<InvalidBoardConnection> {
+fn invalid_board_connection(document: &EventModelDocument) -> Option<InvalidBoardConnection> {
     document.board_slices.iter().find_map(|board_slice| {
         board_slice.connections.iter().find_map(|connection| {
             let from_kind = board_element_kind_by_id(board_slice, &connection.from)?;
             let to_kind = board_element_kind_by_id(board_slice, &connection.to)?;
-            (from_kind == BoardElementKind::ExternalEvent && to_kind == BoardElementKind::ReadModel)
-                .then(|| InvalidBoardConnection {
-                    from: connection.from.clone(),
-                    from_kind,
-                    to: connection.to.clone(),
-                    to_kind,
-                })
+            (!board_connection_kind_is_causal(from_kind, to_kind)).then(|| InvalidBoardConnection {
+                from: connection.from.clone(),
+                from_kind,
+                to: connection.to.clone(),
+                to_kind,
+            })
         })
     })
+}
+
+fn board_connection_kind_is_causal(from: BoardElementKind, to: BoardElementKind) -> bool {
+    matches!(
+        (from, to),
+        (BoardElementKind::Automation, BoardElementKind::Command)
+            | (BoardElementKind::Command, BoardElementKind::Event)
+            | (BoardElementKind::Event, BoardElementKind::Automation)
+            | (BoardElementKind::Event, BoardElementKind::ReadModel)
+            | (BoardElementKind::ExternalEvent, BoardElementKind::Command)
+            | (BoardElementKind::ReadModel, BoardElementKind::Automation)
+            | (BoardElementKind::ReadModel, BoardElementKind::View)
+            | (BoardElementKind::View, BoardElementKind::Command)
+    )
 }
 
 fn board_element_bridges_read_model_to_command(
