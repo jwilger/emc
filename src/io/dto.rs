@@ -216,6 +216,8 @@ fn event_model_document_from_json(
             let read_model_definitions = read_model_definitions_from_json_object(object)?;
             let workflow_slice_references = workflow_slice_references_from_json_object(object)?;
             let workflow_step_slices = workflow_step_slices_from_json_object(object)?;
+            let duplicate_workflow_step_slice =
+                duplicate_workflow_step_slice_from_json_object(object)?;
             let workflow_composition = workflow_composition_from_json_object(object);
             let workflow_entry_step_count =
                 workflow_entry_step_count_from_json_object(object, workflow_composition);
@@ -248,6 +250,7 @@ fn event_model_document_from_json(
                         .with_view_definitions(view_definitions)
                         .with_workflow_slice_references(workflow_slice_references)
                         .with_workflow_step_slices(workflow_step_slices)
+                        .with_duplicate_workflow_step_slice(duplicate_workflow_step_slice)
                         .with_workflow_composition(workflow_composition)
                         .with_workflow_entry_step_count(workflow_entry_step_count)
                         .with_workflow_transition_errors(workflow_transition_errors)
@@ -308,18 +311,44 @@ fn workflow_slice_reference_from_path(path: &str) -> Result<DefinitionName, Boun
 fn workflow_step_slices_from_json_object(
     object: &Map<String, Value>,
 ) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
-    object
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|step| step.get("slice").and_then(Value::as_str))
+    workflow_step_slice_values(object)
         .map(|step_slice| {
             DefinitionName::try_new(step_slice.to_owned()).map_err(|error| {
                 BoundaryParseError::new(format!("invalid workflow step slice: {error}"))
             })
         })
         .collect()
+}
+
+fn duplicate_workflow_step_slice_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Option<DefinitionName>, BoundaryParseError> {
+    let mut seen = BTreeSet::new();
+    workflow_step_slice_values(object)
+        .find_map(|step_slice| {
+            DefinitionName::try_new(step_slice.to_owned())
+                .map(|step_slice| {
+                    if seen.insert(step_slice.clone()) {
+                        None
+                    } else {
+                        Some(step_slice)
+                    }
+                })
+                .map_err(|error| {
+                    BoundaryParseError::new(format!("invalid workflow step slice: {error}"))
+                })
+                .transpose()
+        })
+        .transpose()
+}
+
+fn workflow_step_slice_values(object: &Map<String, Value>) -> impl Iterator<Item = &str> {
+    object
+        .get("steps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|step| step.get("slice").and_then(Value::as_str))
 }
 
 fn workflow_entry_step_count_from_json_object(
