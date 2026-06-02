@@ -6,7 +6,7 @@ use std::process::ExitCode;
 use emc::core::emc::{EMCWorkflowImport, import_emc_workflow};
 use emc::core::layout::check_project;
 use emc::core::project::{ProjectName, init_project};
-use emc::core::validation::validate_event_model;
+use emc::core::validation::{EventModelFileKind, validate_event_model};
 use emc::io::dto::{
     parse_browser_index_workflows, parse_emc_slice_import, parse_emc_workflow_import,
     parse_event_model_document, parse_project_manifest_name, parse_slice_slug, parse_workflow_slug,
@@ -95,10 +95,18 @@ fn validate_target(target: &Path) -> Result<(), ShellError> {
 fn validate_event_model_file(path: &Path) -> Result<(), ShellError> {
     let source =
         fs::read_to_string(path).map_err(|error| ShellError::message(error.to_string()))?;
-    let document = parse_event_model_document(&source)
+    let document = parse_event_model_document(&source, event_model_file_kind(path))
         .map_err(|error| ShellError::message(format!("{} in {}", error, path.display())))?;
     validate_event_model(&document)
         .map_err(|issue| ShellError::message(format!("{} in {}", issue, path.display())))
+}
+
+fn event_model_file_kind(path: &Path) -> EventModelFileKind {
+    path.parent()
+        .and_then(Path::file_name)
+        .and_then(|file_name| file_name.to_str())
+        .filter(|file_name| *file_name == "slices")
+        .map_or(EventModelFileKind::Workflow, |_| EventModelFileKind::Slice)
 }
 
 fn load_emc_import(source: &Path) -> Result<EMCWorkflowImport, ShellError> {
