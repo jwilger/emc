@@ -10,6 +10,7 @@ pub struct EventModelDocument {
     named_definitions: Vec<NamedDefinition>,
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
+    view_definitions: Vec<ViewDefinition>,
 }
 
 impl EventModelDocument {
@@ -20,6 +21,7 @@ impl EventModelDocument {
         named_definitions: Vec<NamedDefinition>,
         slice_count: SliceDefinitionCount,
         slice_definitions: Vec<SliceDefinition>,
+        view_definitions: Vec<ViewDefinition>,
     ) -> Self {
         Self {
             file_kind,
@@ -28,6 +30,7 @@ impl EventModelDocument {
             named_definitions,
             slice_count,
             slice_definitions,
+            view_definitions,
         }
     }
 }
@@ -61,6 +64,12 @@ pub enum ScenarioStepField {
 pub enum ScenarioSetKind {
     Acceptance,
     Contract,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum SliceType {
+    Other,
+    StateView,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
@@ -98,6 +107,8 @@ impl NamedDefinition {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SliceDefinition {
     name: DefinitionName,
+    slice_type: SliceType,
+    owned_views: Vec<DefinitionName>,
     legacy_scenarios: LegacyScenariosField,
     scenarios: Vec<SliceScenario>,
 }
@@ -105,11 +116,15 @@ pub struct SliceDefinition {
 impl SliceDefinition {
     pub fn new(
         name: DefinitionName,
+        slice_type: SliceType,
+        owned_views: Vec<DefinitionName>,
         legacy_scenarios: LegacyScenariosField,
         scenarios: Vec<SliceScenario>,
     ) -> Self {
         Self {
             name,
+            slice_type,
+            owned_views,
             legacy_scenarios,
             scenarios,
         }
@@ -122,6 +137,7 @@ pub struct SliceScenario {
     when_field: ScenarioStepField,
     scenario_set: ScenarioSetKind,
     referenced_events: Vec<DefinitionName>,
+    read_model_states: Vec<DefinitionName>,
 }
 
 impl SliceScenario {
@@ -130,13 +146,27 @@ impl SliceScenario {
         when_field: ScenarioStepField,
         scenario_set: ScenarioSetKind,
         referenced_events: Vec<DefinitionName>,
+        read_model_states: Vec<DefinitionName>,
     ) -> Self {
         Self {
             name,
             when_field,
             scenario_set,
             referenced_events,
+            read_model_states,
         }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ViewDefinition {
+    name: DefinitionName,
+    read_models: Vec<DefinitionName>,
+}
+
+impl ViewDefinition {
+    pub fn new(name: DefinitionName, read_models: Vec<DefinitionName>) -> Self {
+        Self { name, read_models }
     }
 }
 
@@ -184,7 +214,9 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_duplicate_scenario_names(document)?;
 
-    validate_acceptance_scenario_boundaries(document)
+    validate_acceptance_scenario_boundaries(document)?;
+
+    validate_state_view_projector_contract_scenarios(document)
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -374,4 +406,50 @@ fn validate_acceptance_scenario_boundaries(
                 slice.name, scenario.name, event_name
             )))
         })
+}
+
+fn validate_state_view_projector_contract_scenarios(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::StateView)
+        .flat_map(|slice| {
+            read_models_for_slice_views(document, slice)
+                .into_iter()
+                .filter(|read_model| !slice_has_contract_state(slice, read_model))
+                .map(move |read_model| (slice, read_model))
+        })
+        .next()
+        .map_or(Ok(()), |(slice, read_model)| {
+            Err(validation_issue(format!(
+                "state_view slice '{}' read model '{}' requires a contract_scenarios GWT for the projector",
+                slice.name, read_model
+            )))
+        })
+}
+
+fn read_models_for_slice_views(
+    document: &EventModelDocument,
+    slice: &SliceDefinition,
+) -> Vec<DefinitionName> {
+    slice
+        .owned_views
+        .iter()
+        .filter_map(|view_name| {
+            document
+                .view_definitions
+                .iter()
+                .find(|view| view.name == *view_name)
+        })
+        .flat_map(|view| view.read_models.clone())
+        .collect()
+}
+
+fn slice_has_contract_state(slice: &SliceDefinition, read_model: &DefinitionName) -> bool {
+    slice.scenarios.iter().any(|scenario| {
+        scenario.scenario_set == ScenarioSetKind::Contract
+            && scenario.read_model_states.contains(read_model)
+    })
 }
