@@ -23,6 +23,7 @@ pub struct EventModelDocument {
     workflow_step_slices: BTreeSet<DefinitionName>,
     workflow_steps: Vec<WorkflowStep>,
     workflow_event_transitions: Vec<WorkflowEventTransition>,
+    workflow_command_transitions: Vec<WorkflowCommandTransition>,
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
@@ -53,6 +54,7 @@ impl EventModelDocument {
             workflow_step_slices: parts.workflow_step_slices,
             workflow_steps: parts.workflow_steps,
             workflow_event_transitions: parts.workflow_event_transitions,
+            workflow_command_transitions: parts.workflow_command_transitions,
             duplicate_workflow_step_slice: parts.duplicate_workflow_step_slice,
             workflow_composition: parts.workflow_composition,
             workflow_entry_step_count: parts.workflow_entry_step_count,
@@ -84,6 +86,7 @@ pub struct EventModelDocumentParts {
     workflow_step_slices: BTreeSet<DefinitionName>,
     workflow_steps: Vec<WorkflowStep>,
     workflow_event_transitions: Vec<WorkflowEventTransition>,
+    workflow_command_transitions: Vec<WorkflowCommandTransition>,
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
@@ -114,6 +117,7 @@ impl EventModelDocumentParts {
             workflow_step_slices: BTreeSet::new(),
             workflow_steps: Vec::new(),
             workflow_event_transitions: Vec::new(),
+            workflow_command_transitions: Vec::new(),
             duplicate_workflow_step_slice: None,
             workflow_composition: WorkflowComposition::NotComposition,
             workflow_entry_step_count: WorkflowEntryStepCount::NotComposition,
@@ -231,6 +235,14 @@ impl EventModelDocumentParts {
         workflow_event_transitions: Vec<WorkflowEventTransition>,
     ) -> Self {
         self.workflow_event_transitions = workflow_event_transitions;
+        self
+    }
+
+    pub fn with_workflow_command_transitions(
+        mut self,
+        workflow_command_transitions: Vec<WorkflowCommandTransition>,
+    ) -> Self {
+        self.workflow_command_transitions = workflow_command_transitions;
         self
     }
 
@@ -479,6 +491,27 @@ impl WorkflowEventTransition {
             source_slice,
             target_slice,
             event,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowCommandTransition {
+    source_slice: DefinitionName,
+    target_slice: DefinitionName,
+    command: DefinitionName,
+}
+
+impl WorkflowCommandTransition {
+    pub fn new(
+        source_slice: DefinitionName,
+        target_slice: DefinitionName,
+        command: DefinitionName,
+    ) -> Self {
+        Self {
+            source_slice,
+            target_slice,
+            command,
         }
     }
 }
@@ -1580,6 +1613,13 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    workflow_command_transition_not_invoked_by_source_view(documents).map_or(Ok(()), |issue| {
+        Err(validation_issue(format!(
+            "transition command '{}' is not invoked by source view '{}'",
+            issue.transition.command, issue.source_view
+        )))
+    })?;
+
     unhandled_workflow_slice_outcome(documents).map_or(Ok(()), |unhandled| {
         Err(validation_issue(format!(
             "workflow '{}' does not handle outcome '{}' from slice '{}'",
@@ -1762,6 +1802,76 @@ fn workflow_transition_slice_has_event(
 ) -> bool {
     application_entry_slice_by_slug(documents, slice_slug)
         .is_some_and(|slice| slice.owned_events.contains(event))
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowCommandTransitionInvocationIssue {
+    transition: WorkflowCommandTransition,
+    source_view: DefinitionName,
+}
+
+fn workflow_command_transition_not_invoked_by_source_view(
+    documents: &[EventModelDocument],
+) -> Option<WorkflowCommandTransitionInvocationIssue> {
+    documents
+        .iter()
+        .flat_map(|document| document.workflow_command_transitions.iter())
+        .find_map(|transition| {
+            if workflow_command_transition_has_source_control(documents, transition) {
+                None
+            } else {
+                Some(WorkflowCommandTransitionInvocationIssue {
+                    transition: transition.clone(),
+                    source_view: workflow_command_transition_source_view(documents, transition),
+                })
+            }
+        })
+}
+
+fn workflow_command_transition_has_source_control(
+    documents: &[EventModelDocument],
+    transition: &WorkflowCommandTransition,
+) -> bool {
+    workflow_transition_source_views(documents, &transition.source_slice)
+        .iter()
+        .any(|view| view_invokes_command(view, &transition.command))
+}
+
+fn workflow_transition_source_views<'a>(
+    documents: &'a [EventModelDocument],
+    source_slice: &DefinitionName,
+) -> Vec<&'a ViewDefinition> {
+    application_entry_slice_by_slug(documents, source_slice)
+        .into_iter()
+        .flat_map(|slice| slice.owned_views.iter())
+        .filter_map(|view_name| view_definition_by_name(documents, view_name))
+        .collect()
+}
+
+fn view_definition_by_name<'a>(
+    documents: &'a [EventModelDocument],
+    view_name: &DefinitionName,
+) -> Option<&'a ViewDefinition> {
+    documents
+        .iter()
+        .flat_map(|document| document.view_definitions.iter())
+        .find(|view| &view.name == view_name)
+}
+
+fn view_invokes_command(view: &ViewDefinition, command: &DefinitionName) -> bool {
+    view.controls
+        .iter()
+        .any(|control| control.command.as_ref() == Some(command))
+}
+
+fn workflow_command_transition_source_view(
+    documents: &[EventModelDocument],
+    transition: &WorkflowCommandTransition,
+) -> DefinitionName {
+    workflow_transition_source_views(documents, &transition.source_slice)
+        .first()
+        .map(|view| view.name.clone())
+        .unwrap_or_else(|| transition.source_slice.clone())
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
