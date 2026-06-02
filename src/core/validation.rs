@@ -476,29 +476,79 @@ pub struct SliceScenario {
     scenario_set: ScenarioSetKind,
     referenced_events: Vec<DefinitionName>,
     then_events: Vec<DefinitionName>,
+    command_errors: Vec<DefinitionName>,
     given_streams: Vec<DefinitionName>,
     read_model_states: Vec<DefinitionName>,
 }
 
 impl SliceScenario {
+    pub fn new(parts: SliceScenarioParts) -> Self {
+        Self {
+            name: parts.name,
+            when_field: parts.when_field,
+            scenario_set: parts.scenario_set,
+            referenced_events: parts.referenced_events,
+            then_events: parts.then_events,
+            command_errors: parts.command_errors,
+            given_streams: parts.given_streams,
+            read_model_states: parts.read_model_states,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct SliceScenarioParts {
+    name: DefinitionName,
+    when_field: ScenarioStepField,
+    scenario_set: ScenarioSetKind,
+    referenced_events: Vec<DefinitionName>,
+    then_events: Vec<DefinitionName>,
+    command_errors: Vec<DefinitionName>,
+    given_streams: Vec<DefinitionName>,
+    read_model_states: Vec<DefinitionName>,
+}
+
+impl SliceScenarioParts {
     pub fn new(
         name: DefinitionName,
         when_field: ScenarioStepField,
         scenario_set: ScenarioSetKind,
-        referenced_events: Vec<DefinitionName>,
-        then_events: Vec<DefinitionName>,
-        given_streams: Vec<DefinitionName>,
-        read_model_states: Vec<DefinitionName>,
     ) -> Self {
         Self {
             name,
             when_field,
             scenario_set,
-            referenced_events,
-            then_events,
-            given_streams,
-            read_model_states,
+            referenced_events: Vec::new(),
+            then_events: Vec::new(),
+            command_errors: Vec::new(),
+            given_streams: Vec::new(),
+            read_model_states: Vec::new(),
         }
+    }
+
+    pub fn with_referenced_events(mut self, referenced_events: Vec<DefinitionName>) -> Self {
+        self.referenced_events = referenced_events;
+        self
+    }
+
+    pub fn with_then_events(mut self, then_events: Vec<DefinitionName>) -> Self {
+        self.then_events = then_events;
+        self
+    }
+
+    pub fn with_command_errors(mut self, command_errors: Vec<DefinitionName>) -> Self {
+        self.command_errors = command_errors;
+        self
+    }
+
+    pub fn with_given_streams(mut self, given_streams: Vec<DefinitionName>) -> Self {
+        self.given_streams = given_streams;
+        self
+    }
+
+    pub fn with_read_model_states(mut self, read_model_states: Vec<DefinitionName>) -> Self {
+        self.read_model_states = read_model_states;
+        self
     }
 }
 
@@ -863,6 +913,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_automation_slice_command_policy(document)?;
 
     validate_automation_slice_command_error_handling(document)?;
+
+    validate_scenario_command_errors_are_declared(document)?;
 
     validate_board_read_model_to_command_intermediates(document)?;
 
@@ -1727,6 +1779,45 @@ fn command_definition<'a>(
         .command_definitions
         .iter()
         .find(|command| command.name.as_ref() == Some(command_name))
+}
+
+fn validate_scenario_command_errors_are_declared(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .find_map(|slice| undeclared_scenario_command_error(document, slice))
+        .map_or(Ok(()), |error_name| {
+            Err(validation_issue(format!(
+                "scenario references undeclared command error '{error_name}'"
+            )))
+        })
+}
+
+fn undeclared_scenario_command_error(
+    document: &EventModelDocument,
+    slice: &SliceDefinition,
+) -> Option<DefinitionName> {
+    slice
+        .scenarios
+        .iter()
+        .flat_map(|scenario| scenario.command_errors.iter())
+        .find(|error_name| !slice_command_errors(document, slice).contains(error_name))
+        .cloned()
+}
+
+fn slice_command_errors(
+    document: &EventModelDocument,
+    slice: &SliceDefinition,
+) -> Vec<DefinitionName> {
+    slice
+        .issued_commands
+        .iter()
+        .filter_map(|command_name| command_definition(document, command_name))
+        .flat_map(|command| command.errors.iter())
+        .cloned()
+        .collect()
 }
 
 fn validate_board_read_model_to_command_intermediates(
