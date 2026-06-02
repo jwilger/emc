@@ -313,6 +313,7 @@ impl EventAttribute {
 pub enum EventAttributeSource {
     CommandInput(DefinitionName),
     ExternalField(DefinitionName, DefinitionName),
+    GeneratedEmpty,
     ReadModelField(DefinitionName, DefinitionName),
     Other,
 }
@@ -417,6 +418,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_external_sourced_event_attributes(document)
         .and_then(|()| validate_read_model_sourced_event_attributes(document))
+        .and_then(|()| validate_generated_event_attribute_sources(document))
 }
 
 pub fn model_must_be_object_issue() -> ValidationIssue {
@@ -857,6 +859,27 @@ fn validate_read_model_sourced_event_attributes(
             Err(validation_issue(format!(
                 "event '{}' attribute '{}' has invalid source 'read_model.{}.{}'",
                 event.name, attribute.name, read_model_name, field_name
+            )))
+        })
+}
+
+fn validate_generated_event_attribute_sources(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .event_definitions
+        .iter()
+        .flat_map(|event| {
+            event.attributes.iter().filter_map(move |attribute| {
+                (attribute.source == EventAttributeSource::GeneratedEmpty)
+                    .then_some((event, attribute))
+            })
+        })
+        .next()
+        .map_or(Ok(()), |(event, attribute)| {
+            Err(validation_issue(format!(
+                "event '{}' attribute '{}' has invalid source 'generated.'",
+                event.name, attribute.name
             )))
         })
 }
