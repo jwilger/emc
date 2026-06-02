@@ -351,6 +351,14 @@ impl WorkflowStep {
         self.relationship == WorkflowStepRelationship::Entry
     }
 
+    fn is_alternate(&self) -> bool {
+        self.relationship == WorkflowStepRelationship::Alternate
+    }
+
+    fn has_trigger(&self) -> bool {
+        self.trigger == WorkflowStepTrigger::Present
+    }
+
     fn is_exempt_from_entry_reachability(&self) -> bool {
         matches!(
             self.relationship,
@@ -1261,6 +1269,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_workflow_transition_targets_known_steps(document)?;
 
+    validate_alternate_workflow_step_rationale(document)?;
+
     validate_workflow_step_incoming_reachability(document)?;
 
     validate_workflow_steps_reachable_from_entry(document)?;
@@ -1845,6 +1855,30 @@ fn unknown_workflow_transition_target<'a>(
         .iter()
         .flat_map(|step| step.transition_targets().iter())
         .find(|target| !workflow_step_slices.contains(*target))
+}
+
+fn validate_alternate_workflow_step_rationale(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    if document.workflow_composition != WorkflowComposition::DeclaresSteps {
+        return Ok(());
+    }
+
+    let incoming_step_slices = workflow_incoming_step_slices(&document.workflow_steps);
+    document
+        .workflow_steps
+        .iter()
+        .find(|step| {
+            step.is_alternate()
+                && !step.has_trigger()
+                && !incoming_step_slices.contains(step.slice())
+        })
+        .map_or(Ok(()), |step| {
+            Err(validation_issue(format!(
+                "alternate workflow step '{}' must declare a trigger or incoming transition",
+                step.slice()
+            )))
+        })
 }
 
 fn validate_workflow_step_incoming_reachability(
