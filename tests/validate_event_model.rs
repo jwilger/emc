@@ -692,6 +692,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_automation_slices_without_trigger() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("automation-without-trigger.eventmodel.json"),
+            "{\"name\":\"Review lesson submission\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson_review\"}],\"events\":[{\"name\":\"TeacherReviewRecorded\",\"stream\":\"lesson_review\",\"attributes\":[]}],\"commands\":[{\"name\":\"RecordTeacherReview\",\"inputs\":[],\"produces\":[\"TeacherReviewRecorded\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Review lesson submission\",\"type\":\"automation\",\"commands\":[\"RecordTeacherReview\"],\"events\":[\"TeacherReviewRecorded\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"review lesson submission\",\"given\":[],\"when\":{},\"then\":[\"TeacherReviewRecorded\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "automation slice 'Review lesson submission' must declare a trigger",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_undeclared_board_automation_between_read_model_and_command()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
