@@ -436,11 +436,11 @@ pub enum SingletonBehavior {
     DeclaresRepeatBehavior,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum AutomationTrigger {
     NotAutomation,
     MissingTrigger,
-    DeclaresTrigger,
+    DeclaresTriggers(Vec<DefinitionName>),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -475,6 +475,7 @@ pub struct SliceScenario {
     when_field: ScenarioStepField,
     scenario_set: ScenarioSetKind,
     referenced_events: Vec<DefinitionName>,
+    scenario_step_references: Vec<DefinitionName>,
     then_events: Vec<DefinitionName>,
     command_errors: Vec<DefinitionName>,
     given_streams: Vec<DefinitionName>,
@@ -489,6 +490,7 @@ impl SliceScenario {
             when_field: parts.when_field,
             scenario_set: parts.scenario_set,
             referenced_events: parts.referenced_events,
+            scenario_step_references: parts.scenario_step_references,
             then_events: parts.then_events,
             command_errors: parts.command_errors,
             given_streams: parts.given_streams,
@@ -504,6 +506,7 @@ pub struct SliceScenarioParts {
     when_field: ScenarioStepField,
     scenario_set: ScenarioSetKind,
     referenced_events: Vec<DefinitionName>,
+    scenario_step_references: Vec<DefinitionName>,
     then_events: Vec<DefinitionName>,
     command_errors: Vec<DefinitionName>,
     given_streams: Vec<DefinitionName>,
@@ -522,6 +525,7 @@ impl SliceScenarioParts {
             when_field,
             scenario_set,
             referenced_events: Vec::new(),
+            scenario_step_references: Vec::new(),
             then_events: Vec::new(),
             command_errors: Vec::new(),
             given_streams: Vec::new(),
@@ -532,6 +536,14 @@ impl SliceScenarioParts {
 
     pub fn with_referenced_events(mut self, referenced_events: Vec<DefinitionName>) -> Self {
         self.referenced_events = referenced_events;
+        self
+    }
+
+    pub fn with_scenario_step_references(
+        mut self,
+        scenario_step_references: Vec<DefinitionName>,
+    ) -> Self {
+        self.scenario_step_references = scenario_step_references;
         self
     }
 
@@ -1052,6 +1064,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_translation_slice_view_ownership(document)?;
 
     validate_automation_slice_triggers(document)?;
+
+    validate_automation_slice_trigger_scenarios(document)?;
 
     validate_automation_slice_command_policy(document)?;
 
@@ -1928,6 +1942,57 @@ fn validate_automation_slice_triggers(
                 slice.name
             )))
         })
+}
+
+fn validate_automation_slice_trigger_scenarios(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::Automation)
+        .find_map(missing_automation_trigger_scenario)
+        .map_or(Ok(()), |missing| {
+            Err(validation_issue(format!(
+                "automation slice '{}' must include a scenario for trigger event '{}'",
+                missing.slice_name, missing.trigger_event
+            )))
+        })
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct MissingAutomationTriggerScenario {
+    slice_name: DefinitionName,
+    trigger_event: DefinitionName,
+}
+
+fn missing_automation_trigger_scenario(
+    slice: &SliceDefinition,
+) -> Option<MissingAutomationTriggerScenario> {
+    match &slice.automation_trigger {
+        AutomationTrigger::DeclaresTriggers(trigger_events) => trigger_events
+            .iter()
+            .find(|trigger_event| !slice_has_trigger_scenario(slice, trigger_event))
+            .map(|trigger_event| MissingAutomationTriggerScenario {
+                slice_name: slice.name.clone(),
+                trigger_event: trigger_event.clone(),
+            }),
+        AutomationTrigger::MissingTrigger | AutomationTrigger::NotAutomation => None,
+    }
+}
+
+fn slice_has_trigger_scenario(slice: &SliceDefinition, trigger_event: &DefinitionName) -> bool {
+    slice
+        .scenarios
+        .iter()
+        .any(|scenario| scenario_mentions_trigger(scenario, trigger_event))
+}
+
+fn scenario_mentions_trigger(scenario: &SliceScenario, trigger_event: &DefinitionName) -> bool {
+    scenario
+        .scenario_step_references
+        .iter()
+        .any(|reference| reference.as_ref().contains(trigger_event.as_ref()))
 }
 
 fn validate_automation_slice_command_policy(
