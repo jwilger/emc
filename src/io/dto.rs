@@ -12,13 +12,13 @@ use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
 };
 use crate::core::validation::{
-    CommandDefinition, DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource,
-    EventDefinition, EventModelDocument, EventModelDocumentParts, EventModelFileKind,
-    ExternalInputSchema, LegacyScenariosField, NamedDefinition, ReadModelDefinition,
-    ReadModelField, ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
-    ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SliceDefinition,
-    SliceDefinitionCount, SliceScenario, SliceType, TopLevelKey, ViewDefinition,
-    empty_top_level_key_issue, model_must_be_object_issue,
+    CommandDefinition, CommandInputSource, CommandInputSourceKind, DefinitionKind, DefinitionName,
+    EventAttribute, EventAttributeSource, EventDefinition, EventModelDocument,
+    EventModelDocumentParts, EventModelFileKind, ExternalInputSchema, LegacyScenariosField,
+    NamedDefinition, ReadModelDefinition, ReadModelField, ReadModelFieldAbsenceDefault,
+    ReadModelFieldDerivation, ReadModelFieldSource, ReadModelTransitiveDerivation, ScenarioSetKind,
+    ScenarioStepField, SliceDefinition, SliceDefinitionCount, SliceScenario, SliceType,
+    TopLevelKey, ViewDefinition, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -806,6 +806,7 @@ fn command_definitions_from_json_object(
         .flatten()
         .map(|command| {
             let inputs = definition_names_from_json_array_field(command, "inputs", "input")?;
+            let input_sources = command_input_sources_from_json_command(command)?;
             let external_inputs = definition_names_from_json_array_field(
                 command,
                 "external_inputs",
@@ -813,10 +814,64 @@ fn command_definitions_from_json_object(
             )?;
             let external_input_schemas = external_input_schemas_from_json_command(command)?;
             definition_names_from_json_array_field(command, "produces", "event").map(|produces| {
-                CommandDefinition::new(inputs, external_inputs, external_input_schemas, produces)
+                CommandDefinition::new(
+                    inputs,
+                    input_sources,
+                    external_inputs,
+                    external_input_schemas,
+                    produces,
+                )
             })
         })
         .collect()
+}
+
+fn command_input_sources_from_json_command(
+    command: &Value,
+) -> Result<Vec<CommandInputSource>, BoundaryParseError> {
+    command
+        .get("input_sources")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(command_input_source_from_json_source)
+        .collect()
+}
+
+fn command_input_source_from_json_source(
+    input_source: &Value,
+) -> Result<CommandInputSource, BoundaryParseError> {
+    input_source
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| BoundaryParseError::new("command input source is missing name"))
+        .and_then(|name| {
+            DefinitionName::try_new(name.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid command input source name: {error}"))
+            })
+        })
+        .map(|name| {
+            CommandInputSource::new(name, command_input_source_kind_from_json(input_source))
+        })
+}
+
+fn command_input_source_kind_from_json(input_source: &Value) -> CommandInputSourceKind {
+    input_source
+        .get("source")
+        .and_then(Value::as_str)
+        .and_then(command_external_input_source)
+        .unwrap_or(CommandInputSourceKind::Other)
+}
+
+fn command_external_input_source(source: &str) -> Option<CommandInputSourceKind> {
+    let external_reference = source.strip_prefix("external.")?;
+    let (payload_name, field_name) = external_reference.split_once('.')?;
+    DefinitionName::try_new(payload_name.to_owned())
+        .ok()
+        .zip(DefinitionName::try_new(field_name.to_owned()).ok())
+        .map(|(payload_name, field_name)| {
+            CommandInputSourceKind::ExternalField(payload_name, field_name)
+        })
 }
 
 fn external_input_schemas_from_json_command(

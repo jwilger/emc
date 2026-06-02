@@ -408,6 +408,7 @@ pub enum ReadModelFieldAbsenceDefault {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CommandDefinition {
     inputs: Vec<DefinitionName>,
+    input_sources: Vec<CommandInputSource>,
     external_inputs: Vec<DefinitionName>,
     external_input_schemas: Vec<ExternalInputSchema>,
     produces: Vec<DefinitionName>,
@@ -416,17 +417,37 @@ pub struct CommandDefinition {
 impl CommandDefinition {
     pub fn new(
         inputs: Vec<DefinitionName>,
+        input_sources: Vec<CommandInputSource>,
         external_inputs: Vec<DefinitionName>,
         external_input_schemas: Vec<ExternalInputSchema>,
         produces: Vec<DefinitionName>,
     ) -> Self {
         Self {
             inputs,
+            input_sources,
             external_inputs,
             external_input_schemas,
             produces,
         }
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CommandInputSource {
+    name: DefinitionName,
+    source: CommandInputSourceKind,
+}
+
+impl CommandInputSource {
+    pub fn new(name: DefinitionName, source: CommandInputSourceKind) -> Self {
+        Self { name, source }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum CommandInputSourceKind {
+    ExternalField(DefinitionName, DefinitionName),
+    Other,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -506,6 +527,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_external_sourced_event_attributes(document)
         .and_then(|()| validate_read_model_sourced_event_attributes(document))
         .and_then(|()| validate_generated_event_attribute_sources(document))
+        .and_then(|()| validate_command_input_external_source_fields(document))
         .and_then(|()| validate_derived_read_model_field_provenance(document))
         .and_then(|()| validate_derived_read_model_field_scenarios(document))
         .and_then(|()| validate_absence_default_read_model_field_events(document))
@@ -973,6 +995,37 @@ fn validate_generated_event_attribute_sources(
             Err(validation_issue(format!(
                 "event '{}' attribute '{}' has invalid source 'generated.'",
                 event.name, attribute.name
+            )))
+        })
+}
+
+fn validate_command_input_external_source_fields(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .command_definitions
+        .iter()
+        .flat_map(|command| {
+            command
+                .input_sources
+                .iter()
+                .filter_map(move |input_source| {
+                    if let CommandInputSourceKind::ExternalField(payload_name, field_name) =
+                        &input_source.source
+                    {
+                        Some((command, input_source, payload_name, field_name))
+                    } else {
+                        None
+                    }
+                })
+        })
+        .find(|(command, _, payload_name, field_name)| {
+            !external_field_is_declared(command, payload_name, field_name)
+        })
+        .map_or(Ok(()), |(_, input_source, _, field_name)| {
+            Err(validation_issue(format!(
+                "command input '{}' references undeclared external input field '{}'",
+                input_source.name, field_name
             )))
         })
 }
