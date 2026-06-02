@@ -3447,6 +3447,12 @@ fn validate_board_lane_ids(document: &EventModelDocument) -> Result<(), Validati
         ));
     }
 
+    if let Some(lane_id) = duplicated_board_lane_id(board_lanes) {
+        return Err(validation_issue(format!(
+            "board lane id '{lane_id}' is duplicated"
+        )));
+    }
+
     required_board_lane_ids()
         .into_iter()
         .find(|lane_id| !board_lanes.iter().any(|lane| lane.id.as_ref() == *lane_id))
@@ -3461,6 +3467,17 @@ fn is_canonical_board_lane_id(lane_id: &DefinitionName) -> bool {
     required_board_lane_ids()
         .into_iter()
         .any(|canonical| lane_id.as_ref() == canonical)
+}
+
+fn duplicated_board_lane_id(board_lanes: &[BoardLane]) -> Option<DefinitionName> {
+    let mut seen = BTreeSet::new();
+    board_lanes.iter().find_map(|lane| {
+        if seen.insert(lane.id.clone()) {
+            None
+        } else {
+            Some(lane.id.clone())
+        }
+    })
 }
 
 fn required_board_lane_ids() -> [&'static str; 3] {
