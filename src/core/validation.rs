@@ -3453,14 +3453,41 @@ fn validate_board_lane_ids(document: &EventModelDocument) -> Result<(), Validati
         )));
     }
 
-    required_board_lane_ids()
+    if let Some(lane_id) = required_board_lane_ids()
         .into_iter()
         .find(|lane_id| !board_lanes.iter().any(|lane| lane.id.as_ref() == *lane_id))
-        .map_or(Ok(()), |lane_id| {
-            Err(validation_issue(format!(
-                "board lanes must include canonical lane '{lane_id}'"
-            )))
+    {
+        return Err(validation_issue(format!(
+            "board lanes must include canonical lane '{lane_id}'"
+        )));
+    }
+
+    board_lane_name_mismatch(board_lanes).map_or(Ok(()), |mismatch| {
+        Err(validation_issue(format!(
+            "board lane '{}' must be named '{}'",
+            mismatch.lane_id, mismatch.canonical_name
+        )))
+    })
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct BoardLaneNameMismatch {
+    lane_id: DefinitionName,
+    canonical_name: &'static str,
+}
+
+fn board_lane_name_mismatch(board_lanes: &[BoardLane]) -> Option<BoardLaneNameMismatch> {
+    board_lanes.iter().find_map(|lane| {
+        canonical_board_lane_name(&lane.id).and_then(|canonical_name| {
+            lane.name
+                .as_ref()
+                .filter(|name| name.as_ref() != canonical_name)
+                .map(|_name| BoardLaneNameMismatch {
+                    lane_id: lane.id.clone(),
+                    canonical_name,
+                })
         })
+    })
 }
 
 fn is_canonical_board_lane_id(lane_id: &DefinitionName) -> bool {
@@ -3482,6 +3509,15 @@ fn duplicated_board_lane_id(board_lanes: &[BoardLane]) -> Option<DefinitionName>
 
 fn required_board_lane_ids() -> [&'static str; 3] {
     ["ux", "actions", "events"]
+}
+
+fn canonical_board_lane_name(lane_id: &DefinitionName) -> Option<&'static str> {
+    match lane_id.as_ref() {
+        "ux" => Some("People, Views, and Translations"),
+        "actions" => Some("Commands and Projections"),
+        "events" => Some("Stored Facts"),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
