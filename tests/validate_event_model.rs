@@ -1334,6 +1334,37 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_workflow_navigation_transitions_not_owned_by_source_view()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("lesson-01.eventmodel.json"),
+            "{\"name\":\"Lesson 01\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[],\"slice_files\":[\"./entry.eventmodel.json\",\"./show-lesson.eventmodel.json\"],\"steps\":[{\"slice\":\"entry\",\"name\":\"Entry\",\"type\":\"state_view\",\"relationship\":\"entry\",\"transitions\":[{\"to\":\"show-lesson\",\"via_navigation\":\"lesson_screen\"}]},{\"slice\":\"show-lesson\",\"name\":\"Show lesson\",\"type\":\"state_view\",\"relationship\":\"main\"}]}",
+        )?;
+        write(
+            workflows.join("entry.eventmodel.json"),
+            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"course_entry_resolution\",\"uses_read_models\":[],\"controls\":[]}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"course_entry_resolution\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+        write(
+            workflows.join("show-lesson.eventmodel.json"),
+            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "navigation transition to 'lesson_screen' is not owned by source view 'course_entry_resolution'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_automation_slices_without_trigger() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");

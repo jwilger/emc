@@ -24,9 +24,9 @@ use crate::core::validation::{
     SliceScenarioParts, SliceType, TopLevelKey, TranslationContract, ViewControlDefinition,
     ViewControlDefinitionParts, ViewDefinition, ViewWireframe, WorkflowCommandTransition,
     WorkflowComposition, WorkflowEntryStepCount, WorkflowEventTransition,
-    WorkflowInternalDefinitions, WorkflowStep, WorkflowStepExit, WorkflowStepLifecycleRole,
-    WorkflowStepRelationship, WorkflowStepTrigger, empty_top_level_key_issue,
-    model_must_be_object_issue,
+    WorkflowInternalDefinitions, WorkflowNavigationTransition, WorkflowStep, WorkflowStepExit,
+    WorkflowStepLifecycleRole, WorkflowStepRelationship, WorkflowStepTrigger,
+    empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -223,6 +223,8 @@ fn event_model_document_from_json(
             let workflow_event_transitions = workflow_event_transitions_from_json_object(object)?;
             let workflow_command_transitions =
                 workflow_command_transitions_from_json_object(object)?;
+            let workflow_navigation_transitions =
+                workflow_navigation_transitions_from_json_object(object)?;
             let duplicate_workflow_step_slice =
                 duplicate_workflow_step_slice_from_json_object(object)?;
             let workflow_composition = workflow_composition_from_json_object(object);
@@ -262,6 +264,7 @@ fn event_model_document_from_json(
                         .with_workflow_steps(workflow_steps)
                         .with_workflow_event_transitions(workflow_event_transitions)
                         .with_workflow_command_transitions(workflow_command_transitions)
+                        .with_workflow_navigation_transitions(workflow_navigation_transitions)
                         .with_duplicate_workflow_step_slice(duplicate_workflow_step_slice)
                         .with_workflow_composition(workflow_composition)
                         .with_workflow_entry_step_count(workflow_entry_step_count)
@@ -629,6 +632,77 @@ fn workflow_command_transitions_from_json_step(
                 source_slice.clone(),
                 target_slice,
                 command,
+            ))
+        })
+        .collect()
+}
+
+fn workflow_navigation_transitions_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<WorkflowNavigationTransition>, BoundaryParseError> {
+    object
+        .get("steps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .map(workflow_navigation_transitions_from_json_step)
+        .collect::<Result<Vec<_>, _>>()
+        .map(|transitions| transitions.into_iter().flatten().collect())
+}
+
+fn workflow_navigation_transitions_from_json_step(
+    step: &Map<String, Value>,
+) -> Result<Vec<WorkflowNavigationTransition>, BoundaryParseError> {
+    let Some(source_slice) = step.get("slice").and_then(Value::as_str) else {
+        return Ok(Vec::new());
+    };
+    let source_slice = DefinitionName::try_new(source_slice.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid workflow transition source: {error}"))
+    })?;
+
+    step.get("transitions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .filter(|transition| {
+            transition
+                .get("via_navigation")
+                .and_then(Value::as_str)
+                .is_some()
+        })
+        .map(|transition| {
+            let target_slice = transition
+                .get("to")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    BoundaryParseError::new("workflow navigation transition is missing target")
+                })
+                .and_then(|target| {
+                    DefinitionName::try_new(target.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!(
+                            "invalid workflow transition target: {error}"
+                        ))
+                    })
+                })?;
+            let navigation_target = transition
+                .get("via_navigation")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    BoundaryParseError::new("workflow navigation transition is missing navigation")
+                })
+                .and_then(|navigation| {
+                    DefinitionName::try_new(navigation.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!(
+                            "invalid workflow transition navigation: {error}"
+                        ))
+                    })
+                })?;
+            Ok(WorkflowNavigationTransition::new(
+                source_slice.clone(),
+                target_slice,
+                navigation_target,
             ))
         })
         .collect()
