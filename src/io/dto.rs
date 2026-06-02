@@ -1,6 +1,10 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
+use serde_json::Value;
+
+use crate::core::emc::{EMCSliceImport, EMCWorkflowImport};
+use crate::core::effect::FileContents;
 use crate::core::project::ProjectName;
 use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
@@ -43,6 +47,41 @@ pub fn parse_project_manifest_name(raw: &str) -> Result<ProjectName, BoundaryPar
         .and_then(quoted_value)
         .ok_or_else(|| BoundaryParseError::new("emc.toml is missing project name"))
         .and_then(parse_project_name)
+}
+
+pub fn parse_emc_workflow_import(
+    slug: WorkflowSlug,
+    raw_json: &str,
+    slices: Vec<EMCSliceImport>,
+) -> Result<EMCWorkflowImport, BoundaryParseError> {
+    let value = serde_json::from_str::<Value>(raw_json)
+        .map_err(|error| BoundaryParseError::new(format!("invalid EMC workflow JSON: {error}")))?;
+    let name = value
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| BoundaryParseError::new("EMC workflow is missing name"))
+        .and_then(parse_model_name)?;
+    let json = FileContents::try_new(raw_json.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid EMC workflow content: {error}"))
+    })?;
+
+    Ok(EMCWorkflowImport::new(name, slug, json, slices))
+}
+
+pub fn parse_emc_slice_import(
+    slug: SliceSlug,
+    raw_json: &str,
+) -> Result<EMCSliceImport, BoundaryParseError> {
+    let value = serde_json::from_str::<Value>(raw_json)
+        .map_err(|error| BoundaryParseError::new(format!("invalid EMC slice JSON: {error}")))?;
+    value
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| BoundaryParseError::new("EMC slice is missing name"))?;
+    let json = FileContents::try_new(raw_json.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid EMC slice content: {error}")))?;
+
+    Ok(EMCSliceImport::new(slug, json))
 }
 
 pub fn parse_workflow_slug(raw: &str) -> Result<WorkflowSlug, BoundaryParseError> {
