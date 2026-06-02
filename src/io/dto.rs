@@ -24,9 +24,9 @@ use crate::core::validation::{
     SliceScenarioParts, SliceType, TopLevelKey, TranslationContract, ViewControlDefinition,
     ViewControlDefinitionParts, ViewDefinition, ViewWireframe, WorkflowCommandTransition,
     WorkflowComposition, WorkflowEntryStepCount, WorkflowEventTransition,
-    WorkflowInternalDefinitions, WorkflowNavigationTransition, WorkflowStep, WorkflowStepExit,
-    WorkflowStepLifecycleRole, WorkflowStepRelationship, WorkflowStepTrigger,
-    empty_top_level_key_issue, model_must_be_object_issue,
+    WorkflowExternalTriggerTransition, WorkflowInternalDefinitions, WorkflowNavigationTransition,
+    WorkflowStep, WorkflowStepExit, WorkflowStepLifecycleRole, WorkflowStepRelationship,
+    WorkflowStepTrigger, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -225,6 +225,8 @@ fn event_model_document_from_json(
                 workflow_command_transitions_from_json_object(object)?;
             let workflow_navigation_transitions =
                 workflow_navigation_transitions_from_json_object(object)?;
+            let workflow_external_trigger_transitions =
+                workflow_external_trigger_transitions_from_json_object(object)?;
             let duplicate_workflow_step_slice =
                 duplicate_workflow_step_slice_from_json_object(object)?;
             let workflow_composition = workflow_composition_from_json_object(object);
@@ -265,6 +267,9 @@ fn event_model_document_from_json(
                         .with_workflow_event_transitions(workflow_event_transitions)
                         .with_workflow_command_transitions(workflow_command_transitions)
                         .with_workflow_navigation_transitions(workflow_navigation_transitions)
+                        .with_workflow_external_trigger_transitions(
+                            workflow_external_trigger_transitions,
+                        )
                         .with_duplicate_workflow_step_slice(duplicate_workflow_step_slice)
                         .with_workflow_composition(workflow_composition)
                         .with_workflow_entry_step_count(workflow_entry_step_count)
@@ -708,6 +713,79 @@ fn workflow_navigation_transitions_from_json_step(
         .collect()
 }
 
+fn workflow_external_trigger_transitions_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<WorkflowExternalTriggerTransition>, BoundaryParseError> {
+    object
+        .get("steps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .map(workflow_external_trigger_transitions_from_json_step)
+        .collect::<Result<Vec<_>, _>>()
+        .map(|transitions| transitions.into_iter().flatten().collect())
+}
+
+fn workflow_external_trigger_transitions_from_json_step(
+    step: &Map<String, Value>,
+) -> Result<Vec<WorkflowExternalTriggerTransition>, BoundaryParseError> {
+    let Some(source_slice) = step.get("slice").and_then(Value::as_str) else {
+        return Ok(Vec::new());
+    };
+    let source_slice = DefinitionName::try_new(source_slice.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid workflow transition source: {error}"))
+    })?;
+
+    step.get("transitions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .filter_map(|transition| {
+            workflow_external_trigger_from_json_transition(transition)
+                .map(|external_trigger| (transition, external_trigger))
+        })
+        .map(|(transition, external_trigger)| {
+            let target_slice = transition
+                .get("to")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    BoundaryParseError::new(
+                        "workflow external trigger transition is missing target",
+                    )
+                })
+                .and_then(|target| {
+                    DefinitionName::try_new(target.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!(
+                            "invalid workflow transition target: {error}"
+                        ))
+                    })
+                })?;
+            DefinitionName::try_new(external_trigger.to_owned())
+                .map(|external_trigger| {
+                    WorkflowExternalTriggerTransition::new(
+                        source_slice.clone(),
+                        target_slice,
+                        external_trigger,
+                    )
+                })
+                .map_err(|error| {
+                    BoundaryParseError::new(format!(
+                        "invalid workflow transition external trigger: {error}"
+                    ))
+                })
+        })
+        .collect()
+}
+
+fn workflow_external_trigger_from_json_transition(transition: &Map<String, Value>) -> Option<&str> {
+    transition
+        .get("via_external_trigger")
+        .and_then(Value::as_str)
+        .or_else(|| transition.get("external_trigger").and_then(Value::as_str))
+}
+
 fn duplicate_workflow_step_slice_from_json_object(
     object: &Map<String, Value>,
 ) -> Result<Option<DefinitionName>, BoundaryParseError> {
@@ -1006,6 +1084,7 @@ fn slice_definitions_from_json_object(
                         definition_names_from_json_array_field(slice, "views", "view")?;
                     let owned_events =
                         definition_names_from_json_array_field(slice, "events", "event")?;
+                    let external_triggers = external_triggers_from_json_slice(slice)?;
                     let external_payload_variants =
                         external_payload_variants_from_json_slice(slice)?;
                     let outcome_labels = outcome_labels_from_json_slice(slice)?;
@@ -1021,6 +1100,7 @@ fn slice_definitions_from_json_object(
                                 .with_owned_translations(owned_translations)
                                 .with_owned_views(owned_views)
                                 .with_owned_events(owned_events)
+                                .with_external_triggers(external_triggers)
                                 .with_external_payload_variants(external_payload_variants)
                                 .with_outcome_labels(outcome_labels)
                                 .with_outcomes(outcomes)
@@ -1129,6 +1209,25 @@ fn automation_trigger_events_from_json_slice(
     optional_definition_names_from_json_fields(slice, &["trigger", "external_event"]).and_then(
         |single_triggers| {
             definition_names_from_json_array_field(slice, "triggers", "trigger").map(
+                |trigger_array| {
+                    single_triggers
+                        .into_iter()
+                        .chain(trigger_array)
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .collect()
+                },
+            )
+        },
+    )
+}
+
+fn external_triggers_from_json_slice(
+    slice: &Value,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    optional_definition_names_from_json_fields(slice, &["external_event"]).and_then(
+        |single_triggers| {
+            definition_names_from_json_array_field(slice, "external_events", "external event").map(
                 |trigger_array| {
                     single_triggers
                         .into_iter()

@@ -25,6 +25,7 @@ pub struct EventModelDocument {
     workflow_event_transitions: Vec<WorkflowEventTransition>,
     workflow_command_transitions: Vec<WorkflowCommandTransition>,
     workflow_navigation_transitions: Vec<WorkflowNavigationTransition>,
+    workflow_external_trigger_transitions: Vec<WorkflowExternalTriggerTransition>,
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
@@ -57,6 +58,7 @@ impl EventModelDocument {
             workflow_event_transitions: parts.workflow_event_transitions,
             workflow_command_transitions: parts.workflow_command_transitions,
             workflow_navigation_transitions: parts.workflow_navigation_transitions,
+            workflow_external_trigger_transitions: parts.workflow_external_trigger_transitions,
             duplicate_workflow_step_slice: parts.duplicate_workflow_step_slice,
             workflow_composition: parts.workflow_composition,
             workflow_entry_step_count: parts.workflow_entry_step_count,
@@ -90,6 +92,7 @@ pub struct EventModelDocumentParts {
     workflow_event_transitions: Vec<WorkflowEventTransition>,
     workflow_command_transitions: Vec<WorkflowCommandTransition>,
     workflow_navigation_transitions: Vec<WorkflowNavigationTransition>,
+    workflow_external_trigger_transitions: Vec<WorkflowExternalTriggerTransition>,
     duplicate_workflow_step_slice: Option<DefinitionName>,
     workflow_composition: WorkflowComposition,
     workflow_entry_step_count: WorkflowEntryStepCount,
@@ -122,6 +125,7 @@ impl EventModelDocumentParts {
             workflow_event_transitions: Vec::new(),
             workflow_command_transitions: Vec::new(),
             workflow_navigation_transitions: Vec::new(),
+            workflow_external_trigger_transitions: Vec::new(),
             duplicate_workflow_step_slice: None,
             workflow_composition: WorkflowComposition::NotComposition,
             workflow_entry_step_count: WorkflowEntryStepCount::NotComposition,
@@ -255,6 +259,14 @@ impl EventModelDocumentParts {
         workflow_navigation_transitions: Vec<WorkflowNavigationTransition>,
     ) -> Self {
         self.workflow_navigation_transitions = workflow_navigation_transitions;
+        self
+    }
+
+    pub fn with_workflow_external_trigger_transitions(
+        mut self,
+        workflow_external_trigger_transitions: Vec<WorkflowExternalTriggerTransition>,
+    ) -> Self {
+        self.workflow_external_trigger_transitions = workflow_external_trigger_transitions;
         self
     }
 
@@ -549,6 +561,27 @@ impl WorkflowNavigationTransition {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowExternalTriggerTransition {
+    source_slice: DefinitionName,
+    target_slice: DefinitionName,
+    external_trigger: DefinitionName,
+}
+
+impl WorkflowExternalTriggerTransition {
+    pub fn new(
+        source_slice: DefinitionName,
+        target_slice: DefinitionName,
+        external_trigger: DefinitionName,
+    ) -> Self {
+        Self {
+            source_slice,
+            target_slice,
+            external_trigger,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum SliceDefinitionCount {
     Multiple,
@@ -647,6 +680,7 @@ pub struct SliceDefinition {
     owned_translations: Vec<DefinitionName>,
     owned_views: Vec<DefinitionName>,
     owned_events: Vec<DefinitionName>,
+    external_triggers: Vec<DefinitionName>,
     external_payload_variants: Vec<ExternalPayloadVariant>,
     outcome_labels: Vec<DefinitionName>,
     outcomes: Vec<OutcomeDefinition>,
@@ -670,6 +704,7 @@ impl SliceDefinition {
             owned_translations: parts.owned_translations,
             owned_views: parts.owned_views,
             owned_events: parts.owned_events,
+            external_triggers: parts.external_triggers,
             external_payload_variants: parts.external_payload_variants,
             outcome_labels: parts.outcome_labels,
             outcomes: parts.outcomes,
@@ -714,6 +749,7 @@ pub struct SliceDefinitionParts {
     owned_translations: Vec<DefinitionName>,
     owned_views: Vec<DefinitionName>,
     owned_events: Vec<DefinitionName>,
+    external_triggers: Vec<DefinitionName>,
     external_payload_variants: Vec<ExternalPayloadVariant>,
     outcome_labels: Vec<DefinitionName>,
     outcomes: Vec<OutcomeDefinition>,
@@ -737,6 +773,7 @@ impl SliceDefinitionParts {
             owned_translations: Vec::new(),
             owned_views: Vec::new(),
             owned_events: Vec::new(),
+            external_triggers: Vec::new(),
             external_payload_variants: Vec::new(),
             outcome_labels: Vec::new(),
             outcomes: Vec::new(),
@@ -784,6 +821,11 @@ impl SliceDefinitionParts {
 
     pub fn with_owned_events(mut self, owned_events: Vec<DefinitionName>) -> Self {
         self.owned_events = owned_events;
+        self
+    }
+
+    pub fn with_external_triggers(mut self, external_triggers: Vec<DefinitionName>) -> Self {
+        self.external_triggers = external_triggers;
         self
     }
 
@@ -1680,6 +1722,16 @@ pub fn validate_event_model_corpus(
         },
     )?;
 
+    workflow_external_trigger_not_declared_by_target_slice(documents).map_or(
+        Ok(()),
+        |transition| {
+            Err(validation_issue(format!(
+                "external trigger '{}' is not declared by target slice '{}'",
+                transition.external_trigger, transition.target_slice
+            )))
+        },
+    )?;
+
     unhandled_workflow_slice_outcome(documents).map_or(Ok(()), |unhandled| {
         Err(validation_issue(format!(
             "workflow '{}' does not handle outcome '{}' from slice '{}'",
@@ -1979,6 +2031,31 @@ fn target_state_change_exposes_navigation_view(
             }
         })
     })
+}
+
+fn workflow_external_trigger_not_declared_by_target_slice(
+    documents: &[EventModelDocument],
+) -> Option<WorkflowExternalTriggerTransition> {
+    documents
+        .iter()
+        .flat_map(|document| document.workflow_external_trigger_transitions.iter())
+        .find(|transition| {
+            !workflow_transition_slice_declares_external_trigger(
+                documents,
+                &transition.target_slice,
+                &transition.external_trigger,
+            )
+        })
+        .cloned()
+}
+
+fn workflow_transition_slice_declares_external_trigger(
+    documents: &[EventModelDocument],
+    slice_slug: &DefinitionName,
+    external_trigger: &DefinitionName,
+) -> bool {
+    application_entry_slice_by_slug(documents, slice_slug)
+        .is_some_and(|slice| slice.external_triggers.contains(external_trigger))
 }
 
 fn workflow_navigation_transition_has_source_control(
