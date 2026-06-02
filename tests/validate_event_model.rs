@@ -214,6 +214,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_board_external_event_elements_outside_ux_lane() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("board-external-event-element-lane.eventmodel.json"),
+            "{\"name\":\"Show checkpoint\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\",\"name\":\"People, Views, and Translations\"},{\"id\":\"actions\",\"name\":\"Commands and Projections\"},{\"id\":\"events\",\"name\":\"Stored Facts\"}],\"slices\":[{\"name\":\"Show checkpoint\",\"elements\":[{\"id\":\"external-checkpoint\",\"kind\":\"external_event\",\"lane\":\"actions\",\"name\":\"lesson_checkpoint_result\"}],\"connections\":[]}]},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Show checkpoint\",\"type\":\"state_view\",\"acceptance_scenarios\":[{\"name\":\"show checkpoint\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "board element 'external-checkpoint' of kind 'external_event' must be on lane 'ux'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_command_names() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
