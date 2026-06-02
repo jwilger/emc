@@ -916,6 +916,32 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_duplicate_scenarios_across_slice_files() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("teacher-accepts-progress.eventmodel.json"),
+            "{\"name\":\"Teacher accepts progress workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Review progress\",\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"teacher accepts progress\",\"given\":[],\"when\":{},\"then\":[]}]}]}",
+        )?;
+        write(
+            slices.join("mentor-accepts-progress.eventmodel.json"),
+            "{\"name\":\"Mentor accepts progress workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Mentor review progress\",\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"teacher accepts progress\",\"given\":[],\"when\":{},\"then\":[]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "scenario 'teacher accepts progress' is ambiguously defined across slices",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_undeclared_board_automation_between_read_model_and_command()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;

@@ -878,6 +878,12 @@ pub fn validate_event_model_corpus(
         )))
     })?;
 
+    duplicate_cross_slice_scenario_definition(documents).map_or(Ok(()), |scenario_name| {
+        Err(validation_issue(format!(
+            "scenario '{scenario_name}' is ambiguously defined across slices"
+        )))
+    })?;
+
     duplicate_slice_view_definition(documents).map_or(Ok(()), |view_name| {
         Err(validation_issue(format!(
             "view '{view_name}' is defined by more than one slice"
@@ -974,6 +980,33 @@ fn duplicate_slice_read_model_definition(
                 .filter(|previous_slice_name| *previous_slice_name != slice.name)
                 .map(|_| read_model_name.clone())
         })
+}
+
+fn duplicate_cross_slice_scenario_definition(
+    documents: &[EventModelDocument],
+) -> Option<DefinitionName> {
+    let mut seen = BTreeMap::new();
+    documents
+        .iter()
+        .filter(|document| document.file_kind == EventModelFileKind::Slice)
+        .flat_map(|document| document.slice_definitions.iter())
+        .flat_map(|slice| {
+            slice
+                .scenarios
+                .iter()
+                .filter(|scenario| !is_generated_state_scenario(&scenario.name))
+                .map(move |scenario| (slice, scenario))
+        })
+        .find_map(|(slice, scenario)| {
+            seen.insert(scenario.name.clone(), slice.name.clone())
+                .filter(|previous_slice_name| *previous_slice_name != slice.name)
+                .map(|_| scenario.name.clone())
+        })
+}
+
+fn is_generated_state_scenario(scenario_name: &DefinitionName) -> bool {
+    scenario_name.as_ref().ends_with(" empty state")
+        || scenario_name.as_ref().ends_with(" partial state")
 }
 
 fn duplicate_slice_translation_definition(
