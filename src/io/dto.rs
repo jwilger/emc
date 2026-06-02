@@ -15,9 +15,9 @@ use crate::core::validation::{
     CommandDefinition, DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource,
     EventDefinition, EventModelDocument, EventModelDocumentParts, EventModelFileKind,
     ExternalInputSchema, LegacyScenariosField, NamedDefinition, ReadModelDefinition,
-    ReadModelField, ReadModelFieldSource, ScenarioSetKind, ScenarioStepField, SliceDefinition,
-    SliceDefinitionCount, SliceScenario, SliceType, TopLevelKey, ViewDefinition,
-    empty_top_level_key_issue, model_must_be_object_issue,
+    ReadModelField, ReadModelFieldDerivation, ReadModelFieldSource, ScenarioSetKind,
+    ScenarioStepField, SliceDefinition, SliceDefinitionCount, SliceScenario, SliceType,
+    TopLevelKey, ViewDefinition, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -488,7 +488,13 @@ fn read_model_fields_from_json_read_model(
                         BoundaryParseError::new(format!("invalid read model field name: {error}"))
                     })
                 })
-                .map(|name| ReadModelField::new(name, read_model_field_source_from_json(field)))
+                .map(|name| {
+                    ReadModelField::new(
+                        name,
+                        read_model_field_source_from_json(field),
+                        read_model_field_derivation_from_json(field),
+                    )
+                })
         })
         .collect()
 }
@@ -502,6 +508,11 @@ fn read_model_field_source_from_json(field: &Value) -> ReadModelFieldSource {
 }
 
 fn read_model_event_attribute_source(source: &str) -> Option<ReadModelFieldSource> {
+    if let Some(derivation_name) = source.strip_prefix("derivation.") {
+        return DefinitionName::try_new(derivation_name.to_owned())
+            .ok()
+            .map(ReadModelFieldSource::Derivation);
+    }
     let (event_name, attribute_name) = source.split_once('.')?;
     DefinitionName::try_new(event_name.to_owned())
         .ok()
@@ -509,6 +520,31 @@ fn read_model_event_attribute_source(source: &str) -> Option<ReadModelFieldSourc
         .map(|(event_name, attribute_name)| {
             ReadModelFieldSource::EventAttribute(event_name, attribute_name)
         })
+}
+
+fn read_model_field_derivation_from_json(field: &Value) -> ReadModelFieldDerivation {
+    field
+        .get("derived")
+        .and_then(Value::as_bool)
+        .filter(|derived| *derived)
+        .map_or(ReadModelFieldDerivation::NotDerived, |_| {
+            if read_model_field_has_derivation_provenance(field) {
+                ReadModelFieldDerivation::DerivedWithProvenance
+            } else {
+                ReadModelFieldDerivation::DerivedWithoutProvenance
+            }
+        })
+}
+
+fn read_model_field_has_derivation_provenance(field: &Value) -> bool {
+    field
+        .get("derivation_source_fields")
+        .and_then(Value::as_array)
+        .is_some_and(|source_fields| !source_fields.is_empty())
+        && field
+            .get("derivation_description")
+            .and_then(Value::as_str)
+            .is_some_and(|description| !description.is_empty())
 }
 
 fn definition_names_from_json_array_field(
