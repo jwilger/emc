@@ -3589,9 +3589,8 @@ fn board_element_lane_mismatch(document: &EventModelDocument) -> Option<BoardEle
 
 fn expected_board_element_lane(kind: BoardElementKind) -> Option<&'static str> {
     match kind {
-        BoardElementKind::View => Some("ux"),
-        BoardElementKind::Automation
-        | BoardElementKind::Command
+        BoardElementKind::Automation | BoardElementKind::View => Some("ux"),
+        BoardElementKind::Command
         | BoardElementKind::Event
         | BoardElementKind::ExternalEvent
         | BoardElementKind::Other

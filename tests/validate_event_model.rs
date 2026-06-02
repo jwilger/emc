@@ -192,6 +192,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_board_automation_elements_outside_ux_lane() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("board-automation-element-lane.eventmodel.json"),
+            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\",\"name\":\"People, Views, and Translations\"},{\"id\":\"actions\",\"name\":\"Commands and Projections\"},{\"id\":\"events\",\"name\":\"Stored Facts\"}],\"slices\":[{\"name\":\"Review lesson\",\"elements\":[{\"id\":\"automation-review\",\"kind\":\"automation\",\"lane\":\"events\",\"name\":\"ReviewLessonAutomation\"}],\"connections\":[]}]},\"streams\":[{\"name\":\"lesson_review\"}],\"events\":[{\"name\":\"TeacherReviewRecorded\",\"stream\":\"lesson_review\",\"attributes\":[]}],\"commands\":[{\"name\":\"RecordTeacherReview\",\"inputs\":[],\"produces\":[\"TeacherReviewRecorded\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"automation\",\"trigger\":\"LessonSubmittedForReview\",\"commands\":[\"RecordTeacherReview\"],\"events\":[\"TeacherReviewRecorded\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"review lesson\",\"given\":[\"LessonSubmittedForReview\"],\"when\":\"record review\",\"then\":[\"TeacherReviewRecorded\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "board element 'automation-review' of kind 'automation' must be on lane 'ux'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_command_names() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
