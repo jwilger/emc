@@ -14,42 +14,42 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
     let project_name_text = project_name.as_ref();
 
     EffectPlan::new(vec![
-        Effect::WriteFile(
+        Effect::WriteFileIfMissing(
             project_path("emc.toml"),
             file_contents(format!(
                 "[project]\nname = \"{project_name_text}\"\nlean_module = \"{module_name}\"\nquint_module = \"{module_name}\"\n"
             )),
         ),
         Effect::EnsureDirectory(project_path("model/lean")),
-        Effect::WriteFile(
+        Effect::WriteFileIfMissing(
             project_path(format!("model/lean/{module_name}.lean")),
             file_contents(format!(
                 "namespace {module_name}\n\n-- EMC generated Lean4 model root.\n\nend {module_name}\n"
             )),
         ),
         Effect::EnsureDirectory(project_path("model/quint")),
-        Effect::WriteFile(
+        Effect::WriteFileIfMissing(
             project_path(format!("model/quint/{module_name}.qnt")),
             file_contents(format!("module {module_name} {{\n}}\n")),
         ),
         Effect::EnsureDirectory(project_path("model/browser/data/workflows")),
-        Effect::WriteFile(
+        Effect::WriteFileIfMissing(
             project_path("model/browser/data/workflows/.gitkeep"),
             file_contents("\n"),
         ),
         Effect::EnsureDirectory(project_path("model/browser/data/slices")),
-        Effect::WriteFile(
+        Effect::WriteFileIfMissing(
             project_path("model/browser/data/slices/.gitkeep"),
             file_contents("\n"),
         ),
-        Effect::WriteFile(
+        Effect::WriteFileIfMissing(
             project_path("model/browser/data/index.json"),
             file_contents(
                 "{\n  \"generated_at\": \"1970-01-01T00:00:00.000Z\",\n  \"workflows\": []\n}\n",
             ),
         ),
         Effect::EnsureDirectory(project_path("reviews")),
-        Effect::WriteFile(project_path("reviews/.gitkeep"), file_contents("\n")),
+        Effect::WriteFileIfMissing(project_path("reviews/.gitkeep"), file_contents("\n")),
         Effect::Report(report_line(format!(
             "initialized EMC project {project_name}"
         ))),

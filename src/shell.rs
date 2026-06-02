@@ -48,15 +48,24 @@ fn interpret_effect(effect: &Effect) -> Result<(), ShellError> {
         Effect::EnsureDirectory(path) => {
             fs::create_dir_all(Path::new(path.as_ref())).map_err(ShellError::io)
         }
-        Effect::WriteFile(path, contents) => {
-            if let Some(parent) = Path::new(path.as_ref()).parent() {
-                fs::create_dir_all(parent).map_err(ShellError::io)?;
+        Effect::WriteFile(path, contents) => write_file(path.as_ref(), contents.as_ref()),
+        Effect::WriteFileIfMissing(path, contents) => {
+            if Path::new(path.as_ref()).exists() {
+                Ok(())
+            } else {
+                write_file(path.as_ref(), contents.as_ref())
             }
-            fs::write(Path::new(path.as_ref()), contents.as_ref()).map_err(ShellError::io)
         }
         Effect::Report(line) => {
             println!("{}", line.as_ref());
             Ok(())
         }
     }
+}
+
+fn write_file(path: &str, contents: &str) -> Result<(), ShellError> {
+    if let Some(parent) = Path::new(path).parent() {
+        fs::create_dir_all(parent).map_err(ShellError::io)?;
+    }
+    fs::write(Path::new(path), contents).map_err(ShellError::io)
 }

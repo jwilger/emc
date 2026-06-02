@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
+    use std::fs;
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -33,6 +34,35 @@ mod tests {
             .iter()
             .map(|relative_path| temp_dir.path().join(relative_path))
             .for_each(|path| assert!(path.exists(), "expected {} to exist", path.display()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn init_does_not_overwrite_existing_project_files() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let manifest_path = temp_dir.path().join("emc.toml");
+        let user_manifest = "[project]\nname = \"User Edited\"\n";
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::write(&manifest_path, user_manifest)?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let actual_manifest = fs::read_to_string(&manifest_path)?;
+        assert_eq!(
+            actual_manifest, user_manifest,
+            "re-running init must not overwrite existing project files"
+        );
 
         Ok(())
     }
