@@ -827,6 +827,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_automation_slices_without_trigger_scenario() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("automation-without-trigger-scenario.eventmodel.json"),
+            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson_review\"}],\"events\":[{\"name\":\"TeacherReviewRecorded\",\"stream\":\"lesson_review\",\"attributes\":[]}],\"commands\":[{\"name\":\"RecordTeacherReview\",\"inputs\":[],\"produces\":[\"TeacherReviewRecorded\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"automation\",\"trigger\":\"LessonSubmittedForReview\",\"commands\":[\"RecordTeacherReview\"],\"events\":[\"TeacherReviewRecorded\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"other trigger\",\"given\":[\"LessonReviewRetried\"],\"when\":\"record review\",\"then\":[\"TeacherReviewRecorded\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "automation slice 'Review lesson' must include a scenario for trigger event 'LessonSubmittedForReview'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_automation_slices_without_command_error_handling()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;

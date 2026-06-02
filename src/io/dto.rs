@@ -420,6 +420,7 @@ fn slice_definitions_from_json_object(
                         definition_names_from_json_array_field(slice, "events", "event")?;
                     let outcome_labels = outcome_labels_from_json_slice(slice)?;
                     let outcomes = outcomes_from_json_slice(slice)?;
+                    let automation_trigger = automation_trigger_from_json_slice(slice)?;
                     slice_scenarios_from_json_slice(slice).map(|scenarios| {
                         SliceDefinition::new(
                             SliceDefinitionParts::new(name, slice_type_from_json_slice(slice))
@@ -436,7 +437,7 @@ fn slice_definitions_from_json_object(
                                     slice,
                                 ))
                                 .with_singleton_behavior(singleton_behavior_from_json_slice(slice))
-                                .with_automation_trigger(automation_trigger_from_json_slice(slice))
+                                .with_automation_trigger(automation_trigger)
                                 .with_automation_command_policy(
                                     automation_command_policy_from_json_slice(slice),
                                 )
@@ -516,21 +517,38 @@ fn slice_command_count(slice: &Value) -> usize {
         .map_or(0, Vec::len)
 }
 
-fn automation_trigger_from_json_slice(slice: &Value) -> AutomationTrigger {
+fn automation_trigger_from_json_slice(
+    slice: &Value,
+) -> Result<AutomationTrigger, BoundaryParseError> {
     if slice_type_from_json_slice(slice) == SliceType::Automation {
-        if slice_declares_automation_trigger(slice) {
-            AutomationTrigger::DeclaresTrigger
+        let trigger_events = automation_trigger_events_from_json_slice(slice)?;
+        if trigger_events.is_empty() {
+            Ok(AutomationTrigger::MissingTrigger)
         } else {
-            AutomationTrigger::MissingTrigger
+            Ok(AutomationTrigger::DeclaresTriggers(trigger_events))
         }
     } else {
-        AutomationTrigger::NotAutomation
+        Ok(AutomationTrigger::NotAutomation)
     }
 }
 
-fn slice_declares_automation_trigger(slice: &Value) -> bool {
-    slice_has_non_empty_string(slice, "trigger")
-        || slice_has_non_empty_string(slice, "external_event")
+fn automation_trigger_events_from_json_slice(
+    slice: &Value,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    optional_definition_names_from_json_fields(slice, &["trigger", "external_event"]).and_then(
+        |single_triggers| {
+            definition_names_from_json_array_field(slice, "triggers", "trigger").map(
+                |trigger_array| {
+                    single_triggers
+                        .into_iter()
+                        .chain(trigger_array)
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .collect()
+                },
+            )
+        },
+    )
 }
 
 fn translation_contract_from_json_slice(slice: &Value) -> TranslationContract {
@@ -647,6 +665,8 @@ fn slice_scenarios_from_json_field(
                     let then_events = event_references_from_json_field(scenario, "then")?;
                     let command_errors = command_errors_from_json_scenario(scenario)?;
                     let given_streams = given_streams_from_json_scenario(scenario)?;
+                    let scenario_step_references =
+                        scenario_step_references_from_json_scenario(scenario)?;
                     event_references_from_json_scenario(scenario).map(|referenced_events| {
                         SliceScenario::new(
                             SliceScenarioParts::new(
@@ -655,6 +675,7 @@ fn slice_scenarios_from_json_field(
                                 spec.kind,
                             )
                             .with_referenced_events(referenced_events)
+                            .with_scenario_step_references(scenario_step_references)
                             .with_then_events(then_events)
                             .with_command_errors(command_errors)
                             .with_given_streams(given_streams)
@@ -756,6 +777,46 @@ fn event_references_from_json_scenario(
         .map(|field| event_references_from_json_field(scenario, field))
         .collect::<Result<Vec<_>, _>>()
         .map(|references| references.into_iter().flatten().collect())
+}
+
+fn scenario_step_references_from_json_scenario(
+    scenario: &Value,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    scenario_reference_fields()
+        .iter()
+        .map(|field| scenario_step_references_from_json_field(scenario, field))
+        .collect::<Result<Vec<_>, _>>()
+        .map(|references| references.into_iter().flatten().collect())
+}
+
+fn scenario_step_references_from_json_field(
+    scenario: &Value,
+    field: &str,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    scenario
+        .get(field)
+        .into_iter()
+        .flat_map(scenario_step_reference_values)
+        .map(|reference| {
+            DefinitionName::try_new(reference.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid scenario step reference: {error}"))
+            })
+        })
+        .collect()
+}
+
+fn scenario_step_reference_values(value: &Value) -> Vec<&str> {
+    value.as_str().map_or_else(
+        || {
+            value
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .collect()
+        },
+        |reference| vec![reference],
+    )
 }
 
 fn event_references_from_json_field(
@@ -1552,6 +1613,27 @@ fn optional_definition_name_from_json_field(
             })
         })
         .transpose()
+}
+
+fn optional_definition_names_from_json_fields(
+    object: &Value,
+    fields: &[&str],
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    fields
+        .iter()
+        .filter_map(|field| {
+            object
+                .get(field)
+                .and_then(Value::as_str)
+                .map(|value| (*field, value))
+        })
+        .filter(|(_, value)| !value.trim().is_empty())
+        .map(|(field, value)| {
+            DefinitionName::try_new(value.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid {field} reference: {error}"))
+            })
+        })
+        .collect()
 }
 
 fn named_definitions_for_spec(
