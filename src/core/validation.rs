@@ -1259,6 +1259,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_duplicate_workflow_step_slices(document)?;
 
+    validate_workflow_transition_targets_known_steps(document)?;
+
     validate_workflow_step_incoming_reachability(document)?;
 
     validate_workflow_steps_reachable_from_entry(document)?;
@@ -1818,6 +1820,31 @@ fn validate_duplicate_workflow_step_slices(
                 "workflow step slice '{step_slice}' is duplicated"
             )))
         })
+}
+
+fn validate_workflow_transition_targets_known_steps(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    if document.workflow_composition != WorkflowComposition::DeclaresSteps {
+        return Ok(());
+    }
+
+    unknown_workflow_transition_target(&document.workflow_steps, &document.workflow_step_slices)
+        .map_or(Ok(()), |target| {
+            Err(validation_issue(format!(
+                "transition targets unknown workflow step '{target}'"
+            )))
+        })
+}
+
+fn unknown_workflow_transition_target<'a>(
+    workflow_steps: &'a [WorkflowStep],
+    workflow_step_slices: &BTreeSet<DefinitionName>,
+) -> Option<&'a DefinitionName> {
+    workflow_steps
+        .iter()
+        .flat_map(|step| step.transition_targets().iter())
+        .find(|target| !workflow_step_slices.contains(*target))
 }
 
 fn validate_workflow_step_incoming_reachability(
