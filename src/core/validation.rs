@@ -317,6 +317,13 @@ pub enum WorkflowStepExit {
     Present,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum WorkflowStepLifecycleRole {
+    ApplicationEntryStateView,
+    BootstrapRootEntryStateChange,
+    Other,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct WorkflowStep {
     slice: DefinitionName,
@@ -325,6 +332,7 @@ pub struct WorkflowStep {
     workflow_exit: WorkflowStepExit,
     transition_targets: BTreeSet<DefinitionName>,
     selected_scenario: Option<DefinitionName>,
+    lifecycle_role: WorkflowStepLifecycleRole,
 }
 
 impl WorkflowStep {
@@ -335,6 +343,7 @@ impl WorkflowStep {
         workflow_exit: WorkflowStepExit,
         transition_targets: BTreeSet<DefinitionName>,
         selected_scenario: Option<DefinitionName>,
+        lifecycle_role: WorkflowStepLifecycleRole,
     ) -> Self {
         Self {
             slice,
@@ -343,6 +352,7 @@ impl WorkflowStep {
             workflow_exit,
             transition_targets,
             selected_scenario,
+            lifecycle_role,
         }
     }
 
@@ -356,6 +366,14 @@ impl WorkflowStep {
 
     fn selected_scenario(&self) -> Option<&DefinitionName> {
         self.selected_scenario.as_ref()
+    }
+
+    fn is_application_entry_state_view(&self) -> bool {
+        self.lifecycle_role == WorkflowStepLifecycleRole::ApplicationEntryStateView
+    }
+
+    fn is_bootstrap_root_entry_state_change(&self) -> bool {
+        self.lifecycle_role == WorkflowStepLifecycleRole::BootstrapRootEntryStateChange
     }
 
     fn requires_incoming_transition(&self) -> bool {
@@ -1306,6 +1324,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_async_lifecycle_steps_not_main(document)?;
 
+    validate_application_entry_before_bootstrap(document)?;
+
     validate_workflow_step_incoming_reachability(document)?;
 
     validate_workflow_steps_reachable_from_entry(document)?;
@@ -1968,6 +1988,34 @@ fn validate_async_lifecycle_steps_not_main(
                 "async lifecycle step '{}' must be alternate or async_lifecycle",
                 step.slice()
             )))
+        })
+}
+
+fn validate_application_entry_before_bootstrap(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    if document.workflow_composition != WorkflowComposition::DeclaresSteps {
+        return Ok(());
+    }
+
+    if workflow_bootstraps_root_before_application_entry(&document.workflow_steps) {
+        Err(validation_issue(
+            "should model the application entry root bootstrap state view before bootstrap",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn workflow_bootstraps_root_before_application_entry(workflow_steps: &[WorkflowStep]) -> bool {
+    workflow_steps
+        .iter()
+        .position(WorkflowStep::is_bootstrap_root_entry_state_change)
+        .is_some_and(|bootstrap_index| {
+            !workflow_steps
+                .iter()
+                .take(bootstrap_index)
+                .any(WorkflowStep::is_application_entry_state_view)
         })
 }
 
