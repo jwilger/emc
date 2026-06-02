@@ -840,6 +840,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_outcome_event_sets_not_empty(document)?;
 
+    validate_outcome_events_reference_known_events(document)?;
+
     validate_outcome_events_belong_to_slice(document)?;
 
     validate_duplicate_outcome_event_sets(document)?;
@@ -1425,6 +1427,38 @@ fn validate_outcome_event_sets_not_empty(
         })
 }
 
+fn validate_outcome_events_reference_known_events(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .find_map(|slice| outcome_unknown_event(document, slice))
+        .map_or(Ok(()), |reference| {
+            Err(validation_issue(format!(
+                "outcome '{}' references unknown event '{}'",
+                reference.outcome_label, reference.event_name
+            )))
+        })
+}
+
+fn outcome_unknown_event(
+    document: &EventModelDocument,
+    slice: &SliceDefinition,
+) -> Option<OutcomeEventReference> {
+    slice.outcomes.iter().find_map(|outcome| {
+        outcome
+            .events
+            .iter()
+            .find(|event_name| !document.event_names.contains(event_name))
+            .map(|event_name| OutcomeEventReference {
+                slice_name: slice.name.clone(),
+                outcome_label: outcome.label.clone(),
+                event_name: event_name.clone(),
+            })
+    })
+}
+
 fn validate_outcome_events_belong_to_slice(
     document: &EventModelDocument,
 ) -> Result<(), ValidationIssue> {
@@ -1434,26 +1468,26 @@ fn validate_outcome_events_belong_to_slice(
         .find_map(outcome_event_outside_slice)
         .map_or(Ok(()), |reference| {
             Err(validation_issue(format!(
-                "slice '{}' outcome '{}' references event '{}' outside the slice event set",
-                reference.slice_name, reference.outcome_label, reference.event_name
+                "outcome '{}' references event '{}' that is not emitted or observed by slice '{}'",
+                reference.outcome_label, reference.event_name, reference.slice_name
             )))
         })
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-struct OutcomeEventOutsideSlice {
+struct OutcomeEventReference {
     slice_name: DefinitionName,
     outcome_label: DefinitionName,
     event_name: DefinitionName,
 }
 
-fn outcome_event_outside_slice(slice: &SliceDefinition) -> Option<OutcomeEventOutsideSlice> {
+fn outcome_event_outside_slice(slice: &SliceDefinition) -> Option<OutcomeEventReference> {
     slice.outcomes.iter().find_map(|outcome| {
         outcome
             .events
             .iter()
             .find(|event_name| !slice.owned_events.contains(event_name))
-            .map(|event_name| OutcomeEventOutsideSlice {
+            .map(|event_name| OutcomeEventReference {
                 slice_name: slice.name.clone(),
                 outcome_label: outcome.label.clone(),
                 event_name: event_name.clone(),
