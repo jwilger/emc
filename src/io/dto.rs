@@ -23,10 +23,11 @@ use crate::core::validation::{
     SingletonBehavior, SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario,
     SliceScenarioParts, SliceType, TopLevelKey, TranslationContract, ViewControlDefinition,
     ViewControlDefinitionParts, ViewDefinition, ViewWireframe, WorkflowCommandTransition,
-    WorkflowComposition, WorkflowEntryStepCount, WorkflowEventTransition,
-    WorkflowExternalTriggerTransition, WorkflowInternalDefinitions, WorkflowNavigationTransition,
-    WorkflowStep, WorkflowStepExit, WorkflowStepLifecycleRole, WorkflowStepRelationship,
-    WorkflowStepTrigger, empty_top_level_key_issue, model_must_be_object_issue,
+    WorkflowComposition, WorkflowEntryStepCount, WorkflowEventTransition, WorkflowExitRationale,
+    WorkflowExitTransition, WorkflowExternalTriggerTransition, WorkflowInternalDefinitions,
+    WorkflowNavigationTransition, WorkflowStep, WorkflowStepExit, WorkflowStepLifecycleRole,
+    WorkflowStepRelationship, WorkflowStepTrigger, empty_top_level_key_issue,
+    model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -227,6 +228,7 @@ fn event_model_document_from_json(
                 workflow_navigation_transitions_from_json_object(object)?;
             let workflow_external_trigger_transitions =
                 workflow_external_trigger_transitions_from_json_object(object)?;
+            let workflow_exit_transitions = workflow_exit_transitions_from_json_object(object)?;
             let duplicate_workflow_step_slice =
                 duplicate_workflow_step_slice_from_json_object(object)?;
             let workflow_composition = workflow_composition_from_json_object(object);
@@ -270,6 +272,7 @@ fn event_model_document_from_json(
                         .with_workflow_external_trigger_transitions(
                             workflow_external_trigger_transitions,
                         )
+                        .with_workflow_exit_transitions(workflow_exit_transitions)
                         .with_duplicate_workflow_step_slice(duplicate_workflow_step_slice)
                         .with_workflow_composition(workflow_composition)
                         .with_workflow_entry_step_count(workflow_entry_step_count)
@@ -784,6 +787,72 @@ fn workflow_external_trigger_from_json_transition(transition: &Map<String, Value
         .get("via_external_trigger")
         .and_then(Value::as_str)
         .or_else(|| transition.get("external_trigger").and_then(Value::as_str))
+}
+
+fn workflow_exit_transitions_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<Vec<WorkflowExitTransition>, BoundaryParseError> {
+    object
+        .get("steps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .map(workflow_exit_transitions_from_json_step)
+        .collect::<Result<Vec<_>, _>>()
+        .map(|transitions| transitions.into_iter().flatten().collect())
+}
+
+fn workflow_exit_transitions_from_json_step(
+    step: &Map<String, Value>,
+) -> Result<Vec<WorkflowExitTransition>, BoundaryParseError> {
+    step.get("transitions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .filter_map(|transition| {
+            transition
+                .get("to_workflow")
+                .and_then(Value::as_str)
+                .map(|workflow| (transition, workflow))
+        })
+        .map(|(transition, workflow)| {
+            DefinitionName::try_new(workflow.to_owned())
+                .map(|workflow| {
+                    WorkflowExitTransition::new(
+                        workflow,
+                        workflow_exit_rationale_from_json_transition(transition),
+                    )
+                })
+                .map_err(|error| {
+                    BoundaryParseError::new(format!(
+                        "invalid workflow exit transition target: {error}"
+                    ))
+                })
+        })
+        .collect()
+}
+
+fn workflow_exit_rationale_from_json_transition(
+    transition: &Map<String, Value>,
+) -> WorkflowExitRationale {
+    if [
+        "via_event",
+        "via_navigation",
+        "via_command",
+        "via_external_trigger",
+        "external_trigger",
+        "exit_reason",
+        "reason",
+    ]
+    .into_iter()
+    .any(|key| transition.get(key).and_then(Value::as_str).is_some())
+    {
+        WorkflowExitRationale::Present
+    } else {
+        WorkflowExitRationale::Missing
+    }
 }
 
 fn duplicate_workflow_step_slice_from_json_object(
