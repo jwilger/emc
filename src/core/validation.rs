@@ -334,12 +334,28 @@ pub enum EventAttributeSource {
 pub struct ReadModelDefinition {
     name: DefinitionName,
     fields: Vec<ReadModelField>,
+    transitive_derivation: ReadModelTransitiveDerivation,
 }
 
 impl ReadModelDefinition {
-    pub fn new(name: DefinitionName, fields: Vec<ReadModelField>) -> Self {
-        Self { name, fields }
+    pub fn new(
+        name: DefinitionName,
+        fields: Vec<ReadModelField>,
+        transitive_derivation: ReadModelTransitiveDerivation,
+    ) -> Self {
+        Self {
+            name,
+            fields,
+            transitive_derivation,
+        }
     }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ReadModelTransitiveDerivation {
+    NotTransitive,
+    TransitiveWithoutRule,
+    TransitiveComplete,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -481,6 +497,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_generated_event_attribute_sources(document))
         .and_then(|()| validate_derived_read_model_field_provenance(document))
         .and_then(|()| validate_derived_read_model_field_scenarios(document))
+        .and_then(|()| validate_transitive_read_model_derivation(document))
         .and_then(|()| validate_read_model_field_event_sources(document))
 }
 
@@ -1011,6 +1028,24 @@ fn validate_derived_read_model_field_scenarios(
             Err(validation_issue(format!(
                 "derived read model field '{}' must have a derivation scenario",
                 field.name
+            )))
+        })
+}
+
+fn validate_transitive_read_model_derivation(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .read_model_definitions
+        .iter()
+        .find(|read_model| {
+            read_model.transitive_derivation
+                == ReadModelTransitiveDerivation::TransitiveWithoutRule
+        })
+        .map_or(Ok(()), |read_model| {
+            Err(validation_issue(format!(
+                "transitive read model '{}' must declare source fields, derivation rule, and scenarios",
+                read_model.name
             )))
         })
 }
