@@ -16,7 +16,7 @@ use crate::core::validation::{
     CommandDefinitionParts, CommandInputSource, CommandInputSourceKind, CommandReadModelReads,
     DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource, EventDefinition,
     EventModelDocument, EventModelDocumentParts, EventModelFileKind, ExternalInputSchema,
-    LegacyScenariosField, NamedDefinition, ReadModelDefinition, ReadModelField,
+    LegacyScenariosField, NamedDefinition, OutcomeDefinition, ReadModelDefinition, ReadModelField,
     ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
     ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
     SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceType,
@@ -418,6 +418,7 @@ fn slice_definitions_from_json_object(
                     let owned_events =
                         definition_names_from_json_array_field(slice, "events", "event")?;
                     let outcome_labels = outcome_labels_from_json_slice(slice)?;
+                    let outcomes = outcomes_from_json_slice(slice)?;
                     slice_scenarios_from_json_slice(slice).map(|scenarios| {
                         SliceDefinition::new(
                             SliceDefinitionParts::new(name, slice_type_from_json_slice(slice))
@@ -429,6 +430,7 @@ fn slice_definitions_from_json_object(
                                 .with_owned_views(owned_views)
                                 .with_owned_events(owned_events)
                                 .with_outcome_labels(outcome_labels)
+                                .with_outcomes(outcomes)
                                 .with_legacy_scenarios(legacy_scenarios_field_from_json_slice(
                                     slice,
                                 ))
@@ -445,6 +447,34 @@ fn slice_definitions_from_json_object(
                     })
                 })
                 .and_then(|slice_definition| slice_definition)
+        })
+        .collect()
+}
+
+fn outcomes_from_json_slice(slice: &Value) -> Result<Vec<OutcomeDefinition>, BoundaryParseError> {
+    slice
+        .get("outcomes")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|outcome| {
+            outcome
+                .get("label")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BoundaryParseError::new("outcome is missing label"))
+                .and_then(|label| {
+                    DefinitionName::try_new(label.to_owned()).map_err(|error| {
+                        BoundaryParseError::new(format!("invalid outcome label: {error}"))
+                    })
+                })
+                .and_then(|label| {
+                    definition_names_from_json_array_field(outcome, "events", "event").map(
+                        |mut events| {
+                            events.sort();
+                            OutcomeDefinition::new(label, events)
+                        },
+                    )
+                })
         })
         .collect()
 }
