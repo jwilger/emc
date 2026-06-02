@@ -22,8 +22,8 @@ use crate::core::validation::{
     ReadModelState, ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField,
     SingletonBehavior, SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario,
     SliceScenarioParts, SliceType, TopLevelKey, TranslationContract, ViewControlDefinition,
-    ViewControlDefinitionParts, ViewDefinition, ViewWireframe, empty_top_level_key_issue,
-    model_must_be_object_issue,
+    ViewControlDefinitionParts, ViewDefinition, ViewWireframe, WorkflowComposition,
+    empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -214,6 +214,7 @@ fn event_model_document_from_json(
             let event_definitions = event_definitions_from_json_object(object)?;
             let command_definitions = command_definitions_from_json_object(object)?;
             let read_model_definitions = read_model_definitions_from_json_object(object)?;
+            let workflow_composition = workflow_composition_from_json_object(object);
             let workflow_transition_errors = workflow_transition_errors_from_json_object(object)?;
             let workflow_transition_outcomes =
                 workflow_transition_outcomes_from_json_object(object)?;
@@ -241,6 +242,7 @@ fn event_model_document_from_json(
                         .with_slice_count(slice_definition_count(&slice_definitions))
                         .with_slice_definitions(slice_definitions)
                         .with_view_definitions(view_definitions)
+                        .with_workflow_composition(workflow_composition)
                         .with_workflow_transition_errors(workflow_transition_errors)
                         .with_workflow_transition_outcomes(workflow_transition_outcomes),
                 )
@@ -253,6 +255,22 @@ fn slice_definition_count(slice_definitions: &[SliceDefinition]) -> SliceDefinit
         0 => SliceDefinitionCount::Zero,
         1 => SliceDefinitionCount::One,
         _ => SliceDefinitionCount::Multiple,
+    }
+}
+
+fn workflow_composition_from_json_object(object: &Map<String, Value>) -> WorkflowComposition {
+    if object.get("slice_files").is_some() {
+        if object
+            .get("steps")
+            .and_then(Value::as_array)
+            .is_some_and(|steps| !steps.is_empty())
+        {
+            WorkflowComposition::DeclaresSteps
+        } else {
+            WorkflowComposition::MissingSteps
+        }
+    } else {
+        WorkflowComposition::NotComposition
     }
 }
 

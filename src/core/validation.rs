@@ -19,6 +19,7 @@ pub struct EventModelDocument {
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
+    workflow_composition: WorkflowComposition,
     workflow_transition_errors: BTreeSet<DefinitionName>,
     workflow_transition_outcomes: BTreeSet<DefinitionName>,
 }
@@ -41,6 +42,7 @@ impl EventModelDocument {
             slice_count: parts.slice_count,
             slice_definitions: parts.slice_definitions,
             view_definitions: parts.view_definitions,
+            workflow_composition: parts.workflow_composition,
             workflow_transition_errors: parts.workflow_transition_errors,
             workflow_transition_outcomes: parts.workflow_transition_outcomes,
         }
@@ -64,6 +66,7 @@ pub struct EventModelDocumentParts {
     slice_count: SliceDefinitionCount,
     slice_definitions: Vec<SliceDefinition>,
     view_definitions: Vec<ViewDefinition>,
+    workflow_composition: WorkflowComposition,
     workflow_transition_errors: BTreeSet<DefinitionName>,
     workflow_transition_outcomes: BTreeSet<DefinitionName>,
 }
@@ -86,6 +89,7 @@ impl EventModelDocumentParts {
             slice_count: SliceDefinitionCount::Zero,
             slice_definitions: Vec::new(),
             view_definitions: Vec::new(),
+            workflow_composition: WorkflowComposition::NotComposition,
             workflow_transition_errors: BTreeSet::new(),
             workflow_transition_outcomes: BTreeSet::new(),
         }
@@ -173,6 +177,11 @@ impl EventModelDocumentParts {
         self
     }
 
+    pub fn with_workflow_composition(mut self, workflow_composition: WorkflowComposition) -> Self {
+        self.workflow_composition = workflow_composition;
+        self
+    }
+
     pub fn with_workflow_transition_errors(
         mut self,
         workflow_transition_errors: BTreeSet<DefinitionName>,
@@ -194,6 +203,13 @@ impl EventModelDocumentParts {
 pub enum EventModelFileKind {
     Slice,
     Workflow,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum WorkflowComposition {
+    NotComposition,
+    MissingSteps,
+    DeclaresSteps,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -1086,6 +1102,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_slice_file_count(document)?;
 
+    validate_workflow_composition_steps(document)?;
+
     validate_no_legacy_slice_scenarios(document)?;
 
     validate_scenario_when_fields(document)?;
@@ -1569,6 +1587,16 @@ fn validate_slice_file_count(document: &EventModelDocument) -> Result<(), Valida
         ) => Err(validation_issue(
             "slice file must contain exactly one slice",
         )),
+    }
+}
+
+fn validate_workflow_composition_steps(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    if document.workflow_composition == WorkflowComposition::MissingSteps {
+        Err(validation_issue("workflow composition must declare steps"))
+    } else {
+        Ok(())
     }
 }
 
