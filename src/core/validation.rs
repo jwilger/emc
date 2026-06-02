@@ -3672,9 +3672,9 @@ fn unknown_board_element_reference(
 fn board_element_reference_definition_kind(kind: BoardElementKind) -> Option<DefinitionKind> {
     match kind {
         BoardElementKind::Command => Some(DefinitionKind::Command),
+        BoardElementKind::Event => Some(DefinitionKind::Event),
         BoardElementKind::View => Some(DefinitionKind::View),
         BoardElementKind::Automation
-        | BoardElementKind::Event
         | BoardElementKind::ExternalEvent
         | BoardElementKind::Other
         | BoardElementKind::ReadModel => None,
