@@ -198,10 +198,12 @@ fn event_model_document_from_json(
         .collect::<Result<BTreeSet<_>, _>>()
         .and_then(|top_level_keys| {
             let slice_definitions = slice_definitions_from_json_object(object)?;
+            let event_names = event_names_from_json_object(object)?;
             named_definitions_from_json_object(object).map(|named_definitions| {
                 EventModelDocument::new(
                     file_kind,
                     top_level_keys,
+                    event_names,
                     named_definitions,
                     slice_definition_count(&slice_definitions),
                     slice_definitions,
@@ -288,10 +290,38 @@ fn slice_scenarios_from_json_field(
                     })
                 })
                 .map(|name| {
-                    SliceScenario::new(name, scenario_step_field(scenario, "when"), spec.kind)
+                    event_references_from_json_scenario(scenario).map(|referenced_events| {
+                        SliceScenario::new(
+                            name,
+                            scenario_step_field(scenario, "when"),
+                            spec.kind,
+                            referenced_events,
+                        )
+                    })
                 })
+                .and_then(|scenario| scenario)
         })
         .collect()
+}
+
+fn event_references_from_json_scenario(
+    scenario: &Value,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    scenario_reference_fields()
+        .iter()
+        .flat_map(|field| scenario.get(field).and_then(Value::as_array))
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(|reference| {
+            DefinitionName::try_new(reference.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid scenario reference: {error}"))
+            })
+        })
+        .collect()
+}
+
+fn scenario_reference_fields() -> &'static [&'static str] {
+    &["given", "when", "then"]
 }
 
 fn scenario_step_field(scenario: &Value, field: &str) -> ScenarioStepField {
@@ -328,6 +358,25 @@ fn named_definitions_from_json_object(
         .map(|spec| named_definitions_for_spec(object, spec))
         .collect::<Result<Vec<_>, _>>()
         .map(|definitions| definitions.into_iter().flatten().collect())
+}
+
+fn event_names_from_json_object(
+    object: &Map<String, Value>,
+) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
+    named_definitions_for_spec(
+        object,
+        &NamedDefinitionSpec {
+            key: "events",
+            label: "event",
+            kind: DefinitionKind::Event,
+        },
+    )
+    .map(|definitions| {
+        definitions
+            .into_iter()
+            .map(NamedDefinition::into_name)
+            .collect()
+    })
 }
 
 fn named_definitions_for_spec(
