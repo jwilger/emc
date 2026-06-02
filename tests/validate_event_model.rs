@@ -416,4 +416,27 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_read_model_fields_that_reference_unknown_event_attributes()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("unknown-event-attribute.eventmodel.json"),
+            "{\"name\":\"Repair queue\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"repair_ticket\"}],\"events\":[{\"name\":\"RepairTicketOpened\",\"stream\":\"repair_ticket\",\"attributes\":[]}],\"commands\":[{\"name\":\"OpenRepairTicket\",\"inputs\":[],\"produces\":[\"RepairTicketOpened\"]}],\"read_models\":[{\"name\":\"repair_queue\",\"fields\":[{\"name\":\"customer_name\",\"source\":\"RepairTicketOpened.customer_name\"}]}],\"slices\":[]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "read model 'repair_queue' field 'customer_name' references unknown event attribute 'RepairTicketOpened.customer_name'",
+            ));
+
+        Ok(())
+    }
 }
