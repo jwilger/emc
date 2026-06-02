@@ -261,6 +261,7 @@ pub struct SliceDefinition {
     owned_translations: Vec<DefinitionName>,
     owned_views: Vec<DefinitionName>,
     owned_events: Vec<DefinitionName>,
+    external_payload_variants: Vec<ExternalPayloadVariant>,
     outcome_labels: Vec<DefinitionName>,
     outcomes: Vec<OutcomeDefinition>,
     legacy_scenarios: LegacyScenariosField,
@@ -283,6 +284,7 @@ impl SliceDefinition {
             owned_translations: parts.owned_translations,
             owned_views: parts.owned_views,
             owned_events: parts.owned_events,
+            external_payload_variants: parts.external_payload_variants,
             outcome_labels: parts.outcome_labels,
             outcomes: parts.outcomes,
             legacy_scenarios: parts.legacy_scenarios,
@@ -314,6 +316,7 @@ pub struct SliceDefinitionParts {
     owned_translations: Vec<DefinitionName>,
     owned_views: Vec<DefinitionName>,
     owned_events: Vec<DefinitionName>,
+    external_payload_variants: Vec<ExternalPayloadVariant>,
     outcome_labels: Vec<DefinitionName>,
     outcomes: Vec<OutcomeDefinition>,
     legacy_scenarios: LegacyScenariosField,
@@ -336,6 +339,7 @@ impl SliceDefinitionParts {
             owned_translations: Vec::new(),
             owned_views: Vec::new(),
             owned_events: Vec::new(),
+            external_payload_variants: Vec::new(),
             outcome_labels: Vec::new(),
             outcomes: Vec::new(),
             legacy_scenarios: LegacyScenariosField::Absent,
@@ -382,6 +386,14 @@ impl SliceDefinitionParts {
 
     pub fn with_owned_events(mut self, owned_events: Vec<DefinitionName>) -> Self {
         self.owned_events = owned_events;
+        self
+    }
+
+    pub fn with_external_payload_variants(
+        mut self,
+        external_payload_variants: Vec<ExternalPayloadVariant>,
+    ) -> Self {
+        self.external_payload_variants = external_payload_variants;
         self
     }
 
@@ -455,6 +467,18 @@ pub enum TranslationContract {
     NotTranslation,
     MissingExternalContract,
     DeclaresExternalContract,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ExternalPayloadVariant {
+    payload: DefinitionName,
+    variant: DefinitionName,
+}
+
+impl ExternalPayloadVariant {
+    pub fn new(payload: DefinitionName, variant: DefinitionName) -> Self {
+        Self { payload, variant }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -1062,6 +1086,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_translation_slice_external_contracts(document)?;
 
     validate_translation_slice_view_ownership(document)?;
+
+    validate_translation_slice_payload_variant_scenarios(document)?;
 
     validate_automation_slice_triggers(document)?;
 
@@ -1928,6 +1954,51 @@ fn validate_translation_slice_view_ownership(
         })
 }
 
+fn validate_translation_slice_payload_variant_scenarios(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::Translation)
+        .find_map(missing_translation_payload_variant_scenario)
+        .map_or(Ok(()), |missing| {
+            Err(validation_issue(format!(
+                "translation slice '{}' must include a scenario for external payload variant '{}'",
+                missing.slice_name, missing.variant
+            )))
+        })
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct MissingTranslationPayloadVariantScenario {
+    slice_name: DefinitionName,
+    variant: DefinitionName,
+}
+
+fn missing_translation_payload_variant_scenario(
+    slice: &SliceDefinition,
+) -> Option<MissingTranslationPayloadVariantScenario> {
+    slice
+        .external_payload_variants
+        .iter()
+        .find(|payload_variant| !slice_has_payload_variant_scenario(slice, payload_variant))
+        .map(|payload_variant| MissingTranslationPayloadVariantScenario {
+            slice_name: slice.name.clone(),
+            variant: payload_variant.variant.clone(),
+        })
+}
+
+fn slice_has_payload_variant_scenario(
+    slice: &SliceDefinition,
+    payload_variant: &ExternalPayloadVariant,
+) -> bool {
+    slice
+        .scenarios
+        .iter()
+        .any(|scenario| scenario_mentions_definition(scenario, &payload_variant.variant))
+}
+
 fn validate_automation_slice_triggers(
     document: &EventModelDocument,
 ) -> Result<(), ValidationIssue> {
@@ -1989,10 +2060,17 @@ fn slice_has_trigger_scenario(slice: &SliceDefinition, trigger_event: &Definitio
 }
 
 fn scenario_mentions_trigger(scenario: &SliceScenario, trigger_event: &DefinitionName) -> bool {
+    scenario_mentions_definition(scenario, trigger_event)
+}
+
+fn scenario_mentions_definition(
+    scenario: &SliceScenario,
+    definition_name: &DefinitionName,
+) -> bool {
     scenario
         .scenario_step_references
         .iter()
-        .any(|reference| reference.as_ref().contains(trigger_event.as_ref()))
+        .any(|reference| reference.as_ref().contains(definition_name.as_ref()))
 }
 
 fn validate_automation_slice_command_policy(

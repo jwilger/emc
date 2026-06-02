@@ -782,6 +782,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_translation_slices_without_payload_variant_scenario()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("translation-without-payload-variant-scenario.eventmodel.json"),
+            "{\"name\":\"Receive webhook\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"webhook\"}],\"events\":[{\"name\":\"WebhookProcessed\",\"stream\":\"webhook\",\"attributes\":[]}],\"commands\":[{\"name\":\"ProcessWebhook\",\"inputs\":[],\"produces\":[\"WebhookProcessed\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Receive webhook\",\"type\":\"translation\",\"commands\":[\"ProcessWebhook\"],\"external_input_schemas\":[{\"name\":\"webhook_payload\",\"variants\":[\"create\",\"update\"]}],\"events\":[\"WebhookProcessed\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"create webhook\",\"given\":[\"create webhook received\"],\"when\":\"process create\",\"then\":[\"WebhookProcessed\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "translation slice 'Receive webhook' must include a scenario for external payload variant 'update'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_automation_slices_without_trigger() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");

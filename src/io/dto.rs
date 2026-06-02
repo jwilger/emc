@@ -16,13 +16,14 @@ use crate::core::validation::{
     CommandDefinitionParts, CommandInputSource, CommandInputSourceKind, CommandReadModelReads,
     ControlCommandErrorHandling, ControlErrorRecoveryBehavior, DefinitionKind, DefinitionName,
     EventAttribute, EventAttributeSource, EventDefinition, EventModelDocument,
-    EventModelDocumentParts, EventModelFileKind, ExternalInputSchema, LegacyScenariosField,
-    NamedDefinition, NavigationType, OutcomeDefinition, ReadModelDefinition, ReadModelField,
-    ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource, ReadModelState,
-    ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
-    SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceScenarioParts,
-    SliceType, TopLevelKey, TranslationContract, ViewControlDefinition, ViewControlDefinitionParts,
-    ViewDefinition, ViewWireframe, empty_top_level_key_issue, model_must_be_object_issue,
+    EventModelDocumentParts, EventModelFileKind, ExternalInputSchema, ExternalPayloadVariant,
+    LegacyScenariosField, NamedDefinition, NavigationType, OutcomeDefinition, ReadModelDefinition,
+    ReadModelField, ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
+    ReadModelState, ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField,
+    SingletonBehavior, SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario,
+    SliceScenarioParts, SliceType, TopLevelKey, TranslationContract, ViewControlDefinition,
+    ViewControlDefinitionParts, ViewDefinition, ViewWireframe, empty_top_level_key_issue,
+    model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -418,6 +419,8 @@ fn slice_definitions_from_json_object(
                         definition_names_from_json_array_field(slice, "views", "view")?;
                     let owned_events =
                         definition_names_from_json_array_field(slice, "events", "event")?;
+                    let external_payload_variants =
+                        external_payload_variants_from_json_slice(slice)?;
                     let outcome_labels = outcome_labels_from_json_slice(slice)?;
                     let outcomes = outcomes_from_json_slice(slice)?;
                     let automation_trigger = automation_trigger_from_json_slice(slice)?;
@@ -431,6 +434,7 @@ fn slice_definitions_from_json_object(
                                 .with_owned_translations(owned_translations)
                                 .with_owned_views(owned_views)
                                 .with_owned_events(owned_events)
+                                .with_external_payload_variants(external_payload_variants)
                                 .with_outcome_labels(outcome_labels)
                                 .with_outcomes(outcomes)
                                 .with_legacy_scenarios(legacy_scenarios_field_from_json_slice(
@@ -561,6 +565,56 @@ fn translation_contract_from_json_slice(slice: &Value) -> TranslationContract {
     } else {
         TranslationContract::NotTranslation
     }
+}
+
+fn external_payload_variants_from_json_slice(
+    slice: &Value,
+) -> Result<Vec<ExternalPayloadVariant>, BoundaryParseError> {
+    slice
+        .get("external_input_schemas")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(external_payload_variants_from_json_schema)
+        .collect::<Result<Vec<_>, _>>()
+        .map(|variants| variants.into_iter().flatten().collect())
+}
+
+fn external_payload_variants_from_json_schema(
+    schema: &Value,
+) -> Result<Vec<ExternalPayloadVariant>, BoundaryParseError> {
+    schema
+        .get("variants")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(|variant| {
+            external_payload_name_from_json_schema(schema).and_then(|payload| {
+                DefinitionName::try_new(variant.to_owned())
+                    .map(|variant| ExternalPayloadVariant::new(payload, variant))
+                    .map_err(|error| {
+                        BoundaryParseError::new(format!(
+                            "invalid external payload variant: {error}"
+                        ))
+                    })
+            })
+        })
+        .collect()
+}
+
+fn external_payload_name_from_json_schema(
+    schema: &Value,
+) -> Result<DefinitionName, BoundaryParseError> {
+    schema
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| BoundaryParseError::new("external input schema is missing name"))
+        .and_then(|name| {
+            DefinitionName::try_new(name.to_owned()).map_err(|error| {
+                BoundaryParseError::new(format!("invalid external input schema name: {error}"))
+            })
+        })
 }
 
 fn slice_has_external_contract(slice: &Value) -> bool {
