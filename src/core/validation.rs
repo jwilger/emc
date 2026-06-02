@@ -1745,6 +1745,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_board_automation_references(document)?;
 
+    validate_unnamed_board_automation_references(document)?;
+
     validate_board_external_event_references(document)?;
 
     validate_command_sourced_event_attributes(document)?;
@@ -3649,6 +3651,16 @@ fn validate_board_automation_references(
     })
 }
 
+fn validate_unnamed_board_automation_references(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    undeclared_unnamed_board_automation(document).map_or(Ok(()), |element_id| {
+        Err(validation_issue(format!(
+            "automation board element '{element_id}' is not declared by an automation slice"
+        )))
+    })
+}
+
 fn validate_board_external_event_references(
     document: &EventModelDocument,
 ) -> Result<(), ValidationIssue> {
@@ -3729,6 +3741,21 @@ fn unknown_board_automation_reference(
             kind: element.kind,
             name: name.clone(),
         })
+}
+
+fn undeclared_unnamed_board_automation(document: &EventModelDocument) -> Option<DefinitionName> {
+    document
+        .board_slices
+        .iter()
+        .flat_map(|board_slice| board_slice.elements.iter())
+        .filter(|element| element.kind == BoardElementKind::Automation && element.name.is_none())
+        .find(|element| {
+            !document
+                .slice_definitions
+                .iter()
+                .any(|slice| slice.slice_type == SliceType::Automation && slice.name == element.id)
+        })
+        .map(|element| element.id.clone())
 }
 
 fn unknown_board_external_event_reference(
