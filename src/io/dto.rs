@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
@@ -9,6 +10,9 @@ use crate::core::layout::ImportedWorkflowLayout;
 use crate::core::project::ProjectName;
 use crate::core::types::{
     LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
+};
+use crate::core::validation::{
+    EventModelDocument, TopLevelKey, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -35,6 +39,12 @@ impl Error for BoundaryParseError {}
 pub fn parse_model_name(raw: &str) -> Result<ModelName, BoundaryParseError> {
     ModelName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid model name: {error}")))
+}
+
+pub fn parse_event_model_document(raw: &str) -> Result<EventModelDocument, BoundaryParseError> {
+    serde_json::from_str::<Value>(raw)
+        .map_err(|error| BoundaryParseError::new(format!("invalid JSON: {error}")))
+        .and_then(event_model_document_from_json)
 }
 
 pub fn parse_project_name(raw: &str) -> Result<ProjectName, BoundaryParseError> {
@@ -165,4 +175,18 @@ fn slugify(raw: &str) -> String {
 
 fn quoted_value(raw: &str) -> Option<&str> {
     raw.strip_prefix('"')?.strip_suffix('"')
+}
+
+fn event_model_document_from_json(value: Value) -> Result<EventModelDocument, BoundaryParseError> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| BoundaryParseError::new(model_must_be_object_issue().to_string()))?;
+    object
+        .keys()
+        .map(|key| {
+            TopLevelKey::try_new(key.to_owned())
+                .map_err(|_| BoundaryParseError::new(empty_top_level_key_issue().to_string()))
+        })
+        .collect::<Result<BTreeSet<_>, _>>()
+        .map(EventModelDocument::new)
 }
