@@ -714,6 +714,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_automation_slices_that_issue_multiple_commands()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("automation-with-multiple-commands.eventmodel.json"),
+            "{\"name\":\"Review lesson submission\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson_review\"},{\"name\":\"instructor_notification\"}],\"events\":[{\"name\":\"AcceptedReviewRecorded\",\"stream\":\"lesson_review\",\"attributes\":[]},{\"name\":\"InstructorNotified\",\"stream\":\"instructor_notification\",\"attributes\":[]}],\"commands\":[{\"name\":\"RecordAcceptedReview\",\"inputs\":[],\"produces\":[\"AcceptedReviewRecorded\"]},{\"name\":\"NotifyInstructor\",\"inputs\":[],\"produces\":[\"InstructorNotified\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Review lesson submission\",\"type\":\"automation\",\"trigger\":\"LessonSubmittedForReview\",\"commands\":[\"RecordAcceptedReview\",\"NotifyInstructor\"],\"events\":[\"AcceptedReviewRecorded\",\"InstructorNotified\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"review lesson submission\",\"given\":[\"LessonSubmittedForReview\"],\"when\":{},\"then\":[\"AcceptedReviewRecorded\",\"InstructorNotified\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "automation slice 'Review lesson submission' must issue one command per operation",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_undeclared_board_automation_between_read_model_and_command()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
