@@ -374,7 +374,8 @@ pub enum ReadModelFieldSource {
 pub enum ReadModelFieldDerivation {
     NotDerived,
     DerivedWithoutProvenance,
-    DerivedWithProvenance,
+    DerivedWithoutScenarios,
+    DerivedComplete,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -479,6 +480,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_read_model_sourced_event_attributes(document))
         .and_then(|()| validate_generated_event_attribute_sources(document))
         .and_then(|()| validate_derived_read_model_field_provenance(document))
+        .and_then(|()| validate_derived_read_model_field_scenarios(document))
         .and_then(|()| validate_read_model_field_event_sources(document))
 }
 
@@ -988,6 +990,26 @@ fn validate_derived_read_model_field_provenance(
         .map_or(Ok(()), |field| {
             Err(validation_issue(format!(
                 "derived read model field '{}' must declare source fields and derivation",
+                field.name
+            )))
+        })
+}
+
+fn validate_derived_read_model_field_scenarios(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .read_model_definitions
+        .iter()
+        .flat_map(|read_model| {
+            read_model.fields.iter().filter(|field| {
+                field.derivation == ReadModelFieldDerivation::DerivedWithoutScenarios
+            })
+        })
+        .next()
+        .map_or(Ok(()), |field| {
+            Err(validation_issue(format!(
+                "derived read model field '{}' must have a derivation scenario",
                 field.name
             )))
         })

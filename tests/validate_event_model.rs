@@ -462,4 +462,27 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn validate_rejects_derived_read_model_fields_without_derivation_scenarios()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("derived-field-without-scenarios.eventmodel.json"),
+            "{\"name\":\"Manager visibility\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"report_visibility\"}],\"events\":[{\"name\":\"ReportVisibilityGranted\",\"stream\":\"report_visibility\",\"attributes\":[{\"name\":\"report_user_id\",\"source\":\"command.report_user_id\"}]}],\"commands\":[{\"name\":\"GrantReportVisibility\",\"inputs\":[\"report_user_id\"],\"produces\":[\"ReportVisibilityGranted\"]}],\"read_models\":[{\"name\":\"manager_visibility\",\"fields\":[{\"name\":\"visible_report_count\",\"source\":\"derivation.visible_report_count\",\"derived\":true,\"derivation_source_fields\":[\"ReportVisibilityGranted.report_user_id\"],\"derivation_description\":\"count visible reports\"}]}],\"slices\":[]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "derived read model field 'visible_report_count' must have a derivation scenario",
+            ));
+
+        Ok(())
+    }
 }
