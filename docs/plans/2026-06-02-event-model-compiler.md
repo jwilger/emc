@@ -98,6 +98,7 @@
 - 2026-06-03: Check-time Lean and Quint slice-list and slice-detail markers now derive from semantic `WorkflowSliceDetail` values parsed by `WorkflowDocument`. A shell guardrail prevents raw workflow step field access for slice identity, name, type, or description in marker derivation.
 - 2026-06-03: Shell validation, review-digest, and check-time slice-file traversal now use semantic `WorkflowSliceFileReference` values from `WorkflowDocument::slice_files()`. A shell guardrail prevents raw `slice_files` field parsing from reappearing outside the semantic document parser.
 - 2026-06-03: Validation-time referenced slice-file checks now use semantic `WorkflowSliceFileReference` values from `WorkflowDocument::optional_slice_files()`, preserving existing validator diagnostics for non-object workflow documents while preventing raw `slice_files` parsing in validation code.
+- 2026-06-03: Shell browser-index workflow path checks now reuse the boundary parser and `ModeledWorkflowLayout::browser_data_path()` instead of duplicating raw `workflows[].path` traversal. A shell guardrail prevents direct browser-index workflow path parsing from reappearing in the interpreter.
 
 ### Task 1: Guardrails and Project Skeleton
 

@@ -33,6 +33,13 @@ impl ModeledWorkflowLayout {
         &self.slug
     }
 
+    pub fn browser_data_path(&self) -> ProjectPath {
+        project_path(format!(
+            "data/workflows/{}.eventmodel.json",
+            self.slug.as_ref()
+        ))
+    }
+
     pub fn lean_artifact_path(&self) -> ProjectPath {
         let module_name = module_name_from_model(self.name.clone());
         project_path(format!("model/lean/{module_name}.lean"))
