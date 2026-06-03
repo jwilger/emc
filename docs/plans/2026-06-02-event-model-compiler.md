@@ -119,6 +119,7 @@
 - 2026-06-03: `emc check` now rejects stale Lean4 `sliceIdentityIsStable` theorem declarations and Quint `sliceIdentityStable` invariant declarations in generated business slice modules, so slice formal obligations must match the semantic slice identity instead of only carrying matching fields and digests.
 - 2026-06-03: `emc check` now rejects unmodeled Lean4 and Quint business slice modules under `model/lean/slices` and `model/quint/slices`, deriving the allowed formal slice artifact set from semantic workflow slice details instead of accepting extra orphan formal modules.
 - 2026-06-03: `emc add slice` now rejects slice names that would collide on the same generated Lean4/Quint module name, preventing a mutation from overwriting an existing business slice formal artifact and leaving `emc check` to discover the invalid state afterward.
+- 2026-06-03: `emc add workflow` now rejects workflow names that would collide on the same generated Lean4/Quint module name, preventing one business workflow mutation from overwriting another workflow's formal artifacts.
 
 ### Task 1: Guardrails and Project Skeleton
 
