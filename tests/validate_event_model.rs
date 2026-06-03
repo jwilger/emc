@@ -937,6 +937,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_view_controls_missing_from_wireframes() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("show-repair-queue.eventmodel.json"),
+            "{\"name\":\"Repair queue\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"repair_queue_screen\",\"wireframe\":\"<section></section>\",\"uses_read_models\":[],\"controls\":[{\"label\":\"Open repair ticket\"}]}],\"slices\":[{\"name\":\"Show repair queue\",\"type\":\"state_view\",\"views\":[\"repair_queue_screen\"],\"acceptance_scenarios\":[{\"name\":\"show repair queue\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "view 'repair_queue_screen' wireframe does not reference control 'Open repair ticket'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_state_view_slices_that_own_commands() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");
@@ -2233,7 +2255,7 @@ mod tests {
         )?;
         write(
             workflows.join("show-lesson.eventmodel.json"),
-            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[]}],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\",\"controls\":[{\"label\":\"Submit for review\",\"command\":\"SubmitLessonForReview\"}]}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[]}],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"<button data-ref=\\\"Submit for review\\\"></button>\",\"controls\":[{\"label\":\"Submit for review\",\"command\":\"SubmitLessonForReview\"}]}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
         write(
             workflows.join("submit-lesson.eventmodel.json"),
@@ -2295,7 +2317,7 @@ mod tests {
         )?;
         write(
             workflows.join("entry.eventmodel.json"),
-            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"course_entry_resolution\",\"uses_read_models\":[],\"wireframe\":\"course_entry_resolution\",\"controls\":[{\"label\":\"Open lesson\",\"navigation\":\"lesson_screen\",\"navigation_type\":\"modeled_view\"}]},{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\"}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"course_entry_resolution\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"course_entry_resolution\",\"uses_read_models\":[],\"wireframe\":\"<button data-ref=\\\"Open lesson\\\"></button>\",\"controls\":[{\"label\":\"Open lesson\",\"navigation\":\"lesson_screen\",\"navigation_type\":\"modeled_view\"}]},{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\"}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"course_entry_resolution\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
         write(
             workflows.join("show-lesson.eventmodel.json"),
@@ -2805,11 +2827,11 @@ mod tests {
         create_dir_all(&slices)?;
         write(
             slices.join("submit-control.eventmodel.json"),
-            "{\"name\":\"Submit control workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\",\"controls\":[{\"label\":\"Submit for review\",\"description\":\"Submit the lesson.\"}]}],\"slices\":[{\"name\":\"Submit lesson control\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Submit control workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"<button data-ref=\\\"Submit for review\\\"></button>\",\"controls\":[{\"label\":\"Submit for review\",\"description\":\"Submit the lesson.\"}]}],\"slices\":[{\"name\":\"Submit lesson control\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
         )?;
         write(
             slices.join("review-control.eventmodel.json"),
-            "{\"name\":\"Review control workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\",\"controls\":[{\"label\":\"Submit for review\",\"description\":\"Request review.\"}]}],\"slices\":[{\"name\":\"Review lesson control\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Review control workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"<button data-ref=\\\"Submit for review\\\"></button>\",\"controls\":[{\"label\":\"Submit for review\",\"description\":\"Request review.\"}]}],\"slices\":[{\"name\":\"Review lesson control\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
