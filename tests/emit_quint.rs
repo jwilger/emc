@@ -2,7 +2,7 @@
 mod tests {
     use std::error::Error;
 
-    use emc::core::effect::ArtifactDigest;
+    use emc::core::digest::artifact_digest;
     use emc::core::emit::quint::emit_workflow_module;
     use emc::core::types::{SliceKindName, WorkflowSliceDetail, WorkflowTransitionLabel};
     use emc::io::dto::{
@@ -12,11 +12,14 @@ mod tests {
 
     #[test]
     fn quint_workflow_module_represents_business_workflow_fields() -> Result<(), Box<dyn Error>> {
+        let workflow_name = parse_model_name("Open ticket")?;
+        let workflow_description = parse_model_description("Actor opens a repair ticket.")?;
+        let workflow_slug = parse_workflow_slug("open-ticket")?;
         let module = emit_workflow_module(
             parse_quint_module_name("OpenTicket")?,
-            parse_model_name("Open ticket")?,
-            parse_model_description("Actor opens a repair ticket.")?,
-            parse_workflow_slug("open-ticket")?,
+            workflow_name.clone(),
+            workflow_description.clone(),
+            workflow_slug.clone(),
             vec![WorkflowSliceDetail::new(
                 parse_slice_slug("capture-ticket")?,
                 parse_model_name("Capture ticket")?,
@@ -26,12 +29,16 @@ mod tests {
             vec![WorkflowTransitionLabel::try_new(
                 "capture-ticket->review-ticket:navigation:review-ticket-screen".to_owned(),
             )?],
-            ArtifactDigest::try_new("workflow:Open ticket".to_owned())?,
+            artifact_digest(workflow_name, workflow_slug, workflow_description),
         );
         let quint = module.as_ref();
 
         assert!(quint.contains("module OpenTicket"));
-        assert!(quint.contains("// EMC-DIGEST: workflow:Open ticket"));
+        assert!(
+            quint.contains(
+                "// EMC-DIGEST: workflow:name=Open ticket;slug=open-ticket;description=Actor opens a repair ticket."
+            )
+        );
         assert!(quint.contains("val workflowName = \"Open ticket\""));
         assert!(quint.contains("val workflowSlug = \"open-ticket\""));
         assert!(quint.contains("val workflowDescription = \"Actor opens a repair ticket.\""));
