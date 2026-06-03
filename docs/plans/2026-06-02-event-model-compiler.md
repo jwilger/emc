@@ -143,6 +143,7 @@
 - 2026-06-03: `emc generate site` now replaces generated browser data instead of overlaying it, so regenerating a site removes stale workflow or slice data files from previous generations.
 - 2026-06-03: `emc --help` now succeeds through a Clap-backed help surface listing the user-facing command families documented in the README, including model mutation, validation, verification, site generation, and MCP transports.
 - 2026-06-03: CLI and MCP operations now route through a shared semantic command-planning layer before shell interpretation, and an architecture guardrail prevents MCP tool handlers from directly constructing command effects.
+- 2026-06-03: The Cargo manifest now pins the planned `rmcp` SDK dependency at 1.7.0 with default features disabled, and a package-smoke guardrail prevents the MCP implementation stack from silently drifting away from the selected SDK while preserving the strict duplicate-dependency lint policy.
 
 ### Task 1: Guardrails and Project Skeleton
 
