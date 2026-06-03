@@ -172,6 +172,7 @@
 - 2026-06-03: Validation structural builder parts and `with_*` assembly methods are now crate-private DTO-parser internals instead of public core API. An architecture guardrail prevents those structural validation builders from being exposed again.
 - 2026-06-03: Layout command-planning APIs now accept semantic modeled-workflow, slice-detail, and transition collection types instead of exposing raw `Vec<T>` inputs. A static guardrail checks complete public layout function signatures, including multiline signatures, for structural collection leakage.
 - 2026-06-03: `EffectPlan` and `ProcessInvocation` now expose semantic `Effects` and `ProcessArguments` collections instead of public raw vectors or slices. A static guardrail prevents effect-layer public APIs from exposing raw `Vec<T>` or slice collections again.
+- 2026-06-03: Workflow document collection accessors for slice details, step names, branch details, slice files, transitions, transition details, and review overlays are now crate-private semantic parser details. A static guardrail prevents those collection-returning accessors from becoming public API again.
 
 ### Task 1: Guardrails and Project Skeleton
 

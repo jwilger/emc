@@ -165,11 +165,13 @@ impl WorkflowDocument {
         })
     }
 
-    pub fn slice_details(&self) -> Result<Vec<WorkflowSliceDetail>, WorkflowDocumentError> {
+    pub(crate) fn slice_details(&self) -> Result<Vec<WorkflowSliceDetail>, WorkflowDocumentError> {
         self.steps()?.iter().map(workflow_slice_detail).collect()
     }
 
-    pub fn main_path_step_names(&self) -> Result<Vec<WorkflowStepName>, WorkflowDocumentError> {
+    pub(crate) fn main_path_step_names(
+        &self,
+    ) -> Result<Vec<WorkflowStepName>, WorkflowDocumentError> {
         self.steps()?
             .iter()
             .filter(|step| {
@@ -182,7 +184,9 @@ impl WorkflowDocument {
             .collect()
     }
 
-    pub fn branch_details(&self) -> Result<Vec<WorkflowBranchDetail>, WorkflowDocumentError> {
+    pub(crate) fn branch_details(
+        &self,
+    ) -> Result<Vec<WorkflowBranchDetail>, WorkflowDocumentError> {
         let steps = self.steps()?;
 
         steps
@@ -207,12 +211,14 @@ impl WorkflowDocument {
             .collect()
     }
 
-    pub fn slice_files(&self) -> Result<Vec<WorkflowSliceFileReference>, WorkflowDocumentError> {
+    pub(crate) fn slice_files(
+        &self,
+    ) -> Result<Vec<WorkflowSliceFileReference>, WorkflowDocumentError> {
         self.optional_slice_files()?
             .ok_or_else(|| WorkflowDocumentError::new("workflow document is missing slice_files"))
     }
 
-    pub fn optional_slice_files(
+    pub(crate) fn optional_slice_files(
         &self,
     ) -> Result<Option<Vec<WorkflowSliceFileReference>>, WorkflowDocumentError> {
         self.object()?
@@ -228,11 +234,13 @@ impl WorkflowDocument {
             .transpose()
     }
 
-    pub fn transitions(&self) -> Result<Vec<WorkflowTransitionRecord>, WorkflowDocumentError> {
+    pub(crate) fn transitions(
+        &self,
+    ) -> Result<Vec<WorkflowTransitionRecord>, WorkflowDocumentError> {
         workflow_transitions(self.steps()?)
     }
 
-    pub fn transition_details(
+    pub(crate) fn transition_details(
         &self,
     ) -> Result<Vec<WorkflowTransitionDetail>, WorkflowDocumentError> {
         let steps = self.steps()?;
@@ -244,7 +252,7 @@ impl WorkflowDocument {
             .map(|details| details.into_iter().flatten().collect())
     }
 
-    pub fn review_overlay_details(
+    pub(crate) fn review_overlay_details(
         &self,
     ) -> Result<Vec<WorkflowReviewOverlayDetail>, WorkflowDocumentError> {
         self.object()?

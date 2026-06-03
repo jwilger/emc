@@ -349,6 +349,48 @@ mod tests {
     }
 
     #[test]
+    fn workflow_document_collection_accessors_are_crate_private() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/core/workflow_document.rs")?;
+        let mut violations = Vec::new();
+        let mut signature_start = None;
+        let mut signature = String::new();
+
+        for (index, line) in source.lines().enumerate() {
+            if line.trim_start().starts_with("pub fn ") {
+                signature_start = Some(index + 1);
+                signature.clear();
+            }
+
+            if signature_start.is_some() {
+                signature.push_str(line.trim());
+                signature.push(' ');
+                if line.contains('{') {
+                    if signature.contains("Vec<") {
+                        let Some(start) = signature_start else {
+                            return Err("signature parser lost its start line".into());
+                        };
+                        violations.push(format!(
+                            "src/core/workflow_document.rs:{} exposes structural document collection API: {}",
+                            start,
+                            signature.trim()
+                        ));
+                    }
+                    signature_start = None;
+                    signature.clear();
+                }
+            }
+        }
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "workflow document collection accessors are internal semantic parser details and must stay crate-private"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn workflow_mutation_core_uses_semantic_json_document_types() -> Result<(), Box<dyn Error>> {
         let source = read_workspace_file("src/core/workflow.rs")?;
         let violations = [
