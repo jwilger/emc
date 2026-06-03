@@ -151,6 +151,30 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_missing_formal_slice_layout_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        remove_file(temp_dir.path().join("model/quint/slices/.gitkeep"))?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "missing required project artifact model/quint/slices/.gitkeep",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_lean_project_lakefile_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 

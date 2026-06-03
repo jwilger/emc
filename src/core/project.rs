@@ -35,6 +35,10 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
                 "namespace {module_name}\n\n-- EMC generated Lean4 model root.\n\nend {module_name}\n"
             )),
         ),
+        Effect::WriteFileIfMissing(
+            project_path("model/lean/slices/.gitkeep"),
+            file_contents("\n"),
+        ),
         Effect::EnsureDirectory(project_path("model/quint")),
         Effect::WriteFileIfMissing(
             project_path("model/quint/quint.json"),
@@ -45,6 +49,10 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         Effect::WriteFileIfMissing(
             project_path(format!("model/quint/{module_name}.qnt")),
             file_contents(format!("module {module_name} {{\n}}\n")),
+        ),
+        Effect::WriteFileIfMissing(
+            project_path("model/quint/slices/.gitkeep"),
+            file_contents("\n"),
         ),
         Effect::EnsureDirectory(project_path("model/browser/data/workflows")),
         Effect::WriteFileIfMissing(
