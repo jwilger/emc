@@ -44,6 +44,24 @@ mod tests {
     }
 
     #[test]
+    fn cli_entrypoint_does_not_perform_filesystem_io_directly() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/main.rs")?;
+        let violations = filesystem_io_markers()
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| format!("src/main.rs contains `{marker}`"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "CLI commands must describe file reads as effects and leave execution to shell interpreters"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn core_public_apis_do_not_expose_primitive_types() -> Result<(), Box<dyn Error>> {
         let violations = rust_files_under("src/core")?
             .into_iter()
@@ -85,6 +103,7 @@ mod tests {
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",
+            "fs::read_to_string",
             "tokio::fs",
             "std::process",
             "Command::new",
@@ -97,6 +116,10 @@ mod tests {
             "println!",
             "eprintln!",
         ]
+    }
+
+    fn filesystem_io_markers() -> &'static [&'static str] {
+        &["std::fs", "fs::read_to_string"]
     }
 
     fn forbidden_primitive_markers() -> &'static [&'static str] {
