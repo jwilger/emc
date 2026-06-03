@@ -8,6 +8,7 @@ use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
 use crate::core::formal_projection::{
     project_browser_index_document, project_slice_browser_document,
+    project_workflow_browser_document,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{
@@ -535,6 +536,13 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let workflow_effects = [
         vec![
             Effect::RequireFile(workflow_path.clone()),
+            Effect::RequireWorkflowProjection(
+                workflow_path.clone(),
+                project_workflow_browser_document(workflow),
+                report_line(format!(
+                    "browser workflow drift for workflow {workflow_name}"
+                )),
+            ),
             Effect::RequireWorkflowSliceFiles(
                 workflow_path.clone(),
                 report_line(format!(

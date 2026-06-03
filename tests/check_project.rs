@@ -757,6 +757,33 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_browser_workflow_transition_projection_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let workflow = read_to_string(&workflow_path)?.replace(
+            "\"via_navigation\": \"review-ticket-screen\"",
+            "\"via_navigation\": \"stale-screen\"",
+        );
+        write(workflow_path, workflow)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser workflow drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_browser_workflow_extra_name_field_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 

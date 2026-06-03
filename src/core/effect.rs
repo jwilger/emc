@@ -55,6 +55,7 @@ pub enum Effect {
         ArtifactFileExtension,
         ReportLine,
     ),
+    RequireWorkflowProjection(ProjectPath, FileContents, ReportLine),
     RequireWorkflowSliceDetails(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RequireWorkflowSlices(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RequireWorkflowDigest(ProjectPath, ProjectPath, WorkflowSlug, ReportLine),

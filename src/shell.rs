@@ -234,6 +234,10 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             require_file_contents(path.as_ref(), expected.as_ref(), message.as_ref())
                 .map(|()| Vec::new())
         }
+        Effect::RequireWorkflowProjection(path, expected, message) => {
+            require_workflow_projection(path.as_ref(), expected, message.as_ref())
+                .map(|()| Vec::new())
+        }
         Effect::RequireIndexedWorkflowFiles(index_path, workflows_path, message) => {
             require_indexed_workflow_files(
                 index_path.as_ref(),
@@ -995,6 +999,64 @@ fn require_file_contents(path: &str, expected: &str, message: &str) -> Result<()
     } else {
         Err(ShellError::message(message.to_owned()))
     }
+}
+
+fn require_workflow_projection(
+    path: &str,
+    expected: &FileContents,
+    message: &str,
+) -> Result<(), ShellError> {
+    let actual_contents = FileContents::try_new(
+        fs::read_to_string(Path::new(path))
+            .map_err(|_error| ShellError::message(message.to_owned()))?,
+    )
+    .map_err(|_error| ShellError::message(message.to_owned()))?;
+    let actual = WorkflowDocument::parse(&actual_contents)
+        .map_err(|_error| ShellError::message(message.to_owned()))?;
+    let expected = WorkflowDocument::parse(expected)
+        .map_err(|_error| ShellError::message(message.to_owned()))?;
+
+    if workflow_projection_matches(&actual, &expected)? {
+        Ok(())
+    } else {
+        Err(ShellError::message(message.to_owned()))
+    }
+}
+
+fn workflow_projection_matches(
+    actual: &WorkflowDocument,
+    expected: &WorkflowDocument,
+) -> Result<bool, ShellError> {
+    Ok(actual
+        .name()
+        .map_err(|error| ShellError::message(error.to_string()))?
+        == expected
+            .name()
+            .map_err(|error| ShellError::message(error.to_string()))?
+        && actual
+            .description()
+            .map_err(|error| ShellError::message(error.to_string()))?
+            == expected
+                .description()
+                .map_err(|error| ShellError::message(error.to_string()))?
+        && actual
+            .slice_files()
+            .map_err(|error| ShellError::message(error.to_string()))?
+            == expected
+                .slice_files()
+                .map_err(|error| ShellError::message(error.to_string()))?
+        && actual
+            .slice_details()
+            .map_err(|error| ShellError::message(error.to_string()))?
+            == expected
+                .slice_details()
+                .map_err(|error| ShellError::message(error.to_string()))?
+        && actual
+            .transitions()
+            .map_err(|error| ShellError::message(error.to_string()))?
+            == expected
+                .transitions()
+                .map_err(|error| ShellError::message(error.to_string()))?)
 }
 
 fn indexed_workflow_paths(index_contents: &str) -> Result<Vec<ProjectPath>, ShellError> {
