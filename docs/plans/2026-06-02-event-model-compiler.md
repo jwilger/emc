@@ -170,6 +170,7 @@
 - 2026-06-03: Every checked-in Gherkin scenario now has a checked-in traceability row mapping its feature path and scenario title to the expected executable Rust test target, and `tests/rule_fixtures.rs` keeps the map synchronized with validator, review-gate, browser, and runner/meta feature suites.
 - 2026-06-03: Validation orchestration now parses raw event-model source files through one shared raw-to-semantic path before rule checks, including referenced slice files. An architecture guardrail prevents a second `parse_event_model_document` call site from returning to `src/event_model_validation.rs`.
 - 2026-06-03: Validation structural builder parts and `with_*` assembly methods are now crate-private DTO-parser internals instead of public core API. An architecture guardrail prevents those structural validation builders from being exposed again.
+- 2026-06-03: Layout command-planning APIs now accept semantic modeled-workflow, slice-detail, and transition collection types instead of exposing raw `Vec<T>` inputs. A static guardrail checks complete public layout function signatures, including multiline signatures, for structural collection leakage.
 
 ### Task 1: Guardrails and Project Skeleton
 

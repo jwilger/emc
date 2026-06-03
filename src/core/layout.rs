@@ -53,9 +53,50 @@ impl ModeledWorkflowLayout {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ModeledWorkflowLayouts {
+    workflows: Vec<ModeledWorkflowLayout>,
+}
+
+impl ModeledWorkflowLayouts {
+    pub(crate) fn new(workflows: Vec<ModeledWorkflowLayout>) -> Self {
+        Self { workflows }
+    }
+
+    fn as_slice(&self) -> &[ModeledWorkflowLayout] {
+        &self.workflows
+    }
+
+    fn into_inner(self) -> Vec<ModeledWorkflowLayout> {
+        self.workflows
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ModeledWorkflowSliceDetails {
+    slices: Vec<WorkflowSliceDetail>,
+}
+
+impl ModeledWorkflowSliceDetails {
+    pub(crate) fn new(slices: Vec<WorkflowSliceDetail>) -> Self {
+        Self { slices }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ModeledWorkflowTransitions {
+    transitions: Vec<WorkflowTransitionRecord>,
+}
+
+impl ModeledWorkflowTransitions {
+    pub(crate) fn new(transitions: Vec<WorkflowTransitionRecord>) -> Self {
+        Self { transitions }
+    }
+}
+
 pub fn check_project(
     project_name: ProjectName,
-    modeled_workflows: Vec<ModeledWorkflowLayout>,
+    modeled_workflows: ModeledWorkflowLayouts,
 ) -> EffectPlan {
     let module_name = module_name(&project_name);
     let root_effects = project_root_effects(&project_name, &module_name);
@@ -64,15 +105,16 @@ pub fn check_project(
             project_path("model/lean/lakefile.lean"),
             project_path(format!("model/lean/{module_name}.lean")),
         ],
-        &modeled_workflows,
+        modeled_workflows.as_slice(),
         ModeledWorkflowLayout::lean_artifact_path,
     );
     let quint_artifact_paths = modeled_artifact_paths(
         [project_path(format!("model/quint/{module_name}.qnt"))],
-        &modeled_workflows,
+        modeled_workflows.as_slice(),
         ModeledWorkflowLayout::quint_artifact_path,
     );
     let modeled_effects = modeled_workflows
+        .into_inner()
         .into_iter()
         .flat_map(modeled_workflow_effects)
         .collect::<Vec<_>>();
@@ -254,27 +296,30 @@ fn modeled_artifact_paths<const N: usize>(
         .collect()
 }
 
-pub fn list_workflows(modeled_workflows: Vec<ModeledWorkflowLayout>) -> EffectPlan {
+pub fn list_workflows(modeled_workflows: ModeledWorkflowLayouts) -> EffectPlan {
     EffectPlan::new(
         modeled_workflows
+            .into_inner()
             .into_iter()
             .map(|workflow| Effect::Report(report_line(workflow.name.as_ref().to_owned())))
             .collect(),
     )
 }
 
-pub fn list_slices(modeled_slices: Vec<WorkflowSliceDetail>) -> EffectPlan {
+pub fn list_slices(modeled_slices: ModeledWorkflowSliceDetails) -> EffectPlan {
     EffectPlan::new(
         modeled_slices
+            .slices
             .into_iter()
             .map(|slice| Effect::Report(report_line(slice.name().as_ref().to_owned())))
             .collect(),
     )
 }
 
-pub fn list_transitions(modeled_transitions: Vec<WorkflowTransitionRecord>) -> EffectPlan {
+pub fn list_transitions(modeled_transitions: ModeledWorkflowTransitions) -> EffectPlan {
     EffectPlan::new(
         modeled_transitions
+            .transitions
             .into_iter()
             .map(|transition| {
                 Effect::Report(report_line(format!(

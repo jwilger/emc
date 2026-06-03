@@ -262,6 +262,48 @@ mod tests {
     }
 
     #[test]
+    fn layout_public_apis_use_semantic_collections() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/core/layout.rs")?;
+        let mut violations = Vec::new();
+        let mut signature_start = None;
+        let mut signature = String::new();
+
+        for (index, line) in source.lines().enumerate() {
+            if line.trim_start().starts_with("pub fn ") {
+                signature_start = Some(index + 1);
+                signature.clear();
+            }
+
+            if signature_start.is_some() {
+                signature.push_str(line.trim());
+                signature.push(' ');
+                if line.contains('{') {
+                    if signature.contains("Vec<") {
+                        let Some(start) = signature_start else {
+                            return Err("signature parser lost its start line".into());
+                        };
+                        violations.push(format!(
+                            "src/core/layout.rs:{} exposes a structural collection in public API: {}",
+                            start,
+                            signature.trim()
+                        ));
+                    }
+                    signature_start = None;
+                    signature.clear();
+                }
+            }
+        }
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "layout command-planning APIs must accept semantic collection types, not raw Vec<T>"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn workflow_mutation_core_uses_semantic_json_document_types() -> Result<(), Box<dyn Error>> {
         let source = read_workspace_file("src/core/workflow.rs")?;
         let violations = [
