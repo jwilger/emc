@@ -1,0 +1,43 @@
+# Local editor, shell, and environment files
+.envrc
+.direnv/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Rust build outputs
+/target/
+/.build/
+
+# Nix build links
+/result
+/result-*
+
+# JavaScript/package-manager downloads and browser build output
+/node_modules/
+/.npm/
+/.pnpm-store/
+/dist/
+/.vite/
+/.next/
+
+# Test, coverage, and mutation artifacts
+/coverage/
+/mutants.out/
+/mutants.out.old/
+/.playwright-mcp/
+/QA-FINDINGS.md
+
+# Formal verifier scratch output
+/_apalache-out/
+/.lake/
+/lake-packages/
+/.lake-packages/
+
+# Generated EMC site output when created in the repository root
+/site/
+
+# Ad hoc scratch directories
+/tmp/
+/.tmp/
