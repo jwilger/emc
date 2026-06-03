@@ -164,6 +164,7 @@
 - 2026-06-03: CLI `remove workflow --slug <slug>` and MCP `remove_workflow` now remove modeled business workflows, delete owned workflow and slice browser/Lean4/Quint artifacts, rewrite the browser index, and reject removal when another workflow has an incoming workflow-exit transition to the target workflow.
 - 2026-06-03: CLI `validate` and MCP `validate_event_model` now run deterministic project artifact synchronization checks before event-model source validation when invoked inside an initialized EMC project, so validation fails on Lean4, Quint, or browser drift before reporting source-rule diagnostics.
 - 2026-06-03: Review record timestamps now parse through a semantic `ReviewTimestamp` boundary type that only accepts deterministic UTC millisecond instants such as `2026-06-03T00:00:00.000Z`; mutation testing caught and closed missing digit/range examples.
+- 2026-06-03: The Nix package smoke gate now exercises packaged `emc review record` and `emc review gate`, so packaged review-record creation and gating are covered alongside check, verify, site generation, and MCP smoke coverage.
 
 ### Task 1: Guardrails and Project Skeleton
 

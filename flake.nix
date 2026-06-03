@@ -127,6 +127,8 @@
             ${package}/bin/emc connect workflow --workflow package-smoke --from capture-smoke --to review-smoke --via navigation --name review-smoke-screen
             ${package}/bin/emc check
             ${package}/bin/emc verify
+            ${package}/bin/emc review record --workflow package-smoke --reviewer package-smoke --reviewed-at 2026-06-03T00:00:00.000Z
+            ${package}/bin/emc review gate --workflow package-smoke
             ${package}/bin/emc generate site --output site
 
             printf '%s\n' \

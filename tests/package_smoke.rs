@@ -86,6 +86,14 @@ mod tests {
             "package smoke checks must run packaged `emc verify` through pinned tools"
         );
         assert!(
+            flake.contains("${package}/bin/emc review record"),
+            "package smoke checks must run packaged `emc review record`"
+        );
+        assert!(
+            flake.contains("${package}/bin/emc review gate"),
+            "package smoke checks must run packaged `emc review gate`"
+        );
+        assert!(
             flake.contains("${package}/bin/emc generate site"),
             "package smoke checks must run packaged `emc generate site`"
         );
