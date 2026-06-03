@@ -1701,6 +1701,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_command_input_sources_without_reportable_chains()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("incomplete-command-input-source.eventmodel.json"),
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[\"reflection_answer\"],\"input_sources\":[{\"name\":\"reflection_answer\",\"source\":\"user_input.reflection_answer\"}],\"produces\":[]}],\"read_models\":[],\"slices\":[]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "command input 'reflection_answer' source chain is incomplete",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_commands_with_legacy_read_model_reads() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
