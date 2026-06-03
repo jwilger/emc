@@ -5,12 +5,13 @@ use std::iter;
 use serde_json::Value;
 
 use crate::core::effect::FileContents;
-use crate::core::types::{BoardLaneId, WorkflowStepName};
+use crate::core::types::{BoardLaneId, WorkflowBranchLabel, WorkflowStepName};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BrowserWorkflow {
     lane_ids: Vec<BoardLaneId>,
     main_path_names: Vec<WorkflowStepName>,
+    branch_cards: Vec<BrowserBranchCard>,
 }
 
 impl BrowserWorkflow {
@@ -20,6 +21,26 @@ impl BrowserWorkflow {
 
     pub fn main_path_names(&self) -> &[WorkflowStepName] {
         &self.main_path_names
+    }
+
+    pub fn branch_cards(&self) -> &[BrowserBranchCard] {
+        &self.branch_cards
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserBranchCard {
+    name: WorkflowStepName,
+    label: WorkflowBranchLabel,
+}
+
+impl BrowserBranchCard {
+    pub fn name(&self) -> &WorkflowStepName {
+        &self.name
+    }
+
+    pub fn label(&self) -> &WorkflowBranchLabel {
+        &self.label
     }
 }
 
@@ -45,10 +66,12 @@ pub fn compose_browser_workflow(
             Ok(lanes)
         })?;
     let main_path_names = workflow_main_path_names(&workflow_value)?;
+    let branch_cards = workflow_branch_cards(&workflow_value)?;
 
     Ok(BrowserWorkflow {
         lane_ids,
         main_path_names,
+        branch_cards,
     })
 }
 
@@ -108,4 +131,41 @@ fn workflow_main_path_names(
             })
         })
         .collect()
+}
+
+fn workflow_branch_cards(value: &Value) -> Result<Vec<BrowserBranchCard>, BrowserCompositionError> {
+    value
+        .get("steps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|step| {
+            step.get("relationship")
+                .and_then(Value::as_str)
+                .is_some_and(|relationship| relationship != "entry" && relationship != "main")
+        })
+        .filter_map(|step| {
+            step.get("name")
+                .and_then(Value::as_str)
+                .zip(step.get("relationship").and_then(Value::as_str))
+        })
+        .map(|(name, relationship)| {
+            Ok(BrowserBranchCard {
+                name: WorkflowStepName::try_new(name.to_owned()).map_err(|error| {
+                    BrowserCompositionError::new(format!("invalid workflow step name: {error}"))
+                })?,
+                label: WorkflowBranchLabel::try_new(branch_label(relationship)).map_err(
+                    |error| {
+                        BrowserCompositionError::new(format!(
+                            "invalid workflow branch label: {error}"
+                        ))
+                    },
+                )?,
+            })
+        })
+        .collect()
+}
+
+fn branch_label(relationship: &str) -> String {
+    relationship.replace('_', " ")
 }

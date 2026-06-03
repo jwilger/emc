@@ -49,6 +49,34 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn composed_browser_workflow_renders_async_lifecycle_as_branch_card()
+    -> Result<(), Box<dyn Error>> {
+        let workflow = file_contents(
+            "{\n  \"name\": \"Organization access\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Member access lifecycle.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\"},\n    {\"slice\": \"activate-member\", \"name\": \"activate-member\", \"relationship\": \"main\"},\n    {\"slice\": \"record-member-suspension\", \"name\": \"record-member-suspension\", \"relationship\": \"async_lifecycle\"}\n  ]\n}\n",
+        );
+
+        let composed = compose_browser_workflow(workflow, Vec::new())?;
+
+        assert_eq!(
+            composed
+                .branch_cards()
+                .iter()
+                .map(|card| (card.name().as_ref(), card.label().as_ref()))
+                .collect::<Vec<_>>(),
+            [("record-member-suspension", "async lifecycle")]
+        );
+        assert!(
+            composed
+                .main_path_names()
+                .iter()
+                .all(|name| name.as_ref() != "record-member-suspension"),
+            "async lifecycle step must not be part of the main path"
+        );
+
+        Ok(())
+    }
+
     fn slice_with_canonical_lanes(name: &str) -> String {
         format!(
             "{{\n  \"name\": \"{name}\",\n  \"version\": \"0.1.0\",\n  \"board\": {{\"lanes\": [\n    {{\"id\": \"ux\", \"name\": \"People, Views, and Translations\"}},\n    {{\"id\": \"actions\", \"name\": \"Commands and Projections\"}},\n    {{\"id\": \"events\", \"name\": \"Stored Facts\"}}\n  ]}},\n  \"slices\": [{{\"name\": \"{name}\", \"type\": \"state_view\", \"views\": [], \"acceptance_scenarios\": [], \"contract_scenarios\": []}}]\n}}\n"
