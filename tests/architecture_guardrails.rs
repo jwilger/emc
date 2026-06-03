@@ -391,23 +391,23 @@ mod tests {
     }
 
     #[test]
-    fn browser_projection_public_apis_use_semantic_collections() -> Result<(), Box<dyn Error>> {
-        let violations = [
-            "src/core/browser.rs",
-            "src/core/browser_data_document.rs",
-            "src/core/types.rs",
-        ]
-        .into_iter()
-        .map(public_collection_signature_violations)
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
+    fn core_public_apis_use_semantic_collections() -> Result<(), Box<dyn Error>> {
+        let workspace = workspace_root();
+        let violations = rust_files_under("src/core")?
+            .into_iter()
+            .map(|path| {
+                let relative_path = path.strip_prefix(&workspace)?;
+                public_collection_signature_violations(relative_path)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
 
         assert_eq!(
             violations,
             Vec::<String>::new(),
-            "browser projection APIs must expose semantic collection types, not raw Vec<T> or slices"
+            "core public APIs must expose semantic collection types, not raw Vec<T> or slices"
         );
 
         Ok(())
@@ -949,12 +949,13 @@ mod tests {
     }
 
     fn public_collection_signature_violations(
-        relative_path: &str,
+        relative_path: &Path,
     ) -> Result<Vec<String>, Box<dyn Error>> {
-        let source = read_workspace_file(relative_path)?;
+        let source = fs::read_to_string(workspace_root().join(relative_path))?;
         let mut violations = Vec::new();
         let mut signature_start = None;
         let mut signature = String::new();
+        let display_path = relative_path.display();
 
         for (index, line) in source.lines().enumerate() {
             if line.trim_start().starts_with("pub fn ") {
@@ -974,7 +975,7 @@ mod tests {
                             return Err("signature parser lost its start line".into());
                         };
                         violations.push(format!(
-                            "{relative_path}:{start} exposes a structural collection in public API: {}",
+                            "{display_path}:{start} exposes a structural collection in public API: {}",
                             signature.trim()
                         ));
                     }

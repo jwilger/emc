@@ -1,7 +1,7 @@
 use crate::core::effect::{ArtifactDigest, FileContents};
 use crate::core::types::{
     ModelDescription, ModelName, QuintModuleName, SliceKindName, SliceSlug, WorkflowSliceDetail,
-    WorkflowSlug, WorkflowTransitionRecord,
+    WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 
 pub fn emit_workflow_module(
@@ -9,12 +9,12 @@ pub fn emit_workflow_module(
     workflow_name: ModelName,
     workflow_description: ModelDescription,
     workflow_slug: WorkflowSlug,
-    workflow_slice_details: Vec<WorkflowSliceDetail>,
-    workflow_transitions: Vec<WorkflowTransitionRecord>,
+    workflow_slice_details: WorkflowSliceDetails,
+    workflow_transitions: WorkflowTransitionRecords,
     digest: ArtifactDigest,
 ) -> FileContents {
-    let slice_list = slice_list(&workflow_slice_details);
-    let slice_detail_list = slice_detail_list(&workflow_slice_details);
+    let slice_list = slice_list(workflow_slice_details.as_slice());
+    let slice_detail_list = slice_detail_list(workflow_slice_details.as_slice());
     let transition_list = transition_list(workflow_transitions);
     file_contents(format!(
         "module {module_name} {{\n  // EMC-DIGEST: {digest}\n  val workflowName = {workflow_name_json}\n  val workflowSlug = {workflow_slug_json}\n  val workflowDescription = {workflow_description_json}\n  val workflowSlices = {slice_list}\n  val workflowSliceDetails = {slice_detail_list}\n  val workflowTransitions = {transition_list}\n  val workflowIdentityStable = workflowName == {workflow_name_json}\n  val workflowSlicesHaveDetails = length(workflowSlices) == length(workflowSliceDetails)\n  val workflowSliceDetailsComplete = workflowSlicesHaveDetails\n  val workflowTransitionsStructured = workflowTransitions.select(transition => transition.source != \"\" and transition.target != \"\" and transition.kind != \"\" and transition.trigger != \"\").length() == workflowTransitions.length()\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}}\n",
@@ -90,10 +90,11 @@ fn slice_detail_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
     )
 }
 
-fn transition_list(workflow_transitions: Vec<WorkflowTransitionRecord>) -> String {
+fn transition_list(workflow_transitions: WorkflowTransitionRecords) -> String {
     format!(
         "[{}]",
         workflow_transitions
+            .as_slice()
             .iter()
             .map(transition_record)
             .collect::<Vec<_>>()

@@ -8,12 +8,27 @@ use crate::core::effect::{
 };
 use crate::core::types::{ReviewRuleName, ReviewStatus, ReviewTimestamp, ReviewerId, WorkflowSlug};
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct RequiredReviewCategories {
+    categories: Vec<ReviewRuleName>,
+}
+
+impl RequiredReviewCategories {
+    pub(crate) fn new(categories: Vec<ReviewRuleName>) -> Self {
+        Self { categories }
+    }
+
+    fn as_slice(&self) -> &[ReviewRuleName] {
+        &self.categories
+    }
+}
+
 pub fn record_clean_review(
     workflow_slug: WorkflowSlug,
     model_content_digest: ArtifactDigest,
     reviewer_id: ReviewerId,
     reviewed_at: ReviewTimestamp,
-    required_categories: Vec<ReviewRuleName>,
+    required_categories: RequiredReviewCategories,
 ) -> Result<EffectPlan, ReviewRecordDocumentError> {
     Ok(EffectPlan::new(vec![
         Effect::WriteFile(
@@ -23,7 +38,7 @@ pub fn record_clean_review(
                 &model_content_digest,
                 &reviewer_id,
                 &reviewed_at,
-                &required_categories,
+                required_categories.as_slice(),
             )?,
         ),
         Effect::Report(recorded_clean_review_report(&workflow_slug)?),

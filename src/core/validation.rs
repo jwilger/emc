@@ -797,7 +797,7 @@ pub struct BoardSliceGraph {
 }
 
 impl BoardSliceGraph {
-    pub fn new(
+    pub(crate) fn new(
         name: DefinitionName,
         elements: Vec<BoardElement>,
         connections: Vec<BoardGraphConnection>,
@@ -882,7 +882,7 @@ impl SliceDefinition {
         self.slice_type == SliceType::StateView
     }
 
-    pub fn owned_events(&self) -> &[DefinitionName] {
+    pub(crate) fn owned_events(&self) -> &[DefinitionName] {
         &self.owned_events
     }
 
@@ -1095,7 +1095,7 @@ pub struct OutcomeDefinition {
 }
 
 impl OutcomeDefinition {
-    pub fn new(label: DefinitionName, events: Vec<DefinitionName>) -> Self {
+    pub(crate) fn new(label: DefinitionName, events: Vec<DefinitionName>) -> Self {
         Self { label, events }
     }
 }
@@ -1473,7 +1473,7 @@ pub struct EventDefinition {
 }
 
 impl EventDefinition {
-    pub fn new(
+    pub(crate) fn new(
         name: DefinitionName,
         stream: Option<DefinitionName>,
         attributes: Vec<EventAttribute>,
@@ -1516,7 +1516,7 @@ pub struct ReadModelDefinition {
 }
 
 impl ReadModelDefinition {
-    pub fn new(
+    pub(crate) fn new(
         name: DefinitionName,
         fields: Vec<ReadModelField>,
         transitive_derivation: ReadModelTransitiveDerivation,
@@ -1708,13 +1708,13 @@ pub struct ExternalInputSchema {
 }
 
 impl ExternalInputSchema {
-    pub fn new(name: DefinitionName, fields: Vec<DefinitionName>) -> Self {
+    pub(crate) fn new(name: DefinitionName, fields: Vec<DefinitionName>) -> Self {
         Self { name, fields }
     }
 }
 
 impl ViewDefinition {
-    pub fn new(
+    pub(crate) fn new(
         name: DefinitionName,
         read_models: Vec<DefinitionName>,
         fields: Vec<ViewFieldDefinition>,

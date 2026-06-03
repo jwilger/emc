@@ -68,6 +68,27 @@ impl WorkflowSliceDetail {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowSliceDetails {
+    details: Vec<WorkflowSliceDetail>,
+}
+
+impl WorkflowSliceDetails {
+    pub fn from_details(details: impl IntoIterator<Item = WorkflowSliceDetail>) -> Self {
+        Self {
+            details: details.into_iter().collect(),
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[WorkflowSliceDetail] {
+        &self.details
+    }
+
+    pub(crate) fn into_inner(self) -> Vec<WorkflowSliceDetail> {
+        self.details
+    }
+}
+
 #[nutype(
     sanitize(trim),
     validate(not_empty),
@@ -210,6 +231,23 @@ impl WorkflowTransitionRecord {
 
     pub fn trigger(&self) -> &TransitionTriggerName {
         &self.trigger
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowTransitionRecords {
+    records: Vec<WorkflowTransitionRecord>,
+}
+
+impl WorkflowTransitionRecords {
+    pub fn from_records(records: impl IntoIterator<Item = WorkflowTransitionRecord>) -> Self {
+        Self {
+            records: records.into_iter().collect(),
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[WorkflowTransitionRecord] {
+        &self.records
     }
 }
 

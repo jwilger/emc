@@ -19,19 +19,20 @@ use crate::core::layout::{
 };
 use crate::core::project::ProjectName;
 use crate::core::review_record::{
-    ReviewCategoryFinding, ReviewRecordDocument, record_clean_review,
+    RequiredReviewCategories, ReviewCategoryFinding, ReviewRecordDocument, record_clean_review,
 };
 use crate::core::site::generate_site;
 use crate::core::slice::{
     add_slice, remove_slice, update_slice_description, update_slice_kind, update_slice_name,
 };
 use crate::core::types::{
-    ReviewRuleName, SliceSlug, WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionRecord,
+    ReviewRuleName, SliceSlug, WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSlug,
+    WorkflowTransitionRecord,
 };
 use crate::core::verify::verify_project;
 use crate::core::workflow::{
-    IndexedWorkflowDocument, add_workflow, remove_workflow, update_workflow_description,
-    update_workflow_name,
+    IndexedWorkflowDocument, IndexedWorkflowDocuments, add_workflow, remove_workflow,
+    update_workflow_description, update_workflow_name,
 };
 use crate::core::workflow_document::WorkflowDocument;
 use crate::event_model_validation::validate_event_model_sources;
@@ -130,8 +131,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         }
         Effect::AddWorkflowFromIndex(workflow) => {
             let existing_workflows = read_browser_index_workflows()?;
-            let plan = add_workflow(existing_workflows, workflow.clone())
-                .map_err(|error| ShellError::message(error.to_string()))?;
+            let plan = add_workflow(
+                ModeledWorkflowLayouts::new(existing_workflows),
+                workflow.clone(),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
         }
         Effect::CheckCurrentProject => {
@@ -396,7 +400,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 current_digest,
                 reviewer_id.clone(),
                 reviewed_at.clone(),
-                required_categories,
+                RequiredReviewCategories::new(required_categories),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
@@ -443,8 +447,12 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::RemoveWorkflowFromIndex(slug) => {
             let existing_workflows = read_browser_index_workflows()?;
             let workflow_documents = read_indexed_workflow_documents(&existing_workflows)?;
-            let plan = remove_workflow(existing_workflows, workflow_documents, slug.clone())
-                .map_err(|error| ShellError::message(error.to_string()))?;
+            let plan = remove_workflow(
+                ModeledWorkflowLayouts::new(existing_workflows),
+                IndexedWorkflowDocuments::new(workflow_documents),
+                slug.clone(),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
         }
         Effect::ShowSliceFromSlice(slug) => {
@@ -460,7 +468,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let workflow_document =
                 read_indexed_workflow_document_from_layouts(slug, existing_workflows.as_slice())?;
             let plan = update_workflow_description(
-                existing_workflows,
+                ModeledWorkflowLayouts::new(existing_workflows),
                 workflow_document,
                 slug.clone(),
                 description.clone(),
@@ -473,7 +481,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let workflow_document =
                 read_indexed_workflow_document_from_layouts(slug, existing_workflows.as_slice())?;
             let plan = update_workflow_name(
-                existing_workflows,
+                ModeledWorkflowLayouts::new(existing_workflows),
                 workflow_document,
                 slug.clone(),
                 name.clone(),
@@ -533,8 +541,8 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let modeled_slices = read_modeled_workflow_slice_details(&modeled_workflows)?;
             interpret_collect_reports(verify_project(
                 project_name,
-                modeled_workflows,
-                modeled_slices,
+                ModeledWorkflowLayouts::new(modeled_workflows),
+                WorkflowSliceDetails::from_details(modeled_slices),
             ))
         }
         Effect::WriteFile(path, contents) => {

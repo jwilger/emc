@@ -1,7 +1,7 @@
 use crate::core::effect::{ArtifactDigest, FileContents};
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSliceDetail,
-    WorkflowSlug, WorkflowTransitionRecord,
+    WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 
 pub fn emit_workflow_module(
@@ -9,12 +9,12 @@ pub fn emit_workflow_module(
     workflow_name: ModelName,
     workflow_description: ModelDescription,
     workflow_slug: WorkflowSlug,
-    workflow_slice_details: Vec<WorkflowSliceDetail>,
-    workflow_transitions: Vec<WorkflowTransitionRecord>,
+    workflow_slice_details: WorkflowSliceDetails,
+    workflow_transitions: WorkflowTransitionRecords,
     digest: ArtifactDigest,
 ) -> FileContents {
-    let slice_list = slice_list(&workflow_slice_details);
-    let slice_detail_list = slice_detail_list(&workflow_slice_details);
+    let slice_list = slice_list(workflow_slice_details.as_slice());
+    let slice_detail_list = slice_detail_list(workflow_slice_details.as_slice());
     let transition_list = transition_list(workflow_transitions);
     file_contents(format!(
         "namespace {module_name}\n\n-- EMC-DIGEST: {digest}\n-- EMC generated Lean4 business workflow model.\ndef workflowName := {workflow_name_json}\n\ndef workflowSlug := {workflow_slug_json}\n\ndef workflowDescription := {workflow_description_json}\n\ndef workflowSlices : List String := {slice_list}\n\ndef workflowSliceDetails : List (String × String × String × String) := {slice_detail_list}\n\nstructure WorkflowTransition where\n  source : String\n  target : String\n  kind : String\n  trigger : String\n\ndef workflowTransitions : List WorkflowTransition := {transition_list}\n\ntheorem workflowIdentityIsStable : workflowName = {workflow_name_json} := rfl\n\ntheorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl\n\ntheorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl\n\nend {module_name}\n",
@@ -90,10 +90,11 @@ fn slice_detail_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
     )
 }
 
-fn transition_list(workflow_transitions: Vec<WorkflowTransitionRecord>) -> String {
+fn transition_list(workflow_transitions: WorkflowTransitionRecords) -> String {
     format!(
         "[{}]",
         workflow_transitions
+            .as_slice()
             .iter()
             .map(transition_record)
             .collect::<Vec<_>>()

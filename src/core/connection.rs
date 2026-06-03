@@ -7,8 +7,8 @@ use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceSlug, TransitionTriggerName,
-    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionFieldName, WorkflowTransitionKind,
-    WorkflowTransitionRecord,
+    WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionFieldName,
+    WorkflowTransitionKind, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 use crate::core::workflow_document::{
     WorkflowDocument, WorkflowTransitionAddition, WorkflowTransitionTarget, workflow_path,
@@ -243,8 +243,8 @@ pub fn connect_workflow(
         workflow_name.clone(),
         connection.workflow_slug.clone(),
         workflow_description.clone(),
-        workflow_slice_details.clone(),
-        workflow_transitions.clone(),
+        WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+        WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
     );
     let workflow_json = workflow_document
         .contents()
@@ -261,8 +261,8 @@ pub fn connect_workflow(
                 workflow_name.clone(),
                 workflow_description.clone(),
                 connection.workflow_slug.clone(),
-                workflow_slice_details.clone(),
-                workflow_transitions.clone(),
+                WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+                WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
                 digest.clone(),
             ),
         ),
@@ -273,8 +273,8 @@ pub fn connect_workflow(
                 workflow_name,
                 workflow_description,
                 connection.workflow_slug.clone(),
-                workflow_slice_details,
-                workflow_transitions,
+                WorkflowSliceDetails::from_details(workflow_slice_details),
+                WorkflowTransitionRecords::from_records(workflow_transitions),
                 digest,
             ),
         ),
@@ -324,8 +324,8 @@ pub fn remove_transition(
         workflow_name.clone(),
         removal.workflow_slug.clone(),
         workflow_description.clone(),
-        workflow_slice_details.clone(),
-        workflow_transitions.clone(),
+        WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+        WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
     );
     let workflow_json = workflow_document
         .contents()
@@ -342,8 +342,8 @@ pub fn remove_transition(
                 workflow_name.clone(),
                 workflow_description.clone(),
                 removal.workflow_slug.clone(),
-                workflow_slice_details.clone(),
-                workflow_transitions.clone(),
+                WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+                WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
                 digest.clone(),
             ),
         ),
@@ -354,8 +354,8 @@ pub fn remove_transition(
                 workflow_name,
                 workflow_description,
                 removal.workflow_slug.clone(),
-                workflow_slice_details,
-                workflow_transitions,
+                WorkflowSliceDetails::from_details(workflow_slice_details),
+                WorkflowTransitionRecords::from_records(workflow_transitions),
                 digest,
             ),
         ),
