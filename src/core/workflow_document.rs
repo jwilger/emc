@@ -6,8 +6,8 @@ use serde_json::Value;
 use crate::core::effect::{FileContents, ProjectPath};
 use crate::core::types::{
     ModelDescription, ModelName, SliceKindName, SliceSlug, TransitionTriggerName,
-    WorkflowSliceDetail, WorkflowSliceFileReference, WorkflowSlug, WorkflowStepRelationshipName,
-    WorkflowTransitionFieldName, WorkflowTransitionLabel,
+    WorkflowSliceDetail, WorkflowSliceFileReference, WorkflowSlug, WorkflowStepName,
+    WorkflowStepRelationshipName, WorkflowTransitionFieldName, WorkflowTransitionLabel,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -108,6 +108,19 @@ impl WorkflowDocument {
 
     pub fn slice_details(&self) -> Result<Vec<WorkflowSliceDetail>, WorkflowDocumentError> {
         self.steps()?.iter().map(workflow_slice_detail).collect()
+    }
+
+    pub fn main_path_step_names(&self) -> Result<Vec<WorkflowStepName>, WorkflowDocumentError> {
+        self.steps()?
+            .iter()
+            .filter(|step| {
+                step.get("relationship")
+                    .and_then(Value::as_str)
+                    .is_some_and(|relationship| relationship == "entry" || relationship == "main")
+            })
+            .filter_map(|step| step.get("name").and_then(Value::as_str))
+            .map(workflow_step_name)
+            .collect()
     }
 
     pub fn slice_files(&self) -> Result<Vec<WorkflowSliceFileReference>, WorkflowDocumentError> {
@@ -481,6 +494,11 @@ fn workflow_slice_file_reference(
     WorkflowSliceFileReference::try_new(raw.to_owned()).map_err(|error| {
         WorkflowDocumentError::new(format!("invalid workflow slice file reference: {error}"))
     })
+}
+
+fn workflow_step_name(raw: &str) -> Result<WorkflowStepName, WorkflowDocumentError> {
+    WorkflowStepName::try_new(raw.to_owned())
+        .map_err(|error| WorkflowDocumentError::new(format!("invalid workflow step name: {error}")))
 }
 
 fn model_description(context: &str, raw: &str) -> Result<ModelDescription, WorkflowDocumentError> {

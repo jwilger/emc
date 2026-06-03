@@ -12,6 +12,7 @@ use crate::core::types::{
     WorkflowBranchLabel, WorkflowStepName, WorkflowTransitionKind, WorkflowTransitionLabel,
     WorkflowTransitionName,
 };
+use crate::core::workflow_document::WorkflowDocument;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BrowserWorkflow {
@@ -236,6 +237,8 @@ pub fn compose_browser_workflow(
     workflow_document: FileContents,
     slice_documents: Vec<FileContents>,
 ) -> Result<BrowserWorkflow, BrowserCompositionError> {
+    let workflow_semantics = WorkflowDocument::parse(&workflow_document)
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
     let workflow_value = parse_json(workflow_document.as_ref())?;
     let slice_values = slice_documents
         .iter()
@@ -253,7 +256,9 @@ pub fn compose_browser_workflow(
             }
             Ok(lanes)
         })?;
-    let main_path_names = workflow_main_path_names(&workflow_value)?;
+    let main_path_names = workflow_semantics
+        .main_path_step_names()
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
     let branch_cards = workflow_branch_cards(&workflow_value)?;
     let transition_cards = workflow_transition_cards(&workflow_value)?;
     let composed_values = iter::once(&workflow_value)
@@ -312,28 +317,6 @@ fn board_lane_ids(value: &Value) -> impl Iterator<Item = &str> {
         .into_iter()
         .flatten()
         .filter_map(|lane| lane.get("id").and_then(Value::as_str))
-}
-
-fn workflow_main_path_names(
-    value: &Value,
-) -> Result<Vec<WorkflowStepName>, BrowserCompositionError> {
-    value
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter(|step| {
-            step.get("relationship")
-                .and_then(Value::as_str)
-                .is_some_and(|relationship| relationship == "entry" || relationship == "main")
-        })
-        .filter_map(|step| step.get("name").and_then(Value::as_str))
-        .map(|name| {
-            WorkflowStepName::try_new(name.to_owned()).map_err(|error| {
-                BrowserCompositionError::new(format!("invalid workflow step name: {error}"))
-            })
-        })
-        .collect()
 }
 
 fn workflow_branch_cards(value: &Value) -> Result<Vec<BrowserBranchCard>, BrowserCompositionError> {
