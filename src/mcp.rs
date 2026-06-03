@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use crate::core::connection::{WorkflowConnection, connect_workflow};
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath};
 use crate::core::layout::{list_workflows, show_workflow};
+use crate::core::review_gate::review_gate;
 use crate::core::site::generate_site;
 use crate::core::slice::{NewSlice, add_slice};
 use crate::core::verify::verify_project;
@@ -139,6 +140,20 @@ fn tools_list_result() -> Value {
                 }
             },
             {
+                "name": "review_gate",
+                "description": "Evaluate whether a workflow has a current clean structured review.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "workflow": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["workflow"],
+                    "additionalProperties": false
+                }
+            },
+            {
                 "name": "add_workflow",
                 "description": "Add a business workflow and regenerate synchronized model artifacts.",
                 "inputSchema": {
@@ -265,6 +280,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
             id,
             tool_result(validate_event_model_tool_text(request)?),
         ))),
+        "review_gate" => Ok(Some(success_response(
+            id,
+            tool_result(review_gate_tool_text(request)?),
+        ))),
         "add_workflow" => Ok(Some(success_response(
             id,
             tool_result(add_workflow_tool_text(request)?),
@@ -349,6 +368,20 @@ fn validate_event_model_tool_text(request: &Value) -> Result<String, ShellError>
         .ok_or_else(|| ShellError::message("validate_event_model requires target"))?;
     validate_target(Path::new(target))?;
     Ok(format!("event model is valid at {target}"))
+}
+
+fn review_gate_tool_text(request: &Value) -> Result<String, ShellError> {
+    let workflow_slug = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .and_then(|arguments| arguments.get("workflow"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("review_gate requires workflow"))
+        .and_then(|raw_workflow| {
+            parse_workflow_slug(raw_workflow)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    interpret_collect_reports(review_gate(workflow_slug)).map(|reports| reports.join("\n"))
 }
 
 fn add_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
