@@ -9,14 +9,15 @@ use emc::core::effect::ProjectPath;
 use emc::core::layout::{check_project, list_workflows, show_workflow};
 use emc::core::project::{ProjectName, init_project};
 use emc::core::site::generate_site;
+use emc::core::slice::{NewSlice, add_slice};
 use emc::core::types::{ModelDescription, WorkflowSlug};
 use emc::core::verify::verify_project;
 use emc::core::workflow::{NewWorkflow, add_workflow, update_workflow_description};
 use emc::event_model_validation::validate_target;
 use emc::io::dto::{
     parse_browser_index_workflows, parse_emc_slice_import, parse_emc_workflow_import,
-    parse_model_description, parse_model_name, parse_project_manifest_name, parse_slice_slug,
-    parse_workflow_slug,
+    parse_model_description, parse_model_name, parse_project_manifest_name, parse_slice_kind,
+    parse_slice_slug, parse_workflow_slug,
 };
 use emc::mcp::serve_stdio;
 use emc::shell::{ShellError, interpret};
@@ -26,6 +27,9 @@ struct Cli {
 }
 
 enum Command {
+    AddSlice {
+        slice: NewSlice,
+    },
     AddWorkflow {
         workflow: NewWorkflow,
     },
@@ -66,6 +70,20 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<(), ShellError> {
     match cli.command {
+        Command::AddSlice { slice } => {
+            let workflow_document = fs::read_to_string(format!(
+                "model/browser/data/workflows/{}.eventmodel.json",
+                slice.workflow_slug().as_ref()
+            ))
+            .map_err(|error| ShellError::message(error.to_string()))
+            .and_then(|contents| {
+                FileContents::try_new(contents)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+            let plan = add_slice(workflow_document, slice)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret(plan)
+        }
         Command::AddWorkflow { workflow } => {
             let index = fs::read_to_string("model/browser/data/index.json")
                 .map_err(|error| ShellError::message(error.to_string()))?;
@@ -135,6 +153,49 @@ fn run(cli: Cli) -> Result<(), ShellError> {
 
 fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
     match arguments.as_slice() {
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            slug_flag,
+            slug,
+            name_flag,
+            name,
+            type_flag,
+            slice_type,
+            description_flag,
+            description,
+        ] if command == "add"
+            && subject == "slice"
+            && workflow_flag == "--workflow"
+            && slug_flag == "--slug"
+            && name_flag == "--name"
+            && type_flag == "--type"
+            && description_flag == "--description" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let slice_slug =
+                parse_slice_slug(slug).map_err(|error| ShellError::message(error.to_string()))?;
+            let slice_name =
+                parse_model_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+            let slice_kind = parse_slice_kind(slice_type)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let slice_description = parse_model_description(description)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::AddSlice {
+                    slice: NewSlice::new(
+                        workflow_slug,
+                        slice_slug,
+                        slice_name,
+                        slice_description,
+                        slice_kind,
+                    ),
+                },
+            })
+        }
         [
             command,
             subject,
