@@ -92,6 +92,10 @@ fn event_model_file_kind(path: &Path) -> EventModelFileKind {
 }
 
 fn event_model_files(directory: &Path) -> Result<Vec<PathBuf>, ShellError> {
+    if directory.is_file() {
+        return Ok(vec![directory.to_path_buf()]);
+    }
+
     let mut files = fs::read_dir(directory)
         .map_err(|error| ShellError::message(error.to_string()))?
         .map(|entry| entry.map(|directory_entry| directory_entry.path()))
