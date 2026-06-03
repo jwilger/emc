@@ -84,6 +84,18 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 )))
             }
         }
+        Effect::RequireWorkflowSlices(workflow_path, artifact_path, marker_prefix, message) => {
+            let workflow_contents =
+                fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
+            let artifact_contents =
+                fs::read_to_string(Path::new(artifact_path.as_ref())).map_err(ShellError::io)?;
+            let marker = workflow_slice_marker(marker_prefix.as_ref(), &workflow_contents)?;
+            if artifact_contents.contains(&marker) {
+                Ok(None)
+            } else {
+                Err(ShellError::message(message.as_ref().to_owned()))
+            }
+        }
         Effect::RequireWorkflowTransitions(
             workflow_path,
             artifact_path,
@@ -117,19 +129,32 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
     }
 }
 
+fn workflow_slice_marker(prefix: &str, workflow_contents: &str) -> Result<String, ShellError> {
+    let labels = workflow_slice_labels(workflow_contents)?;
+    let joined_labels = labels.join(",");
+    Ok(format!("{prefix} [{joined_labels}]"))
+}
+
 fn workflow_transition_marker(prefix: &str, workflow_contents: &str) -> Result<String, ShellError> {
     let labels = workflow_transition_labels(workflow_contents)?;
     let joined_labels = labels.join(",");
     Ok(format!("{prefix} [{joined_labels}]"))
 }
 
+fn workflow_slice_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
+    let workflow = workflow_json(workflow_contents)?;
+    let steps = workflow_steps(&workflow)?;
+
+    steps
+        .iter()
+        .filter_map(|step| step.get("slice").and_then(Value::as_str))
+        .map(|slice| json_string(slice.to_owned()))
+        .collect()
+}
+
 fn workflow_transition_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    let workflow = serde_json::from_str::<Value>(workflow_contents)
-        .map_err(|error| ShellError::message(format!("invalid workflow JSON: {error}")))?;
-    let steps = workflow
-        .get("steps")
-        .and_then(Value::as_array)
-        .ok_or_else(|| ShellError::message("workflow document is missing steps"))?;
+    let workflow = workflow_json(workflow_contents)?;
+    let steps = workflow_steps(&workflow)?;
 
     steps
         .iter()
@@ -149,6 +174,18 @@ fn workflow_transition_labels(workflow_contents: &str) -> Result<Vec<String>, Sh
         })
         .map(json_string)
         .collect()
+}
+
+fn workflow_json(workflow_contents: &str) -> Result<Value, ShellError> {
+    serde_json::from_str::<Value>(workflow_contents)
+        .map_err(|error| ShellError::message(format!("invalid workflow JSON: {error}")))
+}
+
+fn workflow_steps(workflow: &Value) -> Result<&Vec<Value>, ShellError> {
+    workflow
+        .get("steps")
+        .and_then(Value::as_array)
+        .ok_or_else(|| ShellError::message("workflow document is missing steps"))
 }
 
 fn json_string(value: String) -> Result<String, ShellError> {
