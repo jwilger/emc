@@ -104,6 +104,13 @@ pub fn parse_browser_index_workflows(
                 .and_then(Value::as_str)
                 .ok_or_else(|| BoundaryParseError::new("browser index workflow is missing name"))
                 .and_then(parse_model_name)?;
+            let description = workflow
+                .get("description")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    BoundaryParseError::new("browser index workflow is missing description")
+                })
+                .and_then(parse_model_description)?;
             let path = workflow
                 .get("path")
                 .and_then(Value::as_str)
@@ -114,7 +121,7 @@ pub fn parse_browser_index_workflows(
                 .ok_or_else(|| BoundaryParseError::new("browser index workflow path is invalid"))
                 .and_then(parse_workflow_slug)?;
 
-            Ok(ImportedWorkflowLayout::new(name, slug))
+            Ok(ImportedWorkflowLayout::new(name, description, slug))
         })
         .collect()
 }
