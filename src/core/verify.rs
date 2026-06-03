@@ -3,24 +3,25 @@ use std::collections::BTreeSet;
 use crate::core::effect::{
     Effect, EffectPlan, ProcessArgument, ProcessInvocation, ProgramName, ReportLine,
 };
-use crate::core::layout::ModeledWorkflowLayout;
+use crate::core::layout::{ModeledWorkflowLayout, ModeledWorkflowLayouts};
 use crate::core::project::ProjectName;
-use crate::core::types::WorkflowSliceDetail;
+use crate::core::types::{WorkflowSliceDetail, WorkflowSliceDetails};
 
 pub fn verify_project(
     project_name: ProjectName,
-    modeled_workflows: Vec<ModeledWorkflowLayout>,
-    workflow_slice_details: Vec<WorkflowSliceDetail>,
+    modeled_workflows: ModeledWorkflowLayouts,
+    workflow_slice_details: WorkflowSliceDetails,
 ) -> EffectPlan {
     EffectPlan::new(
         verify_project_root(project_name)
             .into_iter()
             .chain(
                 modeled_workflows
+                    .into_inner()
                     .into_iter()
                     .flat_map(verify_modeled_workflow),
             )
-            .chain(verify_modeled_slices(workflow_slice_details))
+            .chain(verify_modeled_slices(workflow_slice_details.into_inner()))
             .collect(),
     )
 }

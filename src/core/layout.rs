@@ -63,11 +63,11 @@ impl ModeledWorkflowLayouts {
         Self { workflows }
     }
 
-    fn as_slice(&self) -> &[ModeledWorkflowLayout] {
+    pub(crate) fn as_slice(&self) -> &[ModeledWorkflowLayout] {
         &self.workflows
     }
 
-    fn into_inner(self) -> Vec<ModeledWorkflowLayout> {
+    pub(crate) fn into_inner(self) -> Vec<ModeledWorkflowLayout> {
         self.workflows
     }
 }

@@ -3,8 +3,8 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{ArtifactDigest, FileContents};
 use crate::core::types::{
-    ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSliceDetail, WorkflowSlug,
-    WorkflowTransitionRecord,
+    ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSliceDetail,
+    WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 use crate::core::workflow_document::WorkflowDocument;
 
@@ -12,8 +12,8 @@ pub fn artifact_digest(
     workflow_name: ModelName,
     workflow_slug: WorkflowSlug,
     workflow_description: ModelDescription,
-    workflow_slice_details: Vec<WorkflowSliceDetail>,
-    workflow_transitions: Vec<WorkflowTransitionRecord>,
+    workflow_slice_details: WorkflowSliceDetails,
+    workflow_transitions: WorkflowTransitionRecords,
 ) -> ArtifactDigest {
     ArtifactDigest::try_new(format!(
         "workflow:name={workflow_name};slug={workflow_slug};description={workflow_description};slices={};transitions={}",
@@ -40,12 +40,16 @@ pub fn artifact_digest_from_workflow_document(
         workflow
             .description()
             .map_err(|error| ArtifactDigestError::new(error.to_string()))?,
-        workflow
-            .slice_details()
-            .map_err(|error| ArtifactDigestError::new(error.to_string()))?,
-        workflow
-            .transitions()
-            .map_err(|error| ArtifactDigestError::new(error.to_string()))?,
+        WorkflowSliceDetails::from_details(
+            workflow
+                .slice_details()
+                .map_err(|error| ArtifactDigestError::new(error.to_string()))?,
+        ),
+        WorkflowTransitionRecords::from_records(
+            workflow
+                .transitions()
+                .map_err(|error| ArtifactDigestError::new(error.to_string()))?,
+        ),
     ))
 }
 

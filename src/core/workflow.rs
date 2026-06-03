@@ -5,10 +5,10 @@ use crate::core::digest::artifact_digest;
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
-use crate::core::layout::ModeledWorkflowLayout;
+use crate::core::layout::{ModeledWorkflowLayout, ModeledWorkflowLayouts};
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowSliceDetail,
-    WorkflowSlug, WorkflowTransitionRecord,
+    WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 use crate::core::workflow_document::{WorkflowDocument, workflow_path};
 
@@ -49,22 +49,41 @@ impl IndexedWorkflowDocument {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct IndexedWorkflowDocuments {
+    documents: Vec<IndexedWorkflowDocument>,
+}
+
+impl IndexedWorkflowDocuments {
+    pub(crate) fn new(documents: Vec<IndexedWorkflowDocument>) -> Self {
+        Self { documents }
+    }
+
+    fn as_slice(&self) -> &[IndexedWorkflowDocument] {
+        &self.documents
+    }
+}
+
 pub fn add_workflow(
-    existing_workflows: Vec<ModeledWorkflowLayout>,
+    existing_workflows: ModeledWorkflowLayouts,
     workflow: NewWorkflow,
 ) -> Result<EffectPlan, WorkflowMutationError> {
-    reject_workflow_slug_collision(&existing_workflows, &workflow)?;
-    reject_workflow_module_collision(&existing_workflows, &workflow)?;
-    Ok(workflow_effect_plan(existing_workflows, workflow))
+    reject_workflow_slug_collision(existing_workflows.as_slice(), &workflow)?;
+    reject_workflow_module_collision(existing_workflows.as_slice(), &workflow)?;
+    Ok(workflow_effect_plan(
+        existing_workflows.into_inner(),
+        workflow,
+    ))
 }
 
 pub fn update_workflow_description(
-    existing_workflows: Vec<ModeledWorkflowLayout>,
+    existing_workflows: ModeledWorkflowLayouts,
     workflow_document: FileContents,
     slug: WorkflowSlug,
     description: ModelDescription,
 ) -> Result<EffectPlan, WorkflowMutationError> {
     let existing_workflow = existing_workflows
+        .as_slice()
         .iter()
         .find(|existing| existing.slug() == &slug)
         .cloned()
@@ -95,7 +114,7 @@ pub fn update_workflow_description(
         .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
 
     Ok(update_workflow_effect_plan(
-        existing_workflows,
+        existing_workflows.into_inner(),
         NewWorkflow::new(workflow_name, description, slug),
         workflow_json,
         workflow_slice_details,
@@ -105,12 +124,13 @@ pub fn update_workflow_description(
 }
 
 pub fn update_workflow_name(
-    existing_workflows: Vec<ModeledWorkflowLayout>,
+    existing_workflows: ModeledWorkflowLayouts,
     workflow_document: FileContents,
     slug: WorkflowSlug,
     name: ModelName,
 ) -> Result<EffectPlan, WorkflowMutationError> {
     let existing_workflow = existing_workflows
+        .as_slice()
         .iter()
         .find(|existing| existing.slug() == &slug)
         .cloned()
@@ -120,7 +140,7 @@ pub fn update_workflow_name(
         existing_workflow.description().clone(),
         slug.clone(),
     );
-    reject_workflow_module_collision(&existing_workflows, &updated_workflow)?;
+    reject_workflow_module_collision(existing_workflows.as_slice(), &updated_workflow)?;
 
     let workflow_document = WorkflowDocument::parse(&workflow_document)
         .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
@@ -159,7 +179,7 @@ pub fn update_workflow_name(
         .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
 
     Ok(update_workflow_effect_plan(
-        existing_workflows,
+        existing_workflows.into_inner(),
         updated_workflow,
         workflow_json,
         workflow_slice_details,
@@ -169,17 +189,19 @@ pub fn update_workflow_name(
 }
 
 pub fn remove_workflow(
-    existing_workflows: Vec<ModeledWorkflowLayout>,
-    workflow_documents: Vec<IndexedWorkflowDocument>,
+    existing_workflows: ModeledWorkflowLayouts,
+    workflow_documents: IndexedWorkflowDocuments,
     slug: WorkflowSlug,
 ) -> Result<EffectPlan, WorkflowMutationError> {
     let removed_workflow = existing_workflows
+        .as_slice()
         .iter()
         .find(|existing| existing.slug() == &slug)
         .cloned()
         .ok_or_else(|| WorkflowMutationError::new(format!("unknown workflow {}", slug.as_ref())))?;
     reject_incoming_workflow_references(workflow_documents.as_slice(), &slug)?;
     let workflow_document = workflow_documents
+        .as_slice()
         .iter()
         .find(|document| document.slug() == &slug)
         .ok_or_else(|| {
@@ -201,6 +223,7 @@ pub fn remove_workflow(
     }
 
     let remaining_workflows = existing_workflows
+        .into_inner()
         .into_iter()
         .filter(|existing| existing.slug() != &slug)
         .collect::<Vec<_>>();
@@ -270,8 +293,8 @@ fn workflow_effect_plan(
         workflow.name.clone(),
         workflow.slug.clone(),
         workflow.description.clone(),
-        Vec::new(),
-        Vec::new(),
+        WorkflowSliceDetails::from_details([]),
+        WorkflowTransitionRecords::from_records([]),
     );
     let workflow_layout = ModeledWorkflowLayout::new(
         workflow.name.clone(),
@@ -305,8 +328,8 @@ fn workflow_effect_plan(
                 workflow.name.clone(),
                 workflow.description.clone(),
                 workflow.slug.clone(),
-                Vec::new(),
-                Vec::new(),
+                WorkflowSliceDetails::from_details([]),
+                WorkflowTransitionRecords::from_records([]),
                 digest.clone(),
             ),
         ),
@@ -317,8 +340,8 @@ fn workflow_effect_plan(
                 workflow.name.clone(),
                 workflow.description.clone(),
                 workflow.slug.clone(),
-                Vec::new(),
-                Vec::new(),
+                WorkflowSliceDetails::from_details([]),
+                WorkflowTransitionRecords::from_records([]),
                 digest,
             ),
         ),
@@ -398,8 +421,8 @@ fn update_workflow_effect_plan(
         workflow.name.clone(),
         workflow.slug.clone(),
         workflow.description.clone(),
-        workflow_slice_details.clone(),
-        workflow_transitions.clone(),
+        WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+        WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
     );
     let workflow_layout = ModeledWorkflowLayout::new(
         workflow.name.clone(),
@@ -442,8 +465,8 @@ fn update_workflow_effect_plan(
                         workflow.name.clone(),
                         workflow.description.clone(),
                         workflow.slug.clone(),
-                        workflow_slice_details.clone(),
-                        workflow_transitions.clone(),
+                        WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+                        WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
                         digest.clone(),
                     ),
                 ),
@@ -454,8 +477,8 @@ fn update_workflow_effect_plan(
                         workflow.name.clone(),
                         workflow.description.clone(),
                         workflow.slug.clone(),
-                        workflow_slice_details,
-                        workflow_transitions,
+                        WorkflowSliceDetails::from_details(workflow_slice_details),
+                        WorkflowTransitionRecords::from_records(workflow_transitions),
                         digest,
                     ),
                 ),

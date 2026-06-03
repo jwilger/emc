@@ -5,8 +5,9 @@ mod tests {
     use emc::core::digest::{artifact_digest, slice_artifact_digest};
     use emc::core::emit::quint::{emit_slice_module, emit_workflow_module};
     use emc::core::types::{
-        SliceKindName, TransitionTriggerName, WorkflowSliceDetail, WorkflowTransitionEndpoint,
-        WorkflowTransitionKind, WorkflowTransitionRecord,
+        SliceKindName, TransitionTriggerName, WorkflowSliceDetail, WorkflowSliceDetails,
+        WorkflowTransitionEndpoint, WorkflowTransitionKind, WorkflowTransitionRecord,
+        WorkflowTransitionRecords,
     };
     use emc::io::dto::{
         parse_model_description, parse_model_name, parse_quint_module_name, parse_slice_slug,
@@ -35,14 +36,14 @@ mod tests {
             workflow_name.clone(),
             workflow_description.clone(),
             workflow_slug.clone(),
-            workflow_slice_details.clone(),
-            workflow_transitions.clone(),
+            WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+            WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
             artifact_digest(
                 workflow_name,
                 workflow_slug,
                 workflow_description,
-                workflow_slice_details,
-                workflow_transitions,
+                WorkflowSliceDetails::from_details(workflow_slice_details),
+                WorkflowTransitionRecords::from_records(workflow_transitions),
             ),
         );
         let quint = module.as_ref();

@@ -12,7 +12,8 @@ use crate::core::emit::quint::{
 };
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceKindName, SliceSlug,
-    WorkflowSliceDetail, WorkflowSliceFileReference, WorkflowSlug,
+    WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSliceFileReference, WorkflowSlug,
+    WorkflowTransitionRecords,
 };
 use crate::core::workflow_document::{WorkflowDocument, WorkflowSliceAddition, workflow_path};
 
@@ -152,8 +153,8 @@ pub fn add_slice(
         workflow_name.clone(),
         new_slice.workflow_slug.clone(),
         workflow_description.clone(),
-        workflow_slice_details.clone(),
-        workflow_transitions.clone(),
+        WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+        WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
     );
     let workflow_json = workflow_document
         .contents()
@@ -206,8 +207,8 @@ pub fn add_slice(
                 workflow_name.clone(),
                 workflow_description.clone(),
                 new_slice.workflow_slug.clone(),
-                workflow_slice_details.clone(),
-                workflow_transitions.clone(),
+                WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+                WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
                 digest.clone(),
             ),
         ),
@@ -218,8 +219,8 @@ pub fn add_slice(
                 workflow_name,
                 workflow_description,
                 new_slice.workflow_slug.clone(),
-                workflow_slice_details,
-                workflow_transitions,
+                WorkflowSliceDetails::from_details(workflow_slice_details),
+                WorkflowTransitionRecords::from_records(workflow_transitions),
                 digest,
             ),
         ),
@@ -461,8 +462,8 @@ pub fn remove_slice(
         workflow_name.clone(),
         workflow_slug.clone(),
         workflow_description.clone(),
-        workflow_slice_details.clone(),
-        workflow_transitions.clone(),
+        WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+        WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
     );
     let workflow_json = workflow_document
         .contents()
@@ -487,8 +488,8 @@ pub fn remove_slice(
                 workflow_name.clone(),
                 workflow_description.clone(),
                 workflow_slug.clone(),
-                workflow_slice_details.clone(),
-                workflow_transitions.clone(),
+                WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+                WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
                 workflow_digest.clone(),
             ),
         ),
@@ -499,8 +500,8 @@ pub fn remove_slice(
                 workflow_name,
                 workflow_description,
                 workflow_slug,
-                workflow_slice_details,
-                workflow_transitions,
+                WorkflowSliceDetails::from_details(workflow_slice_details),
+                WorkflowTransitionRecords::from_records(workflow_transitions),
                 workflow_digest,
             ),
         ),
@@ -532,8 +533,8 @@ fn updated_slice_plan(
         workflow_name.clone(),
         workflow_slug.clone(),
         workflow_description.clone(),
-        workflow_slice_details.clone(),
-        workflow_transitions.clone(),
+        WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+        WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
     );
     let slice_digest = slice_artifact_digest(
         updated_slice.name().clone(),
@@ -599,8 +600,8 @@ fn updated_slice_plan(
                         workflow_name.clone(),
                         workflow_description.clone(),
                         workflow_slug.clone(),
-                        workflow_slice_details.clone(),
-                        workflow_transitions.clone(),
+                        WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+                        WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
                         workflow_digest.clone(),
                     ),
                 ),
@@ -611,8 +612,8 @@ fn updated_slice_plan(
                         workflow_name,
                         workflow_description,
                         workflow_slug,
-                        workflow_slice_details,
-                        workflow_transitions,
+                        WorkflowSliceDetails::from_details(workflow_slice_details),
+                        WorkflowTransitionRecords::from_records(workflow_transitions),
                         workflow_digest,
                     ),
                 ),

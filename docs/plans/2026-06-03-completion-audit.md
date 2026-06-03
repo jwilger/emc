@@ -24,7 +24,7 @@ output, and mechanical guardrails.
 | Same semantic command core for CLI and MCP | `src/command.rs` provides shared effect plans, and architecture guardrails prevent MCP handlers from directly constructing command effects. | Strong evidence | Keep guardrails updated as new commands appear. |
 | Functional core and imperative shell | Core operations describe effects through `src/core/effect.rs`; shell modules interpret filesystem, process, stdio, network, and environment effects. Architecture guardrails cover the known direct-I/O regressions. | Partial evidence | Run a final direct-I/O audit across `src/core` and add static guardrails for any uncovered I/O classes found. |
 | Step/trampoline variant effect pattern | Command planning returns effect plans interpreted at the shell boundary. CLI and MCP route through that effect plan layer. | Strong evidence | Confirm final command additions keep using `EffectPlan` instead of direct shell calls. |
-| Semantic data types only past boundaries | `nutype = 0.7.0` is pinned. Boundary parsers cover project names, paths, model descriptions, workflow slugs, slice slugs, transition endpoints and kinds, review timestamps, reviewers, and validation definition names. Static guardrails reject several primitive-bearing core API regressions. Validation structural builder parts and `with_*` assembly methods are crate-private DTO-parser internals. Layout command-planning APIs, effect APIs, workflow document parser details, and browser projection APIs now expose semantic collection types or crate-private parser details instead of raw `Vec<T>` inputs or slices. | Partial evidence | Finish the public core API audit for remaining validation definition collection signatures, then add semantic collection types or explicit guardrails where needed. |
+| Semantic data types only past boundaries | `nutype = 0.7.0` is pinned. Boundary parsers cover project names, paths, model descriptions, workflow slugs, slice slugs, transition endpoints and kinds, review timestamps, reviewers, and validation definition names. Static guardrails reject primitive-bearing core API regressions and now scan every `src/core` Rust file to reject public raw `Vec<T>` inputs or slice-returning collection APIs. Validation structural builder parts and `with_*` assembly methods are crate-private DTO-parser internals. Layout, effect, workflow mutation, formal emission, digest, verify, review-record, workflow-document, validation, and browser projection APIs expose semantic collection types or crate-private parser details. | Strong evidence | Keep boundary parsers and core API guardrails current as new command surfaces are added. |
 | Parse-don't-validate | CLI and MCP DTO parsing convert raw strings and JSON fields into semantic types before command execution. Duplicate-key and project-path checks happen at boundary parsing. Validation orchestration now routes raw event-model files through one shared parse path into semantic documents before rule checks, and architecture guardrails prevent a second raw event-model parse path from returning. | Strong evidence | Keep new boundary parsers and validation entrypoints on the shared raw-to-semantic path. |
 | Actual business model represented in Lean4 and Quint | Workflow and slice mutations emit Lean4 and Quint modules for the modeled workflows, slices, transitions, identity fields, slice details, and digests. Verification runs Lean4/Lake and Quint against project root, workflow, and slice artifacts. | Partial evidence | Decide whether the goal requires EMC to parse Lean4 and Quint artifacts back into a normalized semantic graph, not only compare deterministic declarations, markers, digests, and invariant names. If yes, add that graph reader and drift tests. |
 | Deterministic drift checking | `emc check` rejects drift across browser data, Lean4 workflow artifacts, Quint workflow artifacts, slice artifacts, root artifacts, tool config, duplicate metadata, unmodeled artifacts, stale declarations, and generated browser data. | Strong evidence | Strengthen only if normalized graph reading is adopted. |
@@ -42,15 +42,12 @@ output, and mechanical guardrails.
 
 ## Highest-Value Remaining Increments
 
-1. **Semantic-boundary audit:** finish scanning public core APIs for remaining
-   validation definition collection signatures, then add semantic collection
-   types or explicit guardrails where needed.
-2. **Formal graph decision:** either implement Lean4/Quint artifact readers that
+1. **Formal graph decision:** either implement Lean4/Quint artifact readers that
    normalize formal artifacts back into semantic graph data, or explicitly
    narrow the goal to deterministic generated declarations, digests, and tool
    verification. The original goal wording leans toward the stronger graph
    reader, so treat this as an open decision until resolved.
-3. **Final closure pass:** rerun `just ci`, local mutation testing appropriate to
+2. **Final closure pass:** rerun `just ci`, local mutation testing appropriate to
    the touched Rust surface, `nix flake check`, package smoke, forbidden scan,
    and a line-by-line goal audit before declaring the full goal complete.
 
@@ -58,7 +55,7 @@ output, and mechanical guardrails.
 
 EMC has strong implementation evidence for the binary, command surfaces, MCP
 access, deterministic mutation paths, formal artifact emission, drift checks,
-review gate, rendered browser execution, strict lints, mutation-testing
-workflow, validation scenario traceability, and Nix packaging. The goal should
-not be closed until semantic-boundary coverage and the Lean4/Quint normalized
-graph decision are resolved.
+review gate, rendered browser execution, semantic public core APIs, strict
+lints, mutation-testing workflow, validation scenario traceability, and Nix
+packaging. The goal should not be closed until the Lean4/Quint normalized graph
+decision and the final closure audit are resolved.
