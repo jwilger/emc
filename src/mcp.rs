@@ -471,55 +471,62 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
     };
 
     match name {
-        "list_workflows" => Ok(Some(success_response(
+        "list_workflows" => Ok(Some(tool_call_result_response(
             id,
-            tool_result(list_workflows_tool_text()?),
+            list_workflows_tool_text(),
         ))),
-        "show_workflow" => Ok(Some(success_response(
+        "show_workflow" => Ok(Some(tool_call_result_response(
             id,
-            tool_result(show_workflow_tool_text(request)?),
+            show_workflow_tool_text(request),
         ))),
-        "generate_site" => Ok(Some(success_response(
+        "generate_site" => Ok(Some(tool_call_result_response(
             id,
-            tool_result(generate_site_tool_text(request)?),
+            generate_site_tool_text(request),
         ))),
-        "check_project" => Ok(Some(success_response(
+        "check_project" => Ok(Some(tool_call_result_response(
             id,
-            tool_result(check_project_tool_text()?),
+            check_project_tool_text(),
         ))),
-        "verify_project" => Ok(Some(success_response(
+        "verify_project" => Ok(Some(tool_call_result_response(
             id,
-            tool_result(verify_project_tool_text()?),
+            verify_project_tool_text(),
         ))),
-        "validate_event_model" => Ok(Some(success_response(
+        "validate_event_model" => Ok(Some(tool_call_result_response(
             id,
-            tool_result(validate_event_model_tool_text(request)?),
+            validate_event_model_tool_text(request),
         ))),
-        "review_gate" => Ok(Some(success_response(
+        "review_gate" => Ok(Some(tool_call_result_response(
             id,
-            tool_result(review_gate_tool_text(request)?),
+            review_gate_tool_text(request),
         ))),
-        "add_workflow" => Ok(Some(success_response(
+        "add_workflow" => Ok(Some(tool_call_result_response(
             id,
-            tool_result(add_workflow_tool_text(request)?),
+            add_workflow_tool_text(request),
         ))),
-        "add_slice" => Ok(Some(success_response(
+        "add_slice" => Ok(Some(tool_call_result_response(
             id,
-            tool_result(add_slice_tool_text(request)?),
+            add_slice_tool_text(request),
         ))),
-        "update_workflow" => Ok(Some(success_response(
+        "update_workflow" => Ok(Some(tool_call_result_response(
             id,
-            tool_result(update_workflow_tool_text(request)?),
+            update_workflow_tool_text(request),
         ))),
-        "connect_workflow" => Ok(Some(success_response(
+        "connect_workflow" => Ok(Some(tool_call_result_response(
             id,
-            tool_result(connect_workflow_tool_text(request)?),
+            connect_workflow_tool_text(request),
         ))),
         _ => Ok(Some(error_response(
             id,
             -32602,
             format!("unknown EMC MCP tool {name}"),
         ))),
+    }
+}
+
+fn tool_call_result_response(id: &Value, result: Result<String, ShellError>) -> Value {
+    match result {
+        Ok(text) => success_response(id, tool_result(text)),
+        Err(error) => error_response(id, -32000, error.to_string()),
     }
 }
 
