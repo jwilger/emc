@@ -353,6 +353,128 @@ mod tests {
     }
 
     #[test]
+    fn remove_slice_removes_synchronized_slice_artifacts_and_connected_transitions()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "review-ticket",
+                "--name",
+                "Review ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor reviews repair ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["remove", "slice", "--slug", "review-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("removed slice Review ticket"));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        let workflow_lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let workflow_quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        assert!(
+            workflow_json.contains("\"slice\": \"capture-ticket\""),
+            "remaining slice must stay in workflow composition"
+        );
+        assert!(
+            !workflow_json.contains("review-ticket"),
+            "removed slice and transitions to it must leave workflow data"
+        );
+        assert!(
+            workflow_lean.contains("def workflowSlices : List String := [\"capture-ticket\"]"),
+            "workflow Lean artifact must keep only remaining slices"
+        );
+        assert!(
+            workflow_lean.contains("def workflowTransitions : List WorkflowTransition := []"),
+            "workflow Lean artifact must remove transitions involving the slice"
+        );
+        assert!(
+            workflow_quint.contains("val workflowSlices = [\"capture-ticket\"]"),
+            "workflow Quint artifact must keep only remaining slices"
+        );
+        assert!(
+            workflow_quint.contains("val workflowTransitions = []"),
+            "workflow Quint artifact must remove transitions involving the slice"
+        );
+        assert!(
+            !exists(
+                temp_dir
+                    .path()
+                    .join("model/browser/data/slices/review-ticket.eventmodel.json")
+            )?,
+            "removed slice browser data must be deleted"
+        );
+        assert!(
+            !exists(temp_dir.path().join("model/lean/slices/ReviewTicket.lean"))?,
+            "removed slice Lean artifact must be deleted"
+        );
+        assert!(
+            !exists(temp_dir.path().join("model/quint/slices/ReviewTicket.qnt"))?,
+            "removed slice Quint artifact must be deleted"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_slice_requires_exact_slug_flag() -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(["remove", "slice", "--slice", "capture-ticket"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "usage: emc init --name <project-name>",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn update_slice_kind_rejects_non_slug_flag() -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args([

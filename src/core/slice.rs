@@ -408,6 +408,109 @@ pub fn update_slice_name(
     )
 }
 
+pub fn remove_slice(
+    indexed_workflow_name: ModelName,
+    indexed_workflow_description: ModelDescription,
+    workflow_slug: WorkflowSlug,
+    workflow_document: FileContents,
+    slice_slug: SliceSlug,
+) -> Result<EffectPlan, SliceMutationError> {
+    let workflow_document = WorkflowDocument::parse(&workflow_document)
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_name = workflow_document
+        .name()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    if workflow_name != indexed_workflow_name {
+        return Err(SliceMutationError::new(format!(
+            "workflow document name '{}' does not match index name '{}'",
+            workflow_name.as_ref(),
+            indexed_workflow_name.as_ref()
+        )));
+    }
+    let workflow_description = workflow_document
+        .description()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    if workflow_description != indexed_workflow_description {
+        return Err(SliceMutationError::new(format!(
+            "workflow document description '{}' does not match index description '{}'",
+            workflow_description.as_ref(),
+            indexed_workflow_description.as_ref()
+        )));
+    }
+
+    let removed_slice = workflow_document
+        .slice_details()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?
+        .into_iter()
+        .find(|slice| slice.slug() == &slice_slug)
+        .ok_or_else(|| {
+            SliceMutationError::new(format!("slice {} is not in workflow", slice_slug.as_ref()))
+        })?;
+    let workflow_document = workflow_document
+        .with_removed_slice(&slice_slug)
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_module_name = module_name(workflow_name.as_ref());
+    let removed_slice_module_name = module_name(removed_slice.name().as_ref());
+    let workflow_slice_details = workflow_document
+        .slice_details()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_transitions = workflow_document
+        .transitions()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_digest = artifact_digest(
+        workflow_name.clone(),
+        workflow_slug.clone(),
+        workflow_description.clone(),
+        workflow_slice_details.clone(),
+        workflow_transitions.clone(),
+    );
+    let workflow_json = workflow_document
+        .contents()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(workflow_path(&workflow_slug), workflow_json),
+        Effect::RemoveFile(project_path(format!(
+            "model/browser/data/slices/{}.eventmodel.json",
+            slice_slug.as_ref()
+        ))),
+        Effect::RemoveFile(project_path(format!(
+            "model/lean/slices/{removed_slice_module_name}.lean"
+        ))),
+        Effect::RemoveFile(project_path(format!(
+            "model/quint/slices/{removed_slice_module_name}.qnt"
+        ))),
+        Effect::WriteFile(
+            project_path(format!("model/lean/{workflow_module_name}.lean")),
+            emit_lean_workflow_module(
+                lean_module_name(workflow_module_name.clone()),
+                workflow_name.clone(),
+                workflow_description.clone(),
+                workflow_slug.clone(),
+                workflow_slice_details.clone(),
+                workflow_transitions.clone(),
+                workflow_digest.clone(),
+            ),
+        ),
+        Effect::WriteFile(
+            project_path(format!("model/quint/{workflow_module_name}.qnt")),
+            emit_quint_workflow_module(
+                quint_module_name(workflow_module_name),
+                workflow_name,
+                workflow_description,
+                workflow_slug,
+                workflow_slice_details,
+                workflow_transitions,
+                workflow_digest,
+            ),
+        ),
+        Effect::Report(report_line(format!(
+            "removed slice {}",
+            removed_slice.name().as_ref()
+        ))),
+    ]))
+}
+
 fn updated_slice_plan(
     workflow_name: ModelName,
     workflow_description: ModelDescription,

@@ -81,6 +81,24 @@ impl WorkflowDocument {
         })
     }
 
+    pub fn with_removed_slice(&self, slug: &SliceSlug) -> Result<Self, WorkflowDocumentError> {
+        let mut next = self.object()?.clone();
+        next.insert(
+            "slice_files".to_owned(),
+            Value::Array(removed_slice_files(
+                next.get("slice_files").and_then(Value::as_array),
+                slug,
+            )),
+        );
+        next.insert(
+            "steps".to_owned(),
+            Value::Array(removed_slice_steps(self.steps()?, slug)?),
+        );
+        Ok(Self {
+            value: Value::Object(next),
+        })
+    }
+
     pub fn with_connected_transition(
         &self,
         addition: WorkflowTransitionAddition,
@@ -407,6 +425,70 @@ fn appended_steps(existing: Option<&Vec<Value>>, addition: WorkflowSliceAddition
         .collect(),
     ));
     values
+}
+
+fn removed_slice_files(existing: Option<&Vec<Value>>, slug: &SliceSlug) -> Vec<Value> {
+    let expected = format!("../slices/{}.eventmodel.json", slug.as_ref());
+    existing
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|value| value.as_str() != Some(expected.as_str()))
+        .collect()
+}
+
+fn removed_slice_steps(
+    existing: &[Value],
+    slug: &SliceSlug,
+) -> Result<Vec<Value>, WorkflowDocumentError> {
+    let mut found_slice = false;
+    existing
+        .iter()
+        .filter_map(|step| {
+            let step_slice = step.get("slice").and_then(Value::as_str);
+            if step_slice == Some(slug.as_ref()) {
+                found_slice = true;
+                None
+            } else {
+                Some(remove_transitions_touching_slice(step, slug))
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .and_then(|steps| {
+            if found_slice {
+                Ok(steps)
+            } else {
+                Err(WorkflowDocumentError::new(format!(
+                    "workflow document does not contain slice {}",
+                    slug.as_ref()
+                )))
+            }
+        })
+}
+
+fn remove_transitions_touching_slice(
+    step: &Value,
+    slug: &SliceSlug,
+) -> Result<Value, WorkflowDocumentError> {
+    let Some(transitions) = step.get("transitions").and_then(Value::as_array) else {
+        return Ok(step.clone());
+    };
+    let next_transitions = transitions
+        .iter()
+        .filter(|transition| {
+            !transition
+                .get("to")
+                .and_then(Value::as_str)
+                .is_some_and(|target| target == slug.as_ref())
+        })
+        .cloned()
+        .collect();
+    let mut next = step
+        .as_object()
+        .ok_or_else(|| WorkflowDocumentError::new("workflow step must be a JSON object"))?
+        .clone();
+    next.insert("transitions".to_owned(), Value::Array(next_transitions));
+    Ok(Value::Object(next))
 }
 
 fn updated_slice_detail_steps(

@@ -20,7 +20,7 @@ use crate::core::project::ProjectName;
 use crate::core::review_record::{ReviewCategoryFinding, ReviewRecordDocument};
 use crate::core::site::generate_site;
 use crate::core::slice::{
-    add_slice, update_slice_description, update_slice_kind, update_slice_name,
+    add_slice, remove_slice, update_slice_description, update_slice_kind, update_slice_name,
 };
 use crate::core::types::{
     ReviewRuleName, SliceSlug, WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionRecord,
@@ -368,6 +368,20 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         }
         Effect::RunProcess(invocation) => run_process(invocation),
         Effect::RemoveFile(path) => remove_file_if_present(path.as_ref()).map(|()| Vec::new()),
+        Effect::RemoveSliceFromWorkflow(slug) => {
+            let existing_workflows = read_browser_index_workflows()?;
+            let (workflow_layout, workflow_document) =
+                find_workflow_containing_slice(slug, existing_workflows.as_slice())?;
+            let plan = remove_slice(
+                workflow_layout.name().clone(),
+                workflow_layout.description().clone(),
+                workflow_layout.slug().clone(),
+                workflow_document,
+                slug.clone(),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret_collect_reports(plan)
+        }
         Effect::RemoveTransitionFromWorkflow(removal) => {
             let existing_workflows = read_browser_index_workflows()?;
             let workflow_document = read_indexed_workflow_document_from_layouts(

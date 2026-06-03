@@ -60,6 +60,9 @@ enum Command {
     RemoveTransition {
         removal: WorkflowTransitionRemoval,
     },
+    RemoveSlice {
+        slug: SliceSlug,
+    },
     ReviewGate {
         slug: WorkflowSlug,
     },
@@ -128,6 +131,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         } => serve_http(&host, port, once, auth_token.as_deref()),
         Command::McpStdio => serve_stdio(),
         Command::ReviewGate { slug } => interpret(command::review_gate_for_workflow(slug)),
+        Command::RemoveSlice { slug } => interpret(command::remove_slice(slug)),
         Command::RemoveTransition { removal } => interpret(command::remove_transition(removal)),
         Command::ShowSlice { slug } => interpret(command::show_slice(slug)),
         Command::ShowWorkflow { slug } => interpret(command::show_workflow(slug)),
@@ -459,6 +463,15 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         [command, subject] if command == "list" && subject == "transitions" => Ok(Cli {
             command: Command::ListTransitions,
         }),
+        [command, subject, slug_flag, slug]
+            if command == "remove" && subject == "slice" && slug_flag == "--slug" =>
+        {
+            parse_slice_slug(slug)
+                .map(|slug| Cli {
+                    command: Command::RemoveSlice { slug },
+                })
+                .map_err(|error| ShellError::message(error.to_string()))
+        }
         [command, transport] if command == "mcp" && transport == "stdio" => Ok(Cli {
             command: Command::McpStdio,
         }),
@@ -785,6 +798,7 @@ fn help_command() -> ClapCommand {
   emc update slice --slug <slice> --description <text>
   emc update slice --slug <slice> --type <kind>
   emc update slice --slug <slice> --name <name>
+  emc remove slice --slug <slice>
   emc connect workflow --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
   emc remove transition --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
   emc remove transition --workflow <workflow> --from <slice> --to-workflow <workflow> --via outcome --name <trigger>

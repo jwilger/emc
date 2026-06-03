@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-    use std::fs::read_to_string;
+    use std::fs::{exists, read_to_string};
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -269,6 +269,105 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_stdio_removes_slice() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor enters repair ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_slice_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"remove_slice\""))
+            .stdout(predicate::str::contains("removed slice Capture ticket"));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        let workflow_lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let workflow_quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        assert!(
+            !workflow_json.contains("capture-ticket"),
+            "workflow data must remove the MCP-removed slice"
+        );
+        assert!(
+            workflow_lean.contains("def workflowSlices : List String := []"),
+            "workflow Lean artifact must remove the MCP-removed slice"
+        );
+        assert!(
+            workflow_quint.contains("val workflowSlices = []"),
+            "workflow Quint artifact must remove the MCP-removed slice"
+        );
+        assert!(
+            !exists(
+                temp_dir
+                    .path()
+                    .join("model/browser/data/slices/capture-ticket.eventmodel.json")
+            )?,
+            "slice browser data must be deleted by MCP removal"
+        );
+        assert!(
+            !exists(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?,
+            "slice Lean artifact must be deleted by MCP removal"
+        );
+        assert!(
+            !exists(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?,
+            "slice Quint artifact must be deleted by MCP removal"
+        );
+
+        Ok(())
+    }
+
     fn mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
@@ -290,6 +389,14 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice_name\",\"arguments\":{\"slug\":\"capture-ticket\",\"name\":\"Capture repair ticket\"}}}\n",
+        )
+    }
+
+    fn remove_slice_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_slice\",\"arguments\":{\"slug\":\"capture-ticket\"}}}\n",
         )
     }
 }
