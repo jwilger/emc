@@ -98,6 +98,22 @@ mod tests {
             "package smoke checks must run packaged `emc generate site`"
         );
         assert!(
+            flake.contains("pkgs.chromium"),
+            "package smoke checks must use a Nix-provided headless browser for rendered site verification"
+        );
+        assert!(
+            flake.contains("--headless")
+                && flake.contains("--dump-dom")
+                && flake.contains("--virtual-time-budget=5000"),
+            "package smoke checks must execute the generated site in a real headless browser"
+        );
+        assert!(
+            flake.contains("grep 'Package Smoke Event Model Browser' rendered-site.html")
+                && flake.contains("grep 'Package smoke' rendered-site.html")
+                && flake.contains("grep 'Capture smoke' rendered-site.html"),
+            "package smoke checks must assert rendered project and model content, not only static site files"
+        );
+        assert!(
             flake.contains("${package}/bin/emc mcp stdio"),
             "package smoke checks must run packaged `emc mcp stdio`"
         );

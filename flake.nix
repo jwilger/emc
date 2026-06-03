@@ -114,7 +114,11 @@
 
         packageSmoke = pkgs.runCommand "emc-package-smoke"
           {
-            nativeBuildInputs = [ pkgs.netcat ];
+            nativeBuildInputs = [
+              pkgs.chromium
+              pkgs.netcat
+              pkgs.python3
+            ];
           }
           ''
             workdir="$(mktemp -d)"
@@ -130,6 +134,49 @@
             ${package}/bin/emc review record --workflow package-smoke --reviewer package-smoke --reviewed-at 2026-06-03T00:00:00.000Z
             ${package}/bin/emc review gate --workflow package-smoke
             ${package}/bin/emc generate site --output site
+
+            python3 -m http.server 7333 --bind 127.0.0.1 --directory site > site-http.log 2>&1 &
+            site_server_pid="$!"
+            trap 'kill "$site_server_pid" || true; wait "$site_server_pid" || true' EXIT
+            site_ready=0
+            for attempt in $(seq 1 50); do
+              if printf 'GET / HTTP/1.1\r\nHost: 127.0.0.1:7333\r\nConnection: close\r\n\r\n' \
+                | nc 127.0.0.1 7333 \
+                | grep 'Package Smoke Event Model Browser'; then
+                site_ready=1
+                break
+              fi
+              sleep 0.1
+            done
+            if [ "$site_ready" != 1 ]; then
+              cat site-http.log
+              exit 1
+            fi
+
+            export HOME="$workdir/chromium-home"
+            export XDG_CACHE_HOME="$workdir/chromium-cache"
+            export XDG_CONFIG_HOME="$workdir/chromium-config"
+            mkdir -p "$HOME" "$XDG_CACHE_HOME" "$XDG_CONFIG_HOME"
+            chromium \
+              --headless \
+              --disable-gpu \
+              --no-sandbox \
+              --disable-breakpad \
+              --disable-crash-reporter \
+              --disable-dev-shm-usage \
+              --disable-features=Crashpad \
+              --user-data-dir="$workdir/chromium-profile" \
+              --virtual-time-budget=5000 \
+              --dump-dom \
+              http://127.0.0.1:7333/ \
+              > rendered-site.html
+            grep 'Package Smoke Event Model Browser' rendered-site.html
+            grep 'Package smoke' rendered-site.html
+            grep 'Capture smoke' rendered-site.html
+
+            trap - EXIT
+            kill "$site_server_pid"
+            wait "$site_server_pid" || true
 
             printf '%s\n' \
               '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"package-smoke","version":"0.0.0"}}}' \
