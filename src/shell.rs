@@ -186,6 +186,10 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
         }
+        Effect::RequireWorkflowSliceJsonObjects(workflow_path, message) => {
+            require_workflow_slice_json_objects(workflow_path.as_ref(), message.as_ref())
+                .map(|()| Vec::new())
+        }
         Effect::RequireWorkflowSliceJsonObjectKeysUnique(workflow_path, message) => {
             require_workflow_slice_json_object_keys_unique(workflow_path.as_ref(), message.as_ref())
                 .map(|()| Vec::new())
@@ -453,6 +457,27 @@ fn require_json_object_keys_unique(path: &str, message: &str) -> Result<(), Shel
         Err(ShellError::message(message.to_owned()))
     } else {
         Ok(())
+    }
+}
+
+fn require_workflow_slice_json_objects(
+    workflow_path: &str,
+    message: &str,
+) -> Result<(), ShellError> {
+    let workflow_contents = fs::read_to_string(Path::new(workflow_path)).map_err(ShellError::io)?;
+    workflow_slice_file_paths(workflow_path, &workflow_contents)?
+        .iter()
+        .try_for_each(|slice_file| require_json_object(&slice_file.to_string_lossy(), message))
+}
+
+fn require_json_object(path: &str, message: &str) -> Result<(), ShellError> {
+    let contents = fs::read_to_string(Path::new(path)).map_err(ShellError::io)?;
+    let json = serde_json::from_str::<Value>(&contents)
+        .map_err(|_error| ShellError::message(message.to_owned()))?;
+    if json.is_object() {
+        Ok(())
+    } else {
+        Err(ShellError::message(message.to_owned()))
     }
 }
 

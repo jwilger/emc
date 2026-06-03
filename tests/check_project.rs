@@ -491,6 +491,30 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_referenced_browser_slice_invalid_json_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        write(
+            temp_dir
+                .path()
+                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
+            "{ not-json",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser slice drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_unindexed_browser_workflow_files() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
