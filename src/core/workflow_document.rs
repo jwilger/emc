@@ -7,8 +7,9 @@ use crate::core::effect::{FileContents, ProjectPath};
 use crate::core::types::{
     ModelDescription, ModelName, SliceKindName, SliceSlug, TransitionTriggerName,
     WorkflowBranchDetail, WorkflowBranchLabel, WorkflowSliceDetail, WorkflowSliceFileReference,
-    WorkflowSlug, WorkflowStepName, WorkflowStepRelationshipName, WorkflowTransitionFieldName,
-    WorkflowTransitionLabel,
+    WorkflowSlug, WorkflowStepName, WorkflowStepRelationshipName, WorkflowTransitionDetail,
+    WorkflowTransitionFieldName, WorkflowTransitionKind, WorkflowTransitionLabel,
+    WorkflowTransitionName,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -172,6 +173,18 @@ impl WorkflowDocument {
 
     pub fn transitions(&self) -> Result<Vec<WorkflowTransitionLabel>, WorkflowDocumentError> {
         workflow_transitions(self.steps()?)
+    }
+
+    pub fn transition_details(
+        &self,
+    ) -> Result<Vec<WorkflowTransitionDetail>, WorkflowDocumentError> {
+        let steps = self.steps()?;
+
+        steps
+            .iter()
+            .map(|step| step_transition_details(steps, step))
+            .collect::<Result<Vec<_>, _>>()
+            .map(|details| details.into_iter().flatten().collect())
     }
 
     pub fn contents(&self) -> Result<FileContents, WorkflowDocumentError> {
@@ -566,6 +579,124 @@ fn has_incoming_outcome_transition(steps: &[Value], target_slice: &str) -> bool 
                     .and_then(Value::as_str)
                     .is_some()
         })
+}
+
+fn step_transition_details(
+    steps: &[Value],
+    step: &Value,
+) -> Result<Vec<WorkflowTransitionDetail>, WorkflowDocumentError> {
+    let source = step.get("name").and_then(Value::as_str);
+
+    step.get("transitions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|transition| {
+            let (kind, label) = transition_kind_and_label(transition)?;
+            Some((
+                transition_display_name(transition, label),
+                source?,
+                transition_target_name(steps, transition)?,
+                (kind, label),
+            ))
+        })
+        .map(|(name, source, target, (kind, label))| {
+            Ok(WorkflowTransitionDetail::new(
+                workflow_transition_name(name)?,
+                workflow_step_name(source)?,
+                workflow_step_name(target)?,
+                workflow_transition_kind(kind)?,
+                workflow_transition_label_value(label)?,
+            ))
+        })
+        .collect()
+}
+
+fn transition_target_name<'a>(steps: &'a [Value], transition: &'a Value) -> Option<&'a str> {
+    transition
+        .get("to")
+        .and_then(Value::as_str)
+        .map(|target_slice| {
+            workflow_step_name_for_slice(steps, target_slice).unwrap_or(target_slice)
+        })
+        .or_else(|| transition.get("target_name").and_then(Value::as_str))
+        .or_else(|| transition.get("to_workflow").and_then(Value::as_str))
+}
+
+fn workflow_step_name_for_slice<'a>(steps: &'a [Value], slice: &str) -> Option<&'a str> {
+    steps
+        .iter()
+        .find(|step| {
+            step.get("slice")
+                .and_then(Value::as_str)
+                .is_some_and(|step_slice| step_slice == slice)
+        })
+        .and_then(|step| step.get("name").and_then(Value::as_str))
+}
+
+fn transition_kind_and_label(transition: &Value) -> Option<(&'static str, &str)> {
+    transition
+        .get("retry")
+        .and_then(Value::as_bool)
+        .filter(|retry| *retry)
+        .map(|_| ("retry", "retry"))
+        .or_else(|| {
+            transition
+                .get("via_navigation")
+                .and_then(Value::as_str)
+                .map(|label| ("navigation", label))
+        })
+        .or_else(|| {
+            transition
+                .get("via_command")
+                .and_then(Value::as_str)
+                .map(|label| ("command", label))
+        })
+        .or_else(|| {
+            transition
+                .get("via_event")
+                .and_then(Value::as_str)
+                .map(|label| ("event", label))
+        })
+        .or_else(|| {
+            transition
+                .get("via_external_trigger")
+                .and_then(Value::as_str)
+                .map(|label| ("external trigger", label))
+        })
+        .or_else(|| {
+            transition
+                .get("via_outcome")
+                .and_then(Value::as_str)
+                .map(|label| ("workflow exit", label))
+        })
+}
+
+fn transition_display_name<'a>(transition: &'a Value, label: &'a str) -> &'a str {
+    transition
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or(label)
+}
+
+fn workflow_transition_name(raw: &str) -> Result<WorkflowTransitionName, WorkflowDocumentError> {
+    WorkflowTransitionName::try_new(raw.to_owned()).map_err(|error| {
+        WorkflowDocumentError::new(format!("invalid workflow transition name: {error}"))
+    })
+}
+
+fn workflow_transition_kind(raw: &str) -> Result<WorkflowTransitionKind, WorkflowDocumentError> {
+    WorkflowTransitionKind::try_new(raw.to_owned()).map_err(|error| {
+        WorkflowDocumentError::new(format!("invalid workflow transition kind: {error}"))
+    })
+}
+
+fn workflow_transition_label_value(
+    raw: &str,
+) -> Result<WorkflowTransitionLabel, WorkflowDocumentError> {
+    WorkflowTransitionLabel::try_new(raw.to_owned()).map_err(|error| {
+        WorkflowDocumentError::new(format!("invalid workflow transition label: {error}"))
+    })
 }
 
 fn model_description(context: &str, raw: &str) -> Result<ModelDescription, WorkflowDocumentError> {

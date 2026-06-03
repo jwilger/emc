@@ -268,7 +268,18 @@ pub fn compose_browser_workflow(
             label: detail.label().clone(),
         })
         .collect();
-    let transition_cards = workflow_transition_cards(&workflow_value)?;
+    let transition_cards = workflow_semantics
+        .transition_details()
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?
+        .into_iter()
+        .map(|detail| BrowserTransitionCard {
+            name: detail.name().clone(),
+            source: detail.source().clone(),
+            target: detail.target().clone(),
+            kind: detail.kind().clone(),
+            label: detail.label().clone(),
+        })
+        .collect();
     let composed_values = iter::once(&workflow_value)
         .chain(slice_values.iter())
         .collect::<Vec<_>>();
@@ -325,142 +336,6 @@ fn board_lane_ids(value: &Value) -> impl Iterator<Item = &str> {
         .into_iter()
         .flatten()
         .filter_map(|lane| lane.get("id").and_then(Value::as_str))
-}
-
-fn workflow_transition_cards(
-    value: &Value,
-) -> Result<Vec<BrowserTransitionCard>, BrowserCompositionError> {
-    value
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|step| step_transition_cards(value, step))
-        .collect::<Result<Vec<_>, _>>()
-        .map(|cards| cards.into_iter().flatten().collect())
-}
-
-fn step_transition_cards(
-    workflow_value: &Value,
-    step: &Value,
-) -> Result<Vec<BrowserTransitionCard>, BrowserCompositionError> {
-    let source = step.get("name").and_then(Value::as_str);
-
-    step.get("transitions")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|transition| {
-            let (kind, label) = transition_kind_and_label(transition)?;
-            Some((
-                transition_display_name(transition, label),
-                source?,
-                transition_target_name(workflow_value, transition)?,
-                (kind, label),
-            ))
-        })
-        .map(|(name, source, target, (kind, label))| {
-            Ok(BrowserTransitionCard {
-                name: parse_workflow_transition_name(name)?,
-                source: parse_workflow_step_name(source)?,
-                target: parse_workflow_step_name(target)?,
-                kind: WorkflowTransitionKind::try_new(kind.to_owned()).map_err(|error| {
-                    BrowserCompositionError::new(format!(
-                        "invalid workflow transition kind: {error}"
-                    ))
-                })?,
-                label: WorkflowTransitionLabel::try_new(label.to_owned()).map_err(|error| {
-                    BrowserCompositionError::new(format!(
-                        "invalid workflow transition label: {error}"
-                    ))
-                })?,
-            })
-        })
-        .collect()
-}
-
-fn transition_target_name<'a>(workflow_value: &'a Value, transition: &'a Value) -> Option<&'a str> {
-    transition
-        .get("to")
-        .and_then(Value::as_str)
-        .map(|target_slice| {
-            workflow_step_name_for_slice(workflow_value, target_slice).unwrap_or(target_slice)
-        })
-        .or_else(|| transition.get("target_name").and_then(Value::as_str))
-        .or_else(|| transition.get("to_workflow").and_then(Value::as_str))
-}
-
-fn workflow_step_name_for_slice<'a>(workflow_value: &'a Value, slice: &str) -> Option<&'a str> {
-    workflow_value
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .find(|step| {
-            step.get("slice")
-                .and_then(Value::as_str)
-                .is_some_and(|step_slice| step_slice == slice)
-        })
-        .and_then(|step| step.get("name").and_then(Value::as_str))
-}
-
-fn transition_kind_and_label(transition: &Value) -> Option<(&'static str, &str)> {
-    transition
-        .get("retry")
-        .and_then(Value::as_bool)
-        .filter(|retry| *retry)
-        .map(|_| ("retry", "retry"))
-        .or_else(|| {
-            transition
-                .get("via_navigation")
-                .and_then(Value::as_str)
-                .map(|label| ("navigation", label))
-        })
-        .or_else(|| {
-            transition
-                .get("via_command")
-                .and_then(Value::as_str)
-                .map(|label| ("command", label))
-        })
-        .or_else(|| {
-            transition
-                .get("via_event")
-                .and_then(Value::as_str)
-                .map(|label| ("event", label))
-        })
-        .or_else(|| {
-            transition
-                .get("via_external_trigger")
-                .and_then(Value::as_str)
-                .map(|label| ("external trigger", label))
-        })
-        .or_else(|| {
-            transition
-                .get("via_outcome")
-                .and_then(Value::as_str)
-                .map(|label| ("workflow exit", label))
-        })
-}
-
-fn transition_display_name<'a>(transition: &'a Value, label: &'a str) -> &'a str {
-    transition
-        .get("name")
-        .and_then(Value::as_str)
-        .unwrap_or(label)
-}
-
-fn parse_workflow_step_name(value: &str) -> Result<WorkflowStepName, BrowserCompositionError> {
-    WorkflowStepName::try_new(value.to_owned()).map_err(|error| {
-        BrowserCompositionError::new(format!("invalid workflow step name: {error}"))
-    })
-}
-
-fn parse_workflow_transition_name(
-    value: &str,
-) -> Result<WorkflowTransitionName, BrowserCompositionError> {
-    WorkflowTransitionName::try_new(value.to_owned()).map_err(|error| {
-        BrowserCompositionError::new(format!("invalid workflow transition name: {error}"))
-    })
 }
 
 fn error_recovery_cards(
@@ -548,6 +423,12 @@ fn event_element_names(
             })
         })
         .collect()
+}
+
+fn parse_workflow_step_name(value: &str) -> Result<WorkflowStepName, BrowserCompositionError> {
+    WorkflowStepName::try_new(value.to_owned()).map_err(|error| {
+        BrowserCompositionError::new(format!("invalid workflow step name: {error}"))
+    })
 }
 
 fn review_overlays(value: &Value) -> Result<Vec<BrowserReviewOverlay>, BrowserCompositionError> {

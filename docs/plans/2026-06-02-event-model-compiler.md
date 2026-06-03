@@ -103,6 +103,7 @@
 - 2026-06-03: Generic shell JSON-object checks now use `JsonObjectDocument` instead of parsing `serde_json::Value` in the interpreter. A shell guardrail prevents direct raw JSON value parsing from reappearing in shell checks.
 - 2026-06-03: Browser workflow main-path composition now derives entry/main step names from `WorkflowDocument::main_path_step_names()` instead of duplicating raw workflow-step traversal in `src/core/browser.rs`. A browser guardrail prevents the raw main-path helper from returning.
 - 2026-06-03: Browser branch-card composition now derives branch names and labels from `WorkflowDocument::branch_details()`, including alternate-outcome labels, instead of duplicating raw workflow-step traversal in `src/core/browser.rs`. A browser guardrail prevents the raw branch helper from returning.
+- 2026-06-03: Browser transition-card composition now derives transition names, sources, targets, kinds, and labels from `WorkflowDocument::transition_details()` instead of duplicating raw workflow transition traversal in `src/core/browser.rs`. A browser guardrail prevents the raw transition-card helpers from returning.
 
 ### Task 1: Guardrails and Project Skeleton
 

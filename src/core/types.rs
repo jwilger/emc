@@ -207,6 +207,53 @@ impl WorkflowBranchDetail {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowTransitionDetail {
+    name: WorkflowTransitionName,
+    source: WorkflowStepName,
+    target: WorkflowStepName,
+    kind: WorkflowTransitionKind,
+    label: WorkflowTransitionLabel,
+}
+
+impl WorkflowTransitionDetail {
+    pub fn new(
+        name: WorkflowTransitionName,
+        source: WorkflowStepName,
+        target: WorkflowStepName,
+        kind: WorkflowTransitionKind,
+        label: WorkflowTransitionLabel,
+    ) -> Self {
+        Self {
+            name,
+            source,
+            target,
+            kind,
+            label,
+        }
+    }
+
+    pub fn name(&self) -> &WorkflowTransitionName {
+        &self.name
+    }
+
+    pub fn source(&self) -> &WorkflowStepName {
+        &self.source
+    }
+
+    pub fn target(&self) -> &WorkflowStepName {
+        &self.target
+    }
+
+    pub fn kind(&self) -> &WorkflowTransitionKind {
+        &self.kind
+    }
+
+    pub fn label(&self) -> &WorkflowTransitionLabel {
+        &self.label
+    }
+}
+
 #[nutype(
     sanitize(trim),
     validate(not_empty),
