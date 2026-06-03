@@ -75,18 +75,26 @@ nix develop
 cargo build
 ```
 
-Inside the development shell, run commands through Cargo or use the binary from
-`target/debug`:
+Inside the development shell, run commands through Cargo:
 
 ```sh
 cargo run -- init --name "Repair Desk"
-./target/debug/emc --help
+cargo run -- --help
 ```
 
 You can also run the packaged executable through Nix:
 
 ```sh
 nix run . -- --help
+```
+
+The Nix package is the normal way to run formal verification because it wraps
+`emc` with Lean4/Lake and Quint on `PATH`. A development binary built with
+Cargo can run ordinary model commands, but `emc verify` needs either the Nix
+wrapper or separately installed verifier tools:
+
+```sh
+nix run . -- verify
 ```
 
 Create a new EMC project:
@@ -142,6 +150,9 @@ Run Lean4/Lake and Quint verification through EMC:
 ```sh
 emc verify
 ```
+
+Use the packaged `emc` from `nix run`, `nix profile`, the NixOS overlay, or
+another wrapper that provides Lean4/Lake and Quint on `PATH` for this command.
 
 Generate the browsable site:
 
@@ -284,6 +295,8 @@ emc gherkin run --suite <suite>
 emc gherkin run --all
 emc mcp stdio
 emc mcp http
+emc mcp http --host <host> --port <port>
+emc mcp http --host <host> --port <port> --auth-token <token>
 ```
 
 The command parser is intentionally strict. If a command fails with a usage or
@@ -323,6 +336,37 @@ emc mcp http --host 127.0.0.1 --port 7331
 
 Localhost HTTP requests are protected with Origin checks. Non-local binds require
 an explicit bearer token so an exposed MCP server is not accidentally left open.
+
+Current MCP tools are:
+
+```text
+init_project
+list_workflows
+list_slices
+list_transitions
+show_workflow
+show_slice
+generate_site
+check_project
+verify_project
+validate_event_model
+review_gate
+record_clean_review
+add_workflow
+add_slice
+update_workflow
+update_workflow_name
+update_slice
+update_slice_kind
+update_slice_name
+remove_slice
+remove_workflow
+connect_workflow
+remove_transition
+```
+
+`record_clean_review.reviewed_at` must be a deterministic UTC millisecond
+timestamp such as `2026-06-03T00:00:00.000Z`.
 
 ## Browser output
 
@@ -446,6 +490,8 @@ entrypoints, validation fixtures, review-gate checks,
 browser generation, Lean4 and Quint artifact emission, strict lint guardrails,
 and package smoke tests.
 
-The long-term target is a single executable that lets users create and maintain
-business event models while `emc check` and `emc verify` mechanically enforce
-that browser, Lean4, and Quint representations stay synchronized.
+The current executable already supports CLI and MCP model work from the same
+semantic command core. Ongoing work should strengthen the modeled formal
+obligations and validation rule coverage while keeping `emc check` and
+`emc verify` as the mechanical guardrails that browser, Lean4, and Quint
+representations stay synchronized.

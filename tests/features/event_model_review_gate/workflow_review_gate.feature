@@ -4,7 +4,7 @@ Feature: Event model review gate prevents weak reviews from advancing workflow m
   validator-only success, or unresolved findings are not clean review.
 
   Background:
-    Given the review gate stores review records using path template "docs/event-model/reviews/{workflow_slug}.review.json"
+    Given the review gate stores review records using path template "reviews/{workflow_slug}.review.json"
     And each review record contains fields:
       | field                |
       | workflow_slug        |
@@ -35,7 +35,7 @@ Feature: Event model review gate prevents weak reviews from advancing workflow m
 
   Scenario: Clean review records must match the current model digest
     Given workflow "Lesson 03" has current model digest "abc123"
-    And review record "docs/event-model/reviews/course-lesson-03.review.json" has model content digest "def456"
+    And review record "reviews/course-lesson-03.review.json" has model content digest "def456"
     And the review record has status "clean"
     When I evaluate whether workflow "Lesson 03" may advance
     Then modeling is blocked with "clean review is stale for current model digest"
