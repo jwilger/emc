@@ -177,7 +177,7 @@ fn http_response_for_request(
     authority: &str,
     auth_policy: &AuthPolicy<'_>,
 ) -> Result<String, ShellError> {
-    if request.method != "POST" || request.path != "/mcp" {
+    if request.path != "/mcp" {
         return Ok(http_response("404 Not Found", "{\"error\":\"not found\"}"));
     }
     let request_authority = request.host.as_deref().unwrap_or(authority);
@@ -191,6 +191,18 @@ fn http_response_for_request(
         return Ok(http_response(
             "401 Unauthorized",
             "{\"error\":\"missing or invalid bearer token\"}",
+        ));
+    }
+    if request.method == "GET" {
+        return Ok(http_response(
+            "405 Method Not Allowed",
+            "{\"error\":\"server-sent event streaming is not available\"}",
+        ));
+    }
+    if request.method != "POST" {
+        return Ok(http_response(
+            "405 Method Not Allowed",
+            "{\"error\":\"method not allowed\"}",
         ));
     }
 

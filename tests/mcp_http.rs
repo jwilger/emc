@@ -216,6 +216,37 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_http_get_reports_streaming_is_not_available() -> Result<(), Box<dyn Error>> {
+        let _guard = mcp_http_test_lock()?;
+        let temp_dir = TempDir::new()?;
+        let port = available_loopback_port()?;
+        let server = ProcessCommand::new(cargo_bin("emc"))
+            .args([
+                "mcp",
+                "http",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                &port.to_string(),
+                "--once",
+            ])
+            .current_dir(temp_dir.path())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let response = send_get_request(port)?;
+        let output = server.wait_with_output()?;
+
+        assert!(output.status.success());
+        assert!(String::from_utf8(output.stderr)?.is_empty());
+        assert!(predicate::str::contains("HTTP/1.1 405 Method Not Allowed").eval(&response));
+        assert!(predicate::str::contains("Content-Type: application/json").eval(&response));
+
+        Ok(())
+    }
+
     fn mcp_http_test_lock() -> Result<MutexGuard<'static, ()>, Box<dyn Error>> {
         MCP_HTTP_TEST_LOCK
             .lock()
@@ -260,6 +291,18 @@ mod tests {
         let request = format!(
             "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: http://{origin_host}:{port}\r\n{authorization_header}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
+        );
+        let mut stream = connect_with_retry(port)?;
+        stream.write_all(request.as_bytes())?;
+
+        let mut response = String::new();
+        stream.read_to_string(&mut response)?;
+        Ok(response)
+    }
+
+    fn send_get_request(port: u16) -> Result<String, Box<dyn Error>> {
+        let request = format!(
+            "GET /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: http://127.0.0.1:{port}\r\nAccept: text/event-stream\r\nConnection: close\r\n\r\n"
         );
         let mut stream = connect_with_retry(port)?;
         stream.write_all(request.as_bytes())?;
