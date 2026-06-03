@@ -3,7 +3,7 @@ mod tests {
     use std::error::Error;
     use std::io::Error as IoError;
 
-    use emc::core::browser::compose_browser_workflow;
+    use emc::core::browser::{BrowserSliceDocuments, compose_browser_workflow};
     use emc::core::effect::FileContents;
 
     #[test]
@@ -15,7 +15,10 @@ mod tests {
         let entry_slice = file_contents(slice_with_canonical_lanes("Entry"));
         let show_slice = file_contents(slice_with_canonical_lanes("Show lesson"));
 
-        let composed = compose_browser_workflow(workflow, vec![entry_slice, show_slice])?;
+        let composed = compose_browser_workflow(
+            workflow,
+            BrowserSliceDocuments::from_documents([entry_slice, show_slice]),
+        )?;
 
         assert_eq!(
             composed
@@ -36,7 +39,7 @@ mod tests {
             "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\"},\n    {\"slice\": \"show-lesson\", \"name\": \"show lesson\", \"relationship\": \"main\"},\n    {\"slice\": \"checkpoint\", \"name\": \"checkpoint\", \"relationship\": \"alternate\"},\n    {\"slice\": \"submit\", \"name\": \"submit\", \"relationship\": \"main\"},\n    {\"slice\": \"review\", \"name\": \"review\", \"relationship\": \"main\"}\n  ]\n}\n",
         );
 
-        let composed = compose_browser_workflow(workflow, Vec::new())?;
+        let composed = compose_browser_workflow(workflow, BrowserSliceDocuments::empty())?;
 
         assert_eq!(
             composed
@@ -57,7 +60,7 @@ mod tests {
             "{\n  \"name\": \"Organization access\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Member access lifecycle.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\"},\n    {\"slice\": \"activate-member\", \"name\": \"activate-member\", \"relationship\": \"main\"},\n    {\"slice\": \"record-member-suspension\", \"name\": \"record-member-suspension\", \"relationship\": \"async_lifecycle\"}\n  ]\n}\n",
         );
 
-        let composed = compose_browser_workflow(workflow, Vec::new())?;
+        let composed = compose_browser_workflow(workflow, BrowserSliceDocuments::empty())?;
 
         assert_eq!(
             composed
@@ -84,7 +87,7 @@ mod tests {
             "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\", \"transitions\": [{\"to\": \"show-lesson\", \"via_navigation\": \"lesson_screen\"}]},\n    {\"slice\": \"show-lesson\", \"name\": \"show lesson\", \"relationship\": \"main\", \"transitions\": [\n      {\"to\": \"submit\", \"via_command\": \"SubmitLessonForReview\"},\n      {\"to\": \"checkpoint\", \"via_external_trigger\": \"lesson_checkpoint_result\"}\n    ]},\n    {\"slice\": \"submit\", \"name\": \"submit\", \"relationship\": \"main\", \"transitions\": [{\"to\": \"review\", \"via_event\": \"LessonSubmittedForReview\"}]},\n    {\"slice\": \"review\", \"name\": \"review\", \"relationship\": \"main\", \"transitions\": [{\"to_workflow\": \"course-lesson-02\", \"target_name\": \"next lesson\", \"via_outcome\": \"LessonAccepted\"}]},\n    {\"slice\": \"checkpoint\", \"name\": \"checkpoint\", \"relationship\": \"alternate\"}\n  ]\n}\n",
         );
 
-        let composed = compose_browser_workflow(workflow, Vec::new())?;
+        let composed = compose_browser_workflow(workflow, BrowserSliceDocuments::empty())?;
 
         assert_eq!(
             composed
@@ -122,7 +125,7 @@ mod tests {
             "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\"},\n    {\"slice\": \"review\", \"name\": \"review\", \"relationship\": \"main\", \"transitions\": [\n      {\"to_workflow\": \"course-lesson-02\", \"target_name\": \"next lesson\", \"via_outcome\": \"LessonAccepted\"},\n      {\"to\": \"revision\", \"via_outcome\": \"LessonRevisionRequested\"}\n    ]},\n    {\"slice\": \"revision\", \"name\": \"LessonRevisionRequested\", \"relationship\": \"alternate\"}\n  ]\n}\n",
         );
 
-        let composed = compose_browser_workflow(workflow, Vec::new())?;
+        let composed = compose_browser_workflow(workflow, BrowserSliceDocuments::empty())?;
 
         assert_eq!(
             composed
@@ -150,7 +153,7 @@ mod tests {
             "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\"},\n    {\"slice\": \"review\", \"name\": \"review\", \"relationship\": \"main\", \"transitions\": [\n      {\"to_workflow\": \"course-lesson-02\", \"target_name\": \"next lesson\", \"via_outcome\": \"LessonAccepted\"}\n    ]},\n    {\"slice\": \"checkpoint\", \"name\": \"checkpoint\", \"relationship\": \"alternate\"}\n  ]\n}\n",
         );
 
-        let composed = compose_browser_workflow(workflow, Vec::new())?;
+        let composed = compose_browser_workflow(workflow, BrowserSliceDocuments::empty())?;
 
         assert_eq!(
             composed
@@ -171,7 +174,7 @@ mod tests {
             "{\n  \"name\": \"Organization access\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Member access lifecycle.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\"},\n    {\"slice\": \"activate-member\", \"name\": \"activate-member\", \"relationship\": \"main\", \"transitions\": [\n      {\"to\": \"record-member-suspension\", \"via_outcome\": \"MemberSuspended\"}\n    ]},\n    {\"slice\": \"record-member-suspension\", \"name\": \"record-member-suspension\", \"relationship\": \"async_lifecycle\"}\n  ]\n}\n",
         );
 
-        let composed = compose_browser_workflow(workflow, Vec::new())?;
+        let composed = compose_browser_workflow(workflow, BrowserSliceDocuments::empty())?;
 
         assert_eq!(
             composed
@@ -192,7 +195,7 @@ mod tests {
             "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\", \"transitions\": [\n      {\"to\": \"checkpoint\", \"via_navigation\": \"checkpoint_screen\"},\n      {\"to\": \"revision\", \"via_outcome\": \"LessonRevisionRequested\"}\n    ]},\n    {\"slice\": \"checkpoint\", \"name\": \"checkpoint\", \"relationship\": \"alternate\"},\n    {\"slice\": \"revision\", \"name\": \"revision\", \"relationship\": \"alternate\"}\n  ]\n}\n",
         );
 
-        let composed = compose_browser_workflow(workflow, Vec::new())?;
+        let composed = compose_browser_workflow(workflow, BrowserSliceDocuments::empty())?;
 
         assert_eq!(
             composed
@@ -215,7 +218,7 @@ mod tests {
             "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"review\", \"name\": \"review\", \"relationship\": \"entry\", \"transitions\": [\n      {\"name\": \"RegenerateTeacherReview\", \"to\": \"review\", \"retry\": true}\n    ]}\n  ]\n}\n",
         );
 
-        let composed = compose_browser_workflow(workflow, Vec::new())?;
+        let composed = compose_browser_workflow(workflow, BrowserSliceDocuments::empty())?;
 
         assert_eq!(
             composed
@@ -245,7 +248,10 @@ mod tests {
             "{\n  \"name\": \"Submit lesson\",\n  \"version\": \"0.1.0\",\n  \"board\": {\"lanes\": [], \"slices\": [{\"name\": \"Submit lesson\", \"elements\": [\n    {\"id\": \"lesson_screen\", \"kind\": \"view\", \"lane\": \"ux\", \"name\": \"lesson_screen\"},\n    {\"id\": \"lesson_submitted\", \"kind\": \"event\", \"lane\": \"events\", \"name\": \"LessonSubmittedForReview\"}\n  ], \"connections\": []}]},\n  \"views\": [{\"name\": \"lesson_screen\", \"uses_read_models\": [], \"controls\": [\n    {\"label\": \"Submit for review\", \"command\": \"SubmitLesson\", \"error_handling\": [{\"error\": \"evidence_required\", \"stay_on_screen\": true}]}\n  ]}],\n  \"slices\": [{\"name\": \"Submit lesson\", \"type\": \"state_view\", \"views\": [\"lesson_screen\"], \"acceptance_scenarios\": [], \"contract_scenarios\": []}]\n}\n",
         );
 
-        let composed = compose_browser_workflow(workflow, vec![submit_slice])?;
+        let composed = compose_browser_workflow(
+            workflow,
+            BrowserSliceDocuments::from_documents([submit_slice]),
+        )?;
 
         assert_eq!(
             composed
@@ -280,7 +286,7 @@ mod tests {
             "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\"},\n    {\"slice\": \"review\", \"name\": \"review\", \"relationship\": \"main\"}\n  ],\n  \"review_diagnostics\": [\n    {\"step\": \"review\", \"status\": \"unreachable\", \"missing_rule\": \"entry reachability\"}\n  ]\n}\n",
         );
 
-        let composed = compose_browser_workflow(workflow, Vec::new())?;
+        let composed = compose_browser_workflow(workflow, BrowserSliceDocuments::empty())?;
 
         assert_eq!(
             composed
@@ -310,7 +316,10 @@ mod tests {
             "{\n  \"name\": \"Submit lesson for review\",\n  \"version\": \"0.1.0\",\n  \"board\": {\"lanes\": []},\n  \"commands\": [{\"name\": \"SubmitLessonForReview\", \"inputs\": [], \"produces\": [\"LessonSubmittedForReview\"], \"errors\": [\"evidence_required\"]}],\n  \"read_models\": [{\"name\": \"lesson_submission_context\", \"fields\": []}],\n  \"views\": [{\"name\": \"lesson_screen\", \"uses_read_models\": [], \"controls\": [\n    {\"label\": \"Submit for review\", \"command\": \"SubmitLessonForReview\"}\n  ]}],\n  \"slices\": [{\"name\": \"Submit lesson for review\", \"type\": \"state_view\", \"commands\": [\"SubmitLessonForReview\"], \"views\": [\"lesson_screen\"], \"read_models\": [\"lesson_submission_context\"], \"acceptance_scenarios\": [], \"contract_scenarios\": []}]\n}\n",
         );
 
-        let composed = compose_browser_workflow(workflow, vec![submit_slice])?;
+        let composed = compose_browser_workflow(
+            workflow,
+            BrowserSliceDocuments::from_documents([submit_slice]),
+        )?;
         let definition = composed
             .command_definitions()
             .iter()
@@ -355,7 +364,10 @@ mod tests {
             "{\n  \"name\": \"Show lesson\",\n  \"version\": \"0.1.0\",\n  \"board\": {\"lanes\": []},\n  \"events\": [{\"name\": \"CourseLessonCatalogPublished\", \"stream\": \"course_lesson_catalog\", \"attributes\": [\n    {\"name\": \"lesson_title\", \"source\": \"external.course_lesson_catalog_manifest.lesson_title\"}\n  ]}],\n  \"read_models\": [{\"name\": \"lesson_state\", \"fields\": [\n    {\"name\": \"lesson_title\", \"source\": \"CourseLessonCatalogPublished.lesson_title\"}\n  ]}],\n  \"views\": [{\"name\": \"lesson_screen\", \"uses_read_models\": [\"lesson_state\"], \"fields\": [\n    {\"name\": \"lesson_title\", \"source\": \"read_model.lesson_state.lesson_title\"}\n  ]}],\n  \"slices\": [{\"name\": \"Show lesson\", \"type\": \"state_view\", \"views\": [\"lesson_screen\"], \"read_models\": [\"lesson_state\"], \"events\": [\"CourseLessonCatalogPublished\"], \"acceptance_scenarios\": [], \"contract_scenarios\": []}]\n}\n",
         );
 
-        let composed = compose_browser_workflow(workflow, vec![show_slice])?;
+        let composed = compose_browser_workflow(
+            workflow,
+            BrowserSliceDocuments::from_documents([show_slice]),
+        )?;
         let definition = composed
             .view_definitions()
             .iter()
@@ -399,7 +411,10 @@ mod tests {
             "{\n  \"name\": \"Show lesson\",\n  \"version\": \"0.1.0\",\n  \"board\": {\"lanes\": []},\n  \"commands\": [{\"name\": \"SubmitLessonForReview\", \"inputs\": [], \"produces\": []}],\n  \"views\": [{\"name\": \"lesson_screen\", \"uses_read_models\": [], \"controls\": [\n    {\"label\": \"Submit for review\", \"command\": \"SubmitLessonForReview\"},\n    {\"label\": \"Open next lesson\", \"navigation\": \"course-lesson-02\", \"navigation_type\": \"external_workflow\"},\n    {\"label\": \"Open help\", \"navigation\": \"https://docs.example.test/help\", \"navigation_type\": \"external_system\"},\n    {\"label\": \"Show filters\", \"navigation\": \"filters_open\", \"navigation_type\": \"local_view_state\"},\n    {\"label\": \"Open rubric\", \"navigation\": \"rubric_screen\", \"navigation_type\": \"modeled_view\"}\n  ]}],\n  \"slices\": [{\"name\": \"Show lesson\", \"type\": \"state_view\", \"commands\": [\"SubmitLessonForReview\"], \"views\": [\"lesson_screen\"], \"acceptance_scenarios\": [], \"contract_scenarios\": []}]\n}\n",
         );
 
-        let composed = compose_browser_workflow(workflow, vec![show_slice])?;
+        let composed = compose_browser_workflow(
+            workflow,
+            BrowserSliceDocuments::from_documents([show_slice]),
+        )?;
         let definition = composed
             .view_definitions()
             .iter()
