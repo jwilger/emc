@@ -242,7 +242,7 @@ mod tests {
             "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [\"../slices/submit.eventmodel.json\"],\n  \"steps\": []\n}\n",
         );
         let submit_slice = file_contents(
-            "{\n  \"name\": \"Submit lesson\",\n  \"version\": \"0.1.0\",\n  \"board\": {\"lanes\": [], \"slices\": [{\"name\": \"Submit lesson\", \"elements\": [\n    {\"id\": \"lesson_submitted\", \"kind\": \"event\", \"lane\": \"events\", \"name\": \"LessonSubmittedForReview\"}\n  ], \"connections\": []}]},\n  \"views\": [{\"name\": \"lesson_screen\", \"uses_read_models\": [], \"controls\": [\n    {\"label\": \"Submit for review\", \"command\": \"SubmitLesson\", \"error_handling\": [{\"error\": \"evidence_required\", \"stay_on_screen\": true}]}\n  ]}],\n  \"slices\": [{\"name\": \"Submit lesson\", \"type\": \"state_view\", \"views\": [\"lesson_screen\"], \"acceptance_scenarios\": [], \"contract_scenarios\": []}]\n}\n",
+            "{\n  \"name\": \"Submit lesson\",\n  \"version\": \"0.1.0\",\n  \"board\": {\"lanes\": [], \"slices\": [{\"name\": \"Submit lesson\", \"elements\": [\n    {\"id\": \"lesson_screen\", \"kind\": \"view\", \"lane\": \"ux\", \"name\": \"lesson_screen\"},\n    {\"id\": \"lesson_submitted\", \"kind\": \"event\", \"lane\": \"events\", \"name\": \"LessonSubmittedForReview\"}\n  ], \"connections\": []}]},\n  \"views\": [{\"name\": \"lesson_screen\", \"uses_read_models\": [], \"controls\": [\n    {\"label\": \"Submit for review\", \"command\": \"SubmitLesson\", \"error_handling\": [{\"error\": \"evidence_required\", \"stay_on_screen\": true}]}\n  ]}],\n  \"slices\": [{\"name\": \"Submit lesson\", \"type\": \"state_view\", \"views\": [\"lesson_screen\"], \"acceptance_scenarios\": [], \"contract_scenarios\": []}]\n}\n",
         );
 
         let composed = compose_browser_workflow(workflow, vec![submit_slice])?;
@@ -261,6 +261,14 @@ mod tests {
                 .iter()
                 .all(|name| name.as_ref() != "evidence_required"),
             "command errors must not render as event elements"
+        );
+        assert_eq!(
+            composed
+                .event_element_names()
+                .iter()
+                .map(|name| name.as_ref())
+                .collect::<Vec<_>>(),
+            ["LessonSubmittedForReview"]
         );
 
         Ok(())

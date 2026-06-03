@@ -484,6 +484,26 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn browser_event_elements_use_semantic_documents() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/core/browser.rs")?;
+        let violations = ["get(\"elements\")", "kind == \"event\""]
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| {
+                format!("src/core/browser.rs duplicates event element semantics via `{marker}`")
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "browser composition must derive event elements from semantic documents"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",
