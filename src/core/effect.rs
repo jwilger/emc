@@ -27,6 +27,7 @@ pub enum Effect {
         Vec<ProjectPath>,
         ReportLine,
     ),
+    RequireReferencedSliceFileIdentities(ProjectPath, ReportLine),
     RequireReferencedSliceFiles(ProjectPath, ProjectPath, ReportLine),
     RequireReviewRecord(ProjectPath, ProjectPath, ReportLine),
     RequireWorkflowSliceJsonObjects(ProjectPath, ReportLine),

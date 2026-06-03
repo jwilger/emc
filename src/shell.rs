@@ -15,7 +15,9 @@ use crate::core::slice::add_slice;
 use crate::core::verify::verify_project;
 use crate::core::workflow::{add_workflow, update_workflow_description};
 use crate::event_model_validation::validate_event_model_sources;
-use crate::io::dto::{parse_browser_index_workflows, parse_project_manifest_name};
+use crate::io::dto::{
+    parse_browser_index_workflows, parse_project_manifest_name, parse_slice_slug,
+};
 use serde_json::Value;
 
 const REQUIRED_REVIEW_CATEGORIES: &[&str] = &[
@@ -177,6 +179,10 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 message.as_ref(),
             )
             .map(|()| Vec::new())
+        }
+        Effect::RequireReferencedSliceFileIdentities(workflows_path, message) => {
+            require_referenced_slice_file_identities(workflows_path.as_ref(), message.as_ref())
+                .map(|()| Vec::new())
         }
         Effect::RequireReviewRecord(path, workflow_path, message) => {
             if Path::new(path.as_ref()).is_file() {
@@ -694,6 +700,29 @@ fn require_referenced_slice_files(
         .map_or(Ok(()), |file_name| {
             Err(ShellError::message(format!("{message} for {file_name}")))
         })
+}
+
+fn require_referenced_slice_file_identities(
+    workflows_path: &str,
+    message: &str,
+) -> Result<(), ShellError> {
+    referenced_slice_file_names(workflows_path)?
+        .into_iter()
+        .find_map(|file_name| {
+            canonical_slice_file_name(&file_name)
+                .is_some_and(|canonical_file_name| canonical_file_name != file_name)
+                .then_some(file_name)
+        })
+        .map_or(Ok(()), |file_name| {
+            Err(ShellError::message(format!("{message} for {file_name}")))
+        })
+}
+
+fn canonical_slice_file_name(file_name: &str) -> Option<String> {
+    file_name
+        .strip_suffix(".eventmodel.json")
+        .and_then(|stem| parse_slice_slug(stem).ok())
+        .map(|slug| format!("{}.eventmodel.json", slug.as_ref()))
 }
 
 fn referenced_slice_file_names(workflows_path: &str) -> Result<BTreeSet<String>, ShellError> {

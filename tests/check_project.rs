@@ -1354,6 +1354,38 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn check_reports_referenced_browser_slice_file_identity_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let slices_path = temp_dir.path().join("model/browser/data/slices");
+        let canonical_slice_path = slices_path.join("capture-ticket.eventmodel.json");
+        let drifted_slice_path = slices_path.join("capture_ticket.eventmodel.json");
+        write(&drifted_slice_path, read_to_string(&canonical_slice_path)?)?;
+        remove_file(canonical_slice_path)?;
+
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let workflow = read_to_string(&workflow_path)?.replace(
+            "\"../slices/capture-ticket.eventmodel.json\"",
+            "\"../slices/capture_ticket.eventmodel.json\"",
+        );
+        write(workflow_path, workflow)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser slice identity drift for capture_ticket.eventmodel.json",
+            ));
+
+        Ok(())
+    }
+
     fn create_connected_workflow(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args(["init", "--name", "Repair Desk"])

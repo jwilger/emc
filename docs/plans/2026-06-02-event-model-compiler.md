@@ -77,6 +77,7 @@
 - 2026-06-02: Browser index parsing now rejects duplicate workflow paths before they become semantic workflow layouts, so `emc check` cannot accept duplicated workflow entries as a synchronized model.
 - 2026-06-02: Browser index parsing now rejects duplicate workflow names before semantic conversion, preventing separate browser workflow paths from colliding on the same generated Lean4 and Quint module identity.
 - 2026-06-02: Browser index parsing now rejects duplicate semantic workflow slugs after path parsing, preventing distinct raw workflow paths from normalizing to the same modeled workflow identity.
+- 2026-06-02: `emc check` now rejects referenced browser slice filenames that do not round-trip through the semantic slice slug parser to the canonical generated filename, preventing path-level slice identity drift from bypassing formal artifact checks.
 
 ### Task 1: Guardrails and Project Skeleton
 
