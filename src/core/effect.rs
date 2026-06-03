@@ -29,6 +29,7 @@ pub enum Effect {
     ),
     RequireReferencedSliceFiles(ProjectPath, ProjectPath, ReportLine),
     RequireReviewRecord(ProjectPath, ProjectPath, ReportLine),
+    RequireWorkflowSliceJsonObjectKeysUnique(ProjectPath, ReportLine),
     RequireWorkflowSliceFiles(ProjectPath, ReportLine),
     RequireWorkflowSliceDetails(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RequireWorkflowSlices(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),

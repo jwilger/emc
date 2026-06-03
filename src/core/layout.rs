@@ -206,6 +206,10 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
                 "workflow {workflow_name} references missing slice artifact"
             )),
         ),
+        Effect::RequireWorkflowSliceJsonObjectKeysUnique(
+            workflow_path.clone(),
+            report_line(format!("browser slice drift for workflow {workflow_name}")),
+        ),
         Effect::RequireJsonObjectKeysUnique(
             workflow_path.clone(),
             report_line(format!(
