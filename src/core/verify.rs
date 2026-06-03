@@ -27,6 +27,8 @@ fn verify_modeled_workflow(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
             program_name("quint"),
             vec![
                 process_argument("verify"),
+                process_argument("--invariant"),
+                process_argument("workflowIdentityStable,workflowSliceDetailsComplete"),
                 process_argument(workflow.quint_artifact_path().as_ref().to_owned()),
             ],
             report_line("Quint artifacts verified"),
