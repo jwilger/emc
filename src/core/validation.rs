@@ -5052,14 +5052,15 @@ fn validate_control_command_error_handling(
         .find_map(|view| unhandled_control_command_error(document, view))
         .map_or(Ok(()), |unhandled| {
             Err(validation_issue(format!(
-                "control '{}' does not handle command error '{}'",
-                unhandled.control_label, unhandled.error_name
+                "view '{}' control '{}' does not handle command error '{}'",
+                unhandled.view_name, unhandled.control_label, unhandled.error_name
             )))
         })
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct UnhandledControlCommandError {
+    view_name: DefinitionName,
     control_label: DefinitionName,
     error_name: DefinitionName,
 }
@@ -5076,6 +5077,7 @@ fn unhandled_control_command_error(
                     .iter()
                     .find(|error_name| !control_handles_command_error(control, error_name))
                     .map(|error_name| UnhandledControlCommandError {
+                        view_name: view.name.clone(),
                         control_label: control.label.clone(),
                         error_name: error_name.clone(),
                     })
