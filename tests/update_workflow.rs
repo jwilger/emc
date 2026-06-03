@@ -252,6 +252,87 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn update_workflow_description_preserves_existing_workflow_exit_transition()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(temp_dir.path(), "capture-ticket", "Capture ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "repair-complete",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket_closed",
+                "--reason",
+                "Closed tickets continue to completion.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--description",
+                "Actor opens a repair ticket with priority.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        assert!(
+            lean.contains(
+                "def workflowTransitions : List String := [\"capture-ticket->repair-complete:workflow_exit:outcome:ticket_closed\"]"
+            ),
+            "Lean update must preserve existing workflow exit transitions"
+        );
+        assert!(
+            quint.contains(
+                "val workflowTransitions = [\"capture-ticket->repair-complete:workflow_exit:outcome:ticket_closed\"]"
+            ),
+            "Quint update must preserve existing workflow exit transitions"
+        );
+
+        Ok(())
+    }
+
     fn add_slice(cwd: &Path, slug: &str, name: &str) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args([
