@@ -6,9 +6,9 @@ use serde_json::Value;
 
 use crate::core::effect::FileContents;
 use crate::core::types::{
-    BoardLaneId, BrowserEventElementName, CommandErrorName, ReviewRuleName, ReviewStatus, ViewName,
-    WorkflowBranchLabel, WorkflowStepName, WorkflowTransitionKind, WorkflowTransitionLabel,
-    WorkflowTransitionName,
+    BoardLaneId, BrowserEventElementName, CommandErrorName, CommandName, DefinitionSectionLabel,
+    ReviewRuleName, ReviewStatus, SliceName, SourceControlReference, ViewName, WorkflowBranchLabel,
+    WorkflowStepName, WorkflowTransitionKind, WorkflowTransitionLabel, WorkflowTransitionName,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -20,6 +20,7 @@ pub struct BrowserWorkflow {
     error_recovery_cards: Vec<BrowserErrorRecoveryCard>,
     event_element_names: Vec<BrowserEventElementName>,
     review_overlays: Vec<BrowserReviewOverlay>,
+    command_definitions: Vec<BrowserCommandDefinition>,
 }
 
 impl BrowserWorkflow {
@@ -49,6 +50,10 @@ impl BrowserWorkflow {
 
     pub fn review_overlays(&self) -> &[BrowserReviewOverlay] {
         &self.review_overlays
+    }
+
+    pub fn command_definitions(&self) -> &[BrowserCommandDefinition] {
+        &self.command_definitions
     }
 }
 
@@ -136,6 +141,32 @@ impl BrowserReviewOverlay {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserCommandDefinition {
+    name: CommandName,
+    owning_slice: SliceName,
+    source_controls: Vec<SourceControlReference>,
+    section_labels: Vec<DefinitionSectionLabel>,
+}
+
+impl BrowserCommandDefinition {
+    pub fn name(&self) -> &CommandName {
+        &self.name
+    }
+
+    pub fn owning_slice(&self) -> &SliceName {
+        &self.owning_slice
+    }
+
+    pub fn source_controls(&self) -> &[SourceControlReference] {
+        &self.source_controls
+    }
+
+    pub fn section_labels(&self) -> &[DefinitionSectionLabel] {
+        &self.section_labels
+    }
+}
+
 pub fn compose_browser_workflow(
     workflow_document: FileContents,
     slice_documents: Vec<FileContents>,
@@ -166,6 +197,7 @@ pub fn compose_browser_workflow(
     let error_recovery_cards = error_recovery_cards(&composed_values)?;
     let event_element_names = event_element_names(&composed_values)?;
     let review_overlays = review_overlays(&workflow_value)?;
+    let command_definitions = command_definitions(&composed_values)?;
 
     Ok(BrowserWorkflow {
         lane_ids,
@@ -175,6 +207,7 @@ pub fn compose_browser_workflow(
         error_recovery_cards,
         event_element_names,
         review_overlays,
+        command_definitions,
     })
 }
 
@@ -561,4 +594,125 @@ fn review_overlays(value: &Value) -> Result<Vec<BrowserReviewOverlay>, BrowserCo
             })
         })
         .collect()
+}
+
+fn command_definitions(
+    values: &[&Value],
+) -> Result<Vec<BrowserCommandDefinition>, BrowserCompositionError> {
+    values
+        .iter()
+        .flat_map(|value| {
+            value
+                .get("commands")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .filter_map(|command| command.get("name").and_then(Value::as_str))
+        .map(|name| {
+            Ok(BrowserCommandDefinition {
+                name: CommandName::try_new(name.to_owned()).map_err(|error| {
+                    BrowserCompositionError::new(format!("invalid command name: {error}"))
+                })?,
+                owning_slice: command_owning_slice(values, name)?,
+                source_controls: command_source_controls(values, name)?,
+                section_labels: command_section_labels()?,
+            })
+        })
+        .collect()
+}
+
+fn command_owning_slice(
+    values: &[&Value],
+    command_name: &str,
+) -> Result<SliceName, BrowserCompositionError> {
+    values
+        .iter()
+        .flat_map(|value| {
+            value
+                .get("slices")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .find(|slice| {
+            slice
+                .get("commands")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .any(|command| {
+                    command
+                        .as_str()
+                        .is_some_and(|slice_command| slice_command == command_name)
+                })
+        })
+        .and_then(|slice| slice.get("name").and_then(Value::as_str))
+        .ok_or_else(|| {
+            BrowserCompositionError::new(format!("command '{command_name}' has no owning slice"))
+        })
+        .and_then(|slice| {
+            SliceName::try_new(slice.to_owned()).map_err(|error| {
+                BrowserCompositionError::new(format!("invalid owning slice name: {error}"))
+            })
+        })
+}
+
+fn command_source_controls(
+    values: &[&Value],
+    command_name: &str,
+) -> Result<Vec<SourceControlReference>, BrowserCompositionError> {
+    values
+        .iter()
+        .flat_map(|value| {
+            value
+                .get("views")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .flat_map(|view| view_command_source_controls(view, command_name))
+        .map(|source| {
+            SourceControlReference::try_new(source).map_err(|error| {
+                BrowserCompositionError::new(format!("invalid source control reference: {error}"))
+            })
+        })
+        .collect()
+}
+
+fn view_command_source_controls(view: &Value, command_name: &str) -> Vec<String> {
+    view.get("name")
+        .and_then(Value::as_str)
+        .map(|view_name| {
+            view.get("controls")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter(|control| {
+                    control
+                        .get("command")
+                        .and_then(Value::as_str)
+                        .is_some_and(|command| command == command_name)
+                })
+                .filter_map(|control| control.get("label").and_then(Value::as_str))
+                .map(|label| format!("{view_name} / {label}"))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+fn command_section_labels() -> Result<Vec<DefinitionSectionLabel>, BrowserCompositionError> {
+    [
+        "Produced events",
+        "Read models",
+        "Returned errors",
+        "Workflow transitions",
+    ]
+    .into_iter()
+    .map(|label| {
+        DefinitionSectionLabel::try_new(label.to_owned()).map_err(|error| {
+            BrowserCompositionError::new(format!("invalid definition section label: {error}"))
+        })
+    })
+    .collect()
 }
