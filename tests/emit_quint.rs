@@ -65,8 +65,12 @@ mod tests {
         assert!(quint.contains("val workflowSlicesHaveDetails ="));
         assert!(quint.contains("val workflowSliceDetailsComplete = workflowSlicesHaveDetails"));
         assert!(quint.contains(
-            "val workflowTransitionsStructured = all { transition <- workflowTransitions } transition.source != \"\" and transition.target != \"\" and transition.kind != \"\" and transition.trigger != \"\""
+            "val workflowTransitionsStructured = workflowTransitions.select(transition => transition.source != \"\" and transition.target != \"\" and transition.kind != \"\" and transition.trigger != \"\").length() == workflowTransitions.length()"
         ));
+        assert!(
+            !quint.contains("all { transition <- workflowTransitions }"),
+            "Quint transition invariant must be a pure list expression, not an action all block"
+        );
         assert!(
             !quint.contains("length(workflowTransitions) == length(workflowTransitions)"),
             "Quint transition invariant must not be a tautological length self-comparison"

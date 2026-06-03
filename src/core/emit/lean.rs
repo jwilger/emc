@@ -17,7 +17,7 @@ pub fn emit_workflow_module(
     let slice_detail_list = slice_detail_list(&workflow_slice_details);
     let transition_list = transition_list(workflow_transitions);
     file_contents(format!(
-        "namespace {module_name}\n\n-- EMC-DIGEST: {digest}\n-- EMC generated Lean4 business workflow model.\ndef workflowName := {workflow_name_json}\n\ndef workflowSlug := {workflow_slug_json}\n\ndef workflowDescription := {workflow_description_json}\n\ndef workflowSlices : List String := {slice_list}\n\ndef workflowSliceDetails : List (String × String × String × String) := {slice_detail_list}\n\ndef workflowTransitions : List (String × String × String × String) := {transition_list}\n\ntheorem workflowIdentityIsStable : workflowName = {workflow_name_json} := rfl\n\ntheorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl\n\ntheorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.1.isEmpty == false && transition.2.1.isEmpty == false && transition.2.2.1.isEmpty == false && transition.2.2.2.isEmpty == false) = true := rfl\n\nend {module_name}\n",
+        "namespace {module_name}\n\n-- EMC-DIGEST: {digest}\n-- EMC generated Lean4 business workflow model.\ndef workflowName := {workflow_name_json}\n\ndef workflowSlug := {workflow_slug_json}\n\ndef workflowDescription := {workflow_description_json}\n\ndef workflowSlices : List String := {slice_list}\n\ndef workflowSliceDetails : List (String × String × String × String) := {slice_detail_list}\n\nstructure WorkflowTransition where\n  source : String\n  target : String\n  kind : String\n  trigger : String\n\ndef workflowTransitions : List WorkflowTransition := {transition_list}\n\ntheorem workflowIdentityIsStable : workflowName = {workflow_name_json} := rfl\n\ntheorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl\n\ntheorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl\n\nend {module_name}\n",
         module_name = module_name.as_ref(),
         digest = digest.as_ref(),
         workflow_name_json = quoted(workflow_name.as_ref()),
@@ -88,7 +88,7 @@ fn transition_record(transition: &str) -> String {
     });
     let (target, kind, trigger) = transition_parts(tail);
     format!(
-        "({}, {}, {}, {})",
+        "{{ source := {}, target := {}, kind := {}, trigger := {} }}",
         quoted(source),
         quoted(target),
         quoted(kind.as_ref()),

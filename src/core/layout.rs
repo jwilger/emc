@@ -195,9 +195,8 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
     let lean_slice_detail_marker = artifact_digest_marker(
         "def workflowSliceDetails : List (String × String × String × String) :=",
     );
-    let lean_transition_marker = artifact_digest_marker(
-        "def workflowTransitions : List (String × String × String × String) :=",
-    );
+    let lean_transition_marker =
+        artifact_digest_marker("def workflowTransitions : List WorkflowTransition :=");
     let lean_identity_invariant_marker = artifact_marker(format!(
         "theorem workflowIdentityIsStable : workflowName = {} := rfl",
         json_string(workflow.name.as_ref())
@@ -208,7 +207,7 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
     );
     let lean_slice_detail_invariant_prefix = artifact_marker("theorem workflowSlicesHaveDetails :");
     let lean_transition_invariant_marker = artifact_marker(
-        "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.1.isEmpty == false && transition.2.1.isEmpty == false && transition.2.2.1.isEmpty == false && transition.2.2.2.isEmpty == false) = true := rfl",
+        "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl",
     );
     let lean_transition_invariant_prefix =
         artifact_marker("theorem workflowTransitionsAreStructured :");
@@ -228,7 +227,7 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
         artifact_marker("val workflowSliceDetailsComplete = workflowSlicesHaveDetails");
     let quint_slice_detail_complete_prefix = artifact_marker("val workflowSliceDetailsComplete =");
     let quint_transition_invariant_marker = artifact_marker(
-        "val workflowTransitionsStructured = all { transition <- workflowTransitions } transition.source != \"\" and transition.target != \"\" and transition.kind != \"\" and transition.trigger != \"\"",
+        "val workflowTransitionsStructured = workflowTransitions.select(transition => transition.source != \"\" and transition.target != \"\" and transition.kind != \"\" and transition.trigger != \"\").length() == workflowTransitions.length()",
     );
     let quint_transition_invariant_prefix = artifact_marker("val workflowTransitionsStructured =");
     let module_name = module_name_from_model(workflow.name.clone());

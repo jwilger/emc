@@ -231,11 +231,15 @@ mod tests {
     fn shell_check_transition_markers_use_semantic_workflow_documents() -> Result<(), Box<dyn Error>>
     {
         let source = read_workspace_file("src/shell.rs")?;
-        let violations = ["fn transition_label(", "fn workflow_exit_transition_label("]
-            .iter()
-            .filter(|marker| source.contains(**marker))
-            .map(|marker| format!("src/shell.rs duplicates transition semantics via `{marker}`"))
-            .collect::<Vec<_>>();
+        let violations = [
+            "fn transition_label(",
+            "fn workflow_exit_transition_label(",
+            "workflow_transition_tuple_labels",
+        ]
+        .iter()
+        .filter(|marker| source.contains(**marker))
+        .map(|marker| format!("src/shell.rs duplicates transition semantics via `{marker}`"))
+        .collect::<Vec<_>>();
 
         assert_eq!(
             violations,

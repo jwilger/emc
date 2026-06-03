@@ -182,7 +182,7 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"submit-ticket\", \"command\", \"SubmitTicketForReview\")]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"submit-ticket\", kind := \"command\", trigger := \"SubmitTicketForReview\" }]"
             ),
             "Lean artifact must preserve existing command transitions when a later slice is added"
         );
@@ -250,7 +250,7 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"record-callback\", \"external_trigger\", \"callback_received\")]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"record-callback\", kind := \"external_trigger\", trigger := \"callback_received\" }]"
             ),
             "Lean artifact must preserve existing external-trigger transitions when a later slice is added"
         );
@@ -319,7 +319,7 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"repair-complete\", \"workflow_exit:outcome\", \"ticket_closed\")]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := \"workflow_exit:outcome\", trigger := \"ticket_closed\" }]"
             ),
             "Lean artifact must preserve existing workflow exit transitions when a later slice is added"
         );

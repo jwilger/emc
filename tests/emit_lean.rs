@@ -58,8 +58,14 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"review-ticket\", \"navigation\", \"review-ticket-screen\")]"
+                "structure WorkflowTransition where\n  source : String\n  target : String\n  kind : String\n  trigger : String"
             )
+        );
+        assert!(
+            lean.contains(
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\" }]"
+            ),
+            "Lean artifact must model transitions as named business records, not anonymous tuples"
         );
         assert!(lean.contains("theorem workflowIdentityIsStable"));
         assert!(
@@ -70,9 +76,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.1.isEmpty == false && transition.2.1.isEmpty == false && transition.2.2.1.isEmpty == false && transition.2.2.2.isEmpty == false) = true := rfl"
+                "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl"
             ),
             "Lean artifact must prove every business transition has source, target, kind, and trigger fields"
+        );
+        assert!(
+            !lean.contains("transition.1.isEmpty"),
+            "Lean transition structure proof must not depend on positional tuple selectors"
         );
         assert!(
             !lean.contains("workflowTransitions.length = workflowTransitions.length"),
@@ -110,11 +120,7 @@ mod tests {
                 "def workflowSliceDetails : List (String × String × String × String) := []"
             )
         );
-        assert!(
-            lean.contains(
-                "def workflowTransitions : List (String × String × String × String) := []"
-            )
-        );
+        assert!(lean.contains("def workflowTransitions : List WorkflowTransition := []"));
 
         Ok(())
     }
