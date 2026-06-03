@@ -915,6 +915,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_view_fields_missing_from_wireframes() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("show-repair-queue.eventmodel.json"),
+            "{\"name\":\"Repair queue\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"repair_queue_screen\",\"wireframe\":\"<section></section>\",\"uses_read_models\":[],\"fields\":[\"customer_name\"]}],\"slices\":[{\"name\":\"Show repair queue\",\"type\":\"state_view\",\"views\":[\"repair_queue_screen\"],\"acceptance_scenarios\":[{\"name\":\"show repair queue\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "view 'repair_queue_screen' wireframe does not reference field 'customer_name'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_state_view_slices_that_own_commands() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");
