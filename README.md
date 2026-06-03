@@ -263,6 +263,7 @@ emc show slice <slice-slug>
 emc add workflow --slug <slug> --name <name> --description <description>
 emc update workflow --slug <slug> --description <description>
 emc update workflow --slug <slug> --name <name>
+emc remove workflow --slug <workflow-slug>
 emc update slice --slug <slice-slug> --description <description>
 emc update slice --slug <slice-slug> --type <kind>
 emc update slice --slug <slice-slug> --name <name>

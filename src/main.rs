@@ -66,6 +66,9 @@ enum Command {
     ReviewGate {
         slug: WorkflowSlug,
     },
+    RemoveWorkflow {
+        slug: WorkflowSlug,
+    },
     ShowSlice {
         slug: SliceSlug,
     },
@@ -133,6 +136,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::ReviewGate { slug } => interpret(command::review_gate_for_workflow(slug)),
         Command::RemoveSlice { slug } => interpret(command::remove_slice(slug)),
         Command::RemoveTransition { removal } => interpret(command::remove_transition(removal)),
+        Command::RemoveWorkflow { slug } => interpret(command::remove_workflow(slug)),
         Command::ShowSlice { slug } => interpret(command::show_slice(slug)),
         Command::ShowWorkflow { slug } => interpret(command::show_workflow(slug)),
         Command::UpdateSliceDescription { slug, description } => {
@@ -469,6 +473,15 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             parse_slice_slug(slug)
                 .map(|slug| Cli {
                     command: Command::RemoveSlice { slug },
+                })
+                .map_err(|error| ShellError::message(error.to_string()))
+        }
+        [command, subject, slug_flag, slug]
+            if command == "remove" && subject == "workflow" && slug_flag == "--slug" =>
+        {
+            parse_workflow_slug(slug)
+                .map(|slug| Cli {
+                    command: Command::RemoveWorkflow { slug },
                 })
                 .map_err(|error| ShellError::message(error.to_string()))
         }

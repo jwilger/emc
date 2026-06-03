@@ -29,6 +29,10 @@ pub fn remove_transition(removal: WorkflowTransitionRemoval) -> EffectPlan {
     EffectPlan::new(vec![Effect::RemoveTransitionFromWorkflow(removal)])
 }
 
+pub fn remove_workflow(slug: WorkflowSlug) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveWorkflowFromIndex(slug)])
+}
+
 pub fn generate_site(output: ProjectPath) -> EffectPlan {
     EffectPlan::new(vec![Effect::GenerateSiteFromManifest(output)])
 }

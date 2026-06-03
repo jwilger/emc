@@ -160,6 +160,7 @@
 - 2026-06-03: CLI `update slice --slug <slug> --name <name>` and MCP `update_slice_name` now rewrite first-class business slice names, regenerate the owning workflow, browser slice document, Lean4/Quint slice modules, and workflow formal artifacts, and remove stale formal slice modules from the shared semantic command path.
 - 2026-06-03: CLI `remove transition --workflow <slug> --from <slice> --to <slice> --via <kind> --name <trigger>` and MCP `remove_transition` now remove modeled workflow transitions through the shared semantic command path and regenerate synchronized workflow browser, Lean4, and Quint artifacts.
 - 2026-06-03: CLI `remove slice --slug <slug>` and MCP `remove_slice` now remove modeled business slices, delete their browser/Lean4/Quint slice artifacts, drop workflow transitions involving the removed slice, and regenerate the owning workflow artifacts from the shared semantic command path.
+- 2026-06-03: CLI `remove workflow --slug <slug>` and MCP `remove_workflow` now remove modeled business workflows, delete owned workflow and slice browser/Lean4/Quint artifacts, rewrite the browser index, and reject removal when another workflow has an incoming workflow-exit transition to the target workflow.
 
 ### Task 1: Guardrails and Project Skeleton
 

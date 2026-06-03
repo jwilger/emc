@@ -29,6 +29,26 @@ impl NewWorkflow {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct IndexedWorkflowDocument {
+    slug: WorkflowSlug,
+    contents: FileContents,
+}
+
+impl IndexedWorkflowDocument {
+    pub fn new(slug: WorkflowSlug, contents: FileContents) -> Self {
+        Self { slug, contents }
+    }
+
+    pub fn slug(&self) -> &WorkflowSlug {
+        &self.slug
+    }
+
+    pub fn contents(&self) -> &FileContents {
+        &self.contents
+    }
+}
+
 pub fn add_workflow(
     existing_workflows: Vec<ModeledWorkflowLayout>,
     workflow: NewWorkflow,
@@ -148,6 +168,74 @@ pub fn update_workflow_name(
     ))
 }
 
+pub fn remove_workflow(
+    existing_workflows: Vec<ModeledWorkflowLayout>,
+    workflow_documents: Vec<IndexedWorkflowDocument>,
+    slug: WorkflowSlug,
+) -> Result<EffectPlan, WorkflowMutationError> {
+    let removed_workflow = existing_workflows
+        .iter()
+        .find(|existing| existing.slug() == &slug)
+        .cloned()
+        .ok_or_else(|| WorkflowMutationError::new(format!("unknown workflow {}", slug.as_ref())))?;
+    reject_incoming_workflow_references(workflow_documents.as_slice(), &slug)?;
+    let workflow_document = workflow_documents
+        .iter()
+        .find(|document| document.slug() == &slug)
+        .ok_or_else(|| {
+            WorkflowMutationError::new(format!("workflow {} document is missing", slug.as_ref()))
+        })
+        .and_then(|document| {
+            WorkflowDocument::parse(document.contents())
+                .map_err(|error| WorkflowMutationError::new(error.to_string()))
+        })?;
+    let workflow_name = workflow_document
+        .name()
+        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    if workflow_name != *removed_workflow.name() {
+        return Err(WorkflowMutationError::new(format!(
+            "workflow document name '{}' does not match index name '{}'",
+            workflow_name.as_ref(),
+            removed_workflow.name().as_ref()
+        )));
+    }
+
+    let remaining_workflows = existing_workflows
+        .into_iter()
+        .filter(|existing| existing.slug() != &slug)
+        .collect::<Vec<_>>();
+    let removed_slice_details = workflow_document
+        .slice_details()
+        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    let workflow_module_name = module_name(removed_workflow.name().as_ref());
+    let workflow_name = removed_workflow.name().as_ref().to_owned();
+
+    let remove_slice_effects = removed_slice_details
+        .into_iter()
+        .flat_map(remove_slice_artifact_effects);
+    let effects = [
+        Effect::WriteFile(
+            project_path("model/browser/data/index.json"),
+            file_contents(browser_index(remaining_workflows)),
+        ),
+        Effect::RemoveFile(workflow_path(&slug)),
+        Effect::RemoveFile(project_path(format!(
+            "model/lean/{workflow_module_name}.lean"
+        ))),
+        Effect::RemoveFile(project_path(format!(
+            "model/quint/{workflow_module_name}.qnt"
+        ))),
+    ]
+    .into_iter()
+    .chain(remove_slice_effects)
+    .chain([Effect::Report(report_line(format!(
+        "removed workflow {workflow_name}"
+    )))])
+    .collect::<Vec<_>>();
+
+    Ok(EffectPlan::new(effects))
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct WorkflowMutationError {
     message: String,
@@ -236,6 +324,62 @@ fn workflow_effect_plan(
         ),
         Effect::Report(report_line(format!("added workflow {workflow_name}"))),
     ])
+}
+
+fn reject_incoming_workflow_references(
+    workflow_documents: &[IndexedWorkflowDocument],
+    removed_slug: &WorkflowSlug,
+) -> Result<(), WorkflowMutationError> {
+    workflow_documents
+        .iter()
+        .filter(|document| document.slug() != removed_slug)
+        .find_map(|document| incoming_workflow_reference(document, removed_slug).transpose())
+        .transpose()
+        .map(|reference| {
+            reference.map_or(Ok(()), |referencing_slug| {
+                Err(WorkflowMutationError::new(format!(
+                    "workflow {} is referenced by workflow {}",
+                    removed_slug.as_ref(),
+                    referencing_slug.as_ref()
+                )))
+            })
+        })?
+}
+
+fn incoming_workflow_reference(
+    document: &IndexedWorkflowDocument,
+    removed_slug: &WorkflowSlug,
+) -> Result<Option<WorkflowSlug>, WorkflowMutationError> {
+    let workflow_document = WorkflowDocument::parse(document.contents())
+        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    workflow_document
+        .transitions()
+        .map_err(|error| WorkflowMutationError::new(error.to_string()))
+        .map(|transitions| {
+            transitions
+                .into_iter()
+                .any(|transition| {
+                    transition.kind().as_ref().starts_with("workflow_exit:")
+                        && transition.target().as_ref() == removed_slug.as_ref()
+                })
+                .then(|| document.slug().clone())
+        })
+}
+
+fn remove_slice_artifact_effects(slice: WorkflowSliceDetail) -> [Effect; 3] {
+    let slice_slug = slice.slug().as_ref();
+    let module_name = module_name(slice.name().as_ref());
+    [
+        Effect::RemoveFile(project_path(format!(
+            "model/browser/data/slices/{slice_slug}.eventmodel.json"
+        ))),
+        Effect::RemoveFile(project_path(format!(
+            "model/lean/slices/{module_name}.lean"
+        ))),
+        Effect::RemoveFile(project_path(format!(
+            "model/quint/slices/{module_name}.qnt"
+        ))),
+    ]
 }
 
 fn update_workflow_effect_plan(
