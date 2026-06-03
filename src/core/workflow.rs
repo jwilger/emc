@@ -103,7 +103,11 @@ fn workflow_effect_plan(
     let module_name = module_name(workflow.name.as_ref());
     let lean_module_name = lean_module_name(module_name.clone());
     let quint_module_name = quint_module_name(module_name.clone());
-    let digest = artifact_digest(workflow.name.clone());
+    let digest = artifact_digest(
+        workflow.name.clone(),
+        workflow.slug.clone(),
+        workflow.description.clone(),
+    );
     let workflow_layout = ModeledWorkflowLayout::new(
         workflow.name.clone(),
         workflow.description.clone(),
@@ -171,7 +175,11 @@ fn update_workflow_effect_plan(
     let module_name = module_name(workflow.name.as_ref());
     let lean_module_name = lean_module_name(module_name.clone());
     let quint_module_name = quint_module_name(module_name.clone());
-    let digest = artifact_digest(workflow.name.clone());
+    let digest = artifact_digest(
+        workflow.name.clone(),
+        workflow.slug.clone(),
+        workflow.description.clone(),
+    );
     let workflow_layout = ModeledWorkflowLayout::new(
         workflow.name.clone(),
         workflow.description.clone(),
