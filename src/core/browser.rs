@@ -6,8 +6,9 @@ use serde_json::Value;
 
 use crate::core::effect::FileContents;
 use crate::core::types::{
-    BoardLaneId, BrowserEventElementName, CommandErrorName, ViewName, WorkflowBranchLabel,
-    WorkflowStepName, WorkflowTransitionKind, WorkflowTransitionLabel, WorkflowTransitionName,
+    BoardLaneId, BrowserEventElementName, CommandErrorName, ReviewRuleName, ReviewStatus, ViewName,
+    WorkflowBranchLabel, WorkflowStepName, WorkflowTransitionKind, WorkflowTransitionLabel,
+    WorkflowTransitionName,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -18,6 +19,7 @@ pub struct BrowserWorkflow {
     transition_cards: Vec<BrowserTransitionCard>,
     error_recovery_cards: Vec<BrowserErrorRecoveryCard>,
     event_element_names: Vec<BrowserEventElementName>,
+    review_overlays: Vec<BrowserReviewOverlay>,
 }
 
 impl BrowserWorkflow {
@@ -43,6 +45,10 @@ impl BrowserWorkflow {
 
     pub fn event_element_names(&self) -> &[BrowserEventElementName] {
         &self.event_element_names
+    }
+
+    pub fn review_overlays(&self) -> &[BrowserReviewOverlay] {
+        &self.review_overlays
     }
 }
 
@@ -109,6 +115,27 @@ impl BrowserErrorRecoveryCard {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserReviewOverlay {
+    step: WorkflowStepName,
+    status: ReviewStatus,
+    missing_rule: ReviewRuleName,
+}
+
+impl BrowserReviewOverlay {
+    pub fn step(&self) -> &WorkflowStepName {
+        &self.step
+    }
+
+    pub fn status(&self) -> &ReviewStatus {
+        &self.status
+    }
+
+    pub fn missing_rule(&self) -> &ReviewRuleName {
+        &self.missing_rule
+    }
+}
+
 pub fn compose_browser_workflow(
     workflow_document: FileContents,
     slice_documents: Vec<FileContents>,
@@ -138,6 +165,7 @@ pub fn compose_browser_workflow(
         .collect::<Vec<_>>();
     let error_recovery_cards = error_recovery_cards(&composed_values)?;
     let event_element_names = event_element_names(&composed_values)?;
+    let review_overlays = review_overlays(&workflow_value)?;
 
     Ok(BrowserWorkflow {
         lane_ids,
@@ -146,6 +174,7 @@ pub fn compose_browser_workflow(
         transition_cards,
         error_recovery_cards,
         event_element_names,
+        review_overlays,
     })
 }
 
@@ -500,6 +529,35 @@ fn event_element_names(
         .map(|name| {
             BrowserEventElementName::try_new(name.to_owned()).map_err(|error| {
                 BrowserCompositionError::new(format!("invalid event element name: {error}"))
+            })
+        })
+        .collect()
+}
+
+fn review_overlays(value: &Value) -> Result<Vec<BrowserReviewOverlay>, BrowserCompositionError> {
+    value
+        .get("review_diagnostics")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|diagnostic| {
+            Some((
+                diagnostic.get("step").and_then(Value::as_str)?,
+                diagnostic.get("status").and_then(Value::as_str)?,
+                diagnostic.get("missing_rule").and_then(Value::as_str)?,
+            ))
+        })
+        .map(|(step, status, missing_rule)| {
+            Ok(BrowserReviewOverlay {
+                step: parse_workflow_step_name(step)?,
+                status: ReviewStatus::try_new(status.to_owned()).map_err(|error| {
+                    BrowserCompositionError::new(format!("invalid review status: {error}"))
+                })?,
+                missing_rule: ReviewRuleName::try_new(missing_rule.to_owned()).map_err(
+                    |error| {
+                        BrowserCompositionError::new(format!("invalid review rule name: {error}"))
+                    },
+                )?,
             })
         })
         .collect()
