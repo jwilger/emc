@@ -24,11 +24,12 @@ use crate::core::validation::{
     ScenarioSetKind, ScenarioStepField, SingletonBehavior, SliceDefinition, SliceDefinitionCount,
     SliceDefinitionParts, SliceScenario, SliceScenarioParts, SliceType, TopLevelKey,
     TranslationContract, ViewControlDefinition, ViewControlDefinitionParts, ViewDefinition,
-    ViewWireframe, WorkflowCommandTransition, WorkflowComposition, WorkflowEntryStepCount,
-    WorkflowEventTransition, WorkflowExitRationale, WorkflowExitTransition,
-    WorkflowExternalTriggerTransition, WorkflowInternalDefinitions, WorkflowNavigationTransition,
-    WorkflowStep, WorkflowStepExit, WorkflowStepLifecycleRole, WorkflowStepRelationship,
-    WorkflowStepTrigger, empty_top_level_key_issue, model_must_be_object_issue,
+    ViewFieldDefinition, ViewFieldSource, ViewWireframe, WorkflowCommandTransition,
+    WorkflowComposition, WorkflowEntryStepCount, WorkflowEventTransition, WorkflowExitRationale,
+    WorkflowExitTransition, WorkflowExternalTriggerTransition, WorkflowInternalDefinitions,
+    WorkflowNavigationTransition, WorkflowStep, WorkflowStepExit, WorkflowStepLifecycleRole,
+    WorkflowStepRelationship, WorkflowStepTrigger, empty_top_level_key_issue,
+    model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -1837,8 +1838,7 @@ fn view_definitions_from_json_object(
                         "local_states",
                         "local state",
                     )?;
-                    let fields =
-                        definition_names_from_json_array_field(view, "fields", "view field")?;
+                    let fields = view_field_definitions_from_json_view(view)?;
                     let wireframe = view_wireframe_from_json_view(view)?;
                     definition_names_from_json_array_field(view, "uses_read_models", "read model")
                         .map(|read_models| {
@@ -1854,6 +1854,69 @@ fn view_definitions_from_json_object(
                 })
         })
         .collect()
+}
+
+fn view_field_definitions_from_json_view(
+    view: &Value,
+) -> Result<Vec<ViewFieldDefinition>, BoundaryParseError> {
+    view.get("fields")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(view_field_definition_from_json_field)
+        .collect()
+}
+
+fn view_field_definition_from_json_field(
+    field: &Value,
+) -> Result<ViewFieldDefinition, BoundaryParseError> {
+    let name = match field {
+        Value::String(name) => name,
+        Value::Object(object) => object
+            .get("name")
+            .and_then(Value::as_str)
+            .ok_or_else(|| BoundaryParseError::new("view field is missing name"))?,
+        _ => {
+            return Err(BoundaryParseError::new(
+                "view field must be a string or object",
+            ));
+        }
+    };
+    let name = DefinitionName::try_new(name.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid view field name: {error}")))?;
+
+    Ok(ViewFieldDefinition::new(
+        name,
+        view_field_source_from_json_field(field),
+    ))
+}
+
+fn view_field_source_from_json_field(field: &Value) -> ViewFieldSource {
+    field
+        .get("source")
+        .and_then(Value::as_str)
+        .and_then(view_field_source_from_reference)
+        .unwrap_or(ViewFieldSource::Other)
+}
+
+fn view_field_source_from_reference(source: &str) -> Option<ViewFieldSource> {
+    if let Some(read_model_reference) = source.strip_prefix("read_model.") {
+        let (read_model_name, field_name) = read_model_reference.rsplit_once('.')?;
+        return DefinitionName::try_new(read_model_name.to_owned())
+            .ok()
+            .zip(DefinitionName::try_new(field_name.to_owned()).ok())
+            .map(|(read_model_name, field_name)| {
+                ViewFieldSource::ReadModelField(read_model_name, field_name)
+            });
+    }
+
+    let (event_name, attribute_name) = source.split_once('.')?;
+    DefinitionName::try_new(event_name.to_owned())
+        .ok()
+        .zip(DefinitionName::try_new(attribute_name.to_owned()).ok())
+        .map(|(event_name, attribute_name)| {
+            ViewFieldSource::EventAttribute(event_name, attribute_name)
+        })
 }
 
 fn view_wireframe_from_json_view(view: &Value) -> Result<ViewWireframe, BoundaryParseError> {
