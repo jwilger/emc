@@ -11,7 +11,7 @@ use crate::core::project::ProjectName;
 use crate::core::slice::SliceKind;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelDigest, ModelName, QuintModuleName, SliceSlug,
-    TransitionTriggerName, WorkflowSlug,
+    TransitionTriggerName, WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionKind,
 };
 use crate::core::validation::{
     AutomationCommandPolicy, AutomationTrigger, BoardElement, BoardElementKind,
@@ -228,6 +228,22 @@ pub fn parse_transition_trigger_name(
 ) -> Result<TransitionTriggerName, BoundaryParseError> {
     TransitionTriggerName::try_new(raw.to_owned()).map_err(|error| {
         BoundaryParseError::new(format!("invalid transition trigger name: {error}"))
+    })
+}
+
+pub fn parse_workflow_transition_endpoint(
+    raw: &str,
+) -> Result<WorkflowTransitionEndpoint, BoundaryParseError> {
+    WorkflowTransitionEndpoint::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid workflow transition endpoint: {error}"))
+    })
+}
+
+pub fn parse_workflow_transition_kind(
+    raw: &str,
+) -> Result<WorkflowTransitionKind, BoundaryParseError> {
+    WorkflowTransitionKind::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid workflow transition kind: {error}"))
     })
 }
 
