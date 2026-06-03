@@ -16,10 +16,10 @@ use crate::core::validation::{
     BoardGraphConnection, BoardLane, BoardLanes, BoardReadModelCommandDependency, BoardSliceGraph,
     CommandDefinition, CommandDefinitionParts, CommandInputSource, CommandInputSourceKind,
     CommandReadModelReads, ControlCommandErrorHandling, ControlErrorRecoveryBehavior,
-    ControlInputProvision, DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource,
-    EventDefinition, EventModelDocument, EventModelDocumentParts, EventModelFileKind,
-    ExternalInputSchema, ExternalPayloadVariant, LegacyScenariosField, NamedDefinition,
-    NavigationType, OutcomeDefinition, ReadModelDefinition, ReadModelField,
+    ControlInputProvision, ControlInputSource, DefinitionKind, DefinitionName, EventAttribute,
+    EventAttributeSource, EventDefinition, EventModelDocument, EventModelDocumentParts,
+    EventModelFileKind, ExternalInputSchema, ExternalPayloadVariant, LegacyScenariosField,
+    NamedDefinition, NavigationType, OutcomeDefinition, ReadModelDefinition, ReadModelField,
     ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource, ReadModelState,
     ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
     SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceScenarioParts,
@@ -2022,10 +2022,34 @@ fn control_input_provision_from_json_input(
         .as_str()
         .or_else(|| input.get("name").and_then(Value::as_str))
         .ok_or_else(|| BoundaryParseError::new("control input is missing name"))?;
+    let source = control_input_source_from_json_input(input);
 
     DefinitionName::try_new(name.to_owned())
-        .map(ControlInputProvision::new)
+        .map(|name| ControlInputProvision::new(name, source))
         .map_err(|error| BoundaryParseError::new(format!("invalid control input name: {error}")))
+}
+
+fn control_input_source_from_json_input(input: &Value) -> ControlInputSource {
+    let source = input.get("source").and_then(Value::as_str);
+
+    source
+        .and_then(control_user_input_source)
+        .or_else(|| source.and_then(control_session_input_source))
+        .unwrap_or(ControlInputSource::Other)
+}
+
+fn control_user_input_source(source: &str) -> Option<ControlInputSource> {
+    source
+        .strip_prefix("user_input.")
+        .and_then(|input_name| DefinitionName::try_new(input_name.to_owned()).ok())
+        .map(ControlInputSource::UserInput)
+}
+
+fn control_session_input_source(source: &str) -> Option<ControlInputSource> {
+    source
+        .strip_prefix("session.")
+        .and_then(|input_name| DefinitionName::try_new(input_name.to_owned()).ok())
+        .map(ControlInputSource::SessionValue)
 }
 
 fn navigation_type_from_json_control(control: &Value) -> NavigationType {
