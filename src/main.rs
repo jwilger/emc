@@ -807,6 +807,7 @@ fn help_command() -> ClapCommand {
   emc init --name <project-name>
   emc add workflow --slug <slug> --name <name> --description <text>
   emc update workflow --slug <workflow> --name <name>
+  emc remove workflow --slug <workflow>
   emc add slice --workflow <workflow> --slug <slug> --name <name> --type <kind> --description <text>
   emc update slice --slug <slice> --description <text>
   emc update slice --slug <slice> --type <kind>
