@@ -43,6 +43,40 @@ mod tests {
     }
 
     #[test]
+    fn validator_gherkin_does_not_describe_commands_as_reading_read_models()
+    -> Result<(), Box<dyn Error>> {
+        let violations = validator_feature_sources()?
+            .into_iter()
+            .flat_map(|(path, source)| {
+                source
+                    .lines()
+                    .enumerate()
+                    .filter_map(|(index, line)| {
+                        line.contains("command")
+                            .then_some(line)
+                            .filter(|line| line.contains("reads read model"))
+                            .map(|line| {
+                                format!(
+                                    "{}:{} describes command/read-model reads: {line}",
+                                    path.display(),
+                                    index + 1
+                                )
+                            })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "commands receive input from invocation arguments and event streams, not read models"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn review_gate_gherkin_is_checked_in_as_emc_rule_fixtures() -> Result<(), Box<dyn Error>> {
         let path = workspace_root()
             .join("tests/features/event_model_review_gate")
@@ -101,6 +135,24 @@ mod tests {
                 trimmed.starts_with("Scenario:") || trimmed.starts_with("Scenario Outline:")
             })
             .count()
+    }
+
+    fn validator_feature_sources() -> Result<Vec<(PathBuf, String)>, Box<dyn Error>> {
+        let root = workspace_root().join("tests/features/event_model_validator");
+        fs::read_dir(root)?
+            .map(|entry| entry.map(|directory_entry| directory_entry.path()))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .filter(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == "feature")
+            })
+            .map(|path| {
+                fs::read_to_string(&path)
+                    .map(|source| (path, source))
+                    .map_err(Into::into)
+            })
+            .collect()
     }
 
     fn validator_fixture_path(file_name: &str) -> PathBuf {
