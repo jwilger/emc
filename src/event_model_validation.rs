@@ -1,6 +1,7 @@
 use std::path::{Component, Path, PathBuf};
 
 use crate::core::effect::{FileContents, ProjectPath};
+use crate::core::json_object_document::JsonObjectDocument;
 use crate::core::types::WorkflowSliceFileReference;
 use crate::core::validation::{
     EventModelDocument, EventModelFileKind, validate_event_model, validate_event_model_corpus,
@@ -80,6 +81,8 @@ fn parse_and_validate_event_model_file(
     path: &ProjectPath,
     source: &FileContents,
 ) -> Result<EventModelDocument, ShellError> {
+    JsonObjectDocument::reject_duplicate_keys(source)
+        .map_err(|error| ShellError::message(format!("{} in {}", error, path.as_ref())))?;
     let document = parse_event_model_document(source.as_ref(), event_model_file_kind(path))
         .map_err(|error| ShellError::message(format!("{} in {}", error, path.as_ref())))?;
     validate_event_model(&document)

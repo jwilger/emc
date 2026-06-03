@@ -610,11 +610,10 @@ fn indexed_workflow_paths(index_contents: &str) -> Result<Vec<ProjectPath>, Shel
 
 fn require_json_object_keys_unique(path: &str, message: &str) -> Result<(), ShellError> {
     let contents = fs::read_to_string(Path::new(path)).map_err(ShellError::io)?;
-    if JsonKeyScanner::new(&contents).contains_duplicate_key() {
-        Err(ShellError::message(message.to_owned()))
-    } else {
-        Ok(())
-    }
+    let file_contents = FileContents::try_new(contents)
+        .map_err(|_error| ShellError::message(message.to_owned()))?;
+    JsonObjectDocument::reject_duplicate_keys(&file_contents)
+        .map_err(|_error| ShellError::message(message.to_owned()))
 }
 
 fn require_workflow_slice_json_objects(
@@ -646,141 +645,6 @@ fn require_workflow_slice_json_object_keys_unique(
         .try_for_each(|slice_file| {
             require_json_object_keys_unique(&slice_file.to_string_lossy(), message)
         })
-}
-
-struct JsonKeyScanner<'a> {
-    input: &'a str,
-    cursor: usize,
-}
-
-impl<'a> JsonKeyScanner<'a> {
-    fn new(input: &'a str) -> Self {
-        Self { input, cursor: 0 }
-    }
-
-    fn contains_duplicate_key(mut self) -> bool {
-        self.skip_whitespace();
-        self.parse_value()
-    }
-
-    fn parse_value(&mut self) -> bool {
-        self.skip_whitespace();
-        match self.input[self.cursor..].chars().next() {
-            Some('{') => self.parse_object(),
-            Some('[') => self.parse_array(),
-            Some('"') => {
-                self.parse_string();
-                false
-            }
-            Some(_) => {
-                self.parse_scalar();
-                false
-            }
-            None => false,
-        }
-    }
-
-    fn parse_object(&mut self) -> bool {
-        self.bump_char();
-        let mut keys = BTreeSet::new();
-        loop {
-            self.skip_whitespace();
-            if self.consume_char('}') {
-                return false;
-            }
-            let Some(key) = self.parse_string() else {
-                return false;
-            };
-            if !keys.insert(key) {
-                return true;
-            }
-            self.skip_whitespace();
-            if !self.consume_char(':') || self.parse_value() {
-                return true;
-            }
-            self.skip_whitespace();
-            if self.consume_char('}') {
-                return false;
-            }
-            if !self.consume_char(',') {
-                return false;
-            }
-        }
-    }
-
-    fn parse_array(&mut self) -> bool {
-        self.bump_char();
-        loop {
-            self.skip_whitespace();
-            if self.consume_char(']') {
-                return false;
-            }
-            if self.parse_value() {
-                return true;
-            }
-            self.skip_whitespace();
-            if self.consume_char(']') {
-                return false;
-            }
-            if !self.consume_char(',') {
-                return false;
-            }
-        }
-    }
-
-    fn parse_string(&mut self) -> Option<String> {
-        if !self.consume_char('"') {
-            return None;
-        }
-        let mut value = String::new();
-        while let Some(character) = self.bump_char() {
-            match character {
-                '"' => return Some(value),
-                '\\' => {
-                    self.bump_char().into_iter().for_each(|escaped| {
-                        value.push(escaped);
-                    });
-                }
-                _ => value.push(character),
-            }
-        }
-        None
-    }
-
-    fn parse_scalar(&mut self) {
-        while self.input[self.cursor..]
-            .chars()
-            .next()
-            .is_some_and(|character| !matches!(character, ',' | ']' | '}'))
-        {
-            self.bump_char();
-        }
-    }
-
-    fn skip_whitespace(&mut self) {
-        while self.input[self.cursor..]
-            .chars()
-            .next()
-            .is_some_and(char::is_whitespace)
-        {
-            self.bump_char();
-        }
-    }
-
-    fn consume_char(&mut self, expected: char) -> bool {
-        if self.input[self.cursor..].starts_with(expected) {
-            self.bump_char();
-            true
-        } else {
-            false
-        }
-    }
-
-    fn bump_char(&mut self) -> Option<char> {
-        let character = self.input[self.cursor..].chars().next()?;
-        self.cursor += character.len_utf8();
-        Some(character)
-    }
 }
 
 fn require_only_modeled_artifacts(
