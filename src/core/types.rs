@@ -122,6 +122,13 @@ pub struct WorkflowStepRelationshipName(String);
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
+pub struct WorkflowTransitionFieldName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
 pub struct TransitionTriggerName(String);
 
 #[nutype(
