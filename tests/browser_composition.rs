@@ -396,7 +396,7 @@ mod tests {
             "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [\"../slices/show-lesson.eventmodel.json\"],\n  \"steps\": []\n}\n",
         );
         let show_slice = file_contents(
-            "{\n  \"name\": \"Show lesson\",\n  \"version\": \"0.1.0\",\n  \"board\": {\"lanes\": []},\n  \"commands\": [{\"name\": \"SubmitLessonForReview\", \"inputs\": [], \"produces\": []}],\n  \"views\": [{\"name\": \"lesson_screen\", \"uses_read_models\": [], \"controls\": [\n    {\"label\": \"Submit for review\", \"command\": \"SubmitLessonForReview\"},\n    {\"label\": \"Open next lesson\", \"navigation\": \"course-lesson-02\", \"navigation_type\": \"external_workflow\"}\n  ]}],\n  \"slices\": [{\"name\": \"Show lesson\", \"type\": \"state_view\", \"commands\": [\"SubmitLessonForReview\"], \"views\": [\"lesson_screen\"], \"acceptance_scenarios\": [], \"contract_scenarios\": []}]\n}\n",
+            "{\n  \"name\": \"Show lesson\",\n  \"version\": \"0.1.0\",\n  \"board\": {\"lanes\": []},\n  \"commands\": [{\"name\": \"SubmitLessonForReview\", \"inputs\": [], \"produces\": []}],\n  \"views\": [{\"name\": \"lesson_screen\", \"uses_read_models\": [], \"controls\": [\n    {\"label\": \"Submit for review\", \"command\": \"SubmitLessonForReview\"},\n    {\"label\": \"Open next lesson\", \"navigation\": \"course-lesson-02\", \"navigation_type\": \"external_workflow\"},\n    {\"label\": \"Open help\", \"navigation\": \"https://docs.example.test/help\", \"navigation_type\": \"external_system\"},\n    {\"label\": \"Show filters\", \"navigation\": \"filters_open\", \"navigation_type\": \"local_view_state\"},\n    {\"label\": \"Open rubric\", \"navigation\": \"rubric_screen\", \"navigation_type\": \"modeled_view\"}\n  ]}],\n  \"slices\": [{\"name\": \"Show lesson\", \"type\": \"state_view\", \"commands\": [\"SubmitLessonForReview\"], \"views\": [\"lesson_screen\"], \"acceptance_scenarios\": [], \"contract_scenarios\": []}]\n}\n",
         );
 
         let composed = compose_browser_workflow(workflow, vec![show_slice])?;
@@ -425,6 +425,13 @@ mod tests {
                     "workflow navigation",
                     "course-lesson-02",
                 ),
+                (
+                    "Open help",
+                    "external navigation",
+                    "https://docs.example.test/help",
+                ),
+                ("Show filters", "local navigation", "filters_open"),
+                ("Open rubric", "view navigation", "rubric_screen"),
             ]
         );
 

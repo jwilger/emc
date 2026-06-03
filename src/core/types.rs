@@ -346,6 +346,88 @@ impl BrowserCommandDefinitionDetail {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserViewDefinitionDetail {
+    name: ViewName,
+    field_source_chains: Vec<BrowserFieldSourceChainDetail>,
+    control_effects: Vec<BrowserControlEffectDetail>,
+}
+
+impl BrowserViewDefinitionDetail {
+    pub fn new(
+        name: ViewName,
+        field_source_chains: Vec<BrowserFieldSourceChainDetail>,
+        control_effects: Vec<BrowserControlEffectDetail>,
+    ) -> Self {
+        Self {
+            name,
+            field_source_chains,
+            control_effects,
+        }
+    }
+
+    pub fn name(&self) -> &ViewName {
+        &self.name
+    }
+
+    pub fn field_source_chains(&self) -> &[BrowserFieldSourceChainDetail] {
+        &self.field_source_chains
+    }
+
+    pub fn control_effects(&self) -> &[BrowserControlEffectDetail] {
+        &self.control_effects
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserFieldSourceChainDetail {
+    field: ViewFieldName,
+    hops: Vec<SourceChainHop>,
+}
+
+impl BrowserFieldSourceChainDetail {
+    pub fn new(field: ViewFieldName, hops: Vec<SourceChainHop>) -> Self {
+        Self { field, hops }
+    }
+
+    pub fn field(&self) -> &ViewFieldName {
+        &self.field
+    }
+
+    pub fn hops(&self) -> &[SourceChainHop] {
+        &self.hops
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserControlEffectDetail {
+    label: ControlLabel,
+    kind: ControlEffectKind,
+    target: ControlEffectTarget,
+}
+
+impl BrowserControlEffectDetail {
+    pub fn new(label: ControlLabel, kind: ControlEffectKind, target: ControlEffectTarget) -> Self {
+        Self {
+            label,
+            kind,
+            target,
+        }
+    }
+
+    pub fn label(&self) -> &ControlLabel {
+        &self.label
+    }
+
+    pub fn kind(&self) -> &ControlEffectKind {
+        &self.kind
+    }
+
+    pub fn target(&self) -> &ControlEffectTarget {
+        &self.target
+    }
+}
+
 #[nutype(
     sanitize(trim),
     validate(not_empty),

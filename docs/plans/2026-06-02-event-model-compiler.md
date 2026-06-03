@@ -109,6 +109,7 @@
 - 2026-06-03: Browser event-element composition now derives board event element names from `BrowserDataDocument::event_element_names()` instead of parsing raw board slice elements in `src/core/browser.rs`. A browser guardrail prevents direct event-element traversal from returning to browser composition.
 - 2026-06-03: Browser error-recovery composition now derives command error names and source screens from `BrowserDataDocument::error_recovery_details()` instead of parsing raw control error handling in `src/core/browser.rs`. A browser guardrail prevents direct error-handling traversal from returning to browser composition.
 - 2026-06-03: Browser command-definition composition now derives command names, owning slices, source controls, and section labels from `BrowserDataCorpus::command_definition_details()` instead of resolving raw command/view/slice fields in `src/core/browser.rs`. A browser guardrail prevents direct command-definition traversal from returning to browser composition.
+- 2026-06-03: Browser view-definition composition now derives field source chains and control effects from `BrowserDataCorpus::view_definition_details()` instead of traversing raw view/read-model/event fields in `src/core/browser.rs`. A browser guardrail prevents direct view-definition traversal from returning to browser composition.
 
 ### Task 1: Guardrails and Project Skeleton
 
