@@ -359,6 +359,111 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_browser_workflow_duplicate_steps_field_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let workflow = read_to_string(&workflow_path)?
+            .replace("  \"steps\": [\n", "  \"steps\": [],\n  \"steps\": [\n");
+        write(workflow_path, workflow)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser workflow drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_browser_workflow_duplicate_numeric_field_drift() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let workflow = read_to_string(&workflow_path)?.replace(
+            "  \"events\": [],\n",
+            "  \"rank\": 1,\n  \"rank\": 2,\n  \"events\": [],\n",
+        );
+        write(workflow_path, workflow)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser workflow drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_browser_workflow_duplicate_escaped_field_drift() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let workflow = read_to_string(&workflow_path)?.replace(
+            "  \"events\": [],\n",
+            "  \"escaped\\\"key\": \"first\",\n  \"escaped\\\"key\": \"second\",\n  \"events\": [],\n",
+        );
+        write(workflow_path, workflow)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser workflow drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_browser_workflow_duplicate_after_escaped_string_value_drift()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let workflow = read_to_string(&workflow_path)?.replace(
+            "  \"events\": [],\n",
+            "  \"note\": \"contains an escaped \\\" quote\",\n  \"rank\": 1,\n  \"rank\": 2,\n  \"events\": [],\n",
+        );
+        write(workflow_path, workflow)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser workflow drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_unindexed_browser_workflow_files() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 

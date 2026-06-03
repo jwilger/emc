@@ -9,6 +9,7 @@ pub enum Effect {
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
     RequireIndexedWorkflowFiles(ProjectPath, ProjectPath, ReportLine),
+    RequireJsonObjectKeysUnique(ProjectPath, ReportLine),
     RequireOnlyModeledArtifacts(
         ProjectPath,
         ArtifactFileExtension,
