@@ -134,7 +134,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         }
         Effect::RequireDigest(path, digest, message) => {
             let contents = fs::read_to_string(Path::new(path.as_ref())).map_err(ShellError::io)?;
-            if contents.contains(digest.as_ref()) {
+            if artifact_contains_one_digest_marker(&contents, digest.as_ref()) {
                 Ok(Vec::new())
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
@@ -932,6 +932,24 @@ fn artifact_contains_one_canonical_declaration(
         (declarations.next(), declarations.next()),
         (Some(declaration), None) if declaration == marker
     )
+}
+
+fn artifact_contains_one_digest_marker(artifact_contents: &str, digest: &str) -> bool {
+    let mut declarations = artifact_contents
+        .lines()
+        .filter_map(canonical_digest_marker_line);
+
+    matches!(
+        (declarations.next(), declarations.next()),
+        (Some(declaration), None) if declaration == digest
+    )
+}
+
+fn canonical_digest_marker_line(line: &str) -> Option<&str> {
+    let trimmed = line.trim_start();
+    trimmed
+        .strip_prefix("-- EMC-DIGEST: ")
+        .or_else(|| trimmed.strip_prefix("// EMC-DIGEST: "))
 }
 
 fn canonical_declaration_line<'a>(line: &'a str, prefix: &str) -> Option<&'a str> {

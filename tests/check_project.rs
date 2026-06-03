@@ -262,6 +262,28 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_lean_workflow_extra_digest_marker_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let mut lean = read_to_string(&lean_path)?;
+        lean.push_str("\n-- EMC-DIGEST: workflow:Stale ticket\n");
+        write(lean_path, lean)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "artifact digest mismatch for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_browser_workflow_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 

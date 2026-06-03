@@ -70,6 +70,7 @@
 - 2026-06-02: Generated Lean4 and Quint workflow artifacts now include a slice-detail completeness obligation tying the workflow slice list to generated slice metadata. Lean proves the length equality by reduction, and Quint exposes the same boolean as a named verification value.
 - 2026-06-02: `emc verify` now asks Quint to verify the emitted `workflowIdentityStable` and `workflowSliceDetailsComplete` invariant values explicitly through both CLI and MCP verification paths.
 - 2026-06-02: `emc check` now rejects Lean4 and Quint invariant drift for generated workflow slice-detail completeness obligations, including stale or duplicate verified Quint invariant declarations.
+- 2026-06-02: `emc check` now treats formal artifact digest markers as canonical declarations, rejecting generated Lean4 or Quint artifacts that retain the expected digest alongside stale duplicate digest metadata.
 
 ### Task 1: Guardrails and Project Skeleton
 
