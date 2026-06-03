@@ -7,8 +7,10 @@ use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath};
 use crate::core::layout::{list_workflows, show_workflow};
 use crate::core::site::generate_site;
 use crate::core::verify::verify_project;
+use crate::event_model_validation::validate_target;
 use crate::io::dto::{parse_browser_index_workflows, parse_workflow_slug};
 use crate::shell::{ShellError, interpret_collect_reports};
+use std::path::Path;
 
 pub fn serve_stdio() -> Result<(), ShellError> {
     let mut input = String::new();
@@ -114,6 +116,20 @@ fn tools_list_result() -> Value {
                     "properties": {},
                     "additionalProperties": false
                 }
+            },
+            {
+                "name": "validate_event_model",
+                "description": "Validate event model workflow or slice files.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "target": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["target"],
+                    "additionalProperties": false
+                }
             }
         ]
     })
@@ -148,6 +164,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "verify_project" => Ok(Some(success_response(
             id,
             tool_result(verify_project_tool_text()?),
+        ))),
+        "validate_event_model" => Ok(Some(success_response(
+            id,
+            tool_result(validate_event_model_tool_text(request)?),
         ))),
         _ => Ok(Some(error_response(
             id,
@@ -206,6 +226,17 @@ fn verify_project_tool_text() -> Result<String, ShellError> {
     let imported_workflows = parse_browser_index_workflows(&index)
         .map_err(|error| ShellError::message(error.to_string()))?;
     interpret_collect_reports(verify_project(imported_workflows)).map(|reports| reports.join("\n"))
+}
+
+fn validate_event_model_tool_text(request: &Value) -> Result<String, ShellError> {
+    let target = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .and_then(|arguments| arguments.get("target"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("validate_event_model requires target"))?;
+    validate_target(Path::new(target))?;
+    Ok(format!("event model is valid at {target}"))
 }
 
 fn report_text(plan: EffectPlan) -> String {
