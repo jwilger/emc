@@ -8,6 +8,12 @@ pub enum Effect {
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
     RequireIndexedWorkflowFiles(ProjectPath, ProjectPath, ReportLine),
+    RequireOnlyModeledArtifacts(
+        ProjectPath,
+        ArtifactFileExtension,
+        Vec<ProjectPath>,
+        ReportLine,
+    ),
     RequireReferencedSliceFiles(ProjectPath, ProjectPath, ReportLine),
     RequireReviewRecord(ProjectPath, ProjectPath, ReportLine),
     RequireWorkflowSliceFiles(ProjectPath, ReportLine),
@@ -87,6 +93,13 @@ pub struct ReportLine(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef)
 )]
 pub struct ArtifactDigest(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef)
+)]
+pub struct ArtifactFileExtension(String);
 
 #[nutype(
     sanitize(trim),
