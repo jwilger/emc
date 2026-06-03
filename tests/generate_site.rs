@@ -84,4 +84,32 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn generate_site_rejects_absolute_output_paths_at_the_boundary() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let absolute_output = temp_dir.path().join("outside-site");
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "generate",
+                "site",
+                "--output",
+                absolute_output
+                    .to_str()
+                    .ok_or("temporary path is not valid UTF-8")?,
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("invalid project path"));
+
+        Ok(())
+    }
 }

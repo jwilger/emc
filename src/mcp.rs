@@ -558,8 +558,7 @@ fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {
         .and_then(Value::as_str)
         .ok_or_else(|| ShellError::message("generate_site requires output"))
         .and_then(|output| {
-            ProjectPath::try_new(output.to_owned())
-                .map_err(|error| ShellError::message(error.to_string()))
+            ProjectPath::try_new(output.to_owned()).map_err(ShellError::project_path)
         })?;
     interpret_collect_reports(EffectPlan::new(vec![Effect::GenerateSiteFromManifest(
         output,
@@ -585,8 +584,7 @@ fn validate_event_model_tool_text(request: &Value) -> Result<String, ShellError>
         .and_then(Value::as_str)
         .ok_or_else(|| ShellError::message("validate_event_model requires target"))
         .and_then(|target| {
-            ProjectPath::try_new(target.to_owned())
-                .map_err(|error| ShellError::message(error.to_string()))
+            ProjectPath::try_new(target.to_owned()).map_err(ShellError::project_path)
         })?;
     interpret_collect_reports(EffectPlan::new(vec![Effect::ValidateEventModelTarget(
         target,

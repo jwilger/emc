@@ -1,4 +1,5 @@
 use nutype::nutype;
+use std::path::{Component, Path};
 
 use crate::core::connection::WorkflowConnection;
 use crate::core::slice::NewSlice;
@@ -91,9 +92,15 @@ impl ProcessInvocation {
     }
 }
 
+fn is_project_relative_path(value: &str) -> bool {
+    Path::new(value)
+        .components()
+        .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
+}
+
 #[nutype(
     sanitize(trim),
-    validate(not_empty),
+    validate(not_empty, predicate = is_project_relative_path),
     derive(Debug, Clone, Eq, PartialEq, AsRef)
 )]
 pub struct ProjectPath(String);

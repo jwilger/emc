@@ -25,6 +25,20 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_parent_directory_targets_at_the_boundary() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "../outside-model"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("invalid project path"));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_non_object_event_model_json() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");

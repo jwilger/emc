@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use serde_json::Value;
 
@@ -152,8 +152,31 @@ fn referenced_slice_path(
     let base_path = Path::new(workflow_path.as_ref())
         .parent()
         .unwrap_or_else(|| Path::new(""));
-    ProjectPath::try_new(base_path.join(slice_file).to_string_lossy().into_owned())
-        .map_err(|error| ShellError::message(error.to_string()))
+    let path = normalize_project_path(base_path.join(slice_file).as_path())?;
+    ProjectPath::try_new(path.to_string_lossy().into_owned()).map_err(ShellError::project_path)
+}
+
+fn normalize_project_path(path: &Path) -> Result<PathBuf, ShellError> {
+    path.components().try_fold(
+        PathBuf::new(),
+        |mut normalized, component| match component {
+            Component::Normal(segment) => {
+                normalized.push(segment);
+                Ok(normalized)
+            }
+            Component::CurDir => Ok(normalized),
+            Component::ParentDir => {
+                if normalized.pop() {
+                    Ok(normalized)
+                } else {
+                    Err(ShellError::project_path("path escapes project root"))
+                }
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                Err(ShellError::project_path("path must be project-relative"))
+            }
+        },
+    )
 }
 
 fn event_model_file_kind(path: &ProjectPath) -> EventModelFileKind {

@@ -310,7 +310,7 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 .map(|output| Cli {
                     command: Command::GenerateSite { output },
                 })
-                .map_err(|error| ShellError::message(error.to_string()))
+                .map_err(ShellError::project_path)
         }
         [command, subject, suite_flag, suite]
             if command == "gherkin" && subject == "list" && suite_flag == "--suite" =>
@@ -483,8 +483,7 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         }
         [command, target] if command == "validate" => Ok(Cli {
             command: Command::Validate {
-                target: ProjectPath::try_new(target.clone())
-                    .map_err(|error| ShellError::message(error.to_string()))?,
+                target: ProjectPath::try_new(target.clone()).map_err(ShellError::project_path)?,
             },
         }),
         [command] if command == "verify" => Ok(Cli {
