@@ -194,8 +194,18 @@ fn http_response_for_request(
         ));
     }
 
-    let mcp_request = serde_json::from_str::<Value>(&request.body)
-        .map_err(|error| ShellError::message(format!("invalid MCP HTTP JSON-RPC body: {error}")))?;
+    let mcp_request = match serde_json::from_str::<Value>(&request.body) {
+        Ok(request) => request,
+        Err(error) => {
+            return Ok(http_response(
+                "400 Bad Request",
+                &json!({
+                    "error": format!("invalid MCP HTTP JSON-RPC body: {error}")
+                })
+                .to_string(),
+            ));
+        }
+    };
     let response = handle_request(&mcp_request)?
         .map(|response| serde_json::to_string(&response))
         .transpose()
