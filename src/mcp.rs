@@ -9,8 +9,8 @@ use crate::core::effect::ProjectPath;
 use crate::core::slice::NewSlice;
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
-    parse_connection_kind, parse_model_description, parse_model_name, parse_slice_kind,
-    parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
+    parse_connection_kind, parse_model_description, parse_model_name, parse_project_name,
+    parse_slice_kind, parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
 };
 use crate::shell::{ShellError, interpret_collect_reports};
 
@@ -293,6 +293,20 @@ fn tools_list_result() -> Value {
     json!({
         "tools": [
             {
+                "name": "init_project",
+                "description": "Initialize an EMC project layout and root formal artifacts.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["name"],
+                    "additionalProperties": false
+                }
+            },
+            {
                 "name": "list_workflows",
                 "description": "List modeled workflows in the EMC event model.",
                 "inputSchema": {
@@ -493,6 +507,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
     };
 
     match name {
+        "init_project" => Ok(Some(tool_call_result_response(
+            id,
+            init_project_tool_text(request),
+        ))),
         "list_workflows" => Ok(Some(tool_call_result_response(
             id,
             list_workflows_tool_text(),
@@ -550,6 +568,18 @@ fn tool_call_result_response(id: &Value, result: Result<String, ShellError>) -> 
         Ok(text) => success_response(id, tool_result(text)),
         Err(error) => error_response(id, -32000, error.to_string()),
     }
+}
+
+fn init_project_tool_text(request: &Value) -> Result<String, ShellError> {
+    let raw_name = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .and_then(|arguments| arguments.get("name"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("init_project requires name"))?;
+    let name =
+        parse_project_name(raw_name).map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(command::init(name)).map(|reports| reports.join("\n"))
 }
 
 fn list_workflows_tool_text() -> Result<String, ShellError> {
