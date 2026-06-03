@@ -157,6 +157,7 @@
 - 2026-06-03: CLI `list transitions` and MCP `list_transitions` now report modeled workflow transitions from semantic workflow transition records, exposing source, target, kind, and trigger without requiring users to inspect generated workflow JSON.
 - 2026-06-03: CLI `update slice --slug <slug> --type <kind>` and MCP `update_slice_kind` now rewrite first-class business slice kinds and regenerate the owning workflow, browser slice document, Lean4 slice module, Quint slice module, and workflow formal artifacts from the shared semantic command path.
 - 2026-06-03: CLI `update workflow --slug <slug> --name <name>` and MCP `update_workflow_name` now rewrite first-class business workflow names, regenerate browser workflow/index data plus Lean4/Quint workflow modules, and remove stale formal workflow modules from the shared semantic command path.
+- 2026-06-03: CLI `update slice --slug <slug> --name <name>` and MCP `update_slice_name` now rewrite first-class business slice names, regenerate the owning workflow, browser slice document, Lean4/Quint slice modules, and workflow formal artifacts, and remove stale formal slice modules from the shared semantic command path.
 
 ### Task 1: Guardrails and Project Skeleton
 

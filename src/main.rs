@@ -74,6 +74,10 @@ enum Command {
         slug: SliceSlug,
         kind: SliceKind,
     },
+    UpdateSliceName {
+        slug: SliceSlug,
+        name: ModelName,
+    },
     UpdateWorkflowDescription {
         slug: WorkflowSlug,
         description: ModelDescription,
@@ -128,6 +132,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         }
         Command::UpdateSliceKind { slug, kind } => {
             interpret(command::update_slice_kind(slug, kind))
+        }
+        Command::UpdateSliceName { slug, name } => {
+            interpret(command::update_slice_name(slug, name))
         }
         Command::UpdateWorkflowDescription { slug, description } => {
             interpret(command::update_workflow_description(slug, description))
@@ -524,6 +531,23 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        [command, subject, slug_flag, slug, name_flag, name]
+            if command == "update"
+                && subject == "slice"
+                && slug_flag == "--slug"
+                && name_flag == "--name" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slug).map_err(|error| ShellError::message(error.to_string()))?;
+            let slice_name =
+                parse_model_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::UpdateSliceName {
+                    slug: slice_slug,
+                    name: slice_name,
+                },
+            })
+        }
         [
             command,
             subject,
@@ -670,6 +694,7 @@ fn help_command() -> ClapCommand {
   emc add slice --workflow <workflow> --slug <slug> --name <name> --type <kind> --description <text>
   emc update slice --slug <slice> --description <text>
   emc update slice --slug <slice> --type <kind>
+  emc update slice --slug <slice> --name <name>
   emc connect workflow --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
   emc list slices
   emc list transitions

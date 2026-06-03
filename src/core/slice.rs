@@ -282,6 +282,7 @@ pub fn update_slice_description(
         workflow_document,
         slice_slug,
         updated_slice,
+        None,
     )
 }
 
@@ -340,6 +341,70 @@ pub fn update_slice_kind(
         workflow_document,
         slice_slug,
         updated_slice,
+        None,
+    )
+}
+
+pub fn update_slice_name(
+    indexed_workflow_name: ModelName,
+    indexed_workflow_description: ModelDescription,
+    workflow_slug: WorkflowSlug,
+    workflow_document: FileContents,
+    slice_slug: SliceSlug,
+    name: ModelName,
+) -> Result<EffectPlan, SliceMutationError> {
+    let workflow_document = WorkflowDocument::parse(&workflow_document)
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_name = workflow_document
+        .name()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    if workflow_name != indexed_workflow_name {
+        return Err(SliceMutationError::new(format!(
+            "workflow document name '{}' does not match index name '{}'",
+            workflow_name.as_ref(),
+            indexed_workflow_name.as_ref()
+        )));
+    }
+    let workflow_description = workflow_document
+        .description()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    if workflow_description != indexed_workflow_description {
+        return Err(SliceMutationError::new(format!(
+            "workflow document description '{}' does not match index description '{}'",
+            workflow_description.as_ref(),
+            indexed_workflow_description.as_ref()
+        )));
+    }
+
+    let existing_slices = workflow_document
+        .slice_details()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let existing_slice = existing_slices
+        .iter()
+        .find(|slice| slice.slug() == &slice_slug)
+        .cloned()
+        .ok_or_else(|| {
+            SliceMutationError::new(format!("slice {} is not in workflow", slice_slug.as_ref()))
+        })?;
+    reject_updated_slice_module_collision(&existing_slices, &slice_slug, &name)?;
+
+    let updated_slice = WorkflowSliceDetail::new(
+        slice_slug.clone(),
+        name,
+        existing_slice.kind().clone(),
+        existing_slice.description().clone(),
+    );
+    let workflow_document = workflow_document
+        .with_updated_slice_detail(updated_slice.clone())
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    updated_slice_plan(
+        workflow_name,
+        workflow_description,
+        workflow_slug,
+        workflow_document,
+        slice_slug,
+        updated_slice,
+        Some(module_name(existing_slice.name().as_ref())),
     )
 }
 
@@ -350,6 +415,7 @@ fn updated_slice_plan(
     workflow_document: WorkflowDocument,
     slice_slug: SliceSlug,
     updated_slice: WorkflowSliceDetail,
+    previous_slice_module_name: Option<String>,
 ) -> Result<EffectPlan, SliceMutationError> {
     let workflow_module_name = module_name(workflow_name.as_ref());
     let slice_module_name = module_name(updated_slice.name().as_ref());
@@ -376,66 +442,84 @@ fn updated_slice_plan(
         .contents()
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
 
-    Ok(EffectPlan::new(vec![
-        Effect::WriteFile(workflow_path(&workflow_slug), workflow_json),
-        Effect::WriteFile(
-            project_path(format!(
-                "model/browser/data/slices/{}.eventmodel.json",
-                slice_slug.as_ref()
-            )),
-            file_contents(slice_json_from_detail(&updated_slice)),
-        ),
-        Effect::WriteFile(
-            project_path(format!("model/lean/slices/{slice_module_name}.lean")),
-            emit_lean_slice_module(
-                lean_module_name(slice_module_name.clone()),
-                updated_slice.name().clone(),
-                updated_slice.description().clone(),
-                slice_slug.clone(),
-                updated_slice.kind().clone(),
-                slice_digest.clone(),
-            ),
-        ),
-        Effect::WriteFile(
-            project_path(format!("model/quint/slices/{slice_module_name}.qnt")),
-            emit_quint_slice_module(
-                quint_module_name(slice_module_name),
-                updated_slice.name().clone(),
-                updated_slice.description().clone(),
-                slice_slug,
-                updated_slice.kind().clone(),
-                slice_digest,
-            ),
-        ),
-        Effect::WriteFile(
-            project_path(format!("model/lean/{workflow_module_name}.lean")),
-            emit_lean_workflow_module(
-                lean_module_name(workflow_module_name.clone()),
-                workflow_name.clone(),
-                workflow_description.clone(),
-                workflow_slug.clone(),
-                workflow_slice_details.clone(),
-                workflow_transitions.clone(),
-                workflow_digest.clone(),
-            ),
-        ),
-        Effect::WriteFile(
-            project_path(format!("model/quint/{workflow_module_name}.qnt")),
-            emit_quint_workflow_module(
-                quint_module_name(workflow_module_name),
-                workflow_name,
-                workflow_description,
-                workflow_slug,
-                workflow_slice_details,
-                workflow_transitions,
-                workflow_digest,
-            ),
-        ),
-        Effect::Report(report_line(format!(
-            "updated slice {}",
-            updated_slice.name().as_ref()
-        ))),
-    ]))
+    let cleanup_effects = previous_slice_module_name
+        .filter(|previous_module_name| previous_module_name != &slice_module_name)
+        .into_iter()
+        .flat_map(|previous_module_name| {
+            [
+                Effect::RemoveFile(project_path(format!(
+                    "model/lean/slices/{previous_module_name}.lean"
+                ))),
+                Effect::RemoveFile(project_path(format!(
+                    "model/quint/slices/{previous_module_name}.qnt"
+                ))),
+            ]
+        });
+
+    Ok(EffectPlan::new(
+        cleanup_effects
+            .chain([
+                Effect::WriteFile(workflow_path(&workflow_slug), workflow_json),
+                Effect::WriteFile(
+                    project_path(format!(
+                        "model/browser/data/slices/{}.eventmodel.json",
+                        slice_slug.as_ref()
+                    )),
+                    file_contents(slice_json_from_detail(&updated_slice)),
+                ),
+                Effect::WriteFile(
+                    project_path(format!("model/lean/slices/{slice_module_name}.lean")),
+                    emit_lean_slice_module(
+                        lean_module_name(slice_module_name.clone()),
+                        updated_slice.name().clone(),
+                        updated_slice.description().clone(),
+                        slice_slug.clone(),
+                        updated_slice.kind().clone(),
+                        slice_digest.clone(),
+                    ),
+                ),
+                Effect::WriteFile(
+                    project_path(format!("model/quint/slices/{slice_module_name}.qnt")),
+                    emit_quint_slice_module(
+                        quint_module_name(slice_module_name),
+                        updated_slice.name().clone(),
+                        updated_slice.description().clone(),
+                        slice_slug,
+                        updated_slice.kind().clone(),
+                        slice_digest,
+                    ),
+                ),
+                Effect::WriteFile(
+                    project_path(format!("model/lean/{workflow_module_name}.lean")),
+                    emit_lean_workflow_module(
+                        lean_module_name(workflow_module_name.clone()),
+                        workflow_name.clone(),
+                        workflow_description.clone(),
+                        workflow_slug.clone(),
+                        workflow_slice_details.clone(),
+                        workflow_transitions.clone(),
+                        workflow_digest.clone(),
+                    ),
+                ),
+                Effect::WriteFile(
+                    project_path(format!("model/quint/{workflow_module_name}.qnt")),
+                    emit_quint_workflow_module(
+                        quint_module_name(workflow_module_name),
+                        workflow_name,
+                        workflow_description,
+                        workflow_slug,
+                        workflow_slice_details,
+                        workflow_transitions,
+                        workflow_digest,
+                    ),
+                ),
+                Effect::Report(report_line(format!(
+                    "updated slice {}",
+                    updated_slice.name().as_ref()
+                ))),
+            ])
+            .collect(),
+    ))
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -498,6 +582,23 @@ fn workflow_slice_detail(new_slice: &NewSlice) -> WorkflowSliceDetail {
         slice_kind_name(new_slice.kind),
         new_slice.description.clone(),
     )
+}
+
+fn reject_updated_slice_module_collision(
+    existing_slices: &[WorkflowSliceDetail],
+    slice_slug: &SliceSlug,
+    name: &ModelName,
+) -> Result<(), SliceMutationError> {
+    let generated_module_name = module_name(name.as_ref());
+    existing_slices
+        .iter()
+        .filter(|slice| slice.slug() != slice_slug)
+        .find(|slice| module_name(slice.name().as_ref()) == generated_module_name)
+        .map_or(Ok(()), |_slice| {
+            Err(SliceMutationError::new(format!(
+                "slice module {generated_module_name} already exists"
+            )))
+        })
 }
 
 fn slice_kind_name(kind: SliceKind) -> SliceKindName {

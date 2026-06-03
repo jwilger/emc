@@ -96,6 +96,10 @@ pub fn update_slice_kind(slug: SliceSlug, kind: SliceKind) -> EffectPlan {
     EffectPlan::new(vec![Effect::UpdateSliceKindFromWorkflow(slug, kind)])
 }
 
+pub fn update_slice_name(slug: SliceSlug, name: ModelName) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateSliceNameFromWorkflow(slug, name)])
+}
+
 pub fn validate(target: ProjectPath) -> EffectPlan {
     EffectPlan::new(vec![Effect::ValidateEventModelTarget(target)])
 }
