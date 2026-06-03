@@ -97,3 +97,24 @@ pub struct WorkflowTransitionKind(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
 pub struct WorkflowTransitionName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct CommandErrorName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ViewName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct BrowserEventElementName(String);

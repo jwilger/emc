@@ -6,8 +6,8 @@ use serde_json::Value;
 
 use crate::core::effect::FileContents;
 use crate::core::types::{
-    BoardLaneId, WorkflowBranchLabel, WorkflowStepName, WorkflowTransitionKind,
-    WorkflowTransitionLabel, WorkflowTransitionName,
+    BoardLaneId, BrowserEventElementName, CommandErrorName, ViewName, WorkflowBranchLabel,
+    WorkflowStepName, WorkflowTransitionKind, WorkflowTransitionLabel, WorkflowTransitionName,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -16,6 +16,8 @@ pub struct BrowserWorkflow {
     main_path_names: Vec<WorkflowStepName>,
     branch_cards: Vec<BrowserBranchCard>,
     transition_cards: Vec<BrowserTransitionCard>,
+    error_recovery_cards: Vec<BrowserErrorRecoveryCard>,
+    event_element_names: Vec<BrowserEventElementName>,
 }
 
 impl BrowserWorkflow {
@@ -33,6 +35,14 @@ impl BrowserWorkflow {
 
     pub fn transition_cards(&self) -> &[BrowserTransitionCard] {
         &self.transition_cards
+    }
+
+    pub fn error_recovery_cards(&self) -> &[BrowserErrorRecoveryCard] {
+        &self.error_recovery_cards
+    }
+
+    pub fn event_element_names(&self) -> &[BrowserEventElementName] {
+        &self.event_element_names
     }
 }
 
@@ -83,6 +93,22 @@ impl BrowserTransitionCard {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserErrorRecoveryCard {
+    name: CommandErrorName,
+    source_screen: ViewName,
+}
+
+impl BrowserErrorRecoveryCard {
+    pub fn name(&self) -> &CommandErrorName {
+        &self.name
+    }
+
+    pub fn source_screen(&self) -> &ViewName {
+        &self.source_screen
+    }
+}
+
 pub fn compose_browser_workflow(
     workflow_document: FileContents,
     slice_documents: Vec<FileContents>,
@@ -107,12 +133,19 @@ pub fn compose_browser_workflow(
     let main_path_names = workflow_main_path_names(&workflow_value)?;
     let branch_cards = workflow_branch_cards(&workflow_value)?;
     let transition_cards = workflow_transition_cards(&workflow_value)?;
+    let composed_values = iter::once(&workflow_value)
+        .chain(slice_values.iter())
+        .collect::<Vec<_>>();
+    let error_recovery_cards = error_recovery_cards(&composed_values)?;
+    let event_element_names = event_element_names(&composed_values)?;
 
     Ok(BrowserWorkflow {
         lane_ids,
         main_path_names,
         branch_cards,
         transition_cards,
+        error_recovery_cards,
+        event_element_names,
     })
 }
 
@@ -383,4 +416,91 @@ fn parse_workflow_transition_name(
     WorkflowTransitionName::try_new(value.to_owned()).map_err(|error| {
         BrowserCompositionError::new(format!("invalid workflow transition name: {error}"))
     })
+}
+
+fn error_recovery_cards(
+    values: &[&Value],
+) -> Result<Vec<BrowserErrorRecoveryCard>, BrowserCompositionError> {
+    values
+        .iter()
+        .flat_map(|value| {
+            value
+                .get("views")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .map(view_error_recovery_cards)
+        .collect::<Result<Vec<_>, _>>()
+        .map(|cards| cards.into_iter().flatten().collect())
+}
+
+fn view_error_recovery_cards(
+    view: &Value,
+) -> Result<Vec<BrowserErrorRecoveryCard>, BrowserCompositionError> {
+    let source_screen = view.get("name").and_then(Value::as_str);
+
+    view.get("controls")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .flat_map(|control| {
+            control
+                .get("error_handling")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .filter_map(|handling| {
+            Some((
+                source_screen?,
+                handling.get("error").and_then(Value::as_str)?,
+            ))
+        })
+        .map(|(source_screen, error_name)| {
+            Ok(BrowserErrorRecoveryCard {
+                name: CommandErrorName::try_new(error_name.to_owned()).map_err(|error| {
+                    BrowserCompositionError::new(format!("invalid command error name: {error}"))
+                })?,
+                source_screen: ViewName::try_new(source_screen.to_owned()).map_err(|error| {
+                    BrowserCompositionError::new(format!("invalid source screen name: {error}"))
+                })?,
+            })
+        })
+        .collect()
+}
+
+fn event_element_names(
+    values: &[&Value],
+) -> Result<Vec<BrowserEventElementName>, BrowserCompositionError> {
+    values
+        .iter()
+        .flat_map(|value| {
+            value
+                .get("board")
+                .and_then(|board| board.get("slices"))
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .flat_map(|slice| {
+            slice
+                .get("elements")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .filter(|element| {
+            element
+                .get("kind")
+                .and_then(Value::as_str)
+                .is_some_and(|kind| kind == "event")
+        })
+        .filter_map(|element| element.get("name").and_then(Value::as_str))
+        .map(|name| {
+            BrowserEventElementName::try_new(name.to_owned()).map_err(|error| {
+                BrowserCompositionError::new(format!("invalid event element name: {error}"))
+            })
+        })
+        .collect()
 }
