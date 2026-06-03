@@ -5,6 +5,7 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 use serde_json::{Map, Value};
 
 use crate::core::connection::ConnectionKind;
+use crate::core::effect::ProjectPath;
 use crate::core::gherkin::GherkinSuite;
 use crate::core::layout::ModeledWorkflowLayout;
 use crate::core::project::ProjectName;
@@ -89,6 +90,11 @@ pub fn parse_event_model_document(
 pub fn parse_project_name(raw: &str) -> Result<ProjectName, BoundaryParseError> {
     ProjectName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid project name: {error}")))
+}
+
+pub fn parse_project_path(raw: &str) -> Result<ProjectPath, BoundaryParseError> {
+    ProjectPath::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid project path: {error}")))
 }
 
 pub fn parse_project_manifest_name(raw: &str) -> Result<ProjectName, BoundaryParseError> {

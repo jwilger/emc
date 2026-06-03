@@ -12,8 +12,8 @@ use emc::core::types::{ModelDescription, WorkflowSlug};
 use emc::core::workflow::NewWorkflow;
 use emc::io::dto::{
     parse_connection_kind, parse_gherkin_suite, parse_model_description, parse_model_name,
-    parse_project_name, parse_slice_kind, parse_slice_slug, parse_transition_trigger_name,
-    parse_workflow_slug,
+    parse_project_name, parse_project_path, parse_slice_kind, parse_slice_slug,
+    parse_transition_trigger_name, parse_workflow_slug,
 };
 use emc::mcp::{serve_http, serve_stdio};
 use emc::shell::{ShellError, interpret};
@@ -287,11 +287,11 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         [command, subject, output_flag, output]
             if command == "generate" && subject == "site" && output_flag == "--output" =>
         {
-            ProjectPath::try_new(output.clone())
+            parse_project_path(output)
                 .map(|output| Cli {
                     command: Command::GenerateSite { output },
                 })
-                .map_err(ShellError::project_path)
+                .map_err(|error| ShellError::message(error.to_string()))
         }
         [command, subject, suite_flag, suite]
             if command == "gherkin" && subject == "list" && suite_flag == "--suite" =>
@@ -467,7 +467,8 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         }
         [command, target] if command == "validate" => Ok(Cli {
             command: Command::Validate {
-                target: ProjectPath::try_new(target.clone()).map_err(ShellError::project_path)?,
+                target: parse_project_path(target)
+                    .map_err(|error| ShellError::message(error.to_string()))?,
             },
         }),
         [command] if command == "verify" => Ok(Cli {
