@@ -439,6 +439,31 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn browser_review_overlays_use_semantic_workflow_documents() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/core/browser.rs")?;
+        let violations = [
+            "fn review_overlays(value:",
+            "get(\"review_diagnostics\")",
+        ]
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| {
+                format!(
+                    "src/core/browser.rs duplicates workflow review-overlay semantics via `{marker}`"
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "browser composition must derive review overlays from WorkflowDocument"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",
