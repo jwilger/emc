@@ -114,6 +114,10 @@
           };
         };
 
+        app = flake-utils.lib.mkApp { drv = package; } // {
+          meta.description = "Event Model Compiler";
+        };
+
         overlayPkgs = import nixpkgs {
           inherit system;
           overlays = [ self.overlays.default ];
@@ -268,8 +272,8 @@ PY
         };
 
         apps = pkgs.lib.optionalAttrs hasCargoProject {
-          default = flake-utils.lib.mkApp { drv = package; };
-          emc = flake-utils.lib.mkApp { drv = package; };
+          default = app;
+          emc = app;
         };
 
         checks = pkgs.lib.optionalAttrs hasCargoProject {
