@@ -316,6 +316,47 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn composed_browser_workflow_projects_view_control_effects() -> Result<(), Box<dyn Error>> {
+        let workflow = file_contents(
+            "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [\"../slices/show-lesson.eventmodel.json\"],\n  \"steps\": []\n}\n",
+        );
+        let show_slice = file_contents(
+            "{\n  \"name\": \"Show lesson\",\n  \"version\": \"0.1.0\",\n  \"board\": {\"lanes\": []},\n  \"commands\": [{\"name\": \"SubmitLessonForReview\", \"inputs\": [], \"produces\": []}],\n  \"views\": [{\"name\": \"lesson_screen\", \"uses_read_models\": [], \"controls\": [\n    {\"label\": \"Submit for review\", \"command\": \"SubmitLessonForReview\"},\n    {\"label\": \"Open next lesson\", \"navigation\": \"course-lesson-02\", \"navigation_type\": \"external_workflow\"}\n  ]}],\n  \"slices\": [{\"name\": \"Show lesson\", \"type\": \"state_view\", \"commands\": [\"SubmitLessonForReview\"], \"views\": [\"lesson_screen\"], \"acceptance_scenarios\": [], \"contract_scenarios\": []}]\n}\n",
+        );
+
+        let composed = compose_browser_workflow(workflow, vec![show_slice])?;
+        let definition = composed
+            .view_definitions()
+            .iter()
+            .find(|definition| definition.name().as_ref() == "lesson_screen")
+            .ok_or_else(|| IoError::other("view definition must be projected"))?;
+
+        assert_eq!(
+            definition
+                .control_effects()
+                .iter()
+                .map(|effect| {
+                    (
+                        effect.label().as_ref(),
+                        effect.kind().as_ref(),
+                        effect.target().as_ref(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            [
+                ("Submit for review", "command", "SubmitLessonForReview"),
+                (
+                    "Open next lesson",
+                    "workflow navigation",
+                    "course-lesson-02",
+                ),
+            ]
+        );
+
+        Ok(())
+    }
+
     fn slice_with_canonical_lanes(name: &str) -> String {
         format!(
             "{{\n  \"name\": \"{name}\",\n  \"version\": \"0.1.0\",\n  \"board\": {{\"lanes\": [\n    {{\"id\": \"ux\", \"name\": \"People, Views, and Translations\"}},\n    {{\"id\": \"actions\", \"name\": \"Commands and Projections\"}},\n    {{\"id\": \"events\", \"name\": \"Stored Facts\"}}\n  ]}},\n  \"slices\": [{{\"name\": \"{name}\", \"type\": \"state_view\", \"views\": [], \"acceptance_scenarios\": [], \"contract_scenarios\": []}}]\n}}\n"

@@ -6,10 +6,11 @@ use serde_json::Value;
 
 use crate::core::effect::FileContents;
 use crate::core::types::{
-    BoardLaneId, BrowserEventElementName, CommandErrorName, CommandName, DefinitionSectionLabel,
-    ReviewRuleName, ReviewStatus, SliceName, SourceChainHop, SourceControlReference, ViewFieldName,
-    ViewName, WorkflowBranchLabel, WorkflowStepName, WorkflowTransitionKind,
-    WorkflowTransitionLabel, WorkflowTransitionName,
+    BoardLaneId, BrowserEventElementName, CommandErrorName, CommandName, ControlEffectKind,
+    ControlEffectTarget, ControlLabel, DefinitionSectionLabel, ReviewRuleName, ReviewStatus,
+    SliceName, SourceChainHop, SourceControlReference, ViewFieldName, ViewName,
+    WorkflowBranchLabel, WorkflowStepName, WorkflowTransitionKind, WorkflowTransitionLabel,
+    WorkflowTransitionName,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -177,6 +178,7 @@ impl BrowserCommandDefinition {
 pub struct BrowserViewDefinition {
     name: ViewName,
     field_source_chains: Vec<BrowserFieldSourceChain>,
+    control_effects: Vec<BrowserControlEffect>,
 }
 
 impl BrowserViewDefinition {
@@ -186,6 +188,10 @@ impl BrowserViewDefinition {
 
     pub fn field_source_chains(&self) -> &[BrowserFieldSourceChain] {
         &self.field_source_chains
+    }
+
+    pub fn control_effects(&self) -> &[BrowserControlEffect] {
+        &self.control_effects
     }
 }
 
@@ -202,6 +208,27 @@ impl BrowserFieldSourceChain {
 
     pub fn hops(&self) -> &[SourceChainHop] {
         &self.hops
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserControlEffect {
+    label: ControlLabel,
+    kind: ControlEffectKind,
+    target: ControlEffectTarget,
+}
+
+impl BrowserControlEffect {
+    pub fn label(&self) -> &ControlLabel {
+        &self.label
+    }
+
+    pub fn kind(&self) -> &ControlEffectKind {
+        &self.kind
+    }
+
+    pub fn target(&self) -> &ControlEffectTarget {
+        &self.target
     }
 }
 
@@ -780,6 +807,7 @@ fn view_definitions(
                     BrowserCompositionError::new(format!("invalid view name: {error}"))
                 })?,
                 field_source_chains: view_field_source_chains(values, view)?,
+                control_effects: view_control_effects(view)?,
             })
         })
         .collect()
@@ -808,6 +836,58 @@ fn view_field_source_chains(
             })
         })
         .collect()
+}
+
+fn view_control_effects(
+    view: &Value,
+) -> Result<Vec<BrowserControlEffect>, BrowserCompositionError> {
+    view.get("controls")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|control| {
+            Some((
+                control.get("label").and_then(Value::as_str)?,
+                control_effect_kind_and_target(control)?,
+            ))
+        })
+        .map(|(label, (kind, target))| {
+            Ok(BrowserControlEffect {
+                label: ControlLabel::try_new(label.to_owned()).map_err(|error| {
+                    BrowserCompositionError::new(format!("invalid control label: {error}"))
+                })?,
+                kind: ControlEffectKind::try_new(kind.to_owned()).map_err(|error| {
+                    BrowserCompositionError::new(format!("invalid control effect kind: {error}"))
+                })?,
+                target: ControlEffectTarget::try_new(target.to_owned()).map_err(|error| {
+                    BrowserCompositionError::new(format!("invalid control effect target: {error}"))
+                })?,
+            })
+        })
+        .collect()
+}
+
+fn control_effect_kind_and_target(control: &Value) -> Option<(&'static str, &str)> {
+    control
+        .get("command")
+        .and_then(Value::as_str)
+        .map(|command| ("command", command))
+        .or_else(|| {
+            control
+                .get("navigation")
+                .and_then(Value::as_str)
+                .map(|navigation| (navigation_effect_kind(control), navigation))
+        })
+}
+
+fn navigation_effect_kind(control: &Value) -> &'static str {
+    match control.get("navigation_type").and_then(Value::as_str) {
+        Some("external_workflow") => "workflow navigation",
+        Some("external_system") => "external navigation",
+        Some("local_view_state") => "local navigation",
+        Some("modeled_view") => "view navigation",
+        _ => "navigation",
+    }
 }
 
 fn source_chain_hops(
