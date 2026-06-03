@@ -26,6 +26,22 @@ mod tests {
             "Nix package must pin Lean4 and Quint runtime tools"
         );
         assert!(
+            flake.contains("craneLib.filterCargoSources"),
+            "Nix package source filtering must preserve Cargo sources explicitly"
+        );
+        assert!(
+            flake.contains("/browser"),
+            "Nix package source filtering must preserve embedded browser assets"
+        );
+        assert!(
+            flake.contains("/.github"),
+            "Nix package source filtering must preserve CI metadata inspected by tests"
+        );
+        assert!(
+            flake.contains("flake.nix"),
+            "Nix package source filtering must preserve flake metadata inspected by tests"
+        );
+        assert!(
             flake.contains("nativeBuildInputs = [ pkgs.makeWrapper ];"),
             "Nix package must wrap the EMC executable"
         );
@@ -50,6 +66,14 @@ mod tests {
             "package smoke checks must run packaged `emc check`"
         );
         assert!(
+            flake.contains("${package}/bin/emc add workflow"),
+            "package smoke checks must create a non-empty model before verification"
+        );
+        assert!(
+            flake.contains("${package}/bin/emc verify"),
+            "package smoke checks must run packaged `emc verify` through pinned tools"
+        );
+        assert!(
             flake.contains("${package}/bin/emc generate site"),
             "package smoke checks must run packaged `emc generate site`"
         );
@@ -60,6 +84,10 @@ mod tests {
         assert!(
             flake.contains("${package}/bin/emc mcp http"),
             "package smoke checks must run packaged `emc mcp http`"
+        );
+        assert!(
+            flake.contains("http_body_length=\"''${#http_body}\""),
+            "package smoke HTTP request must compute Content-Length from the exact body"
         );
         assert!(
             flake.contains("containerImage = pkgs.dockerTools.buildImage"),

@@ -22,7 +22,6 @@ EMC is for teams that want their business workflow model to be more than a
 diagram or a pile of JSON files. It is meant to make the model actionable:
 
 - create a project with a deterministic layout;
-- import an existing EMC event model while preserving browser compatibility;
 - add workflows, slices, and transitions through commands;
 - validate event-modeling rules that are easy to miss in manual review;
 - generate a browsable site for people who need to understand the model;
@@ -75,10 +74,10 @@ Create a new EMC project:
 emc init --name "Repair Desk"
 ```
 
-Import an existing EMC event model:
+Create a workflow:
 
 ```sh
-emc import emc --source ../emc/docs/event-model
+emc add workflow --slug open-ticket --name "Open ticket" --description "Actor opens a repair ticket."
 ```
 
 Check that required project artifacts exist and synchronized generated files have
@@ -170,7 +169,6 @@ Current user-facing commands include:
 
 ```sh
 emc init --name <project-name>
-emc import emc --source <emc-event-model-directory>
 emc list workflows
 emc show workflow <workflow-slug>
 emc add workflow --slug <slug> --name <name> --description <description>
@@ -217,7 +215,7 @@ an explicit bearer token so an exposed MCP server is not accidentally left open.
 
 `emc generate site --output <directory>` copies the browser application and the
 current model data into a browsable site. The generated browser data shape is
-compatible with EMC-style event-model browsing:
+stable and intended for the EMC browser:
 
 ```text
 data/index.json
@@ -231,8 +229,8 @@ overlays without reading generated formal artifacts.
 
 ## Validation and review gates
 
-`emc validate <file>` checks event-model JSON rules ported from EMC's Gherkin
-suite. These rules cover structure, source provenance, slice ownership, board
+`emc validate <file>` checks the event-model Gherkin rule suite. These rules
+cover structure, source provenance, slice ownership, board
 connections, workflow reachability, transitions, views, controls, information
 flow, outcomes, errors, and review-related behavior.
 
@@ -273,7 +271,7 @@ The Nix flake builds the `emc` package, wraps it with Lean4/Lake and Quint on
 ## Current status
 
 EMC is under active development. It already has a Rust CLI, MCP stdio and HTTP
-entrypoints, EMC import compatibility, validation fixtures, review-gate checks,
+entrypoints, validation fixtures, review-gate checks,
 browser generation, Lean4 and Quint artifact emission, strict lint guardrails,
 and package smoke tests.
 

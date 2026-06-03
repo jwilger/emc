@@ -1,18 +1,18 @@
 use crate::core::effect::{
     Effect, EffectPlan, ProcessArgument, ProcessInvocation, ProgramName, ReportLine,
 };
-use crate::core::layout::ImportedWorkflowLayout;
+use crate::core::layout::ModeledWorkflowLayout;
 
-pub fn verify_project(imported_workflows: Vec<ImportedWorkflowLayout>) -> EffectPlan {
+pub fn verify_project(modeled_workflows: Vec<ModeledWorkflowLayout>) -> EffectPlan {
     EffectPlan::new(
-        imported_workflows
+        modeled_workflows
             .into_iter()
-            .flat_map(verify_imported_workflow)
+            .flat_map(verify_modeled_workflow)
             .collect(),
     )
 }
 
-fn verify_imported_workflow(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
+fn verify_modeled_workflow(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
     vec![
         Effect::RunProcess(ProcessInvocation::new(
             program_name("lake"),

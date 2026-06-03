@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use serde_json::{Value, json};
 
-use crate::core::emc::artifact_digest;
+use crate::core::digest::artifact_digest;
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;

@@ -1,6 +1,6 @@
 pub mod browser;
 pub mod connection;
-pub mod emc;
+pub mod digest;
 pub mod effect;
 pub mod emit;
 pub mod gherkin;

@@ -72,7 +72,7 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "const workflowDescription = \"Actor opens a repair ticket with priority.\""
+                "val workflowDescription = \"Actor opens a repair ticket with priority.\""
             ),
             "Quint artifact must represent the updated workflow description"
         );

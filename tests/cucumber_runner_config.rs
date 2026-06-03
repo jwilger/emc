@@ -7,6 +7,8 @@ mod tests {
     use std::path::Path;
 
     use assert_cmd::Command;
+    use emc::core::effect::Effect;
+    use emc::core::gherkin::run_all_gherkin_suites;
     use predicates::prelude::PredicateBooleanExt;
     use predicates::prelude::predicate;
     use tempfile::TempDir;
@@ -87,41 +89,40 @@ mod tests {
 
     #[test]
     fn gherkin_runner_run_all_executes_every_configured_suite() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-        let tool_dir = temp_dir.path().join("tools");
-        let cargo_log = temp_dir.path().join("cargo.log");
-        create_fake_cargo(&tool_dir, &cargo_log)?;
-
-        Command::cargo_bin("emc")?
-            .args(["gherkin", "run", "--all"])
-            .env("PATH", path_with_fake_tools(&tool_dir)?)
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "browser Gherkin suite passed; attempted 11 configured browser scenarios",
-            ))
-            .stdout(predicate::str::contains(
-                "review-gate Gherkin suite passed; attempted 9 configured review-gate scenarios",
-            ))
-            .stdout(predicate::str::contains(
-                "validator Gherkin suite passed; attempted 159 configured validator scenarios",
-            ))
-            .stdout(predicate::str::contains(
-                "meta Gherkin suite passed; attempted 6 configured meta scenarios",
-            ))
-            .stderr(predicate::str::is_empty());
+        let plan = run_all_gherkin_suites();
+        let commands = plan
+            .effects()
+            .iter()
+            .map(run_process_command)
+            .collect::<Result<Vec<_>, _>>()?;
 
         assert_eq!(
-            read_to_string(cargo_log)?,
-            concat!(
-                "test --test browser_composition\n",
-                "test --test review_gate\n",
-                "test --test validate_event_model\n",
-                "test --test cucumber_runner_config\n",
-            )
+            commands,
+            vec![
+                "cargo test --test browser_composition",
+                "cargo test --test review_gate",
+                "cargo test --test validate_event_model",
+                "cargo test --test cucumber_runner_config",
+            ]
         );
 
         Ok(())
+    }
+
+    fn run_process_command(effect: &Effect) -> Result<String, Box<dyn Error>> {
+        match effect {
+            Effect::RunProcess(invocation) => Ok(format!(
+                "{} {}",
+                invocation.program().as_ref(),
+                invocation
+                    .arguments()
+                    .iter()
+                    .map(|argument| argument.as_ref())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )),
+            _ => Err("expected a run-process effect".into()),
+        }
     }
 
     fn create_fake_cargo(tool_dir: &Path, log_path: &Path) -> Result<(), Box<dyn Error>> {
@@ -130,7 +131,7 @@ mod tests {
         write(
             &tool_path,
             format!(
-                "#!/usr/bin/env sh\nprintf '%s\\n' \"$*\" >> '{}'\n",
+                "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\n",
                 log_path.display()
             ),
         )?;

@@ -1,6 +1,6 @@
 Feature: Event model validator rejects structurally incomplete models and broken source chains
 
-  The event-model JSON is the source of truth for EMC behavior modeling.
+  The event-model JSON is the source of truth for business behavior modeling.
   Validation must reject models whose structure or provenance is not mechanically
   inspectable.
 

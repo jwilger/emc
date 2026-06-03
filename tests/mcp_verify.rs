@@ -4,17 +4,16 @@ mod tests {
     use std::error::Error;
     use std::fs::{Permissions, create_dir_all, read_to_string, set_permissions, write};
     use std::os::unix::fs::PermissionsExt;
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
     use tempfile::TempDir;
 
     #[test]
-    fn mcp_stdio_verifies_imported_workflow_artifacts() -> Result<(), Box<dyn Error>> {
+    fn mcp_stdio_verifies_modeled_workflow_artifacts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let tool_dir = temp_dir.path().join("tools");
-        let emc_event_model = workspace_root().join("../emc/docs/event-model");
 
         create_fake_tool(&tool_dir, "lake", "lake.log")?;
         create_fake_tool(&tool_dir, "quint", "quint.log")?;
@@ -26,8 +25,16 @@ mod tests {
             .success();
 
         Command::cargo_bin("emc")?
-            .args(["import", "emc", "--source"])
-            .arg(&emc_event_model)
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -45,11 +52,11 @@ mod tests {
 
         assert_eq!(
             read_to_string(temp_dir.path().join("lake.log"))?,
-            "env lean model/lean/OrganizationAccess.lean\n"
+            "env lean model/lean/OpenTicket.lean\n"
         );
         assert_eq!(
             read_to_string(temp_dir.path().join("quint.log"))?,
-            "verify model/quint/OrganizationAccess.qnt\n"
+            "verify model/quint/OpenTicket.qnt\n"
         );
 
         Ok(())
@@ -72,7 +79,7 @@ mod tests {
         let tool_path = tool_dir.join(tool_name);
         write(
             &tool_path,
-            format!("#!/usr/bin/env sh\nprintf '%s\\n' \"$*\" >> {log_file}\n"),
+            format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log_file}\n"),
         )?;
         set_permissions(&tool_path, Permissions::from_mode(0o755))?;
         Ok(())
@@ -82,9 +89,5 @@ mod tests {
         let mut paths = vec![tool_dir.to_path_buf()];
         paths.extend(env::split_paths(&env::var_os("PATH").unwrap_or_default()));
         Ok(env::join_paths(paths)?.to_string_lossy().into_owned())
-    }
-
-    fn workspace_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
     }
 }

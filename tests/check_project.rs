@@ -2,7 +2,7 @@
 mod tests {
     use std::error::Error;
     use std::fs::{remove_file, write};
-    use std::path::{Path, PathBuf};
+    use std::path::Path;
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -97,9 +97,8 @@ mod tests {
     }
 
     #[test]
-    fn check_reports_missing_imported_workflow_artifacts() -> Result<(), Box<dyn Error>> {
+    fn check_reports_missing_modeled_workflow_artifacts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
-        let emc_event_model = workspace_root().join("../emc/docs/event-model");
 
         Command::cargo_bin("emc")?
             .args(["init", "--name", "Repair Desk"])
@@ -108,13 +107,21 @@ mod tests {
             .success();
 
         Command::cargo_bin("emc")?
-            .args(["import", "emc", "--source"])
-            .arg(&emc_event_model)
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
             .current_dir(temp_dir.path())
             .assert()
             .success();
 
-        remove_file(temp_dir.path().join("model/lean/OrganizationAccess.lean"))?;
+        remove_file(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
 
         Command::cargo_bin("emc")?
             .arg("check")
@@ -122,16 +129,15 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "missing required project artifact model/lean/OrganizationAccess.lean",
+                "missing required project artifact model/lean/OpenTicket.lean",
             ));
 
         Ok(())
     }
 
     #[test]
-    fn check_reports_imported_workflow_artifact_drift() -> Result<(), Box<dyn Error>> {
+    fn check_reports_modeled_workflow_artifact_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
-        let emc_event_model = workspace_root().join("../emc/docs/event-model");
 
         Command::cargo_bin("emc")?
             .args(["init", "--name", "Repair Desk"])
@@ -140,15 +146,23 @@ mod tests {
             .success();
 
         Command::cargo_bin("emc")?
-            .args(["import", "emc", "--source"])
-            .arg(&emc_event_model)
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
             .current_dir(temp_dir.path())
             .assert()
             .success();
 
         write(
-            temp_dir.path().join("model/lean/OrganizationAccess.lean"),
-            "namespace OrganizationAccess\n\ndef workflowName := \"Changed\"\n\nend OrganizationAccess\n",
+            temp_dir.path().join("model/lean/OpenTicket.lean"),
+            "namespace OpenTicket\n\ndef workflowName := \"Changed\"\n\nend OpenTicket\n",
         )?;
 
         Command::cargo_bin("emc")?
@@ -157,7 +171,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "artifact digest mismatch for workflow Organization access",
+                "artifact digest mismatch for workflow Open ticket",
             ));
 
         Ok(())
@@ -257,7 +271,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/lean/OpenTicket.lean"),
-            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices := [\"capture-ticket\",\"review-ticket\"]\n\ndef workflowTransitions := []\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
+            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := [\"capture-ticket\",\"review-ticket\"]\n\ndef workflowTransitions : List String := []\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
         )?;
 
         Command::cargo_bin("emc")?
@@ -280,7 +294,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/lean/OpenTicket.lean"),
-            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices := []\n\ndef workflowTransitions := [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
+            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := []\n\ndef workflowTransitions : List String := [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
         )?;
 
         Command::cargo_bin("emc")?
@@ -303,7 +317,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/quint/OpenTicket.qnt"),
-            "module OpenTicket\n\n// EMC-DIGEST: workflow:Open ticket\nconst workflowName = \"Open ticket\"\n\nconst workflowSlug = \"open-ticket\"\n\nconst workflowDescription = \"Actor opens a repair ticket.\"\n\nconst workflowSlices = [\"capture-ticket\",\"review-ticket\"]\n\nconst workflowTransitions = []\n",
+            "module OpenTicket\n\n// EMC-DIGEST: workflow:Open ticket\nval workflowName = \"Open ticket\"\n\nval workflowSlug = \"open-ticket\"\n\nval workflowDescription = \"Actor opens a repair ticket.\"\n\nval workflowSlices = [\"capture-ticket\",\"review-ticket\"]\n\nval workflowTransitions = []\n",
         )?;
 
         Command::cargo_bin("emc")?
@@ -326,7 +340,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/quint/OpenTicket.qnt"),
-            "module OpenTicket\n\n// EMC-DIGEST: workflow:Open ticket\nconst workflowName = \"Open ticket\"\n\nconst workflowSlug = \"open-ticket\"\n\nconst workflowDescription = \"Actor opens a repair ticket.\"\n\nconst workflowSlices = []\n\nconst workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]\n",
+            "module OpenTicket\n\n// EMC-DIGEST: workflow:Open ticket\nval workflowName = \"Open ticket\"\n\nval workflowSlug = \"open-ticket\"\n\nval workflowDescription = \"Actor opens a repair ticket.\"\n\nval workflowSlices = []\n\nval workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]\n",
         )?;
 
         Command::cargo_bin("emc")?
@@ -431,9 +445,5 @@ mod tests {
             .assert()
             .success();
         Ok(())
-    }
-
-    fn workspace_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
     }
 }

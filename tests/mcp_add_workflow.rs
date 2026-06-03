@@ -43,7 +43,7 @@ mod tests {
             "Lean artifact must represent the MCP-created workflow"
         );
         assert!(
-            quint.contains("const workflowName = \"Open ticket\""),
+            quint.contains("val workflowName = \"Open ticket\""),
             "Quint artifact must represent the MCP-created workflow"
         );
 
