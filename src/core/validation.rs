@@ -1785,6 +1785,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_state_change_slices_do_not_own_views(document))
         .and_then(|()| validate_state_change_slices_do_not_own_read_models(document))
         .and_then(|()| validate_state_change_slices_do_not_own_automations(document))
+        .and_then(|()| validate_state_change_slices_do_not_own_translations(document))
 }
 
 pub fn validate_event_model_corpus(
@@ -3296,6 +3297,28 @@ fn validate_state_change_slices_do_not_own_automations(
             Err(validation_issue(format!(
                 "state_change slice '{}' must not own automation '{}'",
                 slice.name, automation
+            )))
+        })
+}
+
+fn validate_state_change_slices_do_not_own_translations(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::StateChange)
+        .flat_map(|slice| {
+            slice
+                .owned_translations
+                .iter()
+                .map(move |translation| (slice, translation))
+        })
+        .next()
+        .map_or(Ok(()), |(slice, translation)| {
+            Err(validation_issue(format!(
+                "state_change slice '{}' must not own translation '{}'",
+                slice.name, translation
             )))
         })
 }
