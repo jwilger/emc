@@ -48,3 +48,17 @@ pub struct QuintModuleName(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
 pub struct ModelDigest(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct WorkflowTransitionLabel(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct TransitionTriggerName(String);

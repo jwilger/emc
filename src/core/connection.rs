@@ -8,68 +8,44 @@ use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportL
 use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
 use crate::core::types::{
-    LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
-    WorkflowTransitionLabel,
+    LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceSlug, TransitionTriggerName,
+    WorkflowSlug, WorkflowTransitionLabel,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum SliceKind {
-    StateView,
-    StateChange,
-    Translation,
-    Automation,
+pub enum ConnectionKind {
+    Navigation,
 }
 
-impl SliceKind {
-    pub fn state_view() -> Self {
-        Self::StateView
-    }
-
-    pub fn state_change() -> Self {
-        Self::StateChange
-    }
-
-    pub fn translation() -> Self {
-        Self::Translation
-    }
-
-    pub fn automation() -> Self {
-        Self::Automation
-    }
-
-    fn as_ref(self) -> &'static str {
-        match self {
-            Self::StateView => "state_view",
-            Self::StateChange => "state_change",
-            Self::Translation => "translation",
-            Self::Automation => "automation",
-        }
+impl ConnectionKind {
+    pub fn navigation() -> Self {
+        Self::Navigation
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewSlice {
+pub struct WorkflowConnection {
     workflow_slug: WorkflowSlug,
-    slug: SliceSlug,
-    name: ModelName,
-    description: ModelDescription,
-    kind: SliceKind,
+    source: SliceSlug,
+    target: SliceSlug,
+    kind: ConnectionKind,
+    trigger: TransitionTriggerName,
 }
 
-impl NewSlice {
+impl WorkflowConnection {
     pub fn new(
         workflow_slug: WorkflowSlug,
-        slug: SliceSlug,
-        name: ModelName,
-        description: ModelDescription,
-        kind: SliceKind,
+        source: SliceSlug,
+        target: SliceSlug,
+        kind: ConnectionKind,
+        trigger: TransitionTriggerName,
     ) -> Self {
         Self {
             workflow_slug,
-            slug,
-            name,
-            description,
+            source,
+            target,
             kind,
+            trigger,
         }
     }
 
@@ -78,60 +54,33 @@ impl NewSlice {
     }
 }
 
-pub fn add_slice(
+pub fn connect_workflow(
     workflow_document: FileContents,
-    new_slice: NewSlice,
-) -> Result<EffectPlan, SliceMutationError> {
+    connection: WorkflowConnection,
+) -> Result<EffectPlan, ConnectionMutationError> {
     let workflow_value = serde_json::from_str::<Value>(workflow_document.as_ref())
-        .map_err(|error| SliceMutationError::new(format!("invalid workflow JSON: {error}")))?;
+        .map_err(|error| ConnectionMutationError::new(format!("invalid workflow JSON: {error}")))?;
     let workflow_object = workflow_value
         .as_object()
-        .ok_or_else(|| SliceMutationError::new("workflow document must be a JSON object"))?;
-    let slice_file = slice_file(&new_slice);
-    let relationship = workflow_object
-        .get("steps")
-        .and_then(Value::as_array)
-        .filter(|steps| !steps.is_empty())
-        .map_or("entry", |_| "main");
-    let slice_files = appended_array_strings(
-        workflow_object.get("slice_files").and_then(Value::as_array),
-        slice_file.as_ref(),
-    );
-    let steps = appended_array_values(
-        workflow_object.get("steps").and_then(Value::as_array),
-        json!({
-            "slice": new_slice.slug.as_ref(),
-            "name": new_slice.name.as_ref(),
-            "type": new_slice.kind.as_ref(),
-            "relationship": relationship,
-            "transitions": []
-        }),
-    );
+        .ok_or_else(|| ConnectionMutationError::new("workflow document must be a JSON object"))?;
     let workflow_name = workflow_name(workflow_object)?;
     let workflow_description = workflow_description(workflow_object)?;
     let module_name = module_name(workflow_name.as_ref());
+    let steps = connected_steps(workflow_object, &connection)?;
     let workflow_slices = workflow_slices(&steps)?;
     let workflow_transitions = workflow_transitions(&steps)?;
     let digest = artifact_digest(workflow_name.clone());
-    let workflow_json = workflow_json(workflow_object, slice_files, steps)?;
-    let slice_json = slice_json(&new_slice);
-    let slice_name = new_slice.name.as_ref();
+    let workflow_json = workflow_json(workflow_object, steps)?;
+    let source = connection.source.as_ref();
+    let target = connection.target.as_ref();
 
     Ok(EffectPlan::new(vec![
         Effect::WriteFile(
             project_path(format!(
                 "model/browser/data/workflows/{}.eventmodel.json",
-                new_slice.workflow_slug.as_ref()
+                connection.workflow_slug.as_ref()
             )),
             file_contents(workflow_json),
-        ),
-        Effect::WriteFile(
-            project_path(format!(
-                "model/browser/data/slices/{}-{}.eventmodel.json",
-                new_slice.workflow_slug.as_ref(),
-                new_slice.slug.as_ref()
-            )),
-            file_contents(slice_json),
         ),
         Effect::WriteFile(
             project_path(format!("model/lean/{module_name}.lean")),
@@ -139,7 +88,7 @@ pub fn add_slice(
                 lean_module_name(module_name.clone()),
                 workflow_name.clone(),
                 workflow_description.clone(),
-                new_slice.workflow_slug.clone(),
+                connection.workflow_slug.clone(),
                 workflow_slices.clone(),
                 workflow_transitions.clone(),
                 digest.clone(),
@@ -151,22 +100,22 @@ pub fn add_slice(
                 quint_module_name(module_name),
                 workflow_name,
                 workflow_description,
-                new_slice.workflow_slug.clone(),
+                connection.workflow_slug.clone(),
                 workflow_slices,
                 workflow_transitions,
                 digest,
             ),
         ),
-        Effect::Report(report_line(format!("added slice {slice_name}"))),
+        Effect::Report(report_line(format!("connected {source} to {target}"))),
     ]))
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SliceMutationError {
+pub struct ConnectionMutationError {
     message: String,
 }
 
-impl SliceMutationError {
+impl ConnectionMutationError {
     fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
@@ -174,101 +123,121 @@ impl SliceMutationError {
     }
 }
 
-impl Display for SliceMutationError {
+impl Display for ConnectionMutationError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
         formatter.write_str(&self.message)
     }
 }
 
-impl Error for SliceMutationError {}
+impl Error for ConnectionMutationError {}
+
+fn connected_steps(
+    workflow_object: &serde_json::Map<String, Value>,
+    connection: &WorkflowConnection,
+) -> Result<Vec<Value>, ConnectionMutationError> {
+    let steps = workflow_object
+        .get("steps")
+        .and_then(Value::as_array)
+        .ok_or_else(|| ConnectionMutationError::new("workflow document is missing steps"))?;
+    let mut found_source = false;
+    let next_steps = steps
+        .iter()
+        .map(|step| {
+            if step.get("slice").and_then(Value::as_str) != Some(connection.source.as_ref()) {
+                return Ok(step.clone());
+            }
+            found_source = true;
+            append_transition(step, connection)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if found_source {
+        Ok(next_steps)
+    } else {
+        Err(ConnectionMutationError::new(format!(
+            "unknown workflow step {}",
+            connection.source.as_ref()
+        )))
+    }
+}
+
+fn append_transition(
+    step: &Value,
+    connection: &WorkflowConnection,
+) -> Result<Value, ConnectionMutationError> {
+    let object = step
+        .as_object()
+        .ok_or_else(|| ConnectionMutationError::new("workflow step must be a JSON object"))?;
+    let mut next = object.clone();
+    let mut transitions = object
+        .get("transitions")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    transitions.push(match connection.kind {
+        ConnectionKind::Navigation => json!({
+            "to": connection.target.as_ref(),
+            "via_navigation": connection.trigger.as_ref()
+        }),
+    });
+    next.insert("transitions".to_owned(), Value::Array(transitions));
+    Ok(Value::Object(next))
+}
 
 fn workflow_json(
     workflow_object: &serde_json::Map<String, Value>,
-    slice_files: Vec<Value>,
     steps: Vec<Value>,
-) -> Result<String, SliceMutationError> {
+) -> Result<String, ConnectionMutationError> {
     let mut next = workflow_object.clone();
-    next.insert("slice_files".to_owned(), Value::Array(slice_files));
     next.insert("steps".to_owned(), Value::Array(steps));
     serde_json::to_string_pretty(&Value::Object(next))
         .map(|json| format!("{json}\n"))
-        .map_err(|error| SliceMutationError::new(format!("invalid workflow JSON: {error}")))
-}
-
-fn slice_json(new_slice: &NewSlice) -> String {
-    format!(
-        "{{\n  \"name\": {},\n  \"version\": \"0.1.0\",\n  \"description\": {},\n  \"type\": {},\n  \"board\": {{}},\n  \"streams\": [],\n  \"events\": [],\n  \"commands\": [],\n  \"read_models\": [],\n  \"views\": [],\n  \"slices\": [\n    {{\n      \"name\": {},\n      \"type\": {},\n      \"events\": [],\n      \"views\": [],\n      \"acceptance_scenarios\": [],\n      \"contract_scenarios\": []\n    }}\n  ]\n}}\n",
-        json_string(new_slice.name.as_ref()),
-        json_string(new_slice.description.as_ref()),
-        json_string(new_slice.kind.as_ref()),
-        json_string(new_slice.name.as_ref()),
-        json_string(new_slice.kind.as_ref()),
-    )
-}
-
-fn appended_array_strings(existing: Option<&Vec<Value>>, new_value: &str) -> Vec<Value> {
-    let mut values = existing.cloned().unwrap_or_default();
-    if !values.iter().any(|value| value.as_str() == Some(new_value)) {
-        values.push(Value::String(new_value.to_owned()));
-    }
-    values
-}
-
-fn appended_array_values(existing: Option<&Vec<Value>>, new_value: Value) -> Vec<Value> {
-    let mut values = existing.cloned().unwrap_or_default();
-    values.push(new_value);
-    values
-}
-
-fn slice_file(new_slice: &NewSlice) -> String {
-    format!(
-        "../slices/{}-{}.eventmodel.json",
-        new_slice.workflow_slug.as_ref(),
-        new_slice.slug.as_ref()
-    )
+        .map_err(|error| ConnectionMutationError::new(format!("invalid workflow JSON: {error}")))
 }
 
 fn workflow_name(
     workflow_object: &serde_json::Map<String, Value>,
-) -> Result<ModelName, SliceMutationError> {
+) -> Result<ModelName, ConnectionMutationError> {
     workflow_object
         .get("name")
         .and_then(Value::as_str)
-        .ok_or_else(|| SliceMutationError::new("workflow document is missing name"))
+        .ok_or_else(|| ConnectionMutationError::new("workflow document is missing name"))
         .and_then(|name| {
-            ModelName::try_new(name.to_owned())
-                .map_err(|error| SliceMutationError::new(format!("invalid workflow name: {error}")))
+            ModelName::try_new(name.to_owned()).map_err(|error| {
+                ConnectionMutationError::new(format!("invalid workflow name: {error}"))
+            })
         })
 }
 
 fn workflow_description(
     workflow_object: &serde_json::Map<String, Value>,
-) -> Result<ModelDescription, SliceMutationError> {
+) -> Result<ModelDescription, ConnectionMutationError> {
     workflow_object
         .get("description")
         .and_then(Value::as_str)
-        .ok_or_else(|| SliceMutationError::new("workflow document is missing description"))
+        .ok_or_else(|| ConnectionMutationError::new("workflow document is missing description"))
         .and_then(|description| {
             ModelDescription::try_new(description.to_owned()).map_err(|error| {
-                SliceMutationError::new(format!("invalid workflow description: {error}"))
+                ConnectionMutationError::new(format!("invalid workflow description: {error}"))
             })
         })
 }
 
-fn workflow_slices(steps: &[Value]) -> Result<Vec<SliceSlug>, SliceMutationError> {
+fn workflow_slices(steps: &[Value]) -> Result<Vec<SliceSlug>, ConnectionMutationError> {
     steps
         .iter()
         .filter_map(|step| step.get("slice").and_then(Value::as_str))
         .map(|slice| {
-            SliceSlug::try_new(slice.to_owned())
-                .map_err(|error| SliceMutationError::new(format!("invalid slice slug: {error}")))
+            SliceSlug::try_new(slice.to_owned()).map_err(|error| {
+                ConnectionMutationError::new(format!("invalid slice slug: {error}"))
+            })
         })
         .collect()
 }
 
 fn workflow_transitions(
     steps: &[Value],
-) -> Result<Vec<WorkflowTransitionLabel>, SliceMutationError> {
+) -> Result<Vec<WorkflowTransitionLabel>, ConnectionMutationError> {
     steps
         .iter()
         .filter_map(|step| {
@@ -287,7 +256,7 @@ fn workflow_transitions(
         })
         .map(|label| {
             WorkflowTransitionLabel::try_new(label).map_err(|error| {
-                SliceMutationError::new(format!("invalid workflow transition: {error}"))
+                ConnectionMutationError::new(format!("invalid workflow transition: {error}"))
             })
         })
         .collect()
@@ -340,11 +309,5 @@ fn quint_module_name(value: impl Into<String>) -> QuintModuleName {
 fn report_line(value: impl Into<String>) -> ReportLine {
     ReportLine::try_new(value.into()).unwrap_or_else(|error| {
         unreachable!("EMC generated report line must be valid: {error}");
-    })
-}
-
-fn json_string(value: &str) -> String {
-    serde_json::to_string(value).unwrap_or_else(|error| {
-        unreachable!("EMC generated JSON string must be valid: {error}");
     })
 }

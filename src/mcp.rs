@@ -3,6 +3,7 @@ use std::io::{self, Read};
 
 use serde_json::{Value, json};
 
+use crate::core::connection::{WorkflowConnection, connect_workflow};
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath};
 use crate::core::layout::{list_workflows, show_workflow};
 use crate::core::site::generate_site;
@@ -11,8 +12,9 @@ use crate::core::verify::verify_project;
 use crate::core::workflow::{NewWorkflow, add_workflow, update_workflow_description};
 use crate::event_model_validation::validate_target;
 use crate::io::dto::{
-    parse_browser_index_workflows, parse_model_description, parse_model_name, parse_slice_kind,
-    parse_slice_slug, parse_workflow_slug,
+    parse_browser_index_workflows, parse_connection_kind, parse_model_description,
+    parse_model_name, parse_slice_kind, parse_slice_slug, parse_transition_trigger_name,
+    parse_workflow_slug,
 };
 use crate::shell::{ShellError, interpret_collect_reports};
 use std::path::Path;
@@ -198,6 +200,32 @@ fn tools_list_result() -> Value {
                     "required": ["slug", "description"],
                     "additionalProperties": false
                 }
+            },
+            {
+                "name": "connect_workflow",
+                "description": "Connect workflow steps with a transition and regenerate synchronized model artifacts.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "workflow": {
+                            "type": "string"
+                        },
+                        "from": {
+                            "type": "string"
+                        },
+                        "to": {
+                            "type": "string"
+                        },
+                        "via": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["workflow", "from", "to", "via", "name"],
+                    "additionalProperties": false
+                }
             }
         ]
     })
@@ -248,6 +276,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "update_workflow" => Ok(Some(success_response(
             id,
             tool_result(update_workflow_tool_text(request)?),
+        ))),
+        "connect_workflow" => Ok(Some(success_response(
+            id,
+            tool_result(connect_workflow_tool_text(request)?),
         ))),
         _ => Ok(Some(error_response(
             id,
@@ -447,6 +479,70 @@ fn update_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
         .map_err(|error| ShellError::message(error.to_string()))?;
     let plan = update_workflow_description(existing_workflows, slug, description)
         .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(plan).map(|reports| reports.join("\n"))
+}
+
+fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("connect_workflow requires arguments"))?;
+    let workflow_slug = arguments
+        .get("workflow")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("connect_workflow requires workflow"))
+        .and_then(|raw_workflow| {
+            parse_workflow_slug(raw_workflow)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let source_slug = arguments
+        .get("from")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("connect_workflow requires from"))
+        .and_then(|raw_source| {
+            parse_slice_slug(raw_source).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let target_slug = arguments
+        .get("to")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("connect_workflow requires to"))
+        .and_then(|raw_target| {
+            parse_slice_slug(raw_target).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let connection_kind = arguments
+        .get("via")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("connect_workflow requires via"))
+        .and_then(|raw_via| {
+            parse_connection_kind(raw_via).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let trigger = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("connect_workflow requires name"))
+        .and_then(|raw_name| {
+            parse_transition_trigger_name(raw_name)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let workflow_document = fs::read_to_string(format!(
+        "model/browser/data/workflows/{}.eventmodel.json",
+        workflow_slug.as_ref()
+    ))
+    .map_err(|error| ShellError::message(error.to_string()))
+    .and_then(|contents| {
+        FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
+    })?;
+    let plan = connect_workflow(
+        workflow_document,
+        WorkflowConnection::new(
+            workflow_slug,
+            source_slug,
+            target_slug,
+            connection_kind,
+            trigger,
+        ),
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
     interpret_collect_reports(plan).map(|reports| reports.join("\n"))
 }
 

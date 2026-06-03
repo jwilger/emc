@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+use emc::core::connection::{WorkflowConnection, connect_workflow};
 use emc::core::emc::{EMCWorkflowImport, import_emc_workflow};
 use emc::core::effect::FileContents;
 use emc::core::effect::ProjectPath;
@@ -15,9 +16,10 @@ use emc::core::verify::verify_project;
 use emc::core::workflow::{NewWorkflow, add_workflow, update_workflow_description};
 use emc::event_model_validation::validate_target;
 use emc::io::dto::{
-    parse_browser_index_workflows, parse_emc_slice_import, parse_emc_workflow_import,
-    parse_model_description, parse_model_name, parse_project_manifest_name, parse_slice_kind,
-    parse_slice_slug, parse_workflow_slug,
+    parse_browser_index_workflows, parse_connection_kind, parse_emc_slice_import,
+    parse_emc_workflow_import, parse_model_description, parse_model_name,
+    parse_project_manifest_name, parse_slice_kind, parse_slice_slug, parse_transition_trigger_name,
+    parse_workflow_slug,
 };
 use emc::mcp::serve_stdio;
 use emc::shell::{ShellError, interpret};
@@ -34,6 +36,9 @@ enum Command {
         workflow: NewWorkflow,
     },
     Check,
+    ConnectWorkflow {
+        connection: WorkflowConnection,
+    },
     GenerateSite {
         output: ProjectPath,
     },
@@ -101,6 +106,20 @@ fn run(cli: Cli) -> Result<(), ShellError> {
             let imported_workflows = parse_browser_index_workflows(&index)
                 .map_err(|error| ShellError::message(error.to_string()))?;
             interpret(check_project(project_name, imported_workflows))
+        }
+        Command::ConnectWorkflow { connection } => {
+            let workflow_document = fs::read_to_string(format!(
+                "model/browser/data/workflows/{}.eventmodel.json",
+                connection.workflow_slug().as_ref()
+            ))
+            .map_err(|error| ShellError::message(error.to_string()))
+            .and_then(|contents| {
+                FileContents::try_new(contents)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+            let plan = connect_workflow(workflow_document, connection)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret(plan)
         }
         Command::GenerateSite { output } => interpret(generate_site(output)),
         Command::ImportEMC { source } => {
@@ -226,6 +245,49 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         [command] if command == "check" => Ok(Cli {
             command: Command::Check,
         }),
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            from_flag,
+            source,
+            to_flag,
+            target,
+            via_flag,
+            via,
+            name_flag,
+            name,
+        ] if command == "connect"
+            && subject == "workflow"
+            && workflow_flag == "--workflow"
+            && from_flag == "--from"
+            && to_flag == "--to"
+            && via_flag == "--via"
+            && name_flag == "--name" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_slug =
+                parse_slice_slug(source).map_err(|error| ShellError::message(error.to_string()))?;
+            let target_slug =
+                parse_slice_slug(target).map_err(|error| ShellError::message(error.to_string()))?;
+            let connection_kind = parse_connection_kind(via)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let trigger = parse_transition_trigger_name(name)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::ConnectWorkflow {
+                    connection: WorkflowConnection::new(
+                        workflow_slug,
+                        source_slug,
+                        target_slug,
+                        connection_kind,
+                        trigger,
+                    ),
+                },
+            })
+        }
         [command, subject, output_flag, output]
             if command == "generate" && subject == "site" && output_flag == "--output" =>
         {
