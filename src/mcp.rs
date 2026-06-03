@@ -3,10 +3,11 @@ use std::io::{self, Read};
 
 use serde_json::{Value, json};
 
-use crate::core::effect::{Effect, EffectPlan, FileContents};
+use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath};
 use crate::core::layout::{list_workflows, show_workflow};
+use crate::core::site::generate_site;
 use crate::io::dto::{parse_browser_index_workflows, parse_workflow_slug};
-use crate::shell::ShellError;
+use crate::shell::{ShellError, interpret_collect_reports};
 
 pub fn serve_stdio() -> Result<(), ShellError> {
     let mut input = String::new();
@@ -89,6 +90,20 @@ fn tools_list_result() -> Value {
                     "required": ["slug"],
                     "additionalProperties": false
                 }
+            },
+            {
+                "name": "generate_site",
+                "description": "Generate the human-browsable event model site.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "output": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["output"],
+                    "additionalProperties": false
+                }
             }
         ]
     })
@@ -115,6 +130,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "show_workflow" => Ok(Some(success_response(
             id,
             tool_result(show_workflow_tool_text(request)?),
+        ))),
+        "generate_site" => Ok(Some(success_response(
+            id,
+            tool_result(generate_site_tool_text(request)?),
         ))),
         _ => Ok(Some(error_response(
             id,
@@ -151,6 +170,20 @@ fn show_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
             FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
         })?;
     Ok(document_text(show_workflow(workflow_document)))
+}
+
+fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {
+    let output = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .and_then(|arguments| arguments.get("output"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("generate_site requires output"))
+        .and_then(|output| {
+            ProjectPath::try_new(output.to_owned())
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    interpret_collect_reports(generate_site(output)).map(|reports| reports.join("\n"))
 }
 
 fn report_text(plan: EffectPlan) -> String {
