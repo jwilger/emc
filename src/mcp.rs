@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath};
 use crate::core::layout::{list_workflows, show_workflow};
 use crate::core::site::generate_site;
+use crate::core::verify::verify_project;
 use crate::io::dto::{parse_browser_index_workflows, parse_workflow_slug};
 use crate::shell::{ShellError, interpret_collect_reports};
 
@@ -104,6 +105,15 @@ fn tools_list_result() -> Value {
                     "required": ["output"],
                     "additionalProperties": false
                 }
+            },
+            {
+                "name": "verify_project",
+                "description": "Run Lean4 and Quint verification for generated model artifacts.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false
+                }
             }
         ]
     })
@@ -134,6 +144,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "generate_site" => Ok(Some(success_response(
             id,
             tool_result(generate_site_tool_text(request)?),
+        ))),
+        "verify_project" => Ok(Some(success_response(
+            id,
+            tool_result(verify_project_tool_text()?),
         ))),
         _ => Ok(Some(error_response(
             id,
@@ -184,6 +198,14 @@ fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
     interpret_collect_reports(generate_site(output)).map(|reports| reports.join("\n"))
+}
+
+fn verify_project_tool_text() -> Result<String, ShellError> {
+    let index = fs::read_to_string("model/browser/data/index.json")
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let imported_workflows = parse_browser_index_workflows(&index)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(verify_project(imported_workflows)).map(|reports| reports.join("\n"))
 }
 
 fn report_text(plan: EffectPlan) -> String {
