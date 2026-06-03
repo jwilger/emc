@@ -18,7 +18,23 @@ pub fn list_gherkin_features(suite: GherkinSuite) -> EffectPlan {
     )
 }
 
+pub fn run_gherkin_suite(suite: GherkinSuite) -> EffectPlan {
+    EffectPlan::new(vec![Effect::Fail(report_line(format!(
+        "undefined, pending, or skipped Gherkin steps are failures for {}",
+        suite.label()
+    )))])
+}
+
 impl GherkinSuite {
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Browser => "browser",
+            Self::Meta => "meta",
+            Self::ReviewGate => "review-gate",
+            Self::Validator => "validator",
+        }
+    }
+
     fn feature_paths(&self) -> Vec<ProjectPath> {
         match self {
             Self::Browser => vec![project_path(

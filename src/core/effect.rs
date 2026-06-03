@@ -4,6 +4,7 @@ use nutype::nutype;
 pub enum Effect {
     CopyDirectory(ProjectPath, ProjectPath),
     EnsureDirectory(ProjectPath),
+    Fail(ReportLine),
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
     RequireReviewRecord(ProjectPath, ProjectPath, ReportLine),
