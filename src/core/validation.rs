@@ -1239,6 +1239,7 @@ pub enum ViewFieldSource {
 pub struct ViewControlDefinition {
     label: DefinitionName,
     command: Option<DefinitionName>,
+    input_provisions: Vec<ControlInputProvision>,
     command_error_handling: Vec<ControlCommandErrorHandling>,
     navigation_target: Option<DefinitionName>,
     navigation_type: NavigationType,
@@ -1252,6 +1253,7 @@ impl ViewControlDefinition {
         Self {
             label: parts.label,
             command: parts.command,
+            input_provisions: parts.input_provisions,
             command_error_handling: parts.command_error_handling,
             navigation_target: parts.navigation_target,
             navigation_type: parts.navigation_type,
@@ -1266,6 +1268,7 @@ impl ViewControlDefinition {
 pub struct ViewControlDefinitionParts {
     label: DefinitionName,
     command: Option<DefinitionName>,
+    input_provisions: Vec<ControlInputProvision>,
     command_error_handling: Vec<ControlCommandErrorHandling>,
     navigation_target: Option<DefinitionName>,
     navigation_type: NavigationType,
@@ -1279,6 +1282,7 @@ impl ViewControlDefinitionParts {
         Self {
             label,
             command: None,
+            input_provisions: Vec::new(),
             command_error_handling: Vec::new(),
             navigation_target: None,
             navigation_type: NavigationType::Absent,
@@ -1290,6 +1294,11 @@ impl ViewControlDefinitionParts {
 
     pub fn with_command(mut self, command: Option<DefinitionName>) -> Self {
         self.command = command;
+        self
+    }
+
+    pub fn with_input_provisions(mut self, input_provisions: Vec<ControlInputProvision>) -> Self {
+        self.input_provisions = input_provisions;
         self
     }
 
@@ -1324,6 +1333,17 @@ impl ViewControlDefinitionParts {
     pub fn with_payload_contract(mut self, payload_contract: Option<DefinitionName>) -> Self {
         self.payload_contract = payload_contract;
         self
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ControlInputProvision {
+    name: DefinitionName,
+}
+
+impl ControlInputProvision {
+    pub fn new(name: DefinitionName) -> Self {
+        Self { name }
     }
 }
 
@@ -1768,6 +1788,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_control_error_handling_recovery(document)?;
 
     validate_controls_reference_known_commands(document)?;
+
+    validate_controls_provide_command_inputs(document)?;
 
     validate_navigation_controls_declare_type(document)?;
 
@@ -5037,6 +5059,58 @@ fn control_unknown_command<'a>(
                 .map(|command_name| (view, control, command_name))
         })
         .find(|(_, _, command_name)| command_definition(document, command_name).is_none())
+}
+
+fn validate_controls_provide_command_inputs(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .find_map(|view| missing_control_command_input(document, view))
+        .map_or(Ok(()), |missing| {
+            Err(validation_issue(format!(
+                "view '{}' control '{}' does not provide input '{}' for command '{}'",
+                missing.view_name, missing.control_label, missing.input_name, missing.command_name
+            )))
+        })
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct MissingControlCommandInput {
+    view_name: DefinitionName,
+    control_label: DefinitionName,
+    command_name: DefinitionName,
+    input_name: DefinitionName,
+}
+
+fn missing_control_command_input(
+    document: &EventModelDocument,
+    view: &ViewDefinition,
+) -> Option<MissingControlCommandInput> {
+    view.controls.iter().find_map(|control| {
+        control.command.as_ref().and_then(|command_name| {
+            command_definition(document, command_name).and_then(|command| {
+                command
+                    .inputs
+                    .iter()
+                    .find(|input_name| !control_provides_input(control, input_name))
+                    .map(|input_name| MissingControlCommandInput {
+                        view_name: view.name.clone(),
+                        control_label: control.label.clone(),
+                        command_name: command_name.clone(),
+                        input_name: input_name.clone(),
+                    })
+            })
+        })
+    })
+}
+
+fn control_provides_input(control: &ViewControlDefinition, input_name: &DefinitionName) -> bool {
+    control
+        .input_provisions
+        .iter()
+        .any(|provision| provision.name == *input_name)
 }
 
 fn validate_control_error_handling_recovery(
