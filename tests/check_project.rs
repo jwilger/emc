@@ -664,6 +664,46 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_browser_index_duplicate_workflow_path_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let index_path = temp_dir.path().join("model/browser/data/index.json");
+        let workflow_entry = concat!(
+            "    {\n",
+            "      \"name\": \"Open ticket\",\n",
+            "      \"path\": \"data/workflows/open-ticket.eventmodel.json\",\n",
+            "      \"description\": \"Actor opens a repair ticket.\"\n",
+            "    }"
+        );
+        let duplicate_workflows = concat!(
+            "    {\n",
+            "      \"name\": \"Open ticket\",\n",
+            "      \"path\": \"data/workflows/open-ticket.eventmodel.json\",\n",
+            "      \"description\": \"Actor opens a repair ticket.\"\n",
+            "    },\n",
+            "    {\n",
+            "      \"name\": \"Open ticket\",\n",
+            "      \"path\": \"data/workflows/open-ticket.eventmodel.json\",\n",
+            "      \"description\": \"Actor opens a repair ticket.\"\n",
+            "    }"
+        );
+        let index = read_to_string(&index_path)?.replace(workflow_entry, duplicate_workflows);
+        write(index_path, index)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser index workflow path is duplicated",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_lean_workflow_field_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
