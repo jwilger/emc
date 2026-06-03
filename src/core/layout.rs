@@ -56,6 +56,7 @@ pub fn check_project(
     modeled_workflows: Vec<ModeledWorkflowLayout>,
 ) -> EffectPlan {
     let module_name = module_name(&project_name);
+    let root_effects = project_root_effects(&project_name, &module_name);
     let lean_artifact_paths = modeled_artifact_paths(
         [
             project_path("model/lean/lakefile.lean"),
@@ -130,11 +131,69 @@ pub fn check_project(
                 Effect::RequireFile(project_path("model/browser/data/slices/.gitkeep")),
                 Effect::RequireFile(project_path("reviews/.gitkeep")),
             ],
+            root_effects,
             modeled_effects,
             vec![Effect::Report(report_line("project layout is complete"))],
         ]
         .concat(),
     )
+}
+
+fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Effect> {
+    let project_name_text = project_name.as_ref();
+    let lean_path = project_path(format!("model/lean/{module_name}.lean"));
+    let quint_path = project_path(format!("model/quint/{module_name}.qnt"));
+    let quint_config_path = project_path("model/quint/quint.json");
+    let lean_message = report_line(format!("Lean project root drift for {project_name_text}"));
+    let quint_message = report_line(format!("Quint project root drift for {project_name_text}"));
+    let quint_config_message = report_line(format!(
+        "Quint project config drift for {project_name_text}"
+    ));
+
+    vec![
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("namespace "),
+            artifact_marker(format!("namespace {module_name}")),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path,
+            artifact_marker("end "),
+            artifact_marker(format!("end {module_name}")),
+            lean_message,
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path,
+            artifact_marker("module "),
+            artifact_marker(format!("module {module_name} {{")),
+            quint_message,
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("  \"main\":"),
+            artifact_marker(format!("  \"main\": \"{module_name}.qnt\",")),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowIdentityStable\""),
+            artifact_marker("    \"workflowIdentityStable\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowSliceDetailsComplete\""),
+            artifact_marker("    \"workflowSliceDetailsComplete\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path,
+            artifact_marker("    \"workflowTransitionsStructured\""),
+            artifact_marker("    \"workflowTransitionsStructured\""),
+            quint_config_message,
+        ),
+    ]
 }
 
 fn modeled_artifact_paths<const N: usize>(
