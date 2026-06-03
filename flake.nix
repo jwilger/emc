@@ -76,6 +76,8 @@
             || pkgs.lib.hasInfix "/.github/" pathText
             || pkgs.lib.hasSuffix "/browser" pathText
             || pkgs.lib.hasInfix "/browser/" pathText
+            || pkgs.lib.hasSuffix "/docs" pathText
+            || pkgs.lib.hasInfix "/docs/" pathText
             || pkgs.lib.hasSuffix "/tests" pathText
             || pkgs.lib.hasInfix "/tests/" pathText;
         };
