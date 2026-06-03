@@ -50,11 +50,74 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_stdio_records_clean_review_for_current_workflow_digest() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let current_digest = current_model_digest(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(mcp_record_review_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"record_clean_review\""))
+            .stdout(predicate::str::contains(
+                "recorded clean review for workflow open-ticket",
+            ));
+
+        let review_record =
+            read_to_string(temp_dir.path().join("reviews/open-ticket.review.json"))?;
+        assert!(
+            review_record.contains(&format!("\"model_content_digest\": \"{current_digest}\"")),
+            "review record must bind the clean review to the current workflow digest"
+        );
+
+        Command::cargo_bin("emc")?
+            .args(["review", "gate", "--workflow", "open-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("workflow review is clean"));
+
+        Ok(())
+    }
+
     fn mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"review_gate\",\"arguments\":{\"workflow\":\"open-ticket\"}}}\n",
+        )
+    }
+
+    fn mcp_record_review_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"record_clean_review\",\"arguments\":{\"workflow\":\"open-ticket\",\"reviewer\":\"event-model-reviewer\",\"reviewed_at\":\"2026-06-03T00:00:00.000Z\"}}}\n",
         )
     }
 

@@ -317,6 +317,131 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn review_record_command_stores_clean_review_for_current_workflow_digest()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let current_digest = current_model_digest(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "review",
+                "record",
+                "--workflow",
+                "open-ticket",
+                "--reviewer",
+                "event-model-reviewer",
+                "--reviewed-at",
+                "2026-06-03T00:00:00.000Z",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "recorded clean review for workflow open-ticket",
+            ));
+
+        let review_record =
+            read_to_string(temp_dir.path().join("reviews/open-ticket.review.json"))?;
+        assert!(
+            review_record.contains(&format!("\"model_content_digest\": \"{current_digest}\"")),
+            "review record must bind the clean review to the current workflow digest"
+        );
+        assert!(
+            review_record.contains("\"reviewed_at\": \"2026-06-03T00:00:00.000Z\""),
+            "review record must preserve the supplied review timestamp"
+        );
+
+        Command::cargo_bin("emc")?
+            .args(["review", "gate", "--workflow", "open-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("workflow review is clean"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn review_record_command_rejects_unrecognized_argument_shapes() -> Result<(), Box<dyn Error>> {
+        [
+            [
+                "review",
+                "unknown",
+                "--workflow",
+                "open-ticket",
+                "--reviewer",
+                "event-model-reviewer",
+                "--reviewed-at",
+                "2026-06-03T00:00:00.000Z",
+            ],
+            [
+                "review",
+                "record",
+                "--slug",
+                "open-ticket",
+                "--reviewer",
+                "event-model-reviewer",
+                "--reviewed-at",
+                "2026-06-03T00:00:00.000Z",
+            ],
+            [
+                "review",
+                "record",
+                "--workflow",
+                "open-ticket",
+                "--actor",
+                "event-model-reviewer",
+                "--reviewed-at",
+                "2026-06-03T00:00:00.000Z",
+            ],
+            [
+                "review",
+                "record",
+                "--workflow",
+                "open-ticket",
+                "--reviewer",
+                "event-model-reviewer",
+                "--at",
+                "2026-06-03T00:00:00.000Z",
+            ],
+        ]
+        .into_iter()
+        .try_for_each(|arguments| {
+            Command::cargo_bin("emc")?
+                .args(arguments)
+                .assert()
+                .failure()
+                .stderr(predicate::str::contains(
+                    "usage: emc init --name <project-name>",
+                ));
+
+            Ok::<(), Box<dyn Error>>(())
+        })
+    }
+
     fn clean_review_record(model_content_digest: &str) -> String {
         clean_review_record_for("open-ticket", model_content_digest)
     }

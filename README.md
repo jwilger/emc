@@ -275,6 +275,7 @@ emc connect workflow --workflow <workflow-slug> --from <slice-slug> --to-workflo
 emc remove transition --workflow <workflow-slug> --from <slice-slug> --to-workflow <workflow-slug> --via outcome --name <outcome-name>
 emc validate <eventmodel-json-file>
 emc review gate --workflow <workflow-slug>
+emc review record --workflow <workflow-slug> --reviewer <reviewer-id> --reviewed-at <timestamp>
 emc check
 emc verify
 emc generate site --output <directory>
@@ -304,8 +305,8 @@ missing generated files before the formal tools need to run.
 
 ## MCP access
 
-EMC exposes read, validation, verification, generation, review-gate, and
-mutation operations over MCP. This lets local tools and agents work with the
+EMC exposes read, validation, verification, generation, review-gate, review-record,
+and mutation operations over MCP. This lets local tools and agents work with the
 same deterministic command core as the CLI.
 
 Use stdio for local editor or agent integrations:
@@ -350,6 +351,10 @@ flow, outcomes, errors, and review-related behavior.
 clean review record for the model digest. It blocks stale reviews, missing
 categories, non-clean categories, unresolved mandatory findings, and workflows
 that changed after findings were corrected but before a clean follow-up review.
+
+`emc review record --workflow <workflow-slug> --reviewer <reviewer-id> --reviewed-at <timestamp>`
+records a clean review for the current workflow digest. The timestamp is supplied
+at the boundary so the model core remains deterministic and clock-free.
 
 ## Engineering guardrails
 
