@@ -1,6 +1,7 @@
 use crate::core::digest::artifact_digest;
 use crate::core::effect::{
-    ArtifactDigest, Effect, EffectPlan, FileContents, ProjectPath, ReportLine,
+    ArtifactDigest, ArtifactFileExtension, Effect, EffectPlan, FileContents, ProjectPath,
+    ReportLine,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{ModelDescription, ModelName, WorkflowSlug};
@@ -49,6 +50,19 @@ pub fn check_project(
     modeled_workflows: Vec<ModeledWorkflowLayout>,
 ) -> EffectPlan {
     let module_name = module_name(&project_name);
+    let lean_artifact_paths = modeled_artifact_paths(
+        [
+            project_path("model/lean/lakefile.lean"),
+            project_path(format!("model/lean/{module_name}.lean")),
+        ],
+        &modeled_workflows,
+        ModeledWorkflowLayout::lean_artifact_path,
+    );
+    let quint_artifact_paths = modeled_artifact_paths(
+        [project_path(format!("model/quint/{module_name}.qnt"))],
+        &modeled_workflows,
+        ModeledWorkflowLayout::quint_artifact_path,
+    );
     let modeled_effects = modeled_workflows
         .into_iter()
         .flat_map(modeled_workflow_effects)
@@ -69,6 +83,18 @@ pub fn check_project(
                     project_path("model/browser/data/workflows"),
                     report_line("browser workflow index drift"),
                 ),
+                Effect::RequireOnlyModeledArtifacts(
+                    project_path("model/lean"),
+                    artifact_file_extension(".lean"),
+                    lean_artifact_paths,
+                    report_line("Lean model artifact drift"),
+                ),
+                Effect::RequireOnlyModeledArtifacts(
+                    project_path("model/quint"),
+                    artifact_file_extension(".qnt"),
+                    quint_artifact_paths,
+                    report_line("Quint model artifact drift"),
+                ),
                 Effect::RequireReferencedSliceFiles(
                     project_path("model/browser/data/workflows"),
                     project_path("model/browser/data/slices"),
@@ -83,6 +109,17 @@ pub fn check_project(
         ]
         .concat(),
     )
+}
+
+fn modeled_artifact_paths<const N: usize>(
+    required_paths: [ProjectPath; N],
+    modeled_workflows: &[ModeledWorkflowLayout],
+    workflow_path: fn(&ModeledWorkflowLayout) -> ProjectPath,
+) -> Vec<ProjectPath> {
+    required_paths
+        .into_iter()
+        .chain(modeled_workflows.iter().map(workflow_path))
+        .collect()
 }
 
 pub fn list_workflows(modeled_workflows: Vec<ModeledWorkflowLayout>) -> EffectPlan {
@@ -279,6 +316,12 @@ fn report_line(value: impl Into<String>) -> ReportLine {
 fn artifact_digest_marker(value: impl Into<String>) -> ArtifactDigest {
     ArtifactDigest::try_new(value.into()).unwrap_or_else(|error| {
         unreachable!("EMC static artifact marker must be valid: {error}");
+    })
+}
+
+fn artifact_file_extension(value: impl Into<String>) -> ArtifactFileExtension {
+    ArtifactFileExtension::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC static artifact file extension must be valid: {error}");
     })
 }
 

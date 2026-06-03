@@ -62,6 +62,7 @@
 - 2026-06-02: Workflow browser JSON emitted by `emc add workflow` includes the full event-model top-level shape, so `emc validate` reaches workflow composition diagnostics instead of failing on missing required sections.
 - 2026-06-02: Slice files emitted by `emc add slice` use the slice slug as the file stem, matching workflow step slugs so composed workflow validation reaches referenced slice diagnostics.
 - 2026-06-02: `emc check` rejects browser slice data files that are present under `model/browser/data/slices` but not referenced by any workflow composition.
+- 2026-06-02: `emc check` rejects generated Lean4 and Quint workflow artifacts that are not owned by the initialized project module or a workflow listed in browser data.
 
 ### Task 1: Guardrails and Project Skeleton
 

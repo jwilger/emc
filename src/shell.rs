@@ -6,7 +6,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::core::effect::{Effect, EffectPlan, ProcessInvocation};
+use crate::core::effect::{Effect, EffectPlan, ProcessInvocation, ProjectPath};
 use serde_json::Value;
 
 const REQUIRED_REVIEW_CATEGORIES: &[&str] = &[
@@ -106,6 +106,15 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
             require_indexed_workflow_files(
                 index_path.as_ref(),
                 workflows_path.as_ref(),
+                message.as_ref(),
+            )
+            .map(|()| None)
+        }
+        Effect::RequireOnlyModeledArtifacts(path, extension, allowed_paths, message) => {
+            require_only_modeled_artifacts(
+                path.as_ref(),
+                extension.as_ref(),
+                allowed_paths,
                 message.as_ref(),
             )
             .map(|()| None)
@@ -226,6 +235,47 @@ fn indexed_workflow_paths(index_contents: &str) -> Result<BTreeSet<String>, Shel
         .filter_map(|workflow| workflow.get("path").and_then(Value::as_str))
         .map(str::to_owned)
         .collect())
+}
+
+fn require_only_modeled_artifacts(
+    path: &str,
+    extension: &str,
+    allowed_paths: &[ProjectPath],
+    message: &str,
+) -> Result<(), ShellError> {
+    let allowed_file_names = allowed_artifact_file_names(allowed_paths);
+    let mut artifact_files = fs::read_dir(Path::new(path))
+        .map_err(ShellError::io)?
+        .map(|entry| entry.map(|directory_entry| directory_entry.path()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ShellError::io)?;
+    artifact_files.sort();
+
+    artifact_files
+        .into_iter()
+        .filter_map(|artifact_path| {
+            artifact_path
+                .file_name()
+                .and_then(|file_name| file_name.to_str())
+                .filter(|file_name| file_name.ends_with(extension))
+                .map(str::to_owned)
+        })
+        .find(|file_name| !allowed_file_names.contains(file_name))
+        .map_or(Ok(()), |file_name| {
+            Err(ShellError::message(format!("{message} for {file_name}")))
+        })
+}
+
+fn allowed_artifact_file_names(allowed_paths: &[ProjectPath]) -> BTreeSet<String> {
+    allowed_paths
+        .iter()
+        .filter_map(|path| {
+            Path::new(path.as_ref())
+                .file_name()
+                .and_then(|file_name| file_name.to_str())
+                .map(str::to_owned)
+        })
+        .collect()
 }
 
 fn require_referenced_slice_files(
