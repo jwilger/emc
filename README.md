@@ -266,6 +266,7 @@ emc update workflow --slug <slug> --name <name>
 emc update slice --slug <slice-slug> --description <description>
 emc update slice --slug <slice-slug> --type <kind>
 emc update slice --slug <slice-slug> --name <name>
+emc remove slice --slug <slice-slug>
 emc add slice --workflow <workflow-slug> --slug <slug> --name <name> --type <kind> --description <description>
 emc connect workflow --workflow <workflow-slug> --from <slice-slug> --to <slice-slug> --via <kind> --name <trigger-name>
 emc remove transition --workflow <workflow-slug> --from <slice-slug> --to <slice-slug> --via <kind> --name <trigger-name>
