@@ -6,7 +6,7 @@ use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportL
 use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
 use crate::core::types::{
-    LeanModuleName, ModelDescription, QuintModuleName, SliceSlug, TransitionTriggerName,
+    LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceSlug, TransitionTriggerName,
     WorkflowSlug, WorkflowTransitionFieldName,
 };
 use crate::core::workflow_document::{
@@ -124,11 +124,22 @@ impl WorkflowConnection {
 }
 
 pub fn connect_workflow(
+    indexed_workflow_name: ModelName,
     workflow_document: FileContents,
     connection: WorkflowConnection,
 ) -> Result<EffectPlan, ConnectionMutationError> {
     let workflow_document = WorkflowDocument::parse(&workflow_document)
         .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
+    let workflow_name = workflow_document
+        .name()
+        .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
+    if workflow_name != indexed_workflow_name {
+        return Err(ConnectionMutationError::new(format!(
+            "workflow document name '{}' does not match index name '{}'",
+            workflow_name.as_ref(),
+            indexed_workflow_name.as_ref()
+        )));
+    }
     let workflow_document = workflow_document
         .with_connected_transition(WorkflowTransitionAddition::new(
             connection.source.clone(),
@@ -136,9 +147,6 @@ pub fn connect_workflow(
             workflow_transition_field(connection.kind),
             connection.trigger.clone(),
         ))
-        .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
-    let workflow_name = workflow_document
-        .name()
         .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
     let workflow_description = workflow_document
         .description()
