@@ -1,17 +1,16 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
-use serde_json::Value;
-
 use crate::core::digest::artifact_digest;
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
 use crate::core::layout::ModeledWorkflowLayout;
 use crate::core::types::{
-    LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceKindName, SliceSlug,
-    WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionLabel,
+    LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowSliceDetail,
+    WorkflowSlug, WorkflowTransitionLabel,
 };
+use crate::core::workflow_document::{WorkflowDocument, workflow_path};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NewWorkflow {
@@ -48,12 +47,11 @@ pub fn update_workflow_description(
         .find(|existing| existing.slug() == &slug)
         .cloned()
         .ok_or_else(|| WorkflowMutationError::new(format!("unknown workflow {}", slug.as_ref())))?;
-    let workflow_value = serde_json::from_str::<Value>(workflow_document.as_ref())
-        .map_err(|error| WorkflowMutationError::new(format!("invalid workflow JSON: {error}")))?;
-    let workflow_object = workflow_value
-        .as_object()
-        .ok_or_else(|| WorkflowMutationError::new("workflow document must be a JSON object"))?;
-    let workflow_name = workflow_name(workflow_object)?;
+    let workflow_document = WorkflowDocument::parse(&workflow_document)
+        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    let workflow_name = workflow_document
+        .name()
+        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
     if workflow_name != *existing_workflow.name() {
         return Err(WorkflowMutationError::new(format!(
             "workflow document name '{}' does not match index name '{}'",
@@ -61,14 +59,25 @@ pub fn update_workflow_description(
             existing_workflow.name().as_ref()
         )));
     }
-    let workflow_json = updated_workflow_json(workflow_object, &description)?;
+    let workflow_document = workflow_document
+        .with_description(&description)
+        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    let workflow_json = workflow_document
+        .contents()
+        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    let workflow_slice_details = workflow_document
+        .slice_details()
+        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    let workflow_transitions = workflow_document
+        .transitions()
+        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
 
     Ok(update_workflow_effect_plan(
         existing_workflows,
         NewWorkflow::new(workflow_name, description, slug),
         workflow_json,
-        workflow_slice_details(workflow_object)?,
-        workflow_transitions(workflow_object)?,
+        workflow_slice_details,
+        workflow_transitions,
     ))
 }
 
@@ -99,7 +108,6 @@ fn workflow_effect_plan(
 ) -> EffectPlan {
     let workflow_name = workflow.name.as_ref();
     let workflow_description = workflow.description.as_ref();
-    let workflow_slug = workflow.slug.as_ref();
     let module_name = module_name(workflow.name.as_ref());
     let lean_module_name = lean_module_name(module_name.clone());
     let quint_module_name = quint_module_name(module_name.clone());
@@ -124,9 +132,7 @@ fn workflow_effect_plan(
 
     EffectPlan::new(vec![
         Effect::WriteFile(
-            project_path(format!(
-                "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
-            )),
+            workflow_path(&workflow.slug),
             file_contents(format!(
                 "{{\n  \"name\": {},\n  \"version\": \"0.1.0\",\n  \"description\": {},\n  \"board\": {{}},\n  \"streams\": [],\n  \"events\": [],\n  \"commands\": [],\n  \"read_models\": [],\n  \"slices\": [],\n  \"slice_files\": [],\n  \"steps\": []\n}}\n",
                 json_string(workflow_name),
@@ -168,12 +174,11 @@ fn workflow_effect_plan(
 fn update_workflow_effect_plan(
     existing_workflows: Vec<ModeledWorkflowLayout>,
     workflow: NewWorkflow,
-    workflow_json: String,
+    workflow_json: FileContents,
     workflow_slice_details: Vec<WorkflowSliceDetail>,
     workflow_transitions: Vec<WorkflowTransitionLabel>,
 ) -> EffectPlan {
     let workflow_name = workflow.name.as_ref();
-    let workflow_slug = workflow.slug.as_ref();
     let module_name = module_name(workflow.name.as_ref());
     let lean_module_name = lean_module_name(module_name.clone());
     let quint_module_name = quint_module_name(module_name.clone());
@@ -197,12 +202,7 @@ fn update_workflow_effect_plan(
         .collect::<Vec<_>>();
 
     EffectPlan::new(vec![
-        Effect::WriteFile(
-            project_path(format!(
-                "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
-            )),
-            file_contents(workflow_json),
-        ),
+        Effect::WriteFile(workflow_path(&workflow.slug), workflow_json),
         Effect::WriteFile(
             project_path("model/browser/data/index.json"),
             file_contents(browser_index(workflows)),
@@ -258,159 +258,6 @@ fn workflow_index_entry(workflow: &ModeledWorkflowLayout) -> String {
         workflow.slug().as_ref(),
         json_string(workflow.description().as_ref())
     )
-}
-
-fn updated_workflow_json(
-    workflow_object: &serde_json::Map<String, Value>,
-    description: &ModelDescription,
-) -> Result<String, WorkflowMutationError> {
-    let mut next = workflow_object.clone();
-    next.insert(
-        "description".to_owned(),
-        Value::String(description.as_ref().to_owned()),
-    );
-    serde_json::to_string_pretty(&Value::Object(next))
-        .map(|json| format!("{json}\n"))
-        .map_err(|error| WorkflowMutationError::new(format!("invalid workflow JSON: {error}")))
-}
-
-fn workflow_name(
-    workflow_object: &serde_json::Map<String, Value>,
-) -> Result<ModelName, WorkflowMutationError> {
-    workflow_object
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| WorkflowMutationError::new("workflow document is missing name"))
-        .and_then(|name| {
-            ModelName::try_new(name.to_owned()).map_err(|error| {
-                WorkflowMutationError::new(format!("invalid workflow name: {error}"))
-            })
-        })
-}
-
-fn workflow_slice_details(
-    workflow_object: &serde_json::Map<String, Value>,
-) -> Result<Vec<WorkflowSliceDetail>, WorkflowMutationError> {
-    workflow_object
-        .get("steps")
-        .and_then(Value::as_array)
-        .ok_or_else(|| WorkflowMutationError::new("workflow document is missing steps"))?
-        .iter()
-        .map(workflow_slice_detail)
-        .collect()
-}
-
-fn workflow_slice_detail(step: &Value) -> Result<WorkflowSliceDetail, WorkflowMutationError> {
-    let slug = step
-        .get("slice")
-        .and_then(Value::as_str)
-        .ok_or_else(|| WorkflowMutationError::new("workflow step is missing slice"))
-        .and_then(|slice| {
-            SliceSlug::try_new(slice.to_owned())
-                .map_err(|error| WorkflowMutationError::new(format!("invalid slice slug: {error}")))
-        })?;
-    let name = step
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| WorkflowMutationError::new("workflow step is missing name"))
-        .and_then(|name| {
-            ModelName::try_new(name.to_owned())
-                .map_err(|error| WorkflowMutationError::new(format!("invalid slice name: {error}")))
-        })?;
-    let kind = step
-        .get("type")
-        .and_then(Value::as_str)
-        .ok_or_else(|| WorkflowMutationError::new("workflow step is missing type"))
-        .and_then(|kind| {
-            SliceKindName::try_new(kind.to_owned())
-                .map_err(|error| WorkflowMutationError::new(format!("invalid slice kind: {error}")))
-        })?;
-    let description = step
-        .get("description")
-        .and_then(Value::as_str)
-        .ok_or_else(|| WorkflowMutationError::new("workflow step is missing description"))
-        .and_then(|description| {
-            ModelDescription::try_new(description.to_owned()).map_err(|error| {
-                WorkflowMutationError::new(format!("invalid slice description: {error}"))
-            })
-        })?;
-    Ok(WorkflowSliceDetail::new(slug, name, kind, description))
-}
-
-fn workflow_transitions(
-    workflow_object: &serde_json::Map<String, Value>,
-) -> Result<Vec<WorkflowTransitionLabel>, WorkflowMutationError> {
-    workflow_object
-        .get("steps")
-        .and_then(Value::as_array)
-        .ok_or_else(|| WorkflowMutationError::new("workflow document is missing steps"))?
-        .iter()
-        .filter_map(|step| {
-            let source = step.get("slice").and_then(Value::as_str)?;
-            let transitions = step.get("transitions").and_then(Value::as_array)?;
-            Some((source, transitions))
-        })
-        .flat_map(|(source, transitions)| {
-            transitions.iter().filter_map(move |transition| {
-                transition
-                    .get("to")
-                    .and_then(Value::as_str)
-                    .and_then(|target| transition_label(source, target, transition))
-                    .or_else(|| {
-                        transition
-                            .get("to_workflow")
-                            .and_then(Value::as_str)
-                            .and_then(|target| {
-                                workflow_exit_transition_label(source, target, transition)
-                            })
-                    })
-            })
-        })
-        .map(|label| {
-            WorkflowTransitionLabel::try_new(label).map_err(|error| {
-                WorkflowMutationError::new(format!("invalid workflow transition: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn transition_label(source: &str, target: &str, transition: &Value) -> Option<String> {
-    [
-        ("via_command", "command"),
-        ("via_event", "event"),
-        ("via_navigation", "navigation"),
-        ("via_external_trigger", "external_trigger"),
-        ("via_outcome", "outcome"),
-    ]
-    .into_iter()
-    .find_map(|(field, kind)| {
-        transition
-            .get(field)
-            .and_then(Value::as_str)
-            .map(|trigger| format!("{source}->{target}:{kind}:{trigger}"))
-    })
-}
-
-fn workflow_exit_transition_label(
-    source: &str,
-    target: &str,
-    transition: &Value,
-) -> Option<String> {
-    [
-        ("via_command", "command"),
-        ("via_event", "event"),
-        ("via_navigation", "navigation"),
-        ("via_external_trigger", "external_trigger"),
-        ("via_outcome", "outcome"),
-        ("exit_reason", "reason"),
-    ]
-    .into_iter()
-    .find_map(|(field, kind)| {
-        transition
-            .get(field)
-            .and_then(Value::as_str)
-            .map(|trigger| format!("{source}->{target}:workflow_exit:{kind}:{trigger}"))
-    })
 }
 
 fn module_name(raw: &str) -> String {
