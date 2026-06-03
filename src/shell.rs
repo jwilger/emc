@@ -18,7 +18,7 @@ use crate::core::layout::{
 use crate::core::project::ProjectName;
 use crate::core::review_record::{ReviewCategoryFinding, ReviewRecordDocument};
 use crate::core::site::generate_site;
-use crate::core::slice::add_slice;
+use crate::core::slice::{add_slice, update_slice_description};
 use crate::core::types::{
     ReviewRuleName, SliceSlug, WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionRecord,
 };
@@ -380,6 +380,21 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
         }
+        Effect::UpdateSliceDescriptionFromWorkflow(slug, description) => {
+            let existing_workflows = read_browser_index_workflows()?;
+            let (workflow_layout, workflow_document) =
+                find_workflow_containing_slice(slug, existing_workflows.as_slice())?;
+            let plan = update_slice_description(
+                workflow_layout.name().clone(),
+                workflow_layout.description().clone(),
+                workflow_layout.slug().clone(),
+                workflow_document,
+                slug.clone(),
+                description.clone(),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret_collect_reports(plan)
+        }
         Effect::ValidateEventModelTarget(target) => validate_event_model_target(target.as_ref()),
         Effect::VerifyProjectFromIndex => {
             let project_name = read_project_manifest_name()?;
@@ -477,6 +492,35 @@ fn read_referenced_slice_document(slug: &SliceSlug) -> Result<FileContents, Shel
         )));
     }
     read_slice_document(slug.as_ref())
+}
+
+fn find_workflow_containing_slice<'workflow>(
+    slug: &SliceSlug,
+    modeled_workflows: &'workflow [ModeledWorkflowLayout],
+) -> Result<(&'workflow ModeledWorkflowLayout, FileContents), ShellError> {
+    modeled_workflows
+        .iter()
+        .map(|workflow| {
+            let workflow_document = read_workflow_document(workflow.slug().as_ref())?;
+            let contains_slice = WorkflowDocument::parse(&workflow_document)
+                .map_err(|error| ShellError::message(error.to_string()))?
+                .slice_details()
+                .map_err(|error| ShellError::message(error.to_string()))?
+                .iter()
+                .any(|slice| slice.slug() == slug);
+            Ok((workflow, workflow_document, contains_slice))
+        })
+        .find_map(|result| match result {
+            Ok((workflow, document, true)) => Some(Ok((workflow, document))),
+            Ok((_workflow, _document, false)) => None,
+            Err(error) => Some(Err(error)),
+        })
+        .unwrap_or_else(|| {
+            Err(ShellError::message(format!(
+                "slice {} is not referenced by any indexed workflow",
+                slug.as_ref()
+            )))
+        })
 }
 
 fn read_workflow_document(slug: &str) -> Result<FileContents, ShellError> {

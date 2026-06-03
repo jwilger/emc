@@ -65,6 +65,10 @@ enum Command {
     ShowWorkflow {
         slug: WorkflowSlug,
     },
+    UpdateSliceDescription {
+        slug: SliceSlug,
+        description: ModelDescription,
+    },
     UpdateWorkflowDescription {
         slug: WorkflowSlug,
         description: ModelDescription,
@@ -109,6 +113,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::ReviewGate { slug } => interpret(command::review_gate_for_workflow(slug)),
         Command::ShowSlice { slug } => interpret(command::show_slice(slug)),
         Command::ShowWorkflow { slug } => interpret(command::show_workflow(slug)),
+        Command::UpdateSliceDescription { slug, description } => {
+            interpret(command::update_slice_description(slug, description))
+        }
         Command::UpdateWorkflowDescription { slug, description } => {
             interpret(command::update_workflow_description(slug, description))
         }
@@ -466,6 +473,29 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             description_flag,
             description,
         ] if command == "update"
+            && subject == "slice"
+            && slug_flag == "--slug"
+            && description_flag == "--description" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slug).map_err(|error| ShellError::message(error.to_string()))?;
+            let slice_description = parse_model_description(description)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::UpdateSliceDescription {
+                    slug: slice_slug,
+                    description: slice_description,
+                },
+            })
+        }
+        [
+            command,
+            subject,
+            slug_flag,
+            slug,
+            description_flag,
+            description,
+        ] if command == "update"
             && subject == "workflow"
             && slug_flag == "--slug"
             && description_flag == "--description" =>
@@ -542,6 +572,10 @@ fn help_command() -> ClapCommand {
                 .subcommand(
                     ClapCommand::new("workflow")
                         .about("Update a workflow and synchronized formal artifacts"),
+                )
+                .subcommand(
+                    ClapCommand::new("slice")
+                        .about("Update a slice and synchronized formal artifacts"),
                 ),
         )
         .subcommand(
@@ -576,6 +610,7 @@ fn help_command() -> ClapCommand {
   emc init --name <project-name>
   emc add workflow --slug <slug> --name <name> --description <text>
   emc add slice --workflow <workflow> --slug <slug> --name <name> --type <kind> --description <text>
+  emc update slice --slug <slice> --description <text>
   emc connect workflow --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
   emc list slices
   emc validate <path>

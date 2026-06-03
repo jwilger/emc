@@ -227,6 +227,141 @@ pub fn add_slice(
     ]))
 }
 
+pub fn update_slice_description(
+    indexed_workflow_name: ModelName,
+    indexed_workflow_description: ModelDescription,
+    workflow_slug: WorkflowSlug,
+    workflow_document: FileContents,
+    slice_slug: SliceSlug,
+    description: ModelDescription,
+) -> Result<EffectPlan, SliceMutationError> {
+    let workflow_document = WorkflowDocument::parse(&workflow_document)
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_name = workflow_document
+        .name()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    if workflow_name != indexed_workflow_name {
+        return Err(SliceMutationError::new(format!(
+            "workflow document name '{}' does not match index name '{}'",
+            workflow_name.as_ref(),
+            indexed_workflow_name.as_ref()
+        )));
+    }
+    let workflow_description = workflow_document
+        .description()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    if workflow_description != indexed_workflow_description {
+        return Err(SliceMutationError::new(format!(
+            "workflow document description '{}' does not match index description '{}'",
+            workflow_description.as_ref(),
+            indexed_workflow_description.as_ref()
+        )));
+    }
+
+    let existing_slice = workflow_document
+        .slice_details()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?
+        .into_iter()
+        .find(|slice| slice.slug() == &slice_slug)
+        .ok_or_else(|| {
+            SliceMutationError::new(format!("slice {} is not in workflow", slice_slug.as_ref()))
+        })?;
+    let updated_slice = WorkflowSliceDetail::new(
+        slice_slug.clone(),
+        existing_slice.name().clone(),
+        existing_slice.kind().clone(),
+        description,
+    );
+    let workflow_document = workflow_document
+        .with_updated_slice_detail(updated_slice.clone())
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_module_name = module_name(workflow_name.as_ref());
+    let slice_module_name = module_name(updated_slice.name().as_ref());
+    let workflow_slice_details = workflow_document
+        .slice_details()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_transitions = workflow_document
+        .transitions()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_digest = artifact_digest(
+        workflow_name.clone(),
+        workflow_slug.clone(),
+        workflow_description.clone(),
+        workflow_slice_details.clone(),
+        workflow_transitions.clone(),
+    );
+    let slice_digest = slice_artifact_digest(
+        updated_slice.name().clone(),
+        slice_slug.clone(),
+        updated_slice.kind().clone(),
+        updated_slice.description().clone(),
+    );
+    let workflow_json = workflow_document
+        .contents()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(workflow_path(&workflow_slug), workflow_json),
+        Effect::WriteFile(
+            project_path(format!(
+                "model/browser/data/slices/{}.eventmodel.json",
+                slice_slug.as_ref()
+            )),
+            file_contents(slice_json_from_detail(&updated_slice)),
+        ),
+        Effect::WriteFile(
+            project_path(format!("model/lean/slices/{slice_module_name}.lean")),
+            emit_lean_slice_module(
+                lean_module_name(slice_module_name.clone()),
+                updated_slice.name().clone(),
+                updated_slice.description().clone(),
+                slice_slug.clone(),
+                updated_slice.kind().clone(),
+                slice_digest.clone(),
+            ),
+        ),
+        Effect::WriteFile(
+            project_path(format!("model/quint/slices/{slice_module_name}.qnt")),
+            emit_quint_slice_module(
+                quint_module_name(slice_module_name),
+                updated_slice.name().clone(),
+                updated_slice.description().clone(),
+                slice_slug,
+                updated_slice.kind().clone(),
+                slice_digest,
+            ),
+        ),
+        Effect::WriteFile(
+            project_path(format!("model/lean/{workflow_module_name}.lean")),
+            emit_lean_workflow_module(
+                lean_module_name(workflow_module_name.clone()),
+                workflow_name.clone(),
+                workflow_description.clone(),
+                workflow_slug.clone(),
+                workflow_slice_details.clone(),
+                workflow_transitions.clone(),
+                workflow_digest.clone(),
+            ),
+        ),
+        Effect::WriteFile(
+            project_path(format!("model/quint/{workflow_module_name}.qnt")),
+            emit_quint_workflow_module(
+                quint_module_name(workflow_module_name),
+                workflow_name,
+                workflow_description,
+                workflow_slug,
+                workflow_slice_details,
+                workflow_transitions,
+                workflow_digest,
+            ),
+        ),
+        Effect::Report(report_line(format!(
+            "updated slice {}",
+            updated_slice.name().as_ref()
+        ))),
+    ]))
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SliceMutationError {
     message: String,
@@ -256,6 +391,17 @@ fn slice_json(new_slice: &NewSlice) -> String {
         json_string(new_slice.kind.as_ref()),
         json_string(new_slice.name.as_ref()),
         json_string(new_slice.kind.as_ref()),
+    )
+}
+
+fn slice_json_from_detail(slice: &WorkflowSliceDetail) -> String {
+    format!(
+        "{{\n  \"name\": {},\n  \"version\": \"0.1.0\",\n  \"description\": {},\n  \"type\": {},\n  \"board\": {{}},\n  \"streams\": [],\n  \"events\": [],\n  \"commands\": [],\n  \"read_models\": [],\n  \"views\": [],\n  \"slices\": [\n    {{\n      \"name\": {},\n      \"type\": {},\n      \"events\": [],\n      \"views\": [],\n      \"acceptance_scenarios\": [],\n      \"contract_scenarios\": []\n    }}\n  ]\n}}\n",
+        json_string(slice.name().as_ref()),
+        json_string(slice.description().as_ref()),
+        json_string(slice.kind().as_ref()),
+        json_string(slice.name().as_ref()),
+        json_string(slice.kind().as_ref()),
     )
 }
 
