@@ -8,6 +8,7 @@ pub enum Effect {
     WriteFile(ProjectPath, FileContents),
     WriteFileIfMissing(ProjectPath, FileContents),
     Report(ReportLine),
+    ReportDocument(FileContents),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

@@ -78,6 +78,10 @@ fn interpret_effect(effect: &Effect) -> Result<(), ShellError> {
             println!("{}", line.as_ref());
             Ok(())
         }
+        Effect::ReportDocument(contents) => {
+            println!("{}", contents.as_ref());
+            Ok(())
+        }
     }
 }
 
