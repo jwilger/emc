@@ -3,8 +3,12 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::emc::artifact_digest;
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
+use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
+use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
 use crate::core::layout::ImportedWorkflowLayout;
-use crate::core::types::{ModelDescription, ModelName, WorkflowSlug};
+use crate::core::types::{
+    LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowSlug,
+};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NewWorkflow {
@@ -86,6 +90,8 @@ fn workflow_effect_plan(
     let workflow_description = workflow.description.as_ref();
     let workflow_slug = workflow.slug.as_ref();
     let module_name = module_name(workflow.name.as_ref());
+    let lean_module_name = lean_module_name(module_name.clone());
+    let quint_module_name = quint_module_name(module_name.clone());
     let digest = artifact_digest(workflow.name.clone());
     let workflow_layout = ImportedWorkflowLayout::new(
         workflow.name.clone(),
@@ -116,17 +122,23 @@ fn workflow_effect_plan(
         ),
         Effect::WriteFile(
             project_path(format!("model/lean/{module_name}.lean")),
-            file_contents(format!(
-                "namespace {module_name}\n\n-- EMC-DIGEST: {}\n-- EMC generated Lean4 business workflow model.\ndef workflowName := \"{workflow_name}\"\n\ndef workflowDescription := \"{workflow_description}\"\n\nend {module_name}\n",
-                digest.as_ref()
-            )),
+            emit_lean_workflow_module(
+                lean_module_name,
+                workflow.name.clone(),
+                workflow.description.clone(),
+                workflow.slug.clone(),
+                digest.clone(),
+            ),
         ),
         Effect::WriteFile(
             project_path(format!("model/quint/{module_name}.qnt")),
-            file_contents(format!(
-                "module {module_name} {{\n  // EMC-DIGEST: {}\n  const workflowName = \"{workflow_name}\"\n  const workflowDescription = \"{workflow_description}\"\n}}\n",
-                digest.as_ref()
-            )),
+            emit_quint_workflow_module(
+                quint_module_name,
+                workflow.name.clone(),
+                workflow.description.clone(),
+                workflow.slug.clone(),
+                digest,
+            ),
         ),
         Effect::Report(report_line(format!(
             "{} workflow {workflow_name}",
@@ -198,6 +210,18 @@ fn project_path(value: impl Into<String>) -> ProjectPath {
 fn file_contents(value: impl Into<String>) -> FileContents {
     FileContents::try_new(value.into()).unwrap_or_else(|error| {
         unreachable!("EMC generated file contents must be valid: {error}");
+    })
+}
+
+fn lean_module_name(value: impl Into<String>) -> LeanModuleName {
+    LeanModuleName::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC generated Lean4 module name must be valid: {error}");
+    })
+}
+
+fn quint_module_name(value: impl Into<String>) -> QuintModuleName {
+    QuintModuleName::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC generated Quint module name must be valid: {error}");
     })
 }
 

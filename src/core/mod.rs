@@ -1,5 +1,6 @@
 pub mod emc;
 pub mod effect;
+pub mod emit;
 pub mod layout;
 pub mod project;
 pub mod site;
