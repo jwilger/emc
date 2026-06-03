@@ -287,6 +287,29 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn validation_slice_file_references_use_semantic_workflow_documents()
+    -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/event_model_validation.rs")?;
+        let violations = ["get(\"slice_files\")"]
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| {
+                format!(
+                    "src/event_model_validation.rs duplicates slice-file semantics via `{marker}`"
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "validation slice-file traversal must derive from WorkflowDocument"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",

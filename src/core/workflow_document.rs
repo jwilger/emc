@@ -17,13 +17,18 @@ pub struct WorkflowDocument {
 
 impl WorkflowDocument {
     pub fn parse(contents: &FileContents) -> Result<Self, WorkflowDocumentError> {
+        Self::parse_optional(contents)?
+            .ok_or_else(|| WorkflowDocumentError::new("workflow document must be a JSON object"))
+    }
+
+    pub fn parse_optional(contents: &FileContents) -> Result<Option<Self>, WorkflowDocumentError> {
         let value = serde_json::from_str::<Value>(contents.as_ref()).map_err(|error| {
             WorkflowDocumentError::new(format!("invalid workflow JSON: {error}"))
         })?;
-        value
-            .as_object()
-            .ok_or_else(|| WorkflowDocumentError::new("workflow document must be a JSON object"))?;
-        Ok(Self { value })
+        if value.as_object().is_none() {
+            return Ok(None);
+        }
+        Ok(Some(Self { value }))
     }
 
     pub fn name(&self) -> Result<ModelName, WorkflowDocumentError> {
@@ -106,14 +111,24 @@ impl WorkflowDocument {
     }
 
     pub fn slice_files(&self) -> Result<Vec<WorkflowSliceFileReference>, WorkflowDocumentError> {
+        self.optional_slice_files()?
+            .ok_or_else(|| WorkflowDocumentError::new("workflow document is missing slice_files"))
+    }
+
+    pub fn optional_slice_files(
+        &self,
+    ) -> Result<Option<Vec<WorkflowSliceFileReference>>, WorkflowDocumentError> {
         self.object()?
             .get("slice_files")
             .and_then(Value::as_array)
-            .ok_or_else(|| WorkflowDocumentError::new("workflow document is missing slice_files"))?
-            .iter()
-            .filter_map(Value::as_str)
-            .map(workflow_slice_file_reference)
-            .collect()
+            .map(|slice_files| {
+                slice_files
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(workflow_slice_file_reference)
+                    .collect()
+            })
+            .transpose()
     }
 
     pub fn transitions(&self) -> Result<Vec<WorkflowTransitionLabel>, WorkflowDocumentError> {
