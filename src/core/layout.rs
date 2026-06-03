@@ -144,22 +144,36 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
         "\"description\": {}",
         json_string(workflow.description.as_ref())
     ));
+    let lean_name_marker = artifact_digest_marker(format!(
+        "def workflowName := {}",
+        json_string(workflow.name.as_ref())
+    ));
+    let lean_name_prefix = artifact_digest_marker("def workflowName :=");
     let lean_slug_marker = artifact_digest_marker(format!(
         "def workflowSlug := {}",
         json_string(workflow.slug.as_ref())
     ));
+    let lean_slug_prefix = artifact_digest_marker("def workflowSlug :=");
     let lean_description_marker = artifact_digest_marker(format!(
         "def workflowDescription := {}",
         json_string(workflow.description.as_ref())
     ));
+    let lean_description_prefix = artifact_digest_marker("def workflowDescription :=");
+    let quint_name_marker = artifact_digest_marker(format!(
+        "val workflowName = {}",
+        json_string(workflow.name.as_ref())
+    ));
+    let quint_name_prefix = artifact_digest_marker("val workflowName =");
     let quint_slug_marker = artifact_digest_marker(format!(
         "val workflowSlug = {}",
         json_string(workflow.slug.as_ref())
     ));
+    let quint_slug_prefix = artifact_digest_marker("val workflowSlug =");
     let quint_description_marker = artifact_digest_marker(format!(
         "val workflowDescription = {}",
         json_string(workflow.description.as_ref())
     ));
+    let quint_description_prefix = artifact_digest_marker("val workflowDescription =");
     let lean_slice_marker = artifact_digest_marker("def workflowSlices : List String :=");
     let lean_slice_detail_marker = artifact_digest_marker(
         "def workflowSliceDetails : List (String × String × String × String) :=",
@@ -214,29 +228,49 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
                 "artifact digest mismatch for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireDigest(
+        Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            lean_name_prefix,
+            lean_name_marker,
+            report_line(format!(
+                "Lean workflow field drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_slug_prefix,
             lean_slug_marker,
             report_line(format!(
                 "Lean workflow field drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireDigest(
+        Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            lean_description_prefix,
             lean_description_marker,
             report_line(format!(
                 "Lean workflow field drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireDigest(
+        Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            quint_name_prefix,
+            quint_name_marker,
+            report_line(format!(
+                "Quint workflow field drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_slug_prefix,
             quint_slug_marker,
             report_line(format!(
                 "Quint workflow field drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireDigest(
+        Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            quint_description_prefix,
             quint_description_marker,
             report_line(format!(
                 "Quint workflow field drift for workflow {workflow_name}"

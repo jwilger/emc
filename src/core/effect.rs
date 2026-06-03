@@ -5,6 +5,7 @@ pub enum Effect {
     CopyDirectory(ProjectPath, ProjectPath),
     EnsureDirectory(ProjectPath),
     Fail(ReportLine),
+    RequireCanonicalDeclaration(ProjectPath, ArtifactDigest, ArtifactDigest, ReportLine),
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
     RequireIndexedWorkflowFiles(ProjectPath, ProjectPath, ReportLine),
