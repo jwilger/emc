@@ -17,6 +17,7 @@ pub enum ConnectionKind {
     Command,
     Event,
     Navigation,
+    ExternalTrigger,
 }
 
 impl ConnectionKind {
@@ -32,11 +33,16 @@ impl ConnectionKind {
         Self::Navigation
     }
 
+    pub fn external_trigger() -> Self {
+        Self::ExternalTrigger
+    }
+
     fn trigger_field(self) -> &'static str {
         match self {
             Self::Command => "via_command",
             Self::Event => "via_event",
             Self::Navigation => "via_navigation",
+            Self::ExternalTrigger => "via_external_trigger",
         }
     }
 }
@@ -314,6 +320,7 @@ fn transition_label(source: &str, target: &str, transition: &Value) -> Option<St
         ("via_command", "command"),
         ("via_event", "event"),
         ("via_navigation", "navigation"),
+        ("via_external_trigger", "external_trigger"),
     ]
     .into_iter()
     .find_map(|(field, kind)| {

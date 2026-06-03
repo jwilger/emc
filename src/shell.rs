@@ -1007,6 +1007,7 @@ fn transition_label(source: &str, target: &str, transition: &Value) -> Option<St
         ("via_command", "command"),
         ("via_event", "event"),
         ("via_navigation", "navigation"),
+        ("via_external_trigger", "external_trigger"),
     ]
     .into_iter()
     .find_map(|(field, kind)| {
