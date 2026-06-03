@@ -663,6 +663,45 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_lean_workflow_exit_transition_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_workflow_exit(&temp_dir)?;
+
+        write(
+            temp_dir.path().join("model/lean/OpenTicket.lean"),
+            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := [\"capture-ticket\"]\n\ndef workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Slice description.\")]\n\ndef workflowTransitions : List String := []\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean workflow transition drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_accepts_synchronized_workflow_exit_transition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_workflow_exit(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("project layout is complete"));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_lean_workflow_slice_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -982,6 +1021,54 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn create_workflow_exit(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(temp_dir.path(), "capture-ticket", "Capture ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "repair-complete",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket_closed",
+                "--reason",
+                "Closed tickets continue to completion.",
             ])
             .current_dir(temp_dir.path())
             .assert()

@@ -18,6 +18,7 @@ pub enum ConnectionKind {
     Event,
     Navigation,
     ExternalTrigger,
+    Outcome,
 }
 
 impl ConnectionKind {
@@ -37,12 +38,35 @@ impl ConnectionKind {
         Self::ExternalTrigger
     }
 
+    pub fn outcome() -> Self {
+        Self::Outcome
+    }
+
     fn trigger_field(self) -> &'static str {
         match self {
             Self::Command => "via_command",
             Self::Event => "via_event",
             Self::Navigation => "via_navigation",
             Self::ExternalTrigger => "via_external_trigger",
+            Self::Outcome => "via_outcome",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum WorkflowConnectionTarget {
+    Slice(SliceSlug),
+    Workflow {
+        slug: WorkflowSlug,
+        reason: ModelDescription,
+    },
+}
+
+impl WorkflowConnectionTarget {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Slice(slug) => slug.as_ref(),
+            Self::Workflow { slug, reason: _ } => slug.as_ref(),
         }
     }
 }
@@ -51,7 +75,7 @@ impl ConnectionKind {
 pub struct WorkflowConnection {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
-    target: SliceSlug,
+    target: WorkflowConnectionTarget,
     kind: ConnectionKind,
     trigger: TransitionTriggerName,
 }
@@ -67,7 +91,27 @@ impl WorkflowConnection {
         Self {
             workflow_slug,
             source,
-            target,
+            target: WorkflowConnectionTarget::Slice(target),
+            kind,
+            trigger,
+        }
+    }
+
+    pub fn new_workflow_exit(
+        workflow_slug: WorkflowSlug,
+        source: SliceSlug,
+        target: WorkflowSlug,
+        kind: ConnectionKind,
+        trigger: TransitionTriggerName,
+        reason: ModelDescription,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            source,
+            target: WorkflowConnectionTarget::Workflow {
+                slug: target,
+                reason,
+            },
             kind,
             trigger,
         }
@@ -199,9 +243,21 @@ fn append_transition(
         .cloned()
         .unwrap_or_default();
     transitions.push(json!({
-        "to": connection.target.as_ref(),
         connection.kind.trigger_field(): connection.trigger.as_ref()
     }));
+    let transition = transitions
+        .last_mut()
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| ConnectionMutationError::new("workflow transition must be a JSON object"))?;
+    match &connection.target {
+        WorkflowConnectionTarget::Slice(target) => {
+            transition.insert("to".to_owned(), json!(target.as_ref()));
+        }
+        WorkflowConnectionTarget::Workflow { slug, reason } => {
+            transition.insert("to_workflow".to_owned(), json!(slug.as_ref()));
+            transition.insert("exit_reason".to_owned(), json!(reason.as_ref()));
+        }
+    }
     next.insert("transitions".to_owned(), Value::Array(transitions));
     Ok(Value::Object(next))
 }
@@ -303,8 +359,18 @@ fn workflow_transitions(
         })
         .flat_map(|(source, transitions)| {
             transitions.iter().filter_map(move |transition| {
-                let target = transition.get("to").and_then(Value::as_str)?;
-                transition_label(source, target, transition)
+                transition
+                    .get("to")
+                    .and_then(Value::as_str)
+                    .and_then(|target| transition_label(source, target, transition))
+                    .or_else(|| {
+                        transition
+                            .get("to_workflow")
+                            .and_then(Value::as_str)
+                            .and_then(|target| {
+                                workflow_exit_transition_label(source, target, transition)
+                            })
+                    })
             })
         })
         .map(|label| {
@@ -321,6 +387,7 @@ fn transition_label(source: &str, target: &str, transition: &Value) -> Option<St
         ("via_event", "event"),
         ("via_navigation", "navigation"),
         ("via_external_trigger", "external_trigger"),
+        ("via_outcome", "outcome"),
     ]
     .into_iter()
     .find_map(|(field, kind)| {
@@ -328,6 +395,28 @@ fn transition_label(source: &str, target: &str, transition: &Value) -> Option<St
             .get(field)
             .and_then(Value::as_str)
             .map(|trigger| format!("{source}->{target}:{kind}:{trigger}"))
+    })
+}
+
+fn workflow_exit_transition_label(
+    source: &str,
+    target: &str,
+    transition: &Value,
+) -> Option<String> {
+    [
+        ("via_command", "command"),
+        ("via_event", "event"),
+        ("via_navigation", "navigation"),
+        ("via_external_trigger", "external_trigger"),
+        ("via_outcome", "outcome"),
+        ("exit_reason", "reason"),
+    ]
+    .into_iter()
+    .find_map(|(field, kind)| {
+        transition
+            .get(field)
+            .and_then(Value::as_str)
+            .map(|trigger| format!("{source}->{target}:workflow_exit:{kind}:{trigger}"))
     })
 }
 

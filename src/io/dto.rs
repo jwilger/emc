@@ -167,6 +167,7 @@ pub fn parse_connection_kind(raw: &str) -> Result<ConnectionKind, BoundaryParseE
         "event" => Ok(ConnectionKind::event()),
         "navigation" => Ok(ConnectionKind::navigation()),
         "external_trigger" => Ok(ConnectionKind::external_trigger()),
+        "outcome" => Ok(ConnectionKind::outcome()),
         _ => Err(BoundaryParseError::new(format!(
             "invalid connection kind: {raw}"
         ))),

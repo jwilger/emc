@@ -994,8 +994,18 @@ fn workflow_transition_labels(workflow_contents: &str) -> Result<Vec<String>, Sh
         })
         .flat_map(|(source, transitions)| {
             transitions.iter().filter_map(move |transition| {
-                let target = transition.get("to").and_then(Value::as_str)?;
-                transition_label(source, target, transition)
+                transition
+                    .get("to")
+                    .and_then(Value::as_str)
+                    .and_then(|target| transition_label(source, target, transition))
+                    .or_else(|| {
+                        transition
+                            .get("to_workflow")
+                            .and_then(Value::as_str)
+                            .and_then(|target| {
+                                workflow_exit_transition_label(source, target, transition)
+                            })
+                    })
             })
         })
         .map(json_string)
@@ -1008,6 +1018,7 @@ fn transition_label(source: &str, target: &str, transition: &Value) -> Option<St
         ("via_event", "event"),
         ("via_navigation", "navigation"),
         ("via_external_trigger", "external_trigger"),
+        ("via_outcome", "outcome"),
     ]
     .into_iter()
     .find_map(|(field, kind)| {
@@ -1015,6 +1026,28 @@ fn transition_label(source: &str, target: &str, transition: &Value) -> Option<St
             .get(field)
             .and_then(Value::as_str)
             .map(|trigger| format!("{source}->{target}:{kind}:{trigger}"))
+    })
+}
+
+fn workflow_exit_transition_label(
+    source: &str,
+    target: &str,
+    transition: &Value,
+) -> Option<String> {
+    [
+        ("via_command", "command"),
+        ("via_event", "event"),
+        ("via_navigation", "navigation"),
+        ("via_external_trigger", "external_trigger"),
+        ("via_outcome", "outcome"),
+        ("exit_reason", "reason"),
+    ]
+    .into_iter()
+    .find_map(|(field, kind)| {
+        transition
+            .get(field)
+            .and_then(Value::as_str)
+            .map(|trigger| format!("{source}->{target}:workflow_exit:{kind}:{trigger}"))
     })
 }
 
