@@ -14,6 +14,7 @@ mod tests {
             .stdout(predicate::str::contains("Event Model Compiler"))
             .stdout(predicate::str::contains("init"))
             .stdout(predicate::str::contains("add workflow"))
+            .stdout(predicate::str::contains("remove workflow"))
             .stdout(predicate::str::contains("add slice"))
             .stdout(predicate::str::contains("connect workflow"))
             .stdout(predicate::str::contains("validate"))
