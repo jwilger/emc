@@ -1340,11 +1340,20 @@ impl ViewControlDefinitionParts {
 pub struct ControlInputProvision {
     name: DefinitionName,
     source: ControlInputSource,
+    description: ControlInputDescription,
 }
 
 impl ControlInputProvision {
-    pub fn new(name: DefinitionName, source: ControlInputSource) -> Self {
-        Self { name, source }
+    pub fn new(
+        name: DefinitionName,
+        source: ControlInputSource,
+        description: ControlInputDescription,
+    ) -> Self {
+        Self {
+            name,
+            source,
+            description,
+        }
     }
 }
 
@@ -1353,6 +1362,12 @@ pub enum ControlInputSource {
     UserInput(DefinitionName),
     SessionValue(DefinitionName),
     Other,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ControlInputDescription {
+    Missing,
+    Present,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -1800,6 +1815,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_controls_provide_command_inputs(document)?;
 
     validate_control_inputs_have_source_provenance(document)?;
+
+    validate_control_inputs_have_descriptions(document)?;
 
     validate_navigation_controls_declare_type(document)?;
 
@@ -5146,6 +5163,32 @@ fn control_input_missing_source(
         .input_provisions
         .iter()
         .find(|input| input.source == ControlInputSource::Other)
+        .map(|input| (control, input))
+}
+
+fn validate_control_inputs_have_descriptions(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .flat_map(|view| view.controls.iter())
+        .find_map(control_input_missing_description)
+        .map_or(Ok(()), |(control, input)| {
+            Err(validation_issue(format!(
+                "control '{}' input '{}' is missing description",
+                control.label, input.name
+            )))
+        })
+}
+
+fn control_input_missing_description(
+    control: &ViewControlDefinition,
+) -> Option<(&ViewControlDefinition, &ControlInputProvision)> {
+    control
+        .input_provisions
+        .iter()
+        .find(|input| input.description == ControlInputDescription::Missing)
         .map(|input| (control, input))
 }
 

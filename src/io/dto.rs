@@ -16,20 +16,20 @@ use crate::core::validation::{
     BoardGraphConnection, BoardLane, BoardLanes, BoardReadModelCommandDependency, BoardSliceGraph,
     CommandDefinition, CommandDefinitionParts, CommandInputSource, CommandInputSourceKind,
     CommandReadModelReads, ControlCommandErrorHandling, ControlErrorRecoveryBehavior,
-    ControlInputProvision, ControlInputSource, DefinitionKind, DefinitionName, EventAttribute,
-    EventAttributeSource, EventDefinition, EventModelDocument, EventModelDocumentParts,
-    EventModelFileKind, ExternalInputSchema, ExternalPayloadVariant, LegacyScenariosField,
-    NamedDefinition, NavigationType, OutcomeDefinition, ReadModelDefinition, ReadModelField,
-    ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource, ReadModelState,
-    ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
-    SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceScenarioParts,
-    SliceType, TopLevelKey, TranslationContract, ViewControlDefinition, ViewControlDefinitionParts,
-    ViewDefinition, ViewFieldDefinition, ViewFieldSource, ViewWireframe, WorkflowCommandTransition,
-    WorkflowComposition, WorkflowEntryStepCount, WorkflowEventTransition, WorkflowExitRationale,
-    WorkflowExitTransition, WorkflowExternalTriggerTransition, WorkflowInternalDefinitions,
-    WorkflowNavigationTransition, WorkflowStep, WorkflowStepExit, WorkflowStepLifecycleRole,
-    WorkflowStepRelationship, WorkflowStepTrigger, empty_top_level_key_issue,
-    model_must_be_object_issue,
+    ControlInputDescription, ControlInputProvision, ControlInputSource, DefinitionKind,
+    DefinitionName, EventAttribute, EventAttributeSource, EventDefinition, EventModelDocument,
+    EventModelDocumentParts, EventModelFileKind, ExternalInputSchema, ExternalPayloadVariant,
+    LegacyScenariosField, NamedDefinition, NavigationType, OutcomeDefinition, ReadModelDefinition,
+    ReadModelField, ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
+    ReadModelState, ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField,
+    SingletonBehavior, SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario,
+    SliceScenarioParts, SliceType, TopLevelKey, TranslationContract, ViewControlDefinition,
+    ViewControlDefinitionParts, ViewDefinition, ViewFieldDefinition, ViewFieldSource,
+    ViewWireframe, WorkflowCommandTransition, WorkflowComposition, WorkflowEntryStepCount,
+    WorkflowEventTransition, WorkflowExitRationale, WorkflowExitTransition,
+    WorkflowExternalTriggerTransition, WorkflowInternalDefinitions, WorkflowNavigationTransition,
+    WorkflowStep, WorkflowStepExit, WorkflowStepLifecycleRole, WorkflowStepRelationship,
+    WorkflowStepTrigger, empty_top_level_key_issue, model_must_be_object_issue,
 };
 
 #[derive(Debug)]
@@ -2023,10 +2023,21 @@ fn control_input_provision_from_json_input(
         .or_else(|| input.get("name").and_then(Value::as_str))
         .ok_or_else(|| BoundaryParseError::new("control input is missing name"))?;
     let source = control_input_source_from_json_input(input);
+    let description = control_input_description_from_json_input(input);
 
     DefinitionName::try_new(name.to_owned())
-        .map(|name| ControlInputProvision::new(name, source))
+        .map(|name| ControlInputProvision::new(name, source, description))
         .map_err(|error| BoundaryParseError::new(format!("invalid control input name: {error}")))
+}
+
+fn control_input_description_from_json_input(input: &Value) -> ControlInputDescription {
+    input
+        .get("description")
+        .and_then(Value::as_str)
+        .filter(|description| !description.trim().is_empty())
+        .map_or(ControlInputDescription::Missing, |_| {
+            ControlInputDescription::Present
+        })
 }
 
 fn control_input_source_from_json_input(input: &Value) -> ControlInputSource {
