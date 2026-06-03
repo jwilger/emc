@@ -388,6 +388,20 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        [command, transport, host_flag, host, port_flag, port]
+            if command == "mcp"
+                && transport == "http"
+                && host_flag == "--host"
+                && port_flag == "--port" =>
+        {
+            Ok(Cli {
+                command: Command::McpHttp {
+                    host: host.clone(),
+                    port: parse_port(port)?,
+                    once: false,
+                },
+            })
+        }
         [command, subject, workflow_flag, workflow]
             if command == "review" && subject == "gate" && workflow_flag == "--workflow" =>
         {
