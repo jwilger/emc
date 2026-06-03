@@ -998,7 +998,7 @@ fn workflow_transition_marker(prefix: &str, workflow_contents: &str) -> Result<S
     let labels = if prefix.starts_with("val ") {
         workflow_transition_record_labels(workflow_contents)?
     } else {
-        workflow_transition_tuple_labels(workflow_contents)?
+        workflow_transition_lean_record_labels(workflow_contents)?
     };
     let joined_labels = labels.join(",");
     Ok(format!("{prefix} [{joined_labels}]"))
@@ -1091,13 +1091,15 @@ fn workflow_slice_details(workflow_contents: &str) -> Result<Vec<WorkflowSliceDe
     })
 }
 
-fn workflow_transition_tuple_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
+fn workflow_transition_lean_record_labels(
+    workflow_contents: &str,
+) -> Result<Vec<String>, ShellError> {
     workflow_transition_labels(workflow_contents)?
         .into_iter()
         .map(|label| {
             transition_record_parts(&label).and_then(|(source, target, kind, trigger)| {
                 Ok(format!(
-                    "({}, {}, {}, {})",
+                    "{{ source := {}, target := {}, kind := {}, trigger := {} }}",
                     json_string(source.to_owned())?,
                     json_string(target.to_owned())?,
                     json_string(kind)?,

@@ -111,6 +111,7 @@
 - 2026-06-03: Browser command-definition composition now derives command names, owning slices, source controls, and section labels from `BrowserDataCorpus::command_definition_details()` instead of resolving raw command/view/slice fields in `src/core/browser.rs`. A browser guardrail prevents direct command-definition traversal from returning to browser composition.
 - 2026-06-03: Browser view-definition composition now derives field source chains and control effects from `BrowserDataCorpus::view_definition_details()` instead of traversing raw view/read-model/event fields in `src/core/browser.rs`. A browser guardrail prevents direct view-definition traversal from returning to browser composition.
 - 2026-06-03: Generated Lean4 and Quint transition-structure obligations now assert that each workflow transition carries non-empty source, target, kind, and trigger fields instead of accepting tautological transition-list self-comparisons. `emc check` rejects stale transition-structure declarations that still use the old tautologies.
+- 2026-06-03: Generated Lean4 workflow transitions now use named `WorkflowTransition` records instead of positional tuples, and the Quint transition-structure invariant now uses a pure list `select(...).length()` expression instead of a braced action block. Check-time transition markers were updated to match the formal emitters, with a guardrail against reintroducing Lean transition tuple marker helpers.
 
 ### Task 1: Guardrails and Project Skeleton
 

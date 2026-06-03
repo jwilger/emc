@@ -238,7 +238,7 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List (String × String × String × String) := [(\"submit-ticket\", \"review-ticket\", \"event\", \"TicketSubmittedForReview\")]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"submit-ticket\", target := \"review-ticket\", kind := \"event\", trigger := \"TicketSubmittedForReview\" }]"
             ),
             "Lean update must preserve existing event transitions"
         );
@@ -319,7 +319,7 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"repair-complete\", \"workflow_exit:outcome\", \"ticket_closed\")]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := \"workflow_exit:outcome\", trigger := \"ticket_closed\" }]"
             ),
             "Lean update must preserve existing workflow exit transitions"
         );
