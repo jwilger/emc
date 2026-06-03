@@ -576,13 +576,21 @@ fn artifact_contains_one_canonical_declaration(
 ) -> bool {
     let mut declarations = artifact_contents
         .lines()
-        .map(str::trim_start)
-        .filter(|line| line.starts_with(prefix));
+        .filter_map(|line| canonical_declaration_line(line, prefix));
 
     matches!(
         (declarations.next(), declarations.next()),
         (Some(declaration), None) if declaration == marker
     )
+}
+
+fn canonical_declaration_line<'a>(line: &'a str, prefix: &str) -> Option<&'a str> {
+    if prefix.starts_with(' ') && line.starts_with(prefix) {
+        Some(line)
+    } else {
+        let trimmed = line.trim_start();
+        trimmed.starts_with(prefix).then_some(trimmed)
+    }
 }
 
 fn workflow_slice_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {

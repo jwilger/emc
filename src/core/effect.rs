@@ -5,7 +5,7 @@ pub enum Effect {
     CopyDirectory(ProjectPath, ProjectPath),
     EnsureDirectory(ProjectPath),
     Fail(ReportLine),
-    RequireCanonicalDeclaration(ProjectPath, ArtifactDigest, ArtifactDigest, ReportLine),
+    RequireCanonicalDeclaration(ProjectPath, ArtifactMarker, ArtifactMarker, ReportLine),
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
     RequireIndexedWorkflowFiles(ProjectPath, ProjectPath, ReportLine),
@@ -95,6 +95,9 @@ pub struct ReportLine(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef)
 )]
 pub struct ArtifactDigest(String);
+
+#[nutype(validate(not_empty), derive(Debug, Clone, Eq, PartialEq, AsRef))]
+pub struct ArtifactMarker(String);
 
 #[nutype(
     sanitize(trim),

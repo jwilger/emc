@@ -1,7 +1,7 @@
 use crate::core::digest::artifact_digest;
 use crate::core::effect::{
-    ArtifactDigest, ArtifactFileExtension, Effect, EffectPlan, FileContents, ProjectPath,
-    ReportLine,
+    ArtifactDigest, ArtifactFileExtension, ArtifactMarker, Effect, EffectPlan, FileContents,
+    ProjectPath, ReportLine,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{ModelDescription, ModelName, WorkflowSlug};
@@ -138,42 +138,46 @@ pub fn show_workflow(workflow_document: FileContents) -> EffectPlan {
 fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
     let workflow_name = workflow.name.as_ref().to_owned();
     let digest = artifact_digest(workflow.name.clone());
-    let browser_name_marker =
-        artifact_digest_marker(format!("\"name\": {}", json_string(workflow.name.as_ref())));
-    let browser_description_marker = artifact_digest_marker(format!(
-        "\"description\": {}",
+    let browser_name_marker = artifact_marker(format!(
+        "  \"name\": {},",
+        json_string(workflow.name.as_ref())
+    ));
+    let browser_name_prefix = artifact_marker("  \"name\":");
+    let browser_description_marker = artifact_marker(format!(
+        "  \"description\": {},",
         json_string(workflow.description.as_ref())
     ));
-    let lean_name_marker = artifact_digest_marker(format!(
+    let browser_description_prefix = artifact_marker("  \"description\":");
+    let lean_name_marker = artifact_marker(format!(
         "def workflowName := {}",
         json_string(workflow.name.as_ref())
     ));
-    let lean_name_prefix = artifact_digest_marker("def workflowName :=");
-    let lean_slug_marker = artifact_digest_marker(format!(
+    let lean_name_prefix = artifact_marker("def workflowName :=");
+    let lean_slug_marker = artifact_marker(format!(
         "def workflowSlug := {}",
         json_string(workflow.slug.as_ref())
     ));
-    let lean_slug_prefix = artifact_digest_marker("def workflowSlug :=");
-    let lean_description_marker = artifact_digest_marker(format!(
+    let lean_slug_prefix = artifact_marker("def workflowSlug :=");
+    let lean_description_marker = artifact_marker(format!(
         "def workflowDescription := {}",
         json_string(workflow.description.as_ref())
     ));
-    let lean_description_prefix = artifact_digest_marker("def workflowDescription :=");
-    let quint_name_marker = artifact_digest_marker(format!(
+    let lean_description_prefix = artifact_marker("def workflowDescription :=");
+    let quint_name_marker = artifact_marker(format!(
         "val workflowName = {}",
         json_string(workflow.name.as_ref())
     ));
-    let quint_name_prefix = artifact_digest_marker("val workflowName =");
-    let quint_slug_marker = artifact_digest_marker(format!(
+    let quint_name_prefix = artifact_marker("val workflowName =");
+    let quint_slug_marker = artifact_marker(format!(
         "val workflowSlug = {}",
         json_string(workflow.slug.as_ref())
     ));
-    let quint_slug_prefix = artifact_digest_marker("val workflowSlug =");
-    let quint_description_marker = artifact_digest_marker(format!(
+    let quint_slug_prefix = artifact_marker("val workflowSlug =");
+    let quint_description_marker = artifact_marker(format!(
         "val workflowDescription = {}",
         json_string(workflow.description.as_ref())
     ));
-    let quint_description_prefix = artifact_digest_marker("val workflowDescription =");
+    let quint_description_prefix = artifact_marker("val workflowDescription =");
     let lean_slice_marker = artifact_digest_marker("def workflowSlices : List String :=");
     let lean_slice_detail_marker = artifact_digest_marker(
         "def workflowSliceDetails : List (String × String × String × String) :=",
@@ -198,15 +202,17 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
                 "workflow {workflow_name} references missing slice artifact"
             )),
         ),
-        Effect::RequireDigest(
+        Effect::RequireCanonicalDeclaration(
             workflow_path.clone(),
+            browser_name_prefix,
             browser_name_marker,
             report_line(format!(
                 "browser workflow drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireDigest(
+        Effect::RequireCanonicalDeclaration(
             workflow_path.clone(),
+            browser_description_prefix,
             browser_description_marker,
             report_line(format!(
                 "browser workflow drift for workflow {workflow_name}"
@@ -369,6 +375,12 @@ fn report_line(value: impl Into<String>) -> ReportLine {
 
 fn artifact_digest_marker(value: impl Into<String>) -> ArtifactDigest {
     ArtifactDigest::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC static artifact marker must be valid: {error}");
+    })
+}
+
+fn artifact_marker(value: impl Into<String>) -> ArtifactMarker {
+    ArtifactMarker::try_new(value.into()).unwrap_or_else(|error| {
         unreachable!("EMC static artifact marker must be valid: {error}");
     })
 }
