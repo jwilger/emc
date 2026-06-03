@@ -125,6 +125,7 @@ impl WorkflowConnection {
 
 pub fn connect_workflow(
     indexed_workflow_name: ModelName,
+    indexed_workflow_description: ModelDescription,
     workflow_document: FileContents,
     connection: WorkflowConnection,
 ) -> Result<EffectPlan, ConnectionMutationError> {
@@ -140,6 +141,16 @@ pub fn connect_workflow(
             indexed_workflow_name.as_ref()
         )));
     }
+    let workflow_description = workflow_document
+        .description()
+        .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
+    if workflow_description != indexed_workflow_description {
+        return Err(ConnectionMutationError::new(format!(
+            "workflow document description '{}' does not match index description '{}'",
+            workflow_description.as_ref(),
+            indexed_workflow_description.as_ref()
+        )));
+    }
     let workflow_document = workflow_document
         .with_connected_transition(WorkflowTransitionAddition::new(
             connection.source.clone(),
@@ -147,9 +158,6 @@ pub fn connect_workflow(
             workflow_transition_field(connection.kind),
             connection.trigger.clone(),
         ))
-        .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
-    let workflow_description = workflow_document
-        .description()
         .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
     let module_name = module_name(workflow_name.as_ref());
     let workflow_slice_details = workflow_document
