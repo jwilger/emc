@@ -1816,6 +1816,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_generated_event_attribute_sources(document))
         .and_then(|()| validate_command_input_external_source_fields(document))
         .and_then(|()| validate_command_input_source_chains_are_reportable(document))
+        .and_then(|()| validate_command_inputs_have_source_provenance(document))
         .and_then(|()| validate_derived_read_model_field_provenance(document))
         .and_then(|()| validate_derived_read_model_field_scenarios(document))
         .and_then(|()| validate_absence_default_read_model_field_events(document))
@@ -5415,6 +5416,40 @@ fn command_input_source_chain_is_incomplete(input_source: &CommandInputSource) -
         input_source.source,
         CommandInputSourceKind::ActorInput(_) | CommandInputSourceKind::Other
     )
+}
+
+fn validate_command_inputs_have_source_provenance(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .command_definitions
+        .iter()
+        .find_map(command_input_missing_source_provenance)
+        .map_or(Ok(()), |input_name| {
+            Err(validation_issue(format!(
+                "command input '{input_name}' is missing source provenance"
+            )))
+        })
+}
+
+fn command_input_missing_source_provenance(command: &CommandDefinition) -> Option<&DefinitionName> {
+    command
+        .produces
+        .is_empty()
+        .then(|| {
+            command
+                .inputs
+                .iter()
+                .find(|input_name| !command_input_has_source(command, input_name))
+        })
+        .flatten()
+}
+
+fn command_input_has_source(command: &CommandDefinition, input_name: &DefinitionName) -> bool {
+    command
+        .input_sources
+        .iter()
+        .any(|input_source| input_source.name == *input_name)
 }
 
 fn validate_read_model_field_sources_are_present(
