@@ -296,6 +296,25 @@ mod tests {
 
         Command::cargo_bin("emc")?
             .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "alternate-review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
                 "remove",
                 "transition",
                 "--workflow",
@@ -335,12 +354,116 @@ mod tests {
             "workflow data must remove the transition trigger"
         );
         assert!(
-            lean.contains("def workflowTransitions : List WorkflowTransition := []"),
-            "Lean artifact must remove the workflow transition"
+            workflow_json.contains("\"via_navigation\": \"alternate-review-ticket-screen\""),
+            "workflow data must preserve the remaining transition to the target step"
         );
         assert!(
-            quint.contains("val workflowTransitions = []"),
-            "Quint artifact must remove the workflow transition"
+            lean.contains("alternate-review-ticket-screen"),
+            "Lean artifact must preserve the remaining workflow transition"
+        );
+        assert!(
+            quint.contains("alternate-review-ticket-screen"),
+            "Quint artifact must preserve the remaining workflow transition"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_transition_rejects_removing_required_incoming_transition_without_mutating_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+        add_slice(
+            temp_dir.path(),
+            "review-ticket",
+            "Review ticket",
+            "Actor reviews repair ticket details.",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_before = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "removing transition would leave workflow step 'review-ticket' without an incoming transition",
+            ));
+
+        let workflow_after = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+
+        assert_eq!(
+            workflow_before, workflow_after,
+            "rejected transition removal must not mutate workflow data"
         );
 
         Ok(())

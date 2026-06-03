@@ -115,6 +115,11 @@ mod tests {
             browser_js.contains("contract_scenarios"),
             "browser validation must read EMC contract scenarios"
         );
+        let browser_css = read_to_string(temp_dir.path().join("site/assets/index-DCPB_L_9.css"))?;
+        assert!(
+            browser_css.contains(".overflow-x-auto{overflow-x:auto;max-width:100%;width:100%"),
+            "timeline scrollers must stay viewport-constrained while allowing horizontal scrolling"
+        );
 
         Ok(())
     }
@@ -183,24 +188,7 @@ mod tests {
         let temp_dir = TempDir::new()?;
         initialize_navigation_chain(temp_dir.path())?;
 
-        Command::cargo_bin("emc")?
-            .args([
-                "remove",
-                "transition",
-                "--workflow",
-                "intake-visit",
-                "--from",
-                "capture-intake",
-                "--to",
-                "triage-intake",
-                "--via",
-                "navigation",
-                "--name",
-                "triage-intake-screen",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        remove_first_workflow_transition_fixture(temp_dir.path(), "intake-visit")?;
 
         Command::cargo_bin("emc")?
             .args(["generate", "site", "--output", "site"])
@@ -208,7 +196,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "workflow step 'triage-intake' has no incoming transition",
+                "Lean workflow transition drift for workflow Intake visit",
             ));
 
         Ok(())
@@ -332,6 +320,28 @@ mod tests {
             Ok::<(), Box<dyn Error>>(())
         })?;
 
+        Ok(())
+    }
+
+    fn remove_first_workflow_transition_fixture(
+        cwd: &Path,
+        workflow: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        let path = cwd.join(format!(
+            "model/browser/data/workflows/{workflow}.eventmodel.json"
+        ));
+        let mut workflow_json: serde_json::Value = serde_json::from_str(&read_to_string(&path)?)?;
+        let steps = workflow_json
+            .get_mut("steps")
+            .and_then(serde_json::Value::as_array_mut)
+            .ok_or("workflow fixture is missing steps")?;
+        let transitions = steps
+            .first_mut()
+            .and_then(|step| step.get_mut("transitions"))
+            .and_then(serde_json::Value::as_array_mut)
+            .ok_or("workflow fixture first step is missing transitions")?;
+        transitions.clear();
+        write(path, serde_json::to_string_pretty(&workflow_json)?)?;
         Ok(())
     }
 }

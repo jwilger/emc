@@ -119,11 +119,10 @@ impl WorkflowDocument {
         &self,
         removal: WorkflowTransitionRecord,
     ) -> Result<Self, WorkflowDocumentError> {
+        let next_steps = removed_transition_steps(self.steps()?, &removal)?;
+        reject_main_steps_without_incoming_transitions(&next_steps)?;
         let mut next = self.object()?.clone();
-        next.insert(
-            "steps".to_owned(),
-            Value::Array(removed_transition_steps(self.steps()?, &removal)?),
-        );
+        next.insert("steps".to_owned(), Value::Array(next_steps));
         Ok(Self {
             value: Value::Object(next),
         })
@@ -684,6 +683,33 @@ fn removed_transition_steps(
             transition_record_label(removal)
         )))
     }
+}
+
+fn reject_main_steps_without_incoming_transitions(
+    steps: &[Value],
+) -> Result<(), WorkflowDocumentError> {
+    let transitions = workflow_transitions(steps)?;
+    steps
+        .iter()
+        .filter(|step| {
+            step.get("relationship")
+                .and_then(Value::as_str)
+                .is_some_and(|relationship| relationship == "main")
+        })
+        .find_map(|step| {
+            step.get("slice")
+                .and_then(Value::as_str)
+                .filter(|slice| {
+                    !transitions
+                        .iter()
+                        .any(|transition| transition.target().as_ref() == *slice)
+                })
+        })
+        .map_or(Ok(()), |slice| {
+            Err(WorkflowDocumentError::new(format!(
+                "removing transition would leave workflow step '{slice}' without an incoming transition"
+            )))
+        })
 }
 
 fn transition_addition_record(

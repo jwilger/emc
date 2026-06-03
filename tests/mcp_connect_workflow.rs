@@ -118,6 +118,25 @@ mod tests {
             .success();
 
         Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "alternate-review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
             .args(["mcp", "stdio"])
             .current_dir(temp_dir.path())
             .write_stdin(remove_transition_mcp_requests())
@@ -143,8 +162,86 @@ mod tests {
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
         assert!(!workflow_json.contains("\"via_navigation\": \"review-ticket-screen\""));
-        assert!(lean.contains("def workflowTransitions : List WorkflowTransition := []"));
-        assert!(quint.contains("val workflowTransitions = []"));
+        assert!(workflow_json.contains("\"via_navigation\": \"alternate-review-ticket-screen\""));
+        assert!(lean.contains("alternate-review-ticket-screen"));
+        assert!(quint.contains("alternate-review-ticket-screen"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_rejects_removing_required_workflow_transition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(temp_dir.path(), "capture-ticket", "Capture ticket")?;
+        add_slice(temp_dir.path(), "review-ticket", "Review ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_before = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_transition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"message\":\"removing transition would leave workflow step 'review-ticket' without an incoming transition",
+            ));
+
+        let workflow_after = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+
+        assert_eq!(
+            workflow_before, workflow_after,
+            "rejected MCP transition removal must not mutate workflow data"
+        );
 
         Ok(())
     }
