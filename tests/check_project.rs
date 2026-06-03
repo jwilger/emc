@@ -1288,7 +1288,7 @@ mod tests {
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let mut lean = read_to_string(&lean_path)?;
         lean.push_str(
-            "\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"stale-screen\" }]\n",
+            "\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"stale-screen\", rationale := \"\" }]\n",
         );
         write(lean_path, lean)?;
 
@@ -1367,7 +1367,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/lean/OpenTicket.lean"),
-            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := []\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
+            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := []\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
         )?;
 
         Command::cargo_bin("emc")?
@@ -1412,7 +1412,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/lean/OpenTicket.lean"),
-            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := [\"capture-ticket\",\"review-ticket\"]\n\ndef workflowSliceDetails : List (String × String × String × String) := []\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
+            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := [\"capture-ticket\",\"review-ticket\"]\n\ndef workflowSliceDetails : List (String × String × String × String) := []\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
         )?;
 
         Command::cargo_bin("emc")?
@@ -1556,7 +1556,7 @@ mod tests {
         let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
         let mut quint = read_to_string(&quint_path)?;
         quint.push_str(
-            "  val workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"stale-screen\" }]\n",
+            "  val workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"stale-screen\", rationale: \"\" }]\n",
         );
         write(quint_path, quint)?;
 
@@ -1580,7 +1580,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/quint/OpenTicket.qnt"),
-            "module OpenTicket {\n  // EMC-DIGEST: workflow:Open ticket\n  val workflowName = \"Open ticket\"\n  val workflowSlug = \"open-ticket\"\n  val workflowDescription = \"Actor opens a repair ticket.\"\n  val workflowSlices = [\"capture-ticket\",\"review-ticket\"]\n  val workflowSliceDetails = []\n  val workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\" }]\n  val workflowIdentityStable = workflowName == \"Open ticket\"\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}\n",
+            "module OpenTicket {\n  // EMC-DIGEST: workflow:Open ticket\n  val workflowName = \"Open ticket\"\n  val workflowSlug = \"open-ticket\"\n  val workflowDescription = \"Actor opens a repair ticket.\"\n  val workflowSlices = [\"capture-ticket\",\"review-ticket\"]\n  val workflowSliceDetails = []\n  val workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\", rationale: \"\" }]\n  val workflowIdentityStable = workflowName == \"Open ticket\"\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}\n",
         )?;
 
         Command::cargo_bin("emc")?
@@ -1700,7 +1700,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/quint/OpenTicket.qnt"),
-            "module OpenTicket {\n\n// EMC-DIGEST: workflow:Open ticket\nval workflowName = \"Open ticket\"\n\nval workflowSlug = \"open-ticket\"\n\nval workflowDescription = \"Actor opens a repair ticket.\"\n\nval workflowSlices = []\n\nval workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\" }]\n}\n",
+            "module OpenTicket {\n\n// EMC-DIGEST: workflow:Open ticket\nval workflowName = \"Open ticket\"\n\nval workflowSlug = \"open-ticket\"\n\nval workflowDescription = \"Actor opens a repair ticket.\"\n\nval workflowSlices = []\n\nval workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\", rationale: \"\" }]\n}\n",
         )?;
 
         Command::cargo_bin("emc")?

@@ -130,10 +130,23 @@ fn workflow_step_json(
 
 fn transition_projection_json(transition: &WorkflowTransitionRecord) -> Value {
     if let Some(kind) = workflow_exit_kind(transition.kind()) {
-        json!({
-            "to_workflow": transition.target().as_ref(),
-            transition_field(kind): transition.trigger().as_ref(),
-        })
+        let mut transition_json = serde_json::Map::from_iter([
+            (
+                "to_workflow".to_owned(),
+                Value::String(transition.target().as_ref().to_owned()),
+            ),
+            (
+                transition_field(kind).to_owned(),
+                Value::String(transition.trigger().as_ref().to_owned()),
+            ),
+        ]);
+        if let Some(rationale) = transition.rationale() {
+            transition_json.insert(
+                "exit_reason".to_owned(),
+                Value::String(rationale.as_ref().to_owned()),
+            );
+        }
+        Value::Object(transition_json)
     } else {
         json!({
             "to": transition.target().as_ref(),

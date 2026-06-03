@@ -245,6 +245,46 @@ mod tests {
     }
 
     #[test]
+    fn generate_site_projects_workflow_exit_rationale_from_formal_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_workflow_exit(temp_dir.path())?;
+
+        let browser_workflow = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let stale_workflow = read_to_string(&browser_workflow)?.replace(
+            "Closed tickets continue to completion.",
+            "Stale browser-only exit reason.",
+        );
+        write(&browser_workflow, stale_workflow)?;
+
+        Command::cargo_bin("emc")?
+            .args(["generate", "site", "--output", "site"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("generated site at site"));
+
+        let projected_workflow = read_to_string(
+            temp_dir
+                .path()
+                .join("site/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        assert!(
+            projected_workflow
+                .contains("\"exit_reason\": \"Closed tickets continue to completion.\""),
+            "site data must project workflow-exit rationale from formal artifacts"
+        );
+        assert!(
+            !projected_workflow.contains("Stale browser-only exit reason."),
+            "site data must not copy stale browser-only workflow-exit rationale"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn generate_site_projects_single_slice_workflow_shape_from_formal_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -551,6 +591,71 @@ mod tests {
                 .success();
             Ok::<(), Box<dyn Error>>(())
         })?;
+
+        Ok(())
+    }
+
+    fn initialize_workflow_exit(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor enters repair ticket details.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "repair-complete",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket_closed",
+                "--reason",
+                "Closed tickets continue to completion.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
 
         Ok(())
     }

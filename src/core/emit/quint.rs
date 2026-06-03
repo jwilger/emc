@@ -104,10 +104,15 @@ fn transition_list(workflow_transitions: WorkflowTransitionRecords) -> String {
 
 fn transition_record(transition: &WorkflowTransitionRecord) -> String {
     format!(
-        "{{ source: {}, target: {}, kind: {}, trigger: {} }}",
+        "{{ source: {}, target: {}, kind: {}, trigger: {}, rationale: {} }}",
         quoted(transition.source().as_ref()),
         quoted(transition.target().as_ref()),
         quoted(transition.kind().as_ref()),
-        quoted(transition.trigger().as_ref())
+        quoted(transition.trigger().as_ref()),
+        quoted(
+            transition
+                .rationale()
+                .map_or("", |rationale| rationale.as_ref())
+        )
     )
 }

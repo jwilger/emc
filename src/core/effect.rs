@@ -58,7 +58,6 @@ pub enum Effect {
     RequireWorkflowSliceDetails(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RequireWorkflowSlices(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RequireWorkflowDigest(ProjectPath, ProjectPath, WorkflowSlug, ReportLine),
-    RequireWorkflowTransitions(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RunProcess(ProcessInvocation),
     RecordCleanReviewFromWorkflow(WorkflowSlug, ReviewerId, ReviewTimestamp),
     RemoveDirectory(ProjectPath),

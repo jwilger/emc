@@ -158,7 +158,7 @@ fn json_line_value(artifact: &str, prefix: &str) -> Result<String, FormalGraphEr
 }
 
 fn parse_slice_details(value: &str) -> Result<Vec<WorkflowSliceDetail>, FormalGraphError> {
-    parse_quoted_strings(value)?
+    quoted_string_groups(value, 4)?
         .chunks_exact(4)
         .map(|chunk| {
             Ok(WorkflowSliceDetail::new(
@@ -172,21 +172,72 @@ fn parse_slice_details(value: &str) -> Result<Vec<WorkflowSliceDetail>, FormalGr
 }
 
 fn parse_transitions(value: &str) -> Result<Vec<WorkflowTransitionRecord>, FormalGraphError> {
-    parse_quoted_strings(value)?
-        .chunks_exact(4)
-        .map(|chunk| {
-            Ok(WorkflowTransitionRecord::new(
-                transition_endpoint(&chunk[0])?,
-                transition_endpoint(&chunk[1])?,
-                workflow_transition_kind(&chunk[2])?,
-                transition_trigger_name(&chunk[3])?,
-            ))
-        })
-        .collect()
+    let strings = parse_quoted_strings(value)?;
+    if strings.len() % 5 == 0 {
+        strings
+            .chunks_exact(5)
+            .map(|chunk| {
+                transition_record_from_formal_fields(
+                    &chunk[0],
+                    &chunk[1],
+                    &chunk[2],
+                    &chunk[3],
+                    Some(&chunk[4]),
+                )
+            })
+            .collect()
+    } else if strings.len() % 4 == 0 {
+        strings
+            .chunks_exact(4)
+            .map(|chunk| {
+                transition_record_from_formal_fields(
+                    &chunk[0], &chunk[1], &chunk[2], &chunk[3], None,
+                )
+            })
+            .collect()
+    } else {
+        Err(FormalGraphError::new(
+            "formal workflow transition declarations must contain groups of four or five strings",
+        ))
+    }
+}
+
+fn transition_record_from_formal_fields(
+    source: &str,
+    target: &str,
+    kind: &str,
+    trigger: &str,
+    rationale: Option<&str>,
+) -> Result<WorkflowTransitionRecord, FormalGraphError> {
+    let source = transition_endpoint(source)?;
+    let target = transition_endpoint(target)?;
+    let kind = workflow_transition_kind(kind)?;
+    let trigger = transition_trigger_name(trigger)?;
+    match rationale.filter(|value| !value.is_empty()) {
+        Some(rationale) => Ok(WorkflowTransitionRecord::new_with_rationale(
+            source,
+            target,
+            kind,
+            trigger,
+            model_description(rationale.to_owned())?,
+        )),
+        None => Ok(WorkflowTransitionRecord::new(source, target, kind, trigger)),
+    }
+}
+
+fn quoted_string_groups(value: &str, group_size: usize) -> Result<Vec<String>, FormalGraphError> {
+    let strings = parse_quoted_strings(value)?;
+    if strings.len() % group_size == 0 {
+        Ok(strings)
+    } else {
+        Err(FormalGraphError::new(format!(
+            "formal graph collection declarations must contain groups of {group_size} strings"
+        )))
+    }
 }
 
 fn parse_quoted_strings(value: &str) -> Result<Vec<String>, FormalGraphError> {
-    let strings = value
+    value
         .match_indices('"')
         .scan(None, |start, (index, _)| {
             if value[..index]
@@ -213,15 +264,7 @@ fn parse_quoted_strings(value: &str) -> Result<Vec<String>, FormalGraphError> {
                 FormalGraphError::new(format!("invalid formal quoted string: {error}"))
             })
         })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    if strings.len() % 4 == 0 {
-        Ok(strings)
-    } else {
-        Err(FormalGraphError::new(
-            "formal graph collection declarations must contain groups of four strings",
-        ))
-    }
+        .collect::<Result<Vec<_>, _>>()
 }
 
 fn model_name(value: String) -> Result<ModelName, FormalGraphError> {

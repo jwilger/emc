@@ -91,6 +91,83 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn parsed_formal_graph_preserves_workflow_exit_rationale() -> Result<(), Box<dyn Error>> {
+        let workflow_document = workflow_exit_document()?;
+        let graph =
+            workflow_graph_from_document(parse_workflow_slug("open-ticket")?, workflow_document)?;
+        let artifact = emit_lean_workflow_module(
+            parse_lean_module_name("OpenTicket")?,
+            parse_model_name("Open ticket")?,
+            parse_model_description("Actor opens a repair ticket.")?,
+            parse_workflow_slug("open-ticket")?,
+            graph.slice_details().clone(),
+            graph.transitions().clone(),
+            workflow_digest()?,
+        );
+
+        assert_eq!(
+            parse_lean_workflow_graph(&artifact)?,
+            graph,
+            "formal parser must preserve workflow-exit rationale"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parsed_formal_graph_accepts_legacy_transition_records() -> Result<(), Box<dyn Error>> {
+        let artifact = emit_lean_workflow_module(
+            parse_lean_module_name("OpenTicket")?,
+            parse_model_name("Open ticket")?,
+            parse_model_description("Actor opens a repair ticket.")?,
+            parse_workflow_slug("open-ticket")?,
+            WorkflowSliceDetails::from_details(workflow_slice_details()?),
+            WorkflowTransitionRecords::from_records(workflow_transitions()?),
+            workflow_digest()?,
+        );
+        let legacy = artifact.as_ref().replace(
+            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\" }]",
+            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\" }]",
+        );
+
+        assert_eq!(
+            parse_lean_workflow_graph(&FileContents::try_new(legacy)?)?,
+            workflow_graph_from_document(
+                parse_workflow_slug("open-ticket")?,
+                workflow_document()?
+            )?,
+            "formal parser must retain backward compatibility with four-field transition records"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn parsed_formal_graph_rejects_malformed_transition_field_groups() -> Result<(), Box<dyn Error>>
+    {
+        let artifact = emit_lean_workflow_module(
+            parse_lean_module_name("OpenTicket")?,
+            parse_model_name("Open ticket")?,
+            parse_model_description("Actor opens a repair ticket.")?,
+            parse_workflow_slug("open-ticket")?,
+            WorkflowSliceDetails::from_details(workflow_slice_details()?),
+            WorkflowTransitionRecords::from_records(workflow_transitions()?),
+            workflow_digest()?,
+        );
+        let malformed = artifact.as_ref().replace(
+            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\" }]",
+            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\" }]",
+        );
+
+        assert!(
+            parse_lean_workflow_graph(&FileContents::try_new(malformed)?).is_err(),
+            "formal parser must reject transition declarations that are neither four-field legacy records nor five-field current records"
+        );
+
+        Ok(())
+    }
+
     fn workflow_digest() -> Result<ArtifactDigest, Box<dyn Error>> {
         Ok(artifact_digest(
             parse_model_name("Open ticket")?,
@@ -130,6 +207,12 @@ mod tests {
     fn workflow_document() -> Result<FileContents, Box<dyn Error>> {
         Ok(FileContents::try_new(
             "{\n  \"name\": \"Open ticket\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Actor opens a repair ticket.\",\n  \"board\": {},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"capture-ticket\", \"name\": \"Capture ticket\", \"type\": \"state_view\", \"description\": \"Actor enters repair ticket details.\", \"relationship\": \"entry\", \"transitions\": [{\"to\": \"review-ticket\", \"via_navigation\": \"review-ticket-screen\"}]},\n    {\"slice\": \"review-ticket\", \"name\": \"Review ticket\", \"type\": \"state_view\", \"description\": \"Actor reviews the repair ticket.\", \"relationship\": \"main\"}\n  ]\n}\n".to_owned(),
+        )?)
+    }
+
+    fn workflow_exit_document() -> Result<FileContents, Box<dyn Error>> {
+        Ok(FileContents::try_new(
+            "{\n  \"name\": \"Open ticket\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Actor opens a repair ticket.\",\n  \"board\": {},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"capture-ticket\", \"name\": \"Capture ticket\", \"type\": \"state_view\", \"description\": \"Actor enters repair ticket details.\", \"relationship\": \"entry\", \"transitions\": [{\"to_workflow\": \"repair-complete\", \"via_outcome\": \"ticket_closed\", \"exit_reason\": \"Closed tickets continue to completion.\"}]}\n  ]\n}\n".to_owned(),
         )?)
     }
 }
