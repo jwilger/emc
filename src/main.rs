@@ -641,7 +641,25 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 })
                 .map_err(|error| ShellError::message(error.to_string()))
         }
+        [command, subject, slug_flag, slug]
+            if command == "show" && subject == "workflow" && slug_flag == "--slug" =>
+        {
+            parse_workflow_slug(slug)
+                .map(|slug| Cli {
+                    command: Command::ShowWorkflow { slug },
+                })
+                .map_err(|error| ShellError::message(error.to_string()))
+        }
         [command, subject, slug] if command == "show" && subject == "slice" => {
+            parse_slice_slug(slug)
+                .map(|slug| Cli {
+                    command: Command::ShowSlice { slug },
+                })
+                .map_err(|error| ShellError::message(error.to_string()))
+        }
+        [command, subject, slug_flag, slug]
+            if command == "show" && subject == "slice" && slug_flag == "--slug" =>
+        {
             parse_slice_slug(slug)
                 .map(|slug| Cli {
                     command: Command::ShowSlice { slug },
@@ -754,7 +772,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         [command] if command == "verify" => Ok(Cli {
             command: Command::Verify,
         }),
-        _ => Err(ShellError::message("usage: emc init --name <project-name>")),
+        [command, ..] if command == "init" => {
+            Err(ShellError::message("usage: emc init --name <project-name>"))
+        }
+        _ => Err(ShellError::message(
+            "usage: emc <command> [arguments]; run emc --help",
+        )),
     }
 }
 
@@ -866,8 +889,13 @@ fn help_command() -> ClapCommand {
   emc connect workflow --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
   emc remove transition --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
   emc remove transition --workflow <workflow> --from <slice> --to-workflow <workflow> --via outcome --name <trigger>
+  emc list workflows
   emc list slices
   emc list transitions
+  emc show workflow <workflow>
+  emc show workflow --slug <workflow>
+  emc show slice <slice>
+  emc show slice --slug <slice>
   emc validate <path>
   emc verify
   emc check
@@ -875,9 +903,11 @@ fn help_command() -> ClapCommand {
   emc gherkin list --suite <suite>
   emc gherkin run --suite <suite>
   emc gherkin run --all
+  emc review gate --workflow <workflow>
   emc review record --workflow <workflow> --reviewer <reviewer> --reviewed-at <timestamp>
   emc mcp stdio
-  emc mcp http --host 127.0.0.1 --port 7331",
+  emc mcp http --host 127.0.0.1 --port 7331
+  emc mcp http --host 0.0.0.0 --port 7331 --auth-token <token>",
         )
 }
 

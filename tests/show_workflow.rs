@@ -91,6 +91,21 @@ mod tests {
     }
 
     #[test]
+    fn show_workflow_accepts_explicit_slug_flag() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_workflow(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["show", "workflow", "--slug", "open-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"name\": \"Open ticket\""));
+
+        Ok(())
+    }
+
+    #[test]
     fn show_slice_reports_formal_slice_when_browser_slice_is_stale() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         initialize_project_with_workflow(temp_dir.path())?;
@@ -111,6 +126,40 @@ mod tests {
             .stdout(predicate::str::contains("\"name\": \"Capture ticket\""))
             .stdout(predicate::str::contains(
                 "\"description\": \"Actor enters repair ticket details.\"",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn show_slice_accepts_explicit_slug_flag() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_workflow(temp_dir.path())?;
+        add_slice(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["show", "slice", "--slug", "capture-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"name\": \"Capture ticket\""));
+
+        Ok(())
+    }
+
+    #[test]
+    fn show_slice_with_slug_flag_requires_exact_subject() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_workflow(temp_dir.path())?;
+        add_slice(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["show", "slices", "--slug", "capture-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "usage: emc <command> [arguments]; run emc --help",
             ));
 
         Ok(())
@@ -207,7 +256,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "usage: emc init --name <project-name>",
+                "usage: emc <command> [arguments]; run emc --help",
             ));
 
         Ok(())

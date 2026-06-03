@@ -73,7 +73,7 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         Effect::EnsureDirectory(project_path("reviews")),
         Effect::WriteFileIfMissing(project_path("reviews/.gitkeep"), file_contents("\n")),
         Effect::Report(report_line(format!(
-            "initialized EMC project {project_name}"
+            "EMC project {project_name} layout is present"
         ))),
     ])
 }
