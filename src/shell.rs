@@ -8,12 +8,15 @@ use std::process::Command;
 
 use crate::core::connection::connect_workflow;
 use crate::core::digest::artifact_digest_from_workflow_document;
-use crate::core::effect::{Effect, EffectPlan, FileContents, ProcessInvocation, ProjectPath};
+use crate::core::effect::{
+    ArtifactDigest, Effect, EffectPlan, FileContents, ProcessInvocation, ProjectPath,
+};
 use crate::core::layout::{ModeledWorkflowLayout, check_project, list_workflows, show_workflow};
 use crate::core::project::ProjectName;
+use crate::core::review_record::{ReviewCategoryFinding, ReviewRecordDocument};
 use crate::core::site::generate_site;
 use crate::core::slice::add_slice;
-use crate::core::types::{WorkflowSliceDetail, WorkflowSlug};
+use crate::core::types::{ReviewRuleName, WorkflowSliceDetail, WorkflowSlug};
 use crate::core::verify::verify_project;
 use crate::core::workflow::{add_workflow, update_workflow_description};
 use crate::core::workflow_document::WorkflowDocument;
@@ -841,35 +844,29 @@ fn require_clean_review_record(
     fallback_message: &str,
 ) -> Result<(), ShellError> {
     let contents = fs::read_to_string(Path::new(path)).map_err(ShellError::io)?;
-    let record = serde_json::from_str::<Value>(&contents)
+    let record_contents = FileContents::try_new(contents)
         .map_err(|_error| ShellError::message(fallback_message.to_owned()))?;
-    let Some(record_object) = record.as_object() else {
-        return Err(ShellError::message(fallback_message.to_owned()));
-    };
+    let record = ReviewRecordDocument::parse(&record_contents)
+        .map_err(|_error| ShellError::message(fallback_message.to_owned()))?;
     let expected_workflow_slug = review_record_workflow_slug(path)?;
-    if record_object.get("workflow_slug").and_then(Value::as_str)
-        != Some(expected_workflow_slug.as_str())
-    {
-        let observed = record_object
-            .get("workflow_slug")
-            .and_then(Value::as_str)
-            .unwrap_or("");
+    if !record.matches_workflow(&expected_workflow_slug) {
+        let observed = record
+            .workflow_slug()
+            .map_or_else(String::new, |workflow_slug| {
+                workflow_slug.as_ref().to_owned()
+            });
         return Err(ShellError::message(format!(
             "review record workflow '{observed}' does not match '{expected_workflow_slug}'"
         )));
     }
     let current_digest = model_content_digest(workflow_path)?;
-    if record_object.get("status").and_then(Value::as_str) != Some("clean") {
-        if mandatory_findings_include_digest(record_object, &current_digest) {
+    if !record.is_clean() {
+        if record.current_mandatory_findings_include(&current_digest) {
             return Err(ShellError::message(
                 "mandatory review findings remain for current model digest",
             ));
         }
-        if mandatory_findings_are_present(record_object)
-            && record_object
-                .get("model_content_digest")
-                .and_then(Value::as_str)
-                != Some(current_digest.as_str())
+        if record.has_mandatory_findings() && !record.model_content_digest_matches(&current_digest)
         {
             return Err(ShellError::message(
                 "corrected workflow requires clean follow-up review",
@@ -877,78 +874,63 @@ fn require_clean_review_record(
         }
         return Err(ShellError::message(fallback_message.to_owned()));
     }
-    if record_object
-        .get("model_content_digest")
-        .and_then(Value::as_str)
-        != Some(current_digest.as_str())
-    {
+    if !record.model_content_digest_matches(&current_digest) {
         return Err(ShellError::message(
             "clean review is stale for current model digest",
         ));
     }
-    let Some(category_results) = record_object
-        .get("category_results")
-        .and_then(Value::as_object)
-    else {
+    if !record.has_category_results() {
         return Err(ShellError::message(fallback_message.to_owned()));
-    };
+    }
 
-    REQUIRED_REVIEW_CATEGORIES.iter().try_for_each(|category| {
-        match category_results.get(*category).and_then(Value::as_str) {
-            Some("clean") => Ok(()),
-            Some(_) => Err(ShellError::message(format!(
-                "review category '{category}' is not clean"
-            ))),
-            None => Err(ShellError::message(format!(
-                "clean review is missing category '{category}'"
-            ))),
-        }
-    })
+    let required_categories = required_review_categories()?;
+    match record.first_non_clean_category(&required_categories) {
+        Some(ReviewCategoryFinding::NotClean(category)) => Err(ShellError::message(format!(
+            "review category '{category}' is not clean"
+        ))),
+        Some(ReviewCategoryFinding::Missing(category)) => Err(ShellError::message(format!(
+            "clean review is missing category '{category}'"
+        ))),
+        None => Ok(()),
+    }
 }
 
-fn review_record_workflow_slug(path: &str) -> Result<String, ShellError> {
+fn review_record_workflow_slug(path: &str) -> Result<WorkflowSlug, ShellError> {
     Path::new(path)
         .file_name()
         .and_then(|file_name| file_name.to_str())
         .and_then(|file_name| file_name.strip_suffix(".review.json"))
-        .map(str::to_owned)
         .ok_or_else(|| ShellError::message("review record path is invalid"))
-}
-
-fn mandatory_findings_include_digest(
-    record_object: &serde_json::Map<String, Value>,
-    current_digest: &str,
-) -> bool {
-    record_object
-        .get("mandatory_findings")
-        .and_then(Value::as_array)
-        .is_some_and(|findings| {
-            findings.iter().any(|finding| {
-                finding.get("model_content_digest").and_then(Value::as_str) == Some(current_digest)
-            })
+        .and_then(|slug| {
+            WorkflowSlug::try_new(slug.to_owned())
+                .map_err(|error| ShellError::message(error.to_string()))
         })
 }
 
-fn mandatory_findings_are_present(record_object: &serde_json::Map<String, Value>) -> bool {
-    record_object
-        .get("mandatory_findings")
-        .and_then(Value::as_array)
-        .is_some_and(|findings| !findings.is_empty())
+fn required_review_categories() -> Result<Vec<ReviewRuleName>, ShellError> {
+    REQUIRED_REVIEW_CATEGORIES
+        .iter()
+        .map(|category| {
+            ReviewRuleName::try_new((*category).to_owned())
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .collect()
 }
 
-fn model_content_digest(workflow_path: &str) -> Result<String, ShellError> {
+fn model_content_digest(workflow_path: &str) -> Result<ArtifactDigest, ShellError> {
     let workflow_contents = fs::read_to_string(Path::new(workflow_path)).map_err(ShellError::io)?;
     let slice_files = workflow_slice_file_paths(workflow_path, &workflow_contents)?;
     let mut digest = StableDigest::new();
     digest.write(workflow_path);
     digest.write(&workflow_contents);
     slice_files.into_iter().try_for_each(|slice_file| {
+        let slice_path = slice_file.to_string_lossy().into_owned();
         let slice_contents = fs::read_to_string(&slice_file).map_err(ShellError::io)?;
-        digest.write(&slice_file.to_string_lossy());
+        digest.write(&slice_path);
         digest.write(&slice_contents);
         Ok::<(), ShellError>(())
     })?;
-    Ok(digest.finish())
+    ArtifactDigest::try_new(digest.finish()).map_err(|error| ShellError::message(error.to_string()))
 }
 
 struct StableDigest {

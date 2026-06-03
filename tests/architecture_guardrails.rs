@@ -328,6 +328,30 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn shell_review_records_use_semantic_document_parser() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/shell.rs")?;
+        let violations = [
+            "get(\"workflow_slug\")",
+            "get(\"status\")",
+            "get(\"model_content_digest\")",
+            "get(\"category_results\")",
+            "get(\"mandatory_findings\")",
+        ]
+        .iter()
+        .filter(|marker| source.contains(**marker))
+        .map(|marker| format!("src/shell.rs duplicates review-record semantics via `{marker}`"))
+        .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "shell review gate checks must derive from a semantic review-record document parser"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",

@@ -5,7 +5,7 @@ mod tests {
     use std::path::Path;
 
     use assert_cmd::Command;
-    use predicates::prelude::predicate;
+    use predicates::prelude::{PredicateBooleanExt, predicate};
     use tempfile::TempDir;
 
     #[test]
@@ -174,6 +174,51 @@ mod tests {
     }
 
     #[test]
+    fn review_gate_blocks_non_clean_review_without_mandatory_findings() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        write(
+            temp_dir.path().join("reviews/open-ticket.review.json"),
+            review_record_without_mandatory_findings("stale-digest"),
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["review", "gate", "--workflow", "open-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("workflow review is not clean"))
+            .stderr(
+                predicate::str::contains("corrected workflow requires clean follow-up review")
+                    .not(),
+            );
+
+        Ok(())
+    }
+
+    #[test]
     fn review_gate_blocks_review_record_for_different_workflow() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -285,6 +330,12 @@ mod tests {
     fn review_record_with_current_mandatory_finding(model_content_digest: &str) -> String {
         format!(
             "{{\n  \"workflow_slug\": \"open-ticket\",\n  \"model_content_digest\": \"{model_content_digest}\",\n  \"reviewer_id\": \"event-model-reviewer\",\n  \"status\": \"changes_requested\",\n  \"category_results\": {{}},\n  \"mandatory_findings\": [\n    {{\n      \"summary\": \"bad board lane\",\n      \"model_content_digest\": \"{model_content_digest}\"\n    }}\n  ],\n  \"reviewed_at\": \"2026-06-01T00:00:00.000Z\"\n}}\n"
+        )
+    }
+
+    fn review_record_without_mandatory_findings(model_content_digest: &str) -> String {
+        format!(
+            "{{\n  \"workflow_slug\": \"open-ticket\",\n  \"model_content_digest\": \"{model_content_digest}\",\n  \"reviewer_id\": \"event-model-reviewer\",\n  \"status\": \"changes_requested\",\n  \"category_results\": {{}},\n  \"mandatory_findings\": [],\n  \"reviewed_at\": \"2026-06-01T00:00:00.000Z\"\n}}\n"
         )
     }
 

@@ -99,6 +99,7 @@
 - 2026-06-03: Shell validation, review-digest, and check-time slice-file traversal now use semantic `WorkflowSliceFileReference` values from `WorkflowDocument::slice_files()`. A shell guardrail prevents raw `slice_files` field parsing from reappearing outside the semantic document parser.
 - 2026-06-03: Validation-time referenced slice-file checks now use semantic `WorkflowSliceFileReference` values from `WorkflowDocument::optional_slice_files()`, preserving existing validator diagnostics for non-object workflow documents while preventing raw `slice_files` parsing in validation code.
 - 2026-06-03: Shell browser-index workflow path checks now reuse the boundary parser and `ModeledWorkflowLayout::browser_data_path()` instead of duplicating raw `workflows[].path` traversal. A shell guardrail prevents direct browser-index workflow path parsing from reappearing in the interpreter.
+- 2026-06-03: Review-gate shell checks now parse review JSON through `ReviewRecordDocument` and compare semantic workflow slugs, artifact digests, statuses, category names, and mandatory finding digests. A shell guardrail prevents direct review-record field parsing from returning to the interpreter.
 
 ### Task 1: Guardrails and Project Skeleton
 
