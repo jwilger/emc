@@ -161,6 +161,7 @@
 - 2026-06-03: CLI `remove transition --workflow <slug> --from <slice> --to <slice> --via <kind> --name <trigger>` and MCP `remove_transition` now remove modeled workflow transitions through the shared semantic command path and regenerate synchronized workflow browser, Lean4, and Quint artifacts.
 - 2026-06-03: CLI `remove slice --slug <slug>` and MCP `remove_slice` now remove modeled business slices, delete their browser/Lean4/Quint slice artifacts, drop workflow transitions involving the removed slice, and regenerate the owning workflow artifacts from the shared semantic command path.
 - 2026-06-03: CLI `remove workflow --slug <slug>` and MCP `remove_workflow` now remove modeled business workflows, delete owned workflow and slice browser/Lean4/Quint artifacts, rewrite the browser index, and reject removal when another workflow has an incoming workflow-exit transition to the target workflow.
+- 2026-06-03: CLI `validate` and MCP `validate_event_model` now run deterministic project artifact synchronization checks before event-model source validation when invoked inside an initialized EMC project, so validation fails on Lean4, Quint, or browser drift before reporting source-rule diagnostics.
 
 ### Task 1: Guardrails and Project Skeleton
 
