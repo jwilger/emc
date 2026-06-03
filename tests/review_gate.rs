@@ -442,6 +442,26 @@ mod tests {
         })
     }
 
+    #[test]
+    fn review_record_command_rejects_invalid_review_timestamps() -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "review",
+                "record",
+                "--workflow",
+                "open-ticket",
+                "--reviewer",
+                "event-model-reviewer",
+                "--reviewed-at",
+                "not-a-timestamp",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("invalid review timestamp"));
+
+        Ok(())
+    }
+
     fn clean_review_record(model_content_digest: &str) -> String {
         clean_review_record_for("open-ticket", model_content_digest)
     }

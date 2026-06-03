@@ -496,9 +496,46 @@ pub struct ReviewRuleName(String);
 )]
 pub struct ReviewerId(String);
 
+fn is_utc_millisecond_timestamp(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    bytes.len() == 24
+        && bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && bytes[10] == b'T'
+        && bytes[13] == b':'
+        && bytes[16] == b':'
+        && bytes[19] == b'.'
+        && bytes[23] == b'Z'
+        && ascii_digits(bytes, 0, 4)
+        && ascii_digits(bytes, 5, 2)
+        && ascii_digits(bytes, 8, 2)
+        && ascii_digits(bytes, 11, 2)
+        && ascii_digits(bytes, 14, 2)
+        && ascii_digits(bytes, 17, 2)
+        && ascii_digits(bytes, 20, 3)
+        && numeric_range(bytes, 5, 2, 1, 12)
+        && numeric_range(bytes, 8, 2, 1, 31)
+        && numeric_range(bytes, 11, 2, 0, 23)
+        && numeric_range(bytes, 14, 2, 0, 59)
+        && numeric_range(bytes, 17, 2, 0, 59)
+}
+
+fn ascii_digits(bytes: &[u8], start: usize, length: usize) -> bool {
+    bytes[start..start + length].iter().all(u8::is_ascii_digit)
+}
+
+fn numeric_range(bytes: &[u8], start: usize, length: usize, minimum: u32, maximum: u32) -> bool {
+    ascii_digits(bytes, start, length)
+        && (minimum..=maximum).contains(
+            &bytes[start..start + length]
+                .iter()
+                .fold(0_u32, |value, byte| (value * 10) + u32::from(byte - b'0')),
+        )
+}
+
 #[nutype(
     sanitize(trim),
-    validate(not_empty),
+    validate(not_empty, predicate = is_utc_millisecond_timestamp),
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
 pub struct ReviewTimestamp(String);
