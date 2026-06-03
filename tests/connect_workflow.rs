@@ -311,6 +311,246 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn connect_workflow_adds_workflow_exit_to_canonical_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "repair-complete",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket_closed",
+                "--reason",
+                "Closed tickets continue to completion.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "connected capture-ticket to repair-complete",
+            ));
+
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        assert!(
+            workflow_json.contains("\"to_workflow\": \"repair-complete\""),
+            "workflow data must include the target workflow"
+        );
+        assert!(
+            workflow_json.contains("\"via_outcome\": \"ticket_closed\""),
+            "workflow data must include the workflow exit outcome"
+        );
+        assert!(
+            workflow_json.contains("\"exit_reason\": \"Closed tickets continue to completion.\""),
+            "workflow data must include the workflow exit rationale"
+        );
+        assert!(
+            lean.contains(
+                "def workflowTransitions : List String := [\"capture-ticket->repair-complete:workflow_exit:outcome:ticket_closed\"]"
+            ),
+            "Lean artifact must represent the workflow exit"
+        );
+        assert!(
+            quint.contains(
+                "val workflowTransitions = [\"capture-ticket->repair-complete:workflow_exit:outcome:ticket_closed\"]"
+            ),
+            "Quint artifact must represent the workflow exit"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn connect_workflow_exit_requires_exact_flag_order() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let malformed_commands = [
+            [
+                "wrong-command",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "repair-complete",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket_closed",
+                "--reason",
+                "Closed tickets continue to completion.",
+            ],
+            [
+                "connect",
+                "wrong-subject",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "repair-complete",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket_closed",
+                "--reason",
+                "Closed tickets continue to completion.",
+            ],
+            [
+                "connect",
+                "workflow",
+                "--wrong-workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "repair-complete",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket_closed",
+                "--reason",
+                "Closed tickets continue to completion.",
+            ],
+            [
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--wrong-from",
+                "capture-ticket",
+                "--to-workflow",
+                "repair-complete",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket_closed",
+                "--reason",
+                "Closed tickets continue to completion.",
+            ],
+            [
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--wrong-target",
+                "repair-complete",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket_closed",
+                "--reason",
+                "Closed tickets continue to completion.",
+            ],
+            [
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "repair-complete",
+                "--wrong-via",
+                "outcome",
+                "--name",
+                "ticket_closed",
+                "--reason",
+                "Closed tickets continue to completion.",
+            ],
+            [
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "repair-complete",
+                "--via",
+                "outcome",
+                "--wrong-name",
+                "ticket_closed",
+                "--reason",
+                "Closed tickets continue to completion.",
+            ],
+            [
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "repair-complete",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket_closed",
+                "--wrong-reason",
+                "Closed tickets continue to completion.",
+            ],
+        ];
+
+        for malformed_command in malformed_commands {
+            Command::cargo_bin("emc")?
+                .args(malformed_command)
+                .current_dir(temp_dir.path())
+                .assert()
+                .failure()
+                .stderr(predicate::str::contains(
+                    "usage: emc init --name <project-name>",
+                ));
+        }
+
+        Ok(())
+    }
+
     fn add_slice(
         cwd: &Path,
         slug: &str,

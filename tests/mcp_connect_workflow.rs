@@ -198,6 +198,70 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_connects_workflow_exit() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(temp_dir.path(), "capture-ticket", "Capture ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(workflow_exit_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "connected capture-ticket to repair-complete",
+            ));
+
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        assert!(workflow_json.contains("\"to_workflow\": \"repair-complete\""));
+        assert!(workflow_json.contains("\"via_outcome\": \"ticket_closed\""));
+        assert!(
+            workflow_json.contains("\"exit_reason\": \"Closed tickets continue to completion.\"")
+        );
+        assert!(
+            lean.contains(
+                "def workflowTransitions : List String := [\"capture-ticket->repair-complete:workflow_exit:outcome:ticket_closed\"]"
+            )
+        );
+        assert!(
+            quint.contains(
+                "val workflowTransitions = [\"capture-ticket->repair-complete:workflow_exit:outcome:ticket_closed\"]"
+            )
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_connect_workflow_schema_advertises_transition_kinds() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;
@@ -216,7 +280,7 @@ mod tests {
             .success()
             .stdout(predicate::str::contains("\"connect_workflow\""))
             .stdout(predicate::str::contains(
-                "\"enum\":[\"command\",\"event\",\"navigation\",\"external_trigger\"]",
+                "\"enum\":[\"command\",\"event\",\"navigation\",\"external_trigger\",\"outcome\"]",
             ));
 
         Ok(())
@@ -271,6 +335,13 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"record-callback\",\"via\":\"external_trigger\",\"name\":\"callback_received\"}}}\n",
+        )
+    }
+
+    fn workflow_exit_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to_workflow\":\"repair-complete\",\"via\":\"outcome\",\"name\":\"ticket_closed\",\"reason\":\"Closed tickets continue to completion.\"}}}\n",
         )
     }
 }

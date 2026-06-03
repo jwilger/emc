@@ -66,7 +66,7 @@
 - 2026-06-02: Generated Lean4 and Quint workflow artifacts now include semantic slice detail records for composed business slices: slug, name, type, and description. `emc check` rejects slice-detail drift between browser workflow data and the canonical artifacts.
 - 2026-06-02: `emc update workflow` now preserves existing workflow composition, slice file references, transitions, and canonical Lean4/Quint slice details while rewriting the workflow description.
 - 2026-06-02: Local mutation testing guardrails are available through explicit `just mutants-diff`, `just mutants-core`, and `just mutants-full` recipes. They are intentionally outside `just ci` so mutation testing can run as a regular manual engineering gate without slowing every local/hosted CI pass.
-- 2026-06-02: `emc connect workflow` now supports command, event, and navigation transitions through the same CLI/MCP semantic mutation path, and generated Lean4/Quint transition labels preserve those transition kinds.
+- 2026-06-02: `emc connect workflow` now supports command, event, navigation, external-trigger, and workflow-exit transitions through the same CLI/MCP semantic mutation path, and generated Lean4/Quint transition labels preserve those transition kinds.
 
 ### Task 1: Guardrails and Project Skeleton
 

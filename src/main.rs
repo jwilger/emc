@@ -254,6 +254,55 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            from_flag,
+            source,
+            to_workflow_flag,
+            target,
+            via_flag,
+            via,
+            name_flag,
+            name,
+            reason_flag,
+            reason,
+        ] if command == "connect"
+            && subject == "workflow"
+            && workflow_flag == "--workflow"
+            && from_flag == "--from"
+            && to_workflow_flag == "--to-workflow"
+            && via_flag == "--via"
+            && name_flag == "--name"
+            && reason_flag == "--reason" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_slug =
+                parse_slice_slug(source).map_err(|error| ShellError::message(error.to_string()))?;
+            let target_slug = parse_workflow_slug(target)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let connection_kind = parse_connection_kind(via)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let trigger = parse_transition_trigger_name(name)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let exit_reason = parse_model_description(reason)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::ConnectWorkflow {
+                    connection: WorkflowConnection::new_workflow_exit(
+                        workflow_slug,
+                        source_slug,
+                        target_slug,
+                        connection_kind,
+                        trigger,
+                        exit_reason,
+                    ),
+                },
+            })
+        }
         [command, subject, output_flag, output]
             if command == "generate" && subject == "site" && output_flag == "--output" =>
         {

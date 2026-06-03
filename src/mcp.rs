@@ -431,15 +431,25 @@ fn tools_list_result() -> Value {
                         "to": {
                             "type": "string"
                         },
+                        "to_workflow": {
+                            "type": "string"
+                        },
                         "via": {
                             "type": "string",
-                            "enum": ["command", "event", "navigation", "external_trigger"]
+                            "enum": ["command", "event", "navigation", "external_trigger", "outcome"]
                         },
                         "name": {
                             "type": "string"
+                        },
+                        "reason": {
+                            "type": "string"
                         }
                     },
-                    "required": ["workflow", "from", "to", "via", "name"],
+                    "required": ["workflow", "from", "via", "name"],
+                    "oneOf": [
+                        {"required": ["to"]},
+                        {"required": ["to_workflow", "reason"]}
+                    ],
                     "additionalProperties": false
                 }
             }
@@ -724,13 +734,6 @@ fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
         .and_then(|raw_source| {
             parse_slice_slug(raw_source).map_err(|error| ShellError::message(error.to_string()))
         })?;
-    let target_slug = arguments
-        .get("to")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("connect_workflow requires to"))
-        .and_then(|raw_target| {
-            parse_slice_slug(raw_target).map_err(|error| ShellError::message(error.to_string()))
-        })?;
     let connection_kind = arguments
         .get("via")
         .and_then(Value::as_str)
@@ -746,14 +749,44 @@ fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_transition_trigger_name(raw_name)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(EffectPlan::new(vec![Effect::ConnectWorkflowFromWorkflow(
+    let connection = if let Some(raw_target) = arguments.get("to").and_then(Value::as_str) {
+        let target_slug =
+            parse_slice_slug(raw_target).map_err(|error| ShellError::message(error.to_string()))?;
         WorkflowConnection::new(
             workflow_slug,
             source_slug,
             target_slug,
             connection_kind,
             trigger,
-        ),
+        )
+    } else {
+        let target_workflow = arguments
+            .get("to_workflow")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ShellError::message("connect_workflow requires to or to_workflow"))
+            .and_then(|raw_target| {
+                parse_workflow_slug(raw_target)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+        let reason = arguments
+            .get("reason")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ShellError::message("connect_workflow requires reason"))
+            .and_then(|raw_reason| {
+                parse_model_description(raw_reason)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+        WorkflowConnection::new_workflow_exit(
+            workflow_slug,
+            source_slug,
+            target_workflow,
+            connection_kind,
+            trigger,
+            reason,
+        )
+    };
+    interpret_collect_reports(EffectPlan::new(vec![Effect::ConnectWorkflowFromWorkflow(
+        connection,
     )]))
     .map(|reports| reports.join("\n"))
 }
