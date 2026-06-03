@@ -4,6 +4,7 @@ use std::iter;
 
 use serde_json::Value;
 
+use crate::core::browser_data_document::BrowserDataDocument;
 use crate::core::effect::FileContents;
 use crate::core::types::{
     BoardLaneId, BrowserEventElementName, CommandErrorName, CommandName, ControlEffectKind,
@@ -239,23 +240,31 @@ pub fn compose_browser_workflow(
 ) -> Result<BrowserWorkflow, BrowserCompositionError> {
     let workflow_semantics = WorkflowDocument::parse(&workflow_document)
         .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
+    let workflow_browser_data = BrowserDataDocument::parse(&workflow_document)
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
     let workflow_value = parse_json(workflow_document.as_ref())?;
+    let slice_browser_data = slice_documents
+        .iter()
+        .map(BrowserDataDocument::parse)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
     let slice_values = slice_documents
         .iter()
         .map(|document| parse_json(document.as_ref()))
         .collect::<Result<Vec<_>, _>>()?;
-    let lane_ids = iter::once(&workflow_value)
-        .chain(slice_values.iter())
-        .flat_map(board_lane_ids)
-        .try_fold(Vec::<BoardLaneId>::new(), |mut lanes, lane| {
-            let parsed = BoardLaneId::try_new(lane.to_owned()).map_err(|error| {
-                BrowserCompositionError::new(format!("invalid board lane id: {error}"))
-            })?;
-            if !lanes.iter().any(|existing| existing == &parsed) {
-                lanes.push(parsed);
+    let lane_ids = iter::once(&workflow_browser_data)
+        .chain(slice_browser_data.iter())
+        .map(BrowserDataDocument::board_lane_ids)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?
+        .into_iter()
+        .flatten()
+        .fold(Vec::<BoardLaneId>::new(), |mut lanes, lane| {
+            if !lanes.iter().any(|existing| existing == &lane) {
+                lanes.push(lane);
             }
-            Ok(lanes)
-        })?;
+            lanes
+        });
     let main_path_names = workflow_semantics
         .main_path_step_names()
         .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
@@ -335,16 +344,6 @@ impl Error for BrowserCompositionError {}
 fn parse_json(source: &str) -> Result<Value, BrowserCompositionError> {
     serde_json::from_str::<Value>(source)
         .map_err(|error| BrowserCompositionError::new(format!("invalid browser JSON: {error}")))
-}
-
-fn board_lane_ids(value: &Value) -> impl Iterator<Item = &str> {
-    value
-        .get("board")
-        .and_then(|board| board.get("lanes"))
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|lane| lane.get("id").and_then(Value::as_str))
 }
 
 fn error_recovery_cards(

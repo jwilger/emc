@@ -464,6 +464,26 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn browser_board_lanes_use_semantic_documents() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/core/browser.rs")?;
+        let violations = ["fn board_lane_ids(", "get(\"lanes\")"]
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| {
+                format!("src/core/browser.rs duplicates board lane semantics via `{marker}`")
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "browser composition must derive canonical lanes from semantic documents"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",
