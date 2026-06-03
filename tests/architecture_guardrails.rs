@@ -80,6 +80,25 @@ mod tests {
     }
 
     #[test]
+    fn event_model_validation_does_not_perform_filesystem_io_directly() -> Result<(), Box<dyn Error>>
+    {
+        let source = read_workspace_file("src/event_model_validation.rs")?;
+        let violations = filesystem_io_markers()
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| format!("src/event_model_validation.rs contains `{marker}`"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "validation must receive file contents through shell-interpreted effects"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn core_public_apis_do_not_expose_primitive_types() -> Result<(), Box<dyn Error>> {
         let violations = rust_files_under("src/core")?
             .into_iter()

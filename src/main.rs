@@ -1,5 +1,4 @@
 use std::env;
-use std::path::PathBuf;
 use std::process::ExitCode;
 
 use emc::core::connection::WorkflowConnection;
@@ -12,7 +11,6 @@ use emc::core::review_gate::review_gate;
 use emc::core::slice::NewSlice;
 use emc::core::types::{ModelDescription, WorkflowSlug};
 use emc::core::workflow::NewWorkflow;
-use emc::event_model_validation::validate_target;
 use emc::io::dto::{
     parse_connection_kind, parse_gherkin_suite, parse_model_description, parse_model_name,
     parse_slice_kind, parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
@@ -67,7 +65,7 @@ enum Command {
         description: ModelDescription,
     },
     Validate {
-        target: PathBuf,
+        target: ProjectPath,
     },
     Verify,
 }
@@ -129,7 +127,11 @@ fn run(cli: Cli) -> Result<(), ShellError> {
                 Effect::UpdateWorkflowDescriptionFromIndexAndWorkflow(slug, description),
             ]))
         }
-        Command::Validate { target } => validate_target(&target),
+        Command::Validate { target } => {
+            interpret(EffectPlan::new(vec![Effect::ValidateEventModelTarget(
+                target,
+            )]))
+        }
         Command::Verify => interpret(EffectPlan::new(vec![Effect::VerifyProjectFromIndex])),
     }
 }
@@ -432,7 +434,8 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         }
         [command, target] if command == "validate" => Ok(Cli {
             command: Command::Validate {
-                target: PathBuf::from(target),
+                target: ProjectPath::try_new(target.clone())
+                    .map_err(|error| ShellError::message(error.to_string()))?,
             },
         }),
         [command] if command == "verify" => Ok(Cli {

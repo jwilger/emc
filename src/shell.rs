@@ -14,6 +14,7 @@ use crate::core::site::generate_site;
 use crate::core::slice::add_slice;
 use crate::core::verify::verify_project;
 use crate::core::workflow::{add_workflow, update_workflow_description};
+use crate::event_model_validation::validate_event_model_sources;
 use crate::io::dto::{parse_browser_index_workflows, parse_project_manifest_name};
 use serde_json::Value;
 
@@ -271,6 +272,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
         }
+        Effect::ValidateEventModelTarget(target) => validate_event_model_target(target.as_ref()),
         Effect::VerifyProjectFromIndex => {
             let modeled_workflows = read_browser_index_workflows()?;
             interpret_collect_reports(verify_project(modeled_workflows))
@@ -315,6 +317,84 @@ fn read_workflow_document(slug: &str) -> Result<FileContents, ShellError> {
     .and_then(|contents| {
         FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
     })
+}
+
+fn validate_event_model_target(target: &str) -> Result<Vec<String>, ShellError> {
+    let target_path = ProjectPath::try_new(target.to_owned())
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let sources = read_event_model_sources(event_model_files(Path::new(target))?)?;
+    let referenced_slice_files = referenced_event_model_slice_files(&sources)?;
+    let referenced_sources = read_event_model_sources(referenced_slice_files)?;
+    validate_event_model_sources(&target_path, &sources, &referenced_sources)
+        .map(|()| vec![format!("event model is valid at {target}")])
+}
+
+fn read_event_model_sources(
+    paths: Vec<PathBuf>,
+) -> Result<Vec<(ProjectPath, FileContents)>, ShellError> {
+    paths
+        .into_iter()
+        .map(|path| {
+            fs::read_to_string(&path)
+                .map_err(ShellError::io)
+                .and_then(|contents| {
+                    let project_path = ProjectPath::try_new(path.to_string_lossy().into_owned())
+                        .map_err(|error| ShellError::message(error.to_string()))?;
+                    let file_contents = FileContents::try_new(contents)
+                        .map_err(|error| ShellError::message(error.to_string()))?;
+                    Ok((project_path, file_contents))
+                })
+        })
+        .collect()
+}
+
+fn referenced_event_model_slice_files(
+    sources: &[(ProjectPath, FileContents)],
+) -> Result<Vec<PathBuf>, ShellError> {
+    sources
+        .iter()
+        .map(|(path, contents)| {
+            let value = serde_json::from_str::<Value>(contents.as_ref()).ok();
+            let Some(slice_files) = value
+                .as_ref()
+                .and_then(|value| value.get("slice_files"))
+                .and_then(Value::as_array)
+            else {
+                return Ok(Vec::new());
+            };
+            let base_path = Path::new(path.as_ref())
+                .parent()
+                .unwrap_or_else(|| Path::new(""));
+            Ok(slice_files
+                .iter()
+                .filter_map(Value::as_str)
+                .map(|slice_file| base_path.join(slice_file))
+                .filter(|slice_file| slice_file.is_file())
+                .collect::<Vec<_>>())
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(|nested| nested.into_iter().flatten().collect())
+}
+
+fn event_model_files(target: &Path) -> Result<Vec<PathBuf>, ShellError> {
+    if target.is_file() {
+        return Ok(vec![target.to_path_buf()]);
+    }
+
+    let mut files = fs::read_dir(target)
+        .map_err(ShellError::io)?
+        .map(|entry| entry.map(|directory_entry| directory_entry.path()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ShellError::io)?
+        .into_iter()
+        .filter(|path| {
+            path.file_name()
+                .and_then(|file_name| file_name.to_str())
+                .is_some_and(|file_name| file_name.ends_with(".eventmodel.json"))
+        })
+        .collect::<Vec<_>>();
+    files.sort();
+    Ok(files)
 }
 
 fn require_indexed_workflow_files(
