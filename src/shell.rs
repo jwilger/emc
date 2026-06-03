@@ -175,13 +175,19 @@ fn require_clean_review_record(
     let Some(record_object) = record.as_object() else {
         return Err(ShellError::message(fallback_message.to_owned()));
     };
+    let current_digest = model_content_digest(workflow_path)?;
     if record_object.get("status").and_then(Value::as_str) != Some("clean") {
+        if mandatory_findings_include_digest(record_object, &current_digest) {
+            return Err(ShellError::message(
+                "mandatory review findings remain for current model digest",
+            ));
+        }
         return Err(ShellError::message(fallback_message.to_owned()));
     }
     if record_object
         .get("model_content_digest")
         .and_then(Value::as_str)
-        != Some(model_content_digest(workflow_path)?.as_str())
+        != Some(current_digest.as_str())
     {
         return Err(ShellError::message(
             "clean review is stale for current model digest",
@@ -205,6 +211,20 @@ fn require_clean_review_record(
             ))),
         }
     })
+}
+
+fn mandatory_findings_include_digest(
+    record_object: &serde_json::Map<String, Value>,
+    current_digest: &str,
+) -> bool {
+    record_object
+        .get("mandatory_findings")
+        .and_then(Value::as_array)
+        .is_some_and(|findings| {
+            findings.iter().any(|finding| {
+                finding.get("model_content_digest").and_then(Value::as_str) == Some(current_digest)
+            })
+        })
 }
 
 fn model_content_digest(workflow_path: &str) -> Result<String, ShellError> {

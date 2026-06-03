@@ -131,9 +131,57 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn review_gate_blocks_current_mandatory_findings() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        write(
+            temp_dir.path().join("reviews/open-ticket.review.json"),
+            review_record_with_current_mandatory_finding(&current_model_digest(temp_dir.path())?),
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["review", "gate", "--workflow", "open-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "mandatory review findings remain for current model digest",
+            ));
+
+        Ok(())
+    }
+
     fn clean_review_record(model_content_digest: &str) -> String {
         format!(
             "{{\n  \"workflow_slug\": \"open-ticket\",\n  \"model_content_digest\": \"{model_content_digest}\",\n  \"reviewer_id\": \"event-model-reviewer\",\n  \"status\": \"clean\",\n  \"category_results\": {{\n    \"lifecycle-entry\": \"clean\",\n    \"canonical-lanes\": \"clean\",\n    \"board-connections\": \"clean\",\n    \"fake-intermediates\": \"clean\",\n    \"slice-ownership\": \"clean\",\n    \"source-chains\": \"clean\",\n    \"workflow-reachability\": \"clean\",\n    \"transition-resolution\": \"clean\",\n    \"navigation-targets\": \"clean\",\n    \"branch-shape\": \"clean\",\n    \"outcomes-and-errors\": \"clean\",\n    \"scenario-coverage\": \"clean\",\n    \"timeline-rendering\": \"clean\"\n  }},\n  \"mandatory_findings\": [],\n  \"reviewed_at\": \"2026-06-01T00:00:00.000Z\"\n}}\n"
+        )
+    }
+
+    fn review_record_with_current_mandatory_finding(model_content_digest: &str) -> String {
+        format!(
+            "{{\n  \"workflow_slug\": \"open-ticket\",\n  \"model_content_digest\": \"{model_content_digest}\",\n  \"reviewer_id\": \"event-model-reviewer\",\n  \"status\": \"changes_requested\",\n  \"category_results\": {{}},\n  \"mandatory_findings\": [\n    {{\n      \"summary\": \"bad board lane\",\n      \"model_content_digest\": \"{model_content_digest}\"\n    }}\n  ],\n  \"reviewed_at\": \"2026-06-01T00:00:00.000Z\"\n}}\n"
         )
     }
 
