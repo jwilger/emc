@@ -4,7 +4,7 @@ mod tests {
 
     use emc::core::effect::ArtifactDigest;
     use emc::core::emit::quint::emit_workflow_module;
-    use emc::core::types::WorkflowTransitionLabel;
+    use emc::core::types::{SliceKindName, WorkflowSliceDetail, WorkflowTransitionLabel};
     use emc::io::dto::{
         parse_model_description, parse_model_name, parse_quint_module_name, parse_slice_slug,
         parse_workflow_slug,
@@ -17,7 +17,12 @@ mod tests {
             parse_model_name("Open ticket")?,
             parse_model_description("Actor opens a repair ticket.")?,
             parse_workflow_slug("open-ticket")?,
-            vec![parse_slice_slug("capture-ticket")?],
+            vec![WorkflowSliceDetail::new(
+                parse_slice_slug("capture-ticket")?,
+                parse_model_name("Capture ticket")?,
+                SliceKindName::try_new("state_view".to_owned())?,
+                parse_model_description("Actor enters repair ticket details.")?,
+            )],
             vec![WorkflowTransitionLabel::try_new(
                 "capture-ticket->review-ticket:navigation:review-ticket-screen".to_owned(),
             )?],
@@ -31,6 +36,11 @@ mod tests {
         assert!(quint.contains("val workflowSlug = \"open-ticket\""));
         assert!(quint.contains("val workflowDescription = \"Actor opens a repair ticket.\""));
         assert!(quint.contains("val workflowSlices = [\"capture-ticket\"]"));
+        assert!(
+            quint.contains(
+                "val workflowSliceDetails = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Actor enters repair ticket details.\" }]"
+            )
+        );
         assert!(
             quint.contains(
                 "val workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"

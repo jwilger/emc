@@ -8,8 +8,8 @@ use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportL
 use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
 use crate::core::types::{
-    LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceSlug, TransitionTriggerName,
-    WorkflowSlug, WorkflowTransitionLabel,
+    LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceKindName, SliceSlug,
+    TransitionTriggerName, WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionLabel,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -67,7 +67,7 @@ pub fn connect_workflow(
     let workflow_description = workflow_description(workflow_object)?;
     let module_name = module_name(workflow_name.as_ref());
     let steps = connected_steps(workflow_object, &connection)?;
-    let workflow_slices = workflow_slices(&steps)?;
+    let workflow_slice_details = workflow_slice_details(&steps)?;
     let workflow_transitions = workflow_transitions(&steps)?;
     let digest = artifact_digest(workflow_name.clone());
     let workflow_json = workflow_json(workflow_object, steps)?;
@@ -89,7 +89,7 @@ pub fn connect_workflow(
                 workflow_name.clone(),
                 workflow_description.clone(),
                 connection.workflow_slug.clone(),
-                workflow_slices.clone(),
+                workflow_slice_details.clone(),
                 workflow_transitions.clone(),
                 digest.clone(),
             ),
@@ -101,7 +101,7 @@ pub fn connect_workflow(
                 workflow_name,
                 workflow_description,
                 connection.workflow_slug.clone(),
-                workflow_slices,
+                workflow_slice_details,
                 workflow_transitions,
                 digest,
             ),
@@ -223,16 +223,50 @@ fn workflow_description(
         })
 }
 
-fn workflow_slices(steps: &[Value]) -> Result<Vec<SliceSlug>, ConnectionMutationError> {
-    steps
-        .iter()
-        .filter_map(|step| step.get("slice").and_then(Value::as_str))
-        .map(|slice| {
+fn workflow_slice_details(
+    steps: &[Value],
+) -> Result<Vec<WorkflowSliceDetail>, ConnectionMutationError> {
+    steps.iter().map(workflow_slice_detail).collect()
+}
+
+fn workflow_slice_detail(step: &Value) -> Result<WorkflowSliceDetail, ConnectionMutationError> {
+    let slug = step
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ConnectionMutationError::new("workflow step is missing slice"))
+        .and_then(|slice| {
             SliceSlug::try_new(slice.to_owned()).map_err(|error| {
                 ConnectionMutationError::new(format!("invalid slice slug: {error}"))
             })
-        })
-        .collect()
+        })?;
+    let name = step
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ConnectionMutationError::new("workflow step is missing name"))
+        .and_then(|name| {
+            ModelName::try_new(name.to_owned()).map_err(|error| {
+                ConnectionMutationError::new(format!("invalid slice name: {error}"))
+            })
+        })?;
+    let kind = step
+        .get("type")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ConnectionMutationError::new("workflow step is missing type"))
+        .and_then(|kind| {
+            SliceKindName::try_new(kind.to_owned()).map_err(|error| {
+                ConnectionMutationError::new(format!("invalid slice kind: {error}"))
+            })
+        })?;
+    let description = step
+        .get("description")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ConnectionMutationError::new("workflow step is missing description"))
+        .and_then(|description| {
+            ModelDescription::try_new(description.to_owned()).map_err(|error| {
+                ConnectionMutationError::new(format!("invalid slice description: {error}"))
+            })
+        })?;
+    Ok(WorkflowSliceDetail::new(slug, name, kind, description))
 }
 
 fn workflow_transitions(

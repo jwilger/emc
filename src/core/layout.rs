@@ -161,8 +161,12 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
         json_string(workflow.description.as_ref())
     ));
     let lean_slice_marker = artifact_digest_marker("def workflowSlices : List String :=");
+    let lean_slice_detail_marker = artifact_digest_marker(
+        "def workflowSliceDetails : List (String × String × String × String) :=",
+    );
     let lean_transition_marker = artifact_digest_marker("def workflowTransitions : List String :=");
     let quint_slice_marker = artifact_digest_marker("val workflowSlices =");
+    let quint_slice_detail_marker = artifact_digest_marker("val workflowSliceDetails =");
     let quint_transition_marker = artifact_digest_marker("val workflowTransitions =");
     let module_name = module_name_from_model(workflow.name.clone());
     let workflow_slug = workflow.slug.as_ref();
@@ -246,12 +250,28 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
                 "Lean workflow slice drift for workflow {workflow_name}"
             )),
         ),
+        Effect::RequireWorkflowSliceDetails(
+            workflow_path.clone(),
+            lean_path.clone(),
+            lean_slice_detail_marker,
+            report_line(format!(
+                "Lean workflow slice detail drift for workflow {workflow_name}"
+            )),
+        ),
         Effect::RequireWorkflowSlices(
             workflow_path.clone(),
             quint_path.clone(),
             quint_slice_marker,
             report_line(format!(
                 "Quint workflow slice drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireWorkflowSliceDetails(
+            workflow_path.clone(),
+            quint_path.clone(),
+            quint_slice_detail_marker,
+            report_line(format!(
+                "Quint workflow slice detail drift for workflow {workflow_name}"
             )),
         ),
         Effect::RequireWorkflowTransitions(

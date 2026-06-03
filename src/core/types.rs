@@ -28,6 +28,53 @@ pub struct WorkflowSlug(String);
 )]
 pub struct SliceSlug(String);
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowSliceDetail {
+    slug: SliceSlug,
+    name: ModelName,
+    kind: SliceKindName,
+    description: ModelDescription,
+}
+
+impl WorkflowSliceDetail {
+    pub fn new(
+        slug: SliceSlug,
+        name: ModelName,
+        kind: SliceKindName,
+        description: ModelDescription,
+    ) -> Self {
+        Self {
+            slug,
+            name,
+            kind,
+            description,
+        }
+    }
+
+    pub fn slug(&self) -> &SliceSlug {
+        &self.slug
+    }
+
+    pub fn name(&self) -> &ModelName {
+        &self.name
+    }
+
+    pub fn kind(&self) -> &SliceKindName {
+        &self.kind
+    }
+
+    pub fn description(&self) -> &ModelDescription {
+        &self.description
+    }
+}
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct SliceKindName(String);
+
 #[nutype(
     sanitize(trim),
     validate(not_empty),

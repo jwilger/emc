@@ -94,8 +94,20 @@ mod tests {
             "Lean artifact must represent the workflow's business slices"
         );
         assert!(
+            lean.contains(
+                "def workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Actor enters repair ticket details.\")]"
+            ),
+            "Lean artifact must represent the workflow's business slice details"
+        );
+        assert!(
             quint.contains("val workflowSlices = [\"capture-ticket\"]"),
             "Quint artifact must represent the workflow's business slices"
+        );
+        assert!(
+            quint.contains(
+                "val workflowSliceDetails = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Actor enters repair ticket details.\" }]"
+            ),
+            "Quint artifact must represent the workflow's business slice details"
         );
 
         Ok(())
