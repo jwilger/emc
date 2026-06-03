@@ -77,15 +77,84 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_http_rejects_non_local_bind_without_auth_token() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let port = available_loopback_port()?;
+
+        let output = ProcessCommand::new(cargo_bin("emc"))
+            .args([
+                "mcp",
+                "http",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                &port.to_string(),
+                "--once",
+            ])
+            .current_dir(temp_dir.path())
+            .output()?;
+
+        assert!(!output.status.success());
+        assert!(
+            String::from_utf8(output.stderr)?
+                .contains("MCP HTTP non-local bind requires --auth-token")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_http_requires_bearer_token_for_non_local_bind() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let port = available_loopback_port()?;
+        let server = ProcessCommand::new(cargo_bin("emc"))
+            .args([
+                "mcp",
+                "http",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                &port.to_string(),
+                "--auth-token",
+                "package-secret",
+                "--once",
+            ])
+            .current_dir(temp_dir.path())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let response = send_initialize_request_with_origin(port, "0.0.0.0")?;
+        let output = server.wait_with_output()?;
+
+        assert!(output.status.success());
+        assert!(String::from_utf8(output.stderr)?.is_empty());
+        assert!(
+            String::from_utf8(output.stdout)?
+                .contains(&format!("MCP HTTP listening on 0.0.0.0:{port}"))
+        );
+        assert!(predicate::str::contains("HTTP/1.1 401 Unauthorized").eval(&response));
+
+        Ok(())
+    }
+
     fn available_loopback_port() -> Result<u16, Box<dyn Error>> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
         Ok(listener.local_addr()?.port())
     }
 
     fn send_initialize_request(port: u16) -> Result<String, Box<dyn Error>> {
+        send_initialize_request_with_origin(port, "127.0.0.1")
+    }
+
+    fn send_initialize_request_with_origin(
+        port: u16,
+        origin_host: &str,
+    ) -> Result<String, Box<dyn Error>> {
         let body = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-http-test\",\"version\":\"0.0.0\"}}}";
         let request = format!(
-            "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: http://127.0.0.1:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: http://{origin_host}:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
         );
         let mut stream = connect_with_retry(port)?;

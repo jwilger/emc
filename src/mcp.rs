@@ -36,10 +36,16 @@ pub fn serve_stdio() -> Result<(), ShellError> {
         .try_for_each(write_response)
 }
 
-pub fn serve_http(host: &str, port: u16, once: bool) -> Result<(), ShellError> {
-    if !is_localhost_bind(host) {
+pub fn serve_http(
+    host: &str,
+    port: u16,
+    once: bool,
+    auth_token: Option<&str>,
+) -> Result<(), ShellError> {
+    let auth_policy = auth_policy(host, auth_token)?;
+    if auth_policy.is_required() && auth_token.is_none() {
         return Err(ShellError::message(
-            "MCP HTTP currently requires a localhost bind address",
+            "MCP HTTP non-local bind requires --auth-token",
         ));
     }
 
@@ -56,13 +62,26 @@ pub fn serve_http(host: &str, port: u16, once: bool) -> Result<(), ShellError> {
         let (stream, _address) = listener
             .accept()
             .map_err(|error| ShellError::message(error.to_string()))?;
-        handle_http_stream(stream, &authority)
+        handle_http_stream(stream, &authority, &auth_policy)
     } else {
         listener.incoming().try_for_each(|stream| {
             stream
                 .map_err(|error| ShellError::message(error.to_string()))
-                .and_then(|stream| handle_http_stream(stream, &authority))
+                .and_then(|stream| handle_http_stream(stream, &authority, &auth_policy))
         })
+    }
+}
+
+fn auth_policy<'token>(
+    host: &str,
+    auth_token: Option<&'token str>,
+) -> Result<AuthPolicy<'token>, ShellError> {
+    if is_localhost_bind(host) {
+        Ok(AuthPolicy::Optional(auth_token))
+    } else {
+        auth_token
+            .map(AuthPolicy::Required)
+            .ok_or_else(|| ShellError::message("MCP HTTP non-local bind requires --auth-token"))
     }
 }
 
@@ -70,10 +89,26 @@ fn is_localhost_bind(host: &str) -> bool {
     matches!(host, "127.0.0.1" | "localhost" | "::1")
 }
 
-fn handle_http_stream(stream: TcpStream, authority: &str) -> Result<(), ShellError> {
+#[derive(Clone, Copy)]
+enum AuthPolicy<'token> {
+    Optional(Option<&'token str>),
+    Required(&'token str),
+}
+
+impl AuthPolicy<'_> {
+    fn is_required(&self) -> bool {
+        matches!(self, Self::Required(_token))
+    }
+}
+
+fn handle_http_stream(
+    stream: TcpStream,
+    authority: &str,
+    auth_policy: &AuthPolicy<'_>,
+) -> Result<(), ShellError> {
     let mut reader = BufReader::new(stream);
     let request = read_http_request(&mut reader)?;
-    let response = http_response_for_request(request, authority)?;
+    let response = http_response_for_request(request, authority, auth_policy)?;
     let mut stream = reader.into_inner();
     stream
         .write_all(response.as_bytes())
@@ -84,6 +119,7 @@ struct HttpRequest {
     method: String,
     path: String,
     origin: Option<String>,
+    authorization: Option<String>,
     body: String,
 }
 
@@ -104,6 +140,7 @@ fn read_http_request(reader: &mut BufReader<TcpStream>) -> Result<HttpRequest, S
 
     let mut content_length = 0_usize;
     let mut origin = None;
+    let mut authorization = None;
     loop {
         let mut header = String::new();
         reader
@@ -121,6 +158,8 @@ fn read_http_request(reader: &mut BufReader<TcpStream>) -> Result<HttpRequest, S
                     .map_err(|error| ShellError::message(error.to_string()))?;
             } else if normalized_name == "origin" {
                 origin = Some(normalized_value);
+            } else if normalized_name == "authorization" {
+                authorization = Some(normalized_value);
             }
         }
     }
@@ -136,11 +175,16 @@ fn read_http_request(reader: &mut BufReader<TcpStream>) -> Result<HttpRequest, S
         method,
         path,
         origin,
+        authorization,
         body,
     })
 }
 
-fn http_response_for_request(request: HttpRequest, authority: &str) -> Result<String, ShellError> {
+fn http_response_for_request(
+    request: HttpRequest,
+    authority: &str,
+    auth_policy: &AuthPolicy<'_>,
+) -> Result<String, ShellError> {
     if request.method != "POST" || request.path != "/mcp" {
         return Ok(http_response("404 Not Found", "{\"error\":\"not found\"}"));
     }
@@ -148,6 +192,12 @@ fn http_response_for_request(request: HttpRequest, authority: &str) -> Result<St
         return Ok(http_response(
             "403 Forbidden",
             "{\"error\":\"forbidden origin\"}",
+        ));
+    }
+    if !authorization_is_allowed(request.authorization.as_deref(), auth_policy) {
+        return Ok(http_response(
+            "401 Unauthorized",
+            "{\"error\":\"missing or invalid bearer token\"}",
         ));
     }
 
@@ -159,6 +209,15 @@ fn http_response_for_request(request: HttpRequest, authority: &str) -> Result<St
         .map_err(|error| ShellError::message(error.to_string()))?
         .unwrap_or_else(|| "{}".to_owned());
     Ok(http_response("200 OK", &response))
+}
+
+fn authorization_is_allowed(authorization: Option<&str>, auth_policy: &AuthPolicy<'_>) -> bool {
+    match auth_policy {
+        AuthPolicy::Optional(None) => true,
+        AuthPolicy::Optional(Some(token)) | AuthPolicy::Required(token) => {
+            authorization == Some(format!("Bearer {token}").as_str())
+        }
+    }
 }
 
 fn origin_is_allowed(origin: Option<&str>, authority: &str) -> bool {

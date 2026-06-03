@@ -62,6 +62,7 @@ enum Command {
         host: String,
         port: u16,
         once: bool,
+        auth_token: Option<String>,
     },
     ReviewGate {
         slug: WorkflowSlug,
@@ -160,7 +161,12 @@ fn run(cli: Cli) -> Result<(), ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             interpret(list_workflows(imported_workflows))
         }
-        Command::McpHttp { host, port, once } => serve_http(&host, port, once),
+        Command::McpHttp {
+            host,
+            port,
+            once,
+            auth_token,
+        } => serve_http(&host, port, once, auth_token.as_deref()),
         Command::McpStdio => serve_stdio(),
         Command::ReviewGate { slug } => interpret(review_gate(slug)),
         Command::ShowWorkflow { slug } => {
@@ -364,6 +370,7 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 host: "127.0.0.1".to_owned(),
                 port: 7331,
                 once: false,
+                auth_token: None,
             },
         }),
         [
@@ -385,6 +392,33 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                     host: host.clone(),
                     port: parse_port(port)?,
                     once: true,
+                    auth_token: None,
+                },
+            })
+        }
+        [
+            command,
+            transport,
+            host_flag,
+            host,
+            port_flag,
+            port,
+            auth_flag,
+            auth_token,
+            once_flag,
+        ] if command == "mcp"
+            && transport == "http"
+            && host_flag == "--host"
+            && port_flag == "--port"
+            && auth_flag == "--auth-token"
+            && once_flag == "--once" =>
+        {
+            Ok(Cli {
+                command: Command::McpHttp {
+                    host: host.clone(),
+                    port: parse_port(port)?,
+                    once: true,
+                    auth_token: Some(auth_token.clone()),
                 },
             })
         }
@@ -399,6 +433,31 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                     host: host.clone(),
                     port: parse_port(port)?,
                     once: false,
+                    auth_token: None,
+                },
+            })
+        }
+        [
+            command,
+            transport,
+            host_flag,
+            host,
+            port_flag,
+            port,
+            auth_flag,
+            auth_token,
+        ] if command == "mcp"
+            && transport == "http"
+            && host_flag == "--host"
+            && port_flag == "--port"
+            && auth_flag == "--auth-token" =>
+        {
+            Ok(Cli {
+                command: Command::McpHttp {
+                    host: host.clone(),
+                    port: parse_port(port)?,
+                    once: false,
+                    auth_token: Some(auth_token.clone()),
                 },
             })
         }
