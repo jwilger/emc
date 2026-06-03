@@ -269,6 +269,24 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn shell_slice_file_references_use_semantic_workflow_documents() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/shell.rs")?;
+        let violations = ["get(\"slice_files\")"]
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| format!("src/shell.rs duplicates slice-file semantics via `{marker}`"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "shell slice-file traversal must derive from WorkflowDocument"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",

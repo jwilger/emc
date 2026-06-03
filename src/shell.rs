@@ -415,21 +415,15 @@ fn referenced_event_model_slice_files(
     sources
         .iter()
         .map(|(path, contents)| {
-            let value = serde_json::from_str::<Value>(contents.as_ref()).ok();
-            let Some(slice_files) = value
-                .as_ref()
-                .and_then(|value| value.get("slice_files"))
-                .and_then(Value::as_array)
-            else {
-                return Ok(Vec::new());
-            };
             let base_path = Path::new(path.as_ref())
                 .parent()
                 .unwrap_or_else(|| Path::new(""));
-            Ok(slice_files
-                .iter()
-                .filter_map(Value::as_str)
-                .map(|slice_file| base_path.join(slice_file))
+            Ok(WorkflowDocument::parse(contents)
+                .ok()
+                .and_then(|workflow| workflow.slice_files().ok())
+                .unwrap_or_default()
+                .into_iter()
+                .map(|slice_file| base_path.join(slice_file.as_ref()))
                 .filter_map(|slice_file| normalize_project_path(slice_file.as_path()).ok())
                 .filter(|slice_file| slice_file.is_file())
                 .collect::<Vec<_>>())
@@ -824,16 +818,19 @@ fn referenced_slice_file_names(workflows_path: &str) -> Result<BTreeSet<String>,
 }
 
 fn workflow_slice_file_names(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    let workflow = workflow_json(workflow_contents)?;
-    Ok(workflow
-        .get("slice_files")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .filter_map(|slice_file| slice_file.rsplit('/').next())
-        .map(str::to_owned)
-        .collect())
+    workflow_document(workflow_contents)
+        .and_then(|workflow| {
+            workflow
+                .slice_files()
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .map(|slice_files| {
+            slice_files
+                .into_iter()
+                .map(|slice_file| slice_file.as_ref().to_owned())
+                .filter_map(|slice_file| slice_file.rsplit('/').next().map(str::to_owned))
+                .collect()
+        })
 }
 
 fn require_clean_review_record(
@@ -998,20 +995,21 @@ fn workflow_slice_file_paths(
     workflow_path: &str,
     workflow_contents: &str,
 ) -> Result<Vec<PathBuf>, ShellError> {
-    let workflow = workflow_json(workflow_contents)?;
-    let slice_files = workflow
-        .get("slice_files")
-        .and_then(Value::as_array)
-        .ok_or_else(|| ShellError::message("workflow document is missing slice_files"))?;
     let base_path = Path::new(workflow_path)
         .parent()
         .unwrap_or_else(|| Path::new(""));
-
-    slice_files
-        .iter()
-        .filter_map(Value::as_str)
-        .map(|slice_file| Ok(base_path.join(slice_file)))
-        .collect()
+    workflow_document(workflow_contents)
+        .and_then(|workflow| {
+            workflow
+                .slice_files()
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .map(|slice_files| {
+            slice_files
+                .into_iter()
+                .map(|slice_file| base_path.join(slice_file.as_ref()))
+                .collect()
+        })
 }
 
 fn workflow_transition_marker(prefix: &str, workflow_contents: &str) -> Result<String, ShellError> {
@@ -1184,11 +1182,6 @@ fn transition_record_parts(label: &str) -> Result<(&str, &str, String, String), 
         )),
         _ => Err(ShellError::message("workflow transition is not canonical")),
     }
-}
-
-fn workflow_json(workflow_contents: &str) -> Result<Value, ShellError> {
-    serde_json::from_str::<Value>(workflow_contents)
-        .map_err(|error| ShellError::message(format!("invalid workflow JSON: {error}")))
 }
 
 fn json_string(value: String) -> Result<String, ShellError> {

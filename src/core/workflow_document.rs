@@ -105,6 +105,17 @@ impl WorkflowDocument {
         self.steps()?.iter().map(workflow_slice_detail).collect()
     }
 
+    pub fn slice_files(&self) -> Result<Vec<WorkflowSliceFileReference>, WorkflowDocumentError> {
+        self.object()?
+            .get("slice_files")
+            .and_then(Value::as_array)
+            .ok_or_else(|| WorkflowDocumentError::new("workflow document is missing slice_files"))?
+            .iter()
+            .filter_map(Value::as_str)
+            .map(workflow_slice_file_reference)
+            .collect()
+    }
+
     pub fn transitions(&self) -> Result<Vec<WorkflowTransitionLabel>, WorkflowDocumentError> {
         workflow_transitions(self.steps()?)
     }
@@ -447,6 +458,14 @@ fn model_name(context: &str, raw: &str) -> Result<ModelName, WorkflowDocumentErr
 fn slice_kind(raw: &str) -> Result<SliceKindName, WorkflowDocumentError> {
     SliceKindName::try_new(raw.to_owned())
         .map_err(|error| WorkflowDocumentError::new(format!("invalid slice kind: {error}")))
+}
+
+fn workflow_slice_file_reference(
+    raw: &str,
+) -> Result<WorkflowSliceFileReference, WorkflowDocumentError> {
+    WorkflowSliceFileReference::try_new(raw.to_owned()).map_err(|error| {
+        WorkflowDocumentError::new(format!("invalid workflow slice file reference: {error}"))
+    })
 }
 
 fn model_description(context: &str, raw: &str) -> Result<ModelDescription, WorkflowDocumentError> {
