@@ -82,6 +82,10 @@ mod tests {
             "generated site must load the bundled browser CSS"
         );
         assert!(
+            index_html.contains(r#"<link rel="icon" href="data:," />"#),
+            "generated site must suppress missing favicon requests"
+        );
+        assert!(
             !index_html.contains("Open data/index.json"),
             "generated site must not use the placeholder browser shell"
         );
@@ -93,6 +97,22 @@ mod tests {
         assert!(
             !browser_js.contains(&format!("{}{}", "Ed", "dy")),
             "generated browser assets must not mention unrelated product labels"
+        );
+        assert!(
+            browser_js.contains("No commands, events, or read models modeled yet."),
+            "definition tab must render an empty state"
+        );
+        assert!(
+            browser_js.contains("No views modeled yet."),
+            "views tab must render an empty state"
+        );
+        assert!(
+            browser_js.contains("acceptance_scenarios"),
+            "browser validation must read EMC acceptance scenarios"
+        );
+        assert!(
+            browser_js.contains("contract_scenarios"),
+            "browser validation must read EMC contract scenarios"
         );
 
         Ok(())
@@ -180,7 +200,12 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .failure()
-            .stderr(predicate::str::contains("invalid project path"));
+            .stderr(predicate::str::contains(
+                "expected a relative path inside the project",
+            ))
+            .stderr(predicate::str::contains(
+                "without parent-directory traversal",
+            ));
 
         Ok(())
     }

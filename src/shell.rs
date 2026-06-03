@@ -21,6 +21,7 @@ use crate::core::layout::{
     ModeledWorkflowTransitions, check_project, list_slices, list_transitions, list_workflows,
     show_document, show_workflow,
 };
+use crate::core::navigation_control::ensure_navigation_control_in_slice;
 use crate::core::project::ProjectName;
 use crate::core::review_record::{
     RequiredReviewCategories, ReviewCategoryFinding, ReviewRecordDocument, record_clean_review,
@@ -41,7 +42,8 @@ use crate::core::workflow::{
 use crate::core::workflow_document::WorkflowDocument;
 use crate::event_model_validation::validate_event_model_sources;
 use crate::io::dto::{
-    parse_browser_index_workflows, parse_project_manifest_name, parse_slice_slug,
+    parse_browser_index_workflows, parse_project_manifest_name, parse_project_path,
+    parse_slice_slug,
 };
 
 const REQUIRED_REVIEW_CATEGORIES: &[&str] = &[
@@ -173,6 +175,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::EnsureDirectory(path) => fs::create_dir_all(Path::new(path.as_ref()))
             .map(|()| Vec::new())
             .map_err(ShellError::io),
+        Effect::EnsureNavigationControlInSlice(slug, trigger) => {
+            ensure_slice_navigation_control(slug, trigger.as_ref()).map(|()| Vec::new())
+        }
         Effect::Fail(message) => Err(ShellError::message(message.as_ref().to_owned())),
         Effect::GenerateSiteFromManifest(output) => {
             let project_name = read_project_manifest_name()?;
@@ -737,12 +742,25 @@ fn read_slice_document(slug: &str) -> Result<FileContents, ShellError> {
 
 fn validate_event_model_target(target: &str) -> Result<Vec<String>, ShellError> {
     validate_project_artifact_synchronization_if_present()?;
-    let target_path = ProjectPath::try_new(target.to_owned()).map_err(ShellError::project_path)?;
+    let target_path = parse_project_path(target).map_err(ShellError::project_path)?;
     let sources = read_event_model_sources(event_model_files(Path::new(target))?)?;
     let referenced_slice_files = referenced_event_model_slice_files(&sources)?;
     let referenced_sources = read_event_model_sources(referenced_slice_files)?;
     validate_event_model_sources(&target_path, &sources, &referenced_sources)
         .map(|()| vec![format!("event model is valid at {target}")])
+}
+
+fn ensure_slice_navigation_control(slug: &SliceSlug, navigation: &str) -> Result<(), ShellError> {
+    let path = format!(
+        "model/browser/data/slices/{}.eventmodel.json",
+        slug.as_ref()
+    );
+    let contents = fs::read_to_string(&path).map_err(ShellError::io)?;
+    let file_contents =
+        FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))?;
+    let updated = ensure_navigation_control_in_slice(&file_contents, navigation)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    write_file(&path, updated.as_ref())
 }
 
 fn validate_project_artifact_synchronization_if_present() -> Result<(), ShellError> {
@@ -1620,30 +1638,46 @@ fn remove_file_if_present(path: &str) -> Result<(), ShellError> {
 }
 
 fn run_process(invocation: &ProcessInvocation) -> Result<Vec<String>, ShellError> {
-    let status = Command::new(invocation.program().as_ref())
+    let output = Command::new(invocation.program().as_ref())
         .args(
             invocation
                 .arguments()
                 .iter()
                 .map(|argument| argument.as_ref()),
         )
-        .status()
+        .output()
         .map_err(|error| {
             ShellError::message(format!(
-                "failed to run {}: {}. Install pinned EMC tooling or use the Nix package",
+                "failed to run {}: {}. Use `nix run . -- verify` from this repository or install the pinned EMC tooling from the Nix package",
                 invocation.program().as_ref(),
                 error
             ))
         })?;
 
-    if status.success() {
+    if output.status.success() {
         Ok(vec![invocation.success().as_ref().to_owned()])
     } else {
         Err(ShellError::message(format!(
-            "{} failed with {}. Run `emc check` to confirm generated artifacts are synchronized, then run `emc verify` again",
+            "{} failed with {}{}. Run `emc check` to confirm generated artifacts are synchronized, then run `emc verify` again",
             verification_label(invocation),
-            status
+            output.status,
+            process_diagnostics(&output.stdout, &output.stderr)
         )))
+    }
+}
+
+fn process_diagnostics(stdout: &[u8], stderr: &[u8]) -> String {
+    let stdout = String::from_utf8_lossy(stdout);
+    let stderr = String::from_utf8_lossy(stderr);
+    let diagnostics = [stdout.trim(), stderr.trim()]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+    if diagnostics.is_empty() {
+        String::new()
+    } else {
+        format!(":\n{diagnostics}")
     }
 }
 

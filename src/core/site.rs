@@ -35,6 +35,7 @@ fn index_html(project_name: &ProjectName) -> String {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title} Event Model Browser</title>
+    <link rel="icon" href="data:," />
     <script>window.EMC_PROJECT_NAME = {runtime_project_name};</script>
     <script type="module" crossorigin src="./assets/index-CTzj-YfP.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-DCPB_L_9.css">

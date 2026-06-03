@@ -94,8 +94,11 @@ pub fn parse_project_name(raw: &str) -> Result<ProjectName, BoundaryParseError> 
 }
 
 pub fn parse_project_path(raw: &str) -> Result<ProjectPath, BoundaryParseError> {
-    ProjectPath::try_new(raw.to_owned())
-        .map_err(|error| BoundaryParseError::new(format!("invalid project path: {error}")))
+    ProjectPath::try_new(raw.to_owned()).map_err(|_error| {
+        BoundaryParseError::new(
+            "invalid project path: expected a relative path inside the project without parent-directory traversal",
+        )
+    })
 }
 
 pub fn parse_project_manifest_name(raw: &str) -> Result<ProjectName, BoundaryParseError> {
@@ -275,8 +278,11 @@ pub fn parse_reviewer_id(raw: &str) -> Result<ReviewerId, BoundaryParseError> {
 }
 
 pub fn parse_review_timestamp(raw: &str) -> Result<ReviewTimestamp, BoundaryParseError> {
-    ReviewTimestamp::try_new(raw.to_owned())
-        .map_err(|error| BoundaryParseError::new(format!("invalid review timestamp: {error}")))
+    ReviewTimestamp::try_new(raw.to_owned()).map_err(|_error| {
+        BoundaryParseError::new(
+            "invalid review timestamp: expected UTC millisecond timestamp like 2026-06-03T12:00:00.000Z",
+        )
+    })
 }
 
 pub fn parse_definition_name(raw: &str) -> Result<DefinitionName, BoundaryParseError> {

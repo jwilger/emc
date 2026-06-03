@@ -648,25 +648,73 @@ impl Display for SliceMutationError {
 impl Error for SliceMutationError {}
 
 fn slice_json(new_slice: &NewSlice) -> String {
-    format!(
-        "{{\n  \"name\": {},\n  \"version\": \"0.1.0\",\n  \"description\": {},\n  \"type\": {},\n  \"board\": {{}},\n  \"streams\": [],\n  \"events\": [],\n  \"commands\": [],\n  \"read_models\": [],\n  \"views\": [],\n  \"slices\": [\n    {{\n      \"name\": {},\n      \"type\": {},\n      \"events\": [],\n      \"views\": [],\n      \"acceptance_scenarios\": [],\n      \"contract_scenarios\": []\n    }}\n  ]\n}}\n",
-        json_string(new_slice.name.as_ref()),
-        json_string(new_slice.description.as_ref()),
-        json_string(new_slice.kind.as_ref()),
-        json_string(new_slice.name.as_ref()),
-        json_string(new_slice.kind.as_ref()),
+    generated_slice_json(
+        new_slice.name.as_ref(),
+        new_slice.description.as_ref(),
+        new_slice.kind.as_ref(),
+        new_slice.slug.as_ref(),
     )
 }
 
 fn slice_json_from_detail(slice: &WorkflowSliceDetail) -> String {
+    generated_slice_json(
+        slice.name().as_ref(),
+        slice.description().as_ref(),
+        slice.kind().as_ref(),
+        slice.slug().as_ref(),
+    )
+}
+
+fn generated_slice_json(name: &str, description: &str, kind: &str, slug: &str) -> String {
+    if kind == "state_view" {
+        state_view_slice_json(name, description, kind, slug)
+    } else {
+        draft_slice_json(name, description, kind)
+    }
+}
+
+fn state_view_slice_json(name: &str, description: &str, kind: &str, slug: &str) -> String {
+    let source_view_name = slug.to_owned();
+    let navigation_view_name = default_view_name(slug);
+    let source_element_id = format!("view-{source_view_name}");
+    let scenario_name = scenario_name(name);
+    format!(
+        "{{\n  \"name\": {},\n  \"version\": \"0.1.0\",\n  \"description\": {},\n  \"type\": {},\n  \"board\": {{\n    \"lanes\": [\n      {{\"id\": \"ux\", \"name\": \"People, Views, and Translations\"}},\n      {{\"id\": \"actions\", \"name\": \"Commands and Projections\"}},\n      {{\"id\": \"events\", \"name\": \"Stored Facts\"}}\n    ],\n    \"slices\": [\n      {{\n        \"name\": {},\n        \"elements\": [{{\"id\": {}, \"kind\": \"view\", \"lane\": \"ux\", \"name\": {}}}],\n        \"connections\": []\n      }}\n    ]\n  }},\n  \"streams\": [],\n  \"events\": [],\n  \"commands\": [],\n  \"read_models\": [],\n  \"views\": [\n    {{\n      \"name\": {},\n      \"description\": {},\n      \"wireframe\": \"<section></section>\",\n      \"uses_read_models\": [],\n      \"controls\": []\n    }},\n    {{\n      \"name\": {},\n      \"description\": {},\n      \"wireframe\": \"<section></section>\",\n      \"uses_read_models\": [],\n      \"controls\": []\n    }}\n  ],\n  \"slices\": [\n    {{\n      \"name\": {},\n      \"type\": {},\n      \"events\": [],\n      \"views\": [{}, {}],\n      \"acceptance_scenarios\": [{{\"name\": {}, \"given\": [], \"when\": {{}}, \"then\": []}}],\n      \"contract_scenarios\": []\n    }}\n  ]\n}}\n",
+        json_string(name),
+        json_string(description),
+        json_string(kind),
+        json_string(name),
+        json_string(&source_element_id),
+        json_string(&source_view_name),
+        json_string(&source_view_name),
+        json_string(description),
+        json_string(&navigation_view_name),
+        json_string(description),
+        json_string(name),
+        json_string(kind),
+        json_string(&source_view_name),
+        json_string(&navigation_view_name),
+        json_string(&scenario_name),
+    )
+}
+
+fn draft_slice_json(name: &str, description: &str, kind: &str) -> String {
     format!(
         "{{\n  \"name\": {},\n  \"version\": \"0.1.0\",\n  \"description\": {},\n  \"type\": {},\n  \"board\": {{}},\n  \"streams\": [],\n  \"events\": [],\n  \"commands\": [],\n  \"read_models\": [],\n  \"views\": [],\n  \"slices\": [\n    {{\n      \"name\": {},\n      \"type\": {},\n      \"events\": [],\n      \"views\": [],\n      \"acceptance_scenarios\": [],\n      \"contract_scenarios\": []\n    }}\n  ]\n}}\n",
-        json_string(slice.name().as_ref()),
-        json_string(slice.description().as_ref()),
-        json_string(slice.kind().as_ref()),
-        json_string(slice.name().as_ref()),
-        json_string(slice.kind().as_ref()),
+        json_string(name),
+        json_string(description),
+        json_string(kind),
+        json_string(name),
+        json_string(kind),
     )
+}
+
+fn default_view_name(slug: &str) -> String {
+    format!("{}-screen", slug.replace('_', "-"))
+}
+
+fn scenario_name(name: &str) -> String {
+    name.to_ascii_lowercase()
 }
 
 fn slice_file(new_slice: &NewSlice) -> WorkflowSliceFileReference {

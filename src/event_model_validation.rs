@@ -22,16 +22,17 @@ pub fn validate_event_model_sources(
         .iter()
         .map(|(path, source)| parse_and_validate_event_model_file(path, source))
         .collect::<Result<Vec<_>, _>>()?;
-    let documents = parsed_sources
-        .iter()
-        .map(|source| source.document.clone())
-        .collect::<Vec<_>>();
-    validate_event_model_corpus(&documents)
-        .map_err(|issue| ShellError::message(format!("{} in {}", issue, target.as_ref())))?;
     let parsed_referenced_sources = referenced_sources
         .iter()
         .map(|(path, source)| parse_and_validate_referenced_event_model_file(path, source))
         .collect::<Result<Vec<_>, _>>()?;
+    let documents = parsed_sources
+        .iter()
+        .chain(parsed_referenced_sources.iter())
+        .map(|source| source.document.clone())
+        .collect::<Vec<_>>();
+    validate_event_model_corpus(&documents)
+        .map_err(|issue| ShellError::message(format!("{} in {}", issue, target.as_ref())))?;
     let lookup_sources = parsed_sources
         .into_iter()
         .chain(parsed_referenced_sources)

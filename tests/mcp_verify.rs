@@ -39,7 +39,7 @@ mod tests {
             .assert()
             .success();
 
-        Command::cargo_bin("emc")?
+        let assert = Command::cargo_bin("emc")?
             .args(["mcp", "stdio"])
             .current_dir(temp_dir.path())
             .env("PATH", path_with_fake_tools(&tool_dir)?)
@@ -49,6 +49,12 @@ mod tests {
             .stdout(predicate::str::contains("\"verify_project\""))
             .stdout(predicate::str::contains("Lean4 artifacts verified"))
             .stdout(predicate::str::contains("Quint artifacts verified"));
+
+        let stdout = String::from_utf8(assert.get_output().stdout.clone())?;
+        assert!(
+            stdout.lines().all(|line| line.starts_with('{')),
+            "MCP stdout must contain only JSON-RPC frames, got:\n{stdout}"
+        );
 
         assert_eq!(
             read_to_string(temp_dir.path().join("lake.log"))?,
@@ -103,6 +109,8 @@ mod tests {
             .stdout(predicate::str::contains("\"error\""))
             .stdout(predicate::str::contains("\"code\":-32000"))
             .stdout(predicate::str::contains("Lean4 verification failed"))
+            .stdout(predicate::str::contains("failing tool stdout"))
+            .stdout(predicate::str::contains("failing tool stderr"))
             .stdout(predicate::str::contains("Run `emc check`"));
 
         Ok(())
@@ -125,7 +133,9 @@ mod tests {
         let tool_path = tool_dir.join(tool_name);
         write(
             &tool_path,
-            format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log_file}\n"),
+            format!(
+                "#!/bin/sh\nprintf 'tool stdout noise\\n'\nprintf 'tool stderr noise\\n' >&2\nprintf '%s\\n' \"$*\" >> {log_file}\n"
+            ),
         )?;
         set_permissions(&tool_path, Permissions::from_mode(0o755))?;
         Ok(())
@@ -134,7 +144,10 @@ mod tests {
     fn create_failing_tool(tool_dir: &Path, tool_name: &str) -> Result<(), Box<dyn Error>> {
         create_dir_all(tool_dir)?;
         let tool_path = tool_dir.join(tool_name);
-        write(&tool_path, "#!/bin/sh\nexit 7\n")?;
+        write(
+            &tool_path,
+            "#!/bin/sh\nprintf 'failing tool stdout\\n'\nprintf 'failing tool stderr\\n' >&2\nexit 7\n",
+        )?;
         set_permissions(&tool_path, Permissions::from_mode(0o755))?;
         Ok(())
     }
