@@ -153,6 +153,58 @@ mod tests {
     }
 
     #[test]
+    fn review_timestamps_must_use_utc_millisecond_instants() {
+        assert!(
+            parse_review_timestamp("2026-06-03T00:00:00.000Z").is_ok(),
+            "review timestamps use UTC instants with millisecond precision"
+        );
+        assert!(
+            parse_review_timestamp("2026-06-03T00:00:00Z").is_err(),
+            "review timestamps must include millisecond precision"
+        );
+        assert!(
+            parse_review_timestamp("2026-06-03 00:00:00.000Z").is_err(),
+            "review timestamps must use the RFC3339 separator"
+        );
+        assert!(
+            parse_review_timestamp("2026-06-03T00:00:00.000-07:00").is_err(),
+            "review timestamps must be normalized to UTC"
+        );
+        assert!(
+            parse_review_timestamp("202A-06-03T00:00:00.000Z").is_err(),
+            "review timestamp years must be numeric"
+        );
+        assert!(
+            parse_review_timestamp("2026-0:-03T00:00:00.000Z").is_err(),
+            "review timestamp months must be numeric"
+        );
+        assert!(
+            parse_review_timestamp("2026-19-03T00:00:00.000Z").is_err(),
+            "review timestamp months must be in range"
+        );
+        assert!(
+            parse_review_timestamp("2026-06-03T24:00:00.000Z").is_err(),
+            "review timestamp hours must be in range"
+        );
+        assert!(
+            parse_review_timestamp("2026-06-03T00:60:00.000Z").is_err(),
+            "review timestamp minutes must be in range"
+        );
+        assert!(
+            parse_review_timestamp("2026-06-03T00:00:60.000Z").is_err(),
+            "review timestamp seconds must be in range"
+        );
+        assert!(
+            parse_review_timestamp("2026-06-03T00:00:00.A00Z").is_err(),
+            "review timestamp milliseconds must be numeric"
+        );
+        assert!(
+            parse_review_timestamp("not-a-timestamp").is_err(),
+            "review timestamps must not accept arbitrary text"
+        );
+    }
+
+    #[test]
     fn project_paths_are_relative_to_the_current_project() -> Result<(), Box<dyn Error>> {
         let path = parse_project_path("model/browser/data/index.json")?;
 
