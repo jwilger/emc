@@ -187,6 +187,11 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
         "def workflowSliceDetails : List (String × String × String × String) :=",
     );
     let lean_transition_marker = artifact_digest_marker("def workflowTransitions : List String :=");
+    let lean_identity_invariant_marker = artifact_marker(format!(
+        "theorem workflowIdentityIsStable : workflowName = {} := rfl",
+        json_string(workflow.name.as_ref())
+    ));
+    let lean_identity_invariant_prefix = artifact_marker("theorem workflowIdentityIsStable :");
     let lean_slice_detail_invariant_marker = artifact_marker(
         "theorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl",
     );
@@ -194,6 +199,11 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
     let quint_slice_marker = artifact_digest_marker("val workflowSlices =");
     let quint_slice_detail_marker = artifact_digest_marker("val workflowSliceDetails =");
     let quint_transition_marker = artifact_digest_marker("val workflowTransitions =");
+    let quint_identity_invariant_marker = artifact_marker(format!(
+        "val workflowIdentityStable = workflowName == {}",
+        json_string(workflow.name.as_ref())
+    ));
+    let quint_identity_invariant_prefix = artifact_marker("val workflowIdentityStable =");
     let quint_slice_detail_invariant_marker = artifact_marker(
         "val workflowSlicesHaveDetails = length(workflowSlices) == length(workflowSliceDetails)",
     );
@@ -377,6 +387,22 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
             quint_transition_marker,
             report_line(format!(
                 "Quint workflow transition drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_identity_invariant_prefix,
+            lean_identity_invariant_marker,
+            report_line(format!(
+                "Lean workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_identity_invariant_prefix,
+            quint_identity_invariant_marker,
+            report_line(format!(
+                "Quint workflow invariant drift for workflow {workflow_name}"
             )),
         ),
         Effect::RequireCanonicalDeclaration(
