@@ -62,6 +62,24 @@ mod tests {
     }
 
     #[test]
+    fn cli_entrypoint_uses_boundary_parsers_for_project_names() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/main.rs")?;
+        let violations = ["ProjectName::try_new"]
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| format!("src/main.rs bypasses DTO project-name parsing via `{marker}`"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "CLI boundary parsing must convert raw project names through DTO parsers before command execution"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_tool_handlers_do_not_perform_filesystem_io_directly() -> Result<(), Box<dyn Error>> {
         let source = read_workspace_file("src/mcp.rs")?;
         let violations = filesystem_io_markers()

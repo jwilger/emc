@@ -12,7 +12,8 @@ use emc::core::types::{ModelDescription, WorkflowSlug};
 use emc::core::workflow::NewWorkflow;
 use emc::io::dto::{
     parse_connection_kind, parse_gherkin_suite, parse_model_description, parse_model_name,
-    parse_slice_kind, parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
+    parse_project_name, parse_slice_kind, parse_slice_slug, parse_transition_trigger_name,
+    parse_workflow_slug,
 };
 use emc::mcp::{serve_http, serve_stdio};
 use emc::shell::{ShellError, interpret};
@@ -44,7 +45,7 @@ enum Command {
     GherkinRunAll,
     Help,
     Init {
-        name: String,
+        name: ProjectName,
     },
     ListWorkflows,
     McpStdio,
@@ -91,10 +92,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::GherkinRunAll => interpret(command::gherkin_run_all()),
         Command::GherkinRun { suite } => interpret(command::gherkin_run(suite)),
         Command::Help => print_help(),
-        Command::Init { name } => {
-            let project_name = ProjectName::try_new(name).map_err(ShellError::project_name)?;
-            interpret(command::init(project_name))
-        }
+        Command::Init { name } => interpret(command::init(name)),
         Command::ListWorkflows => interpret(command::list_workflows()),
         Command::McpHttp {
             host,
@@ -321,7 +319,10 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             })
         }
         [command, name_flag, name] if command == "init" && name_flag == "--name" => Ok(Cli {
-            command: Command::Init { name: name.clone() },
+            command: Command::Init {
+                name: parse_project_name(name)
+                    .map_err(|error| ShellError::message(error.to_string()))?,
+            },
         }),
         [command, subject] if command == "list" && subject == "workflows" => Ok(Cli {
             command: Command::ListWorkflows,

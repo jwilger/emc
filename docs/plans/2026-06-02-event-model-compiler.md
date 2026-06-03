@@ -148,6 +148,7 @@
 - 2026-06-03: Boundary parser coverage now includes project names, model descriptions, transition trigger names, and validation definition names, and `parse_definition_name` exposes the existing semantic `DefinitionName` type directly for parse-don't-validate call sites.
 - 2026-06-03: Boundary parser coverage now includes workflow transition endpoints and workflow transition kinds, exposing those existing semantic transition types directly for parse-don't-validate call sites.
 - 2026-06-03: MCP stdio now exposes `init_project`, routing project initialization through the same semantic command planner as the CLI so MCP clients can create the deterministic project skeleton and root formal artifacts.
+- 2026-06-03: CLI `init` now parses project names through the DTO boundary parser before command execution, and an architecture guardrail prevents direct `ProjectName::try_new` construction from returning to the CLI entrypoint.
 
 ### Task 1: Guardrails and Project Skeleton
 
