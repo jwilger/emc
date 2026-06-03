@@ -1746,6 +1746,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_command_input_read_model_sources_without_event_provenance()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("command-input-read-model-without-event.eventmodel.json"),
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[\"evidence_summary\"],\"input_sources\":[{\"name\":\"evidence_summary\",\"source\":\"read_model.lesson_submission_context.evidence_summary\"}],\"produces\":[]}],\"read_models\":[{\"name\":\"lesson_submission_context\",\"fields\":[{\"name\":\"evidence_summary\",\"source\":\"derivation.evidence_summary\"}]}],\"slices\":[]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "command input 'evidence_summary' source chain stops before event provenance",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_commands_with_legacy_read_model_reads() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let workflows = temp_dir.path().join("model/browser/data/workflows");
