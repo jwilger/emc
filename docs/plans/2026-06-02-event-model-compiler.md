@@ -69,6 +69,7 @@
 - 2026-06-02: `emc connect workflow` now supports command, event, navigation, external-trigger, and workflow-exit transitions through the same CLI/MCP semantic mutation path, and generated Lean4/Quint transition labels preserve those transition kinds.
 - 2026-06-02: Generated Lean4 and Quint workflow artifacts now include a slice-detail completeness obligation tying the workflow slice list to generated slice metadata. Lean proves the length equality by reduction, and Quint exposes the same boolean as a named verification value.
 - 2026-06-02: `emc verify` now asks Quint to verify the emitted `workflowIdentityStable` and `workflowSliceDetailsComplete` invariant values explicitly through both CLI and MCP verification paths.
+- 2026-06-02: `emc check` now rejects Lean4 and Quint invariant drift for generated workflow slice-detail completeness obligations, including stale or duplicate verified Quint invariant declarations.
 
 ### Task 1: Guardrails and Project Skeleton
 
