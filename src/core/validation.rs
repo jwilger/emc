@@ -38,7 +38,7 @@ pub struct EventModelDocument {
 }
 
 impl EventModelDocument {
-    pub fn new(parts: EventModelDocumentParts) -> Self {
+    pub(crate) fn new(parts: EventModelDocumentParts) -> Self {
         Self {
             name: parts.name,
             file_kind: parts.file_kind,
@@ -76,7 +76,7 @@ impl EventModelDocument {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct EventModelDocumentParts {
+pub(crate) struct EventModelDocumentParts {
     name: Option<DefinitionName>,
     file_kind: EventModelFileKind,
     top_level_keys: BTreeSet<TopLevelKey>,
@@ -111,7 +111,7 @@ pub struct EventModelDocumentParts {
 }
 
 impl EventModelDocumentParts {
-    pub fn new(file_kind: EventModelFileKind) -> Self {
+    pub(crate) fn new(file_kind: EventModelFileKind) -> Self {
         Self {
             name: None,
             file_kind,
@@ -147,37 +147,43 @@ impl EventModelDocumentParts {
         }
     }
 
-    pub fn with_name(mut self, name: Option<DefinitionName>) -> Self {
+    pub(crate) fn with_name(mut self, name: Option<DefinitionName>) -> Self {
         self.name = name;
         self
     }
 
-    pub fn with_top_level_keys(mut self, top_level_keys: BTreeSet<TopLevelKey>) -> Self {
+    pub(crate) fn with_top_level_keys(mut self, top_level_keys: BTreeSet<TopLevelKey>) -> Self {
         self.top_level_keys = top_level_keys;
         self
     }
 
-    pub fn with_event_names(mut self, event_names: BTreeSet<DefinitionName>) -> Self {
+    pub(crate) fn with_event_names(mut self, event_names: BTreeSet<DefinitionName>) -> Self {
         self.event_names = event_names;
         self
     }
 
-    pub fn with_stream_names(mut self, stream_names: BTreeSet<DefinitionName>) -> Self {
+    pub(crate) fn with_stream_names(mut self, stream_names: BTreeSet<DefinitionName>) -> Self {
         self.stream_names = stream_names;
         self
     }
 
-    pub fn with_event_definitions(mut self, event_definitions: Vec<EventDefinition>) -> Self {
+    pub(crate) fn with_event_definitions(
+        mut self,
+        event_definitions: Vec<EventDefinition>,
+    ) -> Self {
         self.event_definitions = event_definitions;
         self
     }
 
-    pub fn with_command_definitions(mut self, command_definitions: Vec<CommandDefinition>) -> Self {
+    pub(crate) fn with_command_definitions(
+        mut self,
+        command_definitions: Vec<CommandDefinition>,
+    ) -> Self {
         self.command_definitions = command_definitions;
         self
     }
 
-    pub fn with_command_produced_events(
+    pub(crate) fn with_command_produced_events(
         mut self,
         command_produced_events: BTreeSet<DefinitionName>,
     ) -> Self {
@@ -185,7 +191,7 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_state_view_observed_events(
+    pub(crate) fn with_state_view_observed_events(
         mut self,
         state_view_observed_events: BTreeSet<DefinitionName>,
     ) -> Self {
@@ -193,12 +199,15 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_named_definitions(mut self, named_definitions: Vec<NamedDefinition>) -> Self {
+    pub(crate) fn with_named_definitions(
+        mut self,
+        named_definitions: Vec<NamedDefinition>,
+    ) -> Self {
         self.named_definitions = named_definitions;
         self
     }
 
-    pub fn with_read_model_definitions(
+    pub(crate) fn with_read_model_definitions(
         mut self,
         read_model_definitions: Vec<ReadModelDefinition>,
     ) -> Self {
@@ -206,7 +215,7 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_board_read_model_command_dependencies(
+    pub(crate) fn with_board_read_model_command_dependencies(
         mut self,
         board_read_model_command_dependencies: Vec<BoardReadModelCommandDependency>,
     ) -> Self {
@@ -214,32 +223,35 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_board_lanes(mut self, board_lanes: BoardLanes) -> Self {
+    pub(crate) fn with_board_lanes(mut self, board_lanes: BoardLanes) -> Self {
         self.board_lanes = board_lanes;
         self
     }
 
-    pub fn with_board_slices(mut self, board_slices: Vec<BoardSliceGraph>) -> Self {
+    pub(crate) fn with_board_slices(mut self, board_slices: Vec<BoardSliceGraph>) -> Self {
         self.board_slices = board_slices;
         self
     }
 
-    pub fn with_slice_count(mut self, slice_count: SliceDefinitionCount) -> Self {
+    pub(crate) fn with_slice_count(mut self, slice_count: SliceDefinitionCount) -> Self {
         self.slice_count = slice_count;
         self
     }
 
-    pub fn with_slice_definitions(mut self, slice_definitions: Vec<SliceDefinition>) -> Self {
+    pub(crate) fn with_slice_definitions(
+        mut self,
+        slice_definitions: Vec<SliceDefinition>,
+    ) -> Self {
         self.slice_definitions = slice_definitions;
         self
     }
 
-    pub fn with_view_definitions(mut self, view_definitions: Vec<ViewDefinition>) -> Self {
+    pub(crate) fn with_view_definitions(mut self, view_definitions: Vec<ViewDefinition>) -> Self {
         self.view_definitions = view_definitions;
         self
     }
 
-    pub fn with_workflow_slice_references(
+    pub(crate) fn with_workflow_slice_references(
         mut self,
         workflow_slice_references: BTreeSet<DefinitionName>,
     ) -> Self {
@@ -247,7 +259,7 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_workflow_step_slices(
+    pub(crate) fn with_workflow_step_slices(
         mut self,
         workflow_step_slices: BTreeSet<DefinitionName>,
     ) -> Self {
@@ -255,12 +267,12 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_workflow_steps(mut self, workflow_steps: Vec<WorkflowStep>) -> Self {
+    pub(crate) fn with_workflow_steps(mut self, workflow_steps: Vec<WorkflowStep>) -> Self {
         self.workflow_steps = workflow_steps;
         self
     }
 
-    pub fn with_workflow_event_transitions(
+    pub(crate) fn with_workflow_event_transitions(
         mut self,
         workflow_event_transitions: Vec<WorkflowEventTransition>,
     ) -> Self {
@@ -268,7 +280,7 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_workflow_command_transitions(
+    pub(crate) fn with_workflow_command_transitions(
         mut self,
         workflow_command_transitions: Vec<WorkflowCommandTransition>,
     ) -> Self {
@@ -276,7 +288,7 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_workflow_navigation_transitions(
+    pub(crate) fn with_workflow_navigation_transitions(
         mut self,
         workflow_navigation_transitions: Vec<WorkflowNavigationTransition>,
     ) -> Self {
@@ -284,7 +296,7 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_workflow_external_trigger_transitions(
+    pub(crate) fn with_workflow_external_trigger_transitions(
         mut self,
         workflow_external_trigger_transitions: Vec<WorkflowExternalTriggerTransition>,
     ) -> Self {
@@ -292,7 +304,7 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_workflow_exit_transitions(
+    pub(crate) fn with_workflow_exit_transitions(
         mut self,
         workflow_exit_transitions: Vec<WorkflowExitTransition>,
     ) -> Self {
@@ -300,7 +312,7 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_duplicate_workflow_step_slice(
+    pub(crate) fn with_duplicate_workflow_step_slice(
         mut self,
         duplicate_workflow_step_slice: Option<DefinitionName>,
     ) -> Self {
@@ -308,12 +320,15 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_workflow_composition(mut self, workflow_composition: WorkflowComposition) -> Self {
+    pub(crate) fn with_workflow_composition(
+        mut self,
+        workflow_composition: WorkflowComposition,
+    ) -> Self {
         self.workflow_composition = workflow_composition;
         self
     }
 
-    pub fn with_workflow_entry_step_count(
+    pub(crate) fn with_workflow_entry_step_count(
         mut self,
         workflow_entry_step_count: WorkflowEntryStepCount,
     ) -> Self {
@@ -321,7 +336,7 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_workflow_internal_definitions(
+    pub(crate) fn with_workflow_internal_definitions(
         mut self,
         workflow_internal_definitions: WorkflowInternalDefinitions,
     ) -> Self {
@@ -329,7 +344,7 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_workflow_transition_errors(
+    pub(crate) fn with_workflow_transition_errors(
         mut self,
         workflow_transition_errors: BTreeSet<DefinitionName>,
     ) -> Self {
@@ -337,7 +352,7 @@ impl EventModelDocumentParts {
         self
     }
 
-    pub fn with_workflow_transition_outcomes(
+    pub(crate) fn with_workflow_transition_outcomes(
         mut self,
         workflow_transition_outcomes: BTreeSet<DefinitionName>,
     ) -> Self {
@@ -839,7 +854,7 @@ pub struct SliceDefinition {
 }
 
 impl SliceDefinition {
-    pub fn new(parts: SliceDefinitionParts) -> Self {
+    pub(crate) fn new(parts: SliceDefinitionParts) -> Self {
         Self {
             name: parts.name,
             slice_type: parts.slice_type,
@@ -885,7 +900,7 @@ impl SliceDefinition {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SliceDefinitionParts {
+pub(crate) struct SliceDefinitionParts {
     name: DefinitionName,
     slice_type: SliceType,
     issued_commands: Vec<DefinitionName>,
@@ -908,7 +923,7 @@ pub struct SliceDefinitionParts {
 }
 
 impl SliceDefinitionParts {
-    pub fn new(name: DefinitionName, slice_type: SliceType) -> Self {
+    pub(crate) fn new(name: DefinitionName, slice_type: SliceType) -> Self {
         Self {
             name,
             slice_type,
@@ -932,12 +947,12 @@ impl SliceDefinitionParts {
         }
     }
 
-    pub fn with_issued_commands(mut self, issued_commands: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_issued_commands(mut self, issued_commands: Vec<DefinitionName>) -> Self {
         self.issued_commands = issued_commands;
         self
     }
 
-    pub fn with_handled_command_errors(
+    pub(crate) fn with_handled_command_errors(
         mut self,
         handled_command_errors: Vec<DefinitionName>,
     ) -> Self {
@@ -945,37 +960,40 @@ impl SliceDefinitionParts {
         self
     }
 
-    pub fn with_owned_automations(mut self, owned_automations: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_owned_automations(mut self, owned_automations: Vec<DefinitionName>) -> Self {
         self.owned_automations = owned_automations;
         self
     }
 
-    pub fn with_owned_read_models(mut self, owned_read_models: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_owned_read_models(mut self, owned_read_models: Vec<DefinitionName>) -> Self {
         self.owned_read_models = owned_read_models;
         self
     }
 
-    pub fn with_owned_translations(mut self, owned_translations: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_owned_translations(
+        mut self,
+        owned_translations: Vec<DefinitionName>,
+    ) -> Self {
         self.owned_translations = owned_translations;
         self
     }
 
-    pub fn with_owned_views(mut self, owned_views: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_owned_views(mut self, owned_views: Vec<DefinitionName>) -> Self {
         self.owned_views = owned_views;
         self
     }
 
-    pub fn with_owned_events(mut self, owned_events: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_owned_events(mut self, owned_events: Vec<DefinitionName>) -> Self {
         self.owned_events = owned_events;
         self
     }
 
-    pub fn with_external_triggers(mut self, external_triggers: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_external_triggers(mut self, external_triggers: Vec<DefinitionName>) -> Self {
         self.external_triggers = external_triggers;
         self
     }
 
-    pub fn with_external_payload_variants(
+    pub(crate) fn with_external_payload_variants(
         mut self,
         external_payload_variants: Vec<ExternalPayloadVariant>,
     ) -> Self {
@@ -983,32 +1001,32 @@ impl SliceDefinitionParts {
         self
     }
 
-    pub fn with_outcome_labels(mut self, outcome_labels: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_outcome_labels(mut self, outcome_labels: Vec<DefinitionName>) -> Self {
         self.outcome_labels = outcome_labels;
         self
     }
 
-    pub fn with_outcomes(mut self, outcomes: Vec<OutcomeDefinition>) -> Self {
+    pub(crate) fn with_outcomes(mut self, outcomes: Vec<OutcomeDefinition>) -> Self {
         self.outcomes = outcomes;
         self
     }
 
-    pub fn with_legacy_scenarios(mut self, legacy_scenarios: LegacyScenariosField) -> Self {
+    pub(crate) fn with_legacy_scenarios(mut self, legacy_scenarios: LegacyScenariosField) -> Self {
         self.legacy_scenarios = legacy_scenarios;
         self
     }
 
-    pub fn with_singleton_behavior(mut self, singleton_behavior: SingletonBehavior) -> Self {
+    pub(crate) fn with_singleton_behavior(mut self, singleton_behavior: SingletonBehavior) -> Self {
         self.singleton_behavior = singleton_behavior;
         self
     }
 
-    pub fn with_automation_trigger(mut self, automation_trigger: AutomationTrigger) -> Self {
+    pub(crate) fn with_automation_trigger(mut self, automation_trigger: AutomationTrigger) -> Self {
         self.automation_trigger = automation_trigger;
         self
     }
 
-    pub fn with_automation_command_policy(
+    pub(crate) fn with_automation_command_policy(
         mut self,
         automation_command_policy: AutomationCommandPolicy,
     ) -> Self {
@@ -1016,12 +1034,15 @@ impl SliceDefinitionParts {
         self
     }
 
-    pub fn with_translation_contract(mut self, translation_contract: TranslationContract) -> Self {
+    pub(crate) fn with_translation_contract(
+        mut self,
+        translation_contract: TranslationContract,
+    ) -> Self {
         self.translation_contract = translation_contract;
         self
     }
 
-    pub fn with_scenarios(mut self, scenarios: Vec<SliceScenario>) -> Self {
+    pub(crate) fn with_scenarios(mut self, scenarios: Vec<SliceScenario>) -> Self {
         self.scenarios = scenarios;
         self
     }
@@ -1094,7 +1115,7 @@ pub struct SliceScenario {
 }
 
 impl SliceScenario {
-    pub fn new(parts: SliceScenarioParts) -> Self {
+    pub(crate) fn new(parts: SliceScenarioParts) -> Self {
         Self {
             name: parts.name,
             when_field: parts.when_field,
@@ -1119,7 +1140,7 @@ impl SliceScenario {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SliceScenarioParts {
+pub(crate) struct SliceScenarioParts {
     name: DefinitionName,
     when_field: ScenarioStepField,
     scenario_set: ScenarioSetKind,
@@ -1133,7 +1154,7 @@ pub struct SliceScenarioParts {
 }
 
 impl SliceScenarioParts {
-    pub fn new(
+    pub(crate) fn new(
         name: DefinitionName,
         when_field: ScenarioStepField,
         scenario_set: ScenarioSetKind,
@@ -1152,12 +1173,12 @@ impl SliceScenarioParts {
         }
     }
 
-    pub fn with_referenced_events(mut self, referenced_events: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_referenced_events(mut self, referenced_events: Vec<DefinitionName>) -> Self {
         self.referenced_events = referenced_events;
         self
     }
 
-    pub fn with_scenario_step_references(
+    pub(crate) fn with_scenario_step_references(
         mut self,
         scenario_step_references: Vec<DefinitionName>,
     ) -> Self {
@@ -1165,27 +1186,27 @@ impl SliceScenarioParts {
         self
     }
 
-    pub fn with_then_events(mut self, then_events: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_then_events(mut self, then_events: Vec<DefinitionName>) -> Self {
         self.then_events = then_events;
         self
     }
 
-    pub fn with_command_errors(mut self, command_errors: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_command_errors(mut self, command_errors: Vec<DefinitionName>) -> Self {
         self.command_errors = command_errors;
         self
     }
 
-    pub fn with_given_streams(mut self, given_streams: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_given_streams(mut self, given_streams: Vec<DefinitionName>) -> Self {
         self.given_streams = given_streams;
         self
     }
 
-    pub fn with_read_model_states(mut self, read_model_states: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_read_model_states(mut self, read_model_states: Vec<DefinitionName>) -> Self {
         self.read_model_states = read_model_states;
         self
     }
 
-    pub fn with_read_model_state_values(
+    pub(crate) fn with_read_model_state_values(
         mut self,
         read_model_state_values: Vec<ReadModelState>,
     ) -> Self {
@@ -1250,7 +1271,7 @@ pub struct ViewControlDefinition {
 }
 
 impl ViewControlDefinition {
-    pub fn new(parts: ViewControlDefinitionParts) -> Self {
+    pub(crate) fn new(parts: ViewControlDefinitionParts) -> Self {
         Self {
             label: parts.label,
             command: parts.command,
@@ -1267,7 +1288,7 @@ impl ViewControlDefinition {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ViewControlDefinitionParts {
+pub(crate) struct ViewControlDefinitionParts {
     label: DefinitionName,
     command: Option<DefinitionName>,
     input_provisions: Vec<ControlInputProvision>,
@@ -1281,7 +1302,7 @@ pub struct ViewControlDefinitionParts {
 }
 
 impl ViewControlDefinitionParts {
-    pub fn new(label: DefinitionName) -> Self {
+    pub(crate) fn new(label: DefinitionName) -> Self {
         Self {
             label,
             command: None,
@@ -1296,22 +1317,25 @@ impl ViewControlDefinitionParts {
         }
     }
 
-    pub fn with_command(mut self, command: Option<DefinitionName>) -> Self {
+    pub(crate) fn with_command(mut self, command: Option<DefinitionName>) -> Self {
         self.command = command;
         self
     }
 
-    pub fn with_input_provisions(mut self, input_provisions: Vec<ControlInputProvision>) -> Self {
+    pub(crate) fn with_input_provisions(
+        mut self,
+        input_provisions: Vec<ControlInputProvision>,
+    ) -> Self {
         self.input_provisions = input_provisions;
         self
     }
 
-    pub fn with_decision_fields(mut self, decision_fields: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_decision_fields(mut self, decision_fields: Vec<DefinitionName>) -> Self {
         self.decision_fields = decision_fields;
         self
     }
 
-    pub fn with_command_error_handling(
+    pub(crate) fn with_command_error_handling(
         mut self,
         command_error_handling: Vec<ControlCommandErrorHandling>,
     ) -> Self {
@@ -1319,27 +1343,33 @@ impl ViewControlDefinitionParts {
         self
     }
 
-    pub fn with_navigation_target(mut self, navigation_target: Option<DefinitionName>) -> Self {
+    pub(crate) fn with_navigation_target(
+        mut self,
+        navigation_target: Option<DefinitionName>,
+    ) -> Self {
         self.navigation_target = navigation_target;
         self
     }
 
-    pub fn with_navigation_type(mut self, navigation_type: NavigationType) -> Self {
+    pub(crate) fn with_navigation_type(mut self, navigation_type: NavigationType) -> Self {
         self.navigation_type = navigation_type;
         self
     }
 
-    pub fn with_workflow_target(mut self, workflow_target: Option<DefinitionName>) -> Self {
+    pub(crate) fn with_workflow_target(mut self, workflow_target: Option<DefinitionName>) -> Self {
         self.workflow_target = workflow_target;
         self
     }
 
-    pub fn with_external_system(mut self, external_system: Option<DefinitionName>) -> Self {
+    pub(crate) fn with_external_system(mut self, external_system: Option<DefinitionName>) -> Self {
         self.external_system = external_system;
         self
     }
 
-    pub fn with_payload_contract(mut self, payload_contract: Option<DefinitionName>) -> Self {
+    pub(crate) fn with_payload_contract(
+        mut self,
+        payload_contract: Option<DefinitionName>,
+    ) -> Self {
         self.payload_contract = payload_contract;
         self
     }
@@ -1566,7 +1596,7 @@ pub struct CommandDefinition {
 }
 
 impl CommandDefinition {
-    pub fn new(parts: CommandDefinitionParts) -> Self {
+    pub(crate) fn new(parts: CommandDefinitionParts) -> Self {
         Self {
             name: parts.name,
             inputs: parts.inputs,
@@ -1581,7 +1611,7 @@ impl CommandDefinition {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct CommandDefinitionParts {
+pub(crate) struct CommandDefinitionParts {
     name: Option<DefinitionName>,
     inputs: Vec<DefinitionName>,
     input_sources: Vec<CommandInputSource>,
@@ -1593,7 +1623,7 @@ pub struct CommandDefinitionParts {
 }
 
 impl CommandDefinitionParts {
-    pub fn new(name: Option<DefinitionName>) -> Self {
+    pub(crate) fn new(name: Option<DefinitionName>) -> Self {
         Self {
             name,
             inputs: Vec::new(),
@@ -1606,27 +1636,27 @@ impl CommandDefinitionParts {
         }
     }
 
-    pub fn with_inputs(mut self, inputs: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_inputs(mut self, inputs: Vec<DefinitionName>) -> Self {
         self.inputs = inputs;
         self
     }
 
-    pub fn with_input_sources(mut self, input_sources: Vec<CommandInputSource>) -> Self {
+    pub(crate) fn with_input_sources(mut self, input_sources: Vec<CommandInputSource>) -> Self {
         self.input_sources = input_sources;
         self
     }
 
-    pub fn with_read_model_reads(mut self, read_model_reads: CommandReadModelReads) -> Self {
+    pub(crate) fn with_read_model_reads(mut self, read_model_reads: CommandReadModelReads) -> Self {
         self.read_model_reads = read_model_reads;
         self
     }
 
-    pub fn with_external_inputs(mut self, external_inputs: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_external_inputs(mut self, external_inputs: Vec<DefinitionName>) -> Self {
         self.external_inputs = external_inputs;
         self
     }
 
-    pub fn with_external_input_schemas(
+    pub(crate) fn with_external_input_schemas(
         mut self,
         external_input_schemas: Vec<ExternalInputSchema>,
     ) -> Self {
@@ -1634,12 +1664,12 @@ impl CommandDefinitionParts {
         self
     }
 
-    pub fn with_produces(mut self, produces: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_produces(mut self, produces: Vec<DefinitionName>) -> Self {
         self.produces = produces;
         self
     }
 
-    pub fn with_errors(mut self, errors: Vec<DefinitionName>) -> Self {
+    pub(crate) fn with_errors(mut self, errors: Vec<DefinitionName>) -> Self {
         self.errors = errors;
         self
     }

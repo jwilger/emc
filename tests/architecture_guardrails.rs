@@ -234,6 +234,34 @@ mod tests {
     }
 
     #[test]
+    fn validation_structural_builders_are_crate_private() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/core/validation.rs")?;
+        let violations = source
+            .lines()
+            .enumerate()
+            .filter(|(_, line)| {
+                let trimmed = line.trim_start();
+                (trimmed.starts_with("pub struct ") && trimmed.contains("Parts"))
+                    || trimmed.starts_with("pub fn with_")
+            })
+            .map(|(index, line)| {
+                format!(
+                    "src/core/validation.rs:{} exposes structural validation builder API: {line}",
+                    index + 1
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "validation builder structs and with_* assembly methods are DTO-parser internals, not public core API"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn workflow_mutation_core_uses_semantic_json_document_types() -> Result<(), Box<dyn Error>> {
         let source = read_workspace_file("src/core/workflow.rs")?;
         let violations = [
