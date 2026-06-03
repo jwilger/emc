@@ -70,9 +70,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem workflowTransitionsAreStructured : workflowTransitions.length = workflowTransitions.length := rfl"
+                "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.1.isEmpty == false && transition.2.1.isEmpty == false && transition.2.2.1.isEmpty == false && transition.2.2.2.isEmpty == false) = true := rfl"
             ),
-            "Lean artifact must carry a named proof obligation for structured business transitions"
+            "Lean artifact must prove every business transition has source, target, kind, and trigger fields"
+        );
+        assert!(
+            !lean.contains("workflowTransitions.length = workflowTransitions.length"),
+            "Lean transition structure proof must not be a tautological length self-comparison"
         );
 
         Ok(())

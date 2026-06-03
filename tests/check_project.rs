@@ -1212,7 +1212,7 @@ mod tests {
         create_connected_workflow(&temp_dir)?;
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let lean = read_to_string(&lean_path)?.replace(
-            "theorem workflowTransitionsAreStructured : workflowTransitions.length = workflowTransitions.length := rfl",
+            "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.1.isEmpty == false && transition.2.1.isEmpty == false && transition.2.2.1.isEmpty == false && transition.2.2.2.isEmpty == false) = true := rfl",
             "theorem workflowTransitionsAreStructured : workflowTransitions.length = 0 := rfl",
         );
         write(lean_path, lean)?;
@@ -1380,7 +1380,7 @@ mod tests {
         create_connected_workflow(&temp_dir)?;
         let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
         let quint = read_to_string(&quint_path)?.replace(
-            "  val workflowTransitionsStructured = length(workflowTransitions) == length(workflowTransitions)\n",
+            "  val workflowTransitionsStructured = all { transition <- workflowTransitions } transition.source != \"\" and transition.target != \"\" and transition.kind != \"\" and transition.trigger != \"\"\n",
             "  val workflowTransitionsStructured = true\n",
         );
         write(quint_path, quint)?;
