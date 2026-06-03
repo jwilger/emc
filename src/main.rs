@@ -23,7 +23,7 @@ use emc::io::dto::{
     parse_project_manifest_name, parse_slice_kind, parse_slice_slug, parse_transition_trigger_name,
     parse_workflow_slug,
 };
-use emc::mcp::serve_stdio;
+use emc::mcp::{serve_http, serve_stdio};
 use emc::shell::{ShellError, interpret};
 
 struct Cli {
@@ -58,6 +58,11 @@ enum Command {
     },
     ListWorkflows,
     McpStdio,
+    McpHttp {
+        host: String,
+        port: u16,
+        once: bool,
+    },
     ReviewGate {
         slug: WorkflowSlug,
     },
@@ -155,6 +160,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             interpret(list_workflows(imported_workflows))
         }
+        Command::McpHttp { host, port, once } => serve_http(&host, port, once),
         Command::McpStdio => serve_stdio(),
         Command::ReviewGate { slug } => interpret(review_gate(slug)),
         Command::ShowWorkflow { slug } => {
@@ -353,6 +359,35 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         [command, transport] if command == "mcp" && transport == "stdio" => Ok(Cli {
             command: Command::McpStdio,
         }),
+        [command, transport] if command == "mcp" && transport == "http" => Ok(Cli {
+            command: Command::McpHttp {
+                host: "127.0.0.1".to_owned(),
+                port: 7331,
+                once: false,
+            },
+        }),
+        [
+            command,
+            transport,
+            host_flag,
+            host,
+            port_flag,
+            port,
+            once_flag,
+        ] if command == "mcp"
+            && transport == "http"
+            && host_flag == "--host"
+            && port_flag == "--port"
+            && once_flag == "--once" =>
+        {
+            Ok(Cli {
+                command: Command::McpHttp {
+                    host: host.clone(),
+                    port: parse_port(port)?,
+                    once: true,
+                },
+            })
+        }
         [command, subject, workflow_flag, workflow]
             if command == "review" && subject == "gate" && workflow_flag == "--workflow" =>
         {
@@ -402,6 +437,11 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         }),
         _ => Err(ShellError::message("usage: emc init --name <project-name>")),
     }
+}
+
+fn parse_port(port: &str) -> Result<u16, ShellError> {
+    port.parse::<u16>()
+        .map_err(|error| ShellError::message(format!("invalid MCP HTTP port: {error}")))
 }
 
 fn load_emc_import(source: &Path) -> Result<EMCWorkflowImport, ShellError> {

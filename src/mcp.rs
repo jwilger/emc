@@ -1,5 +1,7 @@
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::path::Path;
 
 use serde_json::{Value, json};
 
@@ -18,7 +20,6 @@ use crate::io::dto::{
     parse_transition_trigger_name, parse_workflow_slug,
 };
 use crate::shell::{ShellError, interpret_collect_reports};
-use std::path::Path;
 
 pub fn serve_stdio() -> Result<(), ShellError> {
     let mut input = String::new();
@@ -33,6 +34,144 @@ pub fn serve_stdio() -> Result<(), ShellError> {
         .into_iter()
         .flatten()
         .try_for_each(write_response)
+}
+
+pub fn serve_http(host: &str, port: u16, once: bool) -> Result<(), ShellError> {
+    if !is_localhost_bind(host) {
+        return Err(ShellError::message(
+            "MCP HTTP currently requires a localhost bind address",
+        ));
+    }
+
+    let listener = TcpListener::bind(format!("{host}:{port}")).map_err(|error| {
+        ShellError::message(format!("failed to bind MCP HTTP listener: {error}"))
+    })?;
+    let authority = listener
+        .local_addr()
+        .map_err(|error| ShellError::message(error.to_string()))?
+        .to_string();
+    println!("MCP HTTP listening on {authority}");
+
+    if once {
+        let (stream, _address) = listener
+            .accept()
+            .map_err(|error| ShellError::message(error.to_string()))?;
+        handle_http_stream(stream, &authority)
+    } else {
+        listener.incoming().try_for_each(|stream| {
+            stream
+                .map_err(|error| ShellError::message(error.to_string()))
+                .and_then(|stream| handle_http_stream(stream, &authority))
+        })
+    }
+}
+
+fn is_localhost_bind(host: &str) -> bool {
+    matches!(host, "127.0.0.1" | "localhost" | "::1")
+}
+
+fn handle_http_stream(stream: TcpStream, authority: &str) -> Result<(), ShellError> {
+    let mut reader = BufReader::new(stream);
+    let request = read_http_request(&mut reader)?;
+    let response = http_response_for_request(request, authority)?;
+    let mut stream = reader.into_inner();
+    stream
+        .write_all(response.as_bytes())
+        .map_err(|error| ShellError::message(error.to_string()))
+}
+
+struct HttpRequest {
+    method: String,
+    path: String,
+    origin: Option<String>,
+    body: String,
+}
+
+fn read_http_request(reader: &mut BufReader<TcpStream>) -> Result<HttpRequest, ShellError> {
+    let mut request_line = String::new();
+    reader
+        .read_line(&mut request_line)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let mut request_parts = request_line.split_whitespace();
+    let method = request_parts
+        .next()
+        .ok_or_else(|| ShellError::message("missing HTTP method"))?
+        .to_owned();
+    let path = request_parts
+        .next()
+        .ok_or_else(|| ShellError::message("missing HTTP path"))?
+        .to_owned();
+
+    let mut content_length = 0_usize;
+    let mut origin = None;
+    loop {
+        let mut header = String::new();
+        reader
+            .read_line(&mut header)
+            .map_err(|error| ShellError::message(error.to_string()))?;
+        if header == "\r\n" || header.is_empty() {
+            break;
+        }
+        if let Some((name, value)) = header.split_once(':') {
+            let normalized_name = name.trim().to_ascii_lowercase();
+            let normalized_value = value.trim().to_owned();
+            if normalized_name == "content-length" {
+                content_length = normalized_value
+                    .parse::<usize>()
+                    .map_err(|error| ShellError::message(error.to_string()))?;
+            } else if normalized_name == "origin" {
+                origin = Some(normalized_value);
+            }
+        }
+    }
+
+    let mut body_bytes = vec![0_u8; content_length];
+    reader
+        .read_exact(&mut body_bytes)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let body =
+        String::from_utf8(body_bytes).map_err(|error| ShellError::message(error.to_string()))?;
+
+    Ok(HttpRequest {
+        method,
+        path,
+        origin,
+        body,
+    })
+}
+
+fn http_response_for_request(request: HttpRequest, authority: &str) -> Result<String, ShellError> {
+    if request.method != "POST" || request.path != "/mcp" {
+        return Ok(http_response("404 Not Found", "{\"error\":\"not found\"}"));
+    }
+    if !origin_is_allowed(request.origin.as_deref(), authority) {
+        return Ok(http_response(
+            "403 Forbidden",
+            "{\"error\":\"forbidden origin\"}",
+        ));
+    }
+
+    let mcp_request = serde_json::from_str::<Value>(&request.body)
+        .map_err(|error| ShellError::message(format!("invalid MCP HTTP JSON-RPC body: {error}")))?;
+    let response = handle_request(&mcp_request)?
+        .map(|response| serde_json::to_string(&response))
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?
+        .unwrap_or_else(|| "{}".to_owned());
+    Ok(http_response("200 OK", &response))
+}
+
+fn origin_is_allowed(origin: Option<&str>, authority: &str) -> bool {
+    origin.is_none_or(|origin| {
+        origin == format!("http://{authority}") || origin == format!("https://{authority}")
+    })
+}
+
+fn http_response(status: &str, body: &str) -> String {
+    format!(
+        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
 }
 
 fn handle_input_line(line: &str) -> Result<Option<Value>, ShellError> {
