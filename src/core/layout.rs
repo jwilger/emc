@@ -58,7 +58,10 @@ pub fn check_project(
         [
             vec![
                 Effect::RequireFile(project_path("emc.toml")),
+                Effect::RequireFile(project_path("model/lean/lakefile.lean")),
+                Effect::RequireFile(project_path("model/lean/lean-toolchain")),
                 Effect::RequireFile(project_path(format!("model/lean/{module_name}.lean"))),
+                Effect::RequireFile(project_path("model/quint/quint.json")),
                 Effect::RequireFile(project_path(format!("model/quint/{module_name}.qnt"))),
                 Effect::RequireFile(project_path("model/browser/data/index.json")),
                 Effect::RequireFile(project_path("model/browser/data/workflows/.gitkeep")),

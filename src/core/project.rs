@@ -22,12 +22,26 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         ),
         Effect::EnsureDirectory(project_path("model/lean")),
         Effect::WriteFileIfMissing(
+            project_path("model/lean/lean-toolchain"),
+            file_contents("leanprover/lean4:4.29.1\n"),
+        ),
+        Effect::WriteFileIfMissing(
+            project_path("model/lean/lakefile.lean"),
+            file_contents("package EMCModel\n"),
+        ),
+        Effect::WriteFileIfMissing(
             project_path(format!("model/lean/{module_name}.lean")),
             file_contents(format!(
                 "namespace {module_name}\n\n-- EMC generated Lean4 model root.\n\nend {module_name}\n"
             )),
         ),
         Effect::EnsureDirectory(project_path("model/quint")),
+        Effect::WriteFileIfMissing(
+            project_path("model/quint/quint.json"),
+            file_contents(format!(
+                "{{\n  \"main\": \"{module_name}.qnt\",\n  \"invariants\": [\"workflowIdentityStable\"]\n}}\n"
+            )),
+        ),
         Effect::WriteFileIfMissing(
             project_path(format!("model/quint/{module_name}.qnt")),
             file_contents(format!("module {module_name} {{\n}}\n")),

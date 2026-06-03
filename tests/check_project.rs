@@ -73,6 +73,30 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_missing_verification_entrypoint_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        remove_file(temp_dir.path().join("model/lean/lakefile.lean"))?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "missing required project artifact model/lean/lakefile.lean",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_missing_imported_workflow_artifacts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let emc_event_model = workspace_root().join("../emc/docs/event-model");
