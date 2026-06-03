@@ -283,6 +283,29 @@ impl WorkflowReviewOverlayDetail {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserErrorRecoveryDetail {
+    name: CommandErrorName,
+    source_screen: ViewName,
+}
+
+impl BrowserErrorRecoveryDetail {
+    pub fn new(name: CommandErrorName, source_screen: ViewName) -> Self {
+        Self {
+            name,
+            source_screen,
+        }
+    }
+
+    pub fn name(&self) -> &CommandErrorName {
+        &self.name
+    }
+
+    pub fn source_screen(&self) -> &ViewName {
+        &self.source_screen
+    }
+}
+
 #[nutype(
     sanitize(trim),
     validate(not_empty),

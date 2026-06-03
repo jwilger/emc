@@ -292,7 +292,18 @@ pub fn compose_browser_workflow(
     let composed_values = iter::once(&workflow_value)
         .chain(slice_values.iter())
         .collect::<Vec<_>>();
-    let error_recovery_cards = error_recovery_cards(&composed_values)?;
+    let error_recovery_cards = iter::once(&workflow_browser_data)
+        .chain(slice_browser_data.iter())
+        .map(BrowserDataDocument::error_recovery_details)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?
+        .into_iter()
+        .flatten()
+        .map(|detail| BrowserErrorRecoveryCard {
+            name: detail.name().clone(),
+            source_screen: detail.source_screen().clone(),
+        })
+        .collect();
     let event_element_names = iter::once(&workflow_browser_data)
         .chain(slice_browser_data.iter())
         .map(BrowserDataDocument::event_element_names)
@@ -351,58 +362,6 @@ impl Error for BrowserCompositionError {}
 fn parse_json(source: &str) -> Result<Value, BrowserCompositionError> {
     serde_json::from_str::<Value>(source)
         .map_err(|error| BrowserCompositionError::new(format!("invalid browser JSON: {error}")))
-}
-
-fn error_recovery_cards(
-    values: &[&Value],
-) -> Result<Vec<BrowserErrorRecoveryCard>, BrowserCompositionError> {
-    values
-        .iter()
-        .flat_map(|value| {
-            value
-                .get("views")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-        })
-        .map(view_error_recovery_cards)
-        .collect::<Result<Vec<_>, _>>()
-        .map(|cards| cards.into_iter().flatten().collect())
-}
-
-fn view_error_recovery_cards(
-    view: &Value,
-) -> Result<Vec<BrowserErrorRecoveryCard>, BrowserCompositionError> {
-    let source_screen = view.get("name").and_then(Value::as_str);
-
-    view.get("controls")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .flat_map(|control| {
-            control
-                .get("error_handling")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-        })
-        .filter_map(|handling| {
-            Some((
-                source_screen?,
-                handling.get("error").and_then(Value::as_str)?,
-            ))
-        })
-        .map(|(source_screen, error_name)| {
-            Ok(BrowserErrorRecoveryCard {
-                name: CommandErrorName::try_new(error_name.to_owned()).map_err(|error| {
-                    BrowserCompositionError::new(format!("invalid command error name: {error}"))
-                })?,
-                source_screen: ViewName::try_new(source_screen.to_owned()).map_err(|error| {
-                    BrowserCompositionError::new(format!("invalid source screen name: {error}"))
-                })?,
-            })
-        })
-        .collect()
 }
 
 fn command_definitions(
