@@ -175,6 +175,33 @@
             grep 'Package Smoke Event Model Browser' rendered-site.html
             grep 'Package smoke' rendered-site.html
             grep 'Capture smoke' rendered-site.html
+            chromium \
+              --headless \
+              --disable-gpu \
+              --no-sandbox \
+              --disable-breakpad \
+              --disable-crash-reporter \
+              --disable-dev-shm-usage \
+              --disable-features=Crashpad \
+              --user-data-dir="$workdir/chromium-screenshot-profile" \
+              --virtual-time-budget=5000 \
+              --window-size=1440,1000 \
+              --screenshot=rendered-site.png \
+              http://127.0.0.1:7333/
+            python3 - <<'PY'
+from pathlib import Path
+import struct
+
+image = Path("rendered-site.png")
+data = image.read_bytes()
+if len(data) < 10000:
+    raise SystemExit("browser screenshot is unexpectedly small")
+if data[:8] != b"\x89PNG\r\n\x1a\n":
+    raise SystemExit("browser screenshot is not a PNG")
+width, height = struct.unpack(">II", data[16:24])
+if (width, height) != (1440, 1000):
+    raise SystemExit(f"browser screenshot has unexpected dimensions: {width}x{height}")
+PY
 
             trap - EXIT
             kill "$site_server_pid"

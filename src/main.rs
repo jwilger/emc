@@ -833,6 +833,12 @@ fn help_command() -> ClapCommand {
                 .subcommand(ClapCommand::new("site").about("Generate the browsable event-model site")),
         )
         .subcommand(
+            ClapCommand::new("gherkin")
+                .about("List or run checked-in event-model rule suites")
+                .subcommand(ClapCommand::new("list").about("List configured feature files"))
+                .subcommand(ClapCommand::new("run").about("Run configured rule-suite coverage")),
+        )
+        .subcommand(
             ClapCommand::new("review")
                 .about("Evaluate review gates")
                 .subcommand(ClapCommand::new("gate").about("Check a workflow review gate"))
@@ -866,6 +872,9 @@ fn help_command() -> ClapCommand {
   emc verify
   emc check
   emc generate site --output <directory>
+  emc gherkin list --suite <suite>
+  emc gherkin run --suite <suite>
+  emc gherkin run --all
   emc review record --workflow <workflow> --reviewer <reviewer> --reviewed-at <timestamp>
   emc mcp stdio
   emc mcp http --host 127.0.0.1 --port 7331",
