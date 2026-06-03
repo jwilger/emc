@@ -622,6 +622,22 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
                 "Quint workflow transition drift for workflow {workflow_name}"
             )),
         ),
+        Effect::RequireLeanWorkflowGraph(
+            workflow_path.clone(),
+            lean_path.clone(),
+            workflow.slug.clone(),
+            report_line(format!(
+                "Lean workflow graph drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireQuintWorkflowGraph(
+            workflow_path.clone(),
+            quint_path.clone(),
+            workflow.slug.clone(),
+            report_line(format!(
+                "Quint workflow graph drift for workflow {workflow_name}"
+            )),
+        ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
             lean_identity_invariant_prefix,
