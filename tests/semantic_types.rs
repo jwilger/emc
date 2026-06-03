@@ -8,6 +8,7 @@ mod tests {
             parse_definition_name, parse_lean_module_name, parse_model_description,
             parse_model_digest, parse_model_name, parse_project_name, parse_quint_module_name,
             parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
+            parse_workflow_transition_endpoint, parse_workflow_transition_kind,
         },
     };
 
@@ -22,6 +23,8 @@ mod tests {
         let quint_module = parse_quint_module_name(" RepairDesk ")?;
         let digest = parse_model_digest(" abc123 ")?;
         let transition_trigger = parse_transition_trigger_name(" Open request ")?;
+        let transition_endpoint = parse_workflow_transition_endpoint(" capture-ticket ")?;
+        let transition_kind = parse_workflow_transition_kind(" navigation ")?;
         let definition_name = parse_definition_name(" Submit request ")?;
 
         assert_eq!(
@@ -60,6 +63,16 @@ mod tests {
             transition_trigger.as_ref(),
             "Open request",
             "transition trigger is trimmed"
+        );
+        assert_eq!(
+            transition_endpoint.as_ref(),
+            "capture-ticket",
+            "workflow transition endpoint is trimmed"
+        );
+        assert_eq!(
+            transition_kind.as_ref(),
+            "navigation",
+            "workflow transition kind is trimmed"
         );
         assert_eq!(
             definition_name.as_ref(),
@@ -107,6 +120,14 @@ mod tests {
         assert!(
             parse_transition_trigger_name("   ").is_err(),
             "blank transition triggers must not enter the core"
+        );
+        assert!(
+            parse_workflow_transition_endpoint("   ").is_err(),
+            "blank workflow transition endpoints must not enter the core"
+        );
+        assert!(
+            parse_workflow_transition_kind("   ").is_err(),
+            "blank workflow transition kinds must not enter the core"
         );
         assert!(
             parse_definition_name("   ").is_err(),
