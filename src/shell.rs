@@ -1090,6 +1090,10 @@ fn formal_slice_artifact_is_canonical(
                 "def sliceDescription :=",
                 format!("def sliceDescription := {slice_description}"),
             ),
+            (
+                "theorem sliceIdentityIsStable :",
+                format!("theorem sliceIdentityIsStable : sliceName = {slice_name} := rfl"),
+            ),
             ("end ", format!("end {module_name}")),
         ]
     } else {
@@ -1105,6 +1109,10 @@ fn formal_slice_artifact_is_canonical(
             (
                 "val sliceDescription =",
                 format!("val sliceDescription = {slice_description}"),
+            ),
+            (
+                "val sliceIdentityStable =",
+                format!("val sliceIdentityStable = sliceName == {slice_name}"),
             ),
         ]
     };
