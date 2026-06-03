@@ -434,7 +434,10 @@ fn tools_list_result() -> Result<Value, ShellError> {
                             "type": "string"
                         },
                         "reviewed_at": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+                            "description": "Deterministic UTC millisecond timestamp, for example 2026-06-03T00:00:00.000Z."
                         }
                     },
                     "required": ["workflow", "reviewer", "reviewed_at"],
