@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 use std::fs;
@@ -101,6 +102,14 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 )))
             }
         }
+        Effect::RequireIndexedWorkflowFiles(index_path, workflows_path, message) => {
+            require_indexed_workflow_files(
+                index_path.as_ref(),
+                workflows_path.as_ref(),
+                message.as_ref(),
+            )
+            .map(|()| None)
+        }
         Effect::RequireReviewRecord(path, workflow_path, message) => {
             if Path::new(path.as_ref()).is_file() {
                 require_clean_review_record(path.as_ref(), workflow_path.as_ref(), message.as_ref())
@@ -163,6 +172,52 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
         Effect::Report(line) => Ok(Some(line.as_ref().to_owned())),
         Effect::ReportDocument(contents) => Ok(Some(contents.as_ref().to_owned())),
     }
+}
+
+fn require_indexed_workflow_files(
+    index_path: &str,
+    workflows_path: &str,
+    message: &str,
+) -> Result<(), ShellError> {
+    let index_contents = fs::read_to_string(Path::new(index_path)).map_err(ShellError::io)?;
+    let indexed_paths = indexed_workflow_paths(&index_contents)?;
+    let mut workflow_files = fs::read_dir(Path::new(workflows_path))
+        .map_err(ShellError::io)?
+        .map(|entry| entry.map(|directory_entry| directory_entry.path()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ShellError::io)?;
+    workflow_files.sort();
+
+    workflow_files
+        .into_iter()
+        .filter_map(|path| {
+            path.file_name()
+                .and_then(|file_name| file_name.to_str())
+                .filter(|file_name| file_name.ends_with(".eventmodel.json"))
+                .map(str::to_owned)
+        })
+        .find(|file_name| {
+            let indexed_path = format!("data/workflows/{file_name}");
+            !indexed_paths.contains(&indexed_path)
+        })
+        .map_or(Ok(()), |file_name| {
+            Err(ShellError::message(format!("{message} for {file_name}")))
+        })
+}
+
+fn indexed_workflow_paths(index_contents: &str) -> Result<BTreeSet<String>, ShellError> {
+    let index = serde_json::from_str::<Value>(index_contents)
+        .map_err(|error| ShellError::message(format!("invalid browser index JSON: {error}")))?;
+    let workflows = index
+        .get("workflows")
+        .and_then(Value::as_array)
+        .ok_or_else(|| ShellError::message("browser index is missing workflows"))?;
+
+    Ok(workflows
+        .iter()
+        .filter_map(|workflow| workflow.get("path").and_then(Value::as_str))
+        .map(str::to_owned)
+        .collect())
 }
 
 fn require_clean_review_record(

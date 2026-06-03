@@ -58,6 +58,7 @@
 - 2026-06-02: Review-gate fixture parity is checked in. `emc review gate --workflow <slug>` and MCP `review_gate` enforce current structured clean reviews for the workflow slug, model digest, required categories, mandatory findings, and clean follow-up review after corrected findings.
 - 2026-06-02: Event-model Gherkin fixtures are checked in with scenario-count guardrails for validator, review-gate, browser, and runner/meta suites.
 - 2026-06-02: `emc validate` and the MCP `validate_event_model` tool accept a single `.eventmodel.json` file target as well as a directory target.
+- 2026-06-02: `emc check` rejects browser workflow data files that are present under `model/browser/data/workflows` but missing from `model/browser/data/index.json`.
 
 ### Task 1: Guardrails and Project Skeleton
 

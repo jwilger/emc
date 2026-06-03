@@ -7,6 +7,7 @@ pub enum Effect {
     Fail(ReportLine),
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
+    RequireIndexedWorkflowFiles(ProjectPath, ProjectPath, ReportLine),
     RequireReviewRecord(ProjectPath, ProjectPath, ReportLine),
     RequireWorkflowSliceFiles(ProjectPath, ReportLine),
     RequireWorkflowSlices(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
