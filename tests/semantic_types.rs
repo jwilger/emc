@@ -5,8 +5,8 @@ mod tests {
     use emc::io::dto::{
         parse_definition_name, parse_lean_module_name, parse_model_description, parse_model_digest,
         parse_model_name, parse_project_name, parse_project_path, parse_quint_module_name,
-        parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
-        parse_workflow_transition_endpoint, parse_workflow_transition_kind,
+        parse_review_timestamp, parse_reviewer_id, parse_slice_slug, parse_transition_trigger_name,
+        parse_workflow_slug, parse_workflow_transition_endpoint, parse_workflow_transition_kind,
     };
 
     #[test]
@@ -23,6 +23,8 @@ mod tests {
         let transition_endpoint = parse_workflow_transition_endpoint(" capture-ticket ")?;
         let transition_kind = parse_workflow_transition_kind(" navigation ")?;
         let definition_name = parse_definition_name(" Submit request ")?;
+        let reviewer = parse_reviewer_id(" event-model-reviewer ")?;
+        let reviewed_at = parse_review_timestamp(" 2026-06-03T00:00:00.000Z ")?;
 
         assert_eq!(
             project_name.as_ref(),
@@ -75,6 +77,16 @@ mod tests {
             definition_name.as_ref(),
             "Submit request",
             "definition name is trimmed"
+        );
+        assert_eq!(
+            reviewer.as_ref(),
+            "event-model-reviewer",
+            "reviewer id is trimmed"
+        );
+        assert_eq!(
+            reviewed_at.as_ref(),
+            "2026-06-03T00:00:00.000Z",
+            "review timestamp is trimmed"
         );
 
         Ok(())
@@ -129,6 +141,14 @@ mod tests {
         assert!(
             parse_definition_name("   ").is_err(),
             "blank definition names must not enter the core"
+        );
+        assert!(
+            parse_reviewer_id("   ").is_err(),
+            "blank reviewer ids must not enter the core"
+        );
+        assert!(
+            parse_review_timestamp("   ").is_err(),
+            "blank review timestamps must not enter the core"
         );
     }
 

@@ -6,7 +6,9 @@ use crate::core::gherkin::{
 use crate::core::project::{ProjectName, init_project};
 use crate::core::review_gate::review_gate;
 use crate::core::slice::{NewSlice, SliceKind};
-use crate::core::types::{ModelDescription, ModelName, SliceSlug, WorkflowSlug};
+use crate::core::types::{
+    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceSlug, WorkflowSlug,
+};
 use crate::core::workflow::NewWorkflow;
 
 pub fn add_slice(slice: NewSlice) -> EffectPlan {
@@ -67,6 +69,18 @@ pub fn list_transitions() -> EffectPlan {
 
 pub fn review_gate_for_workflow(slug: WorkflowSlug) -> EffectPlan {
     review_gate(slug)
+}
+
+pub fn record_clean_review(
+    slug: WorkflowSlug,
+    reviewer: ReviewerId,
+    reviewed_at: ReviewTimestamp,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RecordCleanReviewFromWorkflow(
+        slug,
+        reviewer,
+        reviewed_at,
+    )])
 }
 
 pub fn show_workflow(slug: WorkflowSlug) -> EffectPlan {

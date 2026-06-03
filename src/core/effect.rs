@@ -3,7 +3,9 @@ use std::path::{Component, Path};
 
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::slice::{NewSlice, SliceKind};
-use crate::core::types::{ModelDescription, ModelName, SliceSlug, WorkflowSlug};
+use crate::core::types::{
+    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceSlug, WorkflowSlug,
+};
 use crate::core::workflow::NewWorkflow;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -53,6 +55,7 @@ pub enum Effect {
     RequireWorkflowDigest(ProjectPath, ProjectPath, WorkflowSlug, ReportLine),
     RequireWorkflowTransitions(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RunProcess(ProcessInvocation),
+    RecordCleanReviewFromWorkflow(WorkflowSlug, ReviewerId, ReviewTimestamp),
     RemoveFile(ProjectPath),
     RemoveSliceFromWorkflow(SliceSlug),
     RemoveTransitionFromWorkflow(WorkflowTransitionRemoval),

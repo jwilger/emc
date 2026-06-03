@@ -14,8 +14,8 @@ use crate::core::slice::NewSlice;
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
     parse_connection_kind, parse_model_description, parse_model_name, parse_project_name,
-    parse_project_path, parse_slice_kind, parse_slice_slug, parse_transition_trigger_name,
-    parse_workflow_slug,
+    parse_project_path, parse_review_timestamp, parse_reviewer_id, parse_slice_kind,
+    parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
 };
 use crate::shell::{ShellError, interpret_collect_reports};
 
@@ -422,6 +422,26 @@ fn tools_list_result() -> Result<Value, ShellError> {
             })),
         ),
         Tool::new(
+            "record_clean_review",
+            "Record a clean structured review for the current workflow digest.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "workflow": {
+                            "type": "string"
+                        },
+                        "reviewer": {
+                            "type": "string"
+                        },
+                        "reviewed_at": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["workflow", "reviewer", "reviewed_at"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
             "add_workflow",
             "Add a business workflow and regenerate synchronized model artifacts.",
             schema_object(json!({
@@ -710,6 +730,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
             id,
             review_gate_tool_text(request),
         ))),
+        "record_clean_review" => Ok(Some(tool_call_result_response(
+            id,
+            record_clean_review_tool_text(request),
+        ))),
         "add_workflow" => Ok(Some(tool_call_result_response(
             id,
             add_workflow_tool_text(request),
@@ -864,6 +888,42 @@ fn review_gate_tool_text(request: &Value) -> Result<String, ShellError> {
         })?;
     interpret_collect_reports(command::review_gate_for_workflow(workflow_slug))
         .map(|reports| reports.join("\n"))
+}
+
+fn record_clean_review_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("record_clean_review requires arguments"))?;
+    let workflow_slug = arguments
+        .get("workflow")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("record_clean_review requires workflow"))
+        .and_then(|raw_workflow| {
+            parse_workflow_slug(raw_workflow)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let reviewer = arguments
+        .get("reviewer")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("record_clean_review requires reviewer"))
+        .and_then(|raw_reviewer| {
+            parse_reviewer_id(raw_reviewer).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let reviewed_at = arguments
+        .get("reviewed_at")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("record_clean_review requires reviewed_at"))
+        .and_then(|raw_reviewed_at| {
+            parse_review_timestamp(raw_reviewed_at)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    interpret_collect_reports(command::record_clean_review(
+        workflow_slug,
+        reviewer,
+        reviewed_at,
+    ))
+    .map(|reports| reports.join("\n"))
 }
 
 fn add_workflow_tool_text(request: &Value) -> Result<String, ShellError> {

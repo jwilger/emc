@@ -21,6 +21,7 @@ mod tests {
             .stdout(predicate::str::contains("verify"))
             .stdout(predicate::str::contains("check"))
             .stdout(predicate::str::contains("generate site"))
+            .stdout(predicate::str::contains("review record"))
             .stdout(predicate::str::contains("mcp stdio"))
             .stdout(predicate::str::contains("mcp http"));
 

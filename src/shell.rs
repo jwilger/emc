@@ -17,7 +17,9 @@ use crate::core::layout::{
     show_document, show_workflow,
 };
 use crate::core::project::ProjectName;
-use crate::core::review_record::{ReviewCategoryFinding, ReviewRecordDocument};
+use crate::core::review_record::{
+    ReviewCategoryFinding, ReviewRecordDocument, record_clean_review,
+};
 use crate::core::site::generate_site;
 use crate::core::slice::{
     add_slice, remove_slice, update_slice_description, update_slice_kind, update_slice_name,
@@ -370,6 +372,25 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             }
         }
         Effect::RunProcess(invocation) => run_process(invocation),
+        Effect::RecordCleanReviewFromWorkflow(slug, reviewer_id, reviewed_at) => {
+            let modeled_workflows = read_browser_index_workflows()?;
+            let _workflow = find_indexed_workflow(slug, modeled_workflows.as_slice())?;
+            let workflow_path = format!(
+                "model/browser/data/workflows/{}.eventmodel.json",
+                slug.as_ref()
+            );
+            let current_digest = model_content_digest(&workflow_path)?;
+            let required_categories = required_review_categories()?;
+            let plan = record_clean_review(
+                slug.clone(),
+                current_digest,
+                reviewer_id.clone(),
+                reviewed_at.clone(),
+                required_categories,
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret_collect_reports(plan)
+        }
         Effect::RemoveFile(path) => remove_file_if_present(path.as_ref()).map(|()| Vec::new()),
         Effect::RemoveSliceFromWorkflow(slug) => {
             let existing_workflows = read_browser_index_workflows()?;

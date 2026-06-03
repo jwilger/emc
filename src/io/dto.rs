@@ -11,8 +11,9 @@ use crate::core::layout::ModeledWorkflowLayout;
 use crate::core::project::ProjectName;
 use crate::core::slice::SliceKind;
 use crate::core::types::{
-    LeanModuleName, ModelDescription, ModelDigest, ModelName, QuintModuleName, SliceSlug,
-    TransitionTriggerName, WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionKind,
+    LeanModuleName, ModelDescription, ModelDigest, ModelName, QuintModuleName, ReviewTimestamp,
+    ReviewerId, SliceSlug, TransitionTriggerName, WorkflowSlug, WorkflowTransitionEndpoint,
+    WorkflowTransitionKind,
 };
 use crate::core::validation::{
     AutomationCommandPolicy, AutomationTrigger, BoardElement, BoardElementKind,
@@ -266,6 +267,16 @@ pub fn parse_quint_module_name(raw: &str) -> Result<QuintModuleName, BoundaryPar
 pub fn parse_model_digest(raw: &str) -> Result<ModelDigest, BoundaryParseError> {
     ModelDigest::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid model digest: {error}")))
+}
+
+pub fn parse_reviewer_id(raw: &str) -> Result<ReviewerId, BoundaryParseError> {
+    ReviewerId::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid reviewer id: {error}")))
+}
+
+pub fn parse_review_timestamp(raw: &str) -> Result<ReviewTimestamp, BoundaryParseError> {
+    ReviewTimestamp::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid review timestamp: {error}")))
 }
 
 pub fn parse_definition_name(raw: &str) -> Result<DefinitionName, BoundaryParseError> {

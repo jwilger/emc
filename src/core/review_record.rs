@@ -1,10 +1,81 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
-use serde_json::Value;
+use serde_json::{Map, Value, json};
 
-use crate::core::effect::{ArtifactDigest, FileContents};
-use crate::core::types::{ReviewRuleName, ReviewStatus, WorkflowSlug};
+use crate::core::effect::{
+    ArtifactDigest, Effect, EffectPlan, FileContents, ProjectPath, ReportLine,
+};
+use crate::core::types::{ReviewRuleName, ReviewStatus, ReviewTimestamp, ReviewerId, WorkflowSlug};
+
+pub fn record_clean_review(
+    workflow_slug: WorkflowSlug,
+    model_content_digest: ArtifactDigest,
+    reviewer_id: ReviewerId,
+    reviewed_at: ReviewTimestamp,
+    required_categories: Vec<ReviewRuleName>,
+) -> Result<EffectPlan, ReviewRecordDocumentError> {
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(
+            review_record_path(&workflow_slug)?,
+            clean_review_record_contents(
+                &workflow_slug,
+                &model_content_digest,
+                &reviewer_id,
+                &reviewed_at,
+                &required_categories,
+            )?,
+        ),
+        Effect::Report(recorded_clean_review_report(&workflow_slug)?),
+    ]))
+}
+
+fn review_record_path(
+    workflow_slug: &WorkflowSlug,
+) -> Result<ProjectPath, ReviewRecordDocumentError> {
+    ProjectPath::try_new(format!("reviews/{}.review.json", workflow_slug.as_ref()))
+        .map_err(|error| ReviewRecordDocumentError::new(error.to_string()))
+}
+
+fn clean_review_record_contents(
+    workflow_slug: &WorkflowSlug,
+    model_content_digest: &ArtifactDigest,
+    reviewer_id: &ReviewerId,
+    reviewed_at: &ReviewTimestamp,
+    required_categories: &[ReviewRuleName],
+) -> Result<FileContents, ReviewRecordDocumentError> {
+    let category_results = required_categories
+        .iter()
+        .fold(Map::new(), |mut results, category| {
+            results.insert(category.as_ref().to_owned(), json!("clean"));
+            results
+        });
+    let document = json!({
+        "workflow_slug": workflow_slug.as_ref(),
+        "model_content_digest": model_content_digest.as_ref(),
+        "reviewer_id": reviewer_id.as_ref(),
+        "status": "clean",
+        "category_results": category_results,
+        "mandatory_findings": [],
+        "reviewed_at": reviewed_at.as_ref()
+    });
+    FileContents::try_new(format!(
+        "{}\n",
+        serde_json::to_string_pretty(&document)
+            .map_err(|error| ReviewRecordDocumentError::new(error.to_string()))?
+    ))
+    .map_err(|error| ReviewRecordDocumentError::new(error.to_string()))
+}
+
+fn recorded_clean_review_report(
+    workflow_slug: &WorkflowSlug,
+) -> Result<ReportLine, ReviewRecordDocumentError> {
+    ReportLine::try_new(format!(
+        "recorded clean review for workflow {}",
+        workflow_slug.as_ref()
+    ))
+    .map_err(|error| ReviewRecordDocumentError::new(error.to_string()))
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ReviewRecordDocument {

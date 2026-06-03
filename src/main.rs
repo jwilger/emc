@@ -8,12 +8,14 @@ use emc::core::effect::ProjectPath;
 use emc::core::gherkin::GherkinSuite;
 use emc::core::project::ProjectName;
 use emc::core::slice::{NewSlice, SliceKind};
-use emc::core::types::{ModelDescription, ModelName, SliceSlug, WorkflowSlug};
+use emc::core::types::{
+    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceSlug, WorkflowSlug,
+};
 use emc::core::workflow::NewWorkflow;
 use emc::io::dto::{
     parse_connection_kind, parse_gherkin_suite, parse_model_description, parse_model_name,
-    parse_project_name, parse_project_path, parse_slice_kind, parse_slice_slug,
-    parse_transition_trigger_name, parse_workflow_slug,
+    parse_project_name, parse_project_path, parse_review_timestamp, parse_reviewer_id,
+    parse_slice_kind, parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
 };
 use emc::mcp::{serve_http, serve_stdio};
 use emc::shell::{ShellError, interpret};
@@ -65,6 +67,11 @@ enum Command {
     },
     ReviewGate {
         slug: WorkflowSlug,
+    },
+    RecordCleanReview {
+        slug: WorkflowSlug,
+        reviewer: ReviewerId,
+        reviewed_at: ReviewTimestamp,
     },
     RemoveWorkflow {
         slug: WorkflowSlug,
@@ -134,6 +141,11 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         } => serve_http(&host, port, once, auth_token.as_deref()),
         Command::McpStdio => serve_stdio(),
         Command::ReviewGate { slug } => interpret(command::review_gate_for_workflow(slug)),
+        Command::RecordCleanReview {
+            slug,
+            reviewer,
+            reviewed_at,
+        } => interpret(command::record_clean_review(slug, reviewer, reviewed_at)),
         Command::RemoveSlice { slug } => interpret(command::remove_slice(slug)),
         Command::RemoveTransition { removal } => interpret(command::remove_transition(removal)),
         Command::RemoveWorkflow { slug } => interpret(command::remove_workflow(slug)),
@@ -593,6 +605,35 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 })
                 .map_err(|error| ShellError::message(error.to_string()))
         }
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            reviewer_flag,
+            reviewer,
+            reviewed_at_flag,
+            reviewed_at,
+        ] if command == "review"
+            && subject == "record"
+            && workflow_flag == "--workflow"
+            && reviewer_flag == "--reviewer"
+            && reviewed_at_flag == "--reviewed-at" =>
+        {
+            let slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let reviewer = parse_reviewer_id(reviewer)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let reviewed_at = parse_review_timestamp(reviewed_at)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::RecordCleanReview {
+                    slug,
+                    reviewer,
+                    reviewed_at,
+                },
+            })
+        }
         [command, subject, slug] if command == "show" && subject == "workflow" => {
             parse_workflow_slug(slug)
                 .map(|slug| Cli {
@@ -794,7 +835,10 @@ fn help_command() -> ClapCommand {
         .subcommand(
             ClapCommand::new("review")
                 .about("Evaluate review gates")
-                .subcommand(ClapCommand::new("gate").about("Check a workflow review gate")),
+                .subcommand(ClapCommand::new("gate").about("Check a workflow review gate"))
+                .subcommand(
+                    ClapCommand::new("record").about("Record a clean workflow review"),
+                ),
         )
         .subcommand(
             ClapCommand::new("mcp")
@@ -822,6 +866,7 @@ fn help_command() -> ClapCommand {
   emc verify
   emc check
   emc generate site --output <directory>
+  emc review record --workflow <workflow> --reviewer <reviewer> --reviewed-at <timestamp>
   emc mcp stdio
   emc mcp http --host 127.0.0.1 --port 7331",
         )
