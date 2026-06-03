@@ -673,12 +673,23 @@ fn read_slice_document(slug: &str) -> Result<FileContents, ShellError> {
 }
 
 fn validate_event_model_target(target: &str) -> Result<Vec<String>, ShellError> {
+    validate_project_artifact_synchronization_if_present()?;
     let target_path = ProjectPath::try_new(target.to_owned()).map_err(ShellError::project_path)?;
     let sources = read_event_model_sources(event_model_files(Path::new(target))?)?;
     let referenced_slice_files = referenced_event_model_slice_files(&sources)?;
     let referenced_sources = read_event_model_sources(referenced_slice_files)?;
     validate_event_model_sources(&target_path, &sources, &referenced_sources)
         .map(|()| vec![format!("event model is valid at {target}")])
+}
+
+fn validate_project_artifact_synchronization_if_present() -> Result<(), ShellError> {
+    if Path::new("emc.toml").exists() {
+        let project_name = read_project_manifest_name()?;
+        let modeled_workflows = read_browser_index_workflows()?;
+        interpret_collect_reports(check_project(project_name, modeled_workflows)).map(|_| ())
+    } else {
+        Ok(())
+    }
 }
 
 fn read_event_model_sources(
