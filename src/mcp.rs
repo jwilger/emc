@@ -308,6 +308,15 @@ fn tools_list_result() -> Value {
                 }
             },
             {
+                "name": "check_project",
+                "description": "Check required project artifacts and generated model synchronization.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false
+                }
+            },
+            {
                 "name": "verify_project",
                 "description": "Run Lean4 and Quint verification for generated model artifacts.",
                 "inputSchema": {
@@ -464,6 +473,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
             id,
             tool_result(generate_site_tool_text(request)?),
         ))),
+        "check_project" => Ok(Some(success_response(
+            id,
+            tool_result(check_project_tool_text()?),
+        ))),
         "verify_project" => Ok(Some(success_response(
             id,
             tool_result(verify_project_tool_text()?),
@@ -535,6 +548,11 @@ fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {
         output,
     )]))
     .map(|reports| reports.join("\n"))
+}
+
+fn check_project_tool_text() -> Result<String, ShellError> {
+    interpret_collect_reports(EffectPlan::new(vec![Effect::CheckCurrentProject]))
+        .map(|reports| reports.join("\n"))
 }
 
 fn verify_project_tool_text() -> Result<String, ShellError> {
