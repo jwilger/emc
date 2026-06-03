@@ -7,6 +7,7 @@ pub mod gherkin;
 pub mod layout;
 pub mod project;
 pub mod review_gate;
+pub mod review_record;
 pub mod site;
 pub mod slice;
 pub mod types;
