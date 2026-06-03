@@ -146,6 +146,37 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_http_reports_invalid_json_rpc_bodies_as_http_errors() -> Result<(), Box<dyn Error>> {
+        let _guard = mcp_http_test_lock()?;
+        let temp_dir = TempDir::new()?;
+        let port = available_loopback_port()?;
+        let server = ProcessCommand::new(cargo_bin("emc"))
+            .args([
+                "mcp",
+                "http",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                &port.to_string(),
+                "--once",
+            ])
+            .current_dir(temp_dir.path())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let response = send_request_body(port, "127.0.0.1", "{ not-json")?;
+        let output = server.wait_with_output()?;
+
+        assert!(output.status.success());
+        assert!(String::from_utf8(output.stderr)?.is_empty());
+        assert!(predicate::str::contains("HTTP/1.1 400 Bad Request").eval(&response));
+        assert!(predicate::str::contains("invalid MCP HTTP JSON-RPC body").eval(&response));
+
+        Ok(())
+    }
+
     fn mcp_http_test_lock() -> Result<MutexGuard<'static, ()>, Box<dyn Error>> {
         MCP_HTTP_TEST_LOCK
             .lock()
@@ -166,6 +197,14 @@ mod tests {
         origin_host: &str,
     ) -> Result<String, Box<dyn Error>> {
         let body = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-http-test\",\"version\":\"0.0.0\"}}}";
+        send_request_body(port, origin_host, body)
+    }
+
+    fn send_request_body(
+        port: u16,
+        origin_host: &str,
+        body: &str,
+    ) -> Result<String, Box<dyn Error>> {
         let request = format!(
             "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: http://{origin_host}:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
