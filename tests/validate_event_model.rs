@@ -848,6 +848,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_state_view_slices_without_views() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("show-repair-queue.eventmodel.json"),
+            "{\"name\":\"Repair queue\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Show repair queue\",\"type\":\"state_view\",\"acceptance_scenarios\":[{\"name\":\"show repair queue\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "state_view slice 'Show repair queue' must own at least one view",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_slice_outcome_labels() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");
@@ -1848,7 +1870,7 @@ mod tests {
         )?;
         write(
             workflows.join("review-lesson.eventmodel.json"),
-            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"events\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"review_lesson_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"views\":[\"review_lesson_screen\"],\"events\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
@@ -1879,7 +1901,7 @@ mod tests {
         )?;
         write(
             workflows.join("review-lesson.eventmodel.json"),
-            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lessons\"}],\"events\":[{\"name\":\"LessonSubmittedForReview\",\"stream\":\"lessons\",\"attributes\":[]}],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"events\":[\"LessonSubmittedForReview\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lessons\"}],\"events\":[{\"name\":\"LessonSubmittedForReview\",\"stream\":\"lessons\",\"attributes\":[]}],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"review_lesson_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"views\":[\"review_lesson_screen\"],\"events\":[\"LessonSubmittedForReview\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
@@ -1910,7 +1932,7 @@ mod tests {
         )?;
         write(
             workflows.join("review-lesson.eventmodel.json"),
-            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"events\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"review_lesson_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"views\":[\"review_lesson_screen\"],\"events\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
@@ -2061,7 +2083,7 @@ mod tests {
         )?;
         write(
             workflows.join("entry.eventmodel.json"),
-            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"entry_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"entry_screen\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
         write(
             workflows.join("record-checkpoint.eventmodel.json"),
@@ -2091,7 +2113,7 @@ mod tests {
         )?;
         write(
             workflows.join("entry.eventmodel.json"),
-            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"entry_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"entry_screen\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
@@ -2118,7 +2140,7 @@ mod tests {
         )?;
         write(
             workflows.join("entry.eventmodel.json"),
-            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"entry_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"entry_screen\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
         write(
             workflows.join("show-lesson.eventmodel.json"),
