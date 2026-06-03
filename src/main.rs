@@ -5,8 +5,10 @@ use std::process::ExitCode;
 
 use emc::core::emc::{EMCWorkflowImport, import_emc_workflow};
 use emc::core::effect::FileContents;
+use emc::core::effect::ProjectPath;
 use emc::core::layout::{check_project, list_workflows, show_workflow};
 use emc::core::project::{ProjectName, init_project};
+use emc::core::site::generate_site;
 use emc::core::types::WorkflowSlug;
 use emc::core::validation::{
     EventModelDocument, EventModelFileKind, validate_event_model, validate_event_model_corpus,
@@ -24,6 +26,7 @@ struct Cli {
 
 enum Command {
     Check,
+    GenerateSite { output: ProjectPath },
     ImportEMC { source: PathBuf },
     Init { name: String },
     ListWorkflows,
@@ -54,6 +57,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             interpret(check_project(project_name, imported_workflows))
         }
+        Command::GenerateSite { output } => interpret(generate_site(output)),
         Command::ImportEMC { source } => {
             interpret(import_emc_workflow(load_emc_import(&source)?))
         }
@@ -90,6 +94,15 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         [command] if command == "check" => Ok(Cli {
             command: Command::Check,
         }),
+        [command, subject, output_flag, output]
+            if command == "generate" && subject == "site" && output_flag == "--output" =>
+        {
+            ProjectPath::try_new(output.clone())
+                .map(|output| Cli {
+                    command: Command::GenerateSite { output },
+                })
+                .map_err(|error| ShellError::message(error.to_string()))
+        }
         [command, kind, source_flag, source]
             if command == "import" && kind == "emc" && source_flag == "--source" =>
         {
