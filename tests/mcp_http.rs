@@ -132,7 +132,7 @@ mod tests {
             .stderr(Stdio::piped())
             .spawn()?;
 
-        let response = send_initialize_request_with_origin(port, "0.0.0.0")?;
+        let response = send_initialize_request_with_origin(port, "127.0.0.1")?;
         let output = server.wait_with_output()?;
 
         assert!(output.status.success());
@@ -142,6 +142,45 @@ mod tests {
                 .contains(&format!("MCP HTTP listening on 0.0.0.0:{port}"))
         );
         assert!(predicate::str::contains("HTTP/1.1 401 Unauthorized").eval(&response));
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_http_accepts_authenticated_non_local_bind_for_request_host_origin()
+    -> Result<(), Box<dyn Error>> {
+        let _guard = mcp_http_test_lock()?;
+        let temp_dir = TempDir::new()?;
+        let port = available_loopback_port()?;
+        let server = ProcessCommand::new(cargo_bin("emc"))
+            .args([
+                "mcp",
+                "http",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                &port.to_string(),
+                "--auth-token",
+                "package-secret",
+                "--once",
+            ])
+            .current_dir(temp_dir.path())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let response =
+            send_initialize_request_with_authorization(port, "127.0.0.1", "Bearer package-secret")?;
+        let output = server.wait_with_output()?;
+
+        assert!(output.status.success());
+        assert!(String::from_utf8(output.stderr)?.is_empty());
+        assert!(
+            String::from_utf8(output.stdout)?
+                .contains(&format!("MCP HTTP listening on 0.0.0.0:{port}"))
+        );
+        assert!(predicate::str::contains("HTTP/1.1 200 OK").eval(&response));
+        assert!(predicate::str::contains("\"serverInfo\"").eval(&response));
 
         Ok(())
     }
@@ -166,7 +205,7 @@ mod tests {
             .stderr(Stdio::piped())
             .spawn()?;
 
-        let response = send_request_body(port, "127.0.0.1", "{ not-json")?;
+        let response = send_request_body(port, "127.0.0.1", None, "{ not-json")?;
         let output = server.wait_with_output()?;
 
         assert!(output.status.success());
@@ -197,16 +236,29 @@ mod tests {
         origin_host: &str,
     ) -> Result<String, Box<dyn Error>> {
         let body = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-http-test\",\"version\":\"0.0.0\"}}}";
-        send_request_body(port, origin_host, body)
+        send_request_body(port, origin_host, None, body)
+    }
+
+    fn send_initialize_request_with_authorization(
+        port: u16,
+        origin_host: &str,
+        authorization: &str,
+    ) -> Result<String, Box<dyn Error>> {
+        let body = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-http-test\",\"version\":\"0.0.0\"}}}";
+        send_request_body(port, origin_host, Some(authorization), body)
     }
 
     fn send_request_body(
         port: u16,
         origin_host: &str,
+        authorization: Option<&str>,
         body: &str,
     ) -> Result<String, Box<dyn Error>> {
+        let authorization_header = authorization
+            .map(|authorization| format!("Authorization: {authorization}\r\n"))
+            .unwrap_or_default();
         let request = format!(
-            "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: http://{origin_host}:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: http://{origin_host}:{port}\r\n{authorization_header}Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
         );
         let mut stream = connect_with_retry(port)?;

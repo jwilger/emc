@@ -128,6 +128,7 @@
 - 2026-06-03: `emc connect workflow` now rejects workflow document name drift against the indexed workflow identity before planning writes, preventing a corrupted browser workflow document from steering transition mutations into mismatched Lean4/Quint workflow modules.
 - 2026-06-03: `emc add slice` now rejects workflow document description drift against the indexed workflow description before planning writes, preventing a corrupted browser workflow document from changing formal workflow digests through an unrelated slice mutation.
 - 2026-06-03: `emc connect workflow` now rejects workflow document description drift against the indexed workflow description before planning writes, preventing a corrupted browser workflow document from changing formal workflow digests through an unrelated transition mutation.
+- 2026-06-03: MCP HTTP origin validation now compares the request Origin against the request Host authority when present, so authenticated clients can reach a server bound to `0.0.0.0` through their actual host while cross-origin requests still fail deterministically.
 
 ### Task 1: Guardrails and Project Skeleton
 
