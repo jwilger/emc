@@ -150,6 +150,31 @@ mod tests {
             "flake checks must build the Docker-compatible EMC image"
         );
         assert!(
+            flake.contains("overlays.default = final: _previous:"),
+            "flake must expose a default overlay for NixOS users"
+        );
+        assert!(
+            flake.contains("emc = self.packages.${final.stdenv.hostPlatform.system}.emc;"),
+            "overlay pkgs.emc must resolve to the wrapped flake package"
+        );
+        assert!(
+            flake.contains(
+                "emc-container = self.packages.${final.stdenv.hostPlatform.system}.emc-container;"
+            ),
+            "overlay pkgs.emc-container must resolve to the flake container package"
+        );
+        assert!(
+            flake.contains("overlaySmoke = pkgs.runCommand")
+                && flake.contains("overlay-smoke = overlaySmoke;"),
+            "flake checks must prove the overlay evaluates"
+        );
+        assert!(
+            flake.contains("test \"${overlayPkgs.emc}\" = \"${package}\"")
+                && flake.contains("grep '${pkgs.lean4}/bin' \"${overlayPkgs.emc}/bin/emc\"")
+                && flake.contains("grep '${pkgs.quint}/bin' \"${overlayPkgs.emc}/bin/emc\""),
+            "overlay smoke check must prove pkgs.emc is the wrapped package with Lean4 and Quint on PATH"
+        );
+        assert!(
             flake.contains("copyToRoot = pkgs.buildEnv"),
             "EMC container image must include a runnable package closure"
         );

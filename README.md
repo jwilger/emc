@@ -402,6 +402,34 @@ Use `just mutants-full` before larger milestones or releases.
 The Nix flake builds the `emc` package, wraps it with Lean4/Lake and Quint on
 `PATH`, and provides a Docker-compatible image for container use.
 
+NixOS users can install EMC from this flake with the default overlay:
+
+```nix
+{
+  inputs.emc.url = "github:your-org/emc";
+
+  outputs = { nixpkgs, emc, ... }: {
+    nixosConfigurations.workstation = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ({ pkgs, ... }: {
+          nixpkgs.overlays = [
+            emc.overlays.default
+          ];
+
+          environment.systemPackages = [
+            pkgs.emc
+          ];
+        })
+      ];
+    };
+  };
+}
+```
+
+`pkgs.emc` is the wrapped EMC package, so `emc verify` can find Lean4/Lake and
+Quint without extra user configuration.
+
 The Nix gate is:
 
 ```sh

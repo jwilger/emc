@@ -114,6 +114,20 @@
           };
         };
 
+        overlayPkgs = import nixpkgs {
+          inherit system;
+          overlays = [ self.overlays.default ];
+        };
+
+        overlaySmoke = pkgs.runCommand "emc-overlay-smoke" { } ''
+          test "${overlayPkgs.emc}" = "${package}"
+          test "${overlayPkgs.emc-container}" = "${containerImage}"
+          test -x "${overlayPkgs.emc}/bin/emc"
+          grep '${pkgs.lean4}/bin' "${overlayPkgs.emc}/bin/emc"
+          grep '${pkgs.quint}/bin' "${overlayPkgs.emc}/bin/emc"
+          touch "$out"
+        '';
+
         packageSmoke = pkgs.runCommand "emc-package-smoke"
           {
             nativeBuildInputs = [
@@ -262,6 +276,7 @@ PY
           default = package;
           emc = package;
           emc-container-image = containerImage;
+          overlay-smoke = overlaySmoke;
           package-smoke = packageSmoke;
         };
 
@@ -286,5 +301,10 @@ PY
           OPENSSL_NO_VENDOR = "1";
           PKG_CONFIG_PATH = pkgs.lib.makeSearchPath "lib/pkgconfig" commonBuildInputs;
         };
-      });
+      }) // {
+        overlays.default = final: _previous: {
+          emc = self.packages.${final.stdenv.hostPlatform.system}.emc;
+          emc-container = self.packages.${final.stdenv.hostPlatform.system}.emc-container;
+        };
+      };
 }
