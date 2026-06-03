@@ -418,6 +418,114 @@ mod tests {
     }
 
     #[test]
+    fn connect_workflow_rejects_duplicate_transition_without_rewriting_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+        add_slice(
+            temp_dir.path(),
+            "submit-ticket",
+            "Submit ticket",
+            "Actor submits repair ticket details.",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "submit-ticket",
+                "--via",
+                "command",
+                "--name",
+                "SubmitTicketForReview",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let workflow_before = read_to_string(&workflow_path)?;
+        let lean_before = read_to_string(&lean_path)?;
+        let quint_before = read_to_string(&quint_path)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "submit-ticket",
+                "--via",
+                "command",
+                "--name",
+                "SubmitTicketForReview",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow transition capture-ticket->submit-ticket:command:SubmitTicketForReview already exists",
+            ));
+
+        assert_eq!(
+            workflow_before,
+            read_to_string(workflow_path)?,
+            "duplicate transition rejection must leave browser workflow data unchanged"
+        );
+        assert_eq!(
+            lean_before,
+            read_to_string(lean_path)?,
+            "duplicate transition rejection must leave Lean workflow data unchanged"
+        );
+        assert_eq!(
+            quint_before,
+            read_to_string(quint_path)?,
+            "duplicate transition rejection must leave Quint workflow data unchanged"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn connect_workflow_exit_requires_exact_flag_order() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let malformed_commands = [
