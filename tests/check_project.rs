@@ -390,6 +390,51 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_lean_workflow_extra_name_declaration_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let mut lean = read_to_string(&lean_path)?;
+        lean.push_str("\ndef workflowName := \"Stale ticket\"\n");
+        write(lean_path, lean)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean workflow field drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_quint_workflow_extra_description_declaration_drift()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let mut quint = read_to_string(&quint_path)?;
+        quint.push_str("  val workflowDescription = \"Stale description.\"\n");
+        write(quint_path, quint)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint workflow field drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_lean_workflow_transition_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 

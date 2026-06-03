@@ -84,6 +84,18 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
             .map(|()| None)
             .map_err(ShellError::io),
         Effect::Fail(message) => Err(ShellError::message(message.as_ref().to_owned())),
+        Effect::RequireCanonicalDeclaration(path, prefix, marker, message) => {
+            let contents = fs::read_to_string(Path::new(path.as_ref())).map_err(ShellError::io)?;
+            if artifact_contains_one_canonical_declaration(
+                &contents,
+                prefix.as_ref(),
+                marker.as_ref(),
+            ) {
+                Ok(None)
+            } else {
+                Err(ShellError::message(message.as_ref().to_owned()))
+            }
+        }
         Effect::RequireDigest(path, digest, message) => {
             let contents = fs::read_to_string(Path::new(path.as_ref())).map_err(ShellError::io)?;
             if contents.contains(digest.as_ref()) {
