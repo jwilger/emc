@@ -3,9 +3,9 @@ use std::io::{self, Read};
 
 use serde_json::{Value, json};
 
-use crate::core::effect::{Effect, EffectPlan};
-use crate::core::layout::list_workflows;
-use crate::io::dto::parse_browser_index_workflows;
+use crate::core::effect::{Effect, EffectPlan, FileContents};
+use crate::core::layout::{list_workflows, show_workflow};
+use crate::io::dto::{parse_browser_index_workflows, parse_workflow_slug};
 use crate::shell::ShellError;
 
 pub fn serve_stdio() -> Result<(), ShellError> {
@@ -75,6 +75,20 @@ fn tools_list_result() -> Value {
                     "properties": {},
                     "additionalProperties": false
                 }
+            },
+            {
+                "name": "show_workflow",
+                "description": "Show an imported workflow document by workflow slug.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "slug": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slug"],
+                    "additionalProperties": false
+                }
             }
         ]
     })
@@ -98,6 +112,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
             id,
             tool_result(list_workflows_tool_text()?),
         ))),
+        "show_workflow" => Ok(Some(success_response(
+            id,
+            tool_result(show_workflow_tool_text(request)?),
+        ))),
         _ => Ok(Some(error_response(
             id,
             -32602,
@@ -114,11 +132,43 @@ fn list_workflows_tool_text() -> Result<String, ShellError> {
     Ok(report_text(list_workflows(imported_workflows)))
 }
 
+fn show_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
+    let raw_slug = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .and_then(|arguments| arguments.get("slug"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("show_workflow requires slug"))?;
+    let slug =
+        parse_workflow_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))?;
+    let workflow_path = format!(
+        "model/browser/data/workflows/{}.eventmodel.json",
+        slug.as_ref()
+    );
+    let workflow_document = fs::read_to_string(workflow_path)
+        .map_err(|error| ShellError::message(error.to_string()))
+        .and_then(|contents| {
+            FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    Ok(document_text(show_workflow(workflow_document)))
+}
+
 fn report_text(plan: EffectPlan) -> String {
     plan.effects()
         .iter()
         .filter_map(|effect| match effect {
             Effect::Report(line) => Some(line.as_ref()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn document_text(plan: EffectPlan) -> String {
+    plan.effects()
+        .iter()
+        .filter_map(|effect| match effect {
+            Effect::ReportDocument(contents) => Some(contents.as_ref()),
             _ => None,
         })
         .collect::<Vec<_>>()
