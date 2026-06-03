@@ -1,5 +1,5 @@
 use crate::core::emc::artifact_digest;
-use crate::core::effect::{Effect, EffectPlan, ProjectPath, ReportLine};
+use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::project::ProjectName;
 use crate::core::types::{ModelName, WorkflowSlug};
 
@@ -50,6 +50,10 @@ pub fn list_workflows(imported_workflows: Vec<ImportedWorkflowLayout>) -> Effect
             .map(|workflow| Effect::Report(report_line(workflow.name.as_ref().to_owned())))
             .collect(),
     )
+}
+
+pub fn show_workflow(workflow_document: FileContents) -> EffectPlan {
+    EffectPlan::new(vec![Effect::ReportDocument(workflow_document)])
 }
 
 fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {

@@ -4,8 +4,10 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use emc::core::emc::{EMCWorkflowImport, import_emc_workflow};
-use emc::core::layout::{check_project, list_workflows};
+use emc::core::effect::FileContents;
+use emc::core::layout::{check_project, list_workflows, show_workflow};
 use emc::core::project::{ProjectName, init_project};
+use emc::core::types::WorkflowSlug;
 use emc::core::validation::{
     EventModelDocument, EventModelFileKind, validate_event_model, validate_event_model_corpus,
 };
@@ -25,6 +27,7 @@ enum Command {
     ImportEMC { source: PathBuf },
     Init { name: String },
     ListWorkflows,
+    ShowWorkflow { slug: WorkflowSlug },
     Validate { target: PathBuf },
 }
 
@@ -65,6 +68,19 @@ fn run(cli: Cli) -> Result<(), ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             interpret(list_workflows(imported_workflows))
         }
+        Command::ShowWorkflow { slug } => {
+            let workflow_path = format!(
+                "model/browser/data/workflows/{}.eventmodel.json",
+                slug.as_ref()
+            );
+            let workflow_document = fs::read_to_string(workflow_path)
+                .map_err(|error| ShellError::message(error.to_string()))
+                .and_then(|contents| {
+                    FileContents::try_new(contents)
+                        .map_err(|error| ShellError::message(error.to_string()))
+                })?;
+            interpret(show_workflow(workflow_document))
+        }
         Command::Validate { target } => validate_target(&target),
     }
 }
@@ -89,6 +105,13 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         [command, subject] if command == "list" && subject == "workflows" => Ok(Cli {
             command: Command::ListWorkflows,
         }),
+        [command, subject, slug] if command == "show" && subject == "workflow" => {
+            parse_workflow_slug(slug)
+                .map(|slug| Cli {
+                    command: Command::ShowWorkflow { slug },
+                })
+                .map_err(|error| ShellError::message(error.to_string()))
+        }
         [command, target] if command == "validate" => Ok(Cli {
             command: Command::Validate {
                 target: PathBuf::from(target),
