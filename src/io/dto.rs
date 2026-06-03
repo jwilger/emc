@@ -1837,12 +1837,15 @@ fn view_definitions_from_json_object(
                         "local_states",
                         "local state",
                     )?;
-                    let wireframe = view_wireframe_from_json_view(view);
+                    let fields =
+                        definition_names_from_json_array_field(view, "fields", "view field")?;
+                    let wireframe = view_wireframe_from_json_view(view)?;
                     definition_names_from_json_array_field(view, "uses_read_models", "read model")
                         .map(|read_models| {
                             ViewDefinition::new(
                                 name,
                                 read_models,
+                                fields,
                                 controls,
                                 local_states,
                                 wireframe,
@@ -1853,11 +1856,37 @@ fn view_definitions_from_json_object(
         .collect()
 }
 
-fn view_wireframe_from_json_view(view: &Value) -> ViewWireframe {
+fn view_wireframe_from_json_view(view: &Value) -> Result<ViewWireframe, BoundaryParseError> {
     view.get("wireframe")
         .and_then(Value::as_str)
         .filter(|wireframe| !wireframe.trim().is_empty())
-        .map_or(ViewWireframe::Absent, |_| ViewWireframe::Present)
+        .map_or(Ok(ViewWireframe::Absent), |wireframe| {
+            wireframe_tokens_from_markup(wireframe).map(ViewWireframe::Present)
+        })
+}
+
+fn wireframe_tokens_from_markup(
+    wireframe: &str,
+) -> Result<Vec<DefinitionName>, BoundaryParseError> {
+    let marker = "data-ref=\"";
+    let mut rest = wireframe;
+    let mut tokens = Vec::new();
+
+    while let Some(marker_start) = rest.find(marker) {
+        let token_start = marker_start + marker.len();
+        let token_and_tail = &rest[token_start..];
+        let token_end = token_and_tail.find('"').ok_or_else(|| {
+            BoundaryParseError::new("wireframe data-ref is missing closing quote")
+        })?;
+        let raw_token = &token_and_tail[..token_end];
+        let token = DefinitionName::try_new(raw_token.to_owned()).map_err(|error| {
+            BoundaryParseError::new(format!("invalid wireframe token: {error}"))
+        })?;
+        tokens.push(token);
+        rest = &token_and_tail[token_end + 1..];
+    }
+
+    Ok(tokens)
 }
 
 fn view_control_definitions_from_json_view(
