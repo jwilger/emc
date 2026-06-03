@@ -6,6 +6,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::core::effect::{Effect, EffectPlan, ProcessInvocation};
+use serde_json::Value;
 
 #[derive(Debug)]
 pub struct ShellError {
@@ -83,6 +84,23 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 )))
             }
         }
+        Effect::RequireWorkflowTransitions(
+            workflow_path,
+            artifact_path,
+            marker_prefix,
+            message,
+        ) => {
+            let workflow_contents =
+                fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
+            let artifact_contents =
+                fs::read_to_string(Path::new(artifact_path.as_ref())).map_err(ShellError::io)?;
+            let marker = workflow_transition_marker(marker_prefix.as_ref(), &workflow_contents)?;
+            if artifact_contents.contains(&marker) {
+                Ok(None)
+            } else {
+                Err(ShellError::message(message.as_ref().to_owned()))
+            }
+        }
         Effect::RunProcess(invocation) => run_process(invocation),
         Effect::WriteFile(path, contents) => {
             write_file(path.as_ref(), contents.as_ref()).map(|()| None)
@@ -97,6 +115,46 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
         Effect::Report(line) => Ok(Some(line.as_ref().to_owned())),
         Effect::ReportDocument(contents) => Ok(Some(contents.as_ref().to_owned())),
     }
+}
+
+fn workflow_transition_marker(prefix: &str, workflow_contents: &str) -> Result<String, ShellError> {
+    let labels = workflow_transition_labels(workflow_contents)?;
+    let joined_labels = labels.join(",");
+    Ok(format!("{prefix} [{joined_labels}]"))
+}
+
+fn workflow_transition_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
+    let workflow = serde_json::from_str::<Value>(workflow_contents)
+        .map_err(|error| ShellError::message(format!("invalid workflow JSON: {error}")))?;
+    let steps = workflow
+        .get("steps")
+        .and_then(Value::as_array)
+        .ok_or_else(|| ShellError::message("workflow document is missing steps"))?;
+
+    steps
+        .iter()
+        .filter_map(|step| {
+            let source = step.get("slice").and_then(Value::as_str)?;
+            let transitions = step.get("transitions").and_then(Value::as_array)?;
+            Some((source, transitions))
+        })
+        .flat_map(|(source, transitions)| {
+            transitions.iter().filter_map(move |transition| {
+                let target = transition.get("to").and_then(Value::as_str)?;
+                transition
+                    .get("via_navigation")
+                    .and_then(Value::as_str)
+                    .map(|trigger| format!("{source}->{target}:navigation:{trigger}"))
+            })
+        })
+        .map(json_string)
+        .collect()
+}
+
+fn json_string(value: String) -> Result<String, ShellError> {
+    serde_json::to_string(&value).map_err(|error| {
+        ShellError::message(format!("failed to encode workflow transition: {error}"))
+    })
 }
 
 fn write_file(path: &str, contents: &str) -> Result<(), ShellError> {
