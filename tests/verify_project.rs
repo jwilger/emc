@@ -60,6 +60,47 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn verify_reports_actionable_lean_failure_diagnostics() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let tool_dir = temp_dir.path().join("tools");
+
+        create_failing_tool(&tool_dir, "lake")?;
+        create_fake_tool(&tool_dir, "quint", "quint.log")?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .arg("verify")
+            .current_dir(temp_dir.path())
+            .env("PATH", path_with_fake_tools(&tool_dir)?)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("Lean4 verification failed"))
+            .stderr(predicate::str::contains("Run `emc check`"));
+
+        Ok(())
+    }
+
     fn create_fake_tool(
         tool_dir: &Path,
         tool_name: &str,
@@ -71,6 +112,14 @@ mod tests {
             &tool_path,
             format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log_file}\n"),
         )?;
+        set_permissions(&tool_path, Permissions::from_mode(0o755))?;
+        Ok(())
+    }
+
+    fn create_failing_tool(tool_dir: &Path, tool_name: &str) -> Result<(), Box<dyn Error>> {
+        create_dir_all(tool_dir)?;
+        let tool_path = tool_dir.join(tool_name);
+        write(&tool_path, "#!/bin/sh\nexit 7\n")?;
         set_permissions(&tool_path, Permissions::from_mode(0o755))?;
         Ok(())
     }
