@@ -97,6 +97,20 @@ impl WorkflowDocument {
         })
     }
 
+    pub fn with_removed_transition(
+        &self,
+        removal: WorkflowTransitionRecord,
+    ) -> Result<Self, WorkflowDocumentError> {
+        let mut next = self.object()?.clone();
+        next.insert(
+            "steps".to_owned(),
+            Value::Array(removed_transition_steps(self.steps()?, &removal)?),
+        );
+        Ok(Self {
+            value: Value::Object(next),
+        })
+    }
+
     pub fn with_description(
         &self,
         description: &ModelDescription,
@@ -527,6 +541,61 @@ fn append_transition(
     Ok(Value::Object(next))
 }
 
+fn removed_transition_steps(
+    existing: &[Value],
+    removal: &WorkflowTransitionRecord,
+) -> Result<Vec<Value>, WorkflowDocumentError> {
+    let mut removed_transition = false;
+    let next_steps = existing
+        .iter()
+        .map(|step| {
+            let source = step.get("slice").and_then(Value::as_str);
+            let transitions = step.get("transitions").and_then(Value::as_array);
+            source
+                .zip(transitions)
+                .map_or(Ok(step.clone()), |(source, transitions)| {
+                    let next_transitions = transitions
+                        .iter()
+                        .map(|transition| {
+                            transition_record_for_value(source, transition)
+                                .map(|record| {
+                                    record.is_some_and(|record| {
+                                        if &record == removal {
+                                            removed_transition = true;
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    })
+                                })
+                                .map(|remove| (!remove).then(|| transition.clone()))
+                        })
+                        .collect::<Result<Vec<_>, _>>()?
+                        .into_iter()
+                        .flatten()
+                        .collect();
+                    let mut next = step
+                        .as_object()
+                        .ok_or_else(|| {
+                            WorkflowDocumentError::new("workflow step must be a JSON object")
+                        })?
+                        .clone();
+                    next.insert("transitions".to_owned(), Value::Array(next_transitions));
+                    Ok(Value::Object(next))
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if removed_transition {
+        Ok(next_steps)
+    } else {
+        Err(WorkflowDocumentError::new(format!(
+            "workflow transition {} does not exist",
+            transition_record_label(removal)
+        )))
+    }
+}
+
 fn transition_addition_record(
     addition: &WorkflowTransitionAddition,
 ) -> Result<WorkflowTransitionRecord, WorkflowDocumentError> {
@@ -618,6 +687,24 @@ fn workflow_transitions(
         })
         .map(workflow_transition_record)
         .collect()
+}
+
+fn transition_record_for_value(
+    source: &str,
+    transition: &Value,
+) -> Result<Option<WorkflowTransitionRecord>, WorkflowDocumentError> {
+    transition
+        .get("to")
+        .and_then(Value::as_str)
+        .and_then(|target| transition_record(source, target, transition))
+        .or_else(|| {
+            transition
+                .get("to_workflow")
+                .and_then(Value::as_str)
+                .and_then(|target| workflow_exit_transition_record(source, target, transition))
+        })
+        .map(workflow_transition_record)
+        .transpose()
 }
 
 fn transition_record<'a>(

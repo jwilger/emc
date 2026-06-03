@@ -9,7 +9,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::command;
-use crate::core::connection::WorkflowConnection;
+use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::slice::NewSlice;
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
@@ -590,6 +590,40 @@ fn tools_list_result() -> Result<Value, ShellError> {
                     "additionalProperties": false
             })),
         ),
+        Tool::new(
+            "remove_transition",
+            "Remove a workflow transition and regenerate synchronized model artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "workflow": {
+                            "type": "string"
+                        },
+                        "from": {
+                            "type": "string"
+                        },
+                        "to": {
+                            "type": "string"
+                        },
+                        "to_workflow": {
+                            "type": "string"
+                        },
+                        "via": {
+                            "type": "string",
+                            "enum": ["command", "event", "navigation", "external_trigger", "outcome"]
+                        },
+                        "name": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["workflow", "from", "via", "name"],
+                    "oneOf": [
+                        {"required": ["to"]},
+                        {"required": ["to_workflow"]}
+                    ],
+                    "additionalProperties": false
+            })),
+        ),
     ]))
 }
 
@@ -679,6 +713,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "connect_workflow" => Ok(Some(tool_call_result_response(
             id,
             connect_workflow_tool_text(request),
+        ))),
+        "remove_transition" => Ok(Some(tool_call_result_response(
+            id,
+            remove_transition_tool_text(request),
         ))),
         _ => Ok(Some(error_response(
             id,
@@ -1069,6 +1107,71 @@ fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
     };
     interpret_collect_reports(command::connect_workflow(connection))
         .map(|reports| reports.join("\n"))
+}
+
+fn remove_transition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("remove_transition requires arguments"))?;
+    let workflow_slug = arguments
+        .get("workflow")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("remove_transition requires workflow"))
+        .and_then(|raw_workflow| {
+            parse_workflow_slug(raw_workflow)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let source_slug = arguments
+        .get("from")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("remove_transition requires from"))
+        .and_then(|raw_source| {
+            parse_slice_slug(raw_source).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let connection_kind = arguments
+        .get("via")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("remove_transition requires via"))
+        .and_then(|raw_via| {
+            parse_connection_kind(raw_via).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let trigger = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("remove_transition requires name"))
+        .and_then(|raw_name| {
+            parse_transition_trigger_name(raw_name)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let removal = if let Some(raw_target) = arguments.get("to").and_then(Value::as_str) {
+        let target_slug =
+            parse_slice_slug(raw_target).map_err(|error| ShellError::message(error.to_string()))?;
+        WorkflowTransitionRemoval::new(
+            workflow_slug,
+            source_slug,
+            target_slug,
+            connection_kind,
+            trigger,
+        )
+    } else {
+        let target_workflow = arguments
+            .get("to_workflow")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ShellError::message("remove_transition requires to or to_workflow"))
+            .and_then(|raw_target| {
+                parse_workflow_slug(raw_target)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+        WorkflowTransitionRemoval::new_workflow_exit(
+            workflow_slug,
+            source_slug,
+            target_workflow,
+            connection_kind,
+            trigger,
+        )
+    };
+    interpret_collect_reports(command::remove_transition(removal)).map(|reports| reports.join("\n"))
 }
 
 fn tool_result(text: String) -> Value {

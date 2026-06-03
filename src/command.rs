@@ -1,4 +1,4 @@
-use crate::core::connection::WorkflowConnection;
+use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::effect::{Effect, EffectPlan, ProjectPath};
 use crate::core::gherkin::{
     GherkinSuite, list_gherkin_features, run_all_gherkin_suites, run_gherkin_suite,
@@ -23,6 +23,10 @@ pub fn check_project() -> EffectPlan {
 
 pub fn connect_workflow(connection: WorkflowConnection) -> EffectPlan {
     EffectPlan::new(vec![Effect::ConnectWorkflowFromWorkflow(connection)])
+}
+
+pub fn remove_transition(removal: WorkflowTransitionRemoval) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveTransitionFromWorkflow(removal)])
 }
 
 pub fn generate_site(output: ProjectPath) -> EffectPlan {

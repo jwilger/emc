@@ -1,7 +1,7 @@
 use nutype::nutype;
 use std::path::{Component, Path};
 
-use crate::core::connection::WorkflowConnection;
+use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{ModelDescription, ModelName, SliceSlug, WorkflowSlug};
 use crate::core::workflow::NewWorkflow;
@@ -54,6 +54,7 @@ pub enum Effect {
     RequireWorkflowTransitions(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RunProcess(ProcessInvocation),
     RemoveFile(ProjectPath),
+    RemoveTransitionFromWorkflow(WorkflowTransitionRemoval),
     ShowSliceFromSlice(SliceSlug),
     ShowWorkflowFromWorkflow(WorkflowSlug),
     UpdateSliceDescriptionFromWorkflow(SliceSlug, ModelDescription),
