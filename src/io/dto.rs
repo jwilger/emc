@@ -7,6 +7,7 @@ use serde_json::{Map, Value};
 use crate::core::connection::ConnectionKind;
 use crate::core::emc::{EMCSliceImport, EMCWorkflowImport};
 use crate::core::effect::FileContents;
+use crate::core::gherkin::GherkinSuite;
 use crate::core::layout::ImportedWorkflowLayout;
 use crate::core::project::ProjectName;
 use crate::core::slice::SliceKind;
@@ -64,6 +65,18 @@ pub fn parse_model_name(raw: &str) -> Result<ModelName, BoundaryParseError> {
 pub fn parse_model_description(raw: &str) -> Result<ModelDescription, BoundaryParseError> {
     ModelDescription::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid model description: {error}")))
+}
+
+pub fn parse_gherkin_suite(raw: &str) -> Result<GherkinSuite, BoundaryParseError> {
+    match raw {
+        "browser" => Ok(GherkinSuite::Browser),
+        "meta" => Ok(GherkinSuite::Meta),
+        "review-gate" => Ok(GherkinSuite::ReviewGate),
+        "validator" => Ok(GherkinSuite::Validator),
+        _ => Err(BoundaryParseError::new(format!(
+            "invalid Gherkin suite '{raw}'"
+        ))),
+    }
 }
 
 pub fn parse_event_model_document(
