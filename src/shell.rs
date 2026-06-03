@@ -110,6 +110,14 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
             )
             .map(|()| None)
         }
+        Effect::RequireReferencedSliceFiles(workflows_path, slices_path, message) => {
+            require_referenced_slice_files(
+                workflows_path.as_ref(),
+                slices_path.as_ref(),
+                message.as_ref(),
+            )
+            .map(|()| None)
+        }
         Effect::RequireReviewRecord(path, workflow_path, message) => {
             if Path::new(path.as_ref()).is_file() {
                 require_clean_review_record(path.as_ref(), workflow_path.as_ref(), message.as_ref())
@@ -216,6 +224,72 @@ fn indexed_workflow_paths(index_contents: &str) -> Result<BTreeSet<String>, Shel
     Ok(workflows
         .iter()
         .filter_map(|workflow| workflow.get("path").and_then(Value::as_str))
+        .map(str::to_owned)
+        .collect())
+}
+
+fn require_referenced_slice_files(
+    workflows_path: &str,
+    slices_path: &str,
+    message: &str,
+) -> Result<(), ShellError> {
+    let referenced_slice_files = referenced_slice_file_names(workflows_path)?;
+    let mut slice_files = fs::read_dir(Path::new(slices_path))
+        .map_err(ShellError::io)?
+        .map(|entry| entry.map(|directory_entry| directory_entry.path()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ShellError::io)?;
+    slice_files.sort();
+
+    slice_files
+        .into_iter()
+        .filter_map(|path| {
+            path.file_name()
+                .and_then(|file_name| file_name.to_str())
+                .filter(|file_name| file_name.ends_with(".eventmodel.json"))
+                .map(str::to_owned)
+        })
+        .find(|file_name| !referenced_slice_files.contains(file_name))
+        .map_or(Ok(()), |file_name| {
+            Err(ShellError::message(format!("{message} for {file_name}")))
+        })
+}
+
+fn referenced_slice_file_names(workflows_path: &str) -> Result<BTreeSet<String>, ShellError> {
+    let mut workflow_files = fs::read_dir(Path::new(workflows_path))
+        .map_err(ShellError::io)?
+        .map(|entry| entry.map(|directory_entry| directory_entry.path()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ShellError::io)?;
+    workflow_files.sort();
+
+    workflow_files
+        .into_iter()
+        .filter(|path| {
+            path.file_name()
+                .and_then(|file_name| file_name.to_str())
+                .is_some_and(|file_name| file_name.ends_with(".eventmodel.json"))
+        })
+        .try_fold(BTreeSet::new(), |mut referenced_files, workflow_path| {
+            let workflow_contents = fs::read_to_string(&workflow_path).map_err(ShellError::io)?;
+            workflow_slice_file_names(&workflow_contents)?
+                .into_iter()
+                .for_each(|file_name| {
+                    referenced_files.insert(file_name);
+                });
+            Ok(referenced_files)
+        })
+}
+
+fn workflow_slice_file_names(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
+    let workflow = workflow_json(workflow_contents)?;
+    Ok(workflow
+        .get("slice_files")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter_map(|slice_file| slice_file.rsplit('/').next())
         .map(str::to_owned)
         .collect())
 }

@@ -420,6 +420,30 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn check_reports_unreferenced_browser_slice_files() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        write(
+            temp_dir
+                .path()
+                .join("model/browser/data/slices/orphan-slice.eventmodel.json"),
+            "{\"name\":\"Orphan slice\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[],\"slices\":[{\"name\":\"Orphan slice\",\"type\":\"state_view\",\"events\":[],\"views\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser slice reference drift for orphan-slice.eventmodel.json",
+            ));
+
+        Ok(())
+    }
+
     fn create_connected_workflow(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args(["init", "--name", "Repair Desk"])

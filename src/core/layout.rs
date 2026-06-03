@@ -69,6 +69,11 @@ pub fn check_project(
                     project_path("model/browser/data/workflows"),
                     report_line("browser workflow index drift"),
                 ),
+                Effect::RequireReferencedSliceFiles(
+                    project_path("model/browser/data/workflows"),
+                    project_path("model/browser/data/slices"),
+                    report_line("browser slice reference drift"),
+                ),
                 Effect::RequireFile(project_path("model/browser/data/workflows/.gitkeep")),
                 Effect::RequireFile(project_path("model/browser/data/slices/.gitkeep")),
                 Effect::RequireFile(project_path("reviews/.gitkeep")),
