@@ -1781,6 +1781,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_read_model_field_event_sources(document))
         .and_then(|()| validate_state_view_slices_own_views(document))
         .and_then(|()| validate_state_view_slices_do_not_own_commands(document))
+        .and_then(|()| validate_state_change_slices_emit_events(document))
 }
 
 pub fn validate_event_model_corpus(
@@ -3216,6 +3217,21 @@ fn validate_state_view_slices_do_not_own_commands(
             Err(validation_issue(format!(
                 "state_view slice '{}' must not own command '{}'",
                 slice.name, command
+            )))
+        })
+}
+
+fn validate_state_change_slices_emit_events(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .find(|slice| slice.slice_type == SliceType::StateChange && slice.owned_events.is_empty())
+        .map_or(Ok(()), |slice| {
+            Err(validation_issue(format!(
+                "state_change slice '{}' must emit at least one event",
+                slice.name
             )))
         })
 }
