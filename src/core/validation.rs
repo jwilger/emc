@@ -1339,12 +1339,20 @@ impl ViewControlDefinitionParts {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ControlInputProvision {
     name: DefinitionName,
+    source: ControlInputSource,
 }
 
 impl ControlInputProvision {
-    pub fn new(name: DefinitionName) -> Self {
-        Self { name }
+    pub fn new(name: DefinitionName, source: ControlInputSource) -> Self {
+        Self { name, source }
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ControlInputSource {
+    UserInput(DefinitionName),
+    SessionValue(DefinitionName),
+    Other,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -1790,6 +1798,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_controls_reference_known_commands(document)?;
 
     validate_controls_provide_command_inputs(document)?;
+
+    validate_control_inputs_have_source_provenance(document)?;
 
     validate_navigation_controls_declare_type(document)?;
 
@@ -5111,6 +5121,32 @@ fn control_provides_input(control: &ViewControlDefinition, input_name: &Definiti
         .input_provisions
         .iter()
         .any(|provision| provision.name == *input_name)
+}
+
+fn validate_control_inputs_have_source_provenance(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .flat_map(|view| view.controls.iter())
+        .find_map(control_input_missing_source)
+        .map_or(Ok(()), |(control, input)| {
+            Err(validation_issue(format!(
+                "control '{}' input '{}' is missing source",
+                control.label, input.name
+            )))
+        })
+}
+
+fn control_input_missing_source(
+    control: &ViewControlDefinition,
+) -> Option<(&ViewControlDefinition, &ControlInputProvision)> {
+    control
+        .input_provisions
+        .iter()
+        .find(|input| input.source == ControlInputSource::Other)
+        .map(|input| (control, input))
 }
 
 fn validate_control_error_handling_recovery(
