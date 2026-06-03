@@ -137,6 +137,7 @@
 - 2026-06-03: `emc check` now rejects initialized project root formal artifact drift: root Lean4 namespace/end declarations, root Quint module declarations, and root Quint verification config must match the initialized project module and invariant surface.
 - 2026-06-03: `emc check` now rejects Lean project verification config drift: generated `lakefile.lean` and `lean-toolchain` contents must match the deterministic Lake package and pinned Lean4 toolchain emitted by initialization.
 - 2026-06-03: `emc check` now rejects project manifest drift: generated `emc.toml` project name, Lean module, and Quint module declarations must remain canonical for the initialized project root.
+- 2026-06-03: `emc init` now creates empty formal slice artifact directories under `model/lean/slices` and `model/quint/slices`, and `emc check` requires their keep files as part of the deterministic project skeleton.
 
 ### Task 1: Guardrails and Project Skeleton
 
