@@ -7,7 +7,8 @@ use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceSlug, TransitionTriggerName,
-    WorkflowSlug, WorkflowTransitionFieldName,
+    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionFieldName, WorkflowTransitionKind,
+    WorkflowTransitionRecord,
 };
 use crate::core::workflow_document::{
     WorkflowDocument, WorkflowTransitionAddition, WorkflowTransitionTarget, workflow_path,
@@ -50,6 +51,16 @@ impl ConnectionKind {
             Self::Navigation => "via_navigation",
             Self::ExternalTrigger => "via_external_trigger",
             Self::Outcome => "via_outcome",
+        }
+    }
+
+    fn trigger_kind(self) -> &'static str {
+        match self {
+            Self::Command => "command",
+            Self::Event => "event",
+            Self::Navigation => "navigation",
+            Self::ExternalTrigger => "external_trigger",
+            Self::Outcome => "outcome",
         }
     }
 }
@@ -113,6 +124,68 @@ impl WorkflowConnection {
                 slug: target,
                 reason,
             },
+            kind,
+            trigger,
+        }
+    }
+
+    pub fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum WorkflowTransitionRemovalTarget {
+    Slice(SliceSlug),
+    Workflow(WorkflowSlug),
+}
+
+impl WorkflowTransitionRemovalTarget {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Slice(slug) => slug.as_ref(),
+            Self::Workflow(slug) => slug.as_ref(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowTransitionRemoval {
+    workflow_slug: WorkflowSlug,
+    source: SliceSlug,
+    target: WorkflowTransitionRemovalTarget,
+    kind: ConnectionKind,
+    trigger: TransitionTriggerName,
+}
+
+impl WorkflowTransitionRemoval {
+    pub fn new(
+        workflow_slug: WorkflowSlug,
+        source: SliceSlug,
+        target: SliceSlug,
+        kind: ConnectionKind,
+        trigger: TransitionTriggerName,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            source,
+            target: WorkflowTransitionRemovalTarget::Slice(target),
+            kind,
+            trigger,
+        }
+    }
+
+    pub fn new_workflow_exit(
+        workflow_slug: WorkflowSlug,
+        source: SliceSlug,
+        target: WorkflowSlug,
+        kind: ConnectionKind,
+        trigger: TransitionTriggerName,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            source,
+            target: WorkflowTransitionRemovalTarget::Workflow(target),
             kind,
             trigger,
         }
@@ -209,6 +282,89 @@ pub fn connect_workflow(
     ]))
 }
 
+pub fn remove_transition(
+    indexed_workflow_name: ModelName,
+    indexed_workflow_description: ModelDescription,
+    workflow_document: FileContents,
+    removal: WorkflowTransitionRemoval,
+) -> Result<EffectPlan, ConnectionMutationError> {
+    let workflow_document = WorkflowDocument::parse(&workflow_document)
+        .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
+    let workflow_name = workflow_document
+        .name()
+        .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
+    if workflow_name != indexed_workflow_name {
+        return Err(ConnectionMutationError::new(format!(
+            "workflow document name '{}' does not match index name '{}'",
+            workflow_name.as_ref(),
+            indexed_workflow_name.as_ref()
+        )));
+    }
+    let workflow_description = workflow_document
+        .description()
+        .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
+    if workflow_description != indexed_workflow_description {
+        return Err(ConnectionMutationError::new(format!(
+            "workflow document description '{}' does not match index description '{}'",
+            workflow_description.as_ref(),
+            indexed_workflow_description.as_ref()
+        )));
+    }
+    let workflow_document = workflow_document
+        .with_removed_transition(removal_transition_record(&removal)?)
+        .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
+    let module_name = module_name(workflow_name.as_ref());
+    let workflow_slice_details = workflow_document
+        .slice_details()
+        .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
+    let workflow_transitions = workflow_document
+        .transitions()
+        .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
+    let digest = artifact_digest(
+        workflow_name.clone(),
+        removal.workflow_slug.clone(),
+        workflow_description.clone(),
+        workflow_slice_details.clone(),
+        workflow_transitions.clone(),
+    );
+    let workflow_json = workflow_document
+        .contents()
+        .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
+    let source = removal.source.as_ref();
+    let target = removal.target.as_ref();
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(workflow_path(&removal.workflow_slug), workflow_json),
+        Effect::WriteFile(
+            project_path(format!("model/lean/{module_name}.lean")),
+            emit_lean_workflow_module(
+                lean_module_name(module_name.clone()),
+                workflow_name.clone(),
+                workflow_description.clone(),
+                removal.workflow_slug.clone(),
+                workflow_slice_details.clone(),
+                workflow_transitions.clone(),
+                digest.clone(),
+            ),
+        ),
+        Effect::WriteFile(
+            project_path(format!("model/quint/{module_name}.qnt")),
+            emit_quint_workflow_module(
+                quint_module_name(module_name),
+                workflow_name,
+                workflow_description,
+                removal.workflow_slug.clone(),
+                workflow_slice_details,
+                workflow_transitions,
+                digest,
+            ),
+        ),
+        Effect::Report(report_line(format!(
+            "removed transition {source} to {target}"
+        ))),
+    ]))
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ConnectionMutationError {
     message: String,
@@ -243,6 +399,38 @@ fn workflow_transition_target(target: &WorkflowConnectionTarget) -> WorkflowTran
 fn workflow_transition_field(kind: ConnectionKind) -> WorkflowTransitionFieldName {
     WorkflowTransitionFieldName::try_new(kind.trigger_field().to_owned()).unwrap_or_else(|error| {
         unreachable!("EMC generated workflow transition field must be valid: {error}");
+    })
+}
+
+fn removal_transition_record(
+    removal: &WorkflowTransitionRemoval,
+) -> Result<WorkflowTransitionRecord, ConnectionMutationError> {
+    let kind = match removal.target {
+        WorkflowTransitionRemovalTarget::Slice(_) => removal.kind.trigger_kind().to_owned(),
+        WorkflowTransitionRemovalTarget::Workflow(_) => {
+            format!("workflow_exit:{}", removal.kind.trigger_kind())
+        }
+    };
+    Ok(WorkflowTransitionRecord::new(
+        workflow_transition_endpoint("source", removal.source.as_ref())?,
+        workflow_transition_endpoint("target", removal.target.as_ref())?,
+        workflow_transition_kind(&kind)?,
+        removal.trigger.clone(),
+    ))
+}
+
+fn workflow_transition_endpoint(
+    context: &str,
+    raw: &str,
+) -> Result<WorkflowTransitionEndpoint, ConnectionMutationError> {
+    WorkflowTransitionEndpoint::try_new(raw.to_owned()).map_err(|error| {
+        ConnectionMutationError::new(format!("invalid workflow transition {context}: {error}"))
+    })
+}
+
+fn workflow_transition_kind(raw: &str) -> Result<WorkflowTransitionKind, ConnectionMutationError> {
+    WorkflowTransitionKind::try_new(raw.to_owned()).map_err(|error| {
+        ConnectionMutationError::new(format!("invalid workflow transition kind: {error}"))
     })
 }
 

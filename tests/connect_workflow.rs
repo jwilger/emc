@@ -237,6 +237,534 @@ mod tests {
     }
 
     #[test]
+    fn remove_transition_removes_modeled_transition_from_canonical_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+        add_slice(
+            temp_dir.path(),
+            "review-ticket",
+            "Review ticket",
+            "Actor reviews repair ticket details.",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed transition capture-ticket to review-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        assert!(
+            !workflow_json.contains("\"via_navigation\": \"review-ticket-screen\""),
+            "workflow data must remove the transition trigger"
+        );
+        assert!(
+            lean.contains("def workflowTransitions : List WorkflowTransition := []"),
+            "Lean artifact must remove the workflow transition"
+        );
+        assert!(
+            quint.contains("val workflowTransitions = []"),
+            "Quint artifact must remove the workflow transition"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_transition_rejects_unknown_transition_without_mutating_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+        add_slice(
+            temp_dir.path(),
+            "review-ticket",
+            "Review ticket",
+            "Actor reviews repair ticket details.",
+        )?;
+
+        let workflow_before = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow transition capture-ticket->review-ticket:navigation:review-ticket-screen does not exist",
+            ));
+
+        let workflow_after = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+
+        assert_eq!(
+            workflow_before, workflow_after,
+            "rejected transition removal must not mutate workflow data"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_transition_removes_workflow_exit_transition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "close-ticket",
+                "--name",
+                "Close ticket",
+                "--description",
+                "Actor closes a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "close-ticket",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket-closed",
+                "--reason",
+                "Closed tickets continue to completion.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "close-ticket",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket-closed",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed transition capture-ticket to close-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        assert!(
+            !workflow_json.contains("\"via_outcome\": \"ticket-closed\""),
+            "workflow data must remove the workflow-exit trigger"
+        );
+        assert!(
+            lean.contains("def workflowTransitions : List WorkflowTransition := []"),
+            "Lean artifact must remove the workflow-exit transition"
+        );
+        assert!(
+            quint.contains("val workflowTransitions = []"),
+            "Quint artifact must remove the workflow-exit transition"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_transition_requires_exact_in_workflow_command_shape() -> Result<(), Box<dyn Error>> {
+        [
+            [
+                "delete",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ],
+            [
+                "remove",
+                "edge",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ],
+            [
+                "remove",
+                "transition",
+                "--model",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ],
+            [
+                "remove",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--source",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ],
+            [
+                "remove",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--target",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ],
+            [
+                "remove",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--kind",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ],
+            [
+                "remove",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--trigger",
+                "review-ticket-screen",
+            ],
+        ]
+        .into_iter()
+        .try_for_each(assert_usage)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_transition_requires_exact_workflow_exit_command_shape() -> Result<(), Box<dyn Error>>
+    {
+        [
+            [
+                "delete",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "close-ticket",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket-closed",
+            ],
+            [
+                "remove",
+                "edge",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "close-ticket",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket-closed",
+            ],
+            [
+                "remove",
+                "transition",
+                "--model",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "close-ticket",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket-closed",
+            ],
+            [
+                "remove",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--source",
+                "capture-ticket",
+                "--to-workflow",
+                "close-ticket",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket-closed",
+            ],
+            [
+                "remove",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--target-workflow",
+                "close-ticket",
+                "--via",
+                "outcome",
+                "--name",
+                "ticket-closed",
+            ],
+            [
+                "remove",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "close-ticket",
+                "--kind",
+                "outcome",
+                "--name",
+                "ticket-closed",
+            ],
+            [
+                "remove",
+                "transition",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "close-ticket",
+                "--via",
+                "outcome",
+                "--trigger",
+                "ticket-closed",
+            ],
+        ]
+        .into_iter()
+        .try_for_each(assert_usage)?;
+
+        Ok(())
+    }
+
+    #[test]
     fn connect_workflow_adds_external_trigger_transition_to_canonical_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -946,6 +1474,17 @@ mod tests {
                 ));
         }
 
+        Ok(())
+    }
+
+    fn assert_usage<const N: usize>(args: [&str; N]) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(args)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "usage: emc init --name <project-name>",
+            ));
         Ok(())
     }
 

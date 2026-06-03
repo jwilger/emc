@@ -3,7 +3,7 @@ use std::process::ExitCode;
 
 use clap::{Arg, Command as ClapCommand};
 use emc::command;
-use emc::core::connection::WorkflowConnection;
+use emc::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use emc::core::effect::ProjectPath;
 use emc::core::gherkin::GherkinSuite;
 use emc::core::project::ProjectName;
@@ -56,6 +56,9 @@ enum Command {
         port: u16,
         once: bool,
         auth_token: Option<String>,
+    },
+    RemoveTransition {
+        removal: WorkflowTransitionRemoval,
     },
     ReviewGate {
         slug: WorkflowSlug,
@@ -125,6 +128,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         } => serve_http(&host, port, once, auth_token.as_deref()),
         Command::McpStdio => serve_stdio(),
         Command::ReviewGate { slug } => interpret(command::review_gate_for_workflow(slug)),
+        Command::RemoveTransition { removal } => interpret(command::remove_transition(removal)),
         Command::ShowSlice { slug } => interpret(command::show_slice(slug)),
         Command::ShowWorkflow { slug } => interpret(command::show_workflow(slug)),
         Command::UpdateSliceDescription { slug, description } => {
@@ -316,6 +320,92 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                         connection_kind,
                         trigger,
                         exit_reason,
+                    ),
+                },
+            })
+        }
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            from_flag,
+            source,
+            to_flag,
+            target,
+            via_flag,
+            via,
+            name_flag,
+            name,
+        ] if command == "remove"
+            && subject == "transition"
+            && workflow_flag == "--workflow"
+            && from_flag == "--from"
+            && to_flag == "--to"
+            && via_flag == "--via"
+            && name_flag == "--name" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_slug =
+                parse_slice_slug(source).map_err(|error| ShellError::message(error.to_string()))?;
+            let target_slug =
+                parse_slice_slug(target).map_err(|error| ShellError::message(error.to_string()))?;
+            let connection_kind = parse_connection_kind(via)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let trigger = parse_transition_trigger_name(name)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::RemoveTransition {
+                    removal: WorkflowTransitionRemoval::new(
+                        workflow_slug,
+                        source_slug,
+                        target_slug,
+                        connection_kind,
+                        trigger,
+                    ),
+                },
+            })
+        }
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            from_flag,
+            source,
+            to_workflow_flag,
+            target,
+            via_flag,
+            via,
+            name_flag,
+            name,
+        ] if command == "remove"
+            && subject == "transition"
+            && workflow_flag == "--workflow"
+            && from_flag == "--from"
+            && to_workflow_flag == "--to-workflow"
+            && via_flag == "--via"
+            && name_flag == "--name" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_slug =
+                parse_slice_slug(source).map_err(|error| ShellError::message(error.to_string()))?;
+            let target_slug = parse_workflow_slug(target)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let connection_kind = parse_connection_kind(via)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let trigger = parse_transition_trigger_name(name)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::RemoveTransition {
+                    removal: WorkflowTransitionRemoval::new_workflow_exit(
+                        workflow_slug,
+                        source_slug,
+                        target_slug,
+                        connection_kind,
+                        trigger,
                     ),
                 },
             })
@@ -696,6 +786,8 @@ fn help_command() -> ClapCommand {
   emc update slice --slug <slice> --type <kind>
   emc update slice --slug <slice> --name <name>
   emc connect workflow --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
+  emc remove transition --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
+  emc remove transition --workflow <workflow> --from <slice> --to-workflow <workflow> --via outcome --name <trigger>
   emc list slices
   emc list transitions
   emc validate <path>

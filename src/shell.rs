@@ -6,7 +6,7 @@ use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
-use crate::core::connection::connect_workflow;
+use crate::core::connection::{connect_workflow, remove_transition};
 use crate::core::digest::{artifact_digest_from_workflow_document, slice_artifact_digest};
 use crate::core::effect::{
     ArtifactDigest, Effect, EffectPlan, FileContents, ProcessInvocation, ProjectPath,
@@ -368,6 +368,30 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         }
         Effect::RunProcess(invocation) => run_process(invocation),
         Effect::RemoveFile(path) => remove_file_if_present(path.as_ref()).map(|()| Vec::new()),
+        Effect::RemoveTransitionFromWorkflow(removal) => {
+            let existing_workflows = read_browser_index_workflows()?;
+            let workflow_document = read_indexed_workflow_document_from_layouts(
+                removal.workflow_slug(),
+                existing_workflows.as_slice(),
+            )?;
+            let workflow_layout = existing_workflows
+                .iter()
+                .find(|workflow| workflow.slug() == removal.workflow_slug())
+                .ok_or_else(|| {
+                    ShellError::message(format!(
+                        "workflow {} is not indexed",
+                        removal.workflow_slug().as_ref()
+                    ))
+                })?;
+            let plan = remove_transition(
+                workflow_layout.name().clone(),
+                workflow_layout.description().clone(),
+                workflow_document,
+                removal.clone(),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret_collect_reports(plan)
+        }
         Effect::ShowSliceFromSlice(slug) => {
             let slice_document = read_referenced_slice_document(slug)?;
             interpret_collect_reports(show_document(slice_document))
