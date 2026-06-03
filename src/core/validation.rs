@@ -1210,6 +1210,7 @@ impl ReadModelState {
 pub struct ViewDefinition {
     name: DefinitionName,
     read_models: Vec<DefinitionName>,
+    fields: Vec<DefinitionName>,
     controls: Vec<ViewControlDefinition>,
     local_states: Vec<DefinitionName>,
     wireframe: ViewWireframe,
@@ -1340,10 +1341,27 @@ pub enum ControlErrorRecoveryBehavior {
     Present,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ViewWireframe {
     Absent,
-    Present,
+    Present(Vec<DefinitionName>),
+}
+
+impl ViewWireframe {
+    fn is_absent(&self) -> bool {
+        matches!(self, Self::Absent)
+    }
+
+    fn is_present(&self) -> bool {
+        matches!(self, Self::Present(_))
+    }
+
+    fn tokens(&self) -> &[DefinitionName] {
+        match self {
+            Self::Absent => &[],
+            Self::Present(tokens) => tokens,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -1595,6 +1613,7 @@ impl ViewDefinition {
     pub fn new(
         name: DefinitionName,
         read_models: Vec<DefinitionName>,
+        fields: Vec<DefinitionName>,
         controls: Vec<ViewControlDefinition>,
         local_states: Vec<DefinitionName>,
         wireframe: ViewWireframe,
@@ -1602,6 +1621,7 @@ impl ViewDefinition {
         Self {
             name,
             read_models,
+            fields,
             controls,
             local_states,
             wireframe,
@@ -1789,6 +1809,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_state_change_slices_do_not_own_automations(document))
         .and_then(|()| validate_state_change_slices_do_not_own_translations(document))
         .and_then(|()| validate_views_have_wireframes(document))
+        .and_then(|()| validate_wireframe_tokens_are_modeled(document))
 }
 
 pub fn validate_event_model_corpus(
@@ -2547,7 +2568,7 @@ fn duplicate_slice_wireframe_definition(
             document.slice_definitions.iter().flat_map(move |slice| {
                 slice.owned_views.iter().filter_map(move |view_name| {
                     view_definition(document, view_name)
-                        .filter(|view| view.wireframe == ViewWireframe::Present)
+                        .filter(|view| view.wireframe.is_present())
                         .map(|view| (slice, view))
                 })
             })
@@ -3281,9 +3302,7 @@ fn validate_state_change_slices_do_not_own_wireframes(
                 document
                     .view_definitions
                     .iter()
-                    .find(|view| {
-                        view.name == *view_name && view.wireframe == ViewWireframe::Present
-                    })
+                    .find(|view| view.name == *view_name && view.wireframe.is_present())
                     .map(|view| (slice, view))
             })
         })
@@ -3383,13 +3402,40 @@ fn validate_views_have_wireframes(document: &EventModelDocument) -> Result<(), V
     document
         .view_definitions
         .iter()
-        .find(|view| view.wireframe == ViewWireframe::Absent)
+        .find(|view| view.wireframe.is_absent())
         .map_or(Ok(()), |view| {
             Err(validation_issue(format!(
                 "view '{}' is missing wireframe",
                 view.name
             )))
         })
+}
+
+fn validate_wireframe_tokens_are_modeled(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .find_map(unmodeled_wireframe_token)
+        .map_or(Ok(()), |(view, token)| {
+            Err(validation_issue(format!(
+                "view '{}' wireframe token '{}' does not match a field or control",
+                view.name, token
+            )))
+        })
+}
+
+fn unmodeled_wireframe_token(view: &ViewDefinition) -> Option<(&ViewDefinition, &DefinitionName)> {
+    view.wireframe
+        .tokens()
+        .iter()
+        .find(|token| !wireframe_token_is_modeled(view, token))
+        .map(|token| (view, token))
+}
+
+fn wireframe_token_is_modeled(view: &ViewDefinition, token: &DefinitionName) -> bool {
+    view.fields.contains(token) || view.controls.iter().any(|control| control.label == *token)
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
