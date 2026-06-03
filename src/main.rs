@@ -11,10 +11,12 @@ use emc::core::project::{ProjectName, init_project};
 use emc::core::site::generate_site;
 use emc::core::types::WorkflowSlug;
 use emc::core::verify::verify_project;
+use emc::core::workflow::{NewWorkflow, add_workflow};
 use emc::event_model_validation::validate_target;
 use emc::io::dto::{
     parse_browser_index_workflows, parse_emc_slice_import, parse_emc_workflow_import,
-    parse_project_manifest_name, parse_slice_slug, parse_workflow_slug,
+    parse_model_description, parse_model_name, parse_project_manifest_name, parse_slice_slug,
+    parse_workflow_slug,
 };
 use emc::mcp::serve_stdio;
 use emc::shell::{ShellError, interpret};
@@ -24,6 +26,7 @@ struct Cli {
 }
 
 enum Command {
+    AddWorkflow { workflow: NewWorkflow },
     Check,
     GenerateSite { output: ProjectPath },
     ImportEMC { source: PathBuf },
@@ -47,6 +50,13 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<(), ShellError> {
     match cli.command {
+        Command::AddWorkflow { workflow } => {
+            let index = fs::read_to_string("model/browser/data/index.json")
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let existing_workflows = parse_browser_index_workflows(&index)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret(add_workflow(existing_workflows, workflow))
+        }
         Command::Check => {
             let manifest = fs::read_to_string("emc.toml")
                 .map_err(|error| ShellError::message(error.to_string()))?;
@@ -100,6 +110,33 @@ fn run(cli: Cli) -> Result<(), ShellError> {
 
 fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
     match arguments.as_slice() {
+        [
+            command,
+            subject,
+            slug_flag,
+            slug,
+            name_flag,
+            name,
+            description_flag,
+            description,
+        ] if command == "add"
+            && subject == "workflow"
+            && slug_flag == "--slug"
+            && name_flag == "--name"
+            && description_flag == "--description" =>
+        {
+            let workflow_slug = parse_workflow_slug(slug)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let workflow_name =
+                parse_model_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+            let workflow_description = parse_model_description(description)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::AddWorkflow {
+                    workflow: NewWorkflow::new(workflow_name, workflow_description, workflow_slug),
+                },
+            })
+        }
         [command] if command == "check" => Ok(Cli {
             command: Command::Check,
         }),

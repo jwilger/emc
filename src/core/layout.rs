@@ -1,17 +1,34 @@
 use crate::core::emc::artifact_digest;
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::project::ProjectName;
-use crate::core::types::{ModelName, WorkflowSlug};
+use crate::core::types::{ModelDescription, ModelName, WorkflowSlug};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ImportedWorkflowLayout {
     name: ModelName,
+    description: ModelDescription,
     slug: WorkflowSlug,
 }
 
 impl ImportedWorkflowLayout {
-    pub fn new(name: ModelName, slug: WorkflowSlug) -> Self {
-        Self { name, slug }
+    pub fn new(name: ModelName, description: ModelDescription, slug: WorkflowSlug) -> Self {
+        Self {
+            name,
+            description,
+            slug,
+        }
+    }
+
+    pub fn name(&self) -> &ModelName {
+        &self.name
+    }
+
+    pub fn description(&self) -> &ModelDescription {
+        &self.description
+    }
+
+    pub fn slug(&self) -> &WorkflowSlug {
+        &self.slug
     }
 
     pub fn lean_artifact_path(&self) -> ProjectPath {

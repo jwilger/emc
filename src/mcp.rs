@@ -7,8 +7,11 @@ use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath};
 use crate::core::layout::{list_workflows, show_workflow};
 use crate::core::site::generate_site;
 use crate::core::verify::verify_project;
+use crate::core::workflow::{NewWorkflow, add_workflow};
 use crate::event_model_validation::validate_target;
-use crate::io::dto::{parse_browser_index_workflows, parse_workflow_slug};
+use crate::io::dto::{
+    parse_browser_index_workflows, parse_model_description, parse_model_name, parse_workflow_slug,
+};
 use crate::shell::{ShellError, interpret_collect_reports};
 use std::path::Path;
 
@@ -130,6 +133,26 @@ fn tools_list_result() -> Value {
                     "required": ["target"],
                     "additionalProperties": false
                 }
+            },
+            {
+                "name": "add_workflow",
+                "description": "Add a business workflow and regenerate synchronized model artifacts.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "slug": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "description": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slug", "name", "description"],
+                    "additionalProperties": false
+                }
             }
         ]
     })
@@ -168,6 +191,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "validate_event_model" => Ok(Some(success_response(
             id,
             tool_result(validate_event_model_tool_text(request)?),
+        ))),
+        "add_workflow" => Ok(Some(success_response(
+            id,
+            tool_result(add_workflow_tool_text(request)?),
         ))),
         _ => Ok(Some(error_response(
             id,
@@ -237,6 +264,44 @@ fn validate_event_model_tool_text(request: &Value) -> Result<String, ShellError>
         .ok_or_else(|| ShellError::message("validate_event_model requires target"))?;
     validate_target(Path::new(target))?;
     Ok(format!("event model is valid at {target}"))
+}
+
+fn add_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_workflow requires arguments"))?;
+    let slug = arguments
+        .get("slug")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow requires slug"))
+        .and_then(|raw_slug| {
+            parse_workflow_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow requires name"))
+        .and_then(|raw_name| {
+            parse_model_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let description = arguments
+        .get("description")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow requires description"))
+        .and_then(|raw_description| {
+            parse_model_description(raw_description)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let index = fs::read_to_string("model/browser/data/index.json")
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let existing_workflows = parse_browser_index_workflows(&index)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(add_workflow(
+        existing_workflows,
+        NewWorkflow::new(name, description, slug),
+    ))
+    .map(|reports| reports.join("\n"))
 }
 
 fn report_text(plan: EffectPlan) -> String {
