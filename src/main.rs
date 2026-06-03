@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use emc::core::emc::{EMCWorkflowImport, import_emc_workflow};
-use emc::core::layout::check_project;
+use emc::core::layout::{check_project, list_workflows};
 use emc::core::project::{ProjectName, init_project};
 use emc::core::validation::{
     EventModelDocument, EventModelFileKind, validate_event_model, validate_event_model_corpus,
@@ -24,6 +24,7 @@ enum Command {
     Check,
     ImportEMC { source: PathBuf },
     Init { name: String },
+    ListWorkflows,
     Validate { target: PathBuf },
 }
 
@@ -57,6 +58,13 @@ fn run(cli: Cli) -> Result<(), ShellError> {
             let project_name = ProjectName::try_new(name).map_err(ShellError::project_name)?;
             interpret(init_project(project_name))
         }
+        Command::ListWorkflows => {
+            let index = fs::read_to_string("model/browser/data/index.json")
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let imported_workflows = parse_browser_index_workflows(&index)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret(list_workflows(imported_workflows))
+        }
         Command::Validate { target } => validate_target(&target),
     }
 }
@@ -77,6 +85,9 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         }
         [command, name_flag, name] if command == "init" && name_flag == "--name" => Ok(Cli {
             command: Command::Init { name: name.clone() },
+        }),
+        [command, subject] if command == "list" && subject == "workflows" => Ok(Cli {
+            command: Command::ListWorkflows,
         }),
         [command, target] if command == "validate" => Ok(Cli {
             command: Command::Validate {
