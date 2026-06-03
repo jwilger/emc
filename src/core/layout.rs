@@ -145,7 +145,11 @@ pub fn show_workflow(workflow_document: FileContents) -> EffectPlan {
 
 fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
     let workflow_name = workflow.name.as_ref().to_owned();
-    let digest = artifact_digest(workflow.name.clone());
+    let digest = artifact_digest(
+        workflow.name.clone(),
+        workflow.slug.clone(),
+        workflow.description.clone(),
+    );
     let browser_name_marker = artifact_marker(format!(
         "  \"name\": {},",
         json_string(workflow.name.as_ref())
@@ -269,20 +273,6 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
         ),
         Effect::RequireFile(lean_path.clone()),
         Effect::RequireFile(quint_path.clone()),
-        Effect::RequireDigest(
-            lean_path.clone(),
-            digest.clone(),
-            report_line(format!(
-                "artifact digest mismatch for workflow {workflow_name}"
-            )),
-        ),
-        Effect::RequireDigest(
-            quint_path.clone(),
-            digest,
-            report_line(format!(
-                "artifact digest mismatch for workflow {workflow_name}"
-            )),
-        ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
             lean_module_prefix,
@@ -420,7 +410,7 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
             )),
         ),
         Effect::RequireCanonicalDeclaration(
-            lean_path,
+            lean_path.clone(),
             lean_slice_detail_invariant_prefix,
             lean_slice_detail_invariant_marker,
             report_line(format!(
@@ -436,11 +426,25 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
             )),
         ),
         Effect::RequireCanonicalDeclaration(
-            quint_path,
+            quint_path.clone(),
             quint_slice_detail_complete_prefix,
             quint_slice_detail_complete_marker,
             report_line(format!(
                 "Quint workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireDigest(
+            lean_path,
+            digest.clone(),
+            report_line(format!(
+                "artifact digest mismatch for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireDigest(
+            quint_path,
+            digest,
+            report_line(format!(
+                "artifact digest mismatch for workflow {workflow_name}"
             )),
         ),
     ]

@@ -137,7 +137,11 @@ pub fn connect_workflow(
     let steps = connected_steps(workflow_object, &connection)?;
     let workflow_slice_details = workflow_slice_details(&steps)?;
     let workflow_transitions = workflow_transitions(&steps)?;
-    let digest = artifact_digest(workflow_name.clone());
+    let digest = artifact_digest(
+        workflow_name.clone(),
+        connection.workflow_slug.clone(),
+        workflow_description.clone(),
+    );
     let workflow_json = workflow_json(workflow_object, steps)?;
     let source = connection.source.as_ref();
     let target = connection.target.as_ref();

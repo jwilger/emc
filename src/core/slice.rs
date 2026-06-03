@@ -113,7 +113,11 @@ pub fn add_slice(
     let module_name = module_name(workflow_name.as_ref());
     let workflow_slice_details = workflow_slice_details(&steps)?;
     let workflow_transitions = workflow_transitions(&steps)?;
-    let digest = artifact_digest(workflow_name.clone());
+    let digest = artifact_digest(
+        workflow_name.clone(),
+        new_slice.workflow_slug.clone(),
+        workflow_description.clone(),
+    );
     let workflow_json = workflow_json(workflow_object, slice_files, steps)?;
     let slice_json = slice_json(&new_slice);
     let slice_name = new_slice.name.as_ref();

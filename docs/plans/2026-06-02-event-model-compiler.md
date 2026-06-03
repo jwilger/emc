@@ -85,6 +85,7 @@
 - 2026-06-02: Project path arguments now reject absolute paths and parent-directory traversal at the semantic `ProjectPath` boundary, keeping validation and site generation scoped to deterministic project-local paths across CLI and MCP entrypoints.
 - 2026-06-02: `nix flake check` now builds the Docker-compatible EMC container image as a named check, so the packaged runtime closure is exercised alongside the package and command smoke gate.
 - 2026-06-02: MCP HTTP now returns a `400 Bad Request` response for malformed JSON-RPC bodies instead of terminating the HTTP transport with a shell error.
+- 2026-06-02: Generated formal artifact digest markers now include workflow name, slug, and description, so `emc check` rejects stale Lean4 or Quint digest metadata after semantic workflow identity fields change.
 
 ### Task 1: Guardrails and Project Skeleton
 

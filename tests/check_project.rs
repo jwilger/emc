@@ -255,7 +255,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "artifact digest mismatch for workflow Open ticket",
+                "Lean workflow field drift for workflow Open ticket",
             ));
 
         Ok(())
@@ -270,6 +270,77 @@ mod tests {
         let mut lean = read_to_string(&lean_path)?;
         lean.push_str("\n-- EMC-DIGEST: workflow:Stale ticket\n");
         write(lean_path, lean)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "artifact digest mismatch for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_lean_digest_drift_after_workflow_description_changes()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let old_lean = read_to_string(&lean_path)?;
+        let old_digest = old_lean
+            .lines()
+            .find(|line| line.starts_with("-- EMC-DIGEST: "))
+            .ok_or("generated Lean artifact is missing digest marker")?
+            .to_owned();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--description",
+                "Actor opens a repair ticket with priority.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let updated_lean = read_to_string(&lean_path)?;
+        let current_digest = updated_lean
+            .lines()
+            .find(|line| line.starts_with("-- EMC-DIGEST: "))
+            .ok_or("updated Lean artifact is missing digest marker")?;
+        assert_ne!(
+            old_digest, current_digest,
+            "workflow digest must change when semantic workflow content changes"
+        );
+
+        write(lean_path, updated_lean.replace(current_digest, &old_digest))?;
 
         Command::cargo_bin("emc")?
             .arg("check")
