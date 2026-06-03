@@ -2,8 +2,6 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 use std::iter;
 
-use serde_json::Value;
-
 use crate::core::browser_data_document::{BrowserDataCorpus, BrowserDataDocument};
 use crate::core::effect::FileContents;
 use crate::core::types::{
@@ -242,7 +240,6 @@ pub fn compose_browser_workflow(
         .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
     let workflow_browser_data = BrowserDataDocument::parse(&workflow_document)
         .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
-    let workflow_value = parse_json(workflow_document.as_ref())?;
     let slice_browser_data = slice_documents
         .iter()
         .map(BrowserDataDocument::parse)
@@ -253,10 +250,6 @@ pub fn compose_browser_workflow(
             .chain(slice_browser_data)
             .collect(),
     );
-    let slice_values = slice_documents
-        .iter()
-        .map(|document| parse_json(document.as_ref()))
-        .collect::<Result<Vec<_>, _>>()?;
     let lane_ids = browser_data
         .board_lane_ids()
         .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
@@ -284,9 +277,6 @@ pub fn compose_browser_workflow(
             label: detail.label().clone(),
         })
         .collect();
-    let composed_values = iter::once(&workflow_value)
-        .chain(slice_values.iter())
-        .collect::<Vec<_>>();
     let error_recovery_cards = browser_data
         .error_recovery_details()
         .map_err(|error| BrowserCompositionError::new(error.to_string()))?
@@ -320,7 +310,31 @@ pub fn compose_browser_workflow(
             section_labels: detail.section_labels().to_vec(),
         })
         .collect();
-    let view_definitions = view_definitions(&composed_values)?;
+    let view_definitions = browser_data
+        .view_definition_details()
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?
+        .into_iter()
+        .map(|detail| BrowserViewDefinition {
+            name: detail.name().clone(),
+            field_source_chains: detail
+                .field_source_chains()
+                .iter()
+                .map(|source_chain| BrowserFieldSourceChain {
+                    field: source_chain.field().clone(),
+                    hops: source_chain.hops().to_vec(),
+                })
+                .collect(),
+            control_effects: detail
+                .control_effects()
+                .iter()
+                .map(|effect| BrowserControlEffect {
+                    label: effect.label().clone(),
+                    kind: effect.kind().clone(),
+                    target: effect.target().clone(),
+                })
+                .collect(),
+        })
+        .collect();
 
     Ok(BrowserWorkflow {
         lane_ids,
@@ -355,203 +369,3 @@ impl Display for BrowserCompositionError {
 }
 
 impl Error for BrowserCompositionError {}
-
-fn parse_json(source: &str) -> Result<Value, BrowserCompositionError> {
-    serde_json::from_str::<Value>(source)
-        .map_err(|error| BrowserCompositionError::new(format!("invalid browser JSON: {error}")))
-}
-
-fn view_definitions(
-    values: &[&Value],
-) -> Result<Vec<BrowserViewDefinition>, BrowserCompositionError> {
-    values
-        .iter()
-        .flat_map(|value| {
-            value
-                .get("views")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-        })
-        .filter_map(|view| {
-            view.get("name")
-                .and_then(Value::as_str)
-                .map(|name| (name, view))
-        })
-        .map(|(name, view)| {
-            Ok(BrowserViewDefinition {
-                name: ViewName::try_new(name.to_owned()).map_err(|error| {
-                    BrowserCompositionError::new(format!("invalid view name: {error}"))
-                })?,
-                field_source_chains: view_field_source_chains(values, view)?,
-                control_effects: view_control_effects(view)?,
-            })
-        })
-        .collect()
-}
-
-fn view_field_source_chains(
-    values: &[&Value],
-    view: &Value,
-) -> Result<Vec<BrowserFieldSourceChain>, BrowserCompositionError> {
-    view.get("fields")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|field| {
-            Some((
-                field.get("name").and_then(Value::as_str)?,
-                field.get("source").and_then(Value::as_str)?,
-            ))
-        })
-        .map(|(field, source)| {
-            Ok(BrowserFieldSourceChain {
-                field: ViewFieldName::try_new(field.to_owned()).map_err(|error| {
-                    BrowserCompositionError::new(format!("invalid view field name: {error}"))
-                })?,
-                hops: source_chain_hops(values, source)?,
-            })
-        })
-        .collect()
-}
-
-fn view_control_effects(
-    view: &Value,
-) -> Result<Vec<BrowserControlEffect>, BrowserCompositionError> {
-    view.get("controls")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|control| {
-            Some((
-                control.get("label").and_then(Value::as_str)?,
-                control_effect_kind_and_target(control)?,
-            ))
-        })
-        .map(|(label, (kind, target))| {
-            Ok(BrowserControlEffect {
-                label: ControlLabel::try_new(label.to_owned()).map_err(|error| {
-                    BrowserCompositionError::new(format!("invalid control label: {error}"))
-                })?,
-                kind: ControlEffectKind::try_new(kind.to_owned()).map_err(|error| {
-                    BrowserCompositionError::new(format!("invalid control effect kind: {error}"))
-                })?,
-                target: ControlEffectTarget::try_new(target.to_owned()).map_err(|error| {
-                    BrowserCompositionError::new(format!("invalid control effect target: {error}"))
-                })?,
-            })
-        })
-        .collect()
-}
-
-fn control_effect_kind_and_target(control: &Value) -> Option<(&'static str, &str)> {
-    control
-        .get("command")
-        .and_then(Value::as_str)
-        .map(|command| ("command", command))
-        .or_else(|| {
-            control
-                .get("navigation")
-                .and_then(Value::as_str)
-                .map(|navigation| (navigation_effect_kind(control), navigation))
-        })
-}
-
-fn navigation_effect_kind(control: &Value) -> &'static str {
-    match control.get("navigation_type").and_then(Value::as_str) {
-        Some("external_workflow") => "workflow navigation",
-        Some("external_system") => "external navigation",
-        Some("local_view_state") => "local navigation",
-        Some("modeled_view") => "view navigation",
-        _ => "navigation",
-    }
-}
-
-fn source_chain_hops(
-    values: &[&Value],
-    source: &str,
-) -> Result<Vec<SourceChainHop>, BrowserCompositionError> {
-    let raw_hops = iter::once(source)
-        .chain(read_model_field_source(values, source))
-        .chain(event_attribute_source(values, source))
-        .collect::<Vec<_>>();
-
-    raw_hops
-        .into_iter()
-        .map(|hop| {
-            SourceChainHop::try_new(hop.to_owned()).map_err(|error| {
-                BrowserCompositionError::new(format!("invalid source chain hop: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn read_model_field_source<'a>(values: &'a [&Value], source: &str) -> Option<&'a str> {
-    let (read_model_name, field_name) = source
-        .strip_prefix("read_model.")
-        .and_then(|source| source.split_once('.'))?;
-
-    values
-        .iter()
-        .flat_map(|value| {
-            value
-                .get("read_models")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-        })
-        .find(|read_model| {
-            read_model
-                .get("name")
-                .and_then(Value::as_str)
-                .is_some_and(|name| name == read_model_name)
-        })
-        .and_then(|read_model| {
-            read_model
-                .get("fields")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .find(|field| {
-                    field
-                        .get("name")
-                        .and_then(Value::as_str)
-                        .is_some_and(|name| name == field_name)
-                })
-        })
-        .and_then(|field| field.get("source").and_then(Value::as_str))
-}
-
-fn event_attribute_source<'a>(values: &'a [&Value], source: &str) -> Option<&'a str> {
-    let (event_name, attribute_name) = read_model_field_source(values, source)?.split_once('.')?;
-
-    values
-        .iter()
-        .flat_map(|value| {
-            value
-                .get("events")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-        })
-        .find(|event| {
-            event
-                .get("name")
-                .and_then(Value::as_str)
-                .is_some_and(|name| name == event_name)
-        })
-        .and_then(|event| {
-            event
-                .get("attributes")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .find(|attribute| {
-                    attribute
-                        .get("name")
-                        .and_then(Value::as_str)
-                        .is_some_and(|name| name == attribute_name)
-                })
-        })
-        .and_then(|attribute| attribute.get("source").and_then(Value::as_str))
-}

@@ -5,9 +5,11 @@ use serde_json::Value;
 
 use crate::core::effect::FileContents;
 use crate::core::types::{
-    BoardLaneId, BrowserCommandDefinitionDetail, BrowserErrorRecoveryDetail,
-    BrowserEventElementName, CommandErrorName, CommandName, DefinitionSectionLabel, SliceName,
-    SourceControlReference, ViewName,
+    BoardLaneId, BrowserCommandDefinitionDetail, BrowserControlEffectDetail,
+    BrowserErrorRecoveryDetail, BrowserEventElementName, BrowserFieldSourceChainDetail,
+    BrowserViewDefinitionDetail, CommandErrorName, CommandName, ControlEffectKind,
+    ControlEffectTarget, ControlLabel, DefinitionSectionLabel, SliceName, SourceChainHop,
+    SourceControlReference, ViewFieldName, ViewName,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -144,6 +146,27 @@ impl BrowserDataCorpus {
             .collect()
     }
 
+    pub fn view_definition_details(
+        &self,
+    ) -> Result<Vec<BrowserViewDefinitionDetail>, BrowserDataDocumentError> {
+        self.documents
+            .iter()
+            .flat_map(view_definitions)
+            .filter_map(|view| {
+                view.get("name")
+                    .and_then(Value::as_str)
+                    .map(|name| (name, view))
+            })
+            .map(|(name, view)| {
+                Ok(BrowserViewDefinitionDetail::new(
+                    view_name(name)?,
+                    self.view_field_source_chains(view)?,
+                    view_control_effects(view)?,
+                ))
+            })
+            .collect()
+    }
+
     fn command_owning_slice(
         &self,
         command_name: &str,
@@ -182,6 +205,102 @@ impl BrowserDataCorpus {
             .flat_map(|view| view_command_source_controls(view, command_name))
             .map(source_control_reference)
             .collect()
+    }
+
+    fn view_field_source_chains(
+        &self,
+        view: &Value,
+    ) -> Result<Vec<BrowserFieldSourceChainDetail>, BrowserDataDocumentError> {
+        view.get("fields")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|field| {
+                Some((
+                    field.get("name").and_then(Value::as_str)?,
+                    field.get("source").and_then(Value::as_str)?,
+                ))
+            })
+            .map(|(field, source)| {
+                Ok(BrowserFieldSourceChainDetail::new(
+                    view_field_name(field)?,
+                    self.source_chain_hops(source)?,
+                ))
+            })
+            .collect()
+    }
+
+    fn source_chain_hops(
+        &self,
+        source: &str,
+    ) -> Result<Vec<SourceChainHop>, BrowserDataDocumentError> {
+        [
+            Some(source),
+            self.read_model_field_source(source),
+            self.event_attribute_source(source),
+        ]
+        .into_iter()
+        .flatten()
+        .map(source_chain_hop)
+        .collect()
+    }
+
+    fn read_model_field_source(&self, source: &str) -> Option<&str> {
+        let (read_model_name, field_name) = source
+            .strip_prefix("read_model.")
+            .and_then(|source| source.split_once('.'))?;
+
+        self.documents
+            .iter()
+            .flat_map(read_model_definitions)
+            .find(|read_model| {
+                read_model
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|name| name == read_model_name)
+            })
+            .and_then(|read_model| {
+                read_model
+                    .get("fields")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .find(|field| {
+                        field
+                            .get("name")
+                            .and_then(Value::as_str)
+                            .is_some_and(|name| name == field_name)
+                    })
+            })
+            .and_then(|field| field.get("source").and_then(Value::as_str))
+    }
+
+    fn event_attribute_source(&self, source: &str) -> Option<&str> {
+        let (event_name, attribute_name) = self.read_model_field_source(source)?.split_once('.')?;
+
+        self.documents
+            .iter()
+            .flat_map(event_definitions)
+            .find(|event| {
+                event
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|name| name == event_name)
+            })
+            .and_then(|event| {
+                event
+                    .get("attributes")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .find(|attribute| {
+                        attribute
+                            .get("name")
+                            .and_then(Value::as_str)
+                            .is_some_and(|name| name == attribute_name)
+                    })
+            })
+            .and_then(|attribute| attribute.get("source").and_then(Value::as_str))
     }
 }
 
@@ -287,6 +406,24 @@ fn view_definitions(document: &BrowserDataDocument) -> impl Iterator<Item = &Val
         .flatten()
 }
 
+fn read_model_definitions(document: &BrowserDataDocument) -> impl Iterator<Item = &Value> {
+    document
+        .value
+        .get("read_models")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+}
+
+fn event_definitions(document: &BrowserDataDocument) -> impl Iterator<Item = &Value> {
+    document
+        .value
+        .get("events")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+}
+
 fn view_command_source_controls(view: &Value, command_name: &str) -> Vec<String> {
     view.get("name")
         .and_then(Value::as_str)
@@ -342,5 +479,79 @@ fn source_control_reference(
 fn definition_section_label(raw: &str) -> Result<DefinitionSectionLabel, BrowserDataDocumentError> {
     DefinitionSectionLabel::try_new(raw.to_owned()).map_err(|error| {
         BrowserDataDocumentError::new(format!("invalid definition section label: {error}"))
+    })
+}
+
+fn view_control_effects(
+    view: &Value,
+) -> Result<Vec<BrowserControlEffectDetail>, BrowserDataDocumentError> {
+    view.get("controls")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|control| {
+            Some((
+                control.get("label").and_then(Value::as_str)?,
+                control_effect_kind_and_target(control)?,
+            ))
+        })
+        .map(|(label, (kind, target))| {
+            Ok(BrowserControlEffectDetail::new(
+                control_label(label)?,
+                control_effect_kind(kind)?,
+                control_effect_target(target)?,
+            ))
+        })
+        .collect()
+}
+
+fn control_effect_kind_and_target(control: &Value) -> Option<(&'static str, &str)> {
+    control
+        .get("command")
+        .and_then(Value::as_str)
+        .map(|command| ("command", command))
+        .or_else(|| {
+            control
+                .get("navigation")
+                .and_then(Value::as_str)
+                .map(|navigation| (navigation_effect_kind(control), navigation))
+        })
+}
+
+fn navigation_effect_kind(control: &Value) -> &'static str {
+    match control.get("navigation_type").and_then(Value::as_str) {
+        Some("external_workflow") => "workflow navigation",
+        Some("external_system") => "external navigation",
+        Some("local_view_state") => "local navigation",
+        Some("modeled_view") => "view navigation",
+        _ => "navigation",
+    }
+}
+
+fn view_field_name(raw: &str) -> Result<ViewFieldName, BrowserDataDocumentError> {
+    ViewFieldName::try_new(raw.to_owned())
+        .map_err(|error| BrowserDataDocumentError::new(format!("invalid view field name: {error}")))
+}
+
+fn source_chain_hop(raw: &str) -> Result<SourceChainHop, BrowserDataDocumentError> {
+    SourceChainHop::try_new(raw.to_owned()).map_err(|error| {
+        BrowserDataDocumentError::new(format!("invalid source chain hop: {error}"))
+    })
+}
+
+fn control_label(raw: &str) -> Result<ControlLabel, BrowserDataDocumentError> {
+    ControlLabel::try_new(raw.to_owned())
+        .map_err(|error| BrowserDataDocumentError::new(format!("invalid control label: {error}")))
+}
+
+fn control_effect_kind(raw: &str) -> Result<ControlEffectKind, BrowserDataDocumentError> {
+    ControlEffectKind::try_new(raw.to_owned()).map_err(|error| {
+        BrowserDataDocumentError::new(format!("invalid control effect kind: {error}"))
+    })
+}
+
+fn control_effect_target(raw: &str) -> Result<ControlEffectTarget, BrowserDataDocumentError> {
+    ControlEffectTarget::try_new(raw.to_owned()).map_err(|error| {
+        BrowserDataDocumentError::new(format!("invalid control effect target: {error}"))
     })
 }

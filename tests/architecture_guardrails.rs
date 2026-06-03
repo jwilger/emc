@@ -549,6 +549,36 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn browser_view_definitions_use_semantic_documents() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/core/browser.rs")?;
+        let violations = [
+            "fn view_field_source_chains(",
+            "fn view_control_effects(",
+            "fn control_effect_kind_and_target(",
+            "fn source_chain_hops(",
+            "fn read_model_field_source(",
+            "fn event_attribute_source(",
+            "get(\"views\")",
+            "get(\"fields\")",
+            "get(\"controls\")",
+        ]
+        .iter()
+        .filter(|marker| source.contains(**marker))
+        .map(|marker| {
+            format!("src/core/browser.rs duplicates view definition semantics via `{marker}`")
+        })
+        .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "browser composition must derive view definitions from semantic documents"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",
