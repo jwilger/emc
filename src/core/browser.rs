@@ -7,7 +7,7 @@ use serde_json::Value;
 use crate::core::effect::FileContents;
 use crate::core::types::{
     BoardLaneId, WorkflowBranchLabel, WorkflowStepName, WorkflowTransitionKind,
-    WorkflowTransitionLabel,
+    WorkflowTransitionLabel, WorkflowTransitionName,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -54,6 +54,7 @@ impl BrowserBranchCard {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BrowserTransitionCard {
+    name: WorkflowTransitionName,
     source: WorkflowStepName,
     target: WorkflowStepName,
     kind: WorkflowTransitionKind,
@@ -61,6 +62,10 @@ pub struct BrowserTransitionCard {
 }
 
 impl BrowserTransitionCard {
+    pub fn name(&self) -> &WorkflowTransitionName {
+        &self.name
+    }
+
     pub fn source(&self) -> &WorkflowStepName {
         &self.source
     }
@@ -268,14 +273,17 @@ fn step_transition_cards(
         .into_iter()
         .flatten()
         .filter_map(|transition| {
+            let (kind, label) = transition_kind_and_label(transition)?;
             Some((
+                transition_display_name(transition, label),
                 source?,
                 transition_target_name(workflow_value, transition)?,
-                transition_kind_and_label(transition)?,
+                (kind, label),
             ))
         })
-        .map(|(source, target, (kind, label))| {
+        .map(|(name, source, target, (kind, label))| {
             Ok(BrowserTransitionCard {
+                name: parse_workflow_transition_name(name)?,
                 source: parse_workflow_step_name(source)?,
                 target: parse_workflow_step_name(target)?,
                 kind: WorkflowTransitionKind::try_new(kind.to_owned()).map_err(|error| {
@@ -320,9 +328,16 @@ fn workflow_step_name_for_slice<'a>(workflow_value: &'a Value, slice: &str) -> O
 
 fn transition_kind_and_label(transition: &Value) -> Option<(&'static str, &str)> {
     transition
-        .get("via_navigation")
-        .and_then(Value::as_str)
-        .map(|label| ("navigation", label))
+        .get("retry")
+        .and_then(Value::as_bool)
+        .filter(|retry| *retry)
+        .map(|_| ("retry", "retry"))
+        .or_else(|| {
+            transition
+                .get("via_navigation")
+                .and_then(Value::as_str)
+                .map(|label| ("navigation", label))
+        })
         .or_else(|| {
             transition
                 .get("via_command")
@@ -349,8 +364,23 @@ fn transition_kind_and_label(transition: &Value) -> Option<(&'static str, &str)>
         })
 }
 
+fn transition_display_name<'a>(transition: &'a Value, label: &'a str) -> &'a str {
+    transition
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or(label)
+}
+
 fn parse_workflow_step_name(value: &str) -> Result<WorkflowStepName, BrowserCompositionError> {
     WorkflowStepName::try_new(value.to_owned()).map_err(|error| {
         BrowserCompositionError::new(format!("invalid workflow step name: {error}"))
+    })
+}
+
+fn parse_workflow_transition_name(
+    value: &str,
+) -> Result<WorkflowTransitionName, BrowserCompositionError> {
+    WorkflowTransitionName::try_new(value.to_owned()).map_err(|error| {
+        BrowserCompositionError::new(format!("invalid workflow transition name: {error}"))
     })
 }

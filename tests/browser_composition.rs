@@ -142,6 +142,33 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn composed_browser_workflow_labels_retry_transition() -> Result<(), Box<dyn Error>> {
+        let workflow = file_contents(
+            "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"review\", \"name\": \"review\", \"relationship\": \"entry\", \"transitions\": [\n      {\"name\": \"RegenerateTeacherReview\", \"to\": \"review\", \"retry\": true}\n    ]}\n  ]\n}\n",
+        );
+
+        let composed = compose_browser_workflow(workflow, Vec::new())?;
+
+        assert_eq!(
+            composed
+                .transition_cards()
+                .iter()
+                .map(|card| {
+                    (
+                        card.name().as_ref(),
+                        card.kind().as_ref(),
+                        card.label().as_ref(),
+                        card.target().as_ref(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            [("RegenerateTeacherReview", "retry", "retry", "review")]
+        );
+
+        Ok(())
+    }
+
     fn slice_with_canonical_lanes(name: &str) -> String {
         format!(
             "{{\n  \"name\": \"{name}\",\n  \"version\": \"0.1.0\",\n  \"board\": {{\"lanes\": [\n    {{\"id\": \"ux\", \"name\": \"People, Views, and Translations\"}},\n    {{\"id\": \"actions\", \"name\": \"Commands and Projections\"}},\n    {{\"id\": \"events\", \"name\": \"Stored Facts\"}}\n  ]}},\n  \"slices\": [{{\"name\": \"{name}\", \"type\": \"state_view\", \"views\": [], \"acceptance_scenarios\": [], \"contract_scenarios\": []}}]\n}}\n"

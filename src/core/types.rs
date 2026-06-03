@@ -90,3 +90,10 @@ pub struct WorkflowBranchLabel(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
 pub struct WorkflowTransitionKind(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct WorkflowTransitionName(String);
