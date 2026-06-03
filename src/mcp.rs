@@ -1,6 +1,11 @@
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 
+use rmcp::model::{
+    CallToolResult, Content, Implementation, InitializeResult, JsonObject, ListToolsResult,
+    ServerCapabilities, Tool, ToolsCapability,
+};
+use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::command;
@@ -260,8 +265,8 @@ fn handle_request(request: &Value) -> Result<Option<Value>, ShellError> {
     };
 
     match request.get("method").and_then(Value::as_str) {
-        Some("initialize") => Ok(Some(success_response(id, initialize_result()))),
-        Some("tools/list") => Ok(Some(success_response(id, tools_list_result()))),
+        Some("initialize") => Ok(Some(success_response(id, initialize_result()?))),
+        Some("tools/list") => Ok(Some(success_response(id, tools_list_result()?))),
         Some("tools/call") => tool_call_response(id, request),
         Some(method) => Ok(Some(error_response(
             id,
@@ -276,26 +281,21 @@ fn handle_request(request: &Value) -> Result<Option<Value>, ShellError> {
     }
 }
 
-fn initialize_result() -> Value {
-    json!({
-        "protocolVersion": "2025-11-25",
-        "capabilities": {
-            "tools": {}
-        },
-        "serverInfo": {
-            "name": "emc",
-            "version": env!("CARGO_PKG_VERSION")
-        }
-    })
+fn initialize_result() -> Result<Value, ShellError> {
+    let mut capabilities = ServerCapabilities::default();
+    capabilities.tools = Some(ToolsCapability::default());
+    mcp_model_value(
+        InitializeResult::new(capabilities)
+            .with_server_info(Implementation::new("emc", env!("CARGO_PKG_VERSION"))),
+    )
 }
 
-fn tools_list_result() -> Value {
-    json!({
-        "tools": [
-            {
-                "name": "init_project",
-                "description": "Initialize an EMC project layout and root formal artifacts.",
-                "inputSchema": {
+fn tools_list_result() -> Result<Value, ShellError> {
+    mcp_model_value(ListToolsResult::with_all_items(vec![
+        Tool::new(
+            "init_project",
+            "Initialize an EMC project layout and root formal artifacts.",
+            schema_object(json!({
                     "type": "object",
                     "properties": {
                         "name": {
@@ -304,21 +304,21 @@ fn tools_list_result() -> Value {
                     },
                     "required": ["name"],
                     "additionalProperties": false
-                }
-            },
-            {
-                "name": "list_workflows",
-                "description": "List modeled workflows in the EMC event model.",
-                "inputSchema": {
+            })),
+        ),
+        Tool::new(
+            "list_workflows",
+            "List modeled workflows in the EMC event model.",
+            schema_object(json!({
                     "type": "object",
                     "properties": {},
                     "additionalProperties": false
-                }
-            },
-            {
-                "name": "show_workflow",
-                "description": "Show a modeled workflow document by workflow slug.",
-                "inputSchema": {
+            })),
+        ),
+        Tool::new(
+            "show_workflow",
+            "Show a modeled workflow document by workflow slug.",
+            schema_object(json!({
                     "type": "object",
                     "properties": {
                         "slug": {
@@ -327,12 +327,12 @@ fn tools_list_result() -> Value {
                     },
                     "required": ["slug"],
                     "additionalProperties": false
-                }
-            },
-            {
-                "name": "generate_site",
-                "description": "Generate the human-browsable event model site.",
-                "inputSchema": {
+            })),
+        ),
+        Tool::new(
+            "generate_site",
+            "Generate the human-browsable event model site.",
+            schema_object(json!({
                     "type": "object",
                     "properties": {
                         "output": {
@@ -341,30 +341,30 @@ fn tools_list_result() -> Value {
                     },
                     "required": ["output"],
                     "additionalProperties": false
-                }
-            },
-            {
-                "name": "check_project",
-                "description": "Check required project artifacts and generated model synchronization.",
-                "inputSchema": {
+            })),
+        ),
+        Tool::new(
+            "check_project",
+            "Check required project artifacts and generated model synchronization.",
+            schema_object(json!({
                     "type": "object",
                     "properties": {},
                     "additionalProperties": false
-                }
-            },
-            {
-                "name": "verify_project",
-                "description": "Run Lean4 and Quint verification for generated model artifacts.",
-                "inputSchema": {
+            })),
+        ),
+        Tool::new(
+            "verify_project",
+            "Run Lean4 and Quint verification for generated model artifacts.",
+            schema_object(json!({
                     "type": "object",
                     "properties": {},
                     "additionalProperties": false
-                }
-            },
-            {
-                "name": "validate_event_model",
-                "description": "Validate event model workflow or slice files.",
-                "inputSchema": {
+            })),
+        ),
+        Tool::new(
+            "validate_event_model",
+            "Validate event model workflow or slice files.",
+            schema_object(json!({
                     "type": "object",
                     "properties": {
                         "target": {
@@ -373,12 +373,12 @@ fn tools_list_result() -> Value {
                     },
                     "required": ["target"],
                     "additionalProperties": false
-                }
-            },
-            {
-                "name": "review_gate",
-                "description": "Evaluate whether a workflow has a current clean structured review.",
-                "inputSchema": {
+            })),
+        ),
+        Tool::new(
+            "review_gate",
+            "Evaluate whether a workflow has a current clean structured review.",
+            schema_object(json!({
                     "type": "object",
                     "properties": {
                         "workflow": {
@@ -387,12 +387,12 @@ fn tools_list_result() -> Value {
                     },
                     "required": ["workflow"],
                     "additionalProperties": false
-                }
-            },
-            {
-                "name": "add_workflow",
-                "description": "Add a business workflow and regenerate synchronized model artifacts.",
-                "inputSchema": {
+            })),
+        ),
+        Tool::new(
+            "add_workflow",
+            "Add a business workflow and regenerate synchronized model artifacts.",
+            schema_object(json!({
                     "type": "object",
                     "properties": {
                         "slug": {
@@ -407,12 +407,12 @@ fn tools_list_result() -> Value {
                     },
                     "required": ["slug", "name", "description"],
                     "additionalProperties": false
-                }
-            },
-            {
-                "name": "add_slice",
-                "description": "Add a business slice to a workflow composition.",
-                "inputSchema": {
+            })),
+        ),
+        Tool::new(
+            "add_slice",
+            "Add a business slice to a workflow composition.",
+            schema_object(json!({
                     "type": "object",
                     "properties": {
                         "workflow": {
@@ -433,12 +433,12 @@ fn tools_list_result() -> Value {
                     },
                     "required": ["workflow", "slug", "name", "type", "description"],
                     "additionalProperties": false
-                }
-            },
-            {
-                "name": "update_workflow",
-                "description": "Update a business workflow and regenerate synchronized model artifacts.",
-                "inputSchema": {
+            })),
+        ),
+        Tool::new(
+            "update_workflow",
+            "Update a business workflow and regenerate synchronized model artifacts.",
+            schema_object(json!({
                     "type": "object",
                     "properties": {
                         "slug": {
@@ -450,12 +450,12 @@ fn tools_list_result() -> Value {
                     },
                     "required": ["slug", "description"],
                     "additionalProperties": false
-                }
-            },
-            {
-                "name": "connect_workflow",
-                "description": "Connect workflow steps with a transition and regenerate synchronized model artifacts.",
-                "inputSchema": {
+            })),
+        ),
+        Tool::new(
+            "connect_workflow",
+            "Connect workflow steps with a transition and regenerate synchronized model artifacts.",
+            schema_object(json!({
                     "type": "object",
                     "properties": {
                         "workflow": {
@@ -487,10 +487,9 @@ fn tools_list_result() -> Value {
                         {"required": ["to_workflow", "reason"]}
                     ],
                     "additionalProperties": false
-                }
-            }
-        ]
-    })
+            })),
+        ),
+    ]))
 }
 
 fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, ShellError> {
@@ -834,14 +833,8 @@ fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
 }
 
 fn tool_result(text: String) -> Value {
-    json!({
-        "content": [
-            {
-                "type": "text",
-                "text": text
-            }
-        ],
-        "isError": false
+    mcp_model_value(CallToolResult::success(vec![Content::text(text)])).unwrap_or_else(|error| {
+        unreachable!("EMC MCP tool result must serialize through the rmcp model: {error}");
     })
 }
 
@@ -873,4 +866,15 @@ fn write_response(response: Value) -> Result<(), ShellError> {
     lock.flush()
         .map_err(|error| ShellError::message(error.to_string()))?;
     Ok(())
+}
+
+fn schema_object(value: Value) -> JsonObject {
+    match value {
+        Value::Object(object) => object,
+        _ => unreachable!("EMC MCP tool schemas must be JSON objects"),
+    }
+}
+
+fn mcp_model_value(model: impl Serialize) -> Result<Value, ShellError> {
+    serde_json::to_value(model).map_err(|error| ShellError::message(error.to_string()))
 }
