@@ -13,3 +13,4 @@ pub mod types;
 pub mod validation;
 pub mod verify;
 pub mod workflow;
+pub mod workflow_document;
