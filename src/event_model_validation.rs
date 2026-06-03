@@ -6,7 +6,7 @@ use crate::core::effect::{FileContents, ProjectPath};
 use crate::core::validation::{
     EventModelDocument, EventModelFileKind, validate_event_model, validate_event_model_corpus,
 };
-use crate::io::dto::parse_event_model_document;
+use crate::io::dto::{parse_event_model_document, parse_slice_slug};
 use crate::shell::ShellError;
 
 pub fn validate_event_model_sources(
@@ -14,6 +14,9 @@ pub fn validate_event_model_sources(
     sources: &[(ProjectPath, FileContents)],
     referenced_sources: &[(ProjectPath, FileContents)],
 ) -> Result<(), ShellError> {
+    sources.iter().try_for_each(|(path, source)| {
+        validate_workflow_referenced_slice_file_paths(path, source)
+    })?;
     let documents = sources
         .iter()
         .map(|(path, source)| parse_and_validate_event_model_file(path, source))
@@ -28,6 +31,53 @@ pub fn validate_event_model_sources(
     sources.iter().try_for_each(|(path, source)| {
         validate_workflow_referenced_slice_files(&lookup_sources, path, source)
     })
+}
+
+fn validate_workflow_referenced_slice_file_paths(
+    path: &ProjectPath,
+    source: &FileContents,
+) -> Result<(), ShellError> {
+    if event_model_file_kind(path) != EventModelFileKind::Workflow {
+        return Ok(());
+    }
+
+    let value = serde_json::from_str::<Value>(source.as_ref()).map_err(|error| {
+        ShellError::message(format!("invalid JSON: {} in {}", error, path.as_ref()))
+    })?;
+    let Some(slice_files) = value.get("slice_files").and_then(Value::as_array) else {
+        return Ok(());
+    };
+    slice_files
+        .iter()
+        .filter_map(Value::as_str)
+        .try_for_each(|slice_file| validate_referenced_slice_file_path(path, slice_file))
+}
+
+fn validate_referenced_slice_file_path(
+    workflow_path: &ProjectPath,
+    slice_file: &str,
+) -> Result<(), ShellError> {
+    let referenced_path = referenced_slice_path(workflow_path, slice_file)?;
+    let file_name = Path::new(referenced_path.as_ref())
+        .file_name()
+        .and_then(|file_name| file_name.to_str())
+        .ok_or_else(|| ShellError::message("referenced slice file path is invalid"))?;
+    let Some(stem) = file_name.strip_suffix(".eventmodel.json") else {
+        return Err(ShellError::message(format!(
+            "referenced slice file path is invalid: {file_name}"
+        )));
+    };
+    let slug = parse_slice_slug(stem).map_err(|error| {
+        ShellError::message(format!("referenced slice file path is invalid: {error}"))
+    })?;
+    let canonical_file_name = format!("{}.eventmodel.json", slug.as_ref());
+    if canonical_file_name == file_name {
+        Ok(())
+    } else {
+        Err(ShellError::message(format!(
+            "referenced slice file path is noncanonical: {file_name}"
+        )))
+    }
 }
 
 fn parse_and_validate_event_model_file(
