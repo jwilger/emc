@@ -319,7 +319,7 @@ mod tests {
     }
 
     #[test]
-    fn add_slice_rejects_workflow_document_identity_drift_without_rewriting_artifacts()
+    fn add_slice_uses_formal_workflow_when_browser_document_identity_is_stale()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -374,39 +374,41 @@ mod tests {
             ])
             .current_dir(temp_dir.path())
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "workflow document name 'Altered ticket' does not match index name 'Open ticket'",
-            ));
+            .success()
+            .stdout(predicate::str::contains("added slice Capture ticket"));
 
-        assert_eq!(
-            workflow_before.replace("\"name\": \"Open ticket\"", "\"name\": \"Altered ticket\""),
-            read_to_string(workflow_path)?,
-            "identity drift rejection must leave the drifted workflow document unchanged"
+        let workflow_after = read_to_string(workflow_path)?;
+        assert!(
+            workflow_after.contains("\"name\": \"Open ticket\""),
+            "add slice must restore the workflow name from formal artifacts"
         );
-        assert_eq!(
+        assert!(
+            workflow_after.contains("\"../slices/capture-ticket.eventmodel.json\""),
+            "add slice must write the requested slice to the browser projection"
+        );
+        assert_ne!(
             lean_before,
             read_to_string(lean_path)?,
-            "identity drift rejection must leave Lean workflow data unchanged"
+            "add slice must update Lean workflow data from the formal source state"
         );
-        assert_eq!(
+        assert_ne!(
             quint_before,
             read_to_string(quint_path)?,
-            "identity drift rejection must leave Quint workflow data unchanged"
+            "add slice must update Quint workflow data from the formal source state"
         );
         assert!(
             !temp_dir
                 .path()
                 .join("model/lean/AlteredTicket.lean")
                 .exists(),
-            "identity drift rejection must not create formal artifacts for a drifted workflow name"
+            "add slice must not create formal artifacts for the stale browser workflow name"
         );
 
         Ok(())
     }
 
     #[test]
-    fn add_slice_rejects_workflow_document_description_drift_without_rewriting_artifacts()
+    fn add_slice_uses_formal_workflow_when_browser_document_description_is_stale()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -462,25 +464,27 @@ mod tests {
             ])
             .current_dir(temp_dir.path())
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "workflow document description 'Altered workflow description.' does not match index description 'Actor opens a repair ticket.'",
-            ));
+            .success()
+            .stdout(predicate::str::contains("added slice Capture ticket"));
 
-        assert_eq!(
-            drifted_workflow,
-            read_to_string(workflow_path)?,
-            "description drift rejection must leave the drifted workflow document unchanged"
+        let workflow_after = read_to_string(workflow_path)?;
+        assert!(
+            workflow_after.contains("\"description\": \"Actor opens a repair ticket.\""),
+            "add slice must restore the workflow description from formal artifacts"
         );
-        assert_eq!(
+        assert!(
+            workflow_after.contains("\"../slices/capture-ticket.eventmodel.json\""),
+            "add slice must write the requested slice to the browser projection"
+        );
+        assert_ne!(
             lean_before,
             read_to_string(lean_path)?,
-            "description drift rejection must leave Lean workflow data unchanged"
+            "add slice must update Lean workflow data from the formal source state"
         );
-        assert_eq!(
+        assert_ne!(
             quint_before,
             read_to_string(quint_path)?,
-            "description drift rejection must leave Quint workflow data unchanged"
+            "add slice must update Quint workflow data from the formal source state"
         );
 
         Ok(())
