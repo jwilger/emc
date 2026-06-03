@@ -27,6 +27,7 @@ pub fn generate_site(project_name: ProjectName, output: ProjectPath) -> EffectPl
 
 fn index_html(project_name: &ProjectName) -> String {
     let title = project_name.as_ref();
+    let runtime_project_name = json_string(format!("{title} Event Model Browser"));
     format!(
         r#"<!doctype html>
 <html lang="en">
@@ -34,6 +35,7 @@ fn index_html(project_name: &ProjectName) -> String {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title} Event Model Browser</title>
+    <script>window.EMC_PROJECT_NAME = {runtime_project_name};</script>
     <script type="module" crossorigin src="./assets/index-CTzj-YfP.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-DCPB_L_9.css">
   </head>
@@ -47,6 +49,12 @@ fn index_html(project_name: &ProjectName) -> String {
 
 const BROWSER_JAVASCRIPT: &str = include_str!("../../browser/assets/index-CTzj-YfP.js");
 const BROWSER_STYLESHEET: &str = include_str!("../../browser/assets/index-DCPB_L_9.css");
+
+fn json_string(value: impl Into<String>) -> String {
+    serde_json::to_string(&value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC generated browser runtime config must be valid JSON: {error}");
+    })
+}
 
 fn project_path(value: impl Into<String>) -> ProjectPath {
     ProjectPath::try_new(value.into()).unwrap_or_else(|error| {

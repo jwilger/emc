@@ -66,6 +66,10 @@ mod tests {
             "generated site must use project branding in the document title"
         );
         assert!(
+            index_html.contains("window.EMC_PROJECT_NAME = \"Repair Desk Event Model Browser\""),
+            "generated site must provide project branding to the browser runtime"
+        );
+        assert!(
             !index_html.contains("<title>Event Model Browser</title>"),
             "generated site must not drop project branding"
         );
@@ -80,6 +84,15 @@ mod tests {
         assert!(
             !index_html.contains("Open data/index.json"),
             "generated site must not use the placeholder browser shell"
+        );
+        let browser_js = read_to_string(temp_dir.path().join("site/assets/index-CTzj-YfP.js"))?;
+        assert!(
+            browser_js.contains("window.EMC_PROJECT_NAME"),
+            "browser runtime must read the generated project branding"
+        );
+        assert!(
+            !browser_js.contains(&format!("{}{}", "Ed", "dy")),
+            "generated browser assets must not mention unrelated product labels"
         );
 
         Ok(())
