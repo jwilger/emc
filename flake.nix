@@ -122,6 +122,9 @@
 
             ${package}/bin/emc init --name "Package Smoke"
             ${package}/bin/emc add workflow --slug package-smoke --name "Package smoke" --description "Packaged EMC verification smoke workflow."
+            ${package}/bin/emc add slice --workflow package-smoke --slug capture-smoke --name "Capture smoke" --type state_view --description "Capture package smoke details."
+            ${package}/bin/emc add slice --workflow package-smoke --slug review-smoke --name "Review smoke" --type state_view --description "Review package smoke details."
+            ${package}/bin/emc connect workflow --workflow package-smoke --from capture-smoke --to review-smoke --via navigation --name review-smoke-screen
             ${package}/bin/emc check
             ${package}/bin/emc verify
             ${package}/bin/emc generate site --output site
