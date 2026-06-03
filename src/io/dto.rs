@@ -141,6 +141,22 @@ pub fn parse_browser_index_workflows(
 
     workflows
         .iter()
+        .try_fold(BTreeSet::new(), |mut seen_slugs, workflow| {
+            let path = workflow
+                .get("path")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BoundaryParseError::new("browser index workflow is missing path"))?;
+            let slug = workflow_slug_from_index_path(path)?;
+            if !seen_slugs.insert(slug.as_ref().to_owned()) {
+                return Err(BoundaryParseError::new(
+                    "browser index workflow slug is duplicated",
+                ));
+            }
+            Ok(seen_slugs)
+        })?;
+
+    workflows
+        .iter()
         .map(|workflow| {
             let name = workflow
                 .get("name")
@@ -158,15 +174,18 @@ pub fn parse_browser_index_workflows(
                 .get("path")
                 .and_then(Value::as_str)
                 .ok_or_else(|| BoundaryParseError::new("browser index workflow is missing path"))?;
-            let slug = path
-                .strip_prefix("data/workflows/")
-                .and_then(|file_name| file_name.strip_suffix(".eventmodel.json"))
-                .ok_or_else(|| BoundaryParseError::new("browser index workflow path is invalid"))
-                .and_then(parse_workflow_slug)?;
+            let slug = workflow_slug_from_index_path(path)?;
 
             Ok(ModeledWorkflowLayout::new(name, description, slug))
         })
         .collect()
+}
+
+fn workflow_slug_from_index_path(path: &str) -> Result<WorkflowSlug, BoundaryParseError> {
+    path.strip_prefix("data/workflows/")
+        .and_then(|file_name| file_name.strip_suffix(".eventmodel.json"))
+        .ok_or_else(|| BoundaryParseError::new("browser index workflow path is invalid"))
+        .and_then(parse_workflow_slug)
 }
 
 pub fn parse_workflow_slug(raw: &str) -> Result<WorkflowSlug, BoundaryParseError> {
