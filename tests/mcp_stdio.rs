@@ -32,6 +32,21 @@ mod tests {
             .success();
 
         Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "close-ticket",
+                "--name",
+                "Close ticket",
+                "--description",
+                "Actor closes a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
             .args(["mcp", "stdio"])
             .current_dir(temp_dir.path())
             .write_stdin(mcp_requests())
@@ -42,6 +57,7 @@ mod tests {
             .stdout(predicate::str::contains("\"show_workflow\""))
             .stdout(predicate::str::contains("\"generate_site\""))
             .stdout(predicate::str::contains("Open ticket"))
+            .stdout(predicate::str::contains("Close ticket"))
             .stdout(predicate::str::contains("generated site at mcp-site"))
             .stdout(predicate::str::contains(
                 "\\\"name\\\": \\\"Open ticket\\\"",
