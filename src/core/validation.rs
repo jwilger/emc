@@ -1422,6 +1422,7 @@ pub enum EventAttributeSource {
     ExternalField(DefinitionName, DefinitionName),
     GeneratedEmpty,
     ReadModelField(DefinitionName, DefinitionName),
+    Unmodeled(DefinitionName),
     Other,
 }
 
@@ -1835,6 +1836,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_view_controls_appear_in_wireframes(document))
         .and_then(|()| validate_view_field_sources_are_present(document))
         .and_then(|()| validate_view_field_sources_reference_read_models(document))
+        .and_then(|()| validate_view_field_source_chains_reach_original_provenance(document))
 }
 
 pub fn validate_event_model_corpus(
@@ -3590,6 +3592,92 @@ fn read_model_field_exists(
                 .iter()
                 .any(|field| field.name == *field_name)
         })
+}
+
+fn validate_view_field_source_chains_reach_original_provenance(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .flat_map(|view| {
+            view.fields.iter().filter(|field| {
+                !view_field_source_chain_reaches_original_provenance(document, field)
+            })
+        })
+        .next()
+        .map_or(Ok(()), |field| {
+            Err(validation_issue(format!(
+                "view field '{}' source chain stops before original provenance",
+                field.name
+            )))
+        })
+}
+
+fn view_field_source_chain_reaches_original_provenance(
+    document: &EventModelDocument,
+    view_field: &ViewFieldDefinition,
+) -> bool {
+    let ViewFieldSource::ReadModelField(read_model_name, field_name) = &view_field.source else {
+        return false;
+    };
+
+    read_model_field(document, read_model_name, field_name)
+        .and_then(|field| event_attribute_for_read_model_field(document, field))
+        .is_some_and(event_attribute_has_original_provenance)
+}
+
+fn read_model_field<'a>(
+    document: &'a EventModelDocument,
+    read_model_name: &DefinitionName,
+    field_name: &DefinitionName,
+) -> Option<&'a ReadModelField> {
+    document
+        .read_model_definitions
+        .iter()
+        .find(|read_model| read_model.name == *read_model_name)
+        .and_then(|read_model| {
+            read_model
+                .fields
+                .iter()
+                .find(|field| field.name == *field_name)
+        })
+}
+
+fn event_attribute_for_read_model_field<'a>(
+    document: &'a EventModelDocument,
+    read_model_field: &ReadModelField,
+) -> Option<&'a EventAttribute> {
+    let ReadModelFieldSource::EventAttribute(event_name, attribute_name) = &read_model_field.source
+    else {
+        return None;
+    };
+
+    event_attribute(document, event_name, attribute_name)
+}
+
+fn event_attribute<'a>(
+    document: &'a EventModelDocument,
+    event_name: &DefinitionName,
+    attribute_name: &DefinitionName,
+) -> Option<&'a EventAttribute> {
+    document
+        .event_definitions
+        .iter()
+        .find(|event| event.name == *event_name)
+        .and_then(|event| {
+            event
+                .attributes
+                .iter()
+                .find(|attribute| attribute.name == *attribute_name)
+        })
+}
+
+fn event_attribute_has_original_provenance(attribute: &EventAttribute) -> bool {
+    matches!(
+        attribute.source,
+        EventAttributeSource::CommandInput(_) | EventAttributeSource::ExternalField(_, _)
+    )
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
