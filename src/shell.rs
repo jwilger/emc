@@ -146,6 +146,23 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
         }
+        Effect::RequireWorkflowSliceDetails(
+            workflow_path,
+            artifact_path,
+            marker_prefix,
+            message,
+        ) => {
+            let workflow_contents =
+                fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
+            let artifact_contents =
+                fs::read_to_string(Path::new(artifact_path.as_ref())).map_err(ShellError::io)?;
+            let marker = workflow_slice_detail_marker(marker_prefix.as_ref(), &workflow_contents)?;
+            if artifact_contents.contains(&marker) {
+                Ok(None)
+            } else {
+                Err(ShellError::message(message.as_ref().to_owned()))
+            }
+        }
         Effect::RequireWorkflowSlices(workflow_path, artifact_path, marker_prefix, message) => {
             let workflow_contents =
                 fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
@@ -489,6 +506,19 @@ fn workflow_slice_marker(prefix: &str, workflow_contents: &str) -> Result<String
     Ok(format!("{prefix} [{joined_labels}]"))
 }
 
+fn workflow_slice_detail_marker(
+    prefix: &str,
+    workflow_contents: &str,
+) -> Result<String, ShellError> {
+    let labels = if prefix.starts_with("val ") {
+        workflow_slice_detail_record_labels(workflow_contents)?
+    } else {
+        workflow_slice_detail_tuple_labels(workflow_contents)?
+    };
+    let joined_labels = labels.join(",");
+    Ok(format!("{prefix} [{joined_labels}]"))
+}
+
 fn workflow_slice_file_paths(
     workflow_path: &str,
     workflow_contents: &str,
@@ -523,6 +553,74 @@ fn workflow_slice_labels(workflow_contents: &str) -> Result<Vec<String>, ShellEr
         .iter()
         .filter_map(|step| step.get("slice").and_then(Value::as_str))
         .map(|slice| json_string(slice.to_owned()))
+        .collect()
+}
+
+fn workflow_slice_detail_tuple_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
+    let workflow = workflow_json(workflow_contents)?;
+    let steps = workflow_steps(&workflow)?;
+
+    steps
+        .iter()
+        .map(|step| {
+            let slug = step
+                .get("slice")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ShellError::message("workflow step is missing slice"))?;
+            let name = step
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ShellError::message("workflow step is missing name"))?;
+            let kind = step
+                .get("type")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ShellError::message("workflow step is missing type"))?;
+            let description = step
+                .get("description")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ShellError::message("workflow step is missing description"))?;
+            Ok(format!(
+                "({}, {}, {}, {})",
+                json_string(slug.to_owned())?,
+                json_string(name.to_owned())?,
+                json_string(kind.to_owned())?,
+                json_string(description.to_owned())?
+            ))
+        })
+        .collect()
+}
+
+fn workflow_slice_detail_record_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
+    let workflow = workflow_json(workflow_contents)?;
+    let steps = workflow_steps(&workflow)?;
+
+    steps
+        .iter()
+        .map(|step| {
+            let slug = step
+                .get("slice")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ShellError::message("workflow step is missing slice"))?;
+            let name = step
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ShellError::message("workflow step is missing name"))?;
+            let kind = step
+                .get("type")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ShellError::message("workflow step is missing type"))?;
+            let description = step
+                .get("description")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ShellError::message("workflow step is missing description"))?;
+            Ok(format!(
+                "{{ slug: {}, name: {}, kind: {}, description: {} }}",
+                json_string(slug.to_owned())?,
+                json_string(name.to_owned())?,
+                json_string(kind.to_owned())?,
+                json_string(description.to_owned())?
+            ))
+        })
         .collect()
 }
 
