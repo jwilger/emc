@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
+    use std::io::Error as IoError;
 
     use emc::core::browser::compose_browser_workflow;
     use emc::core::effect::FileContents;
@@ -220,6 +221,52 @@ mod tests {
                 })
                 .collect::<Vec<_>>(),
             [("review", "unreachable", "entry reachability")]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn composed_browser_workflow_projects_command_definition_back_references()
+    -> Result<(), Box<dyn Error>> {
+        let workflow = file_contents(
+            "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [\"../slices/submit.eventmodel.json\"],\n  \"steps\": [\n    {\"slice\": \"show-lesson\", \"name\": \"show lesson\", \"relationship\": \"entry\", \"transitions\": [{\"to\": \"submit\", \"via_command\": \"SubmitLessonForReview\"}]},\n    {\"slice\": \"submit\", \"name\": \"submit\", \"relationship\": \"main\"}\n  ]\n}\n",
+        );
+        let submit_slice = file_contents(
+            "{\n  \"name\": \"Submit lesson for review\",\n  \"version\": \"0.1.0\",\n  \"board\": {\"lanes\": []},\n  \"commands\": [{\"name\": \"SubmitLessonForReview\", \"inputs\": [], \"produces\": [\"LessonSubmittedForReview\"], \"errors\": [\"evidence_required\"]}],\n  \"read_models\": [{\"name\": \"lesson_submission_context\", \"fields\": []}],\n  \"views\": [{\"name\": \"lesson_screen\", \"uses_read_models\": [], \"controls\": [\n    {\"label\": \"Submit for review\", \"command\": \"SubmitLessonForReview\"}\n  ]}],\n  \"slices\": [{\"name\": \"Submit lesson for review\", \"type\": \"state_view\", \"commands\": [\"SubmitLessonForReview\"], \"views\": [\"lesson_screen\"], \"read_models\": [\"lesson_submission_context\"], \"acceptance_scenarios\": [], \"contract_scenarios\": []}]\n}\n",
+        );
+
+        let composed = compose_browser_workflow(workflow, vec![submit_slice])?;
+        let definition = composed
+            .command_definitions()
+            .iter()
+            .find(|definition| definition.name().as_ref() == "SubmitLessonForReview")
+            .ok_or_else(|| IoError::other("command definition must be projected"))?;
+
+        assert_eq!(
+            definition.owning_slice().as_ref(),
+            "Submit lesson for review"
+        );
+        assert_eq!(
+            definition
+                .source_controls()
+                .iter()
+                .map(|source| source.as_ref())
+                .collect::<Vec<_>>(),
+            ["lesson_screen / Submit for review"]
+        );
+        assert_eq!(
+            definition
+                .section_labels()
+                .iter()
+                .map(|section| section.as_ref())
+                .collect::<Vec<_>>(),
+            [
+                "Produced events",
+                "Read models",
+                "Returned errors",
+                "Workflow transitions",
+            ]
         );
 
         Ok(())
