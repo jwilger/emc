@@ -7,6 +7,7 @@ use emc::core::connection::{WorkflowConnection, connect_workflow};
 use emc::core::emc::{EMCWorkflowImport, import_emc_workflow};
 use emc::core::effect::FileContents;
 use emc::core::effect::ProjectPath;
+use emc::core::gherkin::{GherkinSuite, list_gherkin_features};
 use emc::core::layout::{check_project, list_workflows, show_workflow};
 use emc::core::project::{ProjectName, init_project};
 use emc::core::review_gate::review_gate;
@@ -18,7 +19,7 @@ use emc::core::workflow::{NewWorkflow, add_workflow, update_workflow_description
 use emc::event_model_validation::validate_target;
 use emc::io::dto::{
     parse_browser_index_workflows, parse_connection_kind, parse_emc_slice_import,
-    parse_emc_workflow_import, parse_model_description, parse_model_name,
+    parse_emc_workflow_import, parse_gherkin_suite, parse_model_description, parse_model_name,
     parse_project_manifest_name, parse_slice_kind, parse_slice_slug, parse_transition_trigger_name,
     parse_workflow_slug,
 };
@@ -42,6 +43,9 @@ enum Command {
     },
     GenerateSite {
         output: ProjectPath,
+    },
+    GherkinList {
+        suite: GherkinSuite,
     },
     ImportEMC {
         source: PathBuf,
@@ -132,6 +136,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
                 parse_project_manifest_name(&manifest).map_err(ShellError::project_name)?;
             interpret(generate_site(project_name, output))
         }
+        Command::GherkinList { suite } => interpret(list_gherkin_features(suite)),
         Command::ImportEMC { source } => {
             interpret(import_emc_workflow(load_emc_import(&source)?))
         }
@@ -305,6 +310,15 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             ProjectPath::try_new(output.clone())
                 .map(|output| Cli {
                     command: Command::GenerateSite { output },
+                })
+                .map_err(|error| ShellError::message(error.to_string()))
+        }
+        [command, subject, suite_flag, suite]
+            if command == "gherkin" && subject == "list" && suite_flag == "--suite" =>
+        {
+            parse_gherkin_suite(suite)
+                .map(|suite| Cli {
+                    command: Command::GherkinList { suite },
                 })
                 .map_err(|error| ShellError::message(error.to_string()))
         }

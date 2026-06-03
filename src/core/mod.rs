@@ -3,6 +3,7 @@ pub mod connection;
 pub mod emc;
 pub mod effect;
 pub mod emit;
+pub mod gherkin;
 pub mod layout;
 pub mod project;
 pub mod review_gate;
