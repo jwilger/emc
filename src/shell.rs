@@ -334,7 +334,8 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::ValidateEventModelTarget(target) => validate_event_model_target(target.as_ref()),
         Effect::VerifyProjectFromIndex => {
             let modeled_workflows = read_browser_index_workflows()?;
-            interpret_collect_reports(verify_project(modeled_workflows))
+            let modeled_slices = read_modeled_workflow_slice_details(&modeled_workflows)?;
+            interpret_collect_reports(verify_project(modeled_workflows, modeled_slices))
         }
         Effect::WriteFile(path, contents) => {
             write_file(path.as_ref(), contents.as_ref()).map(|()| Vec::new())
@@ -388,6 +389,25 @@ fn read_indexed_workflow_document_from_layouts(
             slug.as_ref()
         )))
     }
+}
+
+fn read_modeled_workflow_slice_details(
+    modeled_workflows: &[ModeledWorkflowLayout],
+) -> Result<Vec<WorkflowSliceDetail>, ShellError> {
+    let mut slice_details = Vec::new();
+    for workflow in modeled_workflows {
+        let workflow_document =
+            read_workflow_document(workflow.slug().as_ref()).and_then(|contents| {
+                WorkflowDocument::parse(&contents)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+        slice_details.extend(
+            workflow_document
+                .slice_details()
+                .map_err(|error| ShellError::message(error.to_string()))?,
+        );
+    }
+    Ok(slice_details)
 }
 
 fn read_workflow_document(slug: &str) -> Result<FileContents, ShellError> {

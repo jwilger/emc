@@ -61,6 +61,77 @@ mod tests {
     }
 
     #[test]
+    fn verify_runs_lean_and_quint_for_modeled_slices() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let tool_dir = temp_dir.path().join("tools");
+
+        create_fake_tool(&tool_dir, "lake", "lake.log")?;
+        create_fake_tool(&tool_dir, "quint", "quint.log")?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Capture ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .arg("verify")
+            .current_dir(temp_dir.path())
+            .env("PATH", path_with_fake_tools(&tool_dir)?)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Lean4 artifacts verified"))
+            .stdout(predicate::str::contains("Quint artifacts verified"));
+
+        assert_eq!(
+            read_to_string(temp_dir.path().join("lake.log"))?,
+            "env lean model/lean/OpenTicket.lean\n\
+             env lean model/lean/slices/CaptureTicket.lean\n"
+        );
+        assert_eq!(
+            read_to_string(temp_dir.path().join("quint.log"))?,
+            "verify --invariant workflowIdentityStable,workflowSliceDetailsComplete,workflowTransitionsStructured model/quint/OpenTicket.qnt\n\
+             verify --invariant sliceIdentityStable model/quint/slices/CaptureTicket.qnt\n"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn verify_reports_actionable_lean_failure_diagnostics() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let tool_dir = temp_dir.path().join("tools");
