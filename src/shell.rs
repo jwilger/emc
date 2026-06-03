@@ -1215,6 +1215,7 @@ fn formal_slice_artifact_is_canonical(
                 "val sliceIdentityStable =",
                 format!("val sliceIdentityStable = sliceName == {slice_name}"),
             ),
+            ("}", "}".to_owned()),
         ]
     };
 

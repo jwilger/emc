@@ -157,6 +157,7 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
     let quint_config_message = report_line(format!(
         "Quint project config drift for {project_name_text}"
     ));
+    let quint_module_close_marker = artifact_marker("}");
 
     vec![
         Effect::RequireCanonicalDeclaration(
@@ -202,9 +203,15 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
             lean_message,
         ),
         Effect::RequireCanonicalDeclaration(
-            quint_path,
+            quint_path.clone(),
             artifact_marker("module "),
             artifact_marker(format!("module {module_name} {{")),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path,
+            quint_module_close_marker.clone(),
+            quint_module_close_marker,
             quint_message,
         ),
         Effect::RequireCanonicalDeclaration(
@@ -346,6 +353,7 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
     let lean_module_end_prefix = artifact_marker("end ");
     let quint_module_marker = artifact_marker(format!("module {module_name} {{"));
     let quint_module_prefix = artifact_marker("module ");
+    let quint_module_close_marker = artifact_marker("}");
     let workflow_slug = workflow.slug.as_ref();
     let workflow_path = project_path(format!(
         "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
@@ -429,6 +437,14 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
             quint_path.clone(),
             quint_module_prefix,
             quint_module_marker,
+            report_line(format!(
+                "Quint workflow module drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_module_close_marker.clone(),
+            quint_module_close_marker,
             report_line(format!(
                 "Quint workflow module drift for workflow {workflow_name}"
             )),

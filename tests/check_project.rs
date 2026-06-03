@@ -658,6 +658,32 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_quint_workflow_closing_module_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let quint = read_to_string(&quint_path)?;
+        write(
+            quint_path,
+            quint
+                .strip_suffix("}\n")
+                .ok_or("generated Quint artifact must end with a module close")?,
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint workflow module drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_browser_workflow_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -1868,6 +1894,32 @@ mod tests {
             "val sliceKind = \"stale_kind\"",
         );
         write(quint_slice_path, quint_slice)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint slice artifact drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_quint_slice_artifact_closing_module_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let quint_slice_path = temp_dir.path().join("model/quint/slices/CaptureTicket.qnt");
+        let quint_slice = read_to_string(&quint_slice_path)?;
+        write(
+            quint_slice_path,
+            quint_slice
+                .strip_suffix("}\n")
+                .ok_or("generated Quint slice artifact must end with a module close")?,
+        )?;
 
         Command::cargo_bin("emc")?
             .arg("check")
