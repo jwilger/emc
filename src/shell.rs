@@ -41,26 +41,41 @@ impl Display for ShellError {
 impl Error for ShellError {}
 
 pub fn interpret(plan: EffectPlan) -> Result<(), ShellError> {
-    plan.effects().iter().try_for_each(interpret_effect)
+    interpret_collect_reports(plan).map(|reports| {
+        reports.into_iter().for_each(|report| println!("{report}"));
+    })
 }
 
-fn interpret_effect(effect: &Effect) -> Result<(), ShellError> {
+pub fn interpret_collect_reports(plan: EffectPlan) -> Result<Vec<String>, ShellError> {
+    plan.effects()
+        .iter()
+        .try_fold(Vec::new(), |mut reports, effect| {
+            if let Some(report) = interpret_effect(effect)? {
+                reports.push(report);
+            }
+            Ok(reports)
+        })
+}
+
+fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
     match effect {
-        Effect::CopyDirectory(source, target) => copy_directory(source.as_ref(), target.as_ref()),
-        Effect::EnsureDirectory(path) => {
-            fs::create_dir_all(Path::new(path.as_ref())).map_err(ShellError::io)
+        Effect::CopyDirectory(source, target) => {
+            copy_directory(source.as_ref(), target.as_ref()).map(|()| None)
         }
+        Effect::EnsureDirectory(path) => fs::create_dir_all(Path::new(path.as_ref()))
+            .map(|()| None)
+            .map_err(ShellError::io),
         Effect::RequireDigest(path, digest, message) => {
             let contents = fs::read_to_string(Path::new(path.as_ref())).map_err(ShellError::io)?;
             if contents.contains(digest.as_ref()) {
-                Ok(())
+                Ok(None)
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
         }
         Effect::RequireFile(path) => {
             if Path::new(path.as_ref()).is_file() {
-                Ok(())
+                Ok(None)
             } else {
                 Err(ShellError::message(format!(
                     "missing required project artifact {}",
@@ -69,22 +84,18 @@ fn interpret_effect(effect: &Effect) -> Result<(), ShellError> {
             }
         }
         Effect::RunProcess(invocation) => run_process(invocation),
-        Effect::WriteFile(path, contents) => write_file(path.as_ref(), contents.as_ref()),
+        Effect::WriteFile(path, contents) => {
+            write_file(path.as_ref(), contents.as_ref()).map(|()| None)
+        }
         Effect::WriteFileIfMissing(path, contents) => {
             if Path::new(path.as_ref()).exists() {
-                Ok(())
+                Ok(None)
             } else {
-                write_file(path.as_ref(), contents.as_ref())
+                write_file(path.as_ref(), contents.as_ref()).map(|()| None)
             }
         }
-        Effect::Report(line) => {
-            println!("{}", line.as_ref());
-            Ok(())
-        }
-        Effect::ReportDocument(contents) => {
-            println!("{}", contents.as_ref());
-            Ok(())
-        }
+        Effect::Report(line) => Ok(Some(line.as_ref().to_owned())),
+        Effect::ReportDocument(contents) => Ok(Some(contents.as_ref().to_owned())),
     }
 }
 
@@ -120,7 +131,7 @@ fn copy_directory_path(source: &Path, target: &Path) -> Result<(), ShellError> {
     })
 }
 
-fn run_process(invocation: &ProcessInvocation) -> Result<(), ShellError> {
+fn run_process(invocation: &ProcessInvocation) -> Result<Option<String>, ShellError> {
     let status = Command::new(invocation.program().as_ref())
         .args(
             invocation
@@ -138,8 +149,7 @@ fn run_process(invocation: &ProcessInvocation) -> Result<(), ShellError> {
         })?;
 
     if status.success() {
-        println!("{}", invocation.success().as_ref());
-        Ok(())
+        Ok(Some(invocation.success().as_ref().to_owned()))
     } else {
         Err(ShellError::message(format!(
             "verification command {} failed with {}",
