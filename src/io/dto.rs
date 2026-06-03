@@ -246,6 +246,11 @@ pub fn parse_model_digest(raw: &str) -> Result<ModelDigest, BoundaryParseError> 
         .map_err(|error| BoundaryParseError::new(format!("invalid model digest: {error}")))
 }
 
+pub fn parse_definition_name(raw: &str) -> Result<DefinitionName, BoundaryParseError> {
+    DefinitionName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid definition name: {error}")))
+}
+
 fn slugify(raw: &str) -> String {
     raw.trim()
         .chars()
