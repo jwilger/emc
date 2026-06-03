@@ -21,13 +21,26 @@ pub fn list_gherkin_features(suite: GherkinSuite) -> EffectPlan {
 }
 
 pub fn run_gherkin_suite(suite: GherkinSuite) -> EffectPlan {
+    EffectPlan::new(vec![run_suite_effect(suite)])
+}
+
+pub fn run_all_gherkin_suites() -> EffectPlan {
+    EffectPlan::new(
+        GherkinSuite::all()
+            .into_iter()
+            .map(run_suite_effect)
+            .collect(),
+    )
+}
+
+fn run_suite_effect(suite: GherkinSuite) -> Effect {
     let success = report_line(format!(
         "{} Gherkin suite passed; attempted {} configured {} scenarios",
         suite.label(),
         suite.scenario_count(),
         suite.label()
     ));
-    EffectPlan::new(vec![Effect::RunProcess(ProcessInvocation::new(
+    Effect::RunProcess(ProcessInvocation::new(
         program_name("cargo"),
         vec![
             process_argument("test"),
@@ -35,10 +48,14 @@ pub fn run_gherkin_suite(suite: GherkinSuite) -> EffectPlan {
             process_argument(suite.test_target()),
         ],
         success,
-    ))])
+    ))
 }
 
 impl GherkinSuite {
+    fn all() -> Vec<Self> {
+        vec![Self::Browser, Self::ReviewGate, Self::Validator, Self::Meta]
+    }
+
     fn label(&self) -> &'static str {
         match self {
             Self::Browser => "browser",

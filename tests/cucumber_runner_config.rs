@@ -85,6 +85,45 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn gherkin_runner_run_all_executes_every_configured_suite() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let tool_dir = temp_dir.path().join("tools");
+        let cargo_log = temp_dir.path().join("cargo.log");
+        create_fake_cargo(&tool_dir, &cargo_log)?;
+
+        Command::cargo_bin("emc")?
+            .args(["gherkin", "run", "--all"])
+            .env("PATH", path_with_fake_tools(&tool_dir)?)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "browser Gherkin suite passed; attempted 11 configured browser scenarios",
+            ))
+            .stdout(predicate::str::contains(
+                "review-gate Gherkin suite passed; attempted 9 configured review-gate scenarios",
+            ))
+            .stdout(predicate::str::contains(
+                "validator Gherkin suite passed; attempted 159 configured validator scenarios",
+            ))
+            .stdout(predicate::str::contains(
+                "meta Gherkin suite passed; attempted 6 configured meta scenarios",
+            ))
+            .stderr(predicate::str::is_empty());
+
+        assert_eq!(
+            read_to_string(cargo_log)?,
+            concat!(
+                "test --test browser_composition\n",
+                "test --test review_gate\n",
+                "test --test validate_event_model\n",
+                "test --test cucumber_runner_config\n",
+            )
+        );
+
+        Ok(())
+    }
+
     fn create_fake_cargo(tool_dir: &Path, log_path: &Path) -> Result<(), Box<dyn Error>> {
         create_dir_all(tool_dir)?;
         let tool_path = tool_dir.join("cargo");

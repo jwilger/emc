@@ -7,7 +7,9 @@ use emc::core::connection::{WorkflowConnection, connect_workflow};
 use emc::core::emc::{EMCWorkflowImport, import_emc_workflow};
 use emc::core::effect::FileContents;
 use emc::core::effect::ProjectPath;
-use emc::core::gherkin::{GherkinSuite, list_gherkin_features, run_gherkin_suite};
+use emc::core::gherkin::{
+    GherkinSuite, list_gherkin_features, run_all_gherkin_suites, run_gherkin_suite,
+};
 use emc::core::layout::{check_project, list_workflows, show_workflow};
 use emc::core::project::{ProjectName, init_project};
 use emc::core::review_gate::review_gate;
@@ -50,6 +52,7 @@ enum Command {
     GherkinRun {
         suite: GherkinSuite,
     },
+    GherkinRunAll,
     ImportEMC {
         source: PathBuf,
     },
@@ -146,6 +149,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
             interpret(generate_site(project_name, output))
         }
         Command::GherkinList { suite } => interpret(list_gherkin_features(suite)),
+        Command::GherkinRunAll => interpret(run_all_gherkin_suites()),
         Command::GherkinRun { suite } => interpret(run_gherkin_suite(suite)),
         Command::ImportEMC { source } => {
             interpret(import_emc_workflow(load_emc_import(&source)?))
@@ -346,6 +350,13 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                     command: Command::GherkinRun { suite },
                 })
                 .map_err(|error| ShellError::message(error.to_string()))
+        }
+        [command, subject, all_flag]
+            if command == "gherkin" && subject == "run" && all_flag == "--all" =>
+        {
+            Ok(Cli {
+                command: Command::GherkinRunAll,
+            })
         }
         [command, kind, source_flag, source]
             if command == "import" && kind == "emc" && source_flag == "--source" =>
