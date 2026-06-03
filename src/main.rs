@@ -13,6 +13,7 @@ use emc::core::types::WorkflowSlug;
 use emc::core::validation::{
     EventModelDocument, EventModelFileKind, validate_event_model, validate_event_model_corpus,
 };
+use emc::core::verify::verify_project;
 use emc::io::dto::{
     parse_browser_index_workflows, parse_emc_slice_import, parse_emc_workflow_import,
     parse_event_model_document, parse_project_manifest_name, parse_slice_slug, parse_workflow_slug,
@@ -32,6 +33,7 @@ enum Command {
     ListWorkflows,
     ShowWorkflow { slug: WorkflowSlug },
     Validate { target: PathBuf },
+    Verify,
 }
 
 fn main() -> ExitCode {
@@ -86,6 +88,13 @@ fn run(cli: Cli) -> Result<(), ShellError> {
             interpret(show_workflow(workflow_document))
         }
         Command::Validate { target } => validate_target(&target),
+        Command::Verify => {
+            let index = fs::read_to_string("model/browser/data/index.json")
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let imported_workflows = parse_browser_index_workflows(&index)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret(verify_project(imported_workflows))
+        }
     }
 }
 
@@ -129,6 +138,9 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             command: Command::Validate {
                 target: PathBuf::from(target),
             },
+        }),
+        [command] if command == "verify" => Ok(Cli {
+            command: Command::Verify,
         }),
         _ => Err(ShellError::message("usage: emc init --name <project-name>")),
     }

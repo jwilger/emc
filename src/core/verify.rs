@@ -1,0 +1,51 @@
+use crate::core::effect::{
+    Effect, EffectPlan, ProcessArgument, ProcessInvocation, ProgramName, ReportLine,
+};
+use crate::core::layout::ImportedWorkflowLayout;
+
+pub fn verify_project(imported_workflows: Vec<ImportedWorkflowLayout>) -> EffectPlan {
+    EffectPlan::new(
+        imported_workflows
+            .into_iter()
+            .flat_map(verify_imported_workflow)
+            .collect(),
+    )
+}
+
+fn verify_imported_workflow(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
+    vec![
+        Effect::RunProcess(ProcessInvocation::new(
+            program_name("lean"),
+            vec![process_argument(
+                workflow.lean_artifact_path().as_ref().to_owned(),
+            )],
+            report_line("Lean4 artifacts verified"),
+        )),
+        Effect::RunProcess(ProcessInvocation::new(
+            program_name("quint"),
+            vec![
+                process_argument("verify"),
+                process_argument(workflow.quint_artifact_path().as_ref().to_owned()),
+            ],
+            report_line("Quint artifacts verified"),
+        )),
+    ]
+}
+
+fn program_name(value: impl Into<String>) -> ProgramName {
+    ProgramName::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC generated program name must be valid: {error}");
+    })
+}
+
+fn process_argument(value: impl Into<String>) -> ProcessArgument {
+    ProcessArgument::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC generated process argument must be valid: {error}");
+    })
+}
+
+fn report_line(value: impl Into<String>) -> ReportLine {
+    ReportLine::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC generated report line must be valid: {error}");
+    })
+}

@@ -1,0 +1,80 @@
+#[cfg(test)]
+mod tests {
+    use std::env;
+    use std::error::Error;
+    use std::fs::{Permissions, create_dir_all, read_to_string, set_permissions, write};
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::{Path, PathBuf};
+
+    use assert_cmd::Command;
+    use predicates::prelude::predicate;
+    use tempfile::TempDir;
+
+    #[test]
+    fn verify_runs_lean_and_quint_for_imported_workflows() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let tool_dir = temp_dir.path().join("tools");
+        let emc_event_model = workspace_root().join("../emc/docs/event-model");
+
+        create_fake_tool(&tool_dir, "lean", "lean.log")?;
+        create_fake_tool(&tool_dir, "quint", "quint.log")?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["import", "emc", "--source"])
+            .arg(&emc_event_model)
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .arg("verify")
+            .current_dir(temp_dir.path())
+            .env("PATH", path_with_fake_tools(&tool_dir)?)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Lean4 artifacts verified"))
+            .stdout(predicate::str::contains("Quint artifacts verified"));
+
+        assert_eq!(
+            read_to_string(temp_dir.path().join("lean.log"))?,
+            "model/lean/OrganizationAccess.lean\n"
+        );
+        assert_eq!(
+            read_to_string(temp_dir.path().join("quint.log"))?,
+            "verify model/quint/OrganizationAccess.qnt\n"
+        );
+
+        Ok(())
+    }
+
+    fn create_fake_tool(
+        tool_dir: &Path,
+        tool_name: &str,
+        log_file: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        create_dir_all(tool_dir)?;
+        let tool_path = tool_dir.join(tool_name);
+        write(
+            &tool_path,
+            format!("#!/usr/bin/env sh\nprintf '%s\\n' \"$*\" >> {log_file}\n"),
+        )?;
+        set_permissions(&tool_path, Permissions::from_mode(0o755))?;
+        Ok(())
+    }
+
+    fn path_with_fake_tools(tool_dir: &Path) -> Result<String, Box<dyn Error>> {
+        let mut paths = vec![tool_dir.to_path_buf()];
+        paths.extend(env::split_paths(&env::var_os("PATH").unwrap_or_default()));
+        Ok(env::join_paths(paths)?.to_string_lossy().into_owned())
+    }
+
+    fn workspace_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
+}
