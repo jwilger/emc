@@ -110,6 +110,10 @@ mod tests {
             "flake packages must export the Docker-compatible EMC image"
         );
         assert!(
+            flake.contains("emc-container-image = containerImage;"),
+            "flake checks must build the Docker-compatible EMC image"
+        );
+        assert!(
             flake.contains("copyToRoot = pkgs.buildEnv"),
             "EMC container image must include a runnable package closure"
         );
