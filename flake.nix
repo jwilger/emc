@@ -171,6 +171,7 @@
         checks = pkgs.lib.optionalAttrs hasCargoProject {
           default = package;
           emc = package;
+          emc-container-image = containerImage;
           package-smoke = packageSmoke;
         };
 
