@@ -185,6 +185,30 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn connection_mutation_core_uses_semantic_json_document_types() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/core/connection.rs")?;
+        let violations = [
+            "serde_json::Value",
+            "Value::",
+            "<Value>",
+            "&Value",
+            " Value",
+        ]
+        .iter()
+        .filter(|marker| source.contains(**marker))
+        .map(|marker| format!("src/core/connection.rs manipulates raw JSON `{marker}`"))
+        .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "connection mutation logic must use semantic document types instead of raw JSON values"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",

@@ -5,9 +5,9 @@ use serde_json::Value;
 
 use crate::core::effect::{FileContents, ProjectPath};
 use crate::core::types::{
-    ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSliceDetail,
-    WorkflowSliceFileReference, WorkflowSlug, WorkflowStepRelationshipName,
-    WorkflowTransitionLabel,
+    ModelDescription, ModelName, SliceKindName, SliceSlug, TransitionTriggerName,
+    WorkflowSliceDetail, WorkflowSliceFileReference, WorkflowSlug, WorkflowStepRelationshipName,
+    WorkflowTransitionFieldName, WorkflowTransitionLabel,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -67,6 +67,20 @@ impl WorkflowDocument {
                 next.get("steps").and_then(Value::as_array),
                 addition,
             )),
+        );
+        Ok(Self {
+            value: Value::Object(next),
+        })
+    }
+
+    pub fn with_connected_transition(
+        &self,
+        addition: WorkflowTransitionAddition,
+    ) -> Result<Self, WorkflowDocumentError> {
+        let mut next = self.object()?.clone();
+        next.insert(
+            "steps".to_owned(),
+            Value::Array(connected_steps(self.steps()?, addition)?),
         );
         Ok(Self {
             value: Value::Object(next),
@@ -135,6 +149,39 @@ pub struct WorkflowSliceAddition {
     slice_file: WorkflowSliceFileReference,
     detail: WorkflowSliceDetail,
     relationship: WorkflowStepRelationshipName,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowTransitionAddition {
+    source: SliceSlug,
+    target: WorkflowTransitionTarget,
+    trigger_field: WorkflowTransitionFieldName,
+    trigger: TransitionTriggerName,
+}
+
+impl WorkflowTransitionAddition {
+    pub fn new(
+        source: SliceSlug,
+        target: WorkflowTransitionTarget,
+        trigger_field: WorkflowTransitionFieldName,
+        trigger: TransitionTriggerName,
+    ) -> Self {
+        Self {
+            source,
+            target,
+            trigger_field,
+            trigger,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum WorkflowTransitionTarget {
+    Slice(SliceSlug),
+    Workflow {
+        slug: WorkflowSlug,
+        reason: ModelDescription,
+    },
 }
 
 impl WorkflowSliceAddition {
@@ -218,6 +265,76 @@ fn appended_steps(existing: Option<&Vec<Value>>, addition: WorkflowSliceAddition
         .collect(),
     ));
     values
+}
+
+fn connected_steps(
+    existing: &[Value],
+    addition: WorkflowTransitionAddition,
+) -> Result<Vec<Value>, WorkflowDocumentError> {
+    let mut found_source = false;
+    let next_steps = existing
+        .iter()
+        .map(|step| {
+            if step.get("slice").and_then(Value::as_str) != Some(addition.source.as_ref()) {
+                return Ok(step.clone());
+            }
+            found_source = true;
+            append_transition(step, &addition)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if found_source {
+        Ok(next_steps)
+    } else {
+        Err(WorkflowDocumentError::new(format!(
+            "unknown workflow step {}",
+            addition.source.as_ref()
+        )))
+    }
+}
+
+fn append_transition(
+    step: &Value,
+    addition: &WorkflowTransitionAddition,
+) -> Result<Value, WorkflowDocumentError> {
+    let object = step
+        .as_object()
+        .ok_or_else(|| WorkflowDocumentError::new("workflow step must be a JSON object"))?;
+    let mut next = object.clone();
+    let mut transitions = object
+        .get("transitions")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    transitions.push(Value::Object(
+        [(
+            addition.trigger_field.as_ref().to_owned(),
+            Value::String(addition.trigger.as_ref().to_owned()),
+        )]
+        .into_iter()
+        .collect(),
+    ));
+    let transition = transitions
+        .last_mut()
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| WorkflowDocumentError::new("workflow transition must be a JSON object"))?;
+    match &addition.target {
+        WorkflowTransitionTarget::Slice(target) => {
+            transition.insert("to".to_owned(), Value::String(target.as_ref().to_owned()));
+        }
+        WorkflowTransitionTarget::Workflow { slug, reason } => {
+            transition.insert(
+                "to_workflow".to_owned(),
+                Value::String(slug.as_ref().to_owned()),
+            );
+            transition.insert(
+                "exit_reason".to_owned(),
+                Value::String(reason.as_ref().to_owned()),
+            );
+        }
+    }
+    next.insert("transitions".to_owned(), Value::Array(transitions));
+    Ok(Value::Object(next))
 }
 
 fn workflow_slice_detail(step: &Value) -> Result<WorkflowSliceDetail, WorkflowDocumentError> {
