@@ -183,8 +183,22 @@ fn run(cli: Cli) -> Result<(), ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let existing_workflows = parse_browser_index_workflows(&index)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            let plan = update_workflow_description(existing_workflows, slug, description)
-                .map_err(|error| ShellError::message(error.to_string()))?;
+            let workflow_document = fs::read_to_string(format!(
+                "model/browser/data/workflows/{}.eventmodel.json",
+                slug.as_ref()
+            ))
+            .map_err(|error| ShellError::message(error.to_string()))
+            .and_then(|contents| {
+                FileContents::try_new(contents)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+            let plan = update_workflow_description(
+                existing_workflows,
+                workflow_document,
+                slug,
+                description,
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
             interpret(plan)
         }
         Command::Validate { target } => validate_target(&target),

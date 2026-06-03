@@ -64,6 +64,7 @@
 - 2026-06-02: `emc check` rejects browser slice data files that are present under `model/browser/data/slices` but not referenced by any workflow composition.
 - 2026-06-02: `emc check` rejects generated Lean4 and Quint workflow artifacts that are not owned by the initialized project module or a workflow listed in browser data.
 - 2026-06-02: Generated Lean4 and Quint workflow artifacts now include semantic slice detail records for composed business slices: slug, name, type, and description. `emc check` rejects slice-detail drift between browser workflow data and the canonical artifacts.
+- 2026-06-02: `emc update workflow` now preserves existing workflow composition, slice file references, transitions, and canonical Lean4/Quint slice details while rewriting the workflow description.
 
 ### Task 1: Guardrails and Project Skeleton
 
