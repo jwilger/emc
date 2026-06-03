@@ -275,6 +275,82 @@ pub fn update_slice_description(
     let workflow_document = workflow_document
         .with_updated_slice_detail(updated_slice.clone())
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    updated_slice_plan(
+        workflow_name,
+        workflow_description,
+        workflow_slug,
+        workflow_document,
+        slice_slug,
+        updated_slice,
+    )
+}
+
+pub fn update_slice_kind(
+    indexed_workflow_name: ModelName,
+    indexed_workflow_description: ModelDescription,
+    workflow_slug: WorkflowSlug,
+    workflow_document: FileContents,
+    slice_slug: SliceSlug,
+    kind: SliceKind,
+) -> Result<EffectPlan, SliceMutationError> {
+    let workflow_document = WorkflowDocument::parse(&workflow_document)
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_name = workflow_document
+        .name()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    if workflow_name != indexed_workflow_name {
+        return Err(SliceMutationError::new(format!(
+            "workflow document name '{}' does not match index name '{}'",
+            workflow_name.as_ref(),
+            indexed_workflow_name.as_ref()
+        )));
+    }
+    let workflow_description = workflow_document
+        .description()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    if workflow_description != indexed_workflow_description {
+        return Err(SliceMutationError::new(format!(
+            "workflow document description '{}' does not match index description '{}'",
+            workflow_description.as_ref(),
+            indexed_workflow_description.as_ref()
+        )));
+    }
+
+    let existing_slice = workflow_document
+        .slice_details()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?
+        .into_iter()
+        .find(|slice| slice.slug() == &slice_slug)
+        .ok_or_else(|| {
+            SliceMutationError::new(format!("slice {} is not in workflow", slice_slug.as_ref()))
+        })?;
+    let updated_slice = WorkflowSliceDetail::new(
+        slice_slug.clone(),
+        existing_slice.name().clone(),
+        slice_kind_name(kind),
+        existing_slice.description().clone(),
+    );
+    let workflow_document = workflow_document
+        .with_updated_slice_detail(updated_slice.clone())
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    updated_slice_plan(
+        workflow_name,
+        workflow_description,
+        workflow_slug,
+        workflow_document,
+        slice_slug,
+        updated_slice,
+    )
+}
+
+fn updated_slice_plan(
+    workflow_name: ModelName,
+    workflow_description: ModelDescription,
+    workflow_slug: WorkflowSlug,
+    workflow_document: WorkflowDocument,
+    slice_slug: SliceSlug,
+    updated_slice: WorkflowSliceDetail,
+) -> Result<EffectPlan, SliceMutationError> {
     let workflow_module_name = module_name(workflow_name.as_ref());
     let slice_module_name = module_name(updated_slice.name().as_ref());
     let workflow_slice_details = workflow_document

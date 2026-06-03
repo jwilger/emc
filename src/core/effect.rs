@@ -2,7 +2,7 @@ use nutype::nutype;
 use std::path::{Component, Path};
 
 use crate::core::connection::WorkflowConnection;
-use crate::core::slice::NewSlice;
+use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{ModelDescription, SliceSlug, WorkflowSlug};
 use crate::core::workflow::NewWorkflow;
 
@@ -56,6 +56,7 @@ pub enum Effect {
     ShowSliceFromSlice(SliceSlug),
     ShowWorkflowFromWorkflow(WorkflowSlug),
     UpdateSliceDescriptionFromWorkflow(SliceSlug, ModelDescription),
+    UpdateSliceKindFromWorkflow(SliceSlug, SliceKind),
     UpdateWorkflowDescriptionFromIndexAndWorkflow(WorkflowSlug, ModelDescription),
     ValidateEventModelTarget(ProjectPath),
     VerifyProjectFromIndex,

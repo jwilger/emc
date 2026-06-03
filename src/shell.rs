@@ -19,7 +19,7 @@ use crate::core::layout::{
 use crate::core::project::ProjectName;
 use crate::core::review_record::{ReviewCategoryFinding, ReviewRecordDocument};
 use crate::core::site::generate_site;
-use crate::core::slice::{add_slice, update_slice_description};
+use crate::core::slice::{add_slice, update_slice_description, update_slice_kind};
 use crate::core::types::{
     ReviewRuleName, SliceSlug, WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionRecord,
 };
@@ -397,6 +397,21 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 workflow_document,
                 slug.clone(),
                 description.clone(),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret_collect_reports(plan)
+        }
+        Effect::UpdateSliceKindFromWorkflow(slug, kind) => {
+            let existing_workflows = read_browser_index_workflows()?;
+            let (workflow_layout, workflow_document) =
+                find_workflow_containing_slice(slug, existing_workflows.as_slice())?;
+            let plan = update_slice_kind(
+                workflow_layout.name().clone(),
+                workflow_layout.description().clone(),
+                workflow_layout.slug().clone(),
+                workflow_document,
+                slug.clone(),
+                *kind,
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)

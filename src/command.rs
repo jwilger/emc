@@ -5,7 +5,7 @@ use crate::core::gherkin::{
 };
 use crate::core::project::{ProjectName, init_project};
 use crate::core::review_gate::review_gate;
-use crate::core::slice::NewSlice;
+use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{ModelDescription, SliceSlug, WorkflowSlug};
 use crate::core::workflow::NewWorkflow;
 
@@ -84,6 +84,10 @@ pub fn update_slice_description(slug: SliceSlug, description: ModelDescription) 
         slug,
         description,
     )])
+}
+
+pub fn update_slice_kind(slug: SliceSlug, kind: SliceKind) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateSliceKindFromWorkflow(slug, kind)])
 }
 
 pub fn validate(target: ProjectPath) -> EffectPlan {
