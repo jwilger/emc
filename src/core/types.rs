@@ -83,3 +83,10 @@ pub struct WorkflowStepName(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
 pub struct WorkflowBranchLabel(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct WorkflowTransitionKind(String);

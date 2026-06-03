@@ -77,6 +77,44 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn composed_browser_workflow_labels_transition_cards() -> Result<(), Box<dyn Error>> {
+        let workflow = file_contents(
+            "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\", \"transitions\": [{\"to\": \"show-lesson\", \"via_navigation\": \"lesson_screen\"}]},\n    {\"slice\": \"show-lesson\", \"name\": \"show lesson\", \"relationship\": \"main\", \"transitions\": [\n      {\"to\": \"submit\", \"via_command\": \"SubmitLessonForReview\"},\n      {\"to\": \"checkpoint\", \"via_external_trigger\": \"lesson_checkpoint_result\"}\n    ]},\n    {\"slice\": \"submit\", \"name\": \"submit\", \"relationship\": \"main\", \"transitions\": [{\"to\": \"review\", \"via_event\": \"LessonSubmittedForReview\"}]},\n    {\"slice\": \"review\", \"name\": \"review\", \"relationship\": \"main\", \"transitions\": [{\"to_workflow\": \"course-lesson-02\", \"target_name\": \"next lesson\", \"via_outcome\": \"LessonAccepted\"}]},\n    {\"slice\": \"checkpoint\", \"name\": \"checkpoint\", \"relationship\": \"alternate\"}\n  ]\n}\n",
+        );
+
+        let composed = compose_browser_workflow(workflow, Vec::new())?;
+
+        assert_eq!(
+            composed
+                .transition_cards()
+                .iter()
+                .map(|card| {
+                    (
+                        card.source().as_ref(),
+                        card.target().as_ref(),
+                        card.kind().as_ref(),
+                        card.label().as_ref(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            [
+                ("entry", "show lesson", "navigation", "lesson_screen"),
+                ("show lesson", "submit", "command", "SubmitLessonForReview",),
+                (
+                    "show lesson",
+                    "checkpoint",
+                    "external trigger",
+                    "lesson_checkpoint_result",
+                ),
+                ("submit", "review", "event", "LessonSubmittedForReview"),
+                ("review", "next lesson", "workflow exit", "LessonAccepted"),
+            ]
+        );
+
+        Ok(())
+    }
+
     fn slice_with_canonical_lanes(name: &str) -> String {
         format!(
             "{{\n  \"name\": \"{name}\",\n  \"version\": \"0.1.0\",\n  \"board\": {{\"lanes\": [\n    {{\"id\": \"ux\", \"name\": \"People, Views, and Translations\"}},\n    {{\"id\": \"actions\", \"name\": \"Commands and Projections\"}},\n    {{\"id\": \"events\", \"name\": \"Stored Facts\"}}\n  ]}},\n  \"slices\": [{{\"name\": \"{name}\", \"type\": \"state_view\", \"views\": [], \"acceptance_scenarios\": [], \"contract_scenarios\": []}}]\n}}\n"
