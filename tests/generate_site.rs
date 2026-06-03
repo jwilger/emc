@@ -2,6 +2,7 @@
 mod tests {
     use std::error::Error;
     use std::fs::{read_to_string, write};
+    use std::path::Path;
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -178,6 +179,42 @@ mod tests {
     }
 
     #[test]
+    fn generate_site_rejects_invalid_modeled_workflows() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_navigation_chain(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "transition",
+                "--workflow",
+                "intake-visit",
+                "--from",
+                "capture-intake",
+                "--to",
+                "triage-intake",
+                "--via",
+                "navigation",
+                "--name",
+                "triage-intake-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["generate", "site", "--output", "site"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow step 'triage-intake' has no incoming transition",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn generate_site_rejects_absolute_output_paths_at_the_boundary() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let absolute_output = temp_dir.path().join("outside-site");
@@ -206,6 +243,94 @@ mod tests {
             .stderr(predicate::str::contains(
                 "without parent-directory traversal",
             ));
+
+        Ok(())
+    }
+
+    fn initialize_navigation_chain(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Clinic Intake"])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "intake-visit",
+                "--name",
+                "Intake visit",
+                "--description",
+                "Actor completes intake for a clinic visit.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        [
+            (
+                "capture-intake",
+                "Capture intake",
+                "Actor captures intake details.",
+            ),
+            ("triage-intake", "Triage intake", "Actor triages intake."),
+            (
+                "schedule-visit",
+                "Schedule visit",
+                "Actor schedules a visit.",
+            ),
+        ]
+        .into_iter()
+        .try_for_each(|(slug, name, description)| {
+            Command::cargo_bin("emc")?
+                .args([
+                    "add",
+                    "slice",
+                    "--workflow",
+                    "intake-visit",
+                    "--slug",
+                    slug,
+                    "--name",
+                    name,
+                    "--type",
+                    "state_view",
+                    "--description",
+                    description,
+                ])
+                .current_dir(cwd)
+                .assert()
+                .success();
+            Ok::<(), Box<dyn Error>>(())
+        })?;
+
+        [
+            ("capture-intake", "triage-intake", "triage-intake-screen"),
+            ("triage-intake", "schedule-visit", "schedule-visit-screen"),
+        ]
+        .into_iter()
+        .try_for_each(|(source, target, navigation)| {
+            Command::cargo_bin("emc")?
+                .args([
+                    "connect",
+                    "workflow",
+                    "--workflow",
+                    "intake-visit",
+                    "--from",
+                    source,
+                    "--to",
+                    target,
+                    "--via",
+                    "navigation",
+                    "--name",
+                    navigation,
+                ])
+                .current_dir(cwd)
+                .assert()
+                .success();
+            Ok::<(), Box<dyn Error>>(())
+        })?;
 
         Ok(())
     }

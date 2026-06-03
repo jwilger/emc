@@ -833,6 +833,7 @@ impl BoardGraphConnection {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SliceDefinition {
     name: DefinitionName,
+    slug: Option<DefinitionName>,
     slice_type: SliceType,
     issued_commands: Vec<DefinitionName>,
     handled_command_errors: Vec<DefinitionName>,
@@ -857,6 +858,7 @@ impl SliceDefinition {
     pub(crate) fn new(parts: SliceDefinitionParts) -> Self {
         Self {
             name: parts.name,
+            slug: parts.slug,
             slice_type: parts.slice_type,
             issued_commands: parts.issued_commands,
             handled_command_errors: parts.handled_command_errors,
@@ -887,9 +889,14 @@ impl SliceDefinition {
     }
 
     fn has_slug(&self, slug: &DefinitionName) -> bool {
-        slugified_definition_name(&self.name)
-            .as_ref()
-            .is_some_and(|slice_slug| slice_slug == slug)
+        self.slug.as_ref().map_or_else(
+            || {
+                slugified_definition_name(&self.name)
+                    .as_ref()
+                    .is_some_and(|slice_slug| slice_slug == slug)
+            },
+            |slice_slug| slice_slug == slug,
+        )
     }
 
     fn covers_application_entry_state(&self, state: ApplicationEntryState) -> bool {
@@ -902,6 +909,7 @@ impl SliceDefinition {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct SliceDefinitionParts {
     name: DefinitionName,
+    slug: Option<DefinitionName>,
     slice_type: SliceType,
     issued_commands: Vec<DefinitionName>,
     handled_command_errors: Vec<DefinitionName>,
@@ -926,6 +934,7 @@ impl SliceDefinitionParts {
     pub(crate) fn new(name: DefinitionName, slice_type: SliceType) -> Self {
         Self {
             name,
+            slug: None,
             slice_type,
             issued_commands: Vec::new(),
             handled_command_errors: Vec::new(),
@@ -945,6 +954,11 @@ impl SliceDefinitionParts {
             translation_contract: TranslationContract::NotTranslation,
             scenarios: Vec::new(),
         }
+    }
+
+    pub(crate) fn with_slug(mut self, slug: Option<DefinitionName>) -> Self {
+        self.slug = slug;
+        self
     }
 
     pub(crate) fn with_issued_commands(mut self, issued_commands: Vec<DefinitionName>) -> Self {

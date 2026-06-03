@@ -1382,6 +1382,7 @@ fn slice_definitions_from_json_object(
                     })
                 })
                 .map(|name| {
+                    let slug = optional_definition_name_from_json_field(slice, "slug", "slug")?;
                     let issued_commands =
                         definition_names_from_json_array_field(slice, "commands", "command")?;
                     let handled_command_errors = handled_command_errors_from_json_slice(slice)?;
@@ -1407,6 +1408,7 @@ fn slice_definitions_from_json_object(
                     slice_scenarios_from_json_slice(slice).map(|scenarios| {
                         SliceDefinition::new(
                             SliceDefinitionParts::new(name, slice_type_from_json_slice(slice))
+                                .with_slug(slug)
                                 .with_issued_commands(issued_commands)
                                 .with_handled_command_errors(handled_command_errors)
                                 .with_owned_automations(owned_automations)

@@ -12,8 +12,8 @@ use crate::core::emit::quint::{
 };
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceKindName, SliceSlug,
-    WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSliceFileReference, WorkflowSlug,
-    WorkflowTransitionRecords,
+    TransitionTriggerName, WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSliceFileReference,
+    WorkflowSlug, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 use crate::core::workflow_document::{WorkflowDocument, WorkflowSliceAddition, workflow_path};
 
@@ -447,6 +447,10 @@ pub fn remove_slice(
         .ok_or_else(|| {
             SliceMutationError::new(format!("slice {} is not in workflow", slice_slug.as_ref()))
         })?;
+    let existing_transitions = workflow_document
+        .transitions()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    reject_removing_slice_with_outgoing_transitions(&slice_slug, &existing_transitions)?;
     let workflow_document = workflow_document
         .with_removed_slice(&slice_slug)
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
@@ -545,6 +549,7 @@ fn updated_slice_plan(
     let workflow_json = workflow_document
         .contents()
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let navigation_effects = outgoing_navigation_effects(&slice_slug, &workflow_transitions);
 
     let cleanup_effects = previous_slice_module_name
         .filter(|previous_module_name| previous_module_name != &slice_module_name)
@@ -571,6 +576,9 @@ fn updated_slice_plan(
                     )),
                     file_contents(slice_json_from_detail(&updated_slice)),
                 ),
+            ])
+            .chain(navigation_effects)
+            .chain([
                 Effect::WriteFile(
                     project_path(format!("model/lean/slices/{slice_module_name}.lean")),
                     emit_lean_slice_module(
@@ -626,6 +634,41 @@ fn updated_slice_plan(
     ))
 }
 
+fn outgoing_navigation_effects(
+    slice_slug: &SliceSlug,
+    workflow_transitions: &[WorkflowTransitionRecord],
+) -> Vec<Effect> {
+    workflow_transitions
+        .iter()
+        .filter(|transition| transition.source().as_ref() == slice_slug.as_ref())
+        .filter(|transition| transition.kind().as_ref() == "navigation")
+        .map(|transition| {
+            Effect::EnsureNavigationControlInSlice(
+                slice_slug.clone(),
+                TransitionTriggerName::try_new(transition.trigger().as_ref().to_owned())
+                    .unwrap_or_else(|error| {
+                        unreachable!("parsed workflow transition trigger must be valid: {error}")
+                    }),
+            )
+        })
+        .collect()
+}
+
+fn reject_removing_slice_with_outgoing_transitions(
+    slice_slug: &SliceSlug,
+    workflow_transitions: &[WorkflowTransitionRecord],
+) -> Result<(), SliceMutationError> {
+    workflow_transitions
+        .iter()
+        .find(|transition| transition.source().as_ref() == slice_slug.as_ref())
+        .map_or(Ok(()), |_transition| {
+            Err(SliceMutationError::new(format!(
+                "slice {} has outgoing workflow transitions; remove those transitions before removing the slice",
+                slice_slug.as_ref()
+            )))
+        })
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SliceMutationError {
     message: String,
@@ -679,7 +722,7 @@ fn state_view_slice_json(name: &str, description: &str, kind: &str, slug: &str) 
     let source_element_id = format!("view-{source_view_name}");
     let scenario_name = scenario_name(name);
     format!(
-        "{{\n  \"name\": {},\n  \"version\": \"0.1.0\",\n  \"description\": {},\n  \"type\": {},\n  \"board\": {{\n    \"lanes\": [\n      {{\"id\": \"ux\", \"name\": \"People, Views, and Translations\"}},\n      {{\"id\": \"actions\", \"name\": \"Commands and Projections\"}},\n      {{\"id\": \"events\", \"name\": \"Stored Facts\"}}\n    ],\n    \"slices\": [\n      {{\n        \"name\": {},\n        \"elements\": [{{\"id\": {}, \"kind\": \"view\", \"lane\": \"ux\", \"name\": {}}}],\n        \"connections\": []\n      }}\n    ]\n  }},\n  \"streams\": [],\n  \"events\": [],\n  \"commands\": [],\n  \"read_models\": [],\n  \"views\": [\n    {{\n      \"name\": {},\n      \"description\": {},\n      \"wireframe\": \"<section></section>\",\n      \"uses_read_models\": [],\n      \"controls\": []\n    }},\n    {{\n      \"name\": {},\n      \"description\": {},\n      \"wireframe\": \"<section></section>\",\n      \"uses_read_models\": [],\n      \"controls\": []\n    }}\n  ],\n  \"slices\": [\n    {{\n      \"name\": {},\n      \"type\": {},\n      \"events\": [],\n      \"views\": [{}, {}],\n      \"acceptance_scenarios\": [{{\"name\": {}, \"given\": [], \"when\": {{}}, \"then\": []}}],\n      \"contract_scenarios\": []\n    }}\n  ]\n}}\n",
+        "{{\n  \"name\": {},\n  \"version\": \"0.1.0\",\n  \"description\": {},\n  \"type\": {},\n  \"board\": {{\n    \"lanes\": [\n      {{\"id\": \"ux\", \"name\": \"People, Views, and Translations\"}},\n      {{\"id\": \"actions\", \"name\": \"Commands and Projections\"}},\n      {{\"id\": \"events\", \"name\": \"Stored Facts\"}}\n    ],\n    \"slices\": [\n      {{\n        \"name\": {},\n        \"elements\": [{{\"id\": {}, \"kind\": \"view\", \"lane\": \"ux\", \"name\": {}}}],\n        \"connections\": []\n      }}\n    ]\n  }},\n  \"streams\": [],\n  \"events\": [],\n  \"commands\": [],\n  \"read_models\": [],\n  \"views\": [\n    {{\n      \"name\": {},\n      \"description\": {},\n      \"wireframe\": \"<section></section>\",\n      \"uses_read_models\": [],\n      \"controls\": []\n    }},\n    {{\n      \"name\": {},\n      \"description\": {},\n      \"wireframe\": \"<section></section>\",\n      \"uses_read_models\": [],\n      \"controls\": []\n    }}\n  ],\n  \"slices\": [\n    {{\n      \"name\": {},\n      \"slug\": {},\n      \"type\": {},\n      \"events\": [],\n      \"views\": [{}, {}],\n      \"acceptance_scenarios\": [{{\"name\": {}, \"given\": [], \"when\": {{}}, \"then\": []}}],\n      \"contract_scenarios\": []\n    }}\n  ]\n}}\n",
         json_string(name),
         json_string(description),
         json_string(kind),
@@ -691,6 +734,7 @@ fn state_view_slice_json(name: &str, description: &str, kind: &str, slug: &str) 
         json_string(&navigation_view_name),
         json_string(description),
         json_string(name),
+        json_string(slug),
         json_string(kind),
         json_string(&source_view_name),
         json_string(&navigation_view_name),

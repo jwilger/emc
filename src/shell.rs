@@ -181,6 +181,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::Fail(message) => Err(ShellError::message(message.as_ref().to_owned())),
         Effect::GenerateSiteFromManifest(output) => {
             let project_name = read_project_manifest_name()?;
+            validate_modeled_workflows()?;
             interpret_collect_reports(generate_site(project_name, output.clone()))
         }
         Effect::ListWorkflowsFromIndex => {
@@ -298,6 +299,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 .map(|()| Vec::new())
         }
         Effect::RequireReviewRecord(path, workflow_path, message) => {
+            validate_workflow_if_modeled(workflow_path.as_ref())?;
             if Path::new(path.as_ref()).is_file() {
                 require_clean_review_record(path.as_ref(), workflow_path.as_ref(), message.as_ref())
                     .map(|()| Vec::new())
@@ -422,6 +424,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 "model/browser/data/workflows/{}.eventmodel.json",
                 slug.as_ref()
             );
+            validate_workflow_if_modeled(&workflow_path)?;
             let current_digest = model_content_digest(&workflow_path)?;
             let required_categories = required_review_categories()?;
             let plan = record_clean_review(
@@ -748,6 +751,35 @@ fn validate_event_model_target(target: &str) -> Result<Vec<String>, ShellError> 
     let referenced_sources = read_event_model_sources(referenced_slice_files)?;
     validate_event_model_sources(&target_path, &sources, &referenced_sources)
         .map(|()| vec![format!("event model is valid at {target}")])
+}
+
+fn validate_modeled_workflows() -> Result<(), ShellError> {
+    read_browser_index_workflows()?
+        .into_iter()
+        .map(|workflow| {
+            format!(
+                "model/browser/data/workflows/{}.eventmodel.json",
+                workflow.slug().as_ref()
+            )
+        })
+        .try_for_each(|workflow_path| validate_workflow_if_modeled(&workflow_path))
+}
+
+fn validate_workflow_if_modeled(workflow_path: &str) -> Result<(), ShellError> {
+    let contents = fs::read_to_string(Path::new(workflow_path)).map_err(ShellError::io)?;
+    let file_contents =
+        FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))?;
+    let workflow_document = WorkflowDocument::parse(&file_contents)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    if workflow_document
+        .slice_details()
+        .map_err(|error| ShellError::message(error.to_string()))?
+        .is_empty()
+    {
+        Ok(())
+    } else {
+        validate_event_model_target(workflow_path).map(|_| ())
+    }
 }
 
 fn ensure_slice_navigation_control(slug: &SliceSlug, navigation: &str) -> Result<(), ShellError> {

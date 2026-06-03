@@ -250,6 +250,58 @@ mod tests {
     }
 
     #[test]
+    fn update_slice_name_preserves_outgoing_navigation_controls() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_navigation_chain(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "slice",
+                "--slug",
+                "triage-intake",
+                "--name",
+                "Clinical triage",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("updated slice Clinical triage"));
+
+        Command::cargo_bin("emc")?
+            .args([
+                "validate",
+                "model/browser/data/workflows/intake-visit.eventmodel.json",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "event model is valid at model/browser/data/workflows/intake-visit.eventmodel.json",
+            ));
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "event model is valid at model/browser/data/slices",
+            ));
+
+        let slice_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/slices/triage-intake.eventmodel.json"),
+        )?;
+        assert!(
+            slice_json.contains("\"navigation\": \"schedule-visit-screen\""),
+            "slice rename must preserve outgoing navigation controls"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn update_slice_name_rejects_formal_module_name_collisions() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         initialize_project_with_slice(temp_dir.path())?;
@@ -462,6 +514,52 @@ mod tests {
     }
 
     #[test]
+    fn remove_middle_slice_rejects_outgoing_navigation_dependencies() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_navigation_chain(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["remove", "slice", "--slug", "triage-intake"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "slice triage-intake has outgoing workflow transitions",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        Command::cargo_bin("emc")?
+            .args([
+                "validate",
+                "model/browser/data/workflows/intake-visit.eventmodel.json",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/intake-visit.eventmodel.json"),
+        )?;
+        assert!(
+            workflow_json.contains("triage-intake-screen"),
+            "rejected middle slice removal must preserve incoming navigation transitions"
+        );
+        assert!(
+            workflow_json.contains("schedule-visit-screen"),
+            "rejected middle slice removal must preserve outgoing navigation transitions"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn remove_slice_requires_exact_slug_flag() -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args(["remove", "slice", "--slice", "capture-ticket"])
@@ -554,6 +652,94 @@ mod tests {
             .current_dir(cwd)
             .assert()
             .success();
+
+        Ok(())
+    }
+
+    fn initialize_project_with_navigation_chain(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Clinic Intake"])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "intake-visit",
+                "--name",
+                "Intake visit",
+                "--description",
+                "Actor completes intake for a clinic visit.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        [
+            (
+                "capture-intake",
+                "Capture intake",
+                "Actor captures intake details.",
+            ),
+            ("triage-intake", "Triage intake", "Actor triages intake."),
+            (
+                "schedule-visit",
+                "Schedule visit",
+                "Actor schedules a visit.",
+            ),
+        ]
+        .into_iter()
+        .try_for_each(|(slug, name, description)| {
+            Command::cargo_bin("emc")?
+                .args([
+                    "add",
+                    "slice",
+                    "--workflow",
+                    "intake-visit",
+                    "--slug",
+                    slug,
+                    "--name",
+                    name,
+                    "--type",
+                    "state_view",
+                    "--description",
+                    description,
+                ])
+                .current_dir(cwd)
+                .assert()
+                .success();
+            Ok::<(), Box<dyn Error>>(())
+        })?;
+
+        [
+            ("capture-intake", "triage-intake", "triage-intake-screen"),
+            ("triage-intake", "schedule-visit", "schedule-visit-screen"),
+        ]
+        .into_iter()
+        .try_for_each(|(source, target, navigation)| {
+            Command::cargo_bin("emc")?
+                .args([
+                    "connect",
+                    "workflow",
+                    "--workflow",
+                    "intake-visit",
+                    "--from",
+                    source,
+                    "--to",
+                    target,
+                    "--via",
+                    "navigation",
+                    "--name",
+                    navigation,
+                ])
+                .current_dir(cwd)
+                .assert()
+                .success();
+            Ok::<(), Box<dyn Error>>(())
+        })?;
 
         Ok(())
     }
