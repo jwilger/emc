@@ -22,6 +22,30 @@ mod tests {
             "named emc flake check must build the EMC package"
         );
         assert!(
+            flake.contains("packageSmoke = pkgs.runCommand"),
+            "flake checks must include packaged EMC command smoke tests"
+        );
+        assert!(
+            flake.contains("package-smoke = packageSmoke;"),
+            "flake checks must export packaged EMC command smoke tests"
+        );
+        assert!(
+            flake.contains("${package}/bin/emc check"),
+            "package smoke checks must run packaged `emc check`"
+        );
+        assert!(
+            flake.contains("${package}/bin/emc generate site"),
+            "package smoke checks must run packaged `emc generate site`"
+        );
+        assert!(
+            flake.contains("${package}/bin/emc mcp stdio"),
+            "package smoke checks must run packaged `emc mcp stdio`"
+        );
+        assert!(
+            flake.contains("${package}/bin/emc mcp http"),
+            "package smoke checks must run packaged `emc mcp http`"
+        );
+        assert!(
             flake.contains("containerImage = pkgs.dockerTools.buildImage"),
             "flake packages must include a Docker-compatible EMC image"
         );
