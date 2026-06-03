@@ -378,7 +378,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "usage: emc init --name <project-name>",
+                "usage: emc <command> [arguments]; run emc --help",
             ));
 
         Ok(())
@@ -398,7 +398,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "usage: emc init --name <project-name>",
+                "usage: emc <command> [arguments]; run emc --help",
             ));
 
         Ok(())
@@ -566,7 +566,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "usage: emc init --name <project-name>",
+                "usage: emc <command> [arguments]; run emc --help",
             ));
 
         Ok(())
@@ -586,7 +586,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "usage: emc init --name <project-name>",
+                "usage: emc <command> [arguments]; run emc --help",
             ));
 
         Ok(())
@@ -606,7 +606,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "usage: emc init --name <project-name>",
+                "usage: emc <command> [arguments]; run emc --help",
             ));
 
         Ok(())

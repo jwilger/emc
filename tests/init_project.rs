@@ -17,7 +17,7 @@ mod tests {
             .assert()
             .success()
             .stdout(predicate::str::contains(
-                "initialized EMC project Repair Desk",
+                "EMC project Repair Desk layout is present",
             ));
 
         let expected_paths = [

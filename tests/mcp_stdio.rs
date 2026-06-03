@@ -25,7 +25,7 @@ mod tests {
             .success()
             .stdout(predicate::str::contains("\"init_project\""))
             .stdout(predicate::str::contains(
-                "initialized EMC project Repair Desk",
+                "EMC project Repair Desk layout is present",
             ));
 
         assert!(temp_dir.path().join("emc.toml").is_file());
