@@ -3,7 +3,8 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{ArtifactDigest, FileContents};
 use crate::core::types::{
-    ModelDescription, ModelName, WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionLabel,
+    ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSliceDetail, WorkflowSlug,
+    WorkflowTransitionLabel,
 };
 use crate::core::workflow_document::WorkflowDocument;
 
@@ -46,6 +47,20 @@ pub fn artifact_digest_from_workflow_document(
             .transitions()
             .map_err(|error| ArtifactDigestError::new(error.to_string()))?,
     ))
+}
+
+pub fn slice_artifact_digest(
+    slice_name: ModelName,
+    slice_slug: SliceSlug,
+    slice_kind: SliceKindName,
+    slice_description: ModelDescription,
+) -> ArtifactDigest {
+    ArtifactDigest::try_new(format!(
+        "slice:name={slice_name};slug={slice_slug};kind={slice_kind};description={slice_description}"
+    ))
+    .unwrap_or_else(|error| {
+        unreachable!("EMC generated slice artifact digest must be valid: {error}");
+    })
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

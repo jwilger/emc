@@ -103,6 +103,12 @@ mod tests {
             "Lean slice artifact must use the business slice module name"
         );
         assert!(
+            slice_lean.contains(
+                "-- EMC-DIGEST: slice:name=Capture ticket;slug=capture-ticket;kind=state_view;description=Actor enters repair ticket details."
+            ),
+            "Lean slice artifact must carry a deterministic business slice digest"
+        );
+        assert!(
             slice_lean.contains("def sliceName := \"Capture ticket\""),
             "Lean slice artifact must represent the business slice name"
         );
@@ -121,6 +127,12 @@ mod tests {
         assert!(
             slice_quint.contains("module CaptureTicket"),
             "Quint slice artifact must use the business slice module name"
+        );
+        assert!(
+            slice_quint.contains(
+                "// EMC-DIGEST: slice:name=Capture ticket;slug=capture-ticket;kind=state_view;description=Actor enters repair ticket details."
+            ),
+            "Quint slice artifact must carry a deterministic business slice digest"
         );
         assert!(
             slice_quint.contains("val sliceName = \"Capture ticket\""),

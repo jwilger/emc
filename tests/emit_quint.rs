@@ -2,7 +2,7 @@
 mod tests {
     use std::error::Error;
 
-    use emc::core::digest::artifact_digest;
+    use emc::core::digest::{artifact_digest, slice_artifact_digest};
     use emc::core::emit::quint::{emit_slice_module, emit_workflow_module};
     use emc::core::types::{SliceKindName, WorkflowSliceDetail, WorkflowTransitionLabel};
     use emc::io::dto::{
@@ -84,16 +84,26 @@ mod tests {
 
     #[test]
     fn quint_slice_module_exposes_verification_entrypoints() -> Result<(), Box<dyn Error>> {
+        let slice_name = parse_model_name("Capture ticket")?;
+        let slice_description = parse_model_description("Actor enters repair ticket details.")?;
+        let slice_slug = parse_slice_slug("capture-ticket")?;
+        let slice_kind = SliceKindName::try_new("state_view".to_owned())?;
         let module = emit_slice_module(
             parse_quint_module_name("CaptureTicket")?,
-            parse_model_name("Capture ticket")?,
-            parse_model_description("Actor enters repair ticket details.")?,
-            parse_slice_slug("capture-ticket")?,
-            SliceKindName::try_new("state_view".to_owned())?,
+            slice_name.clone(),
+            slice_description.clone(),
+            slice_slug.clone(),
+            slice_kind.clone(),
+            slice_artifact_digest(slice_name, slice_slug, slice_kind, slice_description),
         );
         let quint = module.as_ref();
 
         assert!(quint.contains("module CaptureTicket"));
+        assert!(
+            quint.contains(
+                "// EMC-DIGEST: slice:name=Capture ticket;slug=capture-ticket;kind=state_view;description=Actor enters repair ticket details."
+            )
+        );
         assert!(quint.contains("val sliceIdentityStable = sliceName == \"Capture ticket\""));
         assert!(quint.contains("var modelState: int"));
         assert!(quint.contains("action init = modelState' = 0"));

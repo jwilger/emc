@@ -35,10 +35,12 @@ pub fn emit_slice_module(
     slice_description: ModelDescription,
     slice_slug: SliceSlug,
     slice_kind: SliceKindName,
+    digest: ArtifactDigest,
 ) -> FileContents {
     file_contents(format!(
-        "module {module_name} {{\n  // EMC generated Quint business slice model.\n  val sliceName = {slice_name_json}\n  val sliceSlug = {slice_slug_json}\n  val sliceKind = {slice_kind_json}\n  val sliceDescription = {slice_description_json}\n  val sliceIdentityStable = sliceName == {slice_name_json}\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}}\n",
+        "module {module_name} {{\n  // EMC-DIGEST: {digest}\n  // EMC generated Quint business slice model.\n  val sliceName = {slice_name_json}\n  val sliceSlug = {slice_slug_json}\n  val sliceKind = {slice_kind_json}\n  val sliceDescription = {slice_description_json}\n  val sliceIdentityStable = sliceName == {slice_name_json}\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}}\n",
         module_name = module_name.as_ref(),
+        digest = digest.as_ref(),
         slice_name_json = quoted(slice_name.as_ref()),
         slice_slug_json = quoted(slice_slug.as_ref()),
         slice_kind_json = quoted(slice_kind.as_ref()),
