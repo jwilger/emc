@@ -406,6 +406,87 @@ mod tests {
     }
 
     #[test]
+    fn add_slice_rejects_workflow_document_description_drift_without_rewriting_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let workflow_before = read_to_string(&workflow_path)?;
+        let lean_before = read_to_string(&lean_path)?;
+        let quint_before = read_to_string(&quint_path)?;
+        let drifted_workflow = workflow_before.replace(
+            "\"description\": \"Actor opens a repair ticket.\"",
+            "\"description\": \"Altered workflow description.\"",
+        );
+        write(&workflow_path, &drifted_workflow)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor enters repair ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow document description 'Altered workflow description.' does not match index description 'Actor opens a repair ticket.'",
+            ));
+
+        assert_eq!(
+            drifted_workflow,
+            read_to_string(workflow_path)?,
+            "description drift rejection must leave the drifted workflow document unchanged"
+        );
+        assert_eq!(
+            lean_before,
+            read_to_string(lean_path)?,
+            "description drift rejection must leave Lean workflow data unchanged"
+        );
+        assert_eq!(
+            quint_before,
+            read_to_string(quint_path)?,
+            "description drift rejection must leave Quint workflow data unchanged"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn add_slice_preserves_existing_canonical_workflow_transitions() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 

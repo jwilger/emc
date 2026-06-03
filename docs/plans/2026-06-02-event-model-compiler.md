@@ -126,6 +126,7 @@
 - 2026-06-03: `emc connect workflow` now rejects transitions to unknown in-workflow slice targets before planning writes, preventing mutation commands from generating browser, Lean4, and Quint artifacts that validation would later reject as unreachable or unresolved.
 - 2026-06-03: `emc add slice` now rejects workflow document name drift against the indexed workflow identity before planning writes, preventing a corrupted browser workflow document from steering new slice mutations into mismatched Lean4/Quint workflow modules.
 - 2026-06-03: `emc connect workflow` now rejects workflow document name drift against the indexed workflow identity before planning writes, preventing a corrupted browser workflow document from steering transition mutations into mismatched Lean4/Quint workflow modules.
+- 2026-06-03: `emc add slice` now rejects workflow document description drift against the indexed workflow description before planning writes, preventing a corrupted browser workflow document from changing formal workflow digests through an unrelated slice mutation.
 
 ### Task 1: Guardrails and Project Skeleton
 
