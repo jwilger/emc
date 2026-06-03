@@ -4,7 +4,9 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 use serde_json::Value;
 
 use crate::core::effect::FileContents;
-use crate::core::types::{BoardLaneId, BrowserEventElementName};
+use crate::core::types::{
+    BoardLaneId, BrowserErrorRecoveryDetail, BrowserEventElementName, CommandErrorName, ViewName,
+};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BrowserDataDocument {
@@ -60,6 +62,19 @@ impl BrowserDataDocument {
             .map(event_element_name)
             .collect()
     }
+
+    pub fn error_recovery_details(
+        &self,
+    ) -> Result<Vec<BrowserErrorRecoveryDetail>, BrowserDataDocumentError> {
+        self.value
+            .get("views")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .map(view_error_recovery_details)
+            .collect::<Result<Vec<_>, _>>()
+            .map(|details| details.into_iter().flatten().collect())
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -92,4 +107,46 @@ fn event_element_name(raw: &str) -> Result<BrowserEventElementName, BrowserDataD
     BrowserEventElementName::try_new(raw.to_owned()).map_err(|error| {
         BrowserDataDocumentError::new(format!("invalid event element name: {error}"))
     })
+}
+
+fn view_error_recovery_details(
+    view: &Value,
+) -> Result<Vec<BrowserErrorRecoveryDetail>, BrowserDataDocumentError> {
+    let source_screen = view.get("name").and_then(Value::as_str);
+
+    view.get("controls")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .flat_map(|control| {
+            control
+                .get("error_handling")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .filter_map(|handling| {
+            Some((
+                source_screen?,
+                handling.get("error").and_then(Value::as_str)?,
+            ))
+        })
+        .map(|(source_screen, error_name)| {
+            Ok(BrowserErrorRecoveryDetail::new(
+                command_error_name(error_name)?,
+                view_name(source_screen)?,
+            ))
+        })
+        .collect()
+}
+
+fn command_error_name(raw: &str) -> Result<CommandErrorName, BrowserDataDocumentError> {
+    CommandErrorName::try_new(raw.to_owned()).map_err(|error| {
+        BrowserDataDocumentError::new(format!("invalid command error name: {error}"))
+    })
+}
+
+fn view_name(raw: &str) -> Result<ViewName, BrowserDataDocumentError> {
+    ViewName::try_new(raw.to_owned())
+        .map_err(|error| BrowserDataDocumentError::new(format!("invalid view name: {error}")))
 }
