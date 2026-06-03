@@ -82,6 +82,7 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
         Effect::EnsureDirectory(path) => fs::create_dir_all(Path::new(path.as_ref()))
             .map(|()| None)
             .map_err(ShellError::io),
+        Effect::Fail(message) => Err(ShellError::message(message.as_ref().to_owned())),
         Effect::RequireDigest(path, digest, message) => {
             let contents = fs::read_to_string(Path::new(path.as_ref())).map_err(ShellError::io)?;
             if contents.contains(digest.as_ref()) {

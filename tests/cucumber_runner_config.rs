@@ -54,4 +54,17 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn gherkin_runner_run_fails_undefined_pending_or_skipped_steps() -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(["gherkin", "run", "--suite", "browser"])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "undefined, pending, or skipped Gherkin steps are failures for browser",
+            ));
+
+        Ok(())
+    }
 }
