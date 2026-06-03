@@ -118,6 +118,7 @@
 - 2026-06-03: Generated Lean4 and Quint business slice modules now carry deterministic slice digest markers derived from semantic slice name, slug, kind, and description. `emc check` rejects stale or duplicate slice digest metadata in formal slice artifacts.
 - 2026-06-03: `emc check` now rejects stale Lean4 `sliceIdentityIsStable` theorem declarations and Quint `sliceIdentityStable` invariant declarations in generated business slice modules, so slice formal obligations must match the semantic slice identity instead of only carrying matching fields and digests.
 - 2026-06-03: `emc check` now rejects unmodeled Lean4 and Quint business slice modules under `model/lean/slices` and `model/quint/slices`, deriving the allowed formal slice artifact set from semantic workflow slice details instead of accepting extra orphan formal modules.
+- 2026-06-03: `emc add slice` now rejects slice names that would collide on the same generated Lean4/Quint module name, preventing a mutation from overwriting an existing business slice formal artifact and leaving `emc check` to discover the invalid state afterward.
 
 ### Task 1: Guardrails and Project Skeleton
 

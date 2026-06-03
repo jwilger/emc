@@ -185,6 +185,65 @@ mod tests {
     }
 
     #[test]
+    fn add_slice_rejects_duplicate_formal_slice_module_names() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(temp_dir.path(), "capture-ticket", "Capture ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket-copy",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Alternate capture flow.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "slice module CaptureTicket already exists",
+            ));
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        assert!(
+            slice_lean.contains("def sliceSlug := \"capture-ticket\""),
+            "rejected duplicate module names must not overwrite the existing formal slice artifact"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn add_slice_preserves_existing_canonical_workflow_transitions() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 

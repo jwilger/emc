@@ -88,6 +88,17 @@ pub fn add_slice(
 ) -> Result<EffectPlan, SliceMutationError> {
     let workflow_document = WorkflowDocument::parse(&workflow_document)
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let slice_module_name = module_name(new_slice.name.as_ref());
+    workflow_document
+        .slice_details()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?
+        .into_iter()
+        .find(|slice| module_name(slice.name().as_ref()) == slice_module_name)
+        .map_or(Ok(()), |_slice| {
+            Err(SliceMutationError::new(format!(
+                "slice module {slice_module_name} already exists"
+            )))
+        })?;
     let relationship = workflow_document
         .next_slice_relationship()
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
@@ -123,7 +134,6 @@ pub fn add_slice(
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
     let slice_json = slice_json(&new_slice);
     let slice_name = new_slice.name.as_ref();
-    let slice_module_name = module_name(slice_name);
     let slice_kind = slice_kind_name(new_slice.kind);
     let slice_digest = slice_artifact_digest(
         new_slice.name.clone(),
