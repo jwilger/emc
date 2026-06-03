@@ -53,6 +53,10 @@ pub fn list_slices() -> EffectPlan {
     EffectPlan::new(vec![Effect::ListSlicesFromIndex])
 }
 
+pub fn list_transitions() -> EffectPlan {
+    EffectPlan::new(vec![Effect::ListTransitionsFromIndex])
+}
+
 pub fn review_gate_for_workflow(slug: WorkflowSlug) -> EffectPlan {
     review_gate(slug)
 }

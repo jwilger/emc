@@ -13,7 +13,8 @@ use crate::core::effect::{
 };
 use crate::core::json_object_document::JsonObjectDocument;
 use crate::core::layout::{
-    ModeledWorkflowLayout, check_project, list_slices, list_workflows, show_document, show_workflow,
+    ModeledWorkflowLayout, check_project, list_slices, list_transitions, list_workflows,
+    show_document, show_workflow,
 };
 use crate::core::project::ProjectName;
 use crate::core::review_record::{ReviewCategoryFinding, ReviewRecordDocument};
@@ -166,6 +167,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let modeled_workflows = read_browser_index_workflows()?;
             let modeled_slices = read_modeled_workflow_slice_details(&modeled_workflows)?;
             interpret_collect_reports(list_slices(modeled_slices))
+        }
+        Effect::ListTransitionsFromIndex => {
+            let modeled_workflows = read_browser_index_workflows()?;
+            let modeled_transitions = read_modeled_workflow_transitions(&modeled_workflows)?;
+            interpret_collect_reports(list_transitions(modeled_transitions))
         }
         Effect::RequireCanonicalDeclaration(path, prefix, marker, message) => {
             let contents = fs::read_to_string(Path::new(path.as_ref())).map_err(ShellError::io)?;
@@ -478,6 +484,25 @@ fn read_modeled_workflow_slice_details(
         );
     }
     Ok(slice_details)
+}
+
+fn read_modeled_workflow_transitions(
+    modeled_workflows: &[ModeledWorkflowLayout],
+) -> Result<Vec<WorkflowTransitionRecord>, ShellError> {
+    let mut transitions = Vec::new();
+    for workflow in modeled_workflows {
+        let workflow_document =
+            read_workflow_document(workflow.slug().as_ref()).and_then(|contents| {
+                WorkflowDocument::parse(&contents)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+        transitions.extend(
+            workflow_document
+                .transitions()
+                .map_err(|error| ShellError::message(error.to_string()))?,
+        );
+    }
+    Ok(transitions)
 }
 
 fn read_referenced_slice_document(slug: &SliceSlug) -> Result<FileContents, ShellError> {
