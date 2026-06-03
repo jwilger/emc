@@ -73,6 +73,7 @@
 - 2026-06-02: `emc check` now treats formal artifact digest markers as canonical declarations, rejecting generated Lean4 or Quint artifacts that retain the expected digest alongside stale duplicate digest metadata.
 - 2026-06-02: `emc check` now rejects Lean4 namespace drift and Quint module declaration drift for generated workflow artifacts, so formal artifact ownership must match the modeled workflow module as well as the filename.
 - 2026-06-02: `emc check` now rejects Lean4 theorem drift and Quint invariant drift for generated workflow identity obligations, preventing trivially true or stale formal identity assertions from passing artifact synchronization.
+- 2026-06-02: `emc check` now rejects stale Lean4 closing module declarations, so both the opening namespace and closing `end` ownership must match the modeled workflow module.
 
 ### Task 1: Guardrails and Project Skeleton
 
