@@ -15,18 +15,12 @@ use crate::io::dto::{
 use crate::shell::{ShellError, interpret_collect_reports};
 
 pub fn serve_stdio() -> Result<(), ShellError> {
-    let mut input = String::new();
-    io::stdin()
-        .read_to_string(&mut input)
-        .map_err(|error| ShellError::message(error.to_string()))?;
-
-    input
-        .lines()
-        .map(handle_input_line)
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .try_for_each(write_response)
+    let stdin = io::stdin();
+    stdin.lock().lines().try_for_each(|line| {
+        line.map_err(|error| ShellError::message(error.to_string()))
+            .and_then(|line| handle_input_line(&line))
+            .and_then(|response| response.map_or(Ok(()), write_response))
+    })
 }
 
 pub fn serve_http(
@@ -844,8 +838,12 @@ fn error_response(id: &Value, code: i64, message: impl Into<String>) -> Value {
 }
 
 fn write_response(response: Value) -> Result<(), ShellError> {
-    let line =
-        serde_json::to_string(&response).map_err(|error| ShellError::message(error.to_string()))?;
-    println!("{line}");
+    let stdout = io::stdout();
+    let mut lock = stdout.lock();
+    serde_json::to_writer(&mut lock, &response)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    writeln!(lock).map_err(|error| ShellError::message(error.to_string()))?;
+    lock.flush()
+        .map_err(|error| ShellError::message(error.to_string()))?;
     Ok(())
 }
