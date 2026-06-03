@@ -1,27 +1,21 @@
 use std::env;
-use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use emc::core::connection::{WorkflowConnection, connect_workflow};
-use emc::core::effect::FileContents;
-use emc::core::effect::ProjectPath;
+use emc::core::connection::WorkflowConnection;
+use emc::core::effect::{Effect, EffectPlan, ProjectPath};
 use emc::core::gherkin::{
     GherkinSuite, list_gherkin_features, run_all_gherkin_suites, run_gherkin_suite,
 };
-use emc::core::layout::{check_project, list_workflows, show_workflow};
 use emc::core::project::{ProjectName, init_project};
 use emc::core::review_gate::review_gate;
-use emc::core::site::generate_site;
-use emc::core::slice::{NewSlice, add_slice};
+use emc::core::slice::NewSlice;
 use emc::core::types::{ModelDescription, WorkflowSlug};
-use emc::core::verify::verify_project;
-use emc::core::workflow::{NewWorkflow, add_workflow, update_workflow_description};
+use emc::core::workflow::NewWorkflow;
 use emc::event_model_validation::validate_target;
 use emc::io::dto::{
-    parse_browser_index_workflows, parse_connection_kind, parse_gherkin_suite,
-    parse_model_description, parse_model_name, parse_project_manifest_name, parse_slice_kind,
-    parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
+    parse_connection_kind, parse_gherkin_suite, parse_model_description, parse_model_name,
+    parse_slice_kind, parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
 };
 use emc::mcp::{serve_http, serve_stdio};
 use emc::shell::{ShellError, interpret};
@@ -91,57 +85,23 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<(), ShellError> {
     match cli.command {
         Command::AddSlice { slice } => {
-            let workflow_document = fs::read_to_string(format!(
-                "model/browser/data/workflows/{}.eventmodel.json",
-                slice.workflow_slug().as_ref()
-            ))
-            .map_err(|error| ShellError::message(error.to_string()))
-            .and_then(|contents| {
-                FileContents::try_new(contents)
-                    .map_err(|error| ShellError::message(error.to_string()))
-            })?;
-            let plan = add_slice(workflow_document, slice)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret(plan)
+            interpret(EffectPlan::new(vec![Effect::AddSliceFromWorkflow(slice)]))
         }
         Command::AddWorkflow { workflow } => {
-            let index = fs::read_to_string("model/browser/data/index.json")
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let existing_workflows = parse_browser_index_workflows(&index)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret(add_workflow(existing_workflows, workflow))
+            interpret(EffectPlan::new(vec![Effect::AddWorkflowFromIndex(
+                workflow,
+            )]))
         }
-        Command::Check => {
-            let manifest = fs::read_to_string("emc.toml")
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_name =
-                parse_project_manifest_name(&manifest).map_err(ShellError::project_name)?;
-            let index = fs::read_to_string("model/browser/data/index.json")
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let modeled_workflows = parse_browser_index_workflows(&index)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret(check_project(project_name, modeled_workflows))
-        }
+        Command::Check => interpret(EffectPlan::new(vec![Effect::CheckCurrentProject])),
         Command::ConnectWorkflow { connection } => {
-            let workflow_document = fs::read_to_string(format!(
-                "model/browser/data/workflows/{}.eventmodel.json",
-                connection.workflow_slug().as_ref()
-            ))
-            .map_err(|error| ShellError::message(error.to_string()))
-            .and_then(|contents| {
-                FileContents::try_new(contents)
-                    .map_err(|error| ShellError::message(error.to_string()))
-            })?;
-            let plan = connect_workflow(workflow_document, connection)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret(plan)
+            interpret(EffectPlan::new(vec![Effect::ConnectWorkflowFromWorkflow(
+                connection,
+            )]))
         }
         Command::GenerateSite { output } => {
-            let manifest = fs::read_to_string("emc.toml")
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_name =
-                parse_project_manifest_name(&manifest).map_err(ShellError::project_name)?;
-            interpret(generate_site(project_name, output))
+            interpret(EffectPlan::new(vec![Effect::GenerateSiteFromManifest(
+                output,
+            )]))
         }
         Command::GherkinList { suite } => interpret(list_gherkin_features(suite)),
         Command::GherkinRunAll => interpret(run_all_gherkin_suites()),
@@ -150,13 +110,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
             let project_name = ProjectName::try_new(name).map_err(ShellError::project_name)?;
             interpret(init_project(project_name))
         }
-        Command::ListWorkflows => {
-            let index = fs::read_to_string("model/browser/data/index.json")
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let modeled_workflows = parse_browser_index_workflows(&index)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret(list_workflows(modeled_workflows))
-        }
+        Command::ListWorkflows => interpret(EffectPlan::new(vec![Effect::ListWorkflowsFromIndex])),
         Command::McpHttp {
             host,
             port,
@@ -166,49 +120,17 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::McpStdio => serve_stdio(),
         Command::ReviewGate { slug } => interpret(review_gate(slug)),
         Command::ShowWorkflow { slug } => {
-            let workflow_path = format!(
-                "model/browser/data/workflows/{}.eventmodel.json",
-                slug.as_ref()
-            );
-            let workflow_document = fs::read_to_string(workflow_path)
-                .map_err(|error| ShellError::message(error.to_string()))
-                .and_then(|contents| {
-                    FileContents::try_new(contents)
-                        .map_err(|error| ShellError::message(error.to_string()))
-                })?;
-            interpret(show_workflow(workflow_document))
+            interpret(EffectPlan::new(vec![Effect::ShowWorkflowFromWorkflow(
+                slug,
+            )]))
         }
         Command::UpdateWorkflowDescription { slug, description } => {
-            let index = fs::read_to_string("model/browser/data/index.json")
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let existing_workflows = parse_browser_index_workflows(&index)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let workflow_document = fs::read_to_string(format!(
-                "model/browser/data/workflows/{}.eventmodel.json",
-                slug.as_ref()
-            ))
-            .map_err(|error| ShellError::message(error.to_string()))
-            .and_then(|contents| {
-                FileContents::try_new(contents)
-                    .map_err(|error| ShellError::message(error.to_string()))
-            })?;
-            let plan = update_workflow_description(
-                existing_workflows,
-                workflow_document,
-                slug,
-                description,
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret(plan)
+            interpret(EffectPlan::new(vec![
+                Effect::UpdateWorkflowDescriptionFromIndexAndWorkflow(slug, description),
+            ]))
         }
         Command::Validate { target } => validate_target(&target),
-        Command::Verify => {
-            let index = fs::read_to_string("model/browser/data/index.json")
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let modeled_workflows = parse_browser_index_workflows(&index)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret(verify_project(modeled_workflows))
-        }
+        Command::Verify => interpret(EffectPlan::new(vec![Effect::VerifyProjectFromIndex])),
     }
 }
 

@@ -1,10 +1,21 @@
 use nutype::nutype;
 
+use crate::core::connection::WorkflowConnection;
+use crate::core::slice::NewSlice;
+use crate::core::types::{ModelDescription, WorkflowSlug};
+use crate::core::workflow::NewWorkflow;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Effect {
+    AddSliceFromWorkflow(NewSlice),
+    AddWorkflowFromIndex(NewWorkflow),
+    CheckCurrentProject,
+    ConnectWorkflowFromWorkflow(WorkflowConnection),
     CopyDirectory(ProjectPath, ProjectPath),
     EnsureDirectory(ProjectPath),
     Fail(ReportLine),
+    GenerateSiteFromManifest(ProjectPath),
+    ListWorkflowsFromIndex,
     RequireCanonicalDeclaration(ProjectPath, ArtifactMarker, ArtifactMarker, ReportLine),
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
@@ -23,6 +34,9 @@ pub enum Effect {
     RequireWorkflowSlices(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RequireWorkflowTransitions(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RunProcess(ProcessInvocation),
+    ShowWorkflowFromWorkflow(WorkflowSlug),
+    UpdateWorkflowDescriptionFromIndexAndWorkflow(WorkflowSlug, ModelDescription),
+    VerifyProjectFromIndex,
     WriteFile(ProjectPath, FileContents),
     WriteFileIfMissing(ProjectPath, FileContents),
     Report(ReportLine),

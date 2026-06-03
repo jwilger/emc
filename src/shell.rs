@@ -6,7 +6,15 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::core::effect::{Effect, EffectPlan, ProcessInvocation, ProjectPath};
+use crate::core::connection::connect_workflow;
+use crate::core::effect::{Effect, EffectPlan, FileContents, ProcessInvocation, ProjectPath};
+use crate::core::layout::{ModeledWorkflowLayout, check_project, list_workflows, show_workflow};
+use crate::core::project::ProjectName;
+use crate::core::site::generate_site;
+use crate::core::slice::add_slice;
+use crate::core::verify::verify_project;
+use crate::core::workflow::{add_workflow, update_workflow_description};
+use crate::io::dto::{parse_browser_index_workflows, parse_project_manifest_name};
 use serde_json::Value;
 
 const REQUIRED_REVIEW_CATEGORIES: &[&str] = &[
@@ -68,22 +76,49 @@ pub fn interpret_collect_reports(plan: EffectPlan) -> Result<Vec<String>, ShellE
     plan.effects()
         .iter()
         .try_fold(Vec::new(), |mut reports, effect| {
-            if let Some(report) = interpret_effect(effect)? {
-                reports.push(report);
-            }
+            reports.extend(interpret_effect(effect)?);
             Ok(reports)
         })
 }
 
-fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
+fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
     match effect {
+        Effect::AddSliceFromWorkflow(slice) => {
+            let workflow_document = read_workflow_document(slice.workflow_slug().as_ref())?;
+            let plan = add_slice(workflow_document, slice.clone())
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret_collect_reports(plan)
+        }
+        Effect::AddWorkflowFromIndex(workflow) => {
+            let existing_workflows = read_browser_index_workflows()?;
+            interpret_collect_reports(add_workflow(existing_workflows, workflow.clone()))
+        }
+        Effect::CheckCurrentProject => {
+            let project_name = read_project_manifest_name()?;
+            let modeled_workflows = read_browser_index_workflows()?;
+            interpret_collect_reports(check_project(project_name, modeled_workflows))
+        }
+        Effect::ConnectWorkflowFromWorkflow(connection) => {
+            let workflow_document = read_workflow_document(connection.workflow_slug().as_ref())?;
+            let plan = connect_workflow(workflow_document, connection.clone())
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret_collect_reports(plan)
+        }
         Effect::CopyDirectory(source, target) => {
-            copy_directory(source.as_ref(), target.as_ref()).map(|()| None)
+            copy_directory(source.as_ref(), target.as_ref()).map(|()| Vec::new())
         }
         Effect::EnsureDirectory(path) => fs::create_dir_all(Path::new(path.as_ref()))
-            .map(|()| None)
+            .map(|()| Vec::new())
             .map_err(ShellError::io),
         Effect::Fail(message) => Err(ShellError::message(message.as_ref().to_owned())),
+        Effect::GenerateSiteFromManifest(output) => {
+            let project_name = read_project_manifest_name()?;
+            interpret_collect_reports(generate_site(project_name, output.clone()))
+        }
+        Effect::ListWorkflowsFromIndex => {
+            let modeled_workflows = read_browser_index_workflows()?;
+            interpret_collect_reports(list_workflows(modeled_workflows))
+        }
         Effect::RequireCanonicalDeclaration(path, prefix, marker, message) => {
             let contents = fs::read_to_string(Path::new(path.as_ref())).map_err(ShellError::io)?;
             if artifact_contains_one_canonical_declaration(
@@ -91,7 +126,7 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 prefix.as_ref(),
                 marker.as_ref(),
             ) {
-                Ok(None)
+                Ok(Vec::new())
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
@@ -99,14 +134,14 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
         Effect::RequireDigest(path, digest, message) => {
             let contents = fs::read_to_string(Path::new(path.as_ref())).map_err(ShellError::io)?;
             if contents.contains(digest.as_ref()) {
-                Ok(None)
+                Ok(Vec::new())
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
         }
         Effect::RequireFile(path) => {
             if Path::new(path.as_ref()).is_file() {
-                Ok(None)
+                Ok(Vec::new())
             } else {
                 Err(ShellError::message(format!(
                     "missing required project artifact {}",
@@ -120,10 +155,10 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 workflows_path.as_ref(),
                 message.as_ref(),
             )
-            .map(|()| None)
+            .map(|()| Vec::new())
         }
         Effect::RequireJsonObjectKeysUnique(path, message) => {
-            require_json_object_keys_unique(path.as_ref(), message.as_ref()).map(|()| None)
+            require_json_object_keys_unique(path.as_ref(), message.as_ref()).map(|()| Vec::new())
         }
         Effect::RequireOnlyModeledArtifacts(path, extension, allowed_paths, message) => {
             require_only_modeled_artifacts(
@@ -132,7 +167,7 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 allowed_paths,
                 message.as_ref(),
             )
-            .map(|()| None)
+            .map(|()| Vec::new())
         }
         Effect::RequireReferencedSliceFiles(workflows_path, slices_path, message) => {
             require_referenced_slice_files(
@@ -140,12 +175,12 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 slices_path.as_ref(),
                 message.as_ref(),
             )
-            .map(|()| None)
+            .map(|()| Vec::new())
         }
         Effect::RequireReviewRecord(path, workflow_path, message) => {
             if Path::new(path.as_ref()).is_file() {
                 require_clean_review_record(path.as_ref(), workflow_path.as_ref(), message.as_ref())
-                    .map(|()| None)
+                    .map(|()| Vec::new())
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
@@ -156,7 +191,7 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
             let slice_files =
                 workflow_slice_file_paths(workflow_path.as_ref(), &workflow_contents)?;
             if slice_files.iter().all(|slice_file| slice_file.is_file()) {
-                Ok(None)
+                Ok(Vec::new())
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
@@ -177,7 +212,7 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 marker_prefix.as_ref(),
                 &marker,
             ) {
-                Ok(None)
+                Ok(Vec::new())
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
@@ -193,7 +228,7 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 marker_prefix.as_ref(),
                 &marker,
             ) {
-                Ok(None)
+                Ok(Vec::new())
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
@@ -214,25 +249,72 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 marker_prefix.as_ref(),
                 &marker,
             ) {
-                Ok(None)
+                Ok(Vec::new())
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
         }
         Effect::RunProcess(invocation) => run_process(invocation),
+        Effect::ShowWorkflowFromWorkflow(slug) => {
+            let workflow_document = read_workflow_document(slug.as_ref())?;
+            interpret_collect_reports(show_workflow(workflow_document))
+        }
+        Effect::UpdateWorkflowDescriptionFromIndexAndWorkflow(slug, description) => {
+            let existing_workflows = read_browser_index_workflows()?;
+            let workflow_document = read_workflow_document(slug.as_ref())?;
+            let plan = update_workflow_description(
+                existing_workflows,
+                workflow_document,
+                slug.clone(),
+                description.clone(),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret_collect_reports(plan)
+        }
+        Effect::VerifyProjectFromIndex => {
+            let modeled_workflows = read_browser_index_workflows()?;
+            interpret_collect_reports(verify_project(modeled_workflows))
+        }
         Effect::WriteFile(path, contents) => {
-            write_file(path.as_ref(), contents.as_ref()).map(|()| None)
+            write_file(path.as_ref(), contents.as_ref()).map(|()| Vec::new())
         }
         Effect::WriteFileIfMissing(path, contents) => {
             if Path::new(path.as_ref()).exists() {
-                Ok(None)
+                Ok(Vec::new())
             } else {
-                write_file(path.as_ref(), contents.as_ref()).map(|()| None)
+                write_file(path.as_ref(), contents.as_ref()).map(|()| Vec::new())
             }
         }
-        Effect::Report(line) => Ok(Some(line.as_ref().to_owned())),
-        Effect::ReportDocument(contents) => Ok(Some(contents.as_ref().to_owned())),
+        Effect::Report(line) => Ok(vec![line.as_ref().to_owned()]),
+        Effect::ReportDocument(contents) => Ok(vec![contents.as_ref().to_owned()]),
     }
+}
+
+fn read_project_manifest_name() -> Result<ProjectName, ShellError> {
+    fs::read_to_string("emc.toml")
+        .map_err(ShellError::io)
+        .and_then(|manifest| {
+            parse_project_manifest_name(&manifest).map_err(ShellError::project_name)
+        })
+}
+
+fn read_browser_index_workflows() -> Result<Vec<ModeledWorkflowLayout>, ShellError> {
+    fs::read_to_string("model/browser/data/index.json")
+        .map_err(ShellError::io)
+        .and_then(|index| {
+            parse_browser_index_workflows(&index)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+}
+
+fn read_workflow_document(slug: &str) -> Result<FileContents, ShellError> {
+    fs::read_to_string(format!(
+        "model/browser/data/workflows/{slug}.eventmodel.json"
+    ))
+    .map_err(ShellError::io)
+    .and_then(|contents| {
+        FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
+    })
 }
 
 fn require_indexed_workflow_files(
@@ -905,7 +987,7 @@ fn copy_directory_path(source: &Path, target: &Path) -> Result<(), ShellError> {
     })
 }
 
-fn run_process(invocation: &ProcessInvocation) -> Result<Option<String>, ShellError> {
+fn run_process(invocation: &ProcessInvocation) -> Result<Vec<String>, ShellError> {
     let status = Command::new(invocation.program().as_ref())
         .args(
             invocation
@@ -923,7 +1005,7 @@ fn run_process(invocation: &ProcessInvocation) -> Result<Option<String>, ShellEr
         })?;
 
     if status.success() {
-        Ok(Some(invocation.success().as_ref().to_owned()))
+        Ok(vec![invocation.success().as_ref().to_owned()])
     } else {
         Err(ShellError::message(format!(
             "verification command {} failed with {}",
