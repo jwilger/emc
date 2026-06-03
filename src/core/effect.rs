@@ -36,6 +36,7 @@ pub enum Effect {
     RequireWorkflowSliceFiles(ProjectPath, ReportLine),
     RequireWorkflowSliceDetails(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RequireWorkflowSlices(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
+    RequireWorkflowDigest(ProjectPath, ProjectPath, WorkflowSlug, ReportLine),
     RequireWorkflowTransitions(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RunProcess(ProcessInvocation),
     ShowWorkflowFromWorkflow(WorkflowSlug),

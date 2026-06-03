@@ -7,6 +7,7 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use crate::core::connection::connect_workflow;
+use crate::core::digest::artifact_digest_from_workflow_document;
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProcessInvocation, ProjectPath};
 use crate::core::layout::{ModeledWorkflowLayout, check_project, list_workflows, show_workflow};
 use crate::core::project::ProjectName;
@@ -250,6 +251,22 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 marker_prefix.as_ref(),
                 &marker,
             ) {
+                Ok(Vec::new())
+            } else {
+                Err(ShellError::message(message.as_ref().to_owned()))
+            }
+        }
+        Effect::RequireWorkflowDigest(workflow_path, artifact_path, workflow_slug, message) => {
+            let workflow_contents =
+                fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
+            let artifact_contents =
+                fs::read_to_string(Path::new(artifact_path.as_ref())).map_err(ShellError::io)?;
+            let workflow_document = FileContents::try_new(workflow_contents)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let digest =
+                artifact_digest_from_workflow_document(workflow_slug.clone(), workflow_document)
+                    .map_err(|error| ShellError::message(error.to_string()))?;
+            if artifact_contains_one_digest_marker(&artifact_contents, digest.as_ref()) {
                 Ok(Vec::new())
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))

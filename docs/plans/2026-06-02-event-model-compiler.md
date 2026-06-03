@@ -86,6 +86,7 @@
 - 2026-06-02: `nix flake check` now builds the Docker-compatible EMC container image as a named check, so the packaged runtime closure is exercised alongside the package and command smoke gate.
 - 2026-06-02: MCP HTTP now returns a `400 Bad Request` response for malformed JSON-RPC bodies instead of terminating the HTTP transport with a shell error.
 - 2026-06-02: Generated formal artifact digest markers now include workflow name, slug, and description, so `emc check` rejects stale Lean4 or Quint digest metadata after semantic workflow identity fields change.
+- 2026-06-02: Generated formal artifact digest markers now include workflow slice details and transition labels as well as identity fields. `emc check` derives the expected digest from browser workflow JSON before comparing Lean4 and Quint artifacts, moving the digest guardrail closer to a normalized workflow graph check.
 
 ### Task 1: Guardrails and Project Skeleton
 

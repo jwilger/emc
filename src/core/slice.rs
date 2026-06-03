@@ -117,6 +117,8 @@ pub fn add_slice(
         workflow_name.clone(),
         new_slice.workflow_slug.clone(),
         workflow_description.clone(),
+        workflow_slice_details.clone(),
+        workflow_transitions.clone(),
     );
     let workflow_json = workflow_json(workflow_object, slice_files, steps)?;
     let slice_json = slice_json(&new_slice);

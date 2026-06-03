@@ -47,6 +47,10 @@ mod tests {
             "Actor reviews repair ticket details.",
         )?;
 
+        let initial_lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let initial_digest = digest_marker(&initial_lean)
+            .ok_or("generated workflow artifact is missing an initial digest")?;
+
         Command::cargo_bin("emc")?
             .args([
                 "connect",
@@ -96,6 +100,16 @@ mod tests {
                 "val workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
             ),
             "Quint artifact must represent the workflow transition"
+        );
+        assert_ne!(
+            initial_digest,
+            digest_marker(&lean).ok_or("Lean artifact is missing an updated digest")?,
+            "Lean digest must change when workflow transitions change"
+        );
+        assert_ne!(
+            initial_digest,
+            digest_marker(&quint).ok_or("Quint artifact is missing an updated digest")?,
+            "Quint digest must change when workflow transitions change"
         );
 
         Ok(())
@@ -576,5 +590,14 @@ mod tests {
             .assert()
             .success();
         Ok(())
+    }
+
+    fn digest_marker(contents: &str) -> Option<String> {
+        contents.lines().find_map(|line| {
+            line.trim()
+                .strip_prefix("-- EMC-DIGEST: ")
+                .or_else(|| line.trim().strip_prefix("// EMC-DIGEST: "))
+                .map(str::to_owned)
+        })
     }
 }

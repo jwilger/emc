@@ -141,6 +141,8 @@ pub fn connect_workflow(
         workflow_name.clone(),
         connection.workflow_slug.clone(),
         workflow_description.clone(),
+        workflow_slice_details.clone(),
+        workflow_transitions.clone(),
     );
     let workflow_json = workflow_json(workflow_object, steps)?;
     let source = connection.source.as_ref();
