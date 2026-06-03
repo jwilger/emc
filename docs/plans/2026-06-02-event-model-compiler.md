@@ -54,6 +54,10 @@
 
 ## Implementation Sequence
 
+## Progress Notes
+
+- 2026-06-02: `emc check` now rejects workflow drift between browser JSON and generated Lean4/Quint artifacts for workflow identity fields, composed slice lists, and navigation transition lists. This is deterministic artifact synchronization coverage, not yet the full normalized semantic graph drift check described above.
+
 ### Task 1: Guardrails and Project Skeleton
 
 **Files:**
