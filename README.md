@@ -103,6 +103,9 @@ Create a new EMC project:
 emc init --name "Repair Desk"
 ```
 
+`emc init` is idempotent. Re-running it leaves existing files in place and
+reports that the project layout is present.
+
 Create a workflow:
 
 ```sh
@@ -270,7 +273,9 @@ emc list workflows
 emc list slices
 emc list transitions
 emc show workflow <workflow-slug>
+emc show workflow --slug <workflow-slug>
 emc show slice <slice-slug>
+emc show slice --slug <slice-slug>
 emc add workflow --slug <slug> --name <name> --description <description>
 emc update workflow --slug <slug> --description <description>
 emc update workflow --slug <slug> --name <name>
