@@ -1450,6 +1450,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_read_model_fields_without_source_provenance() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        create_dir_all(&workflows)?;
+        write(
+            workflows.join("missing-read-model-field-source.eventmodel.json"),
+            "{\"name\":\"Repair queue\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[{\"name\":\"repair_queue\",\"fields\":[{\"name\":\"customer_name\"}]}],\"slices\":[]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "read model 'repair_queue' field 'customer_name' is missing source",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_derived_read_model_fields_without_derivation_provenance()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
