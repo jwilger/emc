@@ -208,7 +208,7 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
     );
     let lean_slice_detail_invariant_prefix = artifact_marker("theorem workflowSlicesHaveDetails :");
     let lean_transition_invariant_marker = artifact_marker(
-        "theorem workflowTransitionsAreStructured : workflowTransitions.length = workflowTransitions.length := rfl",
+        "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.1.isEmpty == false && transition.2.1.isEmpty == false && transition.2.2.1.isEmpty == false && transition.2.2.2.isEmpty == false) = true := rfl",
     );
     let lean_transition_invariant_prefix =
         artifact_marker("theorem workflowTransitionsAreStructured :");
@@ -228,7 +228,7 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
         artifact_marker("val workflowSliceDetailsComplete = workflowSlicesHaveDetails");
     let quint_slice_detail_complete_prefix = artifact_marker("val workflowSliceDetailsComplete =");
     let quint_transition_invariant_marker = artifact_marker(
-        "val workflowTransitionsStructured = length(workflowTransitions) == length(workflowTransitions)",
+        "val workflowTransitionsStructured = all { transition <- workflowTransitions } transition.source != \"\" and transition.target != \"\" and transition.kind != \"\" and transition.trigger != \"\"",
     );
     let quint_transition_invariant_prefix = artifact_marker("val workflowTransitionsStructured =");
     let module_name = module_name_from_model(workflow.name.clone());
