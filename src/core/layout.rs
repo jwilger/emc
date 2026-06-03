@@ -43,6 +43,15 @@ pub fn check_project(
     )
 }
 
+pub fn list_workflows(imported_workflows: Vec<ImportedWorkflowLayout>) -> EffectPlan {
+    EffectPlan::new(
+        imported_workflows
+            .into_iter()
+            .map(|workflow| Effect::Report(report_line(workflow.name.as_ref().to_owned())))
+            .collect(),
+    )
+}
+
 fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
     let workflow_name = workflow.name.as_ref().to_owned();
     let digest = artifact_digest(workflow.name.clone());
