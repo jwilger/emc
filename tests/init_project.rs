@@ -22,7 +22,10 @@ mod tests {
 
         let expected_paths = [
             "emc.toml",
+            "model/lean/lakefile.lean",
+            "model/lean/lean-toolchain",
             "model/lean/RepairDesk.lean",
+            "model/quint/quint.json",
             "model/quint/RepairDesk.qnt",
             "model/browser/data/index.json",
             "model/browser/data/workflows/.gitkeep",
@@ -34,6 +37,19 @@ mod tests {
             .iter()
             .map(|relative_path| temp_dir.path().join(relative_path))
             .for_each(|path| assert!(path.exists(), "expected {} to exist", path.display()));
+
+        assert_eq!(
+            fs::read_to_string(temp_dir.path().join("model/lean/lean-toolchain"))?,
+            "leanprover/lean4:4.29.1\n"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/lakefile.lean"))?
+                .contains("package EMCModel")
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/quint.json"))?
+                .contains("\"main\": \"RepairDesk.qnt\"")
+        );
 
         Ok(())
     }
