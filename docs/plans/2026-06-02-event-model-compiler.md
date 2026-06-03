@@ -124,6 +124,7 @@
 - 2026-06-03: `emc add workflow` now rejects duplicate semantic workflow slugs before planning writes, preventing mutation commands from replacing an existing workflow's browser and formal artifacts.
 - 2026-06-03: `emc connect workflow` now rejects duplicate semantic workflow transition labels before planning writes, so repeated mutation requests cannot append duplicate browser transitions or rewrite Lean4/Quint workflow artifacts with duplicate transition records.
 - 2026-06-03: `emc connect workflow` now rejects transitions to unknown in-workflow slice targets before planning writes, preventing mutation commands from generating browser, Lean4, and Quint artifacts that validation would later reject as unreachable or unresolved.
+- 2026-06-03: `emc add slice` now rejects workflow document name drift against the indexed workflow identity before planning writes, preventing a corrupted browser workflow document from steering new slice mutations into mismatched Lean4/Quint workflow modules.
 
 ### Task 1: Guardrails and Project Skeleton
 
