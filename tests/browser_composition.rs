@@ -199,6 +199,32 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn composed_browser_workflow_projects_review_diagnostics() -> Result<(), Box<dyn Error>> {
+        let workflow = file_contents(
+            "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\"},\n    {\"slice\": \"review\", \"name\": \"review\", \"relationship\": \"main\"}\n  ],\n  \"review_diagnostics\": [\n    {\"step\": \"review\", \"status\": \"unreachable\", \"missing_rule\": \"entry reachability\"}\n  ]\n}\n",
+        );
+
+        let composed = compose_browser_workflow(workflow, Vec::new())?;
+
+        assert_eq!(
+            composed
+                .review_overlays()
+                .iter()
+                .map(|overlay| {
+                    (
+                        overlay.step().as_ref(),
+                        overlay.status().as_ref(),
+                        overlay.missing_rule().as_ref(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            [("review", "unreachable", "entry reachability")]
+        );
+
+        Ok(())
+    }
+
     fn slice_with_canonical_lanes(name: &str) -> String {
         format!(
             "{{\n  \"name\": \"{name}\",\n  \"version\": \"0.1.0\",\n  \"board\": {{\"lanes\": [\n    {{\"id\": \"ux\", \"name\": \"People, Views, and Translations\"}},\n    {{\"id\": \"actions\", \"name\": \"Commands and Projections\"}},\n    {{\"id\": \"events\", \"name\": \"Stored Facts\"}}\n  ]}},\n  \"slices\": [{{\"name\": \"{name}\", \"type\": \"state_view\", \"views\": [], \"acceptance_scenarios\": [], \"contract_scenarios\": []}}]\n}}\n"

@@ -118,3 +118,17 @@ pub struct ViewName(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
 pub struct BrowserEventElementName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ReviewStatus(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ReviewRuleName(String);
