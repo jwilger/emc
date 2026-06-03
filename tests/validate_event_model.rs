@@ -914,6 +914,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_state_change_slices_that_own_views() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("open-repair-ticket.eventmodel.json"),
+            "{\"name\":\"Repair queue\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"repairs\"}],\"events\":[{\"name\":\"RepairTicketOpened\",\"stream\":\"repairs\",\"attributes\":[]}],\"commands\":[{\"name\":\"OpenRepairTicket\",\"inputs\":[],\"produces\":[\"RepairTicketOpened\"]}],\"read_models\":[],\"views\":[{\"name\":\"repair_queue_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Open repair ticket\",\"type\":\"state_change\",\"views\":[\"repair_queue_screen\"],\"commands\":[\"OpenRepairTicket\"],\"events\":[\"RepairTicketOpened\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"open repair ticket\",\"given\":[],\"given_streams\":[{\"stream\":\"repairs\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"RepairTicketOpened\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "state_change slice 'Open repair ticket' must not own view 'repair_queue_screen'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_slice_outcome_labels() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");
