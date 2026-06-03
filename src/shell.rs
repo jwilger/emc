@@ -186,7 +186,11 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
             let artifact_contents =
                 fs::read_to_string(Path::new(artifact_path.as_ref())).map_err(ShellError::io)?;
             let marker = workflow_transition_marker(marker_prefix.as_ref(), &workflow_contents)?;
-            if artifact_contents.contains(&marker) {
+            if artifact_contains_one_canonical_declaration(
+                &artifact_contents,
+                marker_prefix.as_ref(),
+                &marker,
+            ) {
                 Ok(None)
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
@@ -543,6 +547,22 @@ fn workflow_transition_marker(prefix: &str, workflow_contents: &str) -> Result<S
     let labels = workflow_transition_labels(workflow_contents)?;
     let joined_labels = labels.join(",");
     Ok(format!("{prefix} [{joined_labels}]"))
+}
+
+fn artifact_contains_one_canonical_declaration(
+    artifact_contents: &str,
+    prefix: &str,
+    marker: &str,
+) -> bool {
+    let mut declarations = artifact_contents
+        .lines()
+        .map(str::trim_start)
+        .filter(|line| line.starts_with(prefix));
+
+    matches!(
+        (declarations.next(), declarations.next()),
+        (Some(declaration), None) if declaration == marker
+    )
 }
 
 fn workflow_slice_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
