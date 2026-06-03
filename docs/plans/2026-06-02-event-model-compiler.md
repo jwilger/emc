@@ -75,6 +75,7 @@
 - 2026-06-02: `emc check` now rejects Lean4 theorem drift and Quint invariant drift for generated workflow identity obligations, preventing trivially true or stale formal identity assertions from passing artifact synchronization.
 - 2026-06-02: `emc check` now rejects stale Lean4 closing module declarations, so both the opening namespace and closing `end` ownership must match the modeled workflow module.
 - 2026-06-02: Browser index parsing now rejects duplicate workflow paths before they become semantic workflow layouts, so `emc check` cannot accept duplicated workflow entries as a synchronized model.
+- 2026-06-02: Browser index parsing now rejects duplicate workflow names before semantic conversion, preventing separate browser workflow paths from colliding on the same generated Lean4 and Quint module identity.
 
 ### Task 1: Guardrails and Project Skeleton
 
