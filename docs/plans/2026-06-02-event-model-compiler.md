@@ -68,6 +68,7 @@
 - 2026-06-02: Local mutation testing guardrails are available through explicit `just mutants-diff`, `just mutants-core`, and `just mutants-full` recipes. They are intentionally outside `just ci` so mutation testing can run as a regular manual engineering gate without slowing every local/hosted CI pass.
 - 2026-06-02: `emc connect workflow` now supports command, event, navigation, external-trigger, and workflow-exit transitions through the same CLI/MCP semantic mutation path, and generated Lean4/Quint transition labels preserve those transition kinds.
 - 2026-06-02: Generated Lean4 and Quint workflow artifacts now include a slice-detail completeness obligation tying the workflow slice list to generated slice metadata. Lean proves the length equality by reduction, and Quint exposes the same boolean as a named verification value.
+- 2026-06-02: `emc verify` now asks Quint to verify the emitted `workflowIdentityStable` and `workflowSliceDetailsComplete` invariant values explicitly through both CLI and MCP verification paths.
 
 ### Task 1: Guardrails and Project Skeleton
 
