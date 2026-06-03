@@ -666,4 +666,300 @@ mod tests {
             .success();
         Ok(())
     }
+
+    #[test]
+    fn remove_workflow_deletes_index_entry_and_owned_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_workflow(temp_dir.path(), "open-ticket", "Open ticket")?;
+        add_workflow(temp_dir.path(), "close-ticket", "Close ticket")?;
+        add_slice_to_workflow(
+            temp_dir.path(),
+            "open-ticket",
+            "capture-request",
+            "Capture request",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["remove", "workflow", "--slug", "open-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("removed workflow Open ticket"));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let index_json = read_to_string(temp_dir.path().join("model/browser/data/index.json"))?;
+        assert!(
+            !index_json.contains("open-ticket"),
+            "removed workflow must be removed from the browser index"
+        );
+        assert!(
+            index_json.contains("close-ticket"),
+            "unrelated workflow must remain indexed"
+        );
+        assert!(
+            !exists(
+                temp_dir
+                    .path()
+                    .join("model/browser/data/workflows/open-ticket.eventmodel.json")
+            )?,
+            "removed workflow browser JSON must be deleted"
+        );
+        assert!(
+            !exists(
+                temp_dir
+                    .path()
+                    .join("model/browser/data/slices/capture-request.eventmodel.json")
+            )?,
+            "owned slice browser JSON must be deleted"
+        );
+        assert!(
+            !exists(temp_dir.path().join("model/lean/OpenTicket.lean"))?,
+            "removed workflow Lean module must be deleted"
+        );
+        assert!(
+            !exists(temp_dir.path().join("model/quint/OpenTicket.qnt"))?,
+            "removed workflow Quint module must be deleted"
+        );
+        assert!(
+            !exists(
+                temp_dir
+                    .path()
+                    .join("model/lean/slices/CaptureRequest.lean")
+            )?,
+            "owned slice Lean module must be deleted"
+        );
+        assert!(
+            !exists(
+                temp_dir
+                    .path()
+                    .join("model/quint/slices/CaptureRequest.qnt")
+            )?,
+            "owned slice Quint module must be deleted"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_workflow_rejects_incoming_workflow_exit_references() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_workflow(temp_dir.path(), "triage-ticket", "Triage ticket")?;
+        add_workflow(temp_dir.path(), "close-ticket", "Close ticket")?;
+        add_slice_to_workflow(
+            temp_dir.path(),
+            "triage-ticket",
+            "assess-request",
+            "Assess request",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "triage-ticket",
+                "--from",
+                "assess-request",
+                "--to-workflow",
+                "close-ticket",
+                "--via",
+                "outcome",
+                "--name",
+                "Close accepted request",
+                "--reason",
+                "Accepted request can be closed.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["remove", "workflow", "--slug", "close-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow close-ticket is referenced by workflow triage-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        assert!(
+            exists(
+                temp_dir
+                    .path()
+                    .join("model/browser/data/workflows/close-ticket.eventmodel.json")
+            )?,
+            "rejected workflow removal must leave workflow artifacts in place"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_workflow_requires_exact_command_shape() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_workflow(temp_dir.path(), "open-ticket", "Open ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args(["remove", "model", "--slug", "open-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "usage: emc init --name <project-name>",
+            ));
+
+        assert!(
+            exists(
+                temp_dir
+                    .path()
+                    .join("model/browser/data/workflows/open-ticket.eventmodel.json")
+            )?,
+            "malformed workflow removal command must not delete workflow artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_workflow_allows_unrelated_workflow_exit_references() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_workflow(temp_dir.path(), "triage-ticket", "Triage ticket")?;
+        add_workflow(temp_dir.path(), "close-ticket", "Close ticket")?;
+        add_workflow(temp_dir.path(), "archive-ticket", "Archive ticket")?;
+        add_slice_to_workflow(
+            temp_dir.path(),
+            "triage-ticket",
+            "assess-request",
+            "Assess request",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "triage-ticket",
+                "--from",
+                "assess-request",
+                "--to-workflow",
+                "close-ticket",
+                "--via",
+                "outcome",
+                "--name",
+                "Close accepted request",
+                "--reason",
+                "Accepted request can be closed.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["remove", "workflow", "--slug", "archive-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("removed workflow Archive ticket"));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        assert!(
+            exists(
+                temp_dir
+                    .path()
+                    .join("model/browser/data/workflows/close-ticket.eventmodel.json")
+            )?,
+            "unrelated workflow exit target must remain modeled"
+        );
+
+        Ok(())
+    }
+
+    fn add_workflow(path: &Path, slug: &str, name: &str) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                slug,
+                "--name",
+                name,
+                "--description",
+                "Actor completes the workflow.",
+            ])
+            .current_dir(path)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn add_slice_to_workflow(
+        path: &Path,
+        workflow: &str,
+        slug: &str,
+        name: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                workflow,
+                "--slug",
+                slug,
+                "--name",
+                name,
+                "--type",
+                "state_change",
+                "--description",
+                "Actor captures the request.",
+            ])
+            .current_dir(path)
+            .assert()
+            .success();
+        Ok(())
+    }
 }

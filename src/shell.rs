@@ -26,7 +26,10 @@ use crate::core::types::{
     ReviewRuleName, SliceSlug, WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionRecord,
 };
 use crate::core::verify::verify_project;
-use crate::core::workflow::{add_workflow, update_workflow_description, update_workflow_name};
+use crate::core::workflow::{
+    IndexedWorkflowDocument, add_workflow, remove_workflow, update_workflow_description,
+    update_workflow_name,
+};
 use crate::core::workflow_document::WorkflowDocument;
 use crate::event_model_validation::validate_event_model_sources;
 use crate::io::dto::{
@@ -406,6 +409,13 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
         }
+        Effect::RemoveWorkflowFromIndex(slug) => {
+            let existing_workflows = read_browser_index_workflows()?;
+            let workflow_documents = read_indexed_workflow_documents(&existing_workflows)?;
+            let plan = remove_workflow(existing_workflows, workflow_documents, slug.clone())
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret_collect_reports(plan)
+        }
         Effect::ShowSliceFromSlice(slug) => {
             let slice_document = read_referenced_slice_document(slug)?;
             interpret_collect_reports(show_document(slice_document))
@@ -539,6 +549,18 @@ fn read_indexed_workflow_document_from_layouts(
 ) -> Result<FileContents, ShellError> {
     find_indexed_workflow(slug, modeled_workflows)
         .and_then(|_workflow| read_workflow_document(slug.as_ref()))
+}
+
+fn read_indexed_workflow_documents(
+    modeled_workflows: &[ModeledWorkflowLayout],
+) -> Result<Vec<IndexedWorkflowDocument>, ShellError> {
+    modeled_workflows
+        .iter()
+        .map(|workflow| {
+            read_workflow_document(workflow.slug().as_ref())
+                .map(|contents| IndexedWorkflowDocument::new(workflow.slug().clone(), contents))
+        })
+        .collect()
 }
 
 fn find_indexed_workflow<'a>(

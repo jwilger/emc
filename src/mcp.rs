@@ -568,6 +568,20 @@ fn tools_list_result() -> Result<Value, ShellError> {
             })),
         ),
         Tool::new(
+            "remove_workflow",
+            "Remove a business workflow and its owned slices, then regenerate synchronized model artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slug": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slug"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
             "connect_workflow",
             "Connect workflow steps with a transition and regenerate synchronized model artifacts.",
             schema_object(json!({
@@ -727,6 +741,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "remove_slice" => Ok(Some(tool_call_result_response(
             id,
             remove_slice_tool_text(request),
+        ))),
+        "remove_workflow" => Ok(Some(tool_call_result_response(
+            id,
+            remove_workflow_tool_text(request),
         ))),
         "connect_workflow" => Ok(Some(tool_call_result_response(
             id,
@@ -1065,6 +1083,21 @@ fn remove_slice_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_slice_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))
         })?;
     interpret_collect_reports(command::remove_slice(slug)).map(|reports| reports.join("\n"))
+}
+
+fn remove_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("remove_workflow requires arguments"))?;
+    let slug = arguments
+        .get("slug")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("remove_workflow requires slug"))
+        .and_then(|raw_slug| {
+            parse_workflow_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    interpret_collect_reports(command::remove_workflow(slug)).map(|reports| reports.join("\n"))
 }
 
 fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {

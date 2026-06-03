@@ -56,6 +56,7 @@ pub enum Effect {
     RemoveFile(ProjectPath),
     RemoveSliceFromWorkflow(SliceSlug),
     RemoveTransitionFromWorkflow(WorkflowTransitionRemoval),
+    RemoveWorkflowFromIndex(WorkflowSlug),
     ShowSliceFromSlice(SliceSlug),
     ShowWorkflowFromWorkflow(WorkflowSlug),
     UpdateSliceDescriptionFromWorkflow(SliceSlug, ModelDescription),
