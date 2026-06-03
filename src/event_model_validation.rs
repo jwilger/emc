@@ -1,11 +1,11 @@
 use std::path::{Component, Path, PathBuf};
 
-use serde_json::Value;
-
 use crate::core::effect::{FileContents, ProjectPath};
+use crate::core::types::WorkflowSliceFileReference;
 use crate::core::validation::{
     EventModelDocument, EventModelFileKind, validate_event_model, validate_event_model_corpus,
 };
+use crate::core::workflow_document::WorkflowDocument;
 use crate::io::dto::{parse_event_model_document, parse_slice_slug};
 use crate::shell::ShellError;
 
@@ -41,16 +41,12 @@ fn validate_workflow_referenced_slice_file_paths(
         return Ok(());
     }
 
-    let value = serde_json::from_str::<Value>(source.as_ref()).map_err(|error| {
-        ShellError::message(format!("invalid JSON: {} in {}", error, path.as_ref()))
-    })?;
-    let Some(slice_files) = value.get("slice_files").and_then(Value::as_array) else {
+    let Some(slice_files) = optional_workflow_slice_files(path, source)? else {
         return Ok(());
     };
     slice_files
         .iter()
-        .filter_map(Value::as_str)
-        .try_for_each(|slice_file| validate_referenced_slice_file_path(path, slice_file))
+        .try_for_each(|slice_file| validate_referenced_slice_file_path(path, slice_file.as_ref()))
 }
 
 fn validate_referenced_slice_file_path(
@@ -100,16 +96,28 @@ fn validate_workflow_referenced_slice_files(
         return Ok(());
     }
 
-    let value = serde_json::from_str::<Value>(source.as_ref())
-        .map_err(|error| ShellError::message(format!("{} in {}", error, path.as_ref())))?;
-    let Some(slice_files) = value.get("slice_files").and_then(Value::as_array) else {
+    let Some(slice_files) = optional_workflow_slice_files(path, source)? else {
         return Ok(());
     };
     slice_files
         .iter()
-        .filter_map(Value::as_str)
-        .map(|slice_file| referenced_slice_path(path, slice_file))
+        .map(|slice_file| referenced_slice_path(path, slice_file.as_ref()))
         .try_for_each(|slice_file| validate_referenced_slice_file(sources, path, slice_file?))
+}
+
+fn optional_workflow_slice_files(
+    path: &ProjectPath,
+    source: &FileContents,
+) -> Result<Option<Vec<WorkflowSliceFileReference>>, ShellError> {
+    let Some(workflow) = WorkflowDocument::parse_optional(source).map_err(|error| {
+        ShellError::message(format!("invalid JSON: {} in {}", error, path.as_ref()))
+    })?
+    else {
+        return Ok(None);
+    };
+    workflow
+        .optional_slice_files()
+        .map_err(|error| ShellError::message(format!("{} in {}", error, path.as_ref())))
 }
 
 fn validate_referenced_slice_file(
