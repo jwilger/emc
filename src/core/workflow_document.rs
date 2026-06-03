@@ -5,7 +5,8 @@ use serde_json::Value;
 
 use crate::core::effect::{FileContents, ProjectPath};
 use crate::core::types::{
-    ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSliceDetail, WorkflowSlug,
+    ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSliceDetail,
+    WorkflowSliceFileReference, WorkflowSlug, WorkflowStepRelationshipName,
     WorkflowTransitionLabel,
 };
 
@@ -28,6 +29,48 @@ impl WorkflowDocument {
     pub fn name(&self) -> Result<ModelName, WorkflowDocumentError> {
         self.string_field("name")
             .and_then(|name| model_name("workflow name", name))
+    }
+
+    pub fn description(&self) -> Result<ModelDescription, WorkflowDocumentError> {
+        self.string_field("description")
+            .and_then(|description| model_description("workflow description", description))
+    }
+
+    pub fn next_slice_relationship(
+        &self,
+    ) -> Result<WorkflowStepRelationshipName, WorkflowDocumentError> {
+        let relationship = if self.steps()?.is_empty() {
+            "entry"
+        } else {
+            "main"
+        };
+        WorkflowStepRelationshipName::try_new(relationship.to_owned()).map_err(|error| {
+            WorkflowDocumentError::new(format!("invalid workflow step relationship: {error}"))
+        })
+    }
+
+    pub fn with_added_slice(
+        &self,
+        addition: WorkflowSliceAddition,
+    ) -> Result<Self, WorkflowDocumentError> {
+        let mut next = self.object()?.clone();
+        next.insert(
+            "slice_files".to_owned(),
+            Value::Array(appended_slice_files(
+                next.get("slice_files").and_then(Value::as_array),
+                addition.slice_file.as_ref(),
+            )),
+        );
+        next.insert(
+            "steps".to_owned(),
+            Value::Array(appended_steps(
+                next.get("steps").and_then(Value::as_array),
+                addition,
+            )),
+        );
+        Ok(Self {
+            value: Value::Object(next),
+        })
     }
 
     pub fn with_description(
@@ -88,6 +131,27 @@ impl WorkflowDocument {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowSliceAddition {
+    slice_file: WorkflowSliceFileReference,
+    detail: WorkflowSliceDetail,
+    relationship: WorkflowStepRelationshipName,
+}
+
+impl WorkflowSliceAddition {
+    pub fn new(
+        slice_file: WorkflowSliceFileReference,
+        detail: WorkflowSliceDetail,
+        relationship: WorkflowStepRelationshipName,
+    ) -> Self {
+        Self {
+            slice_file,
+            detail,
+            relationship,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct WorkflowDocumentError {
     message: String,
 }
@@ -114,6 +178,46 @@ pub fn workflow_path(slug: &WorkflowSlug) -> ProjectPath {
         slug.as_ref()
     ))
     .unwrap_or_else(|error| unreachable!("EMC generated workflow path must be valid: {error}"))
+}
+
+fn appended_slice_files(existing: Option<&Vec<Value>>, new_value: &str) -> Vec<Value> {
+    let mut values = existing.cloned().unwrap_or_default();
+    if !values.iter().any(|value| value.as_str() == Some(new_value)) {
+        values.push(Value::String(new_value.to_owned()));
+    }
+    values
+}
+
+fn appended_steps(existing: Option<&Vec<Value>>, addition: WorkflowSliceAddition) -> Vec<Value> {
+    let mut values = existing.cloned().unwrap_or_default();
+    values.push(Value::Object(
+        [
+            (
+                "slice".to_owned(),
+                Value::String(addition.detail.slug().as_ref().to_owned()),
+            ),
+            (
+                "name".to_owned(),
+                Value::String(addition.detail.name().as_ref().to_owned()),
+            ),
+            (
+                "type".to_owned(),
+                Value::String(addition.detail.kind().as_ref().to_owned()),
+            ),
+            (
+                "description".to_owned(),
+                Value::String(addition.detail.description().as_ref().to_owned()),
+            ),
+            (
+                "relationship".to_owned(),
+                Value::String(addition.relationship.as_ref().to_owned()),
+            ),
+            ("transitions".to_owned(), Value::Array(Vec::new())),
+        ]
+        .into_iter()
+        .collect(),
+    ));
+    values
 }
 
 fn workflow_slice_detail(step: &Value) -> Result<WorkflowSliceDetail, WorkflowDocumentError> {

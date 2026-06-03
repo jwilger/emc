@@ -161,6 +161,30 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn slice_mutation_core_uses_semantic_json_document_types() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/core/slice.rs")?;
+        let violations = [
+            "serde_json::Value",
+            "Value::",
+            "<Value>",
+            "&Value",
+            " Value",
+        ]
+        .iter()
+        .filter(|marker| source.contains(**marker))
+        .map(|marker| format!("src/core/slice.rs manipulates raw JSON `{marker}`"))
+        .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "slice mutation logic must use semantic document types instead of raw JSON values"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",

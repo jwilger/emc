@@ -1,16 +1,15 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
-use serde_json::{Value, json};
-
 use crate::core::digest::artifact_digest;
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceKindName, SliceSlug,
-    WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionLabel,
+    WorkflowSliceDetail, WorkflowSliceFileReference, WorkflowSlug,
 };
+use crate::core::workflow_document::{WorkflowDocument, WorkflowSliceAddition, workflow_path};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum SliceKind {
@@ -82,37 +81,31 @@ pub fn add_slice(
     workflow_document: FileContents,
     new_slice: NewSlice,
 ) -> Result<EffectPlan, SliceMutationError> {
-    let workflow_value = serde_json::from_str::<Value>(workflow_document.as_ref())
-        .map_err(|error| SliceMutationError::new(format!("invalid workflow JSON: {error}")))?;
-    let workflow_object = workflow_value
-        .as_object()
-        .ok_or_else(|| SliceMutationError::new("workflow document must be a JSON object"))?;
-    let slice_file = slice_file(&new_slice);
-    let relationship = workflow_object
-        .get("steps")
-        .and_then(Value::as_array)
-        .filter(|steps| !steps.is_empty())
-        .map_or("entry", |_| "main");
-    let slice_files = appended_array_strings(
-        workflow_object.get("slice_files").and_then(Value::as_array),
-        slice_file.as_ref(),
-    );
-    let steps = appended_array_values(
-        workflow_object.get("steps").and_then(Value::as_array),
-        json!({
-            "slice": new_slice.slug.as_ref(),
-            "name": new_slice.name.as_ref(),
-            "type": new_slice.kind.as_ref(),
-            "description": new_slice.description.as_ref(),
-            "relationship": relationship,
-            "transitions": []
-        }),
-    );
-    let workflow_name = workflow_name(workflow_object)?;
-    let workflow_description = workflow_description(workflow_object)?;
+    let workflow_document = WorkflowDocument::parse(&workflow_document)
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let relationship = workflow_document
+        .next_slice_relationship()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_document = workflow_document
+        .with_added_slice(WorkflowSliceAddition::new(
+            slice_file(&new_slice),
+            workflow_slice_detail(&new_slice),
+            relationship,
+        ))
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_name = workflow_document
+        .name()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_description = workflow_document
+        .description()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
     let module_name = module_name(workflow_name.as_ref());
-    let workflow_slice_details = workflow_slice_details(&steps)?;
-    let workflow_transitions = workflow_transitions(&steps)?;
+    let workflow_slice_details = workflow_document
+        .slice_details()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_transitions = workflow_document
+        .transitions()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
     let digest = artifact_digest(
         workflow_name.clone(),
         new_slice.workflow_slug.clone(),
@@ -120,18 +113,14 @@ pub fn add_slice(
         workflow_slice_details.clone(),
         workflow_transitions.clone(),
     );
-    let workflow_json = workflow_json(workflow_object, slice_files, steps)?;
+    let workflow_json = workflow_document
+        .contents()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
     let slice_json = slice_json(&new_slice);
     let slice_name = new_slice.name.as_ref();
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(
-            project_path(format!(
-                "model/browser/data/workflows/{}.eventmodel.json",
-                new_slice.workflow_slug.as_ref()
-            )),
-            file_contents(workflow_json),
-        ),
+        Effect::WriteFile(workflow_path(&new_slice.workflow_slug), workflow_json),
         Effect::WriteFile(
             project_path(format!(
                 "model/browser/data/slices/{}.eventmodel.json",
@@ -188,19 +177,6 @@ impl Display for SliceMutationError {
 
 impl Error for SliceMutationError {}
 
-fn workflow_json(
-    workflow_object: &serde_json::Map<String, Value>,
-    slice_files: Vec<Value>,
-    steps: Vec<Value>,
-) -> Result<String, SliceMutationError> {
-    let mut next = workflow_object.clone();
-    next.insert("slice_files".to_owned(), Value::Array(slice_files));
-    next.insert("steps".to_owned(), Value::Array(steps));
-    serde_json::to_string_pretty(&Value::Object(next))
-        .map(|json| format!("{json}\n"))
-        .map_err(|error| SliceMutationError::new(format!("invalid workflow JSON: {error}")))
-}
-
 fn slice_json(new_slice: &NewSlice) -> String {
     format!(
         "{{\n  \"name\": {},\n  \"version\": \"0.1.0\",\n  \"description\": {},\n  \"type\": {},\n  \"board\": {{}},\n  \"streams\": [],\n  \"events\": [],\n  \"commands\": [],\n  \"read_models\": [],\n  \"views\": [],\n  \"slices\": [\n    {{\n      \"name\": {},\n      \"type\": {},\n      \"events\": [],\n      \"views\": [],\n      \"acceptance_scenarios\": [],\n      \"contract_scenarios\": []\n    }}\n  ]\n}}\n",
@@ -212,163 +188,28 @@ fn slice_json(new_slice: &NewSlice) -> String {
     )
 }
 
-fn appended_array_strings(existing: Option<&Vec<Value>>, new_value: &str) -> Vec<Value> {
-    let mut values = existing.cloned().unwrap_or_default();
-    if !values.iter().any(|value| value.as_str() == Some(new_value)) {
-        values.push(Value::String(new_value.to_owned()));
-    }
-    values
-}
-
-fn appended_array_values(existing: Option<&Vec<Value>>, new_value: Value) -> Vec<Value> {
-    let mut values = existing.cloned().unwrap_or_default();
-    values.push(new_value);
-    values
-}
-
-fn slice_file(new_slice: &NewSlice) -> String {
-    format!("../slices/{}.eventmodel.json", new_slice.slug.as_ref())
-}
-
-fn workflow_name(
-    workflow_object: &serde_json::Map<String, Value>,
-) -> Result<ModelName, SliceMutationError> {
-    workflow_object
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| SliceMutationError::new("workflow document is missing name"))
-        .and_then(|name| {
-            ModelName::try_new(name.to_owned())
-                .map_err(|error| SliceMutationError::new(format!("invalid workflow name: {error}")))
-        })
-}
-
-fn workflow_description(
-    workflow_object: &serde_json::Map<String, Value>,
-) -> Result<ModelDescription, SliceMutationError> {
-    workflow_object
-        .get("description")
-        .and_then(Value::as_str)
-        .ok_or_else(|| SliceMutationError::new("workflow document is missing description"))
-        .and_then(|description| {
-            ModelDescription::try_new(description.to_owned()).map_err(|error| {
-                SliceMutationError::new(format!("invalid workflow description: {error}"))
-            })
-        })
-}
-
-fn workflow_slice_details(steps: &[Value]) -> Result<Vec<WorkflowSliceDetail>, SliceMutationError> {
-    steps.iter().map(workflow_slice_detail).collect()
-}
-
-fn workflow_slice_detail(step: &Value) -> Result<WorkflowSliceDetail, SliceMutationError> {
-    let slug = step
-        .get("slice")
-        .and_then(Value::as_str)
-        .ok_or_else(|| SliceMutationError::new("workflow step is missing slice"))
-        .and_then(|slice| {
-            SliceSlug::try_new(slice.to_owned())
-                .map_err(|error| SliceMutationError::new(format!("invalid slice slug: {error}")))
-        })?;
-    let name = step
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| SliceMutationError::new("workflow step is missing name"))
-        .and_then(|name| {
-            ModelName::try_new(name.to_owned())
-                .map_err(|error| SliceMutationError::new(format!("invalid slice name: {error}")))
-        })?;
-    let kind = step
-        .get("type")
-        .and_then(Value::as_str)
-        .ok_or_else(|| SliceMutationError::new("workflow step is missing type"))
-        .and_then(|kind| {
-            SliceKindName::try_new(kind.to_owned())
-                .map_err(|error| SliceMutationError::new(format!("invalid slice kind: {error}")))
-        })?;
-    let description = step
-        .get("description")
-        .and_then(Value::as_str)
-        .ok_or_else(|| SliceMutationError::new("workflow step is missing description"))
-        .and_then(|description| {
-            ModelDescription::try_new(description.to_owned()).map_err(|error| {
-                SliceMutationError::new(format!("invalid slice description: {error}"))
-            })
-        })?;
-    Ok(WorkflowSliceDetail::new(slug, name, kind, description))
-}
-
-fn workflow_transitions(
-    steps: &[Value],
-) -> Result<Vec<WorkflowTransitionLabel>, SliceMutationError> {
-    steps
-        .iter()
-        .filter_map(|step| {
-            let source = step.get("slice").and_then(Value::as_str)?;
-            let transitions = step.get("transitions").and_then(Value::as_array)?;
-            Some((source, transitions))
-        })
-        .flat_map(|(source, transitions)| {
-            transitions.iter().filter_map(move |transition| {
-                transition
-                    .get("to")
-                    .and_then(Value::as_str)
-                    .and_then(|target| transition_label(source, target, transition))
-                    .or_else(|| {
-                        transition
-                            .get("to_workflow")
-                            .and_then(Value::as_str)
-                            .and_then(|target| {
-                                workflow_exit_transition_label(source, target, transition)
-                            })
-                    })
-            })
-        })
-        .map(|label| {
-            WorkflowTransitionLabel::try_new(label).map_err(|error| {
-                SliceMutationError::new(format!("invalid workflow transition: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn transition_label(source: &str, target: &str, transition: &Value) -> Option<String> {
-    [
-        ("via_command", "command"),
-        ("via_event", "event"),
-        ("via_navigation", "navigation"),
-        ("via_external_trigger", "external_trigger"),
-        ("via_outcome", "outcome"),
-    ]
-    .into_iter()
-    .find_map(|(field, kind)| {
-        transition
-            .get(field)
-            .and_then(Value::as_str)
-            .map(|trigger| format!("{source}->{target}:{kind}:{trigger}"))
+fn slice_file(new_slice: &NewSlice) -> WorkflowSliceFileReference {
+    WorkflowSliceFileReference::try_new(format!(
+        "../slices/{}.eventmodel.json",
+        new_slice.slug.as_ref()
+    ))
+    .unwrap_or_else(|error| {
+        unreachable!("EMC generated slice file reference must be valid: {error}")
     })
 }
 
-fn workflow_exit_transition_label(
-    source: &str,
-    target: &str,
-    transition: &Value,
-) -> Option<String> {
-    [
-        ("via_command", "command"),
-        ("via_event", "event"),
-        ("via_navigation", "navigation"),
-        ("via_external_trigger", "external_trigger"),
-        ("via_outcome", "outcome"),
-        ("exit_reason", "reason"),
-    ]
-    .into_iter()
-    .find_map(|(field, kind)| {
-        transition
-            .get(field)
-            .and_then(Value::as_str)
-            .map(|trigger| format!("{source}->{target}:workflow_exit:{kind}:{trigger}"))
-    })
+fn workflow_slice_detail(new_slice: &NewSlice) -> WorkflowSliceDetail {
+    WorkflowSliceDetail::new(
+        new_slice.slug.clone(),
+        new_slice.name.clone(),
+        slice_kind_name(new_slice.kind),
+        new_slice.description.clone(),
+    )
+}
+
+fn slice_kind_name(kind: SliceKind) -> SliceKindName {
+    SliceKindName::try_new(kind.as_ref().to_owned())
+        .unwrap_or_else(|error| unreachable!("EMC generated slice kind must be valid: {error}"))
 }
 
 fn module_name(raw: &str) -> String {

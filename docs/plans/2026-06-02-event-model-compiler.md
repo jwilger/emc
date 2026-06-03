@@ -90,6 +90,7 @@
 - 2026-06-03: Generated Lean4 and Quint workflow artifacts now represent business workflow transitions as structured source, target, kind, and trigger records instead of opaque transition strings. `emc check` derives the same structured records from browser workflow JSON when checking formal artifact drift.
 - 2026-06-03: Structured workflow transitions are now part of the formal verification surface: Lean4 emits a named transition-structure theorem, Quint emits a named `workflowTransitionsStructured` invariant, `emc check` rejects stale copies of both declarations, and `emc verify` asks Quint to verify the transition invariant with the existing workflow invariants.
 - 2026-06-03: Workflow update mutations now parse browser workflow JSON into a semantic `WorkflowDocument` type before deriving workflow identity, slice details, transitions, and rewritten file contents. A static architecture guardrail prevents `src/core/workflow.rs` from directly manipulating raw `serde_json::Value`.
+- 2026-06-03: Slice mutations now use the same semantic `WorkflowDocument` API to append slice-file references and workflow steps before deriving synchronized browser, Lean4, and Quint artifacts. Static architecture guardrails now prevent both `src/core/workflow.rs` and `src/core/slice.rs` from directly manipulating raw JSON values.
 
 ### Task 1: Guardrails and Project Skeleton
 
