@@ -88,11 +88,21 @@ pub fn add_slice(
 ) -> Result<EffectPlan, SliceMutationError> {
     let workflow_document = WorkflowDocument::parse(&workflow_document)
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
-    let slice_module_name = module_name(new_slice.name.as_ref());
-    workflow_document
+    let existing_slice_details = workflow_document
         .slice_details()
-        .map_err(|error| SliceMutationError::new(error.to_string()))?
-        .into_iter()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    existing_slice_details
+        .iter()
+        .find(|slice| slice.slug() == &new_slice.slug)
+        .map_or(Ok(()), |_slice| {
+            Err(SliceMutationError::new(format!(
+                "slice {} already exists",
+                new_slice.slug.as_ref()
+            )))
+        })?;
+    let slice_module_name = module_name(new_slice.name.as_ref());
+    existing_slice_details
+        .iter()
         .find(|slice| module_name(slice.name().as_ref()) == slice_module_name)
         .map_or(Ok(()), |_slice| {
             Err(SliceMutationError::new(format!(

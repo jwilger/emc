@@ -244,6 +244,81 @@ mod tests {
     }
 
     #[test]
+    fn add_slice_rejects_duplicate_slice_slugs() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(temp_dir.path(), "capture-ticket", "Capture ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket copy",
+                "--type",
+                "state_view",
+                "--description",
+                "Alternate capture flow.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "slice capture-ticket already exists",
+            ));
+
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        assert_eq!(
+            workflow_json
+                .matches("\"slice\": \"capture-ticket\"")
+                .count(),
+            1,
+            "rejected duplicate slice slugs must not add another workflow step"
+        );
+
+        let slice_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
+        )?;
+        assert!(
+            slice_json.contains("\"name\": \"Capture ticket\""),
+            "rejected duplicate slice slugs must not overwrite existing browser slice data"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn add_slice_preserves_existing_canonical_workflow_transitions() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
