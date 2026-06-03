@@ -126,9 +126,19 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(check_project(project_name, modeled_workflows))
         }
         Effect::ConnectWorkflowFromWorkflow(connection) => {
-            let workflow_document = read_indexed_workflow_document(connection.workflow_slug())?;
-            let plan = connect_workflow(workflow_document, connection.clone())
-                .map_err(|error| ShellError::message(error.to_string()))?;
+            let modeled_workflows = read_browser_index_workflows()?;
+            let workflow_layout =
+                find_indexed_workflow(connection.workflow_slug(), modeled_workflows.as_slice())?;
+            let workflow_document = read_indexed_workflow_document_from_layouts(
+                connection.workflow_slug(),
+                &modeled_workflows,
+            )?;
+            let plan = connect_workflow(
+                workflow_layout.name().clone(),
+                workflow_document,
+                connection.clone(),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
         }
         Effect::CopyDirectory(source, target) => {
