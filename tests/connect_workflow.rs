@@ -526,6 +526,89 @@ mod tests {
     }
 
     #[test]
+    fn connect_workflow_rejects_unknown_target_slice_without_rewriting_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let workflow_before = read_to_string(&workflow_path)?;
+        let lean_before = read_to_string(&lean_path)?;
+        let quint_before = read_to_string(&quint_path)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "missing-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "missing-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "unknown workflow step missing-ticket",
+            ));
+
+        assert_eq!(
+            workflow_before,
+            read_to_string(workflow_path)?,
+            "unknown target rejection must leave browser workflow data unchanged"
+        );
+        assert_eq!(
+            lean_before,
+            read_to_string(lean_path)?,
+            "unknown target rejection must leave Lean workflow data unchanged"
+        );
+        assert_eq!(
+            quint_before,
+            read_to_string(quint_path)?,
+            "unknown target rejection must leave Quint workflow data unchanged"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn connect_workflow_exit_requires_exact_flag_order() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let malformed_commands = [

@@ -84,6 +84,7 @@ impl WorkflowDocument {
         &self,
         addition: WorkflowTransitionAddition,
     ) -> Result<Self, WorkflowDocumentError> {
+        reject_unknown_transition_target(self.steps()?, &addition)?;
         reject_duplicate_transition(self.steps()?, &addition)?;
         let mut next = self.object()?.clone();
         next.insert(
@@ -394,6 +395,27 @@ fn connected_steps(
             "unknown workflow step {}",
             addition.source.as_ref()
         )))
+    }
+}
+
+fn reject_unknown_transition_target(
+    existing: &[Value],
+    addition: &WorkflowTransitionAddition,
+) -> Result<(), WorkflowDocumentError> {
+    match &addition.target {
+        WorkflowTransitionTarget::Slice(target)
+            if !existing.iter().any(|step| {
+                step.get("slice")
+                    .and_then(Value::as_str)
+                    .is_some_and(|slice| slice == target.as_ref())
+            }) =>
+        {
+            Err(WorkflowDocumentError::new(format!(
+                "unknown workflow step {}",
+                target.as_ref()
+            )))
+        }
+        WorkflowTransitionTarget::Slice(_) | WorkflowTransitionTarget::Workflow { .. } => Ok(()),
     }
 }
 
