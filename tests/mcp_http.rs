@@ -47,6 +47,36 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_http_accepts_explicit_local_bind_for_server_mode() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let port = available_loopback_port()?;
+        let mut server = ProcessCommand::new(cargo_bin("emc"))
+            .args([
+                "mcp",
+                "http",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                &port.to_string(),
+            ])
+            .current_dir(temp_dir.path())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let response = send_initialize_request(port)?;
+        server.kill()?;
+        let output = server.wait_with_output()?;
+
+        assert!(output.status.success() || output.status.code().is_none());
+        assert!(String::from_utf8(output.stderr)?.is_empty());
+        assert!(predicate::str::contains("HTTP/1.1 200 OK").eval(&response));
+        assert!(predicate::str::contains("\"serverInfo\"").eval(&response));
+
+        Ok(())
+    }
+
     fn available_loopback_port() -> Result<u16, Box<dyn Error>> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
         Ok(listener.local_addr()?.port())
