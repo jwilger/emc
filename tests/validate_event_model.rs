@@ -1113,6 +1113,43 @@ mod tests {
     }
 
     #[test]
+    fn validate_generated_workflows_reaches_composition_rules() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow composition must declare steps",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_control_decision_fields_not_visible_on_screen() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;
