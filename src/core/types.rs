@@ -62,3 +62,17 @@ pub struct WorkflowTransitionLabel(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
 pub struct TransitionTriggerName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct BoardLaneId(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct WorkflowStepName(String);
