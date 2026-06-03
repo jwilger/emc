@@ -166,6 +166,7 @@
 - 2026-06-03: Review record timestamps now parse through a semantic `ReviewTimestamp` boundary type that only accepts deterministic UTC millisecond instants such as `2026-06-03T00:00:00.000Z`; mutation testing caught and closed missing digit/range examples.
 - 2026-06-03: The Nix package smoke gate now exercises packaged `emc review record` and `emc review gate`, so packaged review-record creation and gating are covered alongside check, verify, site generation, and MCP smoke coverage.
 - 2026-06-03: MCP `record_clean_review` now advertises the deterministic UTC millisecond `reviewed_at` contract in its JSON Schema with `format: date-time` and the exact timestamp pattern accepted by the semantic boundary parser.
+- 2026-06-03: The Nix package smoke gate now serves the generated site and renders it through Nix-provided headless Chromium, asserting rendered project, workflow, and slice text from the packaged EMC output.
 
 ### Task 1: Guardrails and Project Skeleton
 

@@ -32,8 +32,8 @@ output, and mechanical guardrails.
 | Quint model surface | Generated Quint modules include executable workflow and slice invariants, init and step surfaces, and pinned verification through `emc verify`. | Strong evidence | Final model-surface audit for each emitted invariant and transition surface. |
 | Event-model validation rules | Gherkin fixture counts are checked in for validator, review-gate, browser, and runner/meta suites. Validator tests cover a broad set of structure, source, slice, board, timeline, outcome, review, and browser-data diagnostics. | Partial evidence | Map every checked-in scenario to an executable Rust assertion or runner path, then close any skipped or fixture-only cases. |
 | Review gate | CLI and MCP review gate enforce current clean reviews for workflow slug, digest, categories, mandatory findings, stale reviews, and clean follow-up. Review record creation is deterministic, package-smoked, and advertises its strict timestamp contract over MCP. | Strong evidence | Keep review schema metadata synchronized with semantic boundary parsers. |
-| Generated browser site | `emc generate site` produces stable browser data and replaces stale output. Browser composition tests cover workflow selector data, lanes, main path, branch cards, source chains, controls, navigation targets, command/view definitions, and review overlays. | Partial evidence | Add rendered-site verification with a real browser engine or equivalent deterministic DOM/runtime smoke so the generated site is proven human-browsable, not only data-composable. |
-| Browser visual parity | Browser assets now accept project branding and avoid unrelated labels. Composition tests preserve the key data contracts. | Open gap | Add a documented parity check for the rendered UI: DOM structure, key interactions, and at least one screenshot or pixel-smoke baseline if a headless browser is available in Nix. |
+| Generated browser site | `emc generate site` produces stable browser data and replaces stale output. Browser composition tests cover workflow selector data, lanes, main path, branch cards, source chains, controls, navigation targets, command/view definitions, and review overlays. Nix package smoke serves the generated site and renders it through headless Chromium, asserting project, workflow, and slice text in the rendered DOM. | Strong evidence | Keep rendered package smoke current as browser assets change. |
+| Browser visual parity | Browser assets now accept project branding and avoid unrelated labels. Composition tests preserve the key data contracts, and package smoke proves the browser runtime renders modeled content. | Partial evidence | Add higher-fidelity interaction or screenshot/pixel smoke if exact visual parity remains a closure requirement beyond rendered DOM behavior. |
 | Strict Rust lints | `Cargo.toml` enumerates strict Clippy policy; `justfile` runs fmt, clippy, tests, and build with `RUSTFLAGS='-Dwarnings'`; lint-policy tests guard the setup. | Strong evidence | Keep final `just ci` as a release gate. |
 | Mutation testing balance | `just mutants-diff`, `just mutants-core`, and `just mutants-full` exist outside CI. Recent Rust behavior commits ran `just mutants-diff` before commit. CI guardrails ensure mutation testing is not accidentally folded into routine CI. | Strong evidence | Continue running `just mutants-diff` before meaningful Rust behavior commits and `just mutants-core` before larger core milestones. |
 | Nix package and container | Nix checks build the package, run package smoke, and build a Docker-compatible image. Package smoke exercises Lean4/Lake, Quint, review record/gate, site generation, MCP stdio, and MCP HTTP tool calls. | Strong evidence | Optionally add a container runtime smoke when a local container runtime is available; current Nix check proves image construction. |
@@ -42,21 +42,18 @@ output, and mechanical guardrails.
 
 ## Highest-Value Remaining Increments
 
-1. **Rendered browser proof:** add a deterministic rendered-site smoke that runs
-   from the generated site and proves the browser is actually browsable. Prefer a
-   Nix-available headless browser so the guardrail is reproducible.
-2. **Validation rule map:** create a mechanical map from each checked-in
+1. **Validation rule map:** create a mechanical map from each checked-in
    validation, review-gate, browser, and runner/meta scenario to executable
    coverage, then close any fixture-only scenarios.
-3. **Semantic-boundary audit:** scan public core APIs and validation internals
+2. **Semantic-boundary audit:** scan public core APIs and validation internals
    for primitive or structural DTO leakage and add static guardrails for any
    uncovered regression class.
-4. **Formal graph decision:** either implement Lean4/Quint artifact readers that
+3. **Formal graph decision:** either implement Lean4/Quint artifact readers that
    normalize formal artifacts back into semantic graph data, or explicitly
    narrow the goal to deterministic generated declarations, digests, and tool
    verification. The original goal wording leans toward the stronger graph
    reader, so treat this as an open decision until resolved.
-5. **Final closure pass:** rerun `just ci`, local mutation testing appropriate to
+4. **Final closure pass:** rerun `just ci`, local mutation testing appropriate to
    the touched Rust surface, `nix flake check`, package smoke, forbidden scan,
    and a line-by-line goal audit before declaring the full goal complete.
 
@@ -64,7 +61,7 @@ output, and mechanical guardrails.
 
 EMC has strong implementation evidence for the binary, command surfaces, MCP
 access, deterministic mutation paths, formal artifact emission, drift checks,
-review gate, strict lints, mutation-testing workflow, and Nix packaging. The
-goal should not be closed until rendered browser behavior, validation scenario
-traceability, semantic-boundary coverage, and the Lean4/Quint normalized graph
-decision are resolved.
+review gate, rendered browser execution, strict lints, mutation-testing
+workflow, and Nix packaging. The goal should not be closed until validation
+scenario traceability, semantic-boundary coverage, and the Lean4/Quint
+normalized graph decision are resolved.
