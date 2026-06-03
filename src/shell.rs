@@ -189,21 +189,22 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             ))
         }
         Effect::ListWorkflowsFromIndex => {
-            let modeled_workflows = read_browser_index_workflows()?;
+            let modeled_workflows =
+                formal_workflow_layouts(read_synchronized_formal_workflow_graphs()?);
             interpret_collect_reports(list_workflows(ModeledWorkflowLayouts::new(
                 modeled_workflows,
             )))
         }
         Effect::ListSlicesFromIndex => {
-            let modeled_workflows = read_browser_index_workflows()?;
-            let modeled_slices = read_modeled_workflow_slice_details(&modeled_workflows)?;
+            let modeled_slices =
+                formal_workflow_slice_details(read_synchronized_formal_workflow_graphs()?);
             interpret_collect_reports(list_slices(ModeledWorkflowSliceDetails::new(
                 modeled_slices,
             )))
         }
         Effect::ListTransitionsFromIndex => {
-            let modeled_workflows = read_browser_index_workflows()?;
-            let modeled_transitions = read_modeled_workflow_transitions(&modeled_workflows)?;
+            let modeled_transitions =
+                formal_workflow_transitions(read_synchronized_formal_workflow_graphs()?);
             interpret_collect_reports(list_transitions(ModeledWorkflowTransitions::new(
                 modeled_transitions,
             )))
@@ -719,6 +720,36 @@ fn formal_graphs_by_slug(
         })
 }
 
+fn formal_workflow_layouts(graphs: FormalWorkflowGraphs) -> Vec<ModeledWorkflowLayout> {
+    graphs
+        .into_inner()
+        .into_iter()
+        .map(|graph| {
+            ModeledWorkflowLayout::new(
+                graph.name().clone(),
+                graph.description().clone(),
+                graph.slug().clone(),
+            )
+        })
+        .collect()
+}
+
+fn formal_workflow_slice_details(graphs: FormalWorkflowGraphs) -> Vec<WorkflowSliceDetail> {
+    graphs
+        .into_inner()
+        .into_iter()
+        .flat_map(|graph| graph.slice_details().as_slice().to_owned())
+        .collect()
+}
+
+fn formal_workflow_transitions(graphs: FormalWorkflowGraphs) -> Vec<WorkflowTransitionRecord> {
+    graphs
+        .into_inner()
+        .into_iter()
+        .flat_map(|graph| graph.transitions().as_slice().to_owned())
+        .collect()
+}
+
 fn read_indexed_workflow_document(slug: &WorkflowSlug) -> Result<FileContents, ShellError> {
     let modeled_workflows = read_browser_index_workflows()?;
     read_indexed_workflow_document_from_layouts(slug, modeled_workflows.as_slice())
@@ -771,25 +802,6 @@ fn read_modeled_workflow_slice_details(
         );
     }
     Ok(slice_details)
-}
-
-fn read_modeled_workflow_transitions(
-    modeled_workflows: &[ModeledWorkflowLayout],
-) -> Result<Vec<WorkflowTransitionRecord>, ShellError> {
-    let mut transitions = Vec::new();
-    for workflow in modeled_workflows {
-        let workflow_document =
-            read_workflow_document(workflow.slug().as_ref()).and_then(|contents| {
-                WorkflowDocument::parse(&contents)
-                    .map_err(|error| ShellError::message(error.to_string()))
-            })?;
-        transitions.extend(
-            workflow_document
-                .transitions()
-                .map_err(|error| ShellError::message(error.to_string()))?,
-        );
-    }
-    Ok(transitions)
 }
 
 fn read_referenced_slice_document(slug: &SliceSlug) -> Result<FileContents, ShellError> {
