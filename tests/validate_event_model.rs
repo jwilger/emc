@@ -1511,6 +1511,30 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_workflow_references_to_invalid_slice_files() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflows = temp_dir.path().join("model/browser/data/workflows");
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&workflows)?;
+        create_dir_all(&slices)?;
+        write(
+            workflows.join("lesson-01.eventmodel.json"),
+            "{\"name\":\"Lesson 01\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[],\"slice_files\":[\"../slices/entry.eventmodel.json\"],\"steps\":[{\"slice\":\"entry\",\"name\":\"Entry\",\"type\":\"state_view\",\"relationship\":\"entry\"}]}",
+        )?;
+        write(slices.join("entry.eventmodel.json"), "{")?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("referenced slice file"))
+            .stderr(predicate::str::contains("is invalid"));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_workflow_steps_that_do_not_reference_composed_slices()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;

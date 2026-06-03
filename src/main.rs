@@ -127,14 +127,38 @@ fn validate_workflow_referenced_slice_files(path: &Path) -> Result<(), ShellErro
         .iter()
         .filter_map(Value::as_str)
         .map(|slice_file| base_path.join(slice_file))
-        .find(|slice_file| !slice_file.is_file())
-        .map_or(Ok(()), |slice_file| {
-            Err(ShellError::message(format!(
-                "missing referenced slice file {} in {}",
+        .try_for_each(|slice_file| validate_referenced_slice_file(path, &slice_file))
+}
+
+fn validate_referenced_slice_file(
+    workflow_path: &Path,
+    slice_file: &Path,
+) -> Result<(), ShellError> {
+    if !slice_file.is_file() {
+        return Err(ShellError::message(format!(
+            "missing referenced slice file {} in {}",
+            slice_file.display(),
+            workflow_path.display()
+        )));
+    }
+
+    let source =
+        fs::read_to_string(slice_file).map_err(|error| ShellError::message(error.to_string()))?;
+    let document =
+        parse_event_model_document(&source, EventModelFileKind::Slice).map_err(|error| {
+            ShellError::message(format!(
+                "referenced slice file {} is invalid: {}",
                 slice_file.display(),
-                path.display()
-            )))
-        })
+                error
+            ))
+        })?;
+    validate_event_model(&document).map_err(|issue| {
+        ShellError::message(format!(
+            "referenced slice file {} is invalid: {}",
+            slice_file.display(),
+            issue
+        ))
+    })
 }
 
 fn event_model_file_kind(path: &Path) -> EventModelFileKind {
