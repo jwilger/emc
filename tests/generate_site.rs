@@ -64,6 +64,14 @@ mod tests {
 
         let index_html = read_to_string(temp_dir.path().join("site/index.html"))?;
         assert!(
+            index_html.contains("<title>Repair Desk Event Model Browser</title>"),
+            "generated site must use project branding in the document title"
+        );
+        assert!(
+            !index_html.contains("<title>EMC Event Model Browser</title>"),
+            "generated site must not hard-code EMC branding"
+        );
+        assert!(
             index_html.contains("./assets/index-CTzj-YfP.js"),
             "generated site must load the bundled EMC browser JavaScript"
         );
