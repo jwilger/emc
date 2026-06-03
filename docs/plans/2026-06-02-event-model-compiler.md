@@ -76,6 +76,7 @@
 - 2026-06-02: `emc check` now rejects stale Lean4 closing module declarations, so both the opening namespace and closing `end` ownership must match the modeled workflow module.
 - 2026-06-02: Browser index parsing now rejects duplicate workflow paths before they become semantic workflow layouts, so `emc check` cannot accept duplicated workflow entries as a synchronized model.
 - 2026-06-02: Browser index parsing now rejects duplicate workflow names before semantic conversion, preventing separate browser workflow paths from colliding on the same generated Lean4 and Quint module identity.
+- 2026-06-02: Browser index parsing now rejects duplicate semantic workflow slugs after path parsing, preventing distinct raw workflow paths from normalizing to the same modeled workflow identity.
 
 ### Task 1: Guardrails and Project Skeleton
 

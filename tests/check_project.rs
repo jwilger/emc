@@ -752,6 +752,58 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_browser_index_duplicate_workflow_slug_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let duplicate_workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open_ticket.eventmodel.json");
+        let duplicate_workflow = read_to_string(workflow_path)?.replace(
+            "\"name\": \"Open ticket\"",
+            "\"name\": \"Open ticket duplicate\"",
+        );
+        write(&duplicate_workflow_path, duplicate_workflow)?;
+
+        let index_path = temp_dir.path().join("model/browser/data/index.json");
+        let workflow_entry = concat!(
+            "    {\n",
+            "      \"name\": \"Open ticket\",\n",
+            "      \"path\": \"data/workflows/open-ticket.eventmodel.json\",\n",
+            "      \"description\": \"Actor opens a repair ticket.\"\n",
+            "    }"
+        );
+        let duplicate_workflows = concat!(
+            "    {\n",
+            "      \"name\": \"Open ticket\",\n",
+            "      \"path\": \"data/workflows/open-ticket.eventmodel.json\",\n",
+            "      \"description\": \"Actor opens a repair ticket.\"\n",
+            "    },\n",
+            "    {\n",
+            "      \"name\": \"Open ticket duplicate\",\n",
+            "      \"path\": \"data/workflows/open_ticket.eventmodel.json\",\n",
+            "      \"description\": \"Actor opens a repair ticket.\"\n",
+            "    }"
+        );
+        let index = read_to_string(&index_path)?.replace(workflow_entry, duplicate_workflows);
+        write(index_path, index)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser index workflow slug is duplicated",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_lean_workflow_field_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
