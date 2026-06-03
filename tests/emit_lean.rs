@@ -47,6 +47,12 @@ mod tests {
             )
         );
         assert!(lean.contains("theorem workflowIdentityIsStable"));
+        assert!(
+            lean.contains(
+                "theorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl"
+            ),
+            "Lean artifact must prove every modeled workflow slice has generated detail metadata"
+        );
 
         Ok(())
     }
