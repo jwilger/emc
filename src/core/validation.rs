@@ -1785,6 +1785,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_read_model_view_board_connections(document)?;
 
+    validate_event_attribute_sources_are_present(document)?;
     validate_command_sourced_event_attributes(document)?;
 
     validate_command_legacy_read_model_reads(document)?;
@@ -4980,6 +4981,26 @@ fn validate_command_sourced_event_attributes(
             Err(validation_issue(format!(
                 "event '{}' attribute '{}' has invalid source 'command.{}'",
                 event.name, attribute.name, input_name
+            )))
+        })
+}
+
+fn validate_event_attribute_sources_are_present(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .event_definitions
+        .iter()
+        .flat_map(|event| {
+            event.attributes.iter().filter_map(move |attribute| {
+                (attribute.source == EventAttributeSource::Other).then_some((event, attribute))
+            })
+        })
+        .next()
+        .map_or(Ok(()), |(event, attribute)| {
+            Err(validation_issue(format!(
+                "event '{}' attribute '{}' is missing source",
+                event.name, attribute.name
             )))
         })
 }
