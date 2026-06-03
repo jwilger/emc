@@ -1550,6 +1550,30 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_lean_slice_artifact_invariant_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let lean_slice_path = temp_dir.path().join("model/lean/slices/CaptureTicket.lean");
+        let lean_slice = read_to_string(&lean_slice_path)?.replace(
+            "theorem sliceIdentityIsStable : sliceName = \"Capture ticket\" := rfl",
+            "theorem sliceIdentityIsStable : sliceName = sliceName := rfl",
+        );
+        write(lean_slice_path, lean_slice)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean slice artifact drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_quint_slice_artifact_field_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -1558,6 +1582,30 @@ mod tests {
         let quint_slice = read_to_string(&quint_slice_path)?.replace(
             "val sliceKind = \"state_view\"",
             "val sliceKind = \"stale_kind\"",
+        );
+        write(quint_slice_path, quint_slice)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint slice artifact drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_quint_slice_artifact_invariant_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let quint_slice_path = temp_dir.path().join("model/quint/slices/CaptureTicket.qnt");
+        let quint_slice = read_to_string(&quint_slice_path)?.replace(
+            "val sliceIdentityStable = sliceName == \"Capture ticket\"",
+            "val sliceIdentityStable = sliceName == sliceName",
         );
         write(quint_slice_path, quint_slice)?;
 
