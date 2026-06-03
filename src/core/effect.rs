@@ -54,6 +54,7 @@ pub enum Effect {
     RunProcess(ProcessInvocation),
     ShowSliceFromSlice(SliceSlug),
     ShowWorkflowFromWorkflow(WorkflowSlug),
+    UpdateSliceDescriptionFromWorkflow(SliceSlug, ModelDescription),
     UpdateWorkflowDescriptionFromIndexAndWorkflow(WorkflowSlug, ModelDescription),
     ValidateEventModelTarget(ProjectPath),
     VerifyProjectFromIndex,

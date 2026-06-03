@@ -111,6 +111,20 @@ impl WorkflowDocument {
         })
     }
 
+    pub fn with_updated_slice_detail(
+        &self,
+        detail: WorkflowSliceDetail,
+    ) -> Result<Self, WorkflowDocumentError> {
+        let mut next = self.object()?.clone();
+        next.insert(
+            "steps".to_owned(),
+            Value::Array(updated_slice_detail_steps(self.steps()?, detail)?),
+        );
+        Ok(Self {
+            value: Value::Object(next),
+        })
+    }
+
     pub fn slice_details(&self) -> Result<Vec<WorkflowSliceDetail>, WorkflowDocumentError> {
         self.steps()?.iter().map(workflow_slice_detail).collect()
     }
@@ -371,6 +385,56 @@ fn appended_steps(existing: Option<&Vec<Value>>, addition: WorkflowSliceAddition
         .collect(),
     ));
     values
+}
+
+fn updated_slice_detail_steps(
+    existing: &[Value],
+    detail: WorkflowSliceDetail,
+) -> Result<Vec<Value>, WorkflowDocumentError> {
+    let mut found_slice = false;
+    let updated_steps = existing
+        .iter()
+        .map(|step| {
+            if step.get("slice").and_then(Value::as_str) == Some(detail.slug().as_ref()) {
+                found_slice = true;
+                updated_slice_detail_step(step, &detail)
+            } else {
+                Ok(step.clone())
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if found_slice {
+        Ok(updated_steps)
+    } else {
+        Err(WorkflowDocumentError::new(format!(
+            "workflow document does not contain slice {}",
+            detail.slug().as_ref()
+        )))
+    }
+}
+
+fn updated_slice_detail_step(
+    step: &Value,
+    detail: &WorkflowSliceDetail,
+) -> Result<Value, WorkflowDocumentError> {
+    let mut next = step
+        .as_object()
+        .ok_or_else(|| WorkflowDocumentError::new("workflow step must be a JSON object"))?
+        .clone();
+    next.insert(
+        "name".to_owned(),
+        Value::String(detail.name().as_ref().to_owned()),
+    );
+    next.insert(
+        "type".to_owned(),
+        Value::String(detail.kind().as_ref().to_owned()),
+    );
+    next.insert(
+        "description".to_owned(),
+        Value::String(detail.description().as_ref().to_owned()),
+    );
+    Ok(Value::Object(next))
 }
 
 fn connected_steps(

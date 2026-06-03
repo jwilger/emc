@@ -75,6 +75,13 @@ pub fn update_workflow_description(
     )])
 }
 
+pub fn update_slice_description(slug: SliceSlug, description: ModelDescription) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateSliceDescriptionFromWorkflow(
+        slug,
+        description,
+    )])
+}
+
 pub fn validate(target: ProjectPath) -> EffectPlan {
     EffectPlan::new(vec![Effect::ValidateEventModelTarget(target)])
 }

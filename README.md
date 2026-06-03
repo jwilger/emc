@@ -261,6 +261,7 @@ emc show workflow <workflow-slug>
 emc show slice <slice-slug>
 emc add workflow --slug <slug> --name <name> --description <description>
 emc update workflow --slug <slug> --description <description>
+emc update slice --slug <slice-slug> --description <description>
 emc add slice --workflow <workflow-slug> --slug <slug> --name <name> --type <kind> --description <description>
 emc connect workflow --workflow <workflow-slug> --from <slice-slug> --to <slice-slug> --via <kind> --name <trigger-name>
 emc connect workflow --workflow <workflow-slug> --from <slice-slug> --to-workflow <workflow-slug> --via outcome --name <outcome-name> --reason <rationale>

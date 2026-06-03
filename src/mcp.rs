@@ -476,6 +476,23 @@ fn tools_list_result() -> Result<Value, ShellError> {
             })),
         ),
         Tool::new(
+            "update_slice",
+            "Update a business slice and regenerate synchronized model artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slug": {
+                            "type": "string"
+                        },
+                        "description": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slug", "description"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
             "connect_workflow",
             "Connect workflow steps with a transition and regenerate synchronized model artifacts.",
             schema_object(json!({
@@ -577,6 +594,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "update_workflow" => Ok(Some(tool_call_result_response(
             id,
             update_workflow_tool_text(request),
+        ))),
+        "update_slice" => Ok(Some(tool_call_result_response(
+            id,
+            update_slice_tool_text(request),
         ))),
         "connect_workflow" => Ok(Some(tool_call_result_response(
             id,
@@ -798,6 +819,30 @@ fn update_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
     interpret_collect_reports(command::update_workflow_description(slug, description))
+        .map(|reports| reports.join("\n"))
+}
+
+fn update_slice_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("update_slice requires arguments"))?;
+    let slug = arguments
+        .get("slug")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("update_slice requires slug"))
+        .and_then(|raw_slug| {
+            parse_slice_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let description = arguments
+        .get("description")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("update_slice requires description"))
+        .and_then(|raw_description| {
+            parse_model_description(raw_description)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    interpret_collect_reports(command::update_slice_description(slug, description))
         .map(|reports| reports.join("\n"))
 }
 
