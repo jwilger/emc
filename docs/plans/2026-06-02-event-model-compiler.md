@@ -133,6 +133,7 @@
 - 2026-06-03: MCP stdio now streams requests line-by-line and flushes each JSON-RPC response immediately, so editor and agent clients do not need to close stdin before receiving tool responses.
 - 2026-06-03: Formal workflow transition emission, digesting, duplicate detection, and check-time marker derivation now use semantic `WorkflowTransitionRecord` values instead of reparsing canonical transition-label strings back into source, target, kind, and trigger fields.
 - 2026-06-03: Generated browser sites now pass project-specific branding into the bundled browser runtime and the browser asset no longer carries unrelated product labels in its visible header.
+- 2026-06-03: `emc verify` now checks initialized project root formal artifacts before generated workflow and slice artifacts: Lean4 root modules run through `lake env lean`, and Quint root modules run through `quint typecheck` because root modules do not declare workflow invariants.
 
 ### Task 1: Guardrails and Project Skeleton
 

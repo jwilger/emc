@@ -52,11 +52,13 @@ mod tests {
 
         assert_eq!(
             read_to_string(temp_dir.path().join("lake.log"))?,
-            "env lean model/lean/OpenTicket.lean\n"
+            "env lean model/lean/RepairDesk.lean\n\
+             env lean model/lean/OpenTicket.lean\n"
         );
         assert_eq!(
             read_to_string(temp_dir.path().join("quint.log"))?,
-            "verify --invariant workflowIdentityStable,workflowSliceDetailsComplete,workflowTransitionsStructured model/quint/OpenTicket.qnt\n"
+            "typecheck model/quint/RepairDesk.qnt\n\
+             verify --invariant workflowIdentityStable,workflowSliceDetailsComplete,workflowTransitionsStructured model/quint/OpenTicket.qnt\n"
         );
 
         Ok(())

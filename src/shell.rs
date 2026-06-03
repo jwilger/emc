@@ -371,9 +371,14 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         }
         Effect::ValidateEventModelTarget(target) => validate_event_model_target(target.as_ref()),
         Effect::VerifyProjectFromIndex => {
+            let project_name = read_project_manifest_name()?;
             let modeled_workflows = read_browser_index_workflows()?;
             let modeled_slices = read_modeled_workflow_slice_details(&modeled_workflows)?;
-            interpret_collect_reports(verify_project(modeled_workflows, modeled_slices))
+            interpret_collect_reports(verify_project(
+                project_name,
+                modeled_workflows,
+                modeled_slices,
+            ))
         }
         Effect::WriteFile(path, contents) => {
             write_file(path.as_ref(), contents.as_ref()).map(|()| Vec::new())

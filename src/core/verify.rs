@@ -4,19 +4,48 @@ use crate::core::effect::{
     Effect, EffectPlan, ProcessArgument, ProcessInvocation, ProgramName, ReportLine,
 };
 use crate::core::layout::ModeledWorkflowLayout;
+use crate::core::project::ProjectName;
 use crate::core::types::WorkflowSliceDetail;
 
 pub fn verify_project(
+    project_name: ProjectName,
     modeled_workflows: Vec<ModeledWorkflowLayout>,
     workflow_slice_details: Vec<WorkflowSliceDetail>,
 ) -> EffectPlan {
     EffectPlan::new(
-        modeled_workflows
+        verify_project_root(project_name)
             .into_iter()
-            .flat_map(verify_modeled_workflow)
+            .chain(
+                modeled_workflows
+                    .into_iter()
+                    .flat_map(verify_modeled_workflow),
+            )
             .chain(verify_modeled_slices(workflow_slice_details))
             .collect(),
     )
+}
+
+fn verify_project_root(project_name: ProjectName) -> Vec<Effect> {
+    let module_name = module_name_from_raw(project_name.as_ref());
+    vec![
+        Effect::RunProcess(ProcessInvocation::new(
+            program_name("lake"),
+            vec![
+                process_argument("env"),
+                process_argument("lean"),
+                process_argument(format!("model/lean/{module_name}.lean")),
+            ],
+            report_line("Lean4 artifacts verified"),
+        )),
+        Effect::RunProcess(ProcessInvocation::new(
+            program_name("quint"),
+            vec![
+                process_argument("typecheck"),
+                process_argument(format!("model/quint/{module_name}.qnt")),
+            ],
+            report_line("Quint artifacts verified"),
+        )),
+    ]
 }
 
 fn verify_modeled_workflow(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
