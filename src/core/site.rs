@@ -12,6 +12,14 @@ pub fn generate_site(output: ProjectPath) -> EffectPlan {
             project_path(format!("{output_path}/index.html")),
             file_contents(INDEX_HTML),
         ),
+        Effect::WriteFile(
+            project_path(format!("{output_path}/assets/index-CTzj-YfP.js")),
+            file_contents(BROWSER_JAVASCRIPT),
+        ),
+        Effect::WriteFile(
+            project_path(format!("{output_path}/assets/index-DCPB_L_9.css")),
+            file_contents(BROWSER_STYLESHEET),
+        ),
         Effect::Report(report_line(format!("generated site at {output_path}"))),
     ])
 }
@@ -22,15 +30,17 @@ const INDEX_HTML: &str = r#"<!doctype html>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EMC Event Model Browser</title>
+    <script type="module" crossorigin src="./assets/index-CTzj-YfP.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DCPB_L_9.css">
   </head>
   <body>
-    <main id="root">
-      <h1>EMC Event Model Browser</h1>
-      <p>Open data/index.json to inspect the generated event model data.</p>
-    </main>
+    <div id="root"></div>
   </body>
 </html>
 "#;
+
+const BROWSER_JAVASCRIPT: &str = include_str!("../../browser/assets/index-CTzj-YfP.js");
+const BROWSER_STYLESHEET: &str = include_str!("../../browser/assets/index-DCPB_L_9.css");
 
 fn project_path(value: impl Into<String>) -> ProjectPath {
     ProjectPath::try_new(value.into()).unwrap_or_else(|error| {

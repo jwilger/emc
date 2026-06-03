@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
+    use std::fs::read_to_string;
     use std::path::PathBuf;
 
     use assert_cmd::Command;
@@ -33,6 +34,18 @@ mod tests {
             .stdout(predicate::str::contains("generated site at site"));
 
         assert!(temp_dir.path().join("site/index.html").is_file());
+        assert!(
+            temp_dir
+                .path()
+                .join("site/assets/index-CTzj-YfP.js")
+                .is_file()
+        );
+        assert!(
+            temp_dir
+                .path()
+                .join("site/assets/index-DCPB_L_9.css")
+                .is_file()
+        );
         assert!(temp_dir.path().join("site/data/index.json").is_file());
         assert!(
             temp_dir
@@ -47,6 +60,20 @@ mod tests {
                     "site/data/slices/organization-access-resolve-application-entry.eventmodel.json"
                 )
                 .is_file()
+        );
+
+        let index_html = read_to_string(temp_dir.path().join("site/index.html"))?;
+        assert!(
+            index_html.contains("./assets/index-CTzj-YfP.js"),
+            "generated site must load the bundled EMC browser JavaScript"
+        );
+        assert!(
+            index_html.contains("./assets/index-DCPB_L_9.css"),
+            "generated site must load the bundled EMC browser CSS"
+        );
+        assert!(
+            !index_html.contains("Open data/index.json"),
+            "generated site must not use the placeholder browser shell"
         );
 
         Ok(())
