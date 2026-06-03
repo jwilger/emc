@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-    use std::fs::{create_dir_all, write};
+    use std::fs::{create_dir_all, read_to_string, remove_file, write};
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -1203,6 +1203,78 @@ mod tests {
             .stderr(predicate::str::contains(
                 "state_view slice 'Capture ticket' must own at least one view",
             ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn validate_rejects_noncanonical_referenced_slice_file_paths() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor enters repair ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slices_path = temp_dir.path().join("model/browser/data/slices");
+        let canonical_slice_path = slices_path.join("capture-ticket.eventmodel.json");
+        let drifted_slice_path = slices_path.join("capture_ticket.eventmodel.json");
+        write(&drifted_slice_path, read_to_string(&canonical_slice_path)?)?;
+        remove_file(canonical_slice_path)?;
+
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let workflow = read_to_string(&workflow_path)?.replace(
+            "\"../slices/capture-ticket.eventmodel.json\"",
+            "\"../slices/capture_ticket.eventmodel.json\"",
+        );
+        write(workflow_path, workflow)?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "referenced slice file path is noncanonical",
+            ))
+            .stderr(predicate::str::contains("capture_ticket.eventmodel.json"));
 
         Ok(())
     }
