@@ -1,4 +1,5 @@
 pub mod browser;
+pub mod browser_data_document;
 pub mod connection;
 pub mod digest;
 pub mod effect;
