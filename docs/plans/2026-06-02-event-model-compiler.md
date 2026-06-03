@@ -127,6 +127,7 @@
 - 2026-06-03: `emc add slice` now rejects workflow document name drift against the indexed workflow identity before planning writes, preventing a corrupted browser workflow document from steering new slice mutations into mismatched Lean4/Quint workflow modules.
 - 2026-06-03: `emc connect workflow` now rejects workflow document name drift against the indexed workflow identity before planning writes, preventing a corrupted browser workflow document from steering transition mutations into mismatched Lean4/Quint workflow modules.
 - 2026-06-03: `emc add slice` now rejects workflow document description drift against the indexed workflow description before planning writes, preventing a corrupted browser workflow document from changing formal workflow digests through an unrelated slice mutation.
+- 2026-06-03: `emc connect workflow` now rejects workflow document description drift against the indexed workflow description before planning writes, preventing a corrupted browser workflow document from changing formal workflow digests through an unrelated transition mutation.
 
 ### Task 1: Guardrails and Project Skeleton
 

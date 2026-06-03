@@ -136,6 +136,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             )?;
             let plan = connect_workflow(
                 workflow_layout.name().clone(),
+                workflow_layout.description().clone(),
                 workflow_document,
                 connection.clone(),
             )
