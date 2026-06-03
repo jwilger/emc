@@ -238,13 +238,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List String := [\"submit-ticket->review-ticket:event:TicketSubmittedForReview\"]"
+                "def workflowTransitions : List (String × String × String × String) := [(\"submit-ticket\", \"review-ticket\", \"event\", \"TicketSubmittedForReview\")]"
             ),
             "Lean update must preserve existing event transitions"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [\"submit-ticket->review-ticket:event:TicketSubmittedForReview\"]"
+                "val workflowTransitions = [{ source: \"submit-ticket\", target: \"review-ticket\", kind: \"event\", trigger: \"TicketSubmittedForReview\" }]"
             ),
             "Quint update must preserve existing event transitions"
         );
@@ -319,13 +319,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List String := [\"capture-ticket->repair-complete:workflow_exit:outcome:ticket_closed\"]"
+                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"repair-complete\", \"workflow_exit:outcome\", \"ticket_closed\")]"
             ),
             "Lean update must preserve existing workflow exit transitions"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [\"capture-ticket->repair-complete:workflow_exit:outcome:ticket_closed\"]"
+                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"repair-complete\", kind: \"workflow_exit:outcome\", trigger: \"ticket_closed\" }]"
             ),
             "Quint update must preserve existing workflow exit transitions"
         );

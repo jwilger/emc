@@ -182,13 +182,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List String := [\"capture-ticket->submit-ticket:command:SubmitTicketForReview\"]"
+                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"submit-ticket\", \"command\", \"SubmitTicketForReview\")]"
             ),
             "Lean artifact must preserve existing command transitions when a later slice is added"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [\"capture-ticket->submit-ticket:command:SubmitTicketForReview\"]"
+                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"submit-ticket\", kind: \"command\", trigger: \"SubmitTicketForReview\" }]"
             ),
             "Quint artifact must preserve existing command transitions when a later slice is added"
         );
@@ -250,13 +250,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List String := [\"capture-ticket->record-callback:external_trigger:callback_received\"]"
+                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"record-callback\", \"external_trigger\", \"callback_received\")]"
             ),
             "Lean artifact must preserve existing external-trigger transitions when a later slice is added"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [\"capture-ticket->record-callback:external_trigger:callback_received\"]"
+                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"record-callback\", kind: \"external_trigger\", trigger: \"callback_received\" }]"
             ),
             "Quint artifact must preserve existing external-trigger transitions when a later slice is added"
         );
@@ -319,13 +319,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List String := [\"capture-ticket->repair-complete:workflow_exit:outcome:ticket_closed\"]"
+                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"repair-complete\", \"workflow_exit:outcome\", \"ticket_closed\")]"
             ),
             "Lean artifact must preserve existing workflow exit transitions when a later slice is added"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [\"capture-ticket->repair-complete:workflow_exit:outcome:ticket_closed\"]"
+                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"repair-complete\", kind: \"workflow_exit:outcome\", trigger: \"ticket_closed\" }]"
             ),
             "Quint artifact must preserve existing workflow exit transitions when a later slice is added"
         );

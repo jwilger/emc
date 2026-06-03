@@ -58,7 +58,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowTransitions : List String := [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
+                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"review-ticket\", \"navigation\", \"review-ticket-screen\")]"
             )
         );
         assert!(lean.contains("theorem workflowIdentityIsStable"));
@@ -100,7 +100,11 @@ mod tests {
                 "def workflowSliceDetails : List (String × String × String × String) := []"
             )
         );
-        assert!(lean.contains("def workflowTransitions : List String := []"));
+        assert!(
+            lean.contains(
+                "def workflowTransitions : List (String × String × String × String) := []"
+            )
+        );
 
         Ok(())
     }
