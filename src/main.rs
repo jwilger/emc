@@ -18,6 +18,7 @@ use emc::io::dto::{
     parse_browser_index_workflows, parse_emc_slice_import, parse_emc_workflow_import,
     parse_event_model_document, parse_project_manifest_name, parse_slice_slug, parse_workflow_slug,
 };
+use emc::mcp::serve_stdio;
 use emc::shell::{ShellError, interpret};
 use serde_json::Value;
 
@@ -31,6 +32,7 @@ enum Command {
     ImportEMC { source: PathBuf },
     Init { name: String },
     ListWorkflows,
+    McpStdio,
     ShowWorkflow { slug: WorkflowSlug },
     Validate { target: PathBuf },
     Verify,
@@ -74,6 +76,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             interpret(list_workflows(imported_workflows))
         }
+        Command::McpStdio => serve_stdio(),
         Command::ShowWorkflow { slug } => {
             let workflow_path = format!(
                 "model/browser/data/workflows/{}.eventmodel.json",
@@ -126,6 +129,9 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         }),
         [command, subject] if command == "list" && subject == "workflows" => Ok(Cli {
             command: Command::ListWorkflows,
+        }),
+        [command, transport] if command == "mcp" && transport == "stdio" => Ok(Cli {
+            command: Command::McpStdio,
         }),
         [command, subject, slug] if command == "show" && subject == "workflow" => {
             parse_workflow_slug(slug)
