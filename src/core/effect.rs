@@ -28,6 +28,12 @@ pub enum Effect {
         Vec<ProjectPath>,
         ReportLine,
     ),
+    RequireOnlyModeledFormalSliceArtifacts(
+        ProjectPath,
+        ProjectPath,
+        ArtifactFileExtension,
+        ReportLine,
+    ),
     RequireReferencedSliceFileIdentities(ProjectPath, ReportLine),
     RequireReferencedSliceFiles(ProjectPath, ProjectPath, ReportLine),
     RequireReviewRecord(ProjectPath, ProjectPath, ReportLine),
