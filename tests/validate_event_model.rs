@@ -1091,6 +1091,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_control_decision_fields_not_visible_on_screen() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("open-repair-ticket.eventmodel.json"),
+            "{\"name\":\"Open repair ticket\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"OpenRepairTicket\",\"inputs\":[],\"produces\":[]}],\"read_models\":[],\"views\":[{\"name\":\"repair_queue_screen\",\"wireframe\":\"<button data-ref=\\\"Open repair ticket\\\"></button>\",\"uses_read_models\":[],\"controls\":[{\"label\":\"Open repair ticket\",\"command\":\"OpenRepairTicket\",\"decision_fields\":[\"priority\"]}]}],\"slices\":[{\"name\":\"Show repair queue\",\"type\":\"state_view\",\"views\":[\"repair_queue_screen\"],\"acceptance_scenarios\":[{\"name\":\"show repair queue\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "control 'Open repair ticket' decision field 'priority' is not visible on the screen",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_view_fields_without_source_provenance() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");

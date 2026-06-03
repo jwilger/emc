@@ -1240,6 +1240,7 @@ pub struct ViewControlDefinition {
     label: DefinitionName,
     command: Option<DefinitionName>,
     input_provisions: Vec<ControlInputProvision>,
+    decision_fields: Vec<DefinitionName>,
     command_error_handling: Vec<ControlCommandErrorHandling>,
     navigation_target: Option<DefinitionName>,
     navigation_type: NavigationType,
@@ -1254,6 +1255,7 @@ impl ViewControlDefinition {
             label: parts.label,
             command: parts.command,
             input_provisions: parts.input_provisions,
+            decision_fields: parts.decision_fields,
             command_error_handling: parts.command_error_handling,
             navigation_target: parts.navigation_target,
             navigation_type: parts.navigation_type,
@@ -1269,6 +1271,7 @@ pub struct ViewControlDefinitionParts {
     label: DefinitionName,
     command: Option<DefinitionName>,
     input_provisions: Vec<ControlInputProvision>,
+    decision_fields: Vec<DefinitionName>,
     command_error_handling: Vec<ControlCommandErrorHandling>,
     navigation_target: Option<DefinitionName>,
     navigation_type: NavigationType,
@@ -1283,6 +1286,7 @@ impl ViewControlDefinitionParts {
             label,
             command: None,
             input_provisions: Vec::new(),
+            decision_fields: Vec::new(),
             command_error_handling: Vec::new(),
             navigation_target: None,
             navigation_type: NavigationType::Absent,
@@ -1299,6 +1303,11 @@ impl ViewControlDefinitionParts {
 
     pub fn with_input_provisions(mut self, input_provisions: Vec<ControlInputProvision>) -> Self {
         self.input_provisions = input_provisions;
+        self
+    }
+
+    pub fn with_decision_fields(mut self, decision_fields: Vec<DefinitionName>) -> Self {
+        self.decision_fields = decision_fields;
         self
     }
 
@@ -1817,6 +1826,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
     validate_control_inputs_have_source_provenance(document)?;
 
     validate_control_inputs_have_descriptions(document)?;
+
+    validate_control_decision_fields_are_visible(document)?;
 
     validate_navigation_controls_declare_type(document)?;
 
@@ -5219,6 +5230,40 @@ fn control_input_missing_description(
         .iter()
         .find(|input| input.description == ControlInputDescription::Missing)
         .map(|input| (control, input))
+}
+
+fn validate_control_decision_fields_are_visible(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .find_map(control_decision_field_not_visible)
+        .map_or(Ok(()), |(control, decision_field)| {
+            Err(validation_issue(format!(
+                "control '{}' decision field '{}' is not visible on the screen",
+                control.label, decision_field
+            )))
+        })
+}
+
+fn control_decision_field_not_visible(
+    view: &ViewDefinition,
+) -> Option<(&ViewControlDefinition, &DefinitionName)> {
+    view.controls
+        .iter()
+        .flat_map(|control| {
+            control
+                .decision_fields
+                .iter()
+                .map(move |decision_field| (control, decision_field))
+        })
+        .find(|(_, decision_field)| {
+            !view
+                .fields
+                .iter()
+                .any(|field| field.name == **decision_field)
+        })
 }
 
 fn validate_control_error_handling_recovery(
