@@ -28,7 +28,7 @@ impl BrowserDataDocument {
         Ok(Self { value })
     }
 
-    pub fn board_lane_ids(&self) -> Result<Vec<BoardLaneId>, BrowserDataDocumentError> {
+    pub(crate) fn board_lane_ids(&self) -> Result<Vec<BoardLaneId>, BrowserDataDocumentError> {
         self.value
             .get("board")
             .and_then(|board| board.get("lanes"))
@@ -40,7 +40,7 @@ impl BrowserDataDocument {
             .collect()
     }
 
-    pub fn event_element_names(
+    pub(crate) fn event_element_names(
         &self,
     ) -> Result<Vec<BrowserEventElementName>, BrowserDataDocumentError> {
         self.value
@@ -67,7 +67,7 @@ impl BrowserDataDocument {
             .collect()
     }
 
-    pub fn error_recovery_details(
+    pub(crate) fn error_recovery_details(
         &self,
     ) -> Result<Vec<BrowserErrorRecoveryDetail>, BrowserDataDocumentError> {
         self.value
@@ -87,11 +87,11 @@ pub struct BrowserDataCorpus {
 }
 
 impl BrowserDataCorpus {
-    pub fn new(documents: Vec<BrowserDataDocument>) -> Self {
+    pub(crate) fn new(documents: Vec<BrowserDataDocument>) -> Self {
         Self { documents }
     }
 
-    pub fn board_lane_ids(&self) -> Result<Vec<BoardLaneId>, BrowserDataDocumentError> {
+    pub(crate) fn board_lane_ids(&self) -> Result<Vec<BoardLaneId>, BrowserDataDocumentError> {
         self.documents
             .iter()
             .map(BrowserDataDocument::board_lane_ids)
@@ -109,7 +109,7 @@ impl BrowserDataCorpus {
             })
     }
 
-    pub fn event_element_names(
+    pub(crate) fn event_element_names(
         &self,
     ) -> Result<Vec<BrowserEventElementName>, BrowserDataDocumentError> {
         self.documents
@@ -119,7 +119,7 @@ impl BrowserDataCorpus {
             .map(|names| names.into_iter().flatten().collect())
     }
 
-    pub fn error_recovery_details(
+    pub(crate) fn error_recovery_details(
         &self,
     ) -> Result<Vec<BrowserErrorRecoveryDetail>, BrowserDataDocumentError> {
         self.documents
@@ -129,7 +129,7 @@ impl BrowserDataCorpus {
             .map(|details| details.into_iter().flatten().collect())
     }
 
-    pub fn command_definition_details(
+    pub(crate) fn command_definition_details(
         &self,
     ) -> Result<Vec<BrowserCommandDefinitionDetail>, BrowserDataDocumentError> {
         self.documents
@@ -146,7 +146,7 @@ impl BrowserDataCorpus {
             .collect()
     }
 
-    pub fn view_definition_details(
+    pub(crate) fn view_definition_details(
         &self,
     ) -> Result<Vec<BrowserViewDefinitionDetail>, BrowserDataDocumentError> {
         self.documents

@@ -15,52 +15,109 @@ use crate::core::workflow_document::WorkflowDocument;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BrowserWorkflow {
-    lane_ids: Vec<BoardLaneId>,
-    main_path_names: Vec<WorkflowStepName>,
-    branch_cards: Vec<BrowserBranchCard>,
-    transition_cards: Vec<BrowserTransitionCard>,
-    error_recovery_cards: Vec<BrowserErrorRecoveryCard>,
-    event_element_names: Vec<BrowserEventElementName>,
-    review_overlays: Vec<BrowserReviewOverlay>,
-    command_definitions: Vec<BrowserCommandDefinition>,
-    view_definitions: Vec<BrowserViewDefinition>,
+    lane_ids: BrowserLaneIds,
+    main_path_names: BrowserMainPathNames,
+    branch_cards: BrowserBranchCards,
+    transition_cards: BrowserTransitionCards,
+    error_recovery_cards: BrowserErrorRecoveryCards,
+    event_element_names: BrowserEventElementNames,
+    review_overlays: BrowserReviewOverlays,
+    command_definitions: BrowserCommandDefinitions,
+    view_definitions: BrowserViewDefinitions,
 }
 
 impl BrowserWorkflow {
-    pub fn lane_ids(&self) -> &[BoardLaneId] {
+    pub fn lane_ids(&self) -> &BrowserLaneIds {
         &self.lane_ids
     }
 
-    pub fn main_path_names(&self) -> &[WorkflowStepName] {
+    pub fn main_path_names(&self) -> &BrowserMainPathNames {
         &self.main_path_names
     }
 
-    pub fn branch_cards(&self) -> &[BrowserBranchCard] {
+    pub fn branch_cards(&self) -> &BrowserBranchCards {
         &self.branch_cards
     }
 
-    pub fn transition_cards(&self) -> &[BrowserTransitionCard] {
+    pub fn transition_cards(&self) -> &BrowserTransitionCards {
         &self.transition_cards
     }
 
-    pub fn error_recovery_cards(&self) -> &[BrowserErrorRecoveryCard] {
+    pub fn error_recovery_cards(&self) -> &BrowserErrorRecoveryCards {
         &self.error_recovery_cards
     }
 
-    pub fn event_element_names(&self) -> &[BrowserEventElementName] {
+    pub fn event_element_names(&self) -> &BrowserEventElementNames {
         &self.event_element_names
     }
 
-    pub fn review_overlays(&self) -> &[BrowserReviewOverlay] {
+    pub fn review_overlays(&self) -> &BrowserReviewOverlays {
         &self.review_overlays
     }
 
-    pub fn command_definitions(&self) -> &[BrowserCommandDefinition] {
+    pub fn command_definitions(&self) -> &BrowserCommandDefinitions {
         &self.command_definitions
     }
 
-    pub fn view_definitions(&self) -> &[BrowserViewDefinition] {
+    pub fn view_definitions(&self) -> &BrowserViewDefinitions {
         &self.view_definitions
+    }
+}
+
+macro_rules! browser_collection {
+    ($name:ident, $item:ty) => {
+        #[derive(Debug, Clone, Eq, PartialEq)]
+        pub struct $name {
+            items: Vec<$item>,
+        }
+
+        impl $name {
+            pub(crate) fn new(items: Vec<$item>) -> Self {
+                Self { items }
+            }
+
+            pub fn iter(&self) -> impl Iterator<Item = &$item> {
+                self.items.iter()
+            }
+        }
+    };
+}
+
+browser_collection!(BrowserLaneIds, BoardLaneId);
+browser_collection!(BrowserMainPathNames, WorkflowStepName);
+browser_collection!(BrowserBranchCards, BrowserBranchCard);
+browser_collection!(BrowserTransitionCards, BrowserTransitionCard);
+browser_collection!(BrowserErrorRecoveryCards, BrowserErrorRecoveryCard);
+browser_collection!(BrowserEventElementNames, BrowserEventElementName);
+browser_collection!(BrowserReviewOverlays, BrowserReviewOverlay);
+browser_collection!(BrowserCommandDefinitions, BrowserCommandDefinition);
+browser_collection!(BrowserViewDefinitions, BrowserViewDefinition);
+browser_collection!(SourceControlReferences, SourceControlReference);
+browser_collection!(DefinitionSectionLabels, DefinitionSectionLabel);
+browser_collection!(BrowserFieldSourceChains, BrowserFieldSourceChain);
+browser_collection!(BrowserControlEffects, BrowserControlEffect);
+browser_collection!(SourceChainHops, SourceChainHop);
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserSliceDocuments {
+    documents: Vec<FileContents>,
+}
+
+impl BrowserSliceDocuments {
+    pub fn empty() -> Self {
+        Self {
+            documents: Vec::new(),
+        }
+    }
+
+    pub fn from_documents(documents: impl IntoIterator<Item = FileContents>) -> Self {
+        Self {
+            documents: documents.into_iter().collect(),
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &FileContents> {
+        self.documents.iter()
     }
 }
 
@@ -152,8 +209,8 @@ impl BrowserReviewOverlay {
 pub struct BrowserCommandDefinition {
     name: CommandName,
     owning_slice: SliceName,
-    source_controls: Vec<SourceControlReference>,
-    section_labels: Vec<DefinitionSectionLabel>,
+    source_controls: SourceControlReferences,
+    section_labels: DefinitionSectionLabels,
 }
 
 impl BrowserCommandDefinition {
@@ -165,11 +222,11 @@ impl BrowserCommandDefinition {
         &self.owning_slice
     }
 
-    pub fn source_controls(&self) -> &[SourceControlReference] {
+    pub fn source_controls(&self) -> &SourceControlReferences {
         &self.source_controls
     }
 
-    pub fn section_labels(&self) -> &[DefinitionSectionLabel] {
+    pub fn section_labels(&self) -> &DefinitionSectionLabels {
         &self.section_labels
     }
 }
@@ -177,8 +234,8 @@ impl BrowserCommandDefinition {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BrowserViewDefinition {
     name: ViewName,
-    field_source_chains: Vec<BrowserFieldSourceChain>,
-    control_effects: Vec<BrowserControlEffect>,
+    field_source_chains: BrowserFieldSourceChains,
+    control_effects: BrowserControlEffects,
 }
 
 impl BrowserViewDefinition {
@@ -186,11 +243,11 @@ impl BrowserViewDefinition {
         &self.name
     }
 
-    pub fn field_source_chains(&self) -> &[BrowserFieldSourceChain] {
+    pub fn field_source_chains(&self) -> &BrowserFieldSourceChains {
         &self.field_source_chains
     }
 
-    pub fn control_effects(&self) -> &[BrowserControlEffect] {
+    pub fn control_effects(&self) -> &BrowserControlEffects {
         &self.control_effects
     }
 }
@@ -198,7 +255,7 @@ impl BrowserViewDefinition {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BrowserFieldSourceChain {
     field: ViewFieldName,
-    hops: Vec<SourceChainHop>,
+    hops: SourceChainHops,
 }
 
 impl BrowserFieldSourceChain {
@@ -206,7 +263,7 @@ impl BrowserFieldSourceChain {
         &self.field
     }
 
-    pub fn hops(&self) -> &[SourceChainHop] {
+    pub fn hops(&self) -> &SourceChainHops {
         &self.hops
     }
 }
@@ -234,7 +291,7 @@ impl BrowserControlEffect {
 
 pub fn compose_browser_workflow(
     workflow_document: FileContents,
-    slice_documents: Vec<FileContents>,
+    slice_documents: BrowserSliceDocuments,
 ) -> Result<BrowserWorkflow, BrowserCompositionError> {
     let workflow_semantics = WorkflowDocument::parse(&workflow_document)
         .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
@@ -306,8 +363,8 @@ pub fn compose_browser_workflow(
         .map(|detail| BrowserCommandDefinition {
             name: detail.name().clone(),
             owning_slice: detail.owning_slice().clone(),
-            source_controls: detail.source_controls().to_vec(),
-            section_labels: detail.section_labels().to_vec(),
+            source_controls: SourceControlReferences::new(detail.source_controls().to_vec()),
+            section_labels: DefinitionSectionLabels::new(detail.section_labels().to_vec()),
         })
         .collect();
     let view_definitions = browser_data
@@ -316,36 +373,40 @@ pub fn compose_browser_workflow(
         .into_iter()
         .map(|detail| BrowserViewDefinition {
             name: detail.name().clone(),
-            field_source_chains: detail
-                .field_source_chains()
-                .iter()
-                .map(|source_chain| BrowserFieldSourceChain {
-                    field: source_chain.field().clone(),
-                    hops: source_chain.hops().to_vec(),
-                })
-                .collect(),
-            control_effects: detail
-                .control_effects()
-                .iter()
-                .map(|effect| BrowserControlEffect {
-                    label: effect.label().clone(),
-                    kind: effect.kind().clone(),
-                    target: effect.target().clone(),
-                })
-                .collect(),
+            field_source_chains: BrowserFieldSourceChains::new(
+                detail
+                    .field_source_chains()
+                    .iter()
+                    .map(|source_chain| BrowserFieldSourceChain {
+                        field: source_chain.field().clone(),
+                        hops: SourceChainHops::new(source_chain.hops().to_vec()),
+                    })
+                    .collect(),
+            ),
+            control_effects: BrowserControlEffects::new(
+                detail
+                    .control_effects()
+                    .iter()
+                    .map(|effect| BrowserControlEffect {
+                        label: effect.label().clone(),
+                        kind: effect.kind().clone(),
+                        target: effect.target().clone(),
+                    })
+                    .collect(),
+            ),
         })
         .collect();
 
     Ok(BrowserWorkflow {
-        lane_ids,
-        main_path_names,
-        branch_cards,
-        transition_cards,
-        error_recovery_cards,
-        event_element_names,
-        review_overlays,
-        command_definitions,
-        view_definitions,
+        lane_ids: BrowserLaneIds::new(lane_ids),
+        main_path_names: BrowserMainPathNames::new(main_path_names),
+        branch_cards: BrowserBranchCards::new(branch_cards),
+        transition_cards: BrowserTransitionCards::new(transition_cards),
+        error_recovery_cards: BrowserErrorRecoveryCards::new(error_recovery_cards),
+        event_element_names: BrowserEventElementNames::new(event_element_names),
+        review_overlays: BrowserReviewOverlays::new(review_overlays),
+        command_definitions: BrowserCommandDefinitions::new(command_definitions),
+        view_definitions: BrowserViewDefinitions::new(view_definitions),
     })
 }
 

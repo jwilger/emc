@@ -362,7 +362,7 @@ pub struct BrowserCommandDefinitionDetail {
 }
 
 impl BrowserCommandDefinitionDetail {
-    pub fn new(
+    pub(crate) fn new(
         name: CommandName,
         owning_slice: SliceName,
         source_controls: Vec<SourceControlReference>,
@@ -384,11 +384,11 @@ impl BrowserCommandDefinitionDetail {
         &self.owning_slice
     }
 
-    pub fn source_controls(&self) -> &[SourceControlReference] {
+    pub(crate) fn source_controls(&self) -> &[SourceControlReference] {
         &self.source_controls
     }
 
-    pub fn section_labels(&self) -> &[DefinitionSectionLabel] {
+    pub(crate) fn section_labels(&self) -> &[DefinitionSectionLabel] {
         &self.section_labels
     }
 }
@@ -401,7 +401,7 @@ pub struct BrowserViewDefinitionDetail {
 }
 
 impl BrowserViewDefinitionDetail {
-    pub fn new(
+    pub(crate) fn new(
         name: ViewName,
         field_source_chains: Vec<BrowserFieldSourceChainDetail>,
         control_effects: Vec<BrowserControlEffectDetail>,
@@ -417,11 +417,11 @@ impl BrowserViewDefinitionDetail {
         &self.name
     }
 
-    pub fn field_source_chains(&self) -> &[BrowserFieldSourceChainDetail] {
+    pub(crate) fn field_source_chains(&self) -> &[BrowserFieldSourceChainDetail] {
         &self.field_source_chains
     }
 
-    pub fn control_effects(&self) -> &[BrowserControlEffectDetail] {
+    pub(crate) fn control_effects(&self) -> &[BrowserControlEffectDetail] {
         &self.control_effects
     }
 }
@@ -433,7 +433,7 @@ pub struct BrowserFieldSourceChainDetail {
 }
 
 impl BrowserFieldSourceChainDetail {
-    pub fn new(field: ViewFieldName, hops: Vec<SourceChainHop>) -> Self {
+    pub(crate) fn new(field: ViewFieldName, hops: Vec<SourceChainHop>) -> Self {
         Self { field, hops }
     }
 
@@ -441,7 +441,7 @@ impl BrowserFieldSourceChainDetail {
         &self.field
     }
 
-    pub fn hops(&self) -> &[SourceChainHop] {
+    pub(crate) fn hops(&self) -> &[SourceChainHop] {
         &self.hops
     }
 }

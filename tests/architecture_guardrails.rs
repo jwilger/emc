@@ -391,6 +391,29 @@ mod tests {
     }
 
     #[test]
+    fn browser_projection_public_apis_use_semantic_collections() -> Result<(), Box<dyn Error>> {
+        let violations = [
+            "src/core/browser.rs",
+            "src/core/browser_data_document.rs",
+            "src/core/types.rs",
+        ]
+        .into_iter()
+        .map(public_collection_signature_violations)
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "browser projection APIs must expose semantic collection types, not raw Vec<T> or slices"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn workflow_mutation_core_uses_semantic_json_document_types() -> Result<(), Box<dyn Error>> {
         let source = read_workspace_file("src/core/workflow.rs")?;
         let violations = [
@@ -923,6 +946,45 @@ mod tests {
             "serde_json::Map",
             "serde_json::from_str",
         ]
+    }
+
+    fn public_collection_signature_violations(
+        relative_path: &str,
+    ) -> Result<Vec<String>, Box<dyn Error>> {
+        let source = read_workspace_file(relative_path)?;
+        let mut violations = Vec::new();
+        let mut signature_start = None;
+        let mut signature = String::new();
+
+        for (index, line) in source.lines().enumerate() {
+            if line.trim_start().starts_with("pub fn ") {
+                signature_start = Some(index + 1);
+                signature.clear();
+            }
+
+            if signature_start.is_some() {
+                signature.push_str(line.trim());
+                signature.push(' ');
+                if line.contains('{') {
+                    if ["Vec<", "-> &["]
+                        .iter()
+                        .any(|marker| signature.contains(marker))
+                    {
+                        let Some(start) = signature_start else {
+                            return Err("signature parser lost its start line".into());
+                        };
+                        violations.push(format!(
+                            "{relative_path}:{start} exposes a structural collection in public API: {}",
+                            signature.trim()
+                        ));
+                    }
+                    signature_start = None;
+                    signature.clear();
+                }
+            }
+        }
+
+        Ok(violations)
     }
 
     fn rust_files_under(relative_root: &str) -> Result<Vec<PathBuf>, Box<dyn Error>> {
