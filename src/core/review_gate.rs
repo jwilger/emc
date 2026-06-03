@@ -5,6 +5,10 @@ pub fn review_gate(workflow_slug: WorkflowSlug) -> EffectPlan {
     EffectPlan::new(vec![
         Effect::RequireReviewRecord(
             project_path(format!("reviews/{}.review.json", workflow_slug.as_ref())),
+            project_path(format!(
+                "model/browser/data/workflows/{}.eventmodel.json",
+                workflow_slug.as_ref()
+            )),
             report_line("workflow review is not clean"),
         ),
         Effect::Report(report_line("workflow review is clean")),

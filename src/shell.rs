@@ -100,9 +100,10 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 )))
             }
         }
-        Effect::RequireReviewRecord(path, message) => {
+        Effect::RequireReviewRecord(path, workflow_path, message) => {
             if Path::new(path.as_ref()).is_file() {
-                require_clean_review_record(path.as_ref(), message.as_ref()).map(|()| None)
+                require_clean_review_record(path.as_ref(), workflow_path.as_ref(), message.as_ref())
+                    .map(|()| None)
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
@@ -163,7 +164,11 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
     }
 }
 
-fn require_clean_review_record(path: &str, fallback_message: &str) -> Result<(), ShellError> {
+fn require_clean_review_record(
+    path: &str,
+    workflow_path: &str,
+    fallback_message: &str,
+) -> Result<(), ShellError> {
     let contents = fs::read_to_string(Path::new(path)).map_err(ShellError::io)?;
     let record = serde_json::from_str::<Value>(&contents)
         .map_err(|_error| ShellError::message(fallback_message.to_owned()))?;
@@ -172,6 +177,15 @@ fn require_clean_review_record(path: &str, fallback_message: &str) -> Result<(),
     };
     if record_object.get("status").and_then(Value::as_str) != Some("clean") {
         return Err(ShellError::message(fallback_message.to_owned()));
+    }
+    if record_object
+        .get("model_content_digest")
+        .and_then(Value::as_str)
+        != Some(model_content_digest(workflow_path)?.as_str())
+    {
+        return Err(ShellError::message(
+            "clean review is stale for current model digest",
+        ));
     }
     let Some(category_results) = record_object
         .get("category_results")
@@ -191,6 +205,44 @@ fn require_clean_review_record(path: &str, fallback_message: &str) -> Result<(),
             ))),
         }
     })
+}
+
+fn model_content_digest(workflow_path: &str) -> Result<String, ShellError> {
+    let workflow_contents = fs::read_to_string(Path::new(workflow_path)).map_err(ShellError::io)?;
+    let slice_files = workflow_slice_file_paths(workflow_path, &workflow_contents)?;
+    let mut digest = StableDigest::new();
+    digest.write(workflow_path);
+    digest.write(&workflow_contents);
+    slice_files.into_iter().try_for_each(|slice_file| {
+        let slice_contents = fs::read_to_string(&slice_file).map_err(ShellError::io)?;
+        digest.write(&slice_file.to_string_lossy());
+        digest.write(&slice_contents);
+        Ok::<(), ShellError>(())
+    })?;
+    Ok(digest.finish())
+}
+
+struct StableDigest {
+    value: u64,
+}
+
+impl StableDigest {
+    fn new() -> Self {
+        Self {
+            value: 0xcbf2_9ce4_8422_2325,
+        }
+    }
+
+    fn write(&mut self, value: &str) {
+        value.as_bytes().iter().for_each(|byte| {
+            self.value ^= u64::from(*byte);
+            self.value = self.value.wrapping_mul(0x0000_0100_0000_01b3);
+        });
+    }
+
+    fn finish(self) -> String {
+        format!("emc-fnv1a64:{:016x}", self.value)
+    }
 }
 
 fn workflow_slice_marker(prefix: &str, workflow_contents: &str) -> Result<String, ShellError> {

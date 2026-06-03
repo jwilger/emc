@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-    use std::fs::write;
+    use std::fs::{read_to_string, write};
+    use std::path::Path;
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -70,7 +71,10 @@ mod tests {
 
         write(
             temp_dir.path().join("reviews/open-ticket.review.json"),
-            "{\n  \"workflow_slug\": \"open-ticket\",\n  \"model_content_digest\": \"abc123\",\n  \"reviewer_id\": \"event-model-reviewer\",\n  \"status\": \"clean\",\n  \"category_results\": {},\n  \"mandatory_findings\": [],\n  \"reviewed_at\": \"2026-06-01T00:00:00.000Z\"\n}\n",
+            format!(
+                "{{\n  \"workflow_slug\": \"open-ticket\",\n  \"model_content_digest\": \"{}\",\n  \"reviewer_id\": \"event-model-reviewer\",\n  \"status\": \"clean\",\n  \"category_results\": {{}},\n  \"mandatory_findings\": [],\n  \"reviewed_at\": \"2026-06-01T00:00:00.000Z\"\n}}\n",
+                current_model_digest(temp_dir.path())?
+            ),
         )?;
 
         Command::cargo_bin("emc")?
@@ -83,5 +87,85 @@ mod tests {
             ));
 
         Ok(())
+    }
+
+    #[test]
+    fn review_gate_blocks_clean_record_with_stale_model_digest() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        write(
+            temp_dir.path().join("reviews/open-ticket.review.json"),
+            clean_review_record("stale-digest"),
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["review", "gate", "--workflow", "open-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "clean review is stale for current model digest",
+            ));
+
+        Ok(())
+    }
+
+    fn clean_review_record(model_content_digest: &str) -> String {
+        format!(
+            "{{\n  \"workflow_slug\": \"open-ticket\",\n  \"model_content_digest\": \"{model_content_digest}\",\n  \"reviewer_id\": \"event-model-reviewer\",\n  \"status\": \"clean\",\n  \"category_results\": {{\n    \"lifecycle-entry\": \"clean\",\n    \"canonical-lanes\": \"clean\",\n    \"board-connections\": \"clean\",\n    \"fake-intermediates\": \"clean\",\n    \"slice-ownership\": \"clean\",\n    \"source-chains\": \"clean\",\n    \"workflow-reachability\": \"clean\",\n    \"transition-resolution\": \"clean\",\n    \"navigation-targets\": \"clean\",\n    \"branch-shape\": \"clean\",\n    \"outcomes-and-errors\": \"clean\",\n    \"scenario-coverage\": \"clean\",\n    \"timeline-rendering\": \"clean\"\n  }},\n  \"mandatory_findings\": [],\n  \"reviewed_at\": \"2026-06-01T00:00:00.000Z\"\n}}\n"
+        )
+    }
+
+    fn current_model_digest(project_root: &Path) -> Result<String, Box<dyn Error>> {
+        let workflow_path = "model/browser/data/workflows/open-ticket.eventmodel.json";
+        let workflow_contents = read_to_string(project_root.join(workflow_path))?;
+        let mut digest = StableDigest::new();
+        digest.write(workflow_path);
+        digest.write(&workflow_contents);
+        Ok(digest.finish())
+    }
+
+    struct StableDigest {
+        value: u64,
+    }
+
+    impl StableDigest {
+        fn new() -> Self {
+            Self {
+                value: 0xcbf2_9ce4_8422_2325,
+            }
+        }
+
+        fn write(&mut self, value: &str) {
+            value.as_bytes().iter().for_each(|byte| {
+                self.value ^= u64::from(*byte);
+                self.value = self.value.wrapping_mul(0x0000_0100_0000_01b3);
+            });
+        }
+
+        fn finish(self) -> String {
+            format!("emc-fnv1a64:{:016x}", self.value)
+        }
     }
 }
