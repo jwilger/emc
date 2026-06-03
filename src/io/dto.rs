@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use serde_json::{Map, Value};
 
+use crate::core::connection::ConnectionKind;
 use crate::core::emc::{EMCSliceImport, EMCWorkflowImport};
 use crate::core::effect::FileContents;
 use crate::core::layout::ImportedWorkflowLayout;
@@ -11,7 +12,7 @@ use crate::core::project::ProjectName;
 use crate::core::slice::SliceKind;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelDigest, ModelName, QuintModuleName, SliceSlug,
-    WorkflowSlug,
+    TransitionTriggerName, WorkflowSlug,
 };
 use crate::core::validation::{
     AutomationCommandPolicy, AutomationTrigger, BoardElement, BoardElementKind,
@@ -193,6 +194,23 @@ pub fn parse_slice_kind(raw: &str) -> Result<SliceKind, BoundaryParseError> {
             "invalid slice type: {raw}"
         ))),
     }
+}
+
+pub fn parse_connection_kind(raw: &str) -> Result<ConnectionKind, BoundaryParseError> {
+    match raw.trim() {
+        "navigation" => Ok(ConnectionKind::navigation()),
+        _ => Err(BoundaryParseError::new(format!(
+            "invalid connection kind: {raw}"
+        ))),
+    }
+}
+
+pub fn parse_transition_trigger_name(
+    raw: &str,
+) -> Result<TransitionTriggerName, BoundaryParseError> {
+    TransitionTriggerName::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid transition trigger name: {error}"))
+    })
 }
 
 pub fn parse_lean_module_name(raw: &str) -> Result<LeanModuleName, BoundaryParseError> {

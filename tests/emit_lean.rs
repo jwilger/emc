@@ -4,6 +4,7 @@ mod tests {
 
     use emc::core::effect::ArtifactDigest;
     use emc::core::emit::lean::emit_workflow_module;
+    use emc::core::types::WorkflowTransitionLabel;
     use emc::io::dto::{
         parse_lean_module_name, parse_model_description, parse_model_name, parse_slice_slug,
         parse_workflow_slug,
@@ -17,6 +18,9 @@ mod tests {
             parse_model_description("Actor opens a repair ticket.")?,
             parse_workflow_slug("open-ticket")?,
             vec![parse_slice_slug("capture-ticket")?],
+            vec![WorkflowTransitionLabel::try_new(
+                "capture-ticket->review-ticket:navigation:review-ticket-screen".to_owned(),
+            )?],
             ArtifactDigest::try_new("workflow:Open ticket".to_owned())?,
         );
         let lean = module.as_ref();
@@ -27,6 +31,11 @@ mod tests {
         assert!(lean.contains("def workflowSlug := \"open-ticket\""));
         assert!(lean.contains("def workflowDescription := \"Actor opens a repair ticket.\""));
         assert!(lean.contains("def workflowSlices := [\"capture-ticket\"]"));
+        assert!(
+            lean.contains(
+                "def workflowTransitions := [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
+            )
+        );
         assert!(lean.contains("theorem workflowIdentityIsStable"));
 
         Ok(())
