@@ -117,6 +117,25 @@ When binding HTTP beyond the local machine, provide an auth token:
 emc mcp http --host 0.0.0.0 --port 7331 --auth-token "$EMC_MCP_TOKEN"
 ```
 
+## A normal modeling loop
+
+Most day-to-day work follows this loop:
+
+1. Add or change the model through `emc` commands or MCP tools.
+2. Run `emc check` to confirm browser, Lean4, and Quint artifacts are present
+   and synchronized.
+3. Run `emc validate <target>` when changing event-model JSON rule coverage or
+   when checking a specific workflow or slice file.
+4. Run `emc review gate --workflow <slug>` before treating a workflow as
+   reviewed and ready to advance.
+5. Run `emc verify` to execute the generated Lean4 and Quint verification entry
+   points.
+6. Run `emc generate site --output site` when people need to browse the current
+   model.
+
+If `emc check` fails, fix synchronization drift before running `emc verify`.
+Verification assumes the generated formal artifacts match the browser model.
+
 ## Mental model
 
 An EMC project has a project name, a set of workflows, and generated artifacts.
@@ -266,8 +285,34 @@ Run the strict local gate:
 just ci
 ```
 
+`just ci` runs formatting, clippy, tests, and build with Rust warnings treated
+as errors. It is the fast default gate.
+
+Mutation testing is available as an explicit local engineering gate. It is not
+part of `just ci`, because it is slower and should be used at the right cadence:
+
+```sh
+just mutants-diff
+just mutants-core
+just mutants-full
+```
+
+Use `just mutants-diff` before committing meaningful Rust changes. It runs
+mutation testing only against the current Rust source diff. Use
+`just mutants-core` after changes to workflow, slice, or connection semantics.
+Use `just mutants-full` before larger milestones or releases.
+
 The Nix flake builds the `emc` package, wraps it with Lean4/Lake and Quint on
 `PATH`, and provides a Docker-compatible image for container use.
+
+The Nix gate is:
+
+```sh
+nix flake check
+```
+
+That builds the packaged binary, runs package smoke checks, and builds the
+Docker-compatible image.
 
 ## Current status
 
