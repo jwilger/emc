@@ -36,6 +36,7 @@ pub enum Effect {
     RunProcess(ProcessInvocation),
     ShowWorkflowFromWorkflow(WorkflowSlug),
     UpdateWorkflowDescriptionFromIndexAndWorkflow(WorkflowSlug, ModelDescription),
+    ValidateEventModelTarget(ProjectPath),
     VerifyProjectFromIndex,
     WriteFile(ProjectPath, FileContents),
     WriteFileIfMissing(ProjectPath, FileContents),

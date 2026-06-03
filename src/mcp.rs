@@ -1,6 +1,5 @@
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::Path;
 
 use serde_json::{Value, json};
 
@@ -9,7 +8,6 @@ use crate::core::effect::{Effect, EffectPlan, ProjectPath};
 use crate::core::review_gate::review_gate;
 use crate::core::slice::NewSlice;
 use crate::core::workflow::NewWorkflow;
-use crate::event_model_validation::validate_target;
 use crate::io::dto::{
     parse_connection_kind, parse_model_description, parse_model_name, parse_slice_kind,
     parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
@@ -550,9 +548,15 @@ fn validate_event_model_tool_text(request: &Value) -> Result<String, ShellError>
         .and_then(|params| params.get("arguments"))
         .and_then(|arguments| arguments.get("target"))
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("validate_event_model requires target"))?;
-    validate_target(Path::new(target))?;
-    Ok(format!("event model is valid at {target}"))
+        .ok_or_else(|| ShellError::message("validate_event_model requires target"))
+        .and_then(|target| {
+            ProjectPath::try_new(target.to_owned())
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    interpret_collect_reports(EffectPlan::new(vec![Effect::ValidateEventModelTarget(
+        target,
+    )]))
+    .map(|reports| reports.join("\n"))
 }
 
 fn review_gate_tool_text(request: &Value) -> Result<String, ShellError> {
