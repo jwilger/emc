@@ -1779,6 +1779,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_absence_default_read_model_field_scenarios(document))
         .and_then(|()| validate_transitive_read_model_derivation(document))
         .and_then(|()| validate_read_model_field_event_sources(document))
+        .and_then(|()| validate_state_view_slices_own_views(document))
 }
 
 pub fn validate_event_model_corpus(
@@ -3177,6 +3178,21 @@ fn validate_state_view_empty_read_model_state_scenarios(
             Err(validation_issue(format!(
                 "state-view slice '{}' must include a scenario for empty state of read model '{}'",
                 missing.slice_name, missing.read_model
+            )))
+        })
+}
+
+fn validate_state_view_slices_own_views(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .find(|slice| slice.is_state_view() && slice.owned_views.is_empty())
+        .map_or(Ok(()), |slice| {
+            Err(validation_issue(format!(
+                "state_view slice '{}' must own at least one view",
+                slice.name
             )))
         })
 }
