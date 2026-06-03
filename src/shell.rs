@@ -8,6 +8,22 @@ use std::process::Command;
 use crate::core::effect::{Effect, EffectPlan, ProcessInvocation};
 use serde_json::Value;
 
+const REQUIRED_REVIEW_CATEGORIES: &[&str] = &[
+    "lifecycle-entry",
+    "canonical-lanes",
+    "board-connections",
+    "fake-intermediates",
+    "slice-ownership",
+    "source-chains",
+    "workflow-reachability",
+    "transition-resolution",
+    "navigation-targets",
+    "branch-shape",
+    "outcomes-and-errors",
+    "scenario-coverage",
+    "timeline-rendering",
+];
+
 #[derive(Debug)]
 pub struct ShellError {
     message: String,
@@ -84,6 +100,13 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 )))
             }
         }
+        Effect::RequireReviewRecord(path, message) => {
+            if Path::new(path.as_ref()).is_file() {
+                require_clean_review_record(path.as_ref(), message.as_ref()).map(|()| None)
+            } else {
+                Err(ShellError::message(message.as_ref().to_owned()))
+            }
+        }
         Effect::RequireWorkflowSliceFiles(workflow_path, message) => {
             let workflow_contents =
                 fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
@@ -138,6 +161,36 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
         Effect::Report(line) => Ok(Some(line.as_ref().to_owned())),
         Effect::ReportDocument(contents) => Ok(Some(contents.as_ref().to_owned())),
     }
+}
+
+fn require_clean_review_record(path: &str, fallback_message: &str) -> Result<(), ShellError> {
+    let contents = fs::read_to_string(Path::new(path)).map_err(ShellError::io)?;
+    let record = serde_json::from_str::<Value>(&contents)
+        .map_err(|_error| ShellError::message(fallback_message.to_owned()))?;
+    let Some(record_object) = record.as_object() else {
+        return Err(ShellError::message(fallback_message.to_owned()));
+    };
+    if record_object.get("status").and_then(Value::as_str) != Some("clean") {
+        return Err(ShellError::message(fallback_message.to_owned()));
+    }
+    let Some(category_results) = record_object
+        .get("category_results")
+        .and_then(Value::as_object)
+    else {
+        return Err(ShellError::message(fallback_message.to_owned()));
+    };
+
+    REQUIRED_REVIEW_CATEGORIES.iter().try_for_each(|category| {
+        match category_results.get(*category).and_then(Value::as_str) {
+            Some("clean") => Ok(()),
+            Some(_) => Err(ShellError::message(format!(
+                "review category '{category}' is not clean"
+            ))),
+            None => Err(ShellError::message(format!(
+                "clean review is missing category '{category}'"
+            ))),
+        }
+    })
 }
 
 fn workflow_slice_marker(prefix: &str, workflow_contents: &str) -> Result<String, ShellError> {

@@ -4,6 +4,7 @@ pub mod effect;
 pub mod emit;
 pub mod layout;
 pub mod project;
+pub mod review_gate;
 pub mod site;
 pub mod slice;
 pub mod types;
