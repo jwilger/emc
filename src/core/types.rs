@@ -160,3 +160,17 @@ pub struct SourceControlReference(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
 pub struct DefinitionSectionLabel(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ViewFieldName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct SourceChainHop(String);
