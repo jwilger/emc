@@ -1504,6 +1504,50 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_unmodeled_lean_slice_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        write(
+            temp_dir.path().join("model/lean/slices/OrphanSlice.lean"),
+            "namespace OrphanSlice\n\nend OrphanSlice\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean slice artifact drift for OrphanSlice.lean",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_unmodeled_quint_slice_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        write(
+            temp_dir.path().join("model/quint/slices/OrphanSlice.qnt"),
+            "module OrphanSlice {\n}\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint slice artifact drift for OrphanSlice.qnt",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_lean_slice_artifact_field_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 

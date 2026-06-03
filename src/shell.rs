@@ -184,6 +184,18 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             )
             .map(|()| Vec::new())
         }
+        Effect::RequireOnlyModeledFormalSliceArtifacts(
+            workflows_path,
+            artifact_directory,
+            extension,
+            message,
+        ) => require_only_modeled_formal_slice_artifacts(
+            workflows_path.as_ref(),
+            artifact_directory.as_ref(),
+            extension.as_ref(),
+            message.as_ref(),
+        )
+        .map(|()| Vec::new()),
         Effect::RequireReferencedSliceFiles(workflows_path, slices_path, message) => {
             require_referenced_slice_files(
                 workflows_path.as_ref(),
@@ -766,6 +778,63 @@ fn require_only_modeled_artifacts(
         .map_or(Ok(()), |file_name| {
             Err(ShellError::message(format!("{message} for {file_name}")))
         })
+}
+
+fn require_only_modeled_formal_slice_artifacts(
+    workflows_path: &str,
+    artifact_directory: &str,
+    extension: &str,
+    message: &str,
+) -> Result<(), ShellError> {
+    if !Path::new(artifact_directory).exists() {
+        return Ok(());
+    }
+    let mut workflow_paths = fs::read_dir(Path::new(workflows_path))
+        .map_err(ShellError::io)?
+        .map(|entry| entry.map(|directory_entry| directory_entry.path()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ShellError::io)?;
+    workflow_paths.sort();
+
+    let allowed_paths = workflow_paths
+        .into_iter()
+        .filter(|path| {
+            path.file_name()
+                .and_then(|file_name| file_name.to_str())
+                .is_some_and(|file_name| file_name.ends_with(".eventmodel.json"))
+        })
+        .map(|path| {
+            fs::read_to_string(path)
+                .map_err(ShellError::io)
+                .and_then(|contents| {
+                    formal_slice_artifact_paths(&contents, artifact_directory, extension)
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+
+    require_only_modeled_artifacts(artifact_directory, extension, &allowed_paths, message)
+}
+
+fn formal_slice_artifact_paths(
+    workflow_contents: &str,
+    artifact_directory: &str,
+    extension: &str,
+) -> Result<Vec<ProjectPath>, ShellError> {
+    workflow_slice_details(workflow_contents)?
+        .into_iter()
+        .map(|slice| {
+            ProjectPath::try_new(format!(
+                "{}/{}{}",
+                artifact_directory,
+                module_name_from_raw(slice.name().as_ref()),
+                extension
+            ))
+            .map_err(ShellError::project_path)
+        })
+        .collect()
 }
 
 fn allowed_artifact_file_names(allowed_paths: &[ProjectPath]) -> BTreeSet<String> {

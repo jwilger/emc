@@ -105,6 +105,18 @@ pub fn check_project(
                     quint_artifact_paths,
                     report_line("Quint model artifact drift"),
                 ),
+                Effect::RequireOnlyModeledFormalSliceArtifacts(
+                    project_path("model/browser/data/workflows"),
+                    project_path("model/lean/slices"),
+                    artifact_file_extension(".lean"),
+                    report_line("Lean slice artifact drift"),
+                ),
+                Effect::RequireOnlyModeledFormalSliceArtifacts(
+                    project_path("model/browser/data/workflows"),
+                    project_path("model/quint/slices"),
+                    artifact_file_extension(".qnt"),
+                    report_line("Quint slice artifact drift"),
+                ),
                 Effect::RequireReferencedSliceFiles(
                     project_path("model/browser/data/workflows"),
                     project_path("model/browser/data/slices"),

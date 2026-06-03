@@ -117,6 +117,7 @@
 - 2026-06-03: `emc verify` now runs Lean4 and Quint verification for generated business slice modules as well as workflow modules. Quint slice modules expose a generated `sliceIdentityStable` invariant plus deterministic `init` and `step` actions so the packaged pinned Quint runtime verifies actual slice artifacts.
 - 2026-06-03: Generated Lean4 and Quint business slice modules now carry deterministic slice digest markers derived from semantic slice name, slug, kind, and description. `emc check` rejects stale or duplicate slice digest metadata in formal slice artifacts.
 - 2026-06-03: `emc check` now rejects stale Lean4 `sliceIdentityIsStable` theorem declarations and Quint `sliceIdentityStable` invariant declarations in generated business slice modules, so slice formal obligations must match the semantic slice identity instead of only carrying matching fields and digests.
+- 2026-06-03: `emc check` now rejects unmodeled Lean4 and Quint business slice modules under `model/lean/slices` and `model/quint/slices`, deriving the allowed formal slice artifact set from semantic workflow slice details instead of accepting extra orphan formal modules.
 
 ### Task 1: Guardrails and Project Skeleton
 
