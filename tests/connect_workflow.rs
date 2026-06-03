@@ -222,6 +222,95 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn connect_workflow_adds_external_trigger_transition_to_canonical_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+        add_slice(
+            temp_dir.path(),
+            "record-callback",
+            "Record callback",
+            "System records an external callback.",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "record-callback",
+                "--via",
+                "external_trigger",
+                "--name",
+                "callback_received",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "connected capture-ticket to record-callback",
+            ));
+
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        assert!(
+            workflow_json.contains("\"via_external_trigger\": \"callback_received\""),
+            "workflow data must include the external trigger"
+        );
+        assert!(
+            lean.contains(
+                "def workflowTransitions : List String := [\"capture-ticket->record-callback:external_trigger:callback_received\"]"
+            ),
+            "Lean artifact must represent the external trigger workflow transition"
+        );
+        assert!(
+            quint.contains(
+                "val workflowTransitions = [\"capture-ticket->record-callback:external_trigger:callback_received\"]"
+            ),
+            "Quint artifact must represent the external trigger workflow transition"
+        );
+
+        Ok(())
+    }
+
     fn add_slice(
         cwd: &Path,
         slug: &str,
