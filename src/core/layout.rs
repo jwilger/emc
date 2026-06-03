@@ -141,11 +141,13 @@ pub fn check_project(
 
 fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Effect> {
     let project_name_text = project_name.as_ref();
+    let manifest_path = project_path("emc.toml");
     let lean_path = project_path(format!("model/lean/{module_name}.lean"));
     let lakefile_path = project_path("model/lean/lakefile.lean");
     let lean_toolchain_path = project_path("model/lean/lean-toolchain");
     let quint_path = project_path(format!("model/quint/{module_name}.qnt"));
     let quint_config_path = project_path("model/quint/quint.json");
+    let manifest_message = report_line(format!("project manifest drift for {project_name_text}"));
     let lean_message = report_line(format!("Lean project root drift for {project_name_text}"));
     let lean_config_message =
         report_line(format!("Lean project config drift for {project_name_text}"));
@@ -155,6 +157,24 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
     ));
 
     vec![
+        Effect::RequireCanonicalDeclaration(
+            manifest_path.clone(),
+            artifact_marker("name ="),
+            artifact_marker(format!("name = {}", json_string(project_name_text))),
+            manifest_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            manifest_path.clone(),
+            artifact_marker("lean_module ="),
+            artifact_marker(format!("lean_module = \"{module_name}\"")),
+            manifest_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            manifest_path,
+            artifact_marker("quint_module ="),
+            artifact_marker(format!("quint_module = \"{module_name}\"")),
+            manifest_message,
+        ),
         Effect::RequireCanonicalDeclaration(
             lakefile_path,
             artifact_marker("package "),

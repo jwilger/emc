@@ -73,6 +73,60 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_project_manifest_lean_module_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        write(
+            temp_dir.path().join("emc.toml"),
+            "[project]\nname = \"Repair Desk\"\nlean_module = \"StaleRoot\"\nquint_module = \"RepairDesk\"\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "project manifest drift for Repair Desk",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_project_manifest_quint_module_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        write(
+            temp_dir.path().join("emc.toml"),
+            "[project]\nname = \"Repair Desk\"\nlean_module = \"RepairDesk\"\nquint_module = \"StaleRoot\"\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "project manifest drift for Repair Desk",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_missing_verification_entrypoint_artifacts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
