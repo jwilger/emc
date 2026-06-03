@@ -74,6 +74,14 @@ mod tests {
             "package smoke checks must create a non-empty model before verification"
         );
         assert!(
+            flake.contains("${package}/bin/emc add slice"),
+            "package smoke checks must exercise packaged slice mutation"
+        );
+        assert!(
+            flake.contains("${package}/bin/emc connect workflow"),
+            "package smoke checks must exercise packaged workflow transition mutation"
+        );
+        assert!(
             flake.contains("${package}/bin/emc verify"),
             "package smoke checks must run packaged `emc verify` through pinned tools"
         );
