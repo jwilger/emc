@@ -370,6 +370,28 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn browser_main_path_uses_semantic_workflow_documents() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/core/browser.rs")?;
+        let violations = ["fn workflow_main_path_names("]
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| {
+                format!(
+                    "src/core/browser.rs duplicates workflow main-path semantics via `{marker}`"
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "browser composition must derive main-path workflow steps from WorkflowDocument"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",

@@ -101,6 +101,7 @@
 - 2026-06-03: Shell browser-index workflow path checks now reuse the boundary parser and `ModeledWorkflowLayout::browser_data_path()` instead of duplicating raw `workflows[].path` traversal. A shell guardrail prevents direct browser-index workflow path parsing from reappearing in the interpreter.
 - 2026-06-03: Review-gate shell checks now parse review JSON through `ReviewRecordDocument` and compare semantic workflow slugs, artifact digests, statuses, category names, and mandatory finding digests. A shell guardrail prevents direct review-record field parsing from returning to the interpreter.
 - 2026-06-03: Generic shell JSON-object checks now use `JsonObjectDocument` instead of parsing `serde_json::Value` in the interpreter. A shell guardrail prevents direct raw JSON value parsing from reappearing in shell checks.
+- 2026-06-03: Browser workflow main-path composition now derives entry/main step names from `WorkflowDocument::main_path_step_names()` instead of duplicating raw workflow-step traversal in `src/core/browser.rs`. A browser guardrail prevents the raw main-path helper from returning.
 
 ### Task 1: Guardrails and Project Skeleton
 
