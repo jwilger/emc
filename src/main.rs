@@ -2,13 +2,11 @@ use std::env;
 use std::process::ExitCode;
 
 use clap::{Arg, Command as ClapCommand};
+use emc::command;
 use emc::core::connection::WorkflowConnection;
-use emc::core::effect::{Effect, EffectPlan, ProjectPath};
-use emc::core::gherkin::{
-    GherkinSuite, list_gherkin_features, run_all_gherkin_suites, run_gherkin_suite,
-};
-use emc::core::project::{ProjectName, init_project};
-use emc::core::review_gate::review_gate;
+use emc::core::effect::ProjectPath;
+use emc::core::gherkin::GherkinSuite;
+use emc::core::project::ProjectName;
 use emc::core::slice::NewSlice;
 use emc::core::types::{ModelDescription, WorkflowSlug};
 use emc::core::workflow::NewWorkflow;
@@ -84,34 +82,20 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<(), ShellError> {
     match cli.command {
-        Command::AddSlice { slice } => {
-            interpret(EffectPlan::new(vec![Effect::AddSliceFromWorkflow(slice)]))
-        }
-        Command::AddWorkflow { workflow } => {
-            interpret(EffectPlan::new(vec![Effect::AddWorkflowFromIndex(
-                workflow,
-            )]))
-        }
-        Command::Check => interpret(EffectPlan::new(vec![Effect::CheckCurrentProject])),
-        Command::ConnectWorkflow { connection } => {
-            interpret(EffectPlan::new(vec![Effect::ConnectWorkflowFromWorkflow(
-                connection,
-            )]))
-        }
-        Command::GenerateSite { output } => {
-            interpret(EffectPlan::new(vec![Effect::GenerateSiteFromManifest(
-                output,
-            )]))
-        }
-        Command::GherkinList { suite } => interpret(list_gherkin_features(suite)),
-        Command::GherkinRunAll => interpret(run_all_gherkin_suites()),
-        Command::GherkinRun { suite } => interpret(run_gherkin_suite(suite)),
+        Command::AddSlice { slice } => interpret(command::add_slice(slice)),
+        Command::AddWorkflow { workflow } => interpret(command::add_workflow(workflow)),
+        Command::Check => interpret(command::check_project()),
+        Command::ConnectWorkflow { connection } => interpret(command::connect_workflow(connection)),
+        Command::GenerateSite { output } => interpret(command::generate_site(output)),
+        Command::GherkinList { suite } => interpret(command::gherkin_list(suite)),
+        Command::GherkinRunAll => interpret(command::gherkin_run_all()),
+        Command::GherkinRun { suite } => interpret(command::gherkin_run(suite)),
         Command::Help => print_help(),
         Command::Init { name } => {
             let project_name = ProjectName::try_new(name).map_err(ShellError::project_name)?;
-            interpret(init_project(project_name))
+            interpret(command::init(project_name))
         }
-        Command::ListWorkflows => interpret(EffectPlan::new(vec![Effect::ListWorkflowsFromIndex])),
+        Command::ListWorkflows => interpret(command::list_workflows()),
         Command::McpHttp {
             host,
             port,
@@ -119,23 +103,13 @@ fn run(cli: Cli) -> Result<(), ShellError> {
             auth_token,
         } => serve_http(&host, port, once, auth_token.as_deref()),
         Command::McpStdio => serve_stdio(),
-        Command::ReviewGate { slug } => interpret(review_gate(slug)),
-        Command::ShowWorkflow { slug } => {
-            interpret(EffectPlan::new(vec![Effect::ShowWorkflowFromWorkflow(
-                slug,
-            )]))
-        }
+        Command::ReviewGate { slug } => interpret(command::review_gate_for_workflow(slug)),
+        Command::ShowWorkflow { slug } => interpret(command::show_workflow(slug)),
         Command::UpdateWorkflowDescription { slug, description } => {
-            interpret(EffectPlan::new(vec![
-                Effect::UpdateWorkflowDescriptionFromIndexAndWorkflow(slug, description),
-            ]))
+            interpret(command::update_workflow_description(slug, description))
         }
-        Command::Validate { target } => {
-            interpret(EffectPlan::new(vec![Effect::ValidateEventModelTarget(
-                target,
-            )]))
-        }
-        Command::Verify => interpret(EffectPlan::new(vec![Effect::VerifyProjectFromIndex])),
+        Command::Validate { target } => interpret(command::validate(target)),
+        Command::Verify => interpret(command::verify()),
     }
 }
 

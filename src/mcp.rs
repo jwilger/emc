@@ -3,9 +3,9 @@ use std::net::{TcpListener, TcpStream};
 
 use serde_json::{Value, json};
 
+use crate::command;
 use crate::core::connection::WorkflowConnection;
-use crate::core::effect::{Effect, EffectPlan, ProjectPath};
-use crate::core::review_gate::review_gate;
+use crate::core::effect::ProjectPath;
 use crate::core::slice::NewSlice;
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
@@ -541,8 +541,7 @@ fn tool_call_result_response(id: &Value, result: Result<String, ShellError>) -> 
 }
 
 fn list_workflows_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(EffectPlan::new(vec![Effect::ListWorkflowsFromIndex]))
-        .map(|reports| reports.join("\n"))
+    interpret_collect_reports(command::list_workflows()).map(|reports| reports.join("\n"))
 }
 
 fn show_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -554,10 +553,7 @@ fn show_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
         .ok_or_else(|| ShellError::message("show_workflow requires slug"))?;
     let slug =
         parse_workflow_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))?;
-    interpret_collect_reports(EffectPlan::new(vec![Effect::ShowWorkflowFromWorkflow(
-        slug,
-    )]))
-    .map(|reports| reports.join("\n"))
+    interpret_collect_reports(command::show_workflow(slug)).map(|reports| reports.join("\n"))
 }
 
 fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -570,20 +566,15 @@ fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {
         .and_then(|output| {
             ProjectPath::try_new(output.to_owned()).map_err(ShellError::project_path)
         })?;
-    interpret_collect_reports(EffectPlan::new(vec![Effect::GenerateSiteFromManifest(
-        output,
-    )]))
-    .map(|reports| reports.join("\n"))
+    interpret_collect_reports(command::generate_site(output)).map(|reports| reports.join("\n"))
 }
 
 fn check_project_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(EffectPlan::new(vec![Effect::CheckCurrentProject]))
-        .map(|reports| reports.join("\n"))
+    interpret_collect_reports(command::check_project()).map(|reports| reports.join("\n"))
 }
 
 fn verify_project_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(EffectPlan::new(vec![Effect::VerifyProjectFromIndex]))
-        .map(|reports| reports.join("\n"))
+    interpret_collect_reports(command::verify()).map(|reports| reports.join("\n"))
 }
 
 fn validate_event_model_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -596,10 +587,7 @@ fn validate_event_model_tool_text(request: &Value) -> Result<String, ShellError>
         .and_then(|target| {
             ProjectPath::try_new(target.to_owned()).map_err(ShellError::project_path)
         })?;
-    interpret_collect_reports(EffectPlan::new(vec![Effect::ValidateEventModelTarget(
-        target,
-    )]))
-    .map(|reports| reports.join("\n"))
+    interpret_collect_reports(command::validate(target)).map(|reports| reports.join("\n"))
 }
 
 fn review_gate_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -613,7 +601,8 @@ fn review_gate_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_workflow_slug(raw_workflow)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(review_gate(workflow_slug)).map(|reports| reports.join("\n"))
+    interpret_collect_reports(command::review_gate_for_workflow(workflow_slug))
+        .map(|reports| reports.join("\n"))
 }
 
 fn add_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -643,9 +632,11 @@ fn add_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_model_description(raw_description)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(EffectPlan::new(vec![Effect::AddWorkflowFromIndex(
-        NewWorkflow::new(name, description, slug),
-    )]))
+    interpret_collect_reports(command::add_workflow(NewWorkflow::new(
+        name,
+        description,
+        slug,
+    )))
     .map(|reports| reports.join("\n"))
 }
 
@@ -691,15 +682,13 @@ fn add_slice_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_model_description(raw_description)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(EffectPlan::new(vec![Effect::AddSliceFromWorkflow(
-        NewSlice::new(
-            workflow_slug,
-            slice_slug,
-            slice_name,
-            slice_description,
-            slice_kind,
-        ),
-    )]))
+    interpret_collect_reports(command::add_slice(NewSlice::new(
+        workflow_slug,
+        slice_slug,
+        slice_name,
+        slice_description,
+        slice_kind,
+    )))
     .map(|reports| reports.join("\n"))
 }
 
@@ -723,10 +712,8 @@ fn update_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_model_description(raw_description)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(EffectPlan::new(vec![
-        Effect::UpdateWorkflowDescriptionFromIndexAndWorkflow(slug, description),
-    ]))
-    .map(|reports| reports.join("\n"))
+    interpret_collect_reports(command::update_workflow_description(slug, description))
+        .map(|reports| reports.join("\n"))
 }
 
 fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -800,10 +787,8 @@ fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
             reason,
         )
     };
-    interpret_collect_reports(EffectPlan::new(vec![Effect::ConnectWorkflowFromWorkflow(
-        connection,
-    )]))
-    .map(|reports| reports.join("\n"))
+    interpret_collect_reports(command::connect_workflow(connection))
+        .map(|reports| reports.join("\n"))
 }
 
 fn tool_result(text: String) -> Value {
