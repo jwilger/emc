@@ -62,6 +62,8 @@ mod tests {
                 .path()
                 .join("model/browser/data/slices/open-ticket-capture-ticket.eventmodel.json"),
         )?;
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
         assert!(
             workflow_json.contains("\"../slices/open-ticket-capture-ticket.eventmodel.json\""),
@@ -86,6 +88,14 @@ mod tests {
         assert!(
             slice_json.contains("\"description\": \"Actor enters repair ticket details.\""),
             "slice data must preserve the slice description"
+        );
+        assert!(
+            lean.contains("def workflowSlices := [\"capture-ticket\"]"),
+            "Lean artifact must represent the workflow's business slices"
+        );
+        assert!(
+            quint.contains("const workflowSlices = [\"capture-ticket\"]"),
+            "Quint artifact must represent the workflow's business slices"
         );
 
         Ok(())

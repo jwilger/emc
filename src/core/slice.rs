@@ -3,8 +3,13 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use serde_json::{Value, json};
 
+use crate::core::emc::artifact_digest;
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
-use crate::core::types::{ModelDescription, ModelName, SliceSlug, WorkflowSlug};
+use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
+use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
+use crate::core::types::{
+    LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
+};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum SliceKind {
@@ -101,6 +106,11 @@ pub fn add_slice(
             "transitions": []
         }),
     );
+    let workflow_name = workflow_name(workflow_object)?;
+    let workflow_description = workflow_description(workflow_object)?;
+    let module_name = module_name(workflow_name.as_ref());
+    let workflow_slices = workflow_slices(&steps)?;
+    let digest = artifact_digest(workflow_name.clone());
     let workflow_json = workflow_json(workflow_object, slice_files, steps)?;
     let slice_json = slice_json(&new_slice);
     let slice_name = new_slice.name.as_ref();
@@ -120,6 +130,28 @@ pub fn add_slice(
                 new_slice.slug.as_ref()
             )),
             file_contents(slice_json),
+        ),
+        Effect::WriteFile(
+            project_path(format!("model/lean/{module_name}.lean")),
+            emit_lean_workflow_module(
+                lean_module_name(module_name.clone()),
+                workflow_name.clone(),
+                workflow_description.clone(),
+                new_slice.workflow_slug.clone(),
+                workflow_slices.clone(),
+                digest.clone(),
+            ),
+        ),
+        Effect::WriteFile(
+            project_path(format!("model/quint/{module_name}.qnt")),
+            emit_quint_workflow_module(
+                quint_module_name(module_name),
+                workflow_name,
+                workflow_description,
+                new_slice.workflow_slug.clone(),
+                workflow_slices,
+                digest,
+            ),
         ),
         Effect::Report(report_line(format!("added slice {slice_name}"))),
     ]))
@@ -192,6 +224,64 @@ fn slice_file(new_slice: &NewSlice) -> String {
     )
 }
 
+fn workflow_name(
+    workflow_object: &serde_json::Map<String, Value>,
+) -> Result<ModelName, SliceMutationError> {
+    workflow_object
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| SliceMutationError::new("workflow document is missing name"))
+        .and_then(|name| {
+            ModelName::try_new(name.to_owned())
+                .map_err(|error| SliceMutationError::new(format!("invalid workflow name: {error}")))
+        })
+}
+
+fn workflow_description(
+    workflow_object: &serde_json::Map<String, Value>,
+) -> Result<ModelDescription, SliceMutationError> {
+    workflow_object
+        .get("description")
+        .and_then(Value::as_str)
+        .ok_or_else(|| SliceMutationError::new("workflow document is missing description"))
+        .and_then(|description| {
+            ModelDescription::try_new(description.to_owned()).map_err(|error| {
+                SliceMutationError::new(format!("invalid workflow description: {error}"))
+            })
+        })
+}
+
+fn workflow_slices(steps: &[Value]) -> Result<Vec<SliceSlug>, SliceMutationError> {
+    steps
+        .iter()
+        .filter_map(|step| step.get("slice").and_then(Value::as_str))
+        .map(|slice| {
+            SliceSlug::try_new(slice.to_owned())
+                .map_err(|error| SliceMutationError::new(format!("invalid slice slug: {error}")))
+        })
+        .collect()
+}
+
+fn module_name(raw: &str) -> String {
+    let mut capitalize_next = true;
+    raw.chars()
+        .filter_map(|character| {
+            if character.is_ascii_alphanumeric() {
+                let next = if capitalize_next {
+                    character.to_ascii_uppercase()
+                } else {
+                    character
+                };
+                capitalize_next = false;
+                Some(next)
+            } else {
+                capitalize_next = true;
+                None
+            }
+        })
+        .collect()
+}
+
 fn project_path(value: impl Into<String>) -> ProjectPath {
     ProjectPath::try_new(value.into()).unwrap_or_else(|error| {
         unreachable!("EMC generated project path must be valid: {error}");
@@ -201,6 +291,18 @@ fn project_path(value: impl Into<String>) -> ProjectPath {
 fn file_contents(value: impl Into<String>) -> FileContents {
     FileContents::try_new(value.into()).unwrap_or_else(|error| {
         unreachable!("EMC generated file contents must be valid: {error}");
+    })
+}
+
+fn lean_module_name(value: impl Into<String>) -> LeanModuleName {
+    LeanModuleName::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC generated Lean4 module name must be valid: {error}");
+    })
+}
+
+fn quint_module_name(value: impl Into<String>) -> QuintModuleName {
+    QuintModuleName::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC generated Quint module name must be valid: {error}");
     })
 }
 
