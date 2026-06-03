@@ -12,6 +12,7 @@ use crate::core::layout::{ModeledWorkflowLayout, check_project, list_workflows, 
 use crate::core::project::ProjectName;
 use crate::core::site::generate_site;
 use crate::core::slice::add_slice;
+use crate::core::types::WorkflowSlug;
 use crate::core::verify::verify_project;
 use crate::core::workflow::{add_workflow, update_workflow_description};
 use crate::event_model_validation::validate_event_model_sources;
@@ -87,7 +88,7 @@ pub fn interpret_collect_reports(plan: EffectPlan) -> Result<Vec<String>, ShellE
 fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
     match effect {
         Effect::AddSliceFromWorkflow(slice) => {
-            let workflow_document = read_workflow_document(slice.workflow_slug().as_ref())?;
+            let workflow_document = read_indexed_workflow_document(slice.workflow_slug())?;
             let plan = add_slice(workflow_document, slice.clone())
                 .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
@@ -102,7 +103,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(check_project(project_name, modeled_workflows))
         }
         Effect::ConnectWorkflowFromWorkflow(connection) => {
-            let workflow_document = read_workflow_document(connection.workflow_slug().as_ref())?;
+            let workflow_document = read_indexed_workflow_document(connection.workflow_slug())?;
             let plan = connect_workflow(workflow_document, connection.clone())
                 .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
@@ -271,12 +272,13 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         }
         Effect::RunProcess(invocation) => run_process(invocation),
         Effect::ShowWorkflowFromWorkflow(slug) => {
-            let workflow_document = read_workflow_document(slug.as_ref())?;
+            let workflow_document = read_indexed_workflow_document(slug)?;
             interpret_collect_reports(show_workflow(workflow_document))
         }
         Effect::UpdateWorkflowDescriptionFromIndexAndWorkflow(slug, description) => {
             let existing_workflows = read_browser_index_workflows()?;
-            let workflow_document = read_workflow_document(slug.as_ref())?;
+            let workflow_document =
+                read_indexed_workflow_document_from_layouts(slug, existing_workflows.as_slice())?;
             let plan = update_workflow_description(
                 existing_workflows,
                 workflow_document,
@@ -321,6 +323,28 @@ fn read_browser_index_workflows() -> Result<Vec<ModeledWorkflowLayout>, ShellErr
             parse_browser_index_workflows(&index)
                 .map_err(|error| ShellError::message(error.to_string()))
         })
+}
+
+fn read_indexed_workflow_document(slug: &WorkflowSlug) -> Result<FileContents, ShellError> {
+    let modeled_workflows = read_browser_index_workflows()?;
+    read_indexed_workflow_document_from_layouts(slug, modeled_workflows.as_slice())
+}
+
+fn read_indexed_workflow_document_from_layouts(
+    slug: &WorkflowSlug,
+    modeled_workflows: &[ModeledWorkflowLayout],
+) -> Result<FileContents, ShellError> {
+    if modeled_workflows
+        .iter()
+        .any(|workflow| workflow.slug() == slug)
+    {
+        read_workflow_document(slug.as_ref())
+    } else {
+        Err(ShellError::message(format!(
+            "workflow {} is not indexed",
+            slug.as_ref()
+        )))
+    }
 }
 
 fn read_workflow_document(slug: &str) -> Result<FileContents, ShellError> {

@@ -79,6 +79,7 @@
 - 2026-06-02: Browser index parsing now rejects duplicate semantic workflow slugs after path parsing, preventing distinct raw workflow paths from normalizing to the same modeled workflow identity.
 - 2026-06-02: `emc check` now rejects referenced browser slice filenames that do not round-trip through the semantic slice slug parser to the canonical generated filename, preventing path-level slice identity drift from bypassing formal artifact checks.
 - 2026-06-02: `emc validate` now applies the same semantic slice filename canonicalization at the raw workflow boundary before corpus validation, so noncanonical referenced slice paths cannot be interpreted as a different composed slice identity.
+- 2026-06-02: Workflow-targeted shell reads now require the semantic workflow slug to be present in the browser index before reading workflow JSON, so `show`, update, connect, add-slice, and MCP callers cannot operate on stale unindexed workflow files.
 
 ### Task 1: Guardrails and Project Skeleton
 
