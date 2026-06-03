@@ -5,6 +5,8 @@ use crate::core::digest::artifact_digest;
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
+use crate::core::formal_graph::workflow_graph_from_document;
+use crate::core::formal_projection::project_slice_browser_document;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceSlug, TransitionTriggerName,
     WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionFieldName,
@@ -344,11 +346,17 @@ pub fn remove_transition(
     let workflow_json = workflow_document
         .contents()
         .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
+    let updated_source_slice_projection = source_slice_projection(
+        &removal.workflow_slug,
+        &workflow_json,
+        removal.source.as_ref(),
+    )?;
     let source = removal.source.as_ref();
     let target = removal.target.as_ref();
 
     Ok(EffectPlan::new(vec![
         Effect::WriteFile(workflow_path(&removal.workflow_slug), workflow_json),
+        updated_source_slice_projection,
         Effect::WriteFile(
             project_path(format!("model/lean/{module_name}.lean")),
             emit_lean_workflow_module(
@@ -377,6 +385,32 @@ pub fn remove_transition(
             "removed transition {source} to {target}"
         ))),
     ]))
+}
+
+fn source_slice_projection(
+    workflow_slug: &WorkflowSlug,
+    workflow_document: &FileContents,
+    source: &str,
+) -> Result<Effect, ConnectionMutationError> {
+    let graph = workflow_graph_from_document(workflow_slug.clone(), workflow_document.clone())
+        .map_err(|error| ConnectionMutationError::new(error.to_string()))?;
+    graph
+        .slice_details()
+        .as_slice()
+        .iter()
+        .find(|slice| slice.slug().as_ref() == source)
+        .map(|slice| {
+            Effect::WriteFile(
+                project_path(format!(
+                    "model/browser/data/slices/{}.eventmodel.json",
+                    slice.slug().as_ref()
+                )),
+                project_slice_browser_document(&graph, slice),
+            )
+        })
+        .ok_or_else(|| {
+            ConnectionMutationError::new(format!("workflow source slice {source} is not modeled"))
+        })
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

@@ -5,7 +5,7 @@ mod tests {
     use std::path::Path;
 
     use assert_cmd::Command;
-    use predicates::prelude::predicate;
+    use predicates::prelude::{PredicateBooleanExt, predicate};
     use tempfile::TempDir;
 
     #[test]
@@ -369,7 +369,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "missing required project artifact model/lean/OpenTicket.lean",
+                "Lean workflow artifact is missing for workflow open-ticket",
             ));
 
         Ok(())
@@ -495,7 +495,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Lean workflow field drift for workflow Open ticket",
+                "failed to parse formal workflow artifact model/lean/OpenTicket.lean",
             ));
 
         Ok(())
@@ -723,6 +723,35 @@ mod tests {
             .stderr(predicate::str::contains(
                 "browser workflow drift for workflow Open ticket",
             ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_does_not_use_stale_browser_workflow_as_formal_source() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let workflow = read_to_string(&workflow_path)?.replace(
+            "\"name\": \"Open ticket\"",
+            "\"name\": \"Browser projection drift\"",
+        );
+        write(workflow_path, workflow)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(
+                predicate::str::contains("browser workflow drift for workflow Open ticket")
+                    .and(predicate::str::contains("Lean workflow").not())
+                    .and(predicate::str::contains("Quint workflow").not()),
+            );
 
         Ok(())
     }
@@ -1176,7 +1205,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Lean workflow field drift for workflow Open ticket",
+                "failed to parse formal workflow artifact model/lean/OpenTicket.lean",
             ));
 
         Ok(())
@@ -1198,7 +1227,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Lean workflow field drift for workflow Open ticket",
+                "failed to parse formal workflow artifact model/lean/OpenTicket.lean",
             ));
 
         Ok(())
@@ -1221,7 +1250,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Quint workflow field drift for workflow Open ticket",
+                "failed to parse formal workflow artifact model/quint/OpenTicket.qnt",
             ));
 
         Ok(())
@@ -1244,7 +1273,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Lean workflow transition drift for workflow Open ticket",
+                "Lean and Quint workflow artifacts disagree for workflow open-ticket",
             ));
 
         Ok(())
@@ -1269,7 +1298,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Lean workflow transition drift for workflow Open ticket",
+                "failed to parse formal workflow artifact model/lean/OpenTicket.lean",
             ));
 
         Ok(())
@@ -1292,7 +1321,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Lean workflow transition drift for workflow Open ticket",
+                "Lean and Quint workflow artifacts disagree for workflow open-ticket",
             ));
 
         Ok(())
@@ -1347,7 +1376,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Lean workflow slice drift for workflow Open ticket",
+                "failed to parse formal workflow artifact model/lean/OpenTicket.lean",
             ));
 
         Ok(())
@@ -1392,7 +1421,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Lean workflow slice detail drift for workflow Open ticket",
+                "Lean and Quint workflow artifacts disagree for workflow open-ticket",
             ));
 
         Ok(())
@@ -1417,7 +1446,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Lean workflow slice detail drift for workflow Open ticket",
+                "failed to parse formal workflow artifact model/lean/OpenTicket.lean",
             ));
 
         Ok(())
@@ -1512,7 +1541,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Quint workflow transition drift for workflow Open ticket",
+                "Lean and Quint workflow artifacts disagree for workflow open-ticket",
             ));
 
         Ok(())
@@ -1537,7 +1566,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Quint workflow transition drift for workflow Open ticket",
+                "failed to parse formal workflow artifact model/quint/OpenTicket.qnt",
             ));
 
         Ok(())
@@ -1560,7 +1589,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Quint workflow slice detail drift for workflow Open ticket",
+                "Lean and Quint workflow artifacts disagree for workflow open-ticket",
             ));
 
         Ok(())
@@ -1585,7 +1614,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Quint workflow slice detail drift for workflow Open ticket",
+                "failed to parse formal workflow artifact model/quint/OpenTicket.qnt",
             ));
 
         Ok(())
@@ -1680,7 +1709,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Quint workflow slice drift for workflow Open ticket",
+                "failed to parse formal workflow artifact model/quint/OpenTicket.qnt",
             ));
 
         Ok(())

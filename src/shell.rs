@@ -149,11 +149,8 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         }
         Effect::CheckCurrentProject => {
             let project_name = read_project_manifest_name()?;
-            let modeled_workflows = read_browser_index_workflows()?;
-            interpret_collect_reports(check_project(
-                project_name,
-                ModeledWorkflowLayouts::new(modeled_workflows),
-            ))
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?;
+            interpret_collect_reports(check_project(project_name, formal_workflows))
         }
         Effect::ConnectWorkflowFromWorkflow(connection) => {
             let modeled_workflows = read_browser_index_workflows()?;
@@ -241,6 +238,10 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                     path.as_ref()
                 )))
             }
+        }
+        Effect::RequireFileContents(path, expected, message) => {
+            require_file_contents(path.as_ref(), expected.as_ref(), message.as_ref())
+                .map(|()| Vec::new())
         }
         Effect::RequireIndexedWorkflowFiles(index_path, workflows_path, message) => {
             require_indexed_workflow_files(
@@ -635,7 +636,8 @@ fn read_synchronized_formal_workflow_graphs() -> Result<FormalWorkflowGraphs, Sh
     )?;
 
     let quint_by_slug = formal_graphs_by_slug(quint_graphs, "Quint")?;
-    lean_graphs
+    let mut matched_slugs = BTreeSet::new();
+    let synchronized_graphs = lean_graphs
         .into_iter()
         .map(|lean_graph| {
             let quint_graph = quint_by_slug
@@ -655,8 +657,23 @@ fn read_synchronized_formal_workflow_graphs() -> Result<FormalWorkflowGraphs, Sh
                 )))
             }
         })
-        .collect::<Result<Vec<_>, _>>()
-        .map(FormalWorkflowGraphs::from_graphs)
+        .inspect(|result| {
+            if let Ok(graph) = result {
+                matched_slugs.insert(graph.slug().as_ref().to_owned());
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if let Some(unmatched_slug) = quint_by_slug
+        .keys()
+        .find(|slug| !matched_slugs.contains(*slug))
+    {
+        Err(ShellError::message(format!(
+            "Lean workflow artifact is missing for workflow {unmatched_slug}"
+        )))
+    } else {
+        Ok(FormalWorkflowGraphs::from_graphs(synchronized_graphs))
+    }
 }
 
 fn read_formal_workflow_graphs(
@@ -766,9 +783,14 @@ fn read_formal_slice_projection(slug: &SliceSlug) -> Result<FileContents, ShellE
     read_synchronized_formal_workflow_graphs()?
         .into_inner()
         .into_iter()
-        .flat_map(|graph| graph.slice_details().as_slice().to_owned())
-        .find(|slice| slice.slug() == slug)
-        .map(|slice| project_slice_browser_document(&slice))
+        .find_map(|graph| {
+            graph
+                .slice_details()
+                .as_slice()
+                .iter()
+                .find(|slice| slice.slug() == slug)
+                .map(|slice| project_slice_browser_document(&graph, slice))
+        })
         .ok_or_else(|| {
             ShellError::message(format!(
                 "slice {} is not referenced by any indexed workflow",
@@ -908,12 +930,8 @@ fn ensure_slice_navigation_control(slug: &SliceSlug, navigation: &str) -> Result
 fn validate_project_artifact_synchronization_if_present() -> Result<(), ShellError> {
     if Path::new("emc.toml").exists() {
         let project_name = read_project_manifest_name()?;
-        let modeled_workflows = read_browser_index_workflows()?;
-        interpret_collect_reports(check_project(
-            project_name,
-            ModeledWorkflowLayouts::new(modeled_workflows),
-        ))
-        .map(|_| ())
+        let formal_workflows = read_synchronized_formal_workflow_graphs()?;
+        interpret_collect_reports(check_project(project_name, formal_workflows)).map(|_| ())
     } else {
         Ok(())
     }
@@ -1044,6 +1062,16 @@ fn require_indexed_workflow_files(
     unindexed_workflow.map_or(Ok(()), |file_name| {
         Err(ShellError::message(format!("{message} for {file_name}")))
     })
+}
+
+fn require_file_contents(path: &str, expected: &str, message: &str) -> Result<(), ShellError> {
+    let actual = fs::read_to_string(Path::new(path))
+        .map_err(|_error| ShellError::message(message.to_owned()))?;
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(ShellError::message(message.to_owned()))
+    }
 }
 
 fn indexed_workflow_paths(index_contents: &str) -> Result<Vec<ProjectPath>, ShellError> {
