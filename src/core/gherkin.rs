@@ -20,7 +20,9 @@ pub fn list_gherkin_features(suite: GherkinSuite) -> EffectPlan {
 
 pub fn run_gherkin_suite(suite: GherkinSuite) -> EffectPlan {
     EffectPlan::new(vec![Effect::Fail(report_line(format!(
-        "undefined, pending, or skipped Gherkin steps are failures for {}",
+        "undefined, pending, or skipped Gherkin steps are failures for {}; attempted {} configured {} scenarios",
+        suite.label(),
+        suite.scenario_count(),
         suite.label()
     )))])
 }
@@ -32,6 +34,15 @@ impl GherkinSuite {
             Self::Meta => "meta",
             Self::ReviewGate => "review-gate",
             Self::Validator => "validator",
+        }
+    }
+
+    fn scenario_count(&self) -> usize {
+        match self {
+            Self::Browser => 11,
+            Self::Meta => 6,
+            Self::ReviewGate => 9,
+            Self::Validator => 159,
         }
     }
 

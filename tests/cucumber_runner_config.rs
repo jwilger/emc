@@ -63,6 +63,9 @@ mod tests {
             .failure()
             .stderr(predicate::str::contains(
                 "undefined, pending, or skipped Gherkin steps are failures for browser",
+            ))
+            .stderr(predicate::str::contains(
+                "attempted 11 configured browser scenarios",
             ));
 
         Ok(())
