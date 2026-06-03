@@ -151,6 +151,7 @@
 - 2026-06-03: CLI `init` now parses project names through the DTO boundary parser before command execution, and an architecture guardrail prevents direct `ProjectName::try_new` construction from returning to the CLI entrypoint.
 - 2026-06-03: Project path arguments now parse through `parse_project_path` in the DTO boundary layer for CLI and MCP entrypoints, with a static guardrail preventing direct `ProjectPath::try_new` calls from returning to those shells.
 - 2026-06-03: MCP initialize, tools/list, and tools/call result payloads now serialize through the pinned `rmcp` SDK model types, with an architecture guardrail preventing the MCP protocol surface from drifting back to entirely ad hoc JSON payload construction.
+- 2026-06-03: CLI `show slice <slug>` and MCP `show_slice` now read modeled business slice documents through the shared command/effect path, rejecting unreferenced slice files instead of exposing arbitrary stale browser data.
 
 ### Task 1: Guardrails and Project Skeleton
 

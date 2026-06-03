@@ -330,6 +330,20 @@ fn tools_list_result() -> Result<Value, ShellError> {
             })),
         ),
         Tool::new(
+            "show_slice",
+            "Show a modeled slice document by slice slug.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slug": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slug"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
             "generate_site",
             "Generate the human-browsable event model site.",
             schema_object(json!({
@@ -518,6 +532,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
             id,
             show_workflow_tool_text(request),
         ))),
+        "show_slice" => Ok(Some(tool_call_result_response(
+            id,
+            show_slice_tool_text(request),
+        ))),
         "generate_site" => Ok(Some(tool_call_result_response(
             id,
             generate_site_tool_text(request),
@@ -595,6 +613,18 @@ fn show_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
     let slug =
         parse_workflow_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))?;
     interpret_collect_reports(command::show_workflow(slug)).map(|reports| reports.join("\n"))
+}
+
+fn show_slice_tool_text(request: &Value) -> Result<String, ShellError> {
+    let raw_slug = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .and_then(|arguments| arguments.get("slug"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("show_slice requires slug"))?;
+    let slug =
+        parse_slice_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(command::show_slice(slug)).map(|reports| reports.join("\n"))
 }
 
 fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {

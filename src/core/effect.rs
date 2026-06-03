@@ -3,7 +3,7 @@ use std::path::{Component, Path};
 
 use crate::core::connection::WorkflowConnection;
 use crate::core::slice::NewSlice;
-use crate::core::types::{ModelDescription, WorkflowSlug};
+use crate::core::types::{ModelDescription, SliceSlug, WorkflowSlug};
 use crate::core::workflow::NewWorkflow;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -51,6 +51,7 @@ pub enum Effect {
     RequireWorkflowDigest(ProjectPath, ProjectPath, WorkflowSlug, ReportLine),
     RequireWorkflowTransitions(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RunProcess(ProcessInvocation),
+    ShowSliceFromSlice(SliceSlug),
     ShowWorkflowFromWorkflow(WorkflowSlug),
     UpdateWorkflowDescriptionFromIndexAndWorkflow(WorkflowSlug, ModelDescription),
     ValidateEventModelTarget(ProjectPath),
