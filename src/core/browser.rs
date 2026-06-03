@@ -5,13 +5,17 @@ use std::iter;
 use serde_json::Value;
 
 use crate::core::effect::FileContents;
-use crate::core::types::{BoardLaneId, WorkflowBranchLabel, WorkflowStepName};
+use crate::core::types::{
+    BoardLaneId, WorkflowBranchLabel, WorkflowStepName, WorkflowTransitionKind,
+    WorkflowTransitionLabel,
+};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BrowserWorkflow {
     lane_ids: Vec<BoardLaneId>,
     main_path_names: Vec<WorkflowStepName>,
     branch_cards: Vec<BrowserBranchCard>,
+    transition_cards: Vec<BrowserTransitionCard>,
 }
 
 impl BrowserWorkflow {
@@ -25,6 +29,10 @@ impl BrowserWorkflow {
 
     pub fn branch_cards(&self) -> &[BrowserBranchCard] {
         &self.branch_cards
+    }
+
+    pub fn transition_cards(&self) -> &[BrowserTransitionCard] {
+        &self.transition_cards
     }
 }
 
@@ -40,6 +48,32 @@ impl BrowserBranchCard {
     }
 
     pub fn label(&self) -> &WorkflowBranchLabel {
+        &self.label
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserTransitionCard {
+    source: WorkflowStepName,
+    target: WorkflowStepName,
+    kind: WorkflowTransitionKind,
+    label: WorkflowTransitionLabel,
+}
+
+impl BrowserTransitionCard {
+    pub fn source(&self) -> &WorkflowStepName {
+        &self.source
+    }
+
+    pub fn target(&self) -> &WorkflowStepName {
+        &self.target
+    }
+
+    pub fn kind(&self) -> &WorkflowTransitionKind {
+        &self.kind
+    }
+
+    pub fn label(&self) -> &WorkflowTransitionLabel {
         &self.label
     }
 }
@@ -67,11 +101,13 @@ pub fn compose_browser_workflow(
         })?;
     let main_path_names = workflow_main_path_names(&workflow_value)?;
     let branch_cards = workflow_branch_cards(&workflow_value)?;
+    let transition_cards = workflow_transition_cards(&workflow_value)?;
 
     Ok(BrowserWorkflow {
         lane_ids,
         main_path_names,
         branch_cards,
+        transition_cards,
     })
 }
 
@@ -168,4 +204,115 @@ fn workflow_branch_cards(value: &Value) -> Result<Vec<BrowserBranchCard>, Browse
 
 fn branch_label(relationship: &str) -> String {
     relationship.replace('_', " ")
+}
+
+fn workflow_transition_cards(
+    value: &Value,
+) -> Result<Vec<BrowserTransitionCard>, BrowserCompositionError> {
+    value
+        .get("steps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|step| step_transition_cards(value, step))
+        .collect::<Result<Vec<_>, _>>()
+        .map(|cards| cards.into_iter().flatten().collect())
+}
+
+fn step_transition_cards(
+    workflow_value: &Value,
+    step: &Value,
+) -> Result<Vec<BrowserTransitionCard>, BrowserCompositionError> {
+    let source = step.get("name").and_then(Value::as_str);
+
+    step.get("transitions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|transition| {
+            Some((
+                source?,
+                transition_target_name(workflow_value, transition)?,
+                transition_kind_and_label(transition)?,
+            ))
+        })
+        .map(|(source, target, (kind, label))| {
+            Ok(BrowserTransitionCard {
+                source: parse_workflow_step_name(source)?,
+                target: parse_workflow_step_name(target)?,
+                kind: WorkflowTransitionKind::try_new(kind.to_owned()).map_err(|error| {
+                    BrowserCompositionError::new(format!(
+                        "invalid workflow transition kind: {error}"
+                    ))
+                })?,
+                label: WorkflowTransitionLabel::try_new(label.to_owned()).map_err(|error| {
+                    BrowserCompositionError::new(format!(
+                        "invalid workflow transition label: {error}"
+                    ))
+                })?,
+            })
+        })
+        .collect()
+}
+
+fn transition_target_name<'a>(workflow_value: &'a Value, transition: &'a Value) -> Option<&'a str> {
+    transition
+        .get("to")
+        .and_then(Value::as_str)
+        .map(|target_slice| {
+            workflow_step_name_for_slice(workflow_value, target_slice).unwrap_or(target_slice)
+        })
+        .or_else(|| transition.get("target_name").and_then(Value::as_str))
+        .or_else(|| transition.get("to_workflow").and_then(Value::as_str))
+}
+
+fn workflow_step_name_for_slice<'a>(workflow_value: &'a Value, slice: &str) -> Option<&'a str> {
+    workflow_value
+        .get("steps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find(|step| {
+            step.get("slice")
+                .and_then(Value::as_str)
+                .is_some_and(|step_slice| step_slice == slice)
+        })
+        .and_then(|step| step.get("name").and_then(Value::as_str))
+}
+
+fn transition_kind_and_label(transition: &Value) -> Option<(&'static str, &str)> {
+    transition
+        .get("via_navigation")
+        .and_then(Value::as_str)
+        .map(|label| ("navigation", label))
+        .or_else(|| {
+            transition
+                .get("via_command")
+                .and_then(Value::as_str)
+                .map(|label| ("command", label))
+        })
+        .or_else(|| {
+            transition
+                .get("via_event")
+                .and_then(Value::as_str)
+                .map(|label| ("event", label))
+        })
+        .or_else(|| {
+            transition
+                .get("via_external_trigger")
+                .and_then(Value::as_str)
+                .map(|label| ("external trigger", label))
+        })
+        .or_else(|| {
+            transition
+                .get("via_outcome")
+                .and_then(Value::as_str)
+                .map(|label| ("workflow exit", label))
+        })
+}
+
+fn parse_workflow_step_name(value: &str) -> Result<WorkflowStepName, BrowserCompositionError> {
+    WorkflowStepName::try_new(value.to_owned()).map_err(|error| {
+        BrowserCompositionError::new(format!("invalid workflow step name: {error}"))
+    })
 }
