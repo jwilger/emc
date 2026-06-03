@@ -981,6 +981,29 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_view_fields_sourced_from_unreferenced_read_models()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("show-repair-queue.eventmodel.json"),
+            "{\"name\":\"Repair queue\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"repair_ticket\"}],\"events\":[{\"name\":\"RepairTicketOpened\",\"stream\":\"repair_ticket\",\"attributes\":[{\"name\":\"customer_name\",\"source\":\"command.customer_name\"}]}],\"commands\":[{\"name\":\"OpenRepairTicket\",\"inputs\":[\"customer_name\"],\"produces\":[\"RepairTicketOpened\"]}],\"read_models\":[{\"name\":\"repair_queue\",\"fields\":[{\"name\":\"customer_name\",\"source\":\"RepairTicketOpened.customer_name\"}]}],\"views\":[{\"name\":\"repair_queue_screen\",\"wireframe\":\"<div data-ref=\\\"customer_name\\\"></div>\",\"uses_read_models\":[\"repair_queue\"],\"fields\":[{\"name\":\"customer_name\",\"source\":\"read_model.customer_profile.customer_name\"}]}],\"slices\":[{\"name\":\"Show repair queue\",\"type\":\"state_view\",\"events\":[\"RepairTicketOpened\"],\"views\":[\"repair_queue_screen\"],\"acceptance_scenarios\":[{\"name\":\"show empty repair queue\",\"given\":[],\"when\":{},\"read_model_states\":{\"repair_queue\":\"empty\"},\"then\":[\"empty queue shown\"]},{\"name\":\"show repair queue\",\"given\":[],\"when\":{},\"read_model_states\":{\"repair_queue\":\"populated\"},\"then\":[\"queue shown\"]}],\"contract_scenarios\":[{\"name\":\"empty repair queue projector\",\"given\":[],\"when\":{},\"read_model_states\":{\"repair_queue\":\"empty\"},\"then\":[\"repair_queue is empty\"]},{\"name\":\"repair queue projector\",\"given\":[\"RepairTicketOpened\"],\"when\":{},\"read_model_states\":{\"repair_queue\":\"populated\"},\"then\":[\"repair_queue is populated\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "view 'repair_queue_screen' field 'customer_name' must source from a referenced read model field",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_state_view_slices_that_own_commands() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");
