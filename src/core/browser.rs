@@ -293,7 +293,14 @@ pub fn compose_browser_workflow(
         .chain(slice_values.iter())
         .collect::<Vec<_>>();
     let error_recovery_cards = error_recovery_cards(&composed_values)?;
-    let event_element_names = event_element_names(&composed_values)?;
+    let event_element_names = iter::once(&workflow_browser_data)
+        .chain(slice_browser_data.iter())
+        .map(BrowserDataDocument::event_element_names)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?
+        .into_iter()
+        .flatten()
+        .collect();
     let review_overlays = workflow_semantics
         .review_overlay_details()
         .map_err(|error| BrowserCompositionError::new(error.to_string()))?
@@ -393,41 +400,6 @@ fn view_error_recovery_cards(
                 source_screen: ViewName::try_new(source_screen.to_owned()).map_err(|error| {
                     BrowserCompositionError::new(format!("invalid source screen name: {error}"))
                 })?,
-            })
-        })
-        .collect()
-}
-
-fn event_element_names(
-    values: &[&Value],
-) -> Result<Vec<BrowserEventElementName>, BrowserCompositionError> {
-    values
-        .iter()
-        .flat_map(|value| {
-            value
-                .get("board")
-                .and_then(|board| board.get("slices"))
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-        })
-        .flat_map(|slice| {
-            slice
-                .get("elements")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-        })
-        .filter(|element| {
-            element
-                .get("kind")
-                .and_then(Value::as_str)
-                .is_some_and(|kind| kind == "event")
-        })
-        .filter_map(|element| element.get("name").and_then(Value::as_str))
-        .map(|name| {
-            BrowserEventElementName::try_new(name.to_owned()).map_err(|error| {
-                BrowserCompositionError::new(format!("invalid event element name: {error}"))
             })
         })
         .collect()

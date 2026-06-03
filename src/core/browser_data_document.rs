@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 use serde_json::Value;
 
 use crate::core::effect::FileContents;
-use crate::core::types::BoardLaneId;
+use crate::core::types::{BoardLaneId, BrowserEventElementName};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BrowserDataDocument {
@@ -33,6 +33,33 @@ impl BrowserDataDocument {
             .map(board_lane_id)
             .collect()
     }
+
+    pub fn event_element_names(
+        &self,
+    ) -> Result<Vec<BrowserEventElementName>, BrowserDataDocumentError> {
+        self.value
+            .get("board")
+            .and_then(|board| board.get("slices"))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .flat_map(|slice| {
+                slice
+                    .get("elements")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+            })
+            .filter(|element| {
+                element
+                    .get("kind")
+                    .and_then(Value::as_str)
+                    .is_some_and(|kind| kind == "event")
+            })
+            .filter_map(|element| element.get("name").and_then(Value::as_str))
+            .map(event_element_name)
+            .collect()
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -59,4 +86,10 @@ impl Error for BrowserDataDocumentError {}
 fn board_lane_id(raw: &str) -> Result<BoardLaneId, BrowserDataDocumentError> {
     BoardLaneId::try_new(raw.to_owned())
         .map_err(|error| BrowserDataDocumentError::new(format!("invalid board lane id: {error}")))
+}
+
+fn event_element_name(raw: &str) -> Result<BrowserEventElementName, BrowserDataDocumentError> {
+    BrowserEventElementName::try_new(raw.to_owned()).map_err(|error| {
+        BrowserDataDocumentError::new(format!("invalid event element name: {error}"))
+    })
 }

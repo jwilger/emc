@@ -106,6 +106,7 @@
 - 2026-06-03: Browser transition-card composition now derives transition names, sources, targets, kinds, and labels from `WorkflowDocument::transition_details()` instead of duplicating raw workflow transition traversal in `src/core/browser.rs`. A browser guardrail prevents the raw transition-card helpers from returning.
 - 2026-06-03: Browser review overlays now derive step names, statuses, and missing rules from `WorkflowDocument::review_overlay_details()` instead of parsing raw workflow review diagnostics in `src/core/browser.rs`. A browser guardrail prevents direct review-diagnostics parsing from returning.
 - 2026-06-03: Browser lane composition now derives board lane IDs from `BrowserDataDocument::board_lane_ids()` instead of parsing raw `board.lanes` in `src/core/browser.rs`. A browser guardrail prevents direct lane traversal from returning to browser composition.
+- 2026-06-03: Browser event-element composition now derives board event element names from `BrowserDataDocument::event_element_names()` instead of parsing raw board slice elements in `src/core/browser.rs`. A browser guardrail prevents direct event-element traversal from returning to browser composition.
 
 ### Task 1: Guardrails and Project Skeleton
 
