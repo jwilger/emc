@@ -284,6 +284,48 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_lean_workflow_module_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let lean = read_to_string(&lean_path)?.replace("namespace OpenTicket", "namespace Stale");
+        write(lean_path, lean)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean workflow module drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_quint_workflow_module_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let quint = read_to_string(&quint_path)?.replace("module OpenTicket {", "module Stale {");
+        write(quint_path, quint)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint workflow module drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_browser_workflow_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -1019,7 +1061,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/quint/OpenTicket.qnt"),
-            "module OpenTicket\n\n// EMC-DIGEST: workflow:Open ticket\nval workflowName = \"Open ticket\"\n\nval workflowSlug = \"open-ticket\"\n\nval workflowDescription = \"Actor opens a repair ticket.\"\n\nval workflowSlices = []\n\nval workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]\n",
+            "module OpenTicket {\n\n// EMC-DIGEST: workflow:Open ticket\nval workflowName = \"Open ticket\"\n\nval workflowSlug = \"open-ticket\"\n\nval workflowDescription = \"Actor opens a repair ticket.\"\n\nval workflowSlices = []\n\nval workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]\n}\n",
         )?;
 
         Command::cargo_bin("emc")?

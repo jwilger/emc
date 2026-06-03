@@ -202,6 +202,10 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
         artifact_marker("val workflowSliceDetailsComplete = workflowSlicesHaveDetails");
     let quint_slice_detail_complete_prefix = artifact_marker("val workflowSliceDetailsComplete =");
     let module_name = module_name_from_model(workflow.name.clone());
+    let lean_module_marker = artifact_marker(format!("namespace {module_name}"));
+    let lean_module_prefix = artifact_marker("namespace ");
+    let quint_module_marker = artifact_marker(format!("module {module_name} {{"));
+    let quint_module_prefix = artifact_marker("module ");
     let workflow_slug = workflow.slug.as_ref();
     let workflow_path = project_path(format!(
         "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
@@ -261,6 +265,22 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
             digest,
             report_line(format!(
                 "artifact digest mismatch for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_module_prefix,
+            lean_module_marker,
+            report_line(format!(
+                "Lean workflow module drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_module_prefix,
+            quint_module_marker,
+            report_line(format!(
+                "Quint workflow module drift for workflow {workflow_name}"
             )),
         ),
         Effect::RequireCanonicalDeclaration(
