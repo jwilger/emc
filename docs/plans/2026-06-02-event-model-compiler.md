@@ -145,6 +145,7 @@
 - 2026-06-03: CLI and MCP operations now route through a shared semantic command-planning layer before shell interpretation, and an architecture guardrail prevents MCP tool handlers from directly constructing command effects.
 - 2026-06-03: The Cargo manifest now pins the planned `rmcp` SDK dependency at 1.7.0 with default features disabled, and a package-smoke guardrail prevents the MCP implementation stack from silently drifting away from the selected SDK while preserving the strict duplicate-dependency lint policy.
 - 2026-06-03: MCP HTTP now treats `GET /mcp` as the Streamable HTTP listening endpoint shape and returns `405 Method Not Allowed` when server-sent event streaming is unavailable, instead of misclassifying the MCP endpoint as not found.
+- 2026-06-03: Boundary parser coverage now includes project names, model descriptions, transition trigger names, and validation definition names, and `parse_definition_name` exposes the existing semantic `DefinitionName` type directly for parse-don't-validate call sites.
 
 ### Task 1: Guardrails and Project Skeleton
 

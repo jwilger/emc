@@ -5,21 +5,36 @@ mod tests {
     use emc::{
         core::effect::ProjectPath,
         io::dto::{
-            parse_lean_module_name, parse_model_digest, parse_model_name, parse_quint_module_name,
-            parse_slice_slug, parse_workflow_slug,
+            parse_definition_name, parse_lean_module_name, parse_model_description,
+            parse_model_digest, parse_model_name, parse_project_name, parse_quint_module_name,
+            parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
         },
     };
 
     #[test]
     fn boundary_parsers_convert_raw_strings_to_semantic_types() -> Result<(), Box<dyn Error>> {
+        let project_name = parse_project_name(" Repair Desk ")?;
         let model_name = parse_model_name(" Repair Desk ")?;
+        let model_description = parse_model_description(" Repairs organization access ")?;
         let workflow_slug = parse_workflow_slug(" Organization Access ")?;
         let slice_slug = parse_slice_slug(" Resolve Application Entry ")?;
         let lean_module = parse_lean_module_name(" RepairDesk ")?;
         let quint_module = parse_quint_module_name(" RepairDesk ")?;
         let digest = parse_model_digest(" abc123 ")?;
+        let transition_trigger = parse_transition_trigger_name(" Open request ")?;
+        let definition_name = parse_definition_name(" Submit request ")?;
 
+        assert_eq!(
+            project_name.as_ref(),
+            "Repair Desk",
+            "project name is trimmed"
+        );
         assert_eq!(model_name.as_ref(), "Repair Desk", "model name is trimmed");
+        assert_eq!(
+            model_description.as_ref(),
+            "Repairs organization access",
+            "model description is trimmed"
+        );
         assert_eq!(
             workflow_slug.as_ref(),
             "organization-access",
@@ -41,6 +56,16 @@ mod tests {
             "Quint module name is trimmed"
         );
         assert_eq!(digest.as_ref(), "abc123", "digest is trimmed");
+        assert_eq!(
+            transition_trigger.as_ref(),
+            "Open request",
+            "transition trigger is trimmed"
+        );
+        assert_eq!(
+            definition_name.as_ref(),
+            "Submit request",
+            "definition name is trimmed"
+        );
 
         Ok(())
     }
@@ -48,8 +73,16 @@ mod tests {
     #[test]
     fn boundary_parsers_reject_empty_semantic_values() {
         assert!(
+            parse_project_name("   ").is_err(),
+            "blank project names must not enter the core"
+        );
+        assert!(
             parse_model_name("   ").is_err(),
             "blank model names must not enter the core"
+        );
+        assert!(
+            parse_model_description("   ").is_err(),
+            "blank model descriptions must not enter the core"
         );
         assert!(
             parse_workflow_slug("   ").is_err(),
@@ -70,6 +103,14 @@ mod tests {
         assert!(
             parse_model_digest("   ").is_err(),
             "blank model digests must not enter the core"
+        );
+        assert!(
+            parse_transition_trigger_name("   ").is_err(),
+            "blank transition triggers must not enter the core"
+        );
+        assert!(
+            parse_definition_name("   ").is_err(),
+            "blank definition names must not enter the core"
         );
     }
 
