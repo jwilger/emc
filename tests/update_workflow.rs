@@ -79,4 +79,95 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn update_workflow_description_preserves_composed_slice_artifacts() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor enters repair ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--description",
+                "Actor opens a repair ticket with priority.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("updated workflow Open ticket"));
+
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        assert!(
+            workflow_json.contains("\"../slices/capture-ticket.eventmodel.json\""),
+            "workflow update must preserve composed slice file references"
+        );
+        assert!(
+            workflow_json.contains("\"slice\": \"capture-ticket\""),
+            "workflow update must preserve composed workflow steps"
+        );
+        assert!(
+            lean.contains(
+                "def workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Actor enters repair ticket details.\")]"
+            ),
+            "Lean update must preserve composed slice details"
+        );
+        assert!(
+            quint.contains(
+                "val workflowSliceDetails = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Actor enters repair ticket details.\" }]"
+            ),
+            "Quint update must preserve composed slice details"
+        );
+
+        Ok(())
+    }
 }
