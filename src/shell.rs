@@ -491,7 +491,7 @@ fn require_indexed_workflow_files(
         .map_err(ShellError::io)?;
     workflow_files.sort();
 
-    workflow_files
+    let unindexed_workflow = workflow_files
         .into_iter()
         .filter_map(|path| {
             path.file_name()
@@ -499,27 +499,29 @@ fn require_indexed_workflow_files(
                 .filter(|file_name| file_name.ends_with(".eventmodel.json"))
                 .map(str::to_owned)
         })
-        .find(|file_name| {
-            let indexed_path = format!("data/workflows/{file_name}");
-            !indexed_paths.contains(&indexed_path)
-        })
-        .map_or(Ok(()), |file_name| {
-            Err(ShellError::message(format!("{message} for {file_name}")))
-        })
+        .try_fold(None, |found, file_name| {
+            if found.is_some() {
+                return Ok(found);
+            }
+            let indexed_path = ProjectPath::try_new(format!("data/workflows/{file_name}"))
+                .map_err(ShellError::project_path)?;
+            Ok(if indexed_paths.contains(&indexed_path) {
+                None
+            } else {
+                Some(file_name)
+            })
+        })?;
+
+    unindexed_workflow.map_or(Ok(()), |file_name| {
+        Err(ShellError::message(format!("{message} for {file_name}")))
+    })
 }
 
-fn indexed_workflow_paths(index_contents: &str) -> Result<BTreeSet<String>, ShellError> {
-    let index = serde_json::from_str::<Value>(index_contents)
-        .map_err(|error| ShellError::message(format!("invalid browser index JSON: {error}")))?;
-    let workflows = index
-        .get("workflows")
-        .and_then(Value::as_array)
-        .ok_or_else(|| ShellError::message("browser index is missing workflows"))?;
-
-    Ok(workflows
+fn indexed_workflow_paths(index_contents: &str) -> Result<Vec<ProjectPath>, ShellError> {
+    Ok(parse_browser_index_workflows(index_contents)
+        .map_err(|error| ShellError::message(error.to_string()))?
         .iter()
-        .filter_map(|workflow| workflow.get("path").and_then(Value::as_str))
-        .map(str::to_owned)
+        .map(ModeledWorkflowLayout::browser_data_path)
         .collect())
 }
 

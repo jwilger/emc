@@ -310,6 +310,24 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn shell_browser_index_paths_use_boundary_parser() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/shell.rs")?;
+        let violations = ["get(\"workflows\")", "workflow.get(\"path\")"]
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| format!("src/shell.rs duplicates browser-index semantics via `{marker}`"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "shell browser-index path checks must derive from the boundary parser"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",
