@@ -140,6 +140,7 @@
 - 2026-06-03: `emc init` now creates empty formal slice artifact directories under `model/lean/slices` and `model/quint/slices`, and `emc check` requires their keep files as part of the deterministic project skeleton.
 - 2026-06-03: `emc check` now rejects missing Quint module closing declarations for generated project root, workflow, and business slice artifacts, so malformed formal modules fail deterministic synchronization checks before `emc verify`.
 - 2026-06-03: `emc validate` now rejects duplicate JSON object keys before event-model parsing, sharing the deterministic JSON key guardrail used by `emc check` so boundary parsing cannot silently accept last-key-wins model data.
+- 2026-06-03: `emc generate site` now replaces generated browser data instead of overlaying it, so regenerating a site removes stale workflow or slice data files from previous generations.
 
 ### Task 1: Guardrails and Project Skeleton
 

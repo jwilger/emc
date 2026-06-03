@@ -1270,7 +1270,11 @@ fn write_file(path: &str, contents: &str) -> Result<(), ShellError> {
 }
 
 fn copy_directory(source: &str, target: &str) -> Result<(), ShellError> {
-    copy_directory_path(Path::new(source), Path::new(target))
+    let target_path = Path::new(target);
+    if target_path.exists() {
+        fs::remove_dir_all(target_path).map_err(ShellError::io)?;
+    }
+    copy_directory_path(Path::new(source), target_path)
 }
 
 fn copy_directory_path(source: &Path, target: &Path) -> Result<(), ShellError> {
