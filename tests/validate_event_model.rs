@@ -1278,10 +1278,9 @@ mod tests {
             .args(["validate", "model/browser/data/workflows"])
             .current_dir(temp_dir.path())
             .assert()
-            .failure()
-            .stderr(predicate::str::contains("referenced slice file"))
-            .stderr(predicate::str::contains(
-                "state_view slice 'Capture ticket' must own at least one view",
+            .success()
+            .stdout(predicate::str::contains(
+                "event model is valid at model/browser/data/workflows",
             ));
 
         Ok(())

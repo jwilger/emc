@@ -99,6 +99,112 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn generated_navigation_workflows_validate_after_cli_modeling() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Clinic Intake"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "intake-visit",
+                "--name",
+                "Intake visit",
+                "--description",
+                "Actor completes intake for a clinic visit.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        [
+            (
+                "capture-intake",
+                "Capture intake",
+                "Actor captures intake details.",
+            ),
+            ("triage-intake", "Triage intake", "Actor triages intake."),
+            (
+                "schedule-visit",
+                "Schedule visit",
+                "Actor schedules a visit.",
+            ),
+        ]
+        .into_iter()
+        .try_for_each(|(slug, name, description)| {
+            Command::cargo_bin("emc")?
+                .args([
+                    "add",
+                    "slice",
+                    "--workflow",
+                    "intake-visit",
+                    "--slug",
+                    slug,
+                    "--name",
+                    name,
+                    "--type",
+                    "state_view",
+                    "--description",
+                    description,
+                ])
+                .current_dir(temp_dir.path())
+                .assert()
+                .success();
+            Ok::<(), Box<dyn Error>>(())
+        })?;
+
+        [
+            ("capture-intake", "triage-intake", "triage-intake-screen"),
+            ("triage-intake", "schedule-visit", "schedule-visit-screen"),
+        ]
+        .into_iter()
+        .try_for_each(|(source, target, navigation)| {
+            Command::cargo_bin("emc")?
+                .args([
+                    "connect",
+                    "workflow",
+                    "--workflow",
+                    "intake-visit",
+                    "--from",
+                    source,
+                    "--to",
+                    target,
+                    "--via",
+                    "navigation",
+                    "--name",
+                    navigation,
+                ])
+                .current_dir(temp_dir.path())
+                .assert()
+                .success();
+            Ok::<(), Box<dyn Error>>(())
+        })?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(generated_model_validation_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "event model is valid at model/browser/data/workflows/intake-visit.eventmodel.json",
+            ))
+            .stdout(predicate::str::contains(
+                "event model is valid at model/browser/data/slices",
+            ))
+            .stdout(predicate::str::contains("\"id\":4"))
+            .stdout(predicate::str::contains("\"id\":5"));
+
+        Ok(())
+    }
+
     fn mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
@@ -118,6 +224,16 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"validate_event_model\",\"arguments\":{\"target\":\"model/browser/data/workflows\"}}}\n",
+        )
+    }
+
+    fn generated_model_validation_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"check_project\",\"arguments\":{}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"validate_event_model\",\"arguments\":{\"target\":\"model/browser/data/workflows/intake-visit.eventmodel.json\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"validate_event_model\",\"arguments\":{\"target\":\"model/browser/data/slices\"}}}\n",
         )
     }
 }

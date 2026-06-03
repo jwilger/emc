@@ -252,7 +252,16 @@ pub fn connect_workflow(
     let source = connection.source.as_ref();
     let target = connection.target.as_ref();
 
-    Ok(EffectPlan::new(vec![
+    let navigation_control_effect = match (&connection.target, connection.kind) {
+        (WorkflowConnectionTarget::Slice(_), ConnectionKind::Navigation) => {
+            Some(Effect::EnsureNavigationControlInSlice(
+                connection.source.clone(),
+                connection.trigger.clone(),
+            ))
+        }
+        _ => None,
+    };
+    let effects = [
         Effect::WriteFile(workflow_path(&connection.workflow_slug), workflow_json),
         Effect::WriteFile(
             project_path(format!("model/lean/{module_name}.lean")),
@@ -279,7 +288,12 @@ pub fn connect_workflow(
             ),
         ),
         Effect::Report(report_line(format!("connected {source} to {target}"))),
-    ]))
+    ]
+    .into_iter()
+    .chain(navigation_control_effect)
+    .collect();
+
+    Ok(EffectPlan::new(effects))
 }
 
 pub fn remove_transition(

@@ -457,7 +457,10 @@ mod tests {
             ])
             .assert()
             .failure()
-            .stderr(predicate::str::contains("invalid review timestamp"));
+            .stderr(predicate::str::contains("invalid review timestamp"))
+            .stderr(predicate::str::contains(
+                "expected UTC millisecond timestamp like 2026-06-03T12:00:00.000Z",
+            ));
 
         Ok(())
     }

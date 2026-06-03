@@ -4,7 +4,8 @@ use std::path::{Component, Path};
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceSlug, WorkflowSlug,
+    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceSlug, TransitionTriggerName,
+    WorkflowSlug,
 };
 use crate::core::workflow::NewWorkflow;
 
@@ -16,6 +17,7 @@ pub enum Effect {
     ConnectWorkflowFromWorkflow(WorkflowConnection),
     CopyDirectory(ProjectPath, ProjectPath),
     EnsureDirectory(ProjectPath),
+    EnsureNavigationControlInSlice(SliceSlug, TransitionTriggerName),
     Fail(ReportLine),
     GenerateSiteFromManifest(ProjectPath),
     ListSlicesFromIndex,

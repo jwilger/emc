@@ -8,6 +8,7 @@ pub mod formal_graph;
 pub mod gherkin;
 pub mod json_object_document;
 pub mod layout;
+pub mod navigation_control;
 pub mod project;
 pub mod review_gate;
 pub mod review_record;
