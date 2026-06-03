@@ -3,7 +3,7 @@ use crate::core::effect::{
     ProjectPath, ReportLine,
 };
 use crate::core::project::ProjectName;
-use crate::core::types::{ModelDescription, ModelName, WorkflowSlug};
+use crate::core::types::{ModelDescription, ModelName, WorkflowSliceDetail, WorkflowSlug};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ModeledWorkflowLayout {
@@ -257,6 +257,15 @@ pub fn list_workflows(modeled_workflows: Vec<ModeledWorkflowLayout>) -> EffectPl
         modeled_workflows
             .into_iter()
             .map(|workflow| Effect::Report(report_line(workflow.name.as_ref().to_owned())))
+            .collect(),
+    )
+}
+
+pub fn list_slices(modeled_slices: Vec<WorkflowSliceDetail>) -> EffectPlan {
+    EffectPlan::new(
+        modeled_slices
+            .into_iter()
+            .map(|slice| Effect::Report(report_line(slice.name().as_ref().to_owned())))
             .collect(),
     )
 }

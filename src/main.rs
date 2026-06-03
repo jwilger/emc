@@ -47,6 +47,7 @@ enum Command {
     Init {
         name: ProjectName,
     },
+    ListSlices,
     ListWorkflows,
     McpStdio,
     McpHttp {
@@ -96,6 +97,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::GherkinRun { suite } => interpret(command::gherkin_run(suite)),
         Command::Help => print_help(),
         Command::Init { name } => interpret(command::init(name)),
+        Command::ListSlices => interpret(command::list_slices()),
         Command::ListWorkflows => interpret(command::list_workflows()),
         Command::McpHttp {
             host,
@@ -331,6 +333,9 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         [command, subject] if command == "list" && subject == "workflows" => Ok(Cli {
             command: Command::ListWorkflows,
         }),
+        [command, subject] if command == "list" && subject == "slices" => Ok(Cli {
+            command: Command::ListSlices,
+        }),
         [command, transport] if command == "mcp" && transport == "stdio" => Ok(Cli {
             command: Command::McpStdio,
         }),
@@ -510,7 +515,8 @@ fn help_command() -> ClapCommand {
         .subcommand(
             ClapCommand::new("list").about("Read model indexes").subcommand(
                 ClapCommand::new("workflows").about("List modeled workflows in the project"),
-            ),
+            )
+            .subcommand(ClapCommand::new("slices").about("List modeled slices in the project")),
         )
         .subcommand(
             ClapCommand::new("show")
@@ -571,6 +577,7 @@ fn help_command() -> ClapCommand {
   emc add workflow --slug <slug> --name <name> --description <text>
   emc add slice --workflow <workflow> --slug <slug> --name <name> --type <kind> --description <text>
   emc connect workflow --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
+  emc list slices
   emc validate <path>
   emc verify
   emc check

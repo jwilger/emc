@@ -13,7 +13,7 @@ use crate::core::effect::{
 };
 use crate::core::json_object_document::JsonObjectDocument;
 use crate::core::layout::{
-    ModeledWorkflowLayout, check_project, list_workflows, show_document, show_workflow,
+    ModeledWorkflowLayout, check_project, list_slices, list_workflows, show_document, show_workflow,
 };
 use crate::core::project::ProjectName;
 use crate::core::review_record::{ReviewCategoryFinding, ReviewRecordDocument};
@@ -161,6 +161,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::ListWorkflowsFromIndex => {
             let modeled_workflows = read_browser_index_workflows()?;
             interpret_collect_reports(list_workflows(modeled_workflows))
+        }
+        Effect::ListSlicesFromIndex => {
+            let modeled_workflows = read_browser_index_workflows()?;
+            let modeled_slices = read_modeled_workflow_slice_details(&modeled_workflows)?;
+            interpret_collect_reports(list_slices(modeled_slices))
         }
         Effect::RequireCanonicalDeclaration(path, prefix, marker, message) => {
             let contents = fs::read_to_string(Path::new(path.as_ref())).map_err(ShellError::io)?;
