@@ -71,11 +71,25 @@
           nativeBuildInputs = commonNativeBuildInputs;
         };
 
+        containerImage = pkgs.dockerTools.buildImage {
+          name = "emc";
+          tag = "latest";
+          copyToRoot = pkgs.buildEnv {
+            name = "emc-container-root";
+            paths = [ package ];
+            pathsToLink = [ "/bin" ];
+          };
+          config = {
+            Entrypoint = [ "${package}/bin/emc" ];
+          };
+        };
+
       in
       {
         packages = pkgs.lib.optionalAttrs hasCargoProject {
           default = package;
           emc = package;
+          emc-container = containerImage;
         };
 
         apps = pkgs.lib.optionalAttrs hasCargoProject {
