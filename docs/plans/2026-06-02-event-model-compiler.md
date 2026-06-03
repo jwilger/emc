@@ -147,6 +147,7 @@
 - 2026-06-03: MCP HTTP now treats `GET /mcp` as the Streamable HTTP listening endpoint shape and returns `405 Method Not Allowed` when server-sent event streaming is unavailable, instead of misclassifying the MCP endpoint as not found.
 - 2026-06-03: Boundary parser coverage now includes project names, model descriptions, transition trigger names, and validation definition names, and `parse_definition_name` exposes the existing semantic `DefinitionName` type directly for parse-don't-validate call sites.
 - 2026-06-03: Boundary parser coverage now includes workflow transition endpoints and workflow transition kinds, exposing those existing semantic transition types directly for parse-don't-validate call sites.
+- 2026-06-03: MCP stdio now exposes `init_project`, routing project initialization through the same semantic command planner as the CLI so MCP clients can create the deterministic project skeleton and root formal artifacts.
 
 ### Task 1: Guardrails and Project Skeleton
 

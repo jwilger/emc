@@ -14,6 +14,34 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
+    fn mcp_stdio_initializes_project_layout() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(init_project_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"init_project\""))
+            .stdout(predicate::str::contains(
+                "initialized EMC project Repair Desk",
+            ));
+
+        assert!(temp_dir.path().join("emc.toml").is_file());
+        assert!(temp_dir.path().join("model/lean/RepairDesk.lean").is_file());
+        assert!(temp_dir.path().join("model/quint/RepairDesk.qnt").is_file());
+        assert!(
+            temp_dir
+                .path()
+                .join("model/browser/data/index.json")
+                .is_file()
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_exposes_list_workflows_tool() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -137,6 +165,14 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_workflows\",\"arguments\":{}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"show_workflow\",\"arguments\":{\"slug\":\"open-ticket\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"generate_site\",\"arguments\":{\"output\":\"mcp-site\"}}}\n",
+        )
+    }
+
+    fn init_project_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"init_project\",\"arguments\":{\"name\":\"Repair Desk\"}}}\n",
         )
     }
 
