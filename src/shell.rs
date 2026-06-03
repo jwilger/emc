@@ -24,7 +24,7 @@ use crate::core::types::{
     ReviewRuleName, SliceSlug, WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionRecord,
 };
 use crate::core::verify::verify_project;
-use crate::core::workflow::{add_workflow, update_workflow_description};
+use crate::core::workflow::{add_workflow, update_workflow_description, update_workflow_name};
 use crate::core::workflow_document::WorkflowDocument;
 use crate::event_model_validation::validate_event_model_sources;
 use crate::io::dto::{
@@ -365,6 +365,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             }
         }
         Effect::RunProcess(invocation) => run_process(invocation),
+        Effect::RemoveFile(path) => remove_file_if_present(path.as_ref()).map(|()| Vec::new()),
         Effect::ShowSliceFromSlice(slug) => {
             let slice_document = read_referenced_slice_document(slug)?;
             interpret_collect_reports(show_document(slice_document))
@@ -382,6 +383,19 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 workflow_document,
                 slug.clone(),
                 description.clone(),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret_collect_reports(plan)
+        }
+        Effect::UpdateWorkflowNameFromIndexAndWorkflow(slug, name) => {
+            let existing_workflows = read_browser_index_workflows()?;
+            let workflow_document =
+                read_indexed_workflow_document_from_layouts(slug, existing_workflows.as_slice())?;
+            let plan = update_workflow_name(
+                existing_workflows,
+                workflow_document,
+                slug.clone(),
+                name.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
@@ -1413,6 +1427,14 @@ fn copy_directory_path(source: &Path, target: &Path) -> Result<(), ShellError> {
                 .map_err(ShellError::io)
         }
     })
+}
+
+fn remove_file_if_present(path: &str) -> Result<(), ShellError> {
+    match fs::remove_file(Path::new(path)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(ShellError::io(error)),
+    }
 }
 
 fn run_process(invocation: &ProcessInvocation) -> Result<Vec<String>, ShellError> {

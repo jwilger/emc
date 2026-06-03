@@ -111,6 +111,14 @@ impl WorkflowDocument {
         })
     }
 
+    pub fn with_name(&self, name: &ModelName) -> Result<Self, WorkflowDocumentError> {
+        let mut next = self.object()?.clone();
+        next.insert("name".to_owned(), Value::String(name.as_ref().to_owned()));
+        Ok(Self {
+            value: Value::Object(next),
+        })
+    }
+
     pub fn with_updated_slice_detail(
         &self,
         detail: WorkflowSliceDetail,

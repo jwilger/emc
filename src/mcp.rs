@@ -485,6 +485,23 @@ fn tools_list_result() -> Result<Value, ShellError> {
             })),
         ),
         Tool::new(
+            "update_workflow_name",
+            "Update a business workflow name and regenerate synchronized model artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slug": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slug", "name"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
             "update_slice",
             "Update a business slice and regenerate synchronized model artifacts.",
             schema_object(json!({
@@ -625,6 +642,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "update_workflow" => Ok(Some(tool_call_result_response(
             id,
             update_workflow_tool_text(request),
+        ))),
+        "update_workflow_name" => Ok(Some(tool_call_result_response(
+            id,
+            update_workflow_name_tool_text(request),
         ))),
         "update_slice" => Ok(Some(tool_call_result_response(
             id,
@@ -858,6 +879,29 @@ fn update_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
     interpret_collect_reports(command::update_workflow_description(slug, description))
+        .map(|reports| reports.join("\n"))
+}
+
+fn update_workflow_name_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("update_workflow_name requires arguments"))?;
+    let slug = arguments
+        .get("slug")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("update_workflow_name requires slug"))
+        .and_then(|raw_slug| {
+            parse_workflow_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("update_workflow_name requires name"))
+        .and_then(|raw_name| {
+            parse_model_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    interpret_collect_reports(command::update_workflow_name(slug, name))
         .map(|reports| reports.join("\n"))
 }
 
