@@ -22,6 +22,22 @@ mod tests {
             "named emc flake check must build the EMC package"
         );
         assert!(
+            flake.contains("runtimeTools = [ pkgs.lean4 pkgs.quint ];"),
+            "Nix package must pin Lean4 and Quint runtime tools"
+        );
+        assert!(
+            flake.contains("nativeBuildInputs = [ pkgs.makeWrapper ];"),
+            "Nix package must wrap the EMC executable"
+        );
+        assert!(
+            flake.contains("wrapProgram $out/bin/emc"),
+            "Nix package must wrap emc so verification tools are hidden behind the binary"
+        );
+        assert!(
+            flake.contains("--prefix PATH : ${pkgs.lib.makeBinPath runtimeTools}"),
+            "wrapped EMC package must put Lean4 and Quint on PATH"
+        );
+        assert!(
             flake.contains("packageSmoke = pkgs.runCommand"),
             "flake checks must include packaged EMC command smoke tests"
         );

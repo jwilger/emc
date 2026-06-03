@@ -64,11 +64,23 @@
         cargoToml = ./Cargo.toml;
         hasCargoProject = builtins.pathExists cargoToml;
 
-        package = craneLib.buildPackage {
+        emcBinary = craneLib.buildPackage {
           src = craneLib.cleanCargoSource ./.;
           strictDeps = true;
           buildInputs = commonBuildInputs;
           nativeBuildInputs = commonNativeBuildInputs;
+        };
+
+        runtimeTools = [ pkgs.lean4 pkgs.quint ];
+
+        package = pkgs.symlinkJoin {
+          name = "emc";
+          paths = [ emcBinary ];
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+          postBuild = ''
+            wrapProgram $out/bin/emc \
+              --prefix PATH : ${pkgs.lib.makeBinPath runtimeTools}
+          '';
         };
 
         containerImage = pkgs.dockerTools.buildImage {
