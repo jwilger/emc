@@ -129,6 +129,7 @@
 - 2026-06-03: `emc add slice` now rejects workflow document description drift against the indexed workflow description before planning writes, preventing a corrupted browser workflow document from changing formal workflow digests through an unrelated slice mutation.
 - 2026-06-03: `emc connect workflow` now rejects workflow document description drift against the indexed workflow description before planning writes, preventing a corrupted browser workflow document from changing formal workflow digests through an unrelated transition mutation.
 - 2026-06-03: MCP HTTP origin validation now compares the request Origin against the request Host authority when present, so authenticated clients can reach a server bound to `0.0.0.0` through their actual host while cross-origin requests still fail deterministically.
+- 2026-06-03: The Nix package smoke gate now exercises a packaged MCP HTTP `tools/call` request for `check_project`, proving the packaged HTTP transport can invoke EMC tools instead of only proving that the transport initializes.
 
 ### Task 1: Guardrails and Project Skeleton
 

@@ -98,6 +98,11 @@ mod tests {
             "package smoke checks must run packaged `emc mcp http`"
         );
         assert!(
+            flake.contains("\"method\":\"tools/call\"")
+                && flake.contains("\"name\":\"check_project\""),
+            "package smoke HTTP checks must invoke a packaged EMC MCP tool, not only initialize the transport"
+        );
+        assert!(
             flake.contains("http_body_length=\"''${#http_body}\""),
             "package smoke HTTP request must compute Content-Length from the exact body"
         );

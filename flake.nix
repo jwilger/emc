@@ -134,25 +134,37 @@
               | ${package}/bin/emc mcp stdio \
               | grep '"serverInfo"'
 
-            ${package}/bin/emc mcp http --host 127.0.0.1 --port 7332 --once > http.log &
+            ${package}/bin/emc mcp http --host 127.0.0.1 --port 7332 > http.log &
             server_pid="$!"
-            http_body='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"package-smoke","version":"0.0.0"}}}'
-            http_body_length="''${#http_body}"
+            trap 'kill "$server_pid" || true; wait "$server_pid" || true' EXIT
+            http_ready=0
             for attempt in $(seq 1 50); do
+              http_body='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"package-smoke","version":"0.0.0"}}}'
+              http_body_length="''${#http_body}"
               if printf 'POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:7332\r\nOrigin: http://127.0.0.1:7332\r\nContent-Type: application/json\r\nContent-Length: %s\r\nConnection: close\r\n\r\n%s' "$http_body_length" "$http_body" \
                 | nc 127.0.0.1 7332 \
                 | grep '"serverInfo"'; then
-                wait "$server_pid"
-                touch "$out"
-                exit 0
+                http_ready=1
+                break
               fi
               sleep 0.1
             done
+            if [ "$http_ready" != 1 ]; then
+              cat http.log
+              exit 1
+            fi
 
-            cat http.log
-            kill "$server_pid" || true
+            http_body='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"check_project","arguments":{}}}'
+            http_body_length="''${#http_body}"
+            printf 'POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:7332\r\nOrigin: http://127.0.0.1:7332\r\nContent-Type: application/json\r\nContent-Length: %s\r\nConnection: close\r\n\r\n%s' "$http_body_length" "$http_body" \
+              | nc 127.0.0.1 7332 \
+              | grep 'project layout is complete'
+
+            trap - EXIT
+            kill "$server_pid"
             wait "$server_pid" || true
-            exit 1
+            touch "$out"
+            exit 0
           '';
 
       in
