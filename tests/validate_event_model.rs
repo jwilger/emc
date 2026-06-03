@@ -870,6 +870,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_views_without_wireframes() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("show-repair-queue.eventmodel.json"),
+            "{\"name\":\"Repair queue\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"repair_queue_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Show repair queue\",\"type\":\"state_view\",\"views\":[\"repair_queue_screen\"],\"acceptance_scenarios\":[{\"name\":\"show repair queue\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "view 'repair_queue_screen' is missing wireframe",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_state_view_slices_that_own_commands() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");
@@ -2046,7 +2068,7 @@ mod tests {
         )?;
         write(
             workflows.join("review-lesson.eventmodel.json"),
-            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"review_lesson_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"views\":[\"review_lesson_screen\"],\"events\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"review_lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"review_lesson_screen\"}],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"views\":[\"review_lesson_screen\"],\"events\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
@@ -2077,7 +2099,7 @@ mod tests {
         )?;
         write(
             workflows.join("review-lesson.eventmodel.json"),
-            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lessons\"}],\"events\":[{\"name\":\"LessonSubmittedForReview\",\"stream\":\"lessons\",\"attributes\":[]}],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"review_lesson_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"views\":[\"review_lesson_screen\"],\"events\":[\"LessonSubmittedForReview\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lessons\"}],\"events\":[{\"name\":\"LessonSubmittedForReview\",\"stream\":\"lessons\",\"attributes\":[]}],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"review_lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"review_lesson_screen\"}],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"views\":[\"review_lesson_screen\"],\"events\":[\"LessonSubmittedForReview\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
@@ -2108,7 +2130,7 @@ mod tests {
         )?;
         write(
             workflows.join("review-lesson.eventmodel.json"),
-            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"review_lesson_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"views\":[\"review_lesson_screen\"],\"events\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Review lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"review_lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"review_lesson_screen\"}],\"slices\":[{\"name\":\"Review lesson\",\"type\":\"state_view\",\"views\":[\"review_lesson_screen\"],\"events\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
@@ -2135,7 +2157,7 @@ mod tests {
         )?;
         write(
             workflows.join("show-lesson.eventmodel.json"),
-            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[]}],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"controls\":[]}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[]}],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\",\"controls\":[]}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
         write(
             workflows.join("submit-lesson.eventmodel.json"),
@@ -2166,11 +2188,11 @@ mod tests {
         )?;
         write(
             workflows.join("show-lesson.eventmodel.json"),
-            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[]}],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"controls\":[{\"label\":\"Submit for review\",\"command\":\"SubmitLessonForReview\"}]}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[]}],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\",\"controls\":[{\"label\":\"Submit for review\",\"command\":\"SubmitLessonForReview\"}]}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
         write(
             workflows.join("submit-lesson.eventmodel.json"),
-            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[]}],\"read_models\":[],\"views\":[{\"name\":\"submit_lesson_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_view\",\"views\":[\"submit_lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show submit result\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[]}],\"read_models\":[],\"views\":[{\"name\":\"submit_lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"submit_lesson_screen\"}],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_view\",\"views\":[\"submit_lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show submit result\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
@@ -2197,11 +2219,11 @@ mod tests {
         )?;
         write(
             workflows.join("entry.eventmodel.json"),
-            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"course_entry_resolution\",\"uses_read_models\":[],\"controls\":[]}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"course_entry_resolution\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"course_entry_resolution\",\"uses_read_models\":[],\"wireframe\":\"course_entry_resolution\",\"controls\":[]}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"course_entry_resolution\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
         write(
             workflows.join("show-lesson.eventmodel.json"),
-            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\"}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
@@ -2228,11 +2250,11 @@ mod tests {
         )?;
         write(
             workflows.join("entry.eventmodel.json"),
-            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"course_entry_resolution\",\"uses_read_models\":[],\"controls\":[{\"label\":\"Open lesson\",\"navigation\":\"lesson_screen\",\"navigation_type\":\"modeled_view\"}]},{\"name\":\"lesson_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"course_entry_resolution\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"course_entry_resolution\",\"uses_read_models\":[],\"wireframe\":\"course_entry_resolution\",\"controls\":[{\"label\":\"Open lesson\",\"navigation\":\"lesson_screen\",\"navigation_type\":\"modeled_view\"}]},{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\"}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"course_entry_resolution\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
         write(
             workflows.join("show-lesson.eventmodel.json"),
-            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"other_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"other_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"other_screen\",\"uses_read_models\":[],\"wireframe\":\"other_screen\"}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"other_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
@@ -2259,7 +2281,7 @@ mod tests {
         )?;
         write(
             workflows.join("entry.eventmodel.json"),
-            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"entry_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"entry_screen\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"entry_screen\",\"uses_read_models\":[],\"wireframe\":\"entry_screen\"}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"entry_screen\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
         write(
             workflows.join("record-checkpoint.eventmodel.json"),
@@ -2289,7 +2311,7 @@ mod tests {
         )?;
         write(
             workflows.join("entry.eventmodel.json"),
-            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"entry_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"entry_screen\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"entry_screen\",\"uses_read_models\":[],\"wireframe\":\"entry_screen\"}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"entry_screen\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
@@ -2316,11 +2338,11 @@ mod tests {
         )?;
         write(
             workflows.join("entry.eventmodel.json"),
-            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"entry_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"entry_screen\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Entry\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"entry_screen\",\"uses_read_models\":[],\"wireframe\":\"entry_screen\"}],\"slices\":[{\"name\":\"Entry\",\"type\":\"state_view\",\"views\":[\"entry_screen\"],\"acceptance_scenarios\":[{\"name\":\"entry\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
         write(
             workflows.join("show-lesson.eventmodel.json"),
-            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\"},{\"id\":\"actions\"},{\"id\":\"events\"}],\"slices\":[{\"name\":\"Show Lesson\",\"type\":\"state_view\",\"elements\":[{\"id\":\"view\",\"kind\":\"view\",\"name\":\"lesson_screen\",\"lane\":\"ux\"},{\"id\":\"other\",\"kind\":\"read_model\",\"name\":\"orphan_projection\",\"lane\":\"actions\"}],\"connections\":[]}]},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[{\"name\":\"orphan_projection\",\"fields\":[]}],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Show lesson\",\"version\":\"0.1.0\",\"board\":{\"lanes\":[{\"id\":\"ux\"},{\"id\":\"actions\"},{\"id\":\"events\"}],\"slices\":[{\"name\":\"Show Lesson\",\"type\":\"state_view\",\"elements\":[{\"id\":\"view\",\"kind\":\"view\",\"name\":\"lesson_screen\",\"lane\":\"ux\"},{\"id\":\"other\",\"kind\":\"read_model\",\"name\":\"orphan_projection\",\"lane\":\"actions\"}],\"connections\":[]}]},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[{\"name\":\"orphan_projection\",\"fields\":[]}],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\"}],\"slices\":[{\"name\":\"Show lesson\",\"type\":\"state_view\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[{\"name\":\"show lesson\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
@@ -2712,11 +2734,11 @@ mod tests {
         create_dir_all(&slices)?;
         write(
             slices.join("lesson-screen.eventmodel.json"),
-            "{\"name\":\"Lesson screen workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Show lesson screen\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Lesson screen workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\"}],\"slices\":[{\"name\":\"Show lesson screen\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
         )?;
         write(
             slices.join("review-screen.eventmodel.json"),
-            "{\"name\":\"Review screen workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[]}],\"slices\":[{\"name\":\"Review lesson screen\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Review screen workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\"}],\"slices\":[{\"name\":\"Review lesson screen\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?
@@ -2738,11 +2760,11 @@ mod tests {
         create_dir_all(&slices)?;
         write(
             slices.join("submit-control.eventmodel.json"),
-            "{\"name\":\"Submit control workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"controls\":[{\"label\":\"Submit for review\",\"description\":\"Submit the lesson.\"}]}],\"slices\":[{\"name\":\"Submit lesson control\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Submit control workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\",\"controls\":[{\"label\":\"Submit for review\",\"description\":\"Submit the lesson.\"}]}],\"slices\":[{\"name\":\"Submit lesson control\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
         )?;
         write(
             slices.join("review-control.eventmodel.json"),
-            "{\"name\":\"Review control workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"controls\":[{\"label\":\"Submit for review\",\"description\":\"Request review.\"}]}],\"slices\":[{\"name\":\"Review lesson control\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Review control workflow\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"uses_read_models\":[],\"wireframe\":\"lesson_screen\",\"controls\":[{\"label\":\"Submit for review\",\"description\":\"Request review.\"}]}],\"slices\":[{\"name\":\"Review lesson control\",\"views\":[\"lesson_screen\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
         )?;
 
         Command::cargo_bin("emc")?

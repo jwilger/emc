@@ -1788,6 +1788,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_state_change_slices_do_not_own_read_models(document))
         .and_then(|()| validate_state_change_slices_do_not_own_automations(document))
         .and_then(|()| validate_state_change_slices_do_not_own_translations(document))
+        .and_then(|()| validate_views_have_wireframes(document))
 }
 
 pub fn validate_event_model_corpus(
@@ -3374,6 +3375,19 @@ fn validate_state_change_slices_do_not_own_translations(
             Err(validation_issue(format!(
                 "state_change slice '{}' must not own translation '{}'",
                 slice.name, translation
+            )))
+        })
+}
+
+fn validate_views_have_wireframes(document: &EventModelDocument) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .find(|view| view.wireframe == ViewWireframe::Absent)
+        .map_or(Ok(()), |view| {
+            Err(validation_issue(format!(
+                "view '{}' is missing wireframe",
+                view.name
             )))
         })
 }
