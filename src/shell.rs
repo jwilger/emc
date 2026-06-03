@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 use std::fs;
@@ -12,8 +12,8 @@ use crate::core::effect::{
     ArtifactDigest, Effect, EffectPlan, FileContents, ProcessInvocation, ProjectPath,
 };
 use crate::core::formal_graph::{
-    FormalGraphError, FormalWorkflowGraph, parse_lean_workflow_graph, parse_quint_workflow_graph,
-    workflow_graph_from_document,
+    FormalGraphError, FormalWorkflowGraph, FormalWorkflowGraphs, parse_lean_workflow_graph,
+    parse_quint_workflow_graph, workflow_graph_from_document,
 };
 use crate::core::json_object_document::JsonObjectDocument;
 use crate::core::layout::{
@@ -181,8 +181,12 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::Fail(message) => Err(ShellError::message(message.as_ref().to_owned())),
         Effect::GenerateSiteFromManifest(output) => {
             let project_name = read_project_manifest_name()?;
-            validate_modeled_workflows()?;
-            interpret_collect_reports(generate_site(project_name, output.clone()))
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?;
+            interpret_collect_reports(generate_site(
+                project_name,
+                output.clone(),
+                formal_workflows,
+            ))
         }
         Effect::ListWorkflowsFromIndex => {
             let modeled_workflows = read_browser_index_workflows()?;
@@ -437,6 +441,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
         }
+        Effect::RemoveDirectory(path) => {
+            remove_directory_if_present(path.as_ref()).map(|()| Vec::new())
+        }
         Effect::RemoveFile(path) => remove_file_if_present(path.as_ref()).map(|()| Vec::new()),
         Effect::RemoveSliceFromWorkflow(slug) => {
             let existing_workflows = read_browser_index_workflows()?;
@@ -609,6 +616,109 @@ fn read_browser_index_workflows() -> Result<Vec<ModeledWorkflowLayout>, ShellErr
         })
 }
 
+fn read_synchronized_formal_workflow_graphs() -> Result<FormalWorkflowGraphs, ShellError> {
+    let lean_graphs = read_formal_workflow_graphs(
+        Path::new("model/lean"),
+        ".lean",
+        "def workflowName :=",
+        parse_lean_workflow_graph,
+    )?;
+    let quint_graphs = read_formal_workflow_graphs(
+        Path::new("model/quint"),
+        ".qnt",
+        "val workflowName =",
+        parse_quint_workflow_graph,
+    )?;
+
+    let quint_by_slug = formal_graphs_by_slug(quint_graphs, "Quint")?;
+    lean_graphs
+        .into_iter()
+        .map(|lean_graph| {
+            let quint_graph = quint_by_slug
+                .get(lean_graph.slug().as_ref())
+                .ok_or_else(|| {
+                    ShellError::message(format!(
+                        "Quint workflow artifact is missing for workflow {}",
+                        lean_graph.slug().as_ref()
+                    ))
+                })?;
+            if &lean_graph == quint_graph {
+                Ok(lean_graph)
+            } else {
+                Err(ShellError::message(format!(
+                    "Lean and Quint workflow artifacts disagree for workflow {}",
+                    lean_graph.slug().as_ref()
+                )))
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(FormalWorkflowGraphs::from_graphs)
+}
+
+fn read_formal_workflow_graphs(
+    directory: &Path,
+    extension: &str,
+    workflow_marker: &str,
+    parser: fn(&FileContents) -> Result<FormalWorkflowGraph, FormalGraphError>,
+) -> Result<Vec<FormalWorkflowGraph>, ShellError> {
+    let mut paths = fs::read_dir(directory)
+        .map_err(ShellError::io)?
+        .map(|entry| entry.map(|directory_entry| directory_entry.path()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ShellError::io)?;
+    paths.sort();
+
+    paths
+        .into_iter()
+        .filter(|path| {
+            path.extension().and_then(|value| value.to_str()) == extension.strip_prefix('.')
+        })
+        .map(|path| {
+            fs::read_to_string(&path)
+                .map_err(ShellError::io)
+                .and_then(|contents| {
+                    let file_contents = FileContents::try_new(contents)
+                        .map_err(|error| ShellError::message(error.to_string()))?;
+                    Ok((path, file_contents))
+                })
+        })
+        .filter_map(|result| match result {
+            Ok((path, contents)) if contents.as_ref().contains(workflow_marker) => {
+                Some(Ok((path, contents)))
+            }
+            Ok((_path, _contents)) => None,
+            Err(error) => Some(Err(error)),
+        })
+        .map(|result| {
+            let (path, contents) = result?;
+            parser(&contents).map_err(|error| {
+                ShellError::message(format!(
+                    "failed to parse formal workflow artifact {}: {error}",
+                    path.display()
+                ))
+            })
+        })
+        .collect()
+}
+
+fn formal_graphs_by_slug(
+    graphs: Vec<FormalWorkflowGraph>,
+    artifact_family: &str,
+) -> Result<BTreeMap<String, FormalWorkflowGraph>, ShellError> {
+    graphs
+        .into_iter()
+        .try_fold(BTreeMap::new(), |mut indexed, graph| {
+            let slug = graph.slug().as_ref().to_owned();
+            if indexed.insert(slug.clone(), graph).is_none() {
+                Ok(indexed)
+            } else {
+                Err(ShellError::message(format!(
+                    "{artifact_family} workflow artifact slug {slug} is duplicated"
+                )))
+            }
+        })
+}
+
 fn read_indexed_workflow_document(slug: &WorkflowSlug) -> Result<FileContents, ShellError> {
     let modeled_workflows = read_browser_index_workflows()?;
     read_indexed_workflow_document_from_layouts(slug, modeled_workflows.as_slice())
@@ -751,18 +861,6 @@ fn validate_event_model_target(target: &str) -> Result<Vec<String>, ShellError> 
     let referenced_sources = read_event_model_sources(referenced_slice_files)?;
     validate_event_model_sources(&target_path, &sources, &referenced_sources)
         .map(|()| vec![format!("event model is valid at {target}")])
-}
-
-fn validate_modeled_workflows() -> Result<(), ShellError> {
-    read_browser_index_workflows()?
-        .into_iter()
-        .map(|workflow| {
-            format!(
-                "model/browser/data/workflows/{}.eventmodel.json",
-                workflow.slug().as_ref()
-            )
-        })
-        .try_for_each(|workflow_path| validate_workflow_if_modeled(&workflow_path))
 }
 
 fn validate_workflow_if_modeled(workflow_path: &str) -> Result<(), ShellError> {
@@ -1659,6 +1757,14 @@ fn copy_directory_path(source: &Path, target: &Path) -> Result<(), ShellError> {
                 .map_err(ShellError::io)
         }
     })
+}
+
+fn remove_directory_if_present(path: &str) -> Result<(), ShellError> {
+    match fs::remove_dir_all(Path::new(path)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(ShellError::io(error)),
+    }
 }
 
 fn remove_file_if_present(path: &str) -> Result<(), ShellError> {

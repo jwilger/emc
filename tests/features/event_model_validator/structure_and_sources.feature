@@ -1,8 +1,8 @@
 Feature: Event model validator rejects structurally incomplete models and broken source chains
 
-  The event-model JSON is the source of truth for business behavior modeling.
-  Validation must reject models whose structure or provenance is not mechanically
-  inspectable.
+  Event-model JSON is the validator and browser projection format for business
+  behavior modeling. Validation must reject projected models whose structure or
+  provenance is not mechanically inspectable.
 
   Background:
     Given validation runs through the event-model validator CLI against temporary workflow and slice "*.eventmodel.json" files
