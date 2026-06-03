@@ -131,6 +131,7 @@
 - 2026-06-03: MCP HTTP origin validation now compares the request Origin against the request Host authority when present, so authenticated clients can reach a server bound to `0.0.0.0` through their actual host while cross-origin requests still fail deterministically.
 - 2026-06-03: The Nix package smoke gate now exercises a packaged MCP HTTP `tools/call` request for `check_project`, proving the packaged HTTP transport can invoke EMC tools instead of only proving that the transport initializes.
 - 2026-06-03: MCP stdio now streams requests line-by-line and flushes each JSON-RPC response immediately, so editor and agent clients do not need to close stdin before receiving tool responses.
+- 2026-06-03: Formal workflow transition emission, digesting, duplicate detection, and check-time marker derivation now use semantic `WorkflowTransitionRecord` values instead of reparsing canonical transition-label strings back into source, target, kind, and trigger fields.
 
 ### Task 1: Guardrails and Project Skeleton
 

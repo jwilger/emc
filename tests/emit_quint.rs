@@ -4,7 +4,10 @@ mod tests {
 
     use emc::core::digest::{artifact_digest, slice_artifact_digest};
     use emc::core::emit::quint::{emit_slice_module, emit_workflow_module};
-    use emc::core::types::{SliceKindName, WorkflowSliceDetail, WorkflowTransitionLabel};
+    use emc::core::types::{
+        SliceKindName, TransitionTriggerName, WorkflowSliceDetail, WorkflowTransitionEndpoint,
+        WorkflowTransitionKind, WorkflowTransitionRecord,
+    };
     use emc::io::dto::{
         parse_model_description, parse_model_name, parse_quint_module_name, parse_slice_slug,
         parse_workflow_slug,
@@ -21,9 +24,12 @@ mod tests {
             SliceKindName::try_new("state_view".to_owned())?,
             parse_model_description("Actor enters repair ticket details.")?,
         )];
-        let workflow_transitions = vec![WorkflowTransitionLabel::try_new(
-            "capture-ticket->review-ticket:navigation:review-ticket-screen".to_owned(),
-        )?];
+        let workflow_transitions = vec![WorkflowTransitionRecord::new(
+            WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
+            WorkflowTransitionEndpoint::try_new("review-ticket".to_owned())?,
+            WorkflowTransitionKind::try_new("navigation".to_owned())?,
+            TransitionTriggerName::try_new("review-ticket-screen".to_owned())?,
+        )];
         let module = emit_workflow_module(
             parse_quint_module_name("OpenTicket")?,
             workflow_name.clone(),

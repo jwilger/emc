@@ -1,7 +1,7 @@
 use crate::core::effect::{ArtifactDigest, FileContents};
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSliceDetail,
-    WorkflowSlug, WorkflowTransitionLabel,
+    WorkflowSlug, WorkflowTransitionRecord,
 };
 
 pub fn emit_workflow_module(
@@ -10,7 +10,7 @@ pub fn emit_workflow_module(
     workflow_description: ModelDescription,
     workflow_slug: WorkflowSlug,
     workflow_slice_details: Vec<WorkflowSliceDetail>,
-    workflow_transitions: Vec<WorkflowTransitionLabel>,
+    workflow_transitions: Vec<WorkflowTransitionRecord>,
     digest: ArtifactDigest,
 ) -> FileContents {
     let slice_list = slice_list(&workflow_slice_details);
@@ -90,40 +90,23 @@ fn slice_detail_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
     )
 }
 
-fn transition_list(workflow_transitions: Vec<WorkflowTransitionLabel>) -> String {
+fn transition_list(workflow_transitions: Vec<WorkflowTransitionRecord>) -> String {
     format!(
         "[{}]",
         workflow_transitions
             .iter()
-            .map(|transition| transition_record(transition.as_ref()))
+            .map(transition_record)
             .collect::<Vec<_>>()
             .join(",")
     )
 }
 
-fn transition_record(transition: &str) -> String {
-    let (source, tail) = transition.split_once("->").unwrap_or_else(|| {
-        unreachable!("EMC generated workflow transition must contain a source and target");
-    });
-    let (target, kind, trigger) = transition_parts(tail);
+fn transition_record(transition: &WorkflowTransitionRecord) -> String {
     format!(
         "{{ source := {}, target := {}, kind := {}, trigger := {} }}",
-        quoted(source),
-        quoted(target),
-        quoted(kind.as_ref()),
-        quoted(trigger.as_ref())
+        quoted(transition.source().as_ref()),
+        quoted(transition.target().as_ref()),
+        quoted(transition.kind().as_ref()),
+        quoted(transition.trigger().as_ref())
     )
-}
-
-fn transition_parts(tail: &str) -> (&str, String, String) {
-    let parts = tail.split(':').collect::<Vec<_>>();
-    match parts.as_slice() {
-        [target, kind, trigger] => (target, (*kind).to_owned(), (*trigger).to_owned()),
-        [target, "workflow_exit", exit_kind, trigger] => (
-            target,
-            format!("workflow_exit:{exit_kind}"),
-            (*trigger).to_owned(),
-        ),
-        _ => unreachable!("EMC generated workflow transition must have canonical parts"),
-    }
 }

@@ -583,6 +583,34 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn formal_transition_emission_uses_semantic_transition_records() -> Result<(), Box<dyn Error>> {
+        let violations = [
+            ("src/core/emit/lean.rs", "split_once(\"->\")"),
+            ("src/core/emit/lean.rs", "fn transition_parts("),
+            ("src/core/emit/quint.rs", "split_once(\"->\")"),
+            ("src/core/emit/quint.rs", "fn transition_parts("),
+            ("src/shell.rs", "fn transition_record_parts("),
+        ]
+        .into_iter()
+        .filter_map(|(path, marker)| {
+            read_workspace_file(path).ok().and_then(|source| {
+                source
+                    .contains(marker)
+                    .then(|| format!("{path} reparses transition labels via `{marker}`"))
+            })
+        })
+        .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "formal transition emission and check markers must use semantic transition records"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",
