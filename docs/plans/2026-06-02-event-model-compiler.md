@@ -121,6 +121,7 @@
 - 2026-06-03: `emc add slice` now rejects slice names that would collide on the same generated Lean4/Quint module name, preventing a mutation from overwriting an existing business slice formal artifact and leaving `emc check` to discover the invalid state afterward.
 - 2026-06-03: `emc add workflow` now rejects workflow names that would collide on the same generated Lean4/Quint module name, preventing one business workflow mutation from overwriting another workflow's formal artifacts.
 - 2026-06-03: `emc add slice` now rejects duplicate semantic slice slugs before planning writes, preventing duplicate workflow steps or overwritten browser/formal slice artifacts from being created by mutation commands.
+- 2026-06-03: `emc add workflow` now rejects duplicate semantic workflow slugs before planning writes, preventing mutation commands from replacing an existing workflow's browser and formal artifacts.
 
 ### Task 1: Guardrails and Project Skeleton
 

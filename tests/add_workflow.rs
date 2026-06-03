@@ -129,4 +129,66 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn add_workflow_rejects_duplicate_workflow_slugs() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open repair ticket",
+                "--description",
+                "Alternate workflow with duplicate slug.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow open-ticket already exists",
+            ));
+
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        assert!(
+            workflow_json.contains("\"name\": \"Open ticket\""),
+            "rejected duplicate workflow slugs must not overwrite existing workflow data"
+        );
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        assert!(
+            lean.contains("def workflowName := \"Open ticket\""),
+            "rejected duplicate workflow slugs must not overwrite existing formal workflow artifacts"
+        );
+
+        Ok(())
+    }
 }
