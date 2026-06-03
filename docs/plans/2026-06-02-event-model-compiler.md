@@ -95,6 +95,7 @@
 - 2026-06-03: Project initialization now writes the same Quint workflow invariant list that `emc verify` asks Quint to check: identity stability, slice-detail completeness, and structured transitions. Init coverage asserts the exact root `quint.json` content so the project skeleton cannot silently lag behind the verification surface.
 - 2026-06-03: Formal artifact digest derivation now parses browser workflow JSON through the semantic `WorkflowDocument` type instead of maintaining a separate raw-JSON interpretation path. A static architecture guardrail prevents `src/core/digest.rs` from directly manipulating raw JSON values.
 - 2026-06-03: Check-time Lean and Quint transition markers now derive transition labels from the same semantic `WorkflowDocument` parser used by mutations and formal digests. A shell guardrail prevents reintroducing duplicate transition-label helper semantics in the interpreter.
+- 2026-06-03: Check-time Lean and Quint slice-list and slice-detail markers now derive from semantic `WorkflowSliceDetail` values parsed by `WorkflowDocument`. A shell guardrail prevents raw workflow step field access for slice identity, name, type, or description in marker derivation.
 
 ### Task 1: Guardrails and Project Skeleton
 
