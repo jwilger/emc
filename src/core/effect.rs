@@ -2,6 +2,7 @@ use nutype::nutype;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Effect {
+    CopyDirectory(ProjectPath, ProjectPath),
     EnsureDirectory(ProjectPath),
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
