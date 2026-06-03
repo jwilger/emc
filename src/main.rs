@@ -9,9 +9,9 @@ use emc::core::effect::ProjectPath;
 use emc::core::layout::{check_project, list_workflows, show_workflow};
 use emc::core::project::{ProjectName, init_project};
 use emc::core::site::generate_site;
-use emc::core::types::WorkflowSlug;
+use emc::core::types::{ModelDescription, WorkflowSlug};
 use emc::core::verify::verify_project;
-use emc::core::workflow::{NewWorkflow, add_workflow};
+use emc::core::workflow::{NewWorkflow, add_workflow, update_workflow_description};
 use emc::event_model_validation::validate_target;
 use emc::io::dto::{
     parse_browser_index_workflows, parse_emc_slice_import, parse_emc_workflow_import,
@@ -26,15 +26,31 @@ struct Cli {
 }
 
 enum Command {
-    AddWorkflow { workflow: NewWorkflow },
+    AddWorkflow {
+        workflow: NewWorkflow,
+    },
     Check,
-    GenerateSite { output: ProjectPath },
-    ImportEMC { source: PathBuf },
-    Init { name: String },
+    GenerateSite {
+        output: ProjectPath,
+    },
+    ImportEMC {
+        source: PathBuf,
+    },
+    Init {
+        name: String,
+    },
     ListWorkflows,
     McpStdio,
-    ShowWorkflow { slug: WorkflowSlug },
-    Validate { target: PathBuf },
+    ShowWorkflow {
+        slug: WorkflowSlug,
+    },
+    UpdateWorkflowDescription {
+        slug: WorkflowSlug,
+        description: ModelDescription,
+    },
+    Validate {
+        target: PathBuf,
+    },
     Verify,
 }
 
@@ -96,6 +112,15 @@ fn run(cli: Cli) -> Result<(), ShellError> {
                         .map_err(|error| ShellError::message(error.to_string()))
                 })?;
             interpret(show_workflow(workflow_document))
+        }
+        Command::UpdateWorkflowDescription { slug, description } => {
+            let index = fs::read_to_string("model/browser/data/index.json")
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let existing_workflows = parse_browser_index_workflows(&index)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let plan = update_workflow_description(existing_workflows, slug, description)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret(plan)
         }
         Command::Validate { target } => validate_target(&target),
         Command::Verify => {
@@ -173,6 +198,29 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                     command: Command::ShowWorkflow { slug },
                 })
                 .map_err(|error| ShellError::message(error.to_string()))
+        }
+        [
+            command,
+            subject,
+            slug_flag,
+            slug,
+            description_flag,
+            description,
+        ] if command == "update"
+            && subject == "workflow"
+            && slug_flag == "--slug"
+            && description_flag == "--description" =>
+        {
+            let workflow_slug = parse_workflow_slug(slug)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let workflow_description = parse_model_description(description)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::UpdateWorkflowDescription {
+                    slug: workflow_slug,
+                    description: workflow_description,
+                },
+            })
         }
         [command, target] if command == "validate" => Ok(Cli {
             command: Command::Validate {

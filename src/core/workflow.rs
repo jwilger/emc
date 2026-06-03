@@ -1,3 +1,6 @@
+use std::error::Error;
+use std::fmt::{Display, Formatter, Result as FormatResult};
+
 use crate::core::emc::artifact_digest;
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::layout::ImportedWorkflowLayout;
@@ -23,6 +26,61 @@ impl NewWorkflow {
 pub fn add_workflow(
     existing_workflows: Vec<ImportedWorkflowLayout>,
     workflow: NewWorkflow,
+) -> EffectPlan {
+    workflow_effect_plan(existing_workflows, workflow, MutationReport::Added)
+}
+
+pub fn update_workflow_description(
+    existing_workflows: Vec<ImportedWorkflowLayout>,
+    slug: WorkflowSlug,
+    description: ModelDescription,
+) -> Result<EffectPlan, WorkflowMutationError> {
+    let workflow = existing_workflows
+        .iter()
+        .find(|existing| existing.slug() == &slug)
+        .map(|existing| {
+            NewWorkflow::new(existing.name().clone(), description.clone(), slug.clone())
+        })
+        .ok_or_else(|| WorkflowMutationError::new(format!("unknown workflow {}", slug.as_ref())))?;
+
+    Ok(workflow_effect_plan(
+        existing_workflows,
+        workflow,
+        MutationReport::Updated,
+    ))
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowMutationError {
+    message: String,
+}
+
+impl WorkflowMutationError {
+    fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+impl Display for WorkflowMutationError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl Error for WorkflowMutationError {}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum MutationReport {
+    Added,
+    Updated,
+}
+
+fn workflow_effect_plan(
+    existing_workflows: Vec<ImportedWorkflowLayout>,
+    workflow: NewWorkflow,
+    mutation_report: MutationReport,
 ) -> EffectPlan {
     let workflow_name = workflow.name.as_ref();
     let workflow_description = workflow.description.as_ref();
@@ -59,19 +117,31 @@ pub fn add_workflow(
         Effect::WriteFile(
             project_path(format!("model/lean/{module_name}.lean")),
             file_contents(format!(
-                "namespace {module_name}\n\n-- EMC-DIGEST: {}\n-- EMC generated Lean4 business workflow model.\ndef workflowName := \"{workflow_name}\"\n\nend {module_name}\n",
+                "namespace {module_name}\n\n-- EMC-DIGEST: {}\n-- EMC generated Lean4 business workflow model.\ndef workflowName := \"{workflow_name}\"\n\ndef workflowDescription := \"{workflow_description}\"\n\nend {module_name}\n",
                 digest.as_ref()
             )),
         ),
         Effect::WriteFile(
             project_path(format!("model/quint/{module_name}.qnt")),
             file_contents(format!(
-                "module {module_name} {{\n  // EMC-DIGEST: {}\n  const workflowName = \"{workflow_name}\"\n}}\n",
+                "module {module_name} {{\n  // EMC-DIGEST: {}\n  const workflowName = \"{workflow_name}\"\n  const workflowDescription = \"{workflow_description}\"\n}}\n",
                 digest.as_ref()
             )),
         ),
-        Effect::Report(report_line(format!("added workflow {workflow_name}"))),
+        Effect::Report(report_line(format!(
+            "{} workflow {workflow_name}",
+            mutation_report.as_ref()
+        ))),
     ])
+}
+
+impl MutationReport {
+    fn as_ref(self) -> &'static str {
+        match self {
+            Self::Added => "added",
+            Self::Updated => "updated",
+        }
+    }
 }
 
 fn browser_index(mut workflows: Vec<ImportedWorkflowLayout>) -> String {
