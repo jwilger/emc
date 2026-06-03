@@ -1022,12 +1022,62 @@ fn require_formal_slice_artifacts(
             let module_name = module_name_from_raw(slice.name().as_ref());
             let artifact_path =
                 Path::new(artifact_directory).join(format!("{module_name}{extension}"));
-            if artifact_path.is_file() {
+            let artifact_contents = if artifact_path.is_file() {
+                fs::read_to_string(&artifact_path).map_err(ShellError::io)?
+            } else {
+                return Err(ShellError::message(message.to_owned()));
+            };
+            if formal_slice_artifact_is_canonical(
+                &slice,
+                &module_name,
+                &artifact_contents,
+                extension,
+            )? {
                 Ok(())
             } else {
                 Err(ShellError::message(message.to_owned()))
             }
         })
+}
+
+fn formal_slice_artifact_is_canonical(
+    slice: &WorkflowSliceDetail,
+    module_name: &str,
+    artifact_contents: &str,
+    extension: &str,
+) -> Result<bool, ShellError> {
+    let slice_name = json_string(slice.name().as_ref().to_owned())?;
+    let slice_slug = json_string(slice.slug().as_ref().to_owned())?;
+    let slice_kind = json_string(slice.kind().as_ref().to_owned())?;
+    let slice_description = json_string(slice.description().as_ref().to_owned())?;
+    let declarations = if extension == ".lean" {
+        vec![
+            ("namespace ", format!("namespace {module_name}")),
+            ("def sliceName :=", format!("def sliceName := {slice_name}")),
+            ("def sliceSlug :=", format!("def sliceSlug := {slice_slug}")),
+            ("def sliceKind :=", format!("def sliceKind := {slice_kind}")),
+            (
+                "def sliceDescription :=",
+                format!("def sliceDescription := {slice_description}"),
+            ),
+            ("end ", format!("end {module_name}")),
+        ]
+    } else {
+        vec![
+            ("module ", format!("module {module_name} {{")),
+            ("val sliceName =", format!("val sliceName = {slice_name}")),
+            ("val sliceSlug =", format!("val sliceSlug = {slice_slug}")),
+            ("val sliceKind =", format!("val sliceKind = {slice_kind}")),
+            (
+                "val sliceDescription =",
+                format!("val sliceDescription = {slice_description}"),
+            ),
+        ]
+    };
+
+    Ok(declarations.into_iter().all(|(prefix, marker)| {
+        artifact_contains_one_canonical_declaration(artifact_contents, prefix, &marker)
+    }))
 }
 
 fn workflow_transition_marker(prefix: &str, workflow_contents: &str) -> Result<String, ShellError> {
