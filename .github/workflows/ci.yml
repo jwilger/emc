@@ -20,3 +20,6 @@ jobs:
 
       - name: Run local CI gate
         run: nix develop --command just ci
+
+      - name: Run Nix package smoke gate
+        run: nix flake check

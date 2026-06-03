@@ -83,6 +83,11 @@
           emc = flake-utils.lib.mkApp { drv = package; };
         };
 
+        checks = pkgs.lib.optionalAttrs hasCargoProject {
+          default = package;
+          emc = package;
+        };
+
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             rustToolchain
