@@ -60,13 +60,13 @@ mod tests {
         let slice_json = read_to_string(
             temp_dir
                 .path()
-                .join("model/browser/data/slices/open-ticket-capture-ticket.eventmodel.json"),
+                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
         )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
         assert!(
-            workflow_json.contains("\"../slices/open-ticket-capture-ticket.eventmodel.json\""),
+            workflow_json.contains("\"../slices/capture-ticket.eventmodel.json\""),
             "workflow must reference the new slice file"
         );
         assert!(

@@ -60,6 +60,7 @@
 - 2026-06-02: `emc validate` and the MCP `validate_event_model` tool accept a single `.eventmodel.json` file target as well as a directory target.
 - 2026-06-02: `emc check` rejects browser workflow data files that are present under `model/browser/data/workflows` but missing from `model/browser/data/index.json`.
 - 2026-06-02: Workflow browser JSON emitted by `emc add workflow` includes the full event-model top-level shape, so `emc validate` reaches workflow composition diagnostics instead of failing on missing required sections.
+- 2026-06-02: Slice files emitted by `emc add slice` use the slice slug as the file stem, matching workflow step slugs so composed workflow validation reaches referenced slice diagnostics.
 
 ### Task 1: Guardrails and Project Skeleton
 
