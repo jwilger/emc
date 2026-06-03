@@ -215,6 +215,63 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn review_gate_blocks_corrected_workflow_without_follow_up_review() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let previous_digest = current_model_digest(temp_dir.path())?;
+        write(
+            temp_dir.path().join("reviews/open-ticket.review.json"),
+            review_record_with_current_mandatory_finding(&previous_digest),
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--description",
+                "Actor opens a repair ticket after correction.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["review", "gate", "--workflow", "open-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "corrected workflow requires clean follow-up review",
+            ));
+
+        Ok(())
+    }
+
     fn clean_review_record(model_content_digest: &str) -> String {
         clean_review_record_for("open-ticket", model_content_digest)
     }

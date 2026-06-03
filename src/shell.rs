@@ -194,6 +194,16 @@ fn require_clean_review_record(
                 "mandatory review findings remain for current model digest",
             ));
         }
+        if mandatory_findings_are_present(record_object)
+            && record_object
+                .get("model_content_digest")
+                .and_then(Value::as_str)
+                != Some(current_digest.as_str())
+        {
+            return Err(ShellError::message(
+                "corrected workflow requires clean follow-up review",
+            ));
+        }
         return Err(ShellError::message(fallback_message.to_owned()));
     }
     if record_object
@@ -246,6 +256,13 @@ fn mandatory_findings_include_digest(
                 finding.get("model_content_digest").and_then(Value::as_str) == Some(current_digest)
             })
         })
+}
+
+fn mandatory_findings_are_present(record_object: &serde_json::Map<String, Value>) -> bool {
+    record_object
+        .get("mandatory_findings")
+        .and_then(Value::as_array)
+        .is_some_and(|findings| !findings.is_empty())
 }
 
 fn model_content_digest(workflow_path: &str) -> Result<String, ShellError> {
