@@ -1,6 +1,7 @@
 use std::env;
 use std::process::ExitCode;
 
+use clap::{Arg, Command as ClapCommand};
 use emc::core::connection::WorkflowConnection;
 use emc::core::effect::{Effect, EffectPlan, ProjectPath};
 use emc::core::gherkin::{
@@ -43,6 +44,7 @@ enum Command {
         suite: GherkinSuite,
     },
     GherkinRunAll,
+    Help,
     Init {
         name: String,
     },
@@ -104,6 +106,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::GherkinList { suite } => interpret(list_gherkin_features(suite)),
         Command::GherkinRunAll => interpret(run_all_gherkin_suites()),
         Command::GherkinRun { suite } => interpret(run_gherkin_suite(suite)),
+        Command::Help => print_help(),
         Command::Init { name } => {
             let project_name = ProjectName::try_new(name).map_err(ShellError::project_name)?;
             interpret(init_project(project_name))
@@ -138,6 +141,12 @@ fn run(cli: Cli) -> Result<(), ShellError> {
 
 fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
     match arguments.as_slice() {
+        [] => Ok(Cli {
+            command: Command::Help,
+        }),
+        [flag] if flag == "--help" || flag == "-h" => Ok(Cli {
+            command: Command::Help,
+        }),
         [
             command,
             subject,
@@ -491,6 +500,96 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         }),
         _ => Err(ShellError::message("usage: emc init --name <project-name>")),
     }
+}
+
+fn print_help() -> Result<(), ShellError> {
+    help_command()
+        .print_help()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    println!();
+    Ok(())
+}
+
+fn help_command() -> ClapCommand {
+    ClapCommand::new("emc")
+        .about("Event Model Compiler")
+        .disable_help_subcommand(true)
+        .arg_required_else_help(true)
+        .subcommand(
+            ClapCommand::new("init")
+                .about("Create a deterministic EMC project")
+                .arg(Arg::new("name").long("name").value_name("PROJECT_NAME")),
+        )
+        .subcommand(
+            ClapCommand::new("list").about("Read model indexes").subcommand(
+                ClapCommand::new("workflows").about("List modeled workflows in the project"),
+            ),
+        )
+        .subcommand(
+            ClapCommand::new("show")
+                .about("Read modeled artifacts")
+                .subcommand(ClapCommand::new("workflow").about("Show a workflow by slug")),
+        )
+        .subcommand(
+            ClapCommand::new("add")
+                .about("Create modeled business artifacts")
+                .subcommand(
+                    ClapCommand::new("workflow")
+                        .about("Add a workflow and synchronized formal artifacts"),
+                )
+                .subcommand(
+                    ClapCommand::new("slice")
+                        .about("Add a slice and synchronized formal artifacts"),
+                ),
+        )
+        .subcommand(
+            ClapCommand::new("update")
+                .about("Modify modeled business artifacts")
+                .subcommand(
+                    ClapCommand::new("workflow")
+                        .about("Update a workflow and synchronized formal artifacts"),
+                ),
+        )
+        .subcommand(
+            ClapCommand::new("connect")
+                .about("Connect modeled workflow steps")
+                .subcommand(
+                    ClapCommand::new("workflow")
+                        .about("Add a workflow transition and synchronized formal artifacts"),
+                ),
+        )
+        .subcommand(ClapCommand::new("validate").about("Validate event-model JSON files"))
+        .subcommand(ClapCommand::new("verify").about("Run Lean4 and Quint verification"))
+        .subcommand(ClapCommand::new("check").about("Check project artifact synchronization"))
+        .subcommand(
+            ClapCommand::new("generate")
+                .about("Generate derived artifacts")
+                .subcommand(ClapCommand::new("site").about("Generate the browsable event-model site")),
+        )
+        .subcommand(
+            ClapCommand::new("review")
+                .about("Evaluate review gates")
+                .subcommand(ClapCommand::new("gate").about("Check a workflow review gate")),
+        )
+        .subcommand(
+            ClapCommand::new("mcp")
+                .about("Serve EMC tools over MCP")
+                .subcommand(ClapCommand::new("stdio").about("Serve MCP over stdio"))
+                .subcommand(ClapCommand::new("http").about("Serve MCP over HTTP")),
+        )
+        .after_help(
+            "Common commands:
+  emc init --name <project-name>
+  emc add workflow --slug <slug> --name <name> --description <text>
+  emc add slice --workflow <workflow> --slug <slug> --name <name> --type <kind> --description <text>
+  emc connect workflow --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
+  emc validate <path>
+  emc verify
+  emc check
+  emc generate site --output <directory>
+  emc mcp stdio
+  emc mcp http --host 127.0.0.1 --port 7331",
+        )
 }
 
 fn parse_port(port: &str) -> Result<u16, ShellError> {
