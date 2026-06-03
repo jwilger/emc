@@ -317,6 +317,29 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn check_reports_missing_referenced_browser_slice_file() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        remove_file(
+            temp_dir
+                .path()
+                .join("model/browser/data/slices/open-ticket-capture-ticket.eventmodel.json"),
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow Open ticket references missing slice artifact",
+            ));
+
+        Ok(())
+    }
+
     fn create_connected_workflow(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args(["init", "--name", "Repair Desk"])

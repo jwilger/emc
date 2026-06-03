@@ -124,6 +124,12 @@ fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
 
     vec![
         Effect::RequireFile(workflow_path.clone()),
+        Effect::RequireWorkflowSliceFiles(
+            workflow_path.clone(),
+            report_line(format!(
+                "workflow {workflow_name} references missing slice artifact"
+            )),
+        ),
         Effect::RequireDigest(
             workflow_path.clone(),
             browser_name_marker,
