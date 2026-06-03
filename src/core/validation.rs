@@ -1210,10 +1210,29 @@ impl ReadModelState {
 pub struct ViewDefinition {
     name: DefinitionName,
     read_models: Vec<DefinitionName>,
-    fields: Vec<DefinitionName>,
+    fields: Vec<ViewFieldDefinition>,
     controls: Vec<ViewControlDefinition>,
     local_states: Vec<DefinitionName>,
     wireframe: ViewWireframe,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ViewFieldDefinition {
+    name: DefinitionName,
+    source: ViewFieldSource,
+}
+
+impl ViewFieldDefinition {
+    pub fn new(name: DefinitionName, source: ViewFieldSource) -> Self {
+        Self { name, source }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ViewFieldSource {
+    ReadModelField(DefinitionName, DefinitionName),
+    EventAttribute(DefinitionName, DefinitionName),
+    Other,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -1613,7 +1632,7 @@ impl ViewDefinition {
     pub fn new(
         name: DefinitionName,
         read_models: Vec<DefinitionName>,
-        fields: Vec<DefinitionName>,
+        fields: Vec<ViewFieldDefinition>,
         controls: Vec<ViewControlDefinition>,
         local_states: Vec<DefinitionName>,
         wireframe: ViewWireframe,
@@ -1814,6 +1833,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_wireframe_tokens_are_modeled(document))
         .and_then(|()| validate_view_fields_appear_in_wireframes(document))
         .and_then(|()| validate_view_controls_appear_in_wireframes(document))
+        .and_then(|()| validate_view_field_sources_are_present(document))
 }
 
 pub fn validate_event_model_corpus(
@@ -3439,7 +3459,8 @@ fn unmodeled_wireframe_token(view: &ViewDefinition) -> Option<(&ViewDefinition, 
 }
 
 fn wireframe_token_is_modeled(view: &ViewDefinition, token: &DefinitionName) -> bool {
-    view.fields.contains(token) || view.controls.iter().any(|control| control.label == *token)
+    view.fields.iter().any(|field| field.name == *token)
+        || view.controls.iter().any(|control| control.label == *token)
 }
 
 fn validate_view_fields_appear_in_wireframes(
@@ -3452,17 +3473,17 @@ fn validate_view_fields_appear_in_wireframes(
         .map_or(Ok(()), |(view, field)| {
             Err(validation_issue(format!(
                 "view '{}' wireframe does not reference field '{}'",
-                view.name, field
+                view.name, field.name
             )))
         })
 }
 
 fn view_field_missing_from_wireframe(
     view: &ViewDefinition,
-) -> Option<(&ViewDefinition, &DefinitionName)> {
+) -> Option<(&ViewDefinition, &ViewFieldDefinition)> {
     view.fields
         .iter()
-        .find(|field| !view.wireframe.tokens().contains(field))
+        .find(|field| !view.wireframe.tokens().contains(&field.name))
         .map(|field| (view, field))
 }
 
@@ -3488,6 +3509,30 @@ fn view_control_missing_from_wireframe(
         .iter()
         .find(|control| !view.wireframe.tokens().contains(&control.label))
         .map(|control| (view, control))
+}
+
+fn validate_view_field_sources_are_present(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .find_map(view_field_missing_source)
+        .map_or(Ok(()), |(view, field)| {
+            Err(validation_issue(format!(
+                "view '{}' field '{}' is missing source",
+                view.name, field.name
+            )))
+        })
+}
+
+fn view_field_missing_source(
+    view: &ViewDefinition,
+) -> Option<(&ViewDefinition, &ViewFieldDefinition)> {
+    view.fields
+        .iter()
+        .find(|field| field.source == ViewFieldSource::Other)
+        .map(|field| (view, field))
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
