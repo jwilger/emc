@@ -68,6 +68,27 @@ needs attention before you inspect Lean4 or Quint output directly.
 
 ## Quick start
 
+From this repository, the easiest development build is:
+
+```sh
+nix develop
+cargo build
+```
+
+Inside the development shell, run commands through Cargo or use the binary from
+`target/debug`:
+
+```sh
+cargo run -- init --name "Repair Desk"
+./target/debug/emc --help
+```
+
+You can also run the packaged executable through Nix:
+
+```sh
+nix run . -- --help
+```
+
 Create a new EMC project:
 
 ```sh
@@ -78,6 +99,35 @@ Create a workflow:
 
 ```sh
 emc add workflow --slug open-ticket --name "Open ticket" --description "Actor opens a repair ticket."
+```
+
+Add the first business slice:
+
+```sh
+emc add slice \
+  --workflow open-ticket \
+  --slug capture-ticket \
+  --name "Capture ticket" \
+  --type state_view \
+  --description "Actor enters repair ticket details."
+```
+
+Add another slice and connect the workflow:
+
+```sh
+emc add slice \
+  --workflow open-ticket \
+  --slug review-ticket \
+  --name "Review ticket" \
+  --type state_view \
+  --description "Agent reviews the captured ticket."
+
+emc connect workflow \
+  --workflow open-ticket \
+  --from capture-ticket \
+  --to review-ticket \
+  --via navigation \
+  --name review-ticket-screen
 ```
 
 Check that required project artifacts exist and synchronized generated files have
@@ -140,11 +190,26 @@ Verification assumes the generated formal artifacts match the browser model.
 
 An EMC project has a project name, a set of workflows, and generated artifacts.
 
-A workflow is a user-visible business journey, such as granting organization
-access or repairing a device. A slice is one meaningful part of that workflow:
-a state change, a state view, an automation, or a translation from an external
-signal. A transition connects one slice to another through a command, event,
-navigation action, or external trigger.
+A workflow is a user-visible business journey, such as opening a repair ticket,
+granting organization access, or processing an order. It answers: "What path can
+the business process take?"
+
+A slice is one meaningful part of that workflow. EMC currently models these
+slice kinds:
+
+- `state_change`: records a business decision or fact by emitting events.
+- `state_view`: shows remembered state to an actor.
+- `automation`: reacts to a trigger without a person driving the step.
+- `translation`: turns an external signal into modeled business information.
+
+A transition connects one slice to another. EMC supports command, event,
+navigation, external-trigger, and workflow-exit transitions. The transition is
+part of the model because the reason a workflow can move forward matters as much
+as the target step.
+
+An invariant is a rule that should remain true about the generated model. EMC
+generates Lean4 and Quint artifacts so those invariants can be checked
+mechanically for the actual business workflows and slices in the project.
 
 EMC writes three synchronized representations:
 
@@ -172,9 +237,11 @@ model/
     lakefile.lean
     lean-toolchain
     <ProjectModule>.lean
+    slices/
   quint/
     quint.json
     <ProjectModule>.qnt
+    slices/
 reviews/
 ```
 
@@ -209,6 +276,20 @@ emc mcp http
 
 The command parser is intentionally strict. If a command fails with a usage or
 parse error, check the argument order shown above.
+
+## What `check`, `validate`, and `verify` mean
+
+These commands answer different questions:
+
+- `emc check`: Are the generated browser, Lean4, and Quint artifacts present,
+  canonical, and synchronized?
+- `emc validate <target>`: Does an event-model JSON file or directory satisfy
+  the event-modeling rule suite?
+- `emc verify`: Do the generated Lean4 and Quint verification entrypoints pass
+  through the pinned external tools?
+
+Run `emc check` first when something looks wrong. It catches local drift and
+missing generated files before the formal tools need to run.
 
 ## MCP access
 
