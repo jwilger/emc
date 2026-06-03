@@ -16,7 +16,7 @@ mod tests {
         let tool_dir = temp_dir.path().join("tools");
         let emc_event_model = workspace_root().join("../emc/docs/event-model");
 
-        create_fake_tool(&tool_dir, "lean", "lean.log")?;
+        create_fake_tool(&tool_dir, "lake", "lake.log")?;
         create_fake_tool(&tool_dir, "quint", "quint.log")?;
 
         Command::cargo_bin("emc")?
@@ -42,8 +42,8 @@ mod tests {
             .stdout(predicate::str::contains("Quint artifacts verified"));
 
         assert_eq!(
-            read_to_string(temp_dir.path().join("lean.log"))?,
-            "model/lean/OrganizationAccess.lean\n"
+            read_to_string(temp_dir.path().join("lake.log"))?,
+            "env lean model/lean/OrganizationAccess.lean\n"
         );
         assert_eq!(
             read_to_string(temp_dir.path().join("quint.log"))?,

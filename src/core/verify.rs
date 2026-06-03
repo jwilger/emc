@@ -15,10 +15,12 @@ pub fn verify_project(imported_workflows: Vec<ImportedWorkflowLayout>) -> Effect
 fn verify_imported_workflow(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
     vec![
         Effect::RunProcess(ProcessInvocation::new(
-            program_name("lean"),
-            vec![process_argument(
-                workflow.lean_artifact_path().as_ref().to_owned(),
-            )],
+            program_name("lake"),
+            vec![
+                process_argument("env"),
+                process_argument("lean"),
+                process_argument(workflow.lean_artifact_path().as_ref().to_owned()),
+            ],
             report_line("Lean4 artifacts verified"),
         )),
         Effect::RunProcess(ProcessInvocation::new(
