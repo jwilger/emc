@@ -307,10 +307,10 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             require_referenced_slice_file_identities(workflows_path.as_ref(), message.as_ref())
                 .map(|()| Vec::new())
         }
-        Effect::RequireReviewRecord(path, workflow_path, message) => {
-            validate_workflow_if_modeled(workflow_path.as_ref())?;
+        Effect::RequireReviewRecord(path, workflow_slug, message) => {
+            validate_formal_workflow_if_modeled(workflow_slug)?;
             if Path::new(path.as_ref()).is_file() {
-                require_clean_review_record(path.as_ref(), workflow_path.as_ref(), message.as_ref())
+                require_clean_review_record(path.as_ref(), workflow_slug, message.as_ref())
                     .map(|()| Vec::new())
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
@@ -427,14 +427,8 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         }
         Effect::RunProcess(invocation) => run_process(invocation),
         Effect::RecordCleanReviewFromWorkflow(slug, reviewer_id, reviewed_at) => {
-            let modeled_workflows = read_browser_index_workflows()?;
-            let _workflow = find_indexed_workflow(slug, modeled_workflows.as_slice())?;
-            let workflow_path = format!(
-                "model/browser/data/workflows/{}.eventmodel.json",
-                slug.as_ref()
-            );
-            validate_workflow_if_modeled(&workflow_path)?;
-            let current_digest = model_content_digest(&workflow_path)?;
+            validate_formal_workflow_if_modeled(slug)?;
+            let current_digest = formal_model_content_digest(slug)?;
             let required_categories = required_review_categories()?;
             let plan = record_clean_review(
                 slug.clone(),
@@ -779,6 +773,14 @@ fn read_formal_workflow_projection(slug: &WorkflowSlug) -> Result<FileContents, 
         .ok_or_else(|| ShellError::message(format!("workflow {} is not modeled", slug.as_ref())))
 }
 
+fn read_formal_workflow_graph(slug: &WorkflowSlug) -> Result<FormalWorkflowGraph, ShellError> {
+    read_synchronized_formal_workflow_graphs()?
+        .into_inner()
+        .into_iter()
+        .find(|graph| graph.slug() == slug)
+        .ok_or_else(|| ShellError::message(format!("workflow {} is not modeled", slug.as_ref())))
+}
+
 fn read_formal_slice_projection(slug: &SliceSlug) -> Result<FileContents, ShellError> {
     read_synchronized_formal_workflow_graphs()?
         .into_inner()
@@ -897,21 +899,30 @@ fn validate_event_model_target(target: &str) -> Result<Vec<String>, ShellError> 
         .map(|()| vec![format!("event model is valid at {target}")])
 }
 
-fn validate_workflow_if_modeled(workflow_path: &str) -> Result<(), ShellError> {
-    let contents = fs::read_to_string(Path::new(workflow_path)).map_err(ShellError::io)?;
-    let file_contents =
-        FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))?;
-    let workflow_document = WorkflowDocument::parse(&file_contents)
-        .map_err(|error| ShellError::message(error.to_string()))?;
-    if workflow_document
-        .slice_details()
-        .map_err(|error| ShellError::message(error.to_string()))?
-        .is_empty()
-    {
+fn validate_formal_workflow_if_modeled(slug: &WorkflowSlug) -> Result<(), ShellError> {
+    let graph = read_formal_workflow_graph(slug)?;
+    if graph.slice_details().as_slice().is_empty() {
         Ok(())
     } else {
-        validate_event_model_target(workflow_path).map(|_| ())
+        validate_formal_workflow_projection(&graph)
     }
+}
+
+fn validate_formal_workflow_projection(graph: &FormalWorkflowGraph) -> Result<(), ShellError> {
+    let workflow_path = workflow_browser_project_path(graph.slug())?;
+    let workflow_source = project_workflow_browser_document(graph);
+    let sources = vec![(workflow_path.clone(), workflow_source)];
+    let referenced_sources = graph
+        .slice_details()
+        .as_slice()
+        .iter()
+        .map(|slice| {
+            slice_browser_project_path(slice.slug())
+                .map(|path| (path, project_slice_browser_document(graph, slice)))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    validate_event_model_sources(&workflow_path, &sources, &referenced_sources)
+        .map_err(|error| ShellError::message(error.to_string()))
 }
 
 fn ensure_slice_navigation_control(slug: &SliceSlug, navigation: &str) -> Result<(), ShellError> {
@@ -1340,7 +1351,7 @@ fn workflow_slice_file_names(workflow_contents: &str) -> Result<Vec<String>, She
 
 fn require_clean_review_record(
     path: &str,
-    workflow_path: &str,
+    workflow_slug: &WorkflowSlug,
     fallback_message: &str,
 ) -> Result<(), ShellError> {
     let contents = fs::read_to_string(Path::new(path)).map_err(ShellError::io)?;
@@ -1359,7 +1370,7 @@ fn require_clean_review_record(
             "review record workflow '{observed}' does not match '{expected_workflow_slug}'"
         )));
     }
-    let current_digest = model_content_digest(workflow_path)?;
+    let current_digest = formal_model_content_digest(workflow_slug)?;
     if !record.is_clean() {
         if record.current_mandatory_findings_include(&current_digest) {
             return Err(ShellError::message(
@@ -1417,20 +1428,44 @@ fn required_review_categories() -> Result<Vec<ReviewRuleName>, ShellError> {
         .collect()
 }
 
-fn model_content_digest(workflow_path: &str) -> Result<ArtifactDigest, ShellError> {
-    let workflow_contents = fs::read_to_string(Path::new(workflow_path)).map_err(ShellError::io)?;
-    let slice_files = workflow_slice_file_paths(workflow_path, &workflow_contents)?;
+fn formal_model_content_digest(slug: &WorkflowSlug) -> Result<ArtifactDigest, ShellError> {
+    let graph = read_formal_workflow_graph(slug)?;
+    let workflow_path = workflow_browser_path_string(graph.slug());
+    let workflow_contents = project_workflow_browser_document(&graph);
     let mut digest = StableDigest::new();
-    digest.write(workflow_path);
-    digest.write(&workflow_contents);
-    slice_files.into_iter().try_for_each(|slice_file| {
-        let slice_path = slice_file.to_string_lossy().into_owned();
-        let slice_contents = fs::read_to_string(&slice_file).map_err(ShellError::io)?;
+    digest.write(&workflow_path);
+    digest.write(workflow_contents.as_ref());
+    graph.slice_details().as_slice().iter().for_each(|slice| {
+        let slice_path = slice_browser_path_string(slice.slug());
+        let slice_contents = project_slice_browser_document(&graph, slice);
         digest.write(&slice_path);
-        digest.write(&slice_contents);
-        Ok::<(), ShellError>(())
-    })?;
+        digest.write(slice_contents.as_ref());
+    });
     ArtifactDigest::try_new(digest.finish()).map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn workflow_browser_project_path(slug: &WorkflowSlug) -> Result<ProjectPath, ShellError> {
+    ProjectPath::try_new(workflow_browser_path_string(slug))
+        .map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn workflow_browser_path_string(slug: &WorkflowSlug) -> String {
+    format!(
+        "model/browser/data/workflows/{}.eventmodel.json",
+        slug.as_ref()
+    )
+}
+
+fn slice_browser_project_path(slug: &SliceSlug) -> Result<ProjectPath, ShellError> {
+    ProjectPath::try_new(slice_browser_path_string(slug))
+        .map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn slice_browser_path_string(slug: &SliceSlug) -> String {
+    format!(
+        "model/browser/data/slices/{}.eventmodel.json",
+        slug.as_ref()
+    )
 }
 
 struct StableDigest {

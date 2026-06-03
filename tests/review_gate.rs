@@ -389,7 +389,7 @@ mod tests {
         let temp_dir = TempDir::new()?;
         initialize_navigation_chain(temp_dir.path())?;
 
-        remove_first_workflow_transition_fixture(temp_dir.path(), "intake-visit")?;
+        remove_first_formal_workflow_transition_fixture(temp_dir.path())?;
 
         Command::cargo_bin("emc")?
             .args([
@@ -417,6 +417,42 @@ mod tests {
             .stderr(predicate::str::contains(
                 "workflow step 'triage-intake' has no incoming transition",
             ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn review_record_uses_formal_artifacts_when_browser_workflow_is_stale()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_navigation_chain(temp_dir.path())?;
+
+        remove_first_browser_workflow_transition_fixture(temp_dir.path(), "intake-visit")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "review",
+                "record",
+                "--workflow",
+                "intake-visit",
+                "--reviewer",
+                "event-model-reviewer",
+                "--reviewed-at",
+                "2026-06-03T00:00:00.000Z",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "recorded clean review for workflow intake-visit",
+            ));
+
+        Command::cargo_bin("emc")?
+            .args(["review", "gate", "--workflow", "intake-visit"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("workflow review is clean"));
 
         Ok(())
     }
@@ -621,7 +657,7 @@ mod tests {
         Ok(())
     }
 
-    fn remove_first_workflow_transition_fixture(
+    fn remove_first_browser_workflow_transition_fixture(
         cwd: &Path,
         workflow: &str,
     ) -> Result<(), Box<dyn Error>> {
@@ -640,6 +676,30 @@ mod tests {
             .ok_or("workflow fixture first step is missing transitions")?;
         transitions.clear();
         write(path, serde_json::to_string_pretty(&workflow_json)?)?;
+        Ok(())
+    }
+
+    fn remove_first_formal_workflow_transition_fixture(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        let lean_path = cwd.join("model/lean/IntakeVisit.lean");
+        let lean = read_to_string(&lean_path)?;
+        write(
+            lean_path,
+            lean.replace(
+                "{ source := \"capture-intake\", target := \"triage-intake\", kind := \"navigation\", trigger := \"triage-intake-screen\" },",
+                "",
+            ),
+        )?;
+
+        let quint_path = cwd.join("model/quint/IntakeVisit.qnt");
+        let quint = read_to_string(&quint_path)?;
+        write(
+            quint_path,
+            quint.replace(
+                "{ source: \"capture-intake\", target: \"triage-intake\", kind: \"navigation\", trigger: \"triage-intake-screen\" },",
+                "",
+            ),
+        )?;
+
         Ok(())
     }
 
