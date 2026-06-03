@@ -1,7 +1,7 @@
 use crate::core::effect::{ArtifactDigest, FileContents};
 use crate::core::types::{
-    LeanModuleName, ModelDescription, ModelName, WorkflowSliceDetail, WorkflowSlug,
-    WorkflowTransitionLabel,
+    LeanModuleName, ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSliceDetail,
+    WorkflowSlug, WorkflowTransitionLabel,
 };
 
 pub fn emit_workflow_module(
@@ -26,6 +26,23 @@ pub fn emit_workflow_module(
         slice_list = slice_list,
         slice_detail_list = slice_detail_list,
         transition_list = transition_list,
+    ))
+}
+
+pub fn emit_slice_module(
+    module_name: LeanModuleName,
+    slice_name: ModelName,
+    slice_description: ModelDescription,
+    slice_slug: SliceSlug,
+    slice_kind: SliceKindName,
+) -> FileContents {
+    file_contents(format!(
+        "namespace {module_name}\n\n-- EMC generated Lean4 business slice model.\ndef sliceName := {slice_name_json}\n\ndef sliceSlug := {slice_slug_json}\n\ndef sliceKind := {slice_kind_json}\n\ndef sliceDescription := {slice_description_json}\n\ntheorem sliceIdentityIsStable : sliceName = {slice_name_json} := rfl\n\nend {module_name}\n",
+        module_name = module_name.as_ref(),
+        slice_name_json = quoted(slice_name.as_ref()),
+        slice_slug_json = quoted(slice_slug.as_ref()),
+        slice_kind_json = quoted(slice_kind.as_ref()),
+        slice_description_json = quoted(slice_description.as_ref()),
     ))
 }
 

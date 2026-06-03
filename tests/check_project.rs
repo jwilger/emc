@@ -1466,6 +1466,44 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_missing_formal_slice_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        remove_file(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean slice artifact drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_missing_quint_slice_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        remove_file(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint slice artifact drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_unreferenced_browser_slice_files() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 

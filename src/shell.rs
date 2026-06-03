@@ -223,6 +223,22 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
         }
+        Effect::RequireWorkflowFormalSliceArtifacts(
+            workflow_path,
+            artifact_directory,
+            extension,
+            message,
+        ) => {
+            let workflow_contents =
+                fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
+            require_formal_slice_artifacts(
+                &workflow_contents,
+                artifact_directory.as_ref(),
+                extension.as_ref(),
+                message.as_ref(),
+            )
+            .map(|()| Vec::new())
+        }
         Effect::RequireWorkflowSliceDetails(
             workflow_path,
             artifact_path,
@@ -994,6 +1010,26 @@ fn workflow_slice_file_paths(
         })
 }
 
+fn require_formal_slice_artifacts(
+    workflow_contents: &str,
+    artifact_directory: &str,
+    extension: &str,
+    message: &str,
+) -> Result<(), ShellError> {
+    workflow_slice_details(workflow_contents)?
+        .into_iter()
+        .try_for_each(|slice| {
+            let module_name = module_name_from_raw(slice.name().as_ref());
+            let artifact_path =
+                Path::new(artifact_directory).join(format!("{module_name}{extension}"));
+            if artifact_path.is_file() {
+                Ok(())
+            } else {
+                Err(ShellError::message(message.to_owned()))
+            }
+        })
+}
+
 fn workflow_transition_marker(prefix: &str, workflow_contents: &str) -> Result<String, ShellError> {
     let labels = if prefix.starts_with("val ") {
         workflow_transition_record_labels(workflow_contents)?
@@ -1149,6 +1185,26 @@ fn workflow_document(workflow_contents: &str) -> Result<WorkflowDocument, ShellE
             WorkflowDocument::parse(&contents)
                 .map_err(|error| ShellError::message(error.to_string()))
         })
+}
+
+fn module_name_from_raw(raw: &str) -> String {
+    let mut capitalize_next = true;
+    raw.chars()
+        .filter_map(|character| {
+            if character.is_ascii_alphanumeric() {
+                let next = if capitalize_next {
+                    character.to_ascii_uppercase()
+                } else {
+                    character
+                };
+                capitalize_next = false;
+                Some(next)
+            } else {
+                capitalize_next = true;
+                None
+            }
+        })
+        .collect()
 }
 
 fn transition_record_parts(label: &str) -> Result<(&str, &str, String, String), ShellError> {

@@ -252,6 +252,22 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
                 "workflow {workflow_name} references missing slice artifact"
             )),
         ),
+        Effect::RequireWorkflowFormalSliceArtifacts(
+            workflow_path.clone(),
+            project_path("model/lean/slices"),
+            artifact_file_extension(".lean"),
+            report_line(format!(
+                "Lean slice artifact drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireWorkflowFormalSliceArtifacts(
+            workflow_path.clone(),
+            project_path("model/quint/slices"),
+            artifact_file_extension(".qnt"),
+            report_line(format!(
+                "Quint slice artifact drift for workflow {workflow_name}"
+            )),
+        ),
         Effect::RequireWorkflowSliceJsonObjects(
             workflow_path.clone(),
             report_line(format!("browser slice drift for workflow {workflow_name}")),

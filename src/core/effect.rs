@@ -34,6 +34,12 @@ pub enum Effect {
     RequireWorkflowSliceJsonObjects(ProjectPath, ReportLine),
     RequireWorkflowSliceJsonObjectKeysUnique(ProjectPath, ReportLine),
     RequireWorkflowSliceFiles(ProjectPath, ReportLine),
+    RequireWorkflowFormalSliceArtifacts(
+        ProjectPath,
+        ProjectPath,
+        ArtifactFileExtension,
+        ReportLine,
+    ),
     RequireWorkflowSliceDetails(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RequireWorkflowSlices(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RequireWorkflowDigest(ProjectPath, ProjectPath, WorkflowSlug, ReportLine),
