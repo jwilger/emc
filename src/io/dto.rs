@@ -1982,6 +1982,11 @@ fn view_control_definitions_from_json_view(
                 "payload contract",
             )?;
             let input_provisions = control_input_provisions_from_json_control(control)?;
+            let decision_fields = definition_names_from_json_array_field(
+                control,
+                "decision_fields",
+                "decision field",
+            )?;
             let navigation_type = navigation_type_from_json_control(control);
             let command_error_handling = command_error_handling_from_json_control(control)?;
             DefinitionName::try_new(label.to_owned())
@@ -1990,6 +1995,7 @@ fn view_control_definitions_from_json_view(
                         ViewControlDefinitionParts::new(label)
                             .with_command(command)
                             .with_input_provisions(input_provisions)
+                            .with_decision_fields(decision_fields)
                             .with_command_error_handling(command_error_handling)
                             .with_navigation_target(navigation_target)
                             .with_navigation_type(navigation_type)
