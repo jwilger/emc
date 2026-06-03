@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-    use std::fs::read_to_string;
+    use std::fs::{read_to_string, write};
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -93,6 +93,65 @@ mod tests {
         assert!(
             !browser_js.contains(&format!("{}{}", "Ed", "dy")),
             "generated browser assets must not mention unrelated product labels"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn generate_site_removes_stale_browser_data_files() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["generate", "site", "--output", "site"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let stale_workflow = temp_dir
+            .path()
+            .join("site/data/workflows/stale-ticket.eventmodel.json");
+        write(&stale_workflow, "{\"name\":\"Stale ticket\"}")?;
+        assert!(stale_workflow.is_file());
+
+        Command::cargo_bin("emc")?
+            .args(["generate", "site", "--output", "site"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("generated site at site"));
+
+        assert!(
+            !stale_workflow.exists(),
+            "regenerating the browser site must remove stale data files"
+        );
+        assert!(
+            temp_dir
+                .path()
+                .join("site/data/workflows/open-ticket.eventmodel.json")
+                .is_file(),
+            "regenerating the browser site must keep current workflow data"
         );
 
         Ok(())
