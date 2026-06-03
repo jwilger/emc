@@ -142,6 +142,7 @@
 - 2026-06-03: `emc validate` now rejects duplicate JSON object keys before event-model parsing, sharing the deterministic JSON key guardrail used by `emc check` so boundary parsing cannot silently accept last-key-wins model data.
 - 2026-06-03: `emc generate site` now replaces generated browser data instead of overlaying it, so regenerating a site removes stale workflow or slice data files from previous generations.
 - 2026-06-03: `emc --help` now succeeds through a Clap-backed help surface listing the user-facing command families documented in the README, including model mutation, validation, verification, site generation, and MCP transports.
+- 2026-06-03: CLI and MCP operations now route through a shared semantic command-planning layer before shell interpretation, and an architecture guardrail prevents MCP tool handlers from directly constructing command effects.
 
 ### Task 1: Guardrails and Project Skeleton
 

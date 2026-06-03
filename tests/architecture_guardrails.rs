@@ -80,6 +80,24 @@ mod tests {
     }
 
     #[test]
+    fn mcp_tool_handlers_route_through_shared_command_plans() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/mcp.rs")?;
+        let violations = ["EffectPlan", "Effect::"]
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| format!("src/mcp.rs constructs command effects directly via `{marker}`"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "MCP tools must route through the same semantic command-planning layer as CLI commands"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn event_model_validation_does_not_perform_filesystem_io_directly() -> Result<(), Box<dyn Error>>
     {
         let source = read_workspace_file("src/event_model_validation.rs")?;
