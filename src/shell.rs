@@ -7,7 +7,7 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use crate::core::connection::connect_workflow;
-use crate::core::digest::artifact_digest_from_workflow_document;
+use crate::core::digest::{artifact_digest_from_workflow_document, slice_artifact_digest};
 use crate::core::effect::{
     ArtifactDigest, Effect, EffectPlan, FileContents, ProcessInvocation, ProjectPath,
 };
@@ -1066,6 +1066,12 @@ fn formal_slice_artifact_is_canonical(
     artifact_contents: &str,
     extension: &str,
 ) -> Result<bool, ShellError> {
+    let digest = slice_artifact_digest(
+        slice.name().clone(),
+        slice.slug().clone(),
+        slice.kind().clone(),
+        slice.description().clone(),
+    );
     let slice_name = json_string(slice.name().as_ref().to_owned())?;
     let slice_slug = json_string(slice.slug().as_ref().to_owned())?;
     let slice_kind = json_string(slice.kind().as_ref().to_owned())?;
@@ -1073,6 +1079,10 @@ fn formal_slice_artifact_is_canonical(
     let declarations = if extension == ".lean" {
         vec![
             ("namespace ", format!("namespace {module_name}")),
+            (
+                "-- EMC-DIGEST: ",
+                format!("-- EMC-DIGEST: {}", digest.as_ref()),
+            ),
             ("def sliceName :=", format!("def sliceName := {slice_name}")),
             ("def sliceSlug :=", format!("def sliceSlug := {slice_slug}")),
             ("def sliceKind :=", format!("def sliceKind := {slice_kind}")),
@@ -1085,6 +1095,10 @@ fn formal_slice_artifact_is_canonical(
     } else {
         vec![
             ("module ", format!("module {module_name} {{")),
+            (
+                "// EMC-DIGEST: ",
+                format!("// EMC-DIGEST: {}", digest.as_ref()),
+            ),
             ("val sliceName =", format!("val sliceName = {slice_name}")),
             ("val sliceSlug =", format!("val sliceSlug = {slice_slug}")),
             ("val sliceKind =", format!("val sliceKind = {slice_kind}")),

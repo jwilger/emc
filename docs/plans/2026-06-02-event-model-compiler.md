@@ -115,6 +115,7 @@
 - 2026-06-03: `emc add slice` now emits per-slice Lean4 and Quint modules under `model/lean/slices` and `model/quint/slices` so business slices are represented formally as well as in workflow composition. `emc check` rejects workflows whose referenced business slices are missing corresponding Lean4 or Quint slice artifacts.
 - 2026-06-03: `emc check` now verifies canonical declarations inside per-slice Lean4 and Quint artifacts for slice module identity, name, slug, kind, and description, so stale formal slice modules cannot pass by merely existing at the expected path.
 - 2026-06-03: `emc verify` now runs Lean4 and Quint verification for generated business slice modules as well as workflow modules. Quint slice modules expose a generated `sliceIdentityStable` invariant plus deterministic `init` and `step` actions so the packaged pinned Quint runtime verifies actual slice artifacts.
+- 2026-06-03: Generated Lean4 and Quint business slice modules now carry deterministic slice digest markers derived from semantic slice name, slug, kind, and description. `emc check` rejects stale or duplicate slice digest metadata in formal slice artifacts.
 
 ### Task 1: Guardrails and Project Skeleton
 

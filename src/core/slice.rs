@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
-use crate::core::digest::artifact_digest;
+use crate::core::digest::{artifact_digest, slice_artifact_digest};
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::emit::lean::{
     emit_slice_module as emit_lean_slice_module, emit_workflow_module as emit_lean_workflow_module,
@@ -125,6 +125,12 @@ pub fn add_slice(
     let slice_name = new_slice.name.as_ref();
     let slice_module_name = module_name(slice_name);
     let slice_kind = slice_kind_name(new_slice.kind);
+    let slice_digest = slice_artifact_digest(
+        new_slice.name.clone(),
+        new_slice.slug.clone(),
+        slice_kind.clone(),
+        new_slice.description.clone(),
+    );
 
     Ok(EffectPlan::new(vec![
         Effect::WriteFile(workflow_path(&new_slice.workflow_slug), workflow_json),
@@ -143,6 +149,7 @@ pub fn add_slice(
                 new_slice.description.clone(),
                 new_slice.slug.clone(),
                 slice_kind.clone(),
+                slice_digest.clone(),
             ),
         ),
         Effect::WriteFile(
@@ -153,6 +160,7 @@ pub fn add_slice(
                 new_slice.description.clone(),
                 new_slice.slug.clone(),
                 slice_kind,
+                slice_digest,
             ),
         ),
         Effect::WriteFile(
