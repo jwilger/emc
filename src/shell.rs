@@ -15,6 +15,9 @@ use crate::core::formal_graph::{
     FormalGraphError, FormalWorkflowGraph, FormalWorkflowGraphs, parse_lean_workflow_graph,
     parse_quint_workflow_graph, workflow_graph_from_document,
 };
+use crate::core::formal_projection::{
+    project_slice_browser_document, project_workflow_browser_document,
+};
 use crate::core::json_object_document::JsonObjectDocument;
 use crate::core::layout::{
     ModeledWorkflowLayout, ModeledWorkflowLayouts, ModeledWorkflowSliceDetails,
@@ -496,11 +499,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::ShowSliceFromSlice(slug) => {
-            let slice_document = read_referenced_slice_document(slug)?;
+            let slice_document = read_formal_slice_projection(slug)?;
             interpret_collect_reports(show_document(slice_document))
         }
         Effect::ShowWorkflowFromWorkflow(slug) => {
-            let workflow_document = read_indexed_workflow_document(slug)?;
+            let workflow_document = read_formal_workflow_projection(slug)?;
             interpret_collect_reports(show_workflow(workflow_document))
         }
         Effect::UpdateWorkflowDescriptionFromIndexAndWorkflow(slug, description) => {
@@ -750,9 +753,28 @@ fn formal_workflow_transitions(graphs: FormalWorkflowGraphs) -> Vec<WorkflowTran
         .collect()
 }
 
-fn read_indexed_workflow_document(slug: &WorkflowSlug) -> Result<FileContents, ShellError> {
-    let modeled_workflows = read_browser_index_workflows()?;
-    read_indexed_workflow_document_from_layouts(slug, modeled_workflows.as_slice())
+fn read_formal_workflow_projection(slug: &WorkflowSlug) -> Result<FileContents, ShellError> {
+    read_synchronized_formal_workflow_graphs()?
+        .into_inner()
+        .into_iter()
+        .find(|graph| graph.slug() == slug)
+        .map(|graph| project_workflow_browser_document(&graph))
+        .ok_or_else(|| ShellError::message(format!("workflow {} is not modeled", slug.as_ref())))
+}
+
+fn read_formal_slice_projection(slug: &SliceSlug) -> Result<FileContents, ShellError> {
+    read_synchronized_formal_workflow_graphs()?
+        .into_inner()
+        .into_iter()
+        .flat_map(|graph| graph.slice_details().as_slice().to_owned())
+        .find(|slice| slice.slug() == slug)
+        .map(|slice| project_slice_browser_document(&slice))
+        .ok_or_else(|| {
+            ShellError::message(format!(
+                "slice {} is not referenced by any indexed workflow",
+                slug.as_ref()
+            ))
+        })
 }
 
 fn read_indexed_workflow_document_from_layouts(
@@ -804,20 +826,6 @@ fn read_modeled_workflow_slice_details(
     Ok(slice_details)
 }
 
-fn read_referenced_slice_document(slug: &SliceSlug) -> Result<FileContents, ShellError> {
-    let modeled_workflows = read_browser_index_workflows()?;
-    let slice_is_referenced = read_modeled_workflow_slice_details(&modeled_workflows)?
-        .iter()
-        .any(|slice| slice.slug() == slug);
-    if !slice_is_referenced {
-        return Err(ShellError::message(format!(
-            "slice {} is not referenced by any indexed workflow",
-            slug.as_ref()
-        )));
-    }
-    read_slice_document(slug.as_ref())
-}
-
 fn find_workflow_containing_slice<'workflow>(
     slug: &SliceSlug,
     modeled_workflows: &'workflow [ModeledWorkflowLayout],
@@ -855,14 +863,6 @@ fn read_workflow_document(slug: &str) -> Result<FileContents, ShellError> {
     .and_then(|contents| {
         FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
     })
-}
-
-fn read_slice_document(slug: &str) -> Result<FileContents, ShellError> {
-    fs::read_to_string(format!("model/browser/data/slices/{slug}.eventmodel.json"))
-        .map_err(ShellError::io)
-        .and_then(|contents| {
-            FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
-        })
 }
 
 fn validate_event_model_target(target: &str) -> Result<Vec<String>, ShellError> {
