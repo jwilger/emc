@@ -1783,6 +1783,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_state_view_slices_do_not_own_commands(document))
         .and_then(|()| validate_state_change_slices_emit_events(document))
         .and_then(|()| validate_state_change_slices_do_not_own_controls(document))
+        .and_then(|()| validate_state_change_slices_do_not_own_wireframes(document))
         .and_then(|()| validate_state_change_slices_do_not_own_views(document))
         .and_then(|()| validate_state_change_slices_do_not_own_read_models(document))
         .and_then(|()| validate_state_change_slices_do_not_own_automations(document))
@@ -3263,6 +3264,33 @@ fn validate_state_change_slices_do_not_own_controls(
             Err(validation_issue(format!(
                 "state_change slice '{}' must not own control '{}'",
                 slice.name, control.label
+            )))
+        })
+}
+
+fn validate_state_change_slices_do_not_own_wireframes(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::StateChange)
+        .flat_map(|slice| {
+            slice.owned_views.iter().filter_map(move |view_name| {
+                document
+                    .view_definitions
+                    .iter()
+                    .find(|view| {
+                        view.name == *view_name && view.wireframe == ViewWireframe::Present
+                    })
+                    .map(|view| (slice, view))
+            })
+        })
+        .next()
+        .map_or(Ok(()), |(slice, view)| {
+            Err(validation_issue(format!(
+                "state_change slice '{}' must not own wireframe '{}'",
+                slice.name, view.name
             )))
         })
 }
