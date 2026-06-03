@@ -3,8 +3,9 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::process::Command;
 
-use crate::core::effect::{Effect, EffectPlan};
+use crate::core::effect::{Effect, EffectPlan, ProcessInvocation};
 
 #[derive(Debug)]
 pub struct ShellError {
@@ -67,6 +68,7 @@ fn interpret_effect(effect: &Effect) -> Result<(), ShellError> {
                 )))
             }
         }
+        Effect::RunProcess(invocation) => run_process(invocation),
         Effect::WriteFile(path, contents) => write_file(path.as_ref(), contents.as_ref()),
         Effect::WriteFileIfMissing(path, contents) => {
             if Path::new(path.as_ref()).exists() {
@@ -116,4 +118,33 @@ fn copy_directory_path(source: &Path, target: &Path) -> Result<(), ShellError> {
                 .map_err(ShellError::io)
         }
     })
+}
+
+fn run_process(invocation: &ProcessInvocation) -> Result<(), ShellError> {
+    let status = Command::new(invocation.program().as_ref())
+        .args(
+            invocation
+                .arguments()
+                .iter()
+                .map(|argument| argument.as_ref()),
+        )
+        .status()
+        .map_err(|error| {
+            ShellError::message(format!(
+                "failed to run {}: {}. Install pinned EMC tooling or use the Nix package",
+                invocation.program().as_ref(),
+                error
+            ))
+        })?;
+
+    if status.success() {
+        println!("{}", invocation.success().as_ref());
+        Ok(())
+    } else {
+        Err(ShellError::message(format!(
+            "verification command {} failed with {}",
+            invocation.program().as_ref(),
+            status
+        )))
+    }
 }

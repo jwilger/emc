@@ -6,6 +6,7 @@ pub enum Effect {
     EnsureDirectory(ProjectPath),
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
+    RunProcess(ProcessInvocation),
     WriteFile(ProjectPath, FileContents),
     WriteFileIfMissing(ProjectPath, FileContents),
     Report(ReportLine),
@@ -24,6 +25,35 @@ impl EffectPlan {
 
     pub fn effects(&self) -> &[Effect] {
         &self.effects
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ProcessInvocation {
+    program: ProgramName,
+    arguments: Vec<ProcessArgument>,
+    success: ReportLine,
+}
+
+impl ProcessInvocation {
+    pub fn new(program: ProgramName, arguments: Vec<ProcessArgument>, success: ReportLine) -> Self {
+        Self {
+            program,
+            arguments,
+            success,
+        }
+    }
+
+    pub fn program(&self) -> &ProgramName {
+        &self.program
+    }
+
+    pub fn arguments(&self) -> &[ProcessArgument] {
+        &self.arguments
+    }
+
+    pub fn success(&self) -> &ReportLine {
+        &self.success
     }
 }
 
@@ -50,3 +80,17 @@ pub struct ReportLine(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef)
 )]
 pub struct ArtifactDigest(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef)
+)]
+pub struct ProgramName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef)
+)]
+pub struct ProcessArgument(String);

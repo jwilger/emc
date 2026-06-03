@@ -5,3 +5,4 @@ pub mod project;
 pub mod site;
 pub mod types;
 pub mod validation;
+pub mod verify;
