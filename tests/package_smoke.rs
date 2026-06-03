@@ -130,6 +130,18 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn cargo_manifest_carries_the_planned_mcp_sdk_dependency() -> Result<(), Box<dyn Error>> {
+        let manifest = fs::read_to_string(workspace_root().join("Cargo.toml"))?;
+
+        assert!(
+            manifest.contains("rmcp = { version = \"1.7.0\", default-features = false }"),
+            "Cargo manifest must carry the planned rmcp dependency at the current selected version without unreviewed default features"
+        );
+
+        Ok(())
+    }
+
     fn workspace_root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
     }
