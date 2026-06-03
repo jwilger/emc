@@ -56,7 +56,7 @@ mod tests {
         );
         assert_eq!(
             read_to_string(temp_dir.path().join("quint.log"))?,
-            "verify --invariant workflowIdentityStable,workflowSliceDetailsComplete model/quint/OpenTicket.qnt\n"
+            "verify --invariant workflowIdentityStable,workflowSliceDetailsComplete,workflowTransitionsStructured model/quint/OpenTicket.qnt\n"
         );
 
         Ok(())
