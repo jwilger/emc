@@ -1,5 +1,7 @@
 use crate::core::emc::artifact_digest;
-use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
+use crate::core::effect::{
+    ArtifactDigest, Effect, EffectPlan, FileContents, ProjectPath, ReportLine,
+};
 use crate::core::project::ProjectName;
 use crate::core::types::{ModelDescription, ModelName, WorkflowSlug};
 
@@ -86,13 +88,24 @@ pub fn show_workflow(workflow_document: FileContents) -> EffectPlan {
 fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
     let workflow_name = workflow.name.as_ref().to_owned();
     let digest = artifact_digest(workflow.name.clone());
-    let module_name = module_name_from_model(workflow.name);
+    let browser_identity_marker =
+        artifact_digest_marker(format!("\"name\": {}", json_string(workflow.name.as_ref())));
+    let module_name = module_name_from_model(workflow.name.clone());
     let workflow_slug = workflow.slug.as_ref();
 
     vec![
         Effect::RequireFile(project_path(format!(
             "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
         ))),
+        Effect::RequireDigest(
+            project_path(format!(
+                "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
+            )),
+            browser_identity_marker,
+            report_line(format!(
+                "browser workflow drift for workflow {workflow_name}"
+            )),
+        ),
         Effect::RequireFile(project_path(format!("model/lean/{module_name}.lean"))),
         Effect::RequireFile(project_path(format!("model/quint/{module_name}.qnt"))),
         Effect::RequireDigest(
@@ -149,5 +162,17 @@ fn project_path(value: impl Into<String>) -> ProjectPath {
 fn report_line(value: impl Into<String>) -> ReportLine {
     ReportLine::try_new(value.into()).unwrap_or_else(|error| {
         unreachable!("EMC static report line must be valid: {error}");
+    })
+}
+
+fn artifact_digest_marker(value: impl Into<String>) -> ArtifactDigest {
+    ArtifactDigest::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC static artifact marker must be valid: {error}");
+    })
+}
+
+fn json_string(value: &str) -> String {
+    serde_json::to_string(value).unwrap_or_else(|error| {
+        unreachable!("EMC generated JSON string must be valid: {error}");
     })
 }
