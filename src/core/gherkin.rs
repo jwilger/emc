@@ -1,4 +1,6 @@
-use crate::core::effect::{Effect, EffectPlan, ProjectPath, ReportLine};
+use crate::core::effect::{
+    Effect, EffectPlan, ProcessArgument, ProcessInvocation, ProgramName, ProjectPath, ReportLine,
+};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum GherkinSuite {
@@ -19,12 +21,21 @@ pub fn list_gherkin_features(suite: GherkinSuite) -> EffectPlan {
 }
 
 pub fn run_gherkin_suite(suite: GherkinSuite) -> EffectPlan {
-    EffectPlan::new(vec![Effect::Fail(report_line(format!(
-        "undefined, pending, or skipped Gherkin steps are failures for {}; attempted {} configured {} scenarios",
+    let success = report_line(format!(
+        "{} Gherkin suite passed; attempted {} configured {} scenarios",
         suite.label(),
         suite.scenario_count(),
         suite.label()
-    )))])
+    ));
+    EffectPlan::new(vec![Effect::RunProcess(ProcessInvocation::new(
+        program_name("cargo"),
+        vec![
+            process_argument("test"),
+            process_argument("--test"),
+            process_argument(suite.test_target()),
+        ],
+        success,
+    ))])
 }
 
 impl GherkinSuite {
@@ -43,6 +54,15 @@ impl GherkinSuite {
             Self::Meta => 6,
             Self::ReviewGate => 9,
             Self::Validator => 159,
+        }
+    }
+
+    fn test_target(&self) -> &'static str {
+        match self {
+            Self::Browser => "browser_composition",
+            Self::Meta => "cucumber_runner_config",
+            Self::ReviewGate => "review_gate",
+            Self::Validator => "validate_event_model",
         }
     }
 
@@ -77,6 +97,18 @@ impl GherkinSuite {
 fn project_path(value: impl Into<String>) -> ProjectPath {
     ProjectPath::try_new(value.into()).unwrap_or_else(|error| {
         unreachable!("EMC static feature path must be valid: {error}");
+    })
+}
+
+fn program_name(value: impl Into<String>) -> ProgramName {
+    ProgramName::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC generated Gherkin runner program name must be valid: {error}");
+    })
+}
+
+fn process_argument(value: impl Into<String>) -> ProcessArgument {
+    ProcessArgument::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC generated Gherkin runner argument must be valid: {error}");
     })
 }
 
