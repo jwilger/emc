@@ -1,3 +1,4 @@
+pub mod browser;
 pub mod connection;
 pub mod emc;
 pub mod effect;
