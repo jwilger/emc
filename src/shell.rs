@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::core::effect::{Effect, EffectPlan, ProcessInvocation};
@@ -84,6 +84,17 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
                 )))
             }
         }
+        Effect::RequireWorkflowSliceFiles(workflow_path, message) => {
+            let workflow_contents =
+                fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
+            let slice_files =
+                workflow_slice_file_paths(workflow_path.as_ref(), &workflow_contents)?;
+            if slice_files.iter().all(|slice_file| slice_file.is_file()) {
+                Ok(None)
+            } else {
+                Err(ShellError::message(message.as_ref().to_owned()))
+            }
+        }
         Effect::RequireWorkflowSlices(workflow_path, artifact_path, marker_prefix, message) => {
             let workflow_contents =
                 fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
@@ -133,6 +144,26 @@ fn workflow_slice_marker(prefix: &str, workflow_contents: &str) -> Result<String
     let labels = workflow_slice_labels(workflow_contents)?;
     let joined_labels = labels.join(",");
     Ok(format!("{prefix} [{joined_labels}]"))
+}
+
+fn workflow_slice_file_paths(
+    workflow_path: &str,
+    workflow_contents: &str,
+) -> Result<Vec<PathBuf>, ShellError> {
+    let workflow = workflow_json(workflow_contents)?;
+    let slice_files = workflow
+        .get("slice_files")
+        .and_then(Value::as_array)
+        .ok_or_else(|| ShellError::message("workflow document is missing slice_files"))?;
+    let base_path = Path::new(workflow_path)
+        .parent()
+        .unwrap_or_else(|| Path::new(""));
+
+    slice_files
+        .iter()
+        .filter_map(Value::as_str)
+        .map(|slice_file| Ok(base_path.join(slice_file)))
+        .collect()
 }
 
 fn workflow_transition_marker(prefix: &str, workflow_contents: &str) -> Result<String, ShellError> {
