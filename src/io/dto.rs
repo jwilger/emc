@@ -126,6 +126,21 @@ pub fn parse_browser_index_workflows(
 
     workflows
         .iter()
+        .try_fold(BTreeSet::new(), |mut seen_names, workflow| {
+            let name = workflow
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| BoundaryParseError::new("browser index workflow is missing name"))?;
+            if !seen_names.insert(name.to_owned()) {
+                return Err(BoundaryParseError::new(
+                    "browser index workflow name is duplicated",
+                ));
+            }
+            Ok(seen_names)
+        })?;
+
+    workflows
+        .iter()
         .map(|workflow| {
             let name = workflow
                 .get("name")
