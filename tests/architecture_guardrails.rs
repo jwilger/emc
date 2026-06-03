@@ -62,6 +62,24 @@ mod tests {
     }
 
     #[test]
+    fn mcp_tool_handlers_do_not_perform_filesystem_io_directly() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/mcp.rs")?;
+        let violations = filesystem_io_markers()
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| format!("src/mcp.rs contains `{marker}`"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "MCP tools must route project file access through shell-interpreted effects"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn core_public_apis_do_not_expose_primitive_types() -> Result<(), Box<dyn Error>> {
         let violations = rust_files_under("src/core")?
             .into_iter()

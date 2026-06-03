@@ -1,23 +1,18 @@
-use std::fs;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 
 use serde_json::{Value, json};
 
-use crate::core::connection::{WorkflowConnection, connect_workflow};
-use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath};
-use crate::core::layout::{list_workflows, show_workflow};
+use crate::core::connection::WorkflowConnection;
+use crate::core::effect::{Effect, EffectPlan, ProjectPath};
 use crate::core::review_gate::review_gate;
-use crate::core::site::generate_site;
-use crate::core::slice::{NewSlice, add_slice};
-use crate::core::verify::verify_project;
-use crate::core::workflow::{NewWorkflow, add_workflow, update_workflow_description};
+use crate::core::slice::NewSlice;
+use crate::core::workflow::NewWorkflow;
 use crate::event_model_validation::validate_target;
 use crate::io::dto::{
-    parse_browser_index_workflows, parse_connection_kind, parse_model_description,
-    parse_model_name, parse_project_manifest_name, parse_slice_kind, parse_slice_slug,
-    parse_transition_trigger_name, parse_workflow_slug,
+    parse_connection_kind, parse_model_description, parse_model_name, parse_slice_kind,
+    parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
 };
 use crate::shell::{ShellError, interpret_collect_reports};
 
@@ -508,11 +503,8 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
 }
 
 fn list_workflows_tool_text() -> Result<String, ShellError> {
-    let index = fs::read_to_string("model/browser/data/index.json")
-        .map_err(|error| ShellError::message(error.to_string()))?;
-    let modeled_workflows = parse_browser_index_workflows(&index)
-        .map_err(|error| ShellError::message(error.to_string()))?;
-    Ok(report_text(list_workflows(modeled_workflows)))
+    interpret_collect_reports(EffectPlan::new(vec![Effect::ListWorkflowsFromIndex]))
+        .map(|reports| reports.join("\n"))
 }
 
 fn show_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -524,22 +516,13 @@ fn show_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
         .ok_or_else(|| ShellError::message("show_workflow requires slug"))?;
     let slug =
         parse_workflow_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))?;
-    let workflow_path = format!(
-        "model/browser/data/workflows/{}.eventmodel.json",
-        slug.as_ref()
-    );
-    let workflow_document = fs::read_to_string(workflow_path)
-        .map_err(|error| ShellError::message(error.to_string()))
-        .and_then(|contents| {
-            FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    Ok(document_text(show_workflow(workflow_document)))
+    interpret_collect_reports(EffectPlan::new(vec![Effect::ShowWorkflowFromWorkflow(
+        slug,
+    )]))
+    .map(|reports| reports.join("\n"))
 }
 
 fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {
-    let manifest =
-        fs::read_to_string("emc.toml").map_err(|error| ShellError::message(error.to_string()))?;
-    let project_name = parse_project_manifest_name(&manifest).map_err(ShellError::project_name)?;
     let output = request
         .get("params")
         .and_then(|params| params.get("arguments"))
@@ -550,15 +533,15 @@ fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {
             ProjectPath::try_new(output.to_owned())
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(generate_site(project_name, output)).map(|reports| reports.join("\n"))
+    interpret_collect_reports(EffectPlan::new(vec![Effect::GenerateSiteFromManifest(
+        output,
+    )]))
+    .map(|reports| reports.join("\n"))
 }
 
 fn verify_project_tool_text() -> Result<String, ShellError> {
-    let index = fs::read_to_string("model/browser/data/index.json")
-        .map_err(|error| ShellError::message(error.to_string()))?;
-    let modeled_workflows = parse_browser_index_workflows(&index)
-        .map_err(|error| ShellError::message(error.to_string()))?;
-    interpret_collect_reports(verify_project(modeled_workflows)).map(|reports| reports.join("\n"))
+    interpret_collect_reports(EffectPlan::new(vec![Effect::VerifyProjectFromIndex]))
+        .map(|reports| reports.join("\n"))
 }
 
 fn validate_event_model_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -613,14 +596,9 @@ fn add_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_model_description(raw_description)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    let index = fs::read_to_string("model/browser/data/index.json")
-        .map_err(|error| ShellError::message(error.to_string()))?;
-    let existing_workflows = parse_browser_index_workflows(&index)
-        .map_err(|error| ShellError::message(error.to_string()))?;
-    interpret_collect_reports(add_workflow(
-        existing_workflows,
+    interpret_collect_reports(EffectPlan::new(vec![Effect::AddWorkflowFromIndex(
         NewWorkflow::new(name, description, slug),
-    ))
+    )]))
     .map(|reports| reports.join("\n"))
 }
 
@@ -666,16 +644,7 @@ fn add_slice_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_model_description(raw_description)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    let workflow_document = fs::read_to_string(format!(
-        "model/browser/data/workflows/{}.eventmodel.json",
-        workflow_slug.as_ref()
-    ))
-    .map_err(|error| ShellError::message(error.to_string()))
-    .and_then(|contents| {
-        FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
-    })?;
-    let plan = add_slice(
-        workflow_document,
+    interpret_collect_reports(EffectPlan::new(vec![Effect::AddSliceFromWorkflow(
         NewSlice::new(
             workflow_slug,
             slice_slug,
@@ -683,9 +652,8 @@ fn add_slice_tool_text(request: &Value) -> Result<String, ShellError> {
             slice_description,
             slice_kind,
         ),
-    )
-    .map_err(|error| ShellError::message(error.to_string()))?;
-    interpret_collect_reports(plan).map(|reports| reports.join("\n"))
+    )]))
+    .map(|reports| reports.join("\n"))
 }
 
 fn update_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -708,22 +676,10 @@ fn update_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_model_description(raw_description)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    let index = fs::read_to_string("model/browser/data/index.json")
-        .map_err(|error| ShellError::message(error.to_string()))?;
-    let existing_workflows = parse_browser_index_workflows(&index)
-        .map_err(|error| ShellError::message(error.to_string()))?;
-    let workflow_document = fs::read_to_string(format!(
-        "model/browser/data/workflows/{}.eventmodel.json",
-        slug.as_ref()
-    ))
-    .map_err(|error| ShellError::message(error.to_string()))
-    .and_then(|contents| {
-        FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
-    })?;
-    let plan =
-        update_workflow_description(existing_workflows, workflow_document, slug, description)
-            .map_err(|error| ShellError::message(error.to_string()))?;
-    interpret_collect_reports(plan).map(|reports| reports.join("\n"))
+    interpret_collect_reports(EffectPlan::new(vec![
+        Effect::UpdateWorkflowDescriptionFromIndexAndWorkflow(slug, description),
+    ]))
+    .map(|reports| reports.join("\n"))
 }
 
 fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -768,16 +724,7 @@ fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_transition_trigger_name(raw_name)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    let workflow_document = fs::read_to_string(format!(
-        "model/browser/data/workflows/{}.eventmodel.json",
-        workflow_slug.as_ref()
-    ))
-    .map_err(|error| ShellError::message(error.to_string()))
-    .and_then(|contents| {
-        FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
-    })?;
-    let plan = connect_workflow(
-        workflow_document,
+    interpret_collect_reports(EffectPlan::new(vec![Effect::ConnectWorkflowFromWorkflow(
         WorkflowConnection::new(
             workflow_slug,
             source_slug,
@@ -785,31 +732,8 @@ fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
             connection_kind,
             trigger,
         ),
-    )
-    .map_err(|error| ShellError::message(error.to_string()))?;
-    interpret_collect_reports(plan).map(|reports| reports.join("\n"))
-}
-
-fn report_text(plan: EffectPlan) -> String {
-    plan.effects()
-        .iter()
-        .filter_map(|effect| match effect {
-            Effect::Report(line) => Some(line.as_ref()),
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn document_text(plan: EffectPlan) -> String {
-    plan.effects()
-        .iter()
-        .filter_map(|effect| match effect {
-            Effect::ReportDocument(contents) => Some(contents.as_ref()),
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    )]))
+    .map(|reports| reports.join("\n"))
 }
 
 fn tool_result(text: String) -> Value {
