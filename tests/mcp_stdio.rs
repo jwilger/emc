@@ -33,7 +33,11 @@ mod tests {
             .success()
             .stdout(predicate::str::contains("\"serverInfo\""))
             .stdout(predicate::str::contains("\"list_workflows\""))
-            .stdout(predicate::str::contains("Organization access"));
+            .stdout(predicate::str::contains("\"show_workflow\""))
+            .stdout(predicate::str::contains("Organization access"))
+            .stdout(predicate::str::contains(
+                "\\\"name\\\": \\\"Organization access\\\"",
+            ));
 
         Ok(())
     }
@@ -43,6 +47,7 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_workflows\",\"arguments\":{}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"show_workflow\",\"arguments\":{\"slug\":\"organization-access\"}}}\n",
         )
     }
 
