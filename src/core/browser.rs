@@ -7,8 +7,9 @@ use serde_json::Value;
 use crate::core::effect::FileContents;
 use crate::core::types::{
     BoardLaneId, BrowserEventElementName, CommandErrorName, CommandName, DefinitionSectionLabel,
-    ReviewRuleName, ReviewStatus, SliceName, SourceControlReference, ViewName, WorkflowBranchLabel,
-    WorkflowStepName, WorkflowTransitionKind, WorkflowTransitionLabel, WorkflowTransitionName,
+    ReviewRuleName, ReviewStatus, SliceName, SourceChainHop, SourceControlReference, ViewFieldName,
+    ViewName, WorkflowBranchLabel, WorkflowStepName, WorkflowTransitionKind,
+    WorkflowTransitionLabel, WorkflowTransitionName,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -21,6 +22,7 @@ pub struct BrowserWorkflow {
     event_element_names: Vec<BrowserEventElementName>,
     review_overlays: Vec<BrowserReviewOverlay>,
     command_definitions: Vec<BrowserCommandDefinition>,
+    view_definitions: Vec<BrowserViewDefinition>,
 }
 
 impl BrowserWorkflow {
@@ -54,6 +56,10 @@ impl BrowserWorkflow {
 
     pub fn command_definitions(&self) -> &[BrowserCommandDefinition] {
         &self.command_definitions
+    }
+
+    pub fn view_definitions(&self) -> &[BrowserViewDefinition] {
+        &self.view_definitions
     }
 }
 
@@ -167,6 +173,38 @@ impl BrowserCommandDefinition {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserViewDefinition {
+    name: ViewName,
+    field_source_chains: Vec<BrowserFieldSourceChain>,
+}
+
+impl BrowserViewDefinition {
+    pub fn name(&self) -> &ViewName {
+        &self.name
+    }
+
+    pub fn field_source_chains(&self) -> &[BrowserFieldSourceChain] {
+        &self.field_source_chains
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserFieldSourceChain {
+    field: ViewFieldName,
+    hops: Vec<SourceChainHop>,
+}
+
+impl BrowserFieldSourceChain {
+    pub fn field(&self) -> &ViewFieldName {
+        &self.field
+    }
+
+    pub fn hops(&self) -> &[SourceChainHop] {
+        &self.hops
+    }
+}
+
 pub fn compose_browser_workflow(
     workflow_document: FileContents,
     slice_documents: Vec<FileContents>,
@@ -198,6 +236,7 @@ pub fn compose_browser_workflow(
     let event_element_names = event_element_names(&composed_values)?;
     let review_overlays = review_overlays(&workflow_value)?;
     let command_definitions = command_definitions(&composed_values)?;
+    let view_definitions = view_definitions(&composed_values)?;
 
     Ok(BrowserWorkflow {
         lane_ids,
@@ -208,6 +247,7 @@ pub fn compose_browser_workflow(
         event_element_names,
         review_overlays,
         command_definitions,
+        view_definitions,
     })
 }
 
@@ -715,4 +755,146 @@ fn command_section_labels() -> Result<Vec<DefinitionSectionLabel>, BrowserCompos
         })
     })
     .collect()
+}
+
+fn view_definitions(
+    values: &[&Value],
+) -> Result<Vec<BrowserViewDefinition>, BrowserCompositionError> {
+    values
+        .iter()
+        .flat_map(|value| {
+            value
+                .get("views")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .filter_map(|view| {
+            view.get("name")
+                .and_then(Value::as_str)
+                .map(|name| (name, view))
+        })
+        .map(|(name, view)| {
+            Ok(BrowserViewDefinition {
+                name: ViewName::try_new(name.to_owned()).map_err(|error| {
+                    BrowserCompositionError::new(format!("invalid view name: {error}"))
+                })?,
+                field_source_chains: view_field_source_chains(values, view)?,
+            })
+        })
+        .collect()
+}
+
+fn view_field_source_chains(
+    values: &[&Value],
+    view: &Value,
+) -> Result<Vec<BrowserFieldSourceChain>, BrowserCompositionError> {
+    view.get("fields")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|field| {
+            Some((
+                field.get("name").and_then(Value::as_str)?,
+                field.get("source").and_then(Value::as_str)?,
+            ))
+        })
+        .map(|(field, source)| {
+            Ok(BrowserFieldSourceChain {
+                field: ViewFieldName::try_new(field.to_owned()).map_err(|error| {
+                    BrowserCompositionError::new(format!("invalid view field name: {error}"))
+                })?,
+                hops: source_chain_hops(values, source)?,
+            })
+        })
+        .collect()
+}
+
+fn source_chain_hops(
+    values: &[&Value],
+    source: &str,
+) -> Result<Vec<SourceChainHop>, BrowserCompositionError> {
+    let raw_hops = iter::once(source)
+        .chain(read_model_field_source(values, source))
+        .chain(event_attribute_source(values, source))
+        .collect::<Vec<_>>();
+
+    raw_hops
+        .into_iter()
+        .map(|hop| {
+            SourceChainHop::try_new(hop.to_owned()).map_err(|error| {
+                BrowserCompositionError::new(format!("invalid source chain hop: {error}"))
+            })
+        })
+        .collect()
+}
+
+fn read_model_field_source<'a>(values: &'a [&Value], source: &str) -> Option<&'a str> {
+    let (read_model_name, field_name) = source
+        .strip_prefix("read_model.")
+        .and_then(|source| source.split_once('.'))?;
+
+    values
+        .iter()
+        .flat_map(|value| {
+            value
+                .get("read_models")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .find(|read_model| {
+            read_model
+                .get("name")
+                .and_then(Value::as_str)
+                .is_some_and(|name| name == read_model_name)
+        })
+        .and_then(|read_model| {
+            read_model
+                .get("fields")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .find(|field| {
+                    field
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .is_some_and(|name| name == field_name)
+                })
+        })
+        .and_then(|field| field.get("source").and_then(Value::as_str))
+}
+
+fn event_attribute_source<'a>(values: &'a [&Value], source: &str) -> Option<&'a str> {
+    let (event_name, attribute_name) = read_model_field_source(values, source)?.split_once('.')?;
+
+    values
+        .iter()
+        .flat_map(|value| {
+            value
+                .get("events")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .find(|event| {
+            event
+                .get("name")
+                .and_then(Value::as_str)
+                .is_some_and(|name| name == event_name)
+        })
+        .and_then(|event| {
+            event
+                .get("attributes")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .find(|attribute| {
+                    attribute
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .is_some_and(|name| name == attribute_name)
+                })
+        })
+        .and_then(|attribute| attribute.get("source").and_then(Value::as_str))
 }

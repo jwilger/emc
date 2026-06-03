@@ -272,6 +272,50 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn composed_browser_workflow_projects_view_field_source_chains() -> Result<(), Box<dyn Error>> {
+        let workflow = file_contents(
+            "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [\"../slices/show-lesson.eventmodel.json\"],\n  \"steps\": []\n}\n",
+        );
+        let show_slice = file_contents(
+            "{\n  \"name\": \"Show lesson\",\n  \"version\": \"0.1.0\",\n  \"board\": {\"lanes\": []},\n  \"events\": [{\"name\": \"CourseLessonCatalogPublished\", \"stream\": \"course_lesson_catalog\", \"attributes\": [\n    {\"name\": \"lesson_title\", \"source\": \"external.course_lesson_catalog_manifest.lesson_title\"}\n  ]}],\n  \"read_models\": [{\"name\": \"lesson_state\", \"fields\": [\n    {\"name\": \"lesson_title\", \"source\": \"CourseLessonCatalogPublished.lesson_title\"}\n  ]}],\n  \"views\": [{\"name\": \"lesson_screen\", \"uses_read_models\": [\"lesson_state\"], \"fields\": [\n    {\"name\": \"lesson_title\", \"source\": \"read_model.lesson_state.lesson_title\"}\n  ]}],\n  \"slices\": [{\"name\": \"Show lesson\", \"type\": \"state_view\", \"views\": [\"lesson_screen\"], \"read_models\": [\"lesson_state\"], \"events\": [\"CourseLessonCatalogPublished\"], \"acceptance_scenarios\": [], \"contract_scenarios\": []}]\n}\n",
+        );
+
+        let composed = compose_browser_workflow(workflow, vec![show_slice])?;
+        let definition = composed
+            .view_definitions()
+            .iter()
+            .find(|definition| definition.name().as_ref() == "lesson_screen")
+            .ok_or_else(|| IoError::other("view definition must be projected"))?;
+
+        assert_eq!(
+            definition
+                .field_source_chains()
+                .iter()
+                .map(|chain| {
+                    (
+                        chain.field().as_ref(),
+                        chain
+                            .hops()
+                            .iter()
+                            .map(|hop| hop.as_ref())
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            [(
+                "lesson_title",
+                vec![
+                    "read_model.lesson_state.lesson_title",
+                    "CourseLessonCatalogPublished.lesson_title",
+                    "external.course_lesson_catalog_manifest.lesson_title",
+                ],
+            )]
+        );
+
+        Ok(())
+    }
+
     fn slice_with_canonical_lanes(name: &str) -> String {
         format!(
             "{{\n  \"name\": \"{name}\",\n  \"version\": \"0.1.0\",\n  \"board\": {{\"lanes\": [\n    {{\"id\": \"ux\", \"name\": \"People, Views, and Translations\"}},\n    {{\"id\": \"actions\", \"name\": \"Commands and Projections\"}},\n    {{\"id\": \"events\", \"name\": \"Stored Facts\"}}\n  ]}},\n  \"slices\": [{{\"name\": \"{name}\", \"type\": \"state_view\", \"views\": [], \"acceptance_scenarios\": [], \"contract_scenarios\": []}}]\n}}\n"
