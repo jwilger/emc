@@ -97,6 +97,114 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_project_root_formal_artifact_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        write(
+            temp_dir.path().join("model/lean/RepairDesk.lean"),
+            "namespace StaleRoot\n\n-- EMC generated Lean4 model root.\n\nend StaleRoot\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean project root drift for Repair Desk",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_project_root_lean_end_module_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        write(
+            temp_dir.path().join("model/lean/RepairDesk.lean"),
+            "namespace RepairDesk\n\n-- EMC generated Lean4 model root.\n\nend StaleRoot\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean project root drift for Repair Desk",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_project_root_quint_module_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        write(
+            temp_dir.path().join("model/quint/RepairDesk.qnt"),
+            "module StaleRoot {\n}\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint project root drift for Repair Desk",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_project_quint_config_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        write(
+            temp_dir.path().join("model/quint/quint.json"),
+            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": []\n}\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint project config drift for Repair Desk",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_missing_modeled_workflow_artifacts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
