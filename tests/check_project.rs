@@ -222,6 +222,48 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_unindexed_browser_workflow_files() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        write(
+            temp_dir.path().join("model/browser/data/index.json"),
+            "{\n  \"generated_at\": \"1970-01-01T00:00:00.000Z\",\n  \"workflows\": []\n}\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser workflow index drift for open-ticket.eventmodel.json",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_lean_workflow_field_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 

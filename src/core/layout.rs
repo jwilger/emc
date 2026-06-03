@@ -64,6 +64,11 @@ pub fn check_project(
                 Effect::RequireFile(project_path("model/quint/quint.json")),
                 Effect::RequireFile(project_path(format!("model/quint/{module_name}.qnt"))),
                 Effect::RequireFile(project_path("model/browser/data/index.json")),
+                Effect::RequireIndexedWorkflowFiles(
+                    project_path("model/browser/data/index.json"),
+                    project_path("model/browser/data/workflows"),
+                    report_line("browser workflow index drift"),
+                ),
                 Effect::RequireFile(project_path("model/browser/data/workflows/.gitkeep")),
                 Effect::RequireFile(project_path("model/browser/data/slices/.gitkeep")),
                 Effect::RequireFile(project_path("reviews/.gitkeep")),
