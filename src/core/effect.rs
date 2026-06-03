@@ -45,7 +45,7 @@ pub enum Effect {
     RequireQuintWorkflowGraph(ProjectPath, ProjectPath, WorkflowSlug, ReportLine),
     RequireReferencedSliceFileIdentities(ProjectPath, ReportLine),
     RequireReferencedSliceFiles(ProjectPath, ProjectPath, ReportLine),
-    RequireReviewRecord(ProjectPath, ProjectPath, ReportLine),
+    RequireReviewRecord(ProjectPath, WorkflowSlug, ReportLine),
     RequireWorkflowSliceJsonObjects(ProjectPath, ReportLine),
     RequireWorkflowSliceJsonObjectKeysUnique(ProjectPath, ReportLine),
     RequireWorkflowSliceFiles(ProjectPath, ReportLine),
