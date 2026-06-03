@@ -1,7 +1,8 @@
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
-use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
+use crate::core::formal_graph::FormalWorkflowGraphs;
 use crate::core::formal_projection::{
-    project_slice_browser_document, project_workflow_browser_document,
+    project_browser_index_document, project_slice_browser_document,
+    project_workflow_browser_document,
 };
 use crate::core::project::ProjectName;
 
@@ -74,7 +75,6 @@ fn browser_projection_effects(
 ) -> Vec<Effect> {
     let mut formal_workflows = formal_workflows.into_inner();
     formal_workflows.sort_by(|left, right| left.slug().as_ref().cmp(right.slug().as_ref()));
-    let index = browser_index(&formal_workflows);
     let workflow_effects = formal_workflows.iter().map(|workflow| {
         Effect::WriteFile(
             project_path(format!(
@@ -91,41 +91,19 @@ fn browser_projection_effects(
                     "{output_path}/data/slices/{}.eventmodel.json",
                     slice.slug().as_ref()
                 )),
-                project_slice_browser_document(slice),
+                project_slice_browser_document(workflow, slice),
             )
         })
     });
 
     [Effect::WriteFile(
         project_path(format!("{output_path}/data/index.json")),
-        file_contents(index),
+        project_browser_index_document(&formal_workflows),
     )]
     .into_iter()
     .chain(workflow_effects)
     .chain(slice_effects)
     .collect()
-}
-
-fn browser_index(workflows: &[FormalWorkflowGraph]) -> String {
-    let entries = workflows
-        .iter()
-        .map(|workflow| {
-            format!(
-                "    {{\n      \"name\": {},\n      \"path\": \"data/workflows/{}.eventmodel.json\",\n      \"description\": {}\n    }}",
-                json_string(workflow.name().as_ref()),
-                workflow.slug().as_ref(),
-                json_string(workflow.description().as_ref())
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",\n");
-    if entries.is_empty() {
-        "{\n  \"generated_at\": \"1970-01-01T00:00:00.000Z\",\n  \"workflows\": []\n}\n".to_owned()
-    } else {
-        format!(
-            "{{\n  \"generated_at\": \"1970-01-01T00:00:00.000Z\",\n  \"workflows\": [\n{entries}\n  ]\n}}\n"
-        )
-    }
 }
 
 fn json_string(value: impl Into<String>) -> String {

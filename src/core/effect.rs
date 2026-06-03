@@ -26,6 +26,7 @@ pub enum Effect {
     RequireCanonicalDeclaration(ProjectPath, ArtifactMarker, ArtifactMarker, ReportLine),
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
+    RequireFileContents(ProjectPath, FileContents, ReportLine),
     RequireIndexedWorkflowFiles(ProjectPath, ProjectPath, ReportLine),
     RequireLeanWorkflowGraph(ProjectPath, ProjectPath, WorkflowSlug, ReportLine),
     RequireJsonObjectKeysUnique(ProjectPath, ReportLine),

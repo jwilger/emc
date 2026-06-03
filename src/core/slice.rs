@@ -10,6 +10,8 @@ use crate::core::emit::quint::{
     emit_slice_module as emit_quint_slice_module,
     emit_workflow_module as emit_quint_workflow_module,
 };
+use crate::core::formal_graph::workflow_graph_from_document;
+use crate::core::formal_projection::project_slice_browser_document;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceKindName, SliceSlug,
     TransitionTriggerName, WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSliceFileReference,
@@ -472,48 +474,78 @@ pub fn remove_slice(
     let workflow_json = workflow_document
         .contents()
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let remaining_slice_projection_effects =
+        slice_projection_effects(&workflow_slug, &workflow_json)?;
 
-    Ok(EffectPlan::new(vec![
-        Effect::WriteFile(workflow_path(&workflow_slug), workflow_json),
-        Effect::RemoveFile(project_path(format!(
-            "model/browser/data/slices/{}.eventmodel.json",
-            slice_slug.as_ref()
-        ))),
-        Effect::RemoveFile(project_path(format!(
-            "model/lean/slices/{removed_slice_module_name}.lean"
-        ))),
-        Effect::RemoveFile(project_path(format!(
-            "model/quint/slices/{removed_slice_module_name}.qnt"
-        ))),
-        Effect::WriteFile(
-            project_path(format!("model/lean/{workflow_module_name}.lean")),
-            emit_lean_workflow_module(
-                lean_module_name(workflow_module_name.clone()),
-                workflow_name.clone(),
-                workflow_description.clone(),
-                workflow_slug.clone(),
-                WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
-                WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
-                workflow_digest.clone(),
-            ),
-        ),
-        Effect::WriteFile(
-            project_path(format!("model/quint/{workflow_module_name}.qnt")),
-            emit_quint_workflow_module(
-                quint_module_name(workflow_module_name),
-                workflow_name,
-                workflow_description,
-                workflow_slug,
-                WorkflowSliceDetails::from_details(workflow_slice_details),
-                WorkflowTransitionRecords::from_records(workflow_transitions),
-                workflow_digest,
-            ),
-        ),
-        Effect::Report(report_line(format!(
-            "removed slice {}",
-            removed_slice.name().as_ref()
-        ))),
-    ]))
+    Ok(EffectPlan::new(
+        [
+            vec![
+                Effect::WriteFile(workflow_path(&workflow_slug), workflow_json),
+                Effect::RemoveFile(project_path(format!(
+                    "model/browser/data/slices/{}.eventmodel.json",
+                    slice_slug.as_ref()
+                ))),
+                Effect::RemoveFile(project_path(format!(
+                    "model/lean/slices/{removed_slice_module_name}.lean"
+                ))),
+                Effect::RemoveFile(project_path(format!(
+                    "model/quint/slices/{removed_slice_module_name}.qnt"
+                ))),
+                Effect::WriteFile(
+                    project_path(format!("model/lean/{workflow_module_name}.lean")),
+                    emit_lean_workflow_module(
+                        lean_module_name(workflow_module_name.clone()),
+                        workflow_name.clone(),
+                        workflow_description.clone(),
+                        workflow_slug.clone(),
+                        WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
+                        WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
+                        workflow_digest.clone(),
+                    ),
+                ),
+                Effect::WriteFile(
+                    project_path(format!("model/quint/{workflow_module_name}.qnt")),
+                    emit_quint_workflow_module(
+                        quint_module_name(workflow_module_name),
+                        workflow_name,
+                        workflow_description,
+                        workflow_slug,
+                        WorkflowSliceDetails::from_details(workflow_slice_details),
+                        WorkflowTransitionRecords::from_records(workflow_transitions),
+                        workflow_digest,
+                    ),
+                ),
+            ],
+            remaining_slice_projection_effects,
+            vec![Effect::Report(report_line(format!(
+                "removed slice {}",
+                removed_slice.name().as_ref()
+            )))],
+        ]
+        .concat(),
+    ))
+}
+
+fn slice_projection_effects(
+    workflow_slug: &WorkflowSlug,
+    workflow_document: &FileContents,
+) -> Result<Vec<Effect>, SliceMutationError> {
+    let graph = workflow_graph_from_document(workflow_slug.clone(), workflow_document.clone())
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    Ok(graph
+        .slice_details()
+        .as_slice()
+        .iter()
+        .map(|slice| {
+            Effect::WriteFile(
+                project_path(format!(
+                    "model/browser/data/slices/{}.eventmodel.json",
+                    slice.slug().as_ref()
+                )),
+                project_slice_browser_document(&graph, slice),
+            )
+        })
+        .collect())
 }
 
 fn updated_slice_plan(

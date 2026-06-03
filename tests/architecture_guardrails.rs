@@ -904,15 +904,15 @@ mod tests {
     fn check_project_uses_normalized_formal_graph_readers() -> Result<(), Box<dyn Error>> {
         let layout = read_workspace_file("src/core/layout.rs")?;
         let shell = read_workspace_file("src/shell.rs")?;
-        let effect = read_workspace_file("src/core/effect.rs")?;
         let required_markers = [
-            (&effect, "RequireLeanWorkflowGraph"),
-            (&effect, "RequireQuintWorkflowGraph"),
-            (&layout, "Effect::RequireLeanWorkflowGraph"),
-            (&layout, "Effect::RequireQuintWorkflowGraph"),
+            (&layout, "formal_workflows: FormalWorkflowGraphs"),
+            (&layout, "formal_workflows.into_inner()"),
+            (&layout, "formal_workflow_effects"),
+            (&shell, "Effect::CheckCurrentProject =>"),
+            (&shell, "read_synchronized_formal_workflow_graphs()?"),
+            (&shell, "check_project(project_name, formal_workflows)"),
             (&shell, "parse_lean_workflow_graph"),
             (&shell, "parse_quint_workflow_graph"),
-            (&shell, "workflow_graph_from_document"),
         ];
         let violations = required_markers
             .iter()

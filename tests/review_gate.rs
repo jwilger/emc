@@ -406,7 +406,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Lean workflow transition drift for workflow Intake visit",
+                "workflow step 'triage-intake' has no incoming transition",
             ));
 
         Command::cargo_bin("emc")?
@@ -415,7 +415,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Lean workflow transition drift for workflow Intake visit",
+                "workflow step 'triage-intake' has no incoming transition",
             ));
 
         Ok(())

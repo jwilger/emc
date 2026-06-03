@@ -245,6 +245,141 @@ mod tests {
     }
 
     #[test]
+    fn generate_site_projects_single_slice_workflow_shape_from_formal_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Clinic Intake"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "intake-visit",
+                "--name",
+                "Intake visit",
+                "--description",
+                "Actor completes intake for a clinic visit.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "intake-visit",
+                "--slug",
+                "capture-intake",
+                "--name",
+                "Capture intake",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor captures intake details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["generate", "site", "--output", "site"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("generated site at site"));
+
+        let workflow = read_projected_workflow(temp_dir.path(), "intake-visit")?;
+        assert_eq!(
+            workflow
+                .get("slice_files")
+                .and_then(serde_json::Value::as_array)
+                .ok_or("projected workflow must include slice files")?
+                .as_slice(),
+            [serde_json::Value::String(
+                "../slices/capture-intake.eventmodel.json".to_owned()
+            )],
+            "workflow projection must retain formal slice references"
+        );
+        let steps = workflow
+            .get("steps")
+            .and_then(serde_json::Value::as_array)
+            .ok_or("projected workflow must include steps")?;
+        assert_eq!(steps.len(), 1, "workflow projection must include its slice");
+        assert_eq!(
+            steps[0].get("slice").and_then(serde_json::Value::as_str),
+            Some("capture-intake"),
+            "workflow step must identify the formal slice"
+        );
+        assert!(
+            steps[0].get("transitions").is_none(),
+            "single-slice workflow with no formal transitions must omit transitions"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn generate_site_projects_transition_workflow_shape_from_formal_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_navigation_chain(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["generate", "site", "--output", "site"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("generated site at site"));
+
+        let workflow = read_projected_workflow(temp_dir.path(), "intake-visit")?;
+        let steps = workflow
+            .get("steps")
+            .and_then(serde_json::Value::as_array)
+            .ok_or("projected workflow must include steps")?;
+        assert_eq!(
+            steps.len(),
+            3,
+            "workflow projection must include all slices"
+        );
+        assert_transition(
+            &steps[0],
+            "capture-intake",
+            "triage-intake",
+            "triage-intake-screen",
+        )?;
+        assert_transition(
+            &steps[1],
+            "triage-intake",
+            "schedule-visit",
+            "schedule-visit-screen",
+        )?;
+        assert_eq!(
+            steps[2].get("slice").and_then(serde_json::Value::as_str),
+            Some("schedule-visit"),
+            "final workflow step must identify the formal slice"
+        );
+        assert_eq!(
+            steps[2]
+                .get("transitions")
+                .and_then(serde_json::Value::as_array)
+                .ok_or("final step must include an empty transitions projection")?
+                .len(),
+            0,
+            "when any formal transitions exist, steps with no outgoing edge must project an empty transitions array"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn generate_site_rejects_unsynchronized_formal_workflows() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         initialize_navigation_chain(temp_dir.path())?;
@@ -293,6 +428,42 @@ mod tests {
                 "without parent-directory traversal",
             ));
 
+        Ok(())
+    }
+
+    fn read_projected_workflow(
+        cwd: &Path,
+        workflow: &str,
+    ) -> Result<serde_json::Value, Box<dyn Error>> {
+        serde_json::from_str(&read_to_string(
+            cwd.join(format!("site/data/workflows/{workflow}.eventmodel.json")),
+        )?)
+        .map_err(Into::into)
+    }
+
+    fn assert_transition(
+        step: &serde_json::Value,
+        source: &str,
+        target: &str,
+        navigation: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        assert_eq!(
+            step.get("slice").and_then(serde_json::Value::as_str),
+            Some(source),
+            "workflow step must identify the formal transition source"
+        );
+        let transitions = step
+            .get("transitions")
+            .and_then(serde_json::Value::as_array)
+            .ok_or("workflow step must include projected transitions")?;
+        assert_eq!(
+            transitions.as_slice(),
+            [serde_json::json!({
+                "to": target,
+                "via_navigation": navigation,
+            })],
+            "workflow step must project the formal transition target and trigger"
+        );
         Ok(())
     }
 
