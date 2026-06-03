@@ -150,6 +150,7 @@
 - 2026-06-03: MCP stdio now exposes `init_project`, routing project initialization through the same semantic command planner as the CLI so MCP clients can create the deterministic project skeleton and root formal artifacts.
 - 2026-06-03: CLI `init` now parses project names through the DTO boundary parser before command execution, and an architecture guardrail prevents direct `ProjectName::try_new` construction from returning to the CLI entrypoint.
 - 2026-06-03: Project path arguments now parse through `parse_project_path` in the DTO boundary layer for CLI and MCP entrypoints, with a static guardrail preventing direct `ProjectPath::try_new` calls from returning to those shells.
+- 2026-06-03: MCP initialize, tools/list, and tools/call result payloads now serialize through the pinned `rmcp` SDK model types, with an architecture guardrail preventing the MCP protocol surface from drifting back to entirely ad hoc JSON payload construction.
 
 ### Task 1: Guardrails and Project Skeleton
 

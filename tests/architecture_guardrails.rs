@@ -149,6 +149,33 @@ mod tests {
     }
 
     #[test]
+    fn mcp_protocol_payloads_use_the_pinned_sdk_model_types() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/mcp.rs")?;
+        let required_markers = [
+            "rmcp::model",
+            "InitializeResult",
+            "ServerCapabilities",
+            "Implementation",
+            "Tool",
+            "CallToolResult",
+            "Content",
+        ];
+        let violations = required_markers
+            .iter()
+            .filter(|marker| !source.contains(**marker))
+            .map(|marker| format!("src/mcp.rs does not use `{marker}` for MCP payloads"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "MCP protocol payloads must be built from the pinned rmcp SDK model types instead of ad hoc JSON shapes"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn event_model_validation_does_not_perform_filesystem_io_directly() -> Result<(), Box<dyn Error>>
     {
         let source = read_workspace_file("src/event_model_validation.rs")?;
