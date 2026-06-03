@@ -42,7 +42,7 @@
 ## Event Model Rule Coverage
 
 - Check in the current event-model rule surface as acceptance coverage:
-  - 156 validator scenarios.
+  - 159 validator scenarios.
   - 9 review-gate scenarios.
   - 11 browser scenarios.
   - 6 runner/meta scenarios.
@@ -57,6 +57,7 @@
 - 2026-06-02: `emc check` now rejects workflow drift between browser JSON and generated Lean4/Quint artifacts for workflow identity fields, composed slice lists, and navigation transition lists. It also rejects workflows that reference missing browser slice artifacts. This is deterministic artifact synchronization coverage, not yet the full normalized semantic graph drift check described above.
 - 2026-06-02: Review-gate fixture parity is checked in. `emc review gate --workflow <slug>` and MCP `review_gate` enforce current structured clean reviews for the workflow slug, model digest, required categories, mandatory findings, and clean follow-up review after corrected findings.
 - 2026-06-02: Event-model Gherkin fixtures are checked in with scenario-count guardrails for validator, review-gate, browser, and runner/meta suites.
+- 2026-06-02: `emc validate` and the MCP `validate_event_model` tool accept a single `.eventmodel.json` file target as well as a directory target.
 
 ### Task 1: Guardrails and Project Skeleton
 
