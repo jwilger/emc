@@ -46,9 +46,9 @@ mod tests {
             fs::read_to_string(temp_dir.path().join("model/lean/lakefile.lean"))?
                 .contains("package EMCModel")
         );
-        assert!(
-            fs::read_to_string(temp_dir.path().join("model/quint/quint.json"))?
-                .contains("\"main\": \"RepairDesk.qnt\"")
+        assert_eq!(
+            fs::read_to_string(temp_dir.path().join("model/quint/quint.json"))?,
+            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowTransitionsStructured\"\n  ]\n}\n"
         );
 
         Ok(())
