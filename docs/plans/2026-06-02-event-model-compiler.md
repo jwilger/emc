@@ -171,6 +171,7 @@
 - 2026-06-03: Validation orchestration now parses raw event-model source files through one shared raw-to-semantic path before rule checks, including referenced slice files. An architecture guardrail prevents a second `parse_event_model_document` call site from returning to `src/event_model_validation.rs`.
 - 2026-06-03: Validation structural builder parts and `with_*` assembly methods are now crate-private DTO-parser internals instead of public core API. An architecture guardrail prevents those structural validation builders from being exposed again.
 - 2026-06-03: Layout command-planning APIs now accept semantic modeled-workflow, slice-detail, and transition collection types instead of exposing raw `Vec<T>` inputs. A static guardrail checks complete public layout function signatures, including multiline signatures, for structural collection leakage.
+- 2026-06-03: `EffectPlan` and `ProcessInvocation` now expose semantic `Effects` and `ProcessArguments` collections instead of public raw vectors or slices. A static guardrail prevents effect-layer public APIs from exposing raw `Vec<T>` or slice collections again.
 
 ### Task 1: Guardrails and Project Skeleton
 
