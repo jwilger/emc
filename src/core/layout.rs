@@ -188,7 +188,9 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
     let lean_slice_detail_marker = artifact_digest_marker(
         "def workflowSliceDetails : List (String × String × String × String) :=",
     );
-    let lean_transition_marker = artifact_digest_marker("def workflowTransitions : List String :=");
+    let lean_transition_marker = artifact_digest_marker(
+        "def workflowTransitions : List (String × String × String × String) :=",
+    );
     let lean_identity_invariant_marker = artifact_marker(format!(
         "theorem workflowIdentityIsStable : workflowName = {} := rfl",
         json_string(workflow.name.as_ref())

@@ -76,8 +76,35 @@ fn transition_list(workflow_transitions: Vec<WorkflowTransitionLabel>) -> String
         "[{}]",
         workflow_transitions
             .iter()
-            .map(|transition| quoted(transition.as_ref()))
+            .map(|transition| transition_record(transition.as_ref()))
             .collect::<Vec<_>>()
             .join(",")
     )
+}
+
+fn transition_record(transition: &str) -> String {
+    let (source, tail) = transition.split_once("->").unwrap_or_else(|| {
+        unreachable!("EMC generated workflow transition must contain a source and target");
+    });
+    let (target, kind, trigger) = transition_parts(tail);
+    format!(
+        "{{ source: {}, target: {}, kind: {}, trigger: {} }}",
+        quoted(source),
+        quoted(target),
+        quoted(kind.as_ref()),
+        quoted(trigger.as_ref())
+    )
+}
+
+fn transition_parts(tail: &str) -> (&str, String, String) {
+    let parts = tail.split(':').collect::<Vec<_>>();
+    match parts.as_slice() {
+        [target, kind, trigger] => (target, (*kind).to_owned(), (*trigger).to_owned()),
+        [target, "workflow_exit", exit_kind, trigger] => (
+            target,
+            format!("workflow_exit:{exit_kind}"),
+            (*trigger).to_owned(),
+        ),
+        _ => unreachable!("EMC generated workflow transition must have canonical parts"),
+    }
 }

@@ -87,6 +87,7 @@
 - 2026-06-02: MCP HTTP now returns a `400 Bad Request` response for malformed JSON-RPC bodies instead of terminating the HTTP transport with a shell error.
 - 2026-06-02: Generated formal artifact digest markers now include workflow name, slug, and description, so `emc check` rejects stale Lean4 or Quint digest metadata after semantic workflow identity fields change.
 - 2026-06-02: Generated formal artifact digest markers now include workflow slice details and transition labels as well as identity fields. `emc check` derives the expected digest from browser workflow JSON before comparing Lean4 and Quint artifacts, moving the digest guardrail closer to a normalized workflow graph check.
+- 2026-06-03: Generated Lean4 and Quint workflow artifacts now represent business workflow transitions as structured source, target, kind, and trigger records instead of opaque transition strings. `emc check` derives the same structured records from browser workflow JSON when checking formal artifact drift.
 
 ### Task 1: Guardrails and Project Skeleton
 

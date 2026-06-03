@@ -1014,7 +1014,11 @@ fn workflow_slice_file_paths(
 }
 
 fn workflow_transition_marker(prefix: &str, workflow_contents: &str) -> Result<String, ShellError> {
-    let labels = workflow_transition_labels(workflow_contents)?;
+    let labels = if prefix.starts_with("val ") {
+        workflow_transition_record_labels(workflow_contents)?
+    } else {
+        workflow_transition_tuple_labels(workflow_contents)?
+    };
     let joined_labels = labels.join(",");
     Ok(format!("{prefix} [{joined_labels}]"))
 }
@@ -1140,11 +1144,45 @@ fn workflow_slice_detail_record_labels(workflow_contents: &str) -> Result<Vec<St
         .collect()
 }
 
+fn workflow_transition_tuple_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
+    workflow_transition_labels(workflow_contents)?
+        .into_iter()
+        .map(|label| {
+            transition_record_parts(&label).and_then(|(source, target, kind, trigger)| {
+                Ok(format!(
+                    "({}, {}, {}, {})",
+                    json_string(source.to_owned())?,
+                    json_string(target.to_owned())?,
+                    json_string(kind)?,
+                    json_string(trigger)?
+                ))
+            })
+        })
+        .collect()
+}
+
+fn workflow_transition_record_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
+    workflow_transition_labels(workflow_contents)?
+        .into_iter()
+        .map(|label| {
+            transition_record_parts(&label).and_then(|(source, target, kind, trigger)| {
+                Ok(format!(
+                    "{{ source: {}, target: {}, kind: {}, trigger: {} }}",
+                    json_string(source.to_owned())?,
+                    json_string(target.to_owned())?,
+                    json_string(kind)?,
+                    json_string(trigger)?
+                ))
+            })
+        })
+        .collect()
+}
+
 fn workflow_transition_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
     let workflow = workflow_json(workflow_contents)?;
     let steps = workflow_steps(&workflow)?;
 
-    steps
+    let labels = steps
         .iter()
         .filter_map(|step| {
             let source = step.get("slice").and_then(Value::as_str)?;
@@ -1167,8 +1205,25 @@ fn workflow_transition_labels(workflow_contents: &str) -> Result<Vec<String>, Sh
                     })
             })
         })
-        .map(json_string)
-        .collect()
+        .collect::<Vec<_>>();
+    Ok(labels)
+}
+
+fn transition_record_parts(label: &str) -> Result<(&str, &str, String, String), ShellError> {
+    let (source, tail) = label
+        .split_once("->")
+        .ok_or_else(|| ShellError::message("workflow transition is missing source"))?;
+    let parts = tail.split(':').collect::<Vec<_>>();
+    match parts.as_slice() {
+        [target, kind, trigger] => Ok((source, target, (*kind).to_owned(), (*trigger).to_owned())),
+        [target, "workflow_exit", exit_kind, trigger] => Ok((
+            source,
+            target,
+            format!("workflow_exit:{exit_kind}"),
+            (*trigger).to_owned(),
+        )),
+        _ => Err(ShellError::message("workflow transition is not canonical")),
+    }
 }
 
 fn transition_label(source: &str, target: &str, transition: &Value) -> Option<String> {

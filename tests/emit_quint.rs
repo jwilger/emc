@@ -58,7 +58,7 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
+                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\" }]"
             )
         );
         assert!(quint.contains("val workflowIdentityStable"));

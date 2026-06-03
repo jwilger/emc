@@ -91,13 +91,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowTransitions : List String := [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
+                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"review-ticket\", \"navigation\", \"review-ticket-screen\")]"
             ),
             "Lean artifact must represent the workflow transition"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
+                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\" }]"
             ),
             "Quint artifact must represent the workflow transition"
         );
@@ -222,13 +222,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowTransitions : List String := [\"capture-ticket->submit-ticket:command:SubmitTicketForReview\",\"submit-ticket->review-ticket:event:TicketSubmittedForReview\"]"
+                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"submit-ticket\", \"command\", \"SubmitTicketForReview\"),(\"submit-ticket\", \"review-ticket\", \"event\", \"TicketSubmittedForReview\")]"
             ),
             "Lean artifact must represent command and event workflow transitions"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [\"capture-ticket->submit-ticket:command:SubmitTicketForReview\",\"submit-ticket->review-ticket:event:TicketSubmittedForReview\"]"
+                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"submit-ticket\", kind: \"command\", trigger: \"SubmitTicketForReview\" },{ source: \"submit-ticket\", target: \"review-ticket\", kind: \"event\", trigger: \"TicketSubmittedForReview\" }]"
             ),
             "Quint artifact must represent command and event workflow transitions"
         );
@@ -311,13 +311,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowTransitions : List String := [\"capture-ticket->record-callback:external_trigger:callback_received\"]"
+                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"record-callback\", \"external_trigger\", \"callback_received\")]"
             ),
             "Lean artifact must represent the external trigger workflow transition"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [\"capture-ticket->record-callback:external_trigger:callback_received\"]"
+                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"record-callback\", kind: \"external_trigger\", trigger: \"callback_received\" }]"
             ),
             "Quint artifact must represent the external trigger workflow transition"
         );
@@ -403,13 +403,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowTransitions : List String := [\"capture-ticket->repair-complete:workflow_exit:outcome:ticket_closed\"]"
+                "def workflowTransitions : List (String × String × String × String) := [(\"capture-ticket\", \"repair-complete\", \"workflow_exit:outcome\", \"ticket_closed\")]"
             ),
             "Lean artifact must represent the workflow exit"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [\"capture-ticket->repair-complete:workflow_exit:outcome:ticket_closed\"]"
+                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"repair-complete\", kind: \"workflow_exit:outcome\", trigger: \"ticket_closed\" }]"
             ),
             "Quint artifact must represent the workflow exit"
         );
