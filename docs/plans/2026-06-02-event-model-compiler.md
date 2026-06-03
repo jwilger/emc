@@ -92,6 +92,7 @@
 - 2026-06-03: Workflow update mutations now parse browser workflow JSON into a semantic `WorkflowDocument` type before deriving workflow identity, slice details, transitions, and rewritten file contents. A static architecture guardrail prevents `src/core/workflow.rs` from directly manipulating raw `serde_json::Value`.
 - 2026-06-03: Slice mutations now use the same semantic `WorkflowDocument` API to append slice-file references and workflow steps before deriving synchronized browser, Lean4, and Quint artifacts. Static architecture guardrails now prevent both `src/core/workflow.rs` and `src/core/slice.rs` from directly manipulating raw JSON values.
 - 2026-06-03: Workflow connection mutations now use semantic `WorkflowDocument` transition additions to append command, event, navigation, external-trigger, and workflow-exit transitions before deriving synchronized artifacts. Static architecture guardrails now prevent workflow, slice, and connection mutation modules from directly manipulating raw JSON values.
+- 2026-06-03: Project initialization now writes the same Quint workflow invariant list that `emc verify` asks Quint to check: identity stability, slice-detail completeness, and structured transitions. Init coverage asserts the exact root `quint.json` content so the project skeleton cannot silently lag behind the verification surface.
 
 ### Task 1: Guardrails and Project Skeleton
 

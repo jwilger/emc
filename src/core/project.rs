@@ -39,7 +39,7 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         Effect::WriteFileIfMissing(
             project_path("model/quint/quint.json"),
             file_contents(format!(
-                "{{\n  \"main\": \"{module_name}.qnt\",\n  \"invariants\": [\"workflowIdentityStable\"]\n}}\n"
+                "{{\n  \"main\": \"{module_name}.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowTransitionsStructured\"\n  ]\n}}\n"
             )),
         ),
         Effect::WriteFileIfMissing(
