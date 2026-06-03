@@ -464,6 +464,33 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_referenced_browser_slice_duplicate_field_drift() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let slice_path = temp_dir
+            .path()
+            .join("model/browser/data/slices/capture-ticket.eventmodel.json");
+        let slice = read_to_string(&slice_path)?.replace(
+            "  \"name\": \"Capture ticket\",\n",
+            "  \"name\": \"Stale capture ticket\",\n  \"name\": \"Capture ticket\",\n",
+        );
+        write(slice_path, slice)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser slice drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_unindexed_browser_workflow_files() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 

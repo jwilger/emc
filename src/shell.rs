@@ -186,6 +186,10 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
         }
+        Effect::RequireWorkflowSliceJsonObjectKeysUnique(workflow_path, message) => {
+            require_workflow_slice_json_object_keys_unique(workflow_path.as_ref(), message.as_ref())
+                .map(|()| Vec::new())
+        }
         Effect::RequireWorkflowSliceFiles(workflow_path, message) => {
             let workflow_contents =
                 fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
@@ -450,6 +454,18 @@ fn require_json_object_keys_unique(path: &str, message: &str) -> Result<(), Shel
     } else {
         Ok(())
     }
+}
+
+fn require_workflow_slice_json_object_keys_unique(
+    workflow_path: &str,
+    message: &str,
+) -> Result<(), ShellError> {
+    let workflow_contents = fs::read_to_string(Path::new(workflow_path)).map_err(ShellError::io)?;
+    workflow_slice_file_paths(workflow_path, &workflow_contents)?
+        .iter()
+        .try_for_each(|slice_file| {
+            require_json_object_keys_unique(&slice_file.to_string_lossy(), message)
+        })
 }
 
 struct JsonKeyScanner<'a> {
