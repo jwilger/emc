@@ -30,13 +30,32 @@ mod tests {
         assert!(lean.contains("def workflowName := \"Open ticket\""));
         assert!(lean.contains("def workflowSlug := \"open-ticket\""));
         assert!(lean.contains("def workflowDescription := \"Actor opens a repair ticket.\""));
-        assert!(lean.contains("def workflowSlices := [\"capture-ticket\"]"));
+        assert!(lean.contains("def workflowSlices : List String := [\"capture-ticket\"]"));
         assert!(
             lean.contains(
-                "def workflowTransitions := [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
+                "def workflowTransitions : List String := [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
             )
         );
         assert!(lean.contains("theorem workflowIdentityIsStable"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn lean_workflow_module_types_empty_lists() -> Result<(), Box<dyn Error>> {
+        let module = emit_workflow_module(
+            parse_lean_module_name("OpenTicket")?,
+            parse_model_name("Open ticket")?,
+            parse_model_description("Actor opens a repair ticket.")?,
+            parse_workflow_slug("open-ticket")?,
+            Vec::new(),
+            Vec::new(),
+            ArtifactDigest::try_new("workflow:Open ticket".to_owned())?,
+        );
+        let lean = module.as_ref();
+
+        assert!(lean.contains("def workflowSlices : List String := []"));
+        assert!(lean.contains("def workflowTransitions : List String := []"));
 
         Ok(())
     }

@@ -15,7 +15,7 @@ pub fn emit_workflow_module(
     let slice_list = slice_list(workflow_slices);
     let transition_list = transition_list(workflow_transitions);
     file_contents(format!(
-        "namespace {module_name}\n\n-- EMC-DIGEST: {digest}\n-- EMC generated Lean4 business workflow model.\ndef workflowName := {workflow_name_json}\n\ndef workflowSlug := {workflow_slug_json}\n\ndef workflowDescription := {workflow_description_json}\n\ndef workflowSlices := {slice_list}\n\ndef workflowTransitions := {transition_list}\n\ntheorem workflowIdentityIsStable : workflowName = {workflow_name_json} := rfl\n\nend {module_name}\n",
+        "namespace {module_name}\n\n-- EMC-DIGEST: {digest}\n-- EMC generated Lean4 business workflow model.\ndef workflowName := {workflow_name_json}\n\ndef workflowSlug := {workflow_slug_json}\n\ndef workflowDescription := {workflow_description_json}\n\ndef workflowSlices : List String := {slice_list}\n\ndef workflowTransitions : List String := {transition_list}\n\ntheorem workflowIdentityIsStable : workflowName = {workflow_name_json} := rfl\n\nend {module_name}\n",
         module_name = module_name.as_ref(),
         digest = digest.as_ref(),
         workflow_name_json = quoted(workflow_name.as_ref()),

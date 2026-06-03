@@ -90,11 +90,11 @@ mod tests {
             "slice data must preserve the slice description"
         );
         assert!(
-            lean.contains("def workflowSlices := [\"capture-ticket\"]"),
+            lean.contains("def workflowSlices : List String := [\"capture-ticket\"]"),
             "Lean artifact must represent the workflow's business slices"
         );
         assert!(
-            quint.contains("const workflowSlices = [\"capture-ticket\"]"),
+            quint.contains("val workflowSlices = [\"capture-ticket\"]"),
             "Quint artifact must represent the workflow's business slices"
         );
 

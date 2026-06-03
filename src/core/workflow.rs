@@ -1,11 +1,11 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
-use crate::core::emc::artifact_digest;
+use crate::core::digest::artifact_digest;
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
-use crate::core::layout::ImportedWorkflowLayout;
+use crate::core::layout::ModeledWorkflowLayout;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowSlug,
 };
@@ -28,14 +28,14 @@ impl NewWorkflow {
 }
 
 pub fn add_workflow(
-    existing_workflows: Vec<ImportedWorkflowLayout>,
+    existing_workflows: Vec<ModeledWorkflowLayout>,
     workflow: NewWorkflow,
 ) -> EffectPlan {
     workflow_effect_plan(existing_workflows, workflow, MutationReport::Added)
 }
 
 pub fn update_workflow_description(
-    existing_workflows: Vec<ImportedWorkflowLayout>,
+    existing_workflows: Vec<ModeledWorkflowLayout>,
     slug: WorkflowSlug,
     description: ModelDescription,
 ) -> Result<EffectPlan, WorkflowMutationError> {
@@ -82,7 +82,7 @@ enum MutationReport {
 }
 
 fn workflow_effect_plan(
-    existing_workflows: Vec<ImportedWorkflowLayout>,
+    existing_workflows: Vec<ModeledWorkflowLayout>,
     workflow: NewWorkflow,
     mutation_report: MutationReport,
 ) -> EffectPlan {
@@ -93,7 +93,7 @@ fn workflow_effect_plan(
     let lean_module_name = lean_module_name(module_name.clone());
     let quint_module_name = quint_module_name(module_name.clone());
     let digest = artifact_digest(workflow.name.clone());
-    let workflow_layout = ImportedWorkflowLayout::new(
+    let workflow_layout = ModeledWorkflowLayout::new(
         workflow.name.clone(),
         workflow.description.clone(),
         workflow.slug.clone(),
@@ -160,7 +160,7 @@ impl MutationReport {
     }
 }
 
-fn browser_index(mut workflows: Vec<ImportedWorkflowLayout>) -> String {
+fn browser_index(mut workflows: Vec<ModeledWorkflowLayout>) -> String {
     workflows.sort_by(|left, right| left.slug().as_ref().cmp(right.slug().as_ref()));
     let entries = workflows
         .iter()
@@ -176,7 +176,7 @@ fn browser_index(mut workflows: Vec<ImportedWorkflowLayout>) -> String {
     }
 }
 
-fn workflow_index_entry(workflow: &ImportedWorkflowLayout) -> String {
+fn workflow_index_entry(workflow: &ModeledWorkflowLayout) -> String {
     format!(
         "    {{\n      \"name\": {},\n      \"path\": \"data/workflows/{}.eventmodel.json\",\n      \"description\": {}\n    }}",
         json_string(workflow.name().as_ref()),

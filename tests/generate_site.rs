@@ -2,7 +2,6 @@
 mod tests {
     use std::error::Error;
     use std::fs::read_to_string;
-    use std::path::PathBuf;
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -11,7 +10,6 @@ mod tests {
     #[test]
     fn generate_site_emits_browsable_site_files() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
-        let emc_event_model = workspace_root().join("../emc/docs/event-model");
 
         Command::cargo_bin("emc")?
             .args(["init", "--name", "Repair Desk"])
@@ -20,8 +18,16 @@ mod tests {
             .success();
 
         Command::cargo_bin("emc")?
-            .args(["import", "emc", "--source"])
-            .arg(&emc_event_model)
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -50,15 +56,7 @@ mod tests {
         assert!(
             temp_dir
                 .path()
-                .join("site/data/workflows/organization-access.eventmodel.json")
-                .is_file()
-        );
-        assert!(
-            temp_dir
-                .path()
-                .join(
-                    "site/data/slices/organization-access-resolve-application-entry.eventmodel.json"
-                )
+                .join("site/data/workflows/open-ticket.eventmodel.json")
                 .is_file()
         );
 
@@ -68,16 +66,16 @@ mod tests {
             "generated site must use project branding in the document title"
         );
         assert!(
-            !index_html.contains("<title>EMC Event Model Browser</title>"),
-            "generated site must not hard-code EMC branding"
+            !index_html.contains("<title>Event Model Browser</title>"),
+            "generated site must not drop project branding"
         );
         assert!(
             index_html.contains("./assets/index-CTzj-YfP.js"),
-            "generated site must load the bundled EMC browser JavaScript"
+            "generated site must load the bundled browser JavaScript"
         );
         assert!(
             index_html.contains("./assets/index-DCPB_L_9.css"),
-            "generated site must load the bundled EMC browser CSS"
+            "generated site must load the bundled browser CSS"
         );
         assert!(
             !index_html.contains("Open data/index.json"),
@@ -85,9 +83,5 @@ mod tests {
         );
 
         Ok(())
-    }
-
-    fn workspace_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
     }
 }

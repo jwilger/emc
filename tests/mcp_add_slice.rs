@@ -63,11 +63,11 @@ mod tests {
             "slice data must preserve the MCP-created slice description"
         );
         assert!(
-            lean.contains("def workflowSlices := [\"capture-ticket\"]"),
+            lean.contains("def workflowSlices : List String := [\"capture-ticket\"]"),
             "Lean artifact must represent the MCP-created workflow slice"
         );
         assert!(
-            quint.contains("const workflowSlices = [\"capture-ticket\"]"),
+            quint.contains("val workflowSlices = [\"capture-ticket\"]"),
             "Quint artifact must represent the MCP-created workflow slice"
         );
 

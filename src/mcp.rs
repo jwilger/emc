@@ -279,7 +279,7 @@ fn tools_list_result() -> Value {
         "tools": [
             {
                 "name": "list_workflows",
-                "description": "List imported workflows in the EMC event model.",
+                "description": "List modeled workflows in the EMC event model.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {},
@@ -288,7 +288,7 @@ fn tools_list_result() -> Value {
             },
             {
                 "name": "show_workflow",
-                "description": "Show an imported workflow document by workflow slug.",
+                "description": "Show a modeled workflow document by workflow slug.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -509,9 +509,9 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
 fn list_workflows_tool_text() -> Result<String, ShellError> {
     let index = fs::read_to_string("model/browser/data/index.json")
         .map_err(|error| ShellError::message(error.to_string()))?;
-    let imported_workflows = parse_browser_index_workflows(&index)
+    let modeled_workflows = parse_browser_index_workflows(&index)
         .map_err(|error| ShellError::message(error.to_string()))?;
-    Ok(report_text(list_workflows(imported_workflows)))
+    Ok(report_text(list_workflows(modeled_workflows)))
 }
 
 fn show_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -555,9 +555,9 @@ fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {
 fn verify_project_tool_text() -> Result<String, ShellError> {
     let index = fs::read_to_string("model/browser/data/index.json")
         .map_err(|error| ShellError::message(error.to_string()))?;
-    let imported_workflows = parse_browser_index_workflows(&index)
+    let modeled_workflows = parse_browser_index_workflows(&index)
         .map_err(|error| ShellError::message(error.to_string()))?;
-    interpret_collect_reports(verify_project(imported_workflows)).map(|reports| reports.join("\n"))
+    interpret_collect_reports(verify_project(modeled_workflows)).map(|reports| reports.join("\n"))
 }
 
 fn validate_event_model_tool_text(request: &Value) -> Result<String, ShellError> {

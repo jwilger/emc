@@ -1,4 +1,4 @@
-use crate::core::emc::artifact_digest;
+use crate::core::digest::artifact_digest;
 use crate::core::effect::{
     ArtifactDigest, Effect, EffectPlan, FileContents, ProjectPath, ReportLine,
 };
@@ -6,13 +6,13 @@ use crate::core::project::ProjectName;
 use crate::core::types::{ModelDescription, ModelName, WorkflowSlug};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ImportedWorkflowLayout {
+pub struct ModeledWorkflowLayout {
     name: ModelName,
     description: ModelDescription,
     slug: WorkflowSlug,
 }
 
-impl ImportedWorkflowLayout {
+impl ModeledWorkflowLayout {
     pub fn new(name: ModelName, description: ModelDescription, slug: WorkflowSlug) -> Self {
         Self {
             name,
@@ -46,12 +46,12 @@ impl ImportedWorkflowLayout {
 
 pub fn check_project(
     project_name: ProjectName,
-    imported_workflows: Vec<ImportedWorkflowLayout>,
+    modeled_workflows: Vec<ModeledWorkflowLayout>,
 ) -> EffectPlan {
     let module_name = module_name(&project_name);
-    let imported_effects = imported_workflows
+    let modeled_effects = modeled_workflows
         .into_iter()
-        .flat_map(imported_workflow_effects)
+        .flat_map(modeled_workflow_effects)
         .collect::<Vec<_>>();
 
     EffectPlan::new(
@@ -68,16 +68,16 @@ pub fn check_project(
                 Effect::RequireFile(project_path("model/browser/data/slices/.gitkeep")),
                 Effect::RequireFile(project_path("reviews/.gitkeep")),
             ],
-            imported_effects,
+            modeled_effects,
             vec![Effect::Report(report_line("project layout is complete"))],
         ]
         .concat(),
     )
 }
 
-pub fn list_workflows(imported_workflows: Vec<ImportedWorkflowLayout>) -> EffectPlan {
+pub fn list_workflows(modeled_workflows: Vec<ModeledWorkflowLayout>) -> EffectPlan {
     EffectPlan::new(
-        imported_workflows
+        modeled_workflows
             .into_iter()
             .map(|workflow| Effect::Report(report_line(workflow.name.as_ref().to_owned())))
             .collect(),
@@ -88,7 +88,7 @@ pub fn show_workflow(workflow_document: FileContents) -> EffectPlan {
     EffectPlan::new(vec![Effect::ReportDocument(workflow_document)])
 }
 
-fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
+fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
     let workflow_name = workflow.name.as_ref().to_owned();
     let digest = artifact_digest(workflow.name.clone());
     let browser_name_marker =
@@ -106,17 +106,17 @@ fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
         json_string(workflow.description.as_ref())
     ));
     let quint_slug_marker = artifact_digest_marker(format!(
-        "const workflowSlug = {}",
+        "val workflowSlug = {}",
         json_string(workflow.slug.as_ref())
     ));
     let quint_description_marker = artifact_digest_marker(format!(
-        "const workflowDescription = {}",
+        "val workflowDescription = {}",
         json_string(workflow.description.as_ref())
     ));
-    let lean_slice_marker = artifact_digest_marker("def workflowSlices :=");
-    let lean_transition_marker = artifact_digest_marker("def workflowTransitions :=");
-    let quint_slice_marker = artifact_digest_marker("const workflowSlices =");
-    let quint_transition_marker = artifact_digest_marker("const workflowTransitions =");
+    let lean_slice_marker = artifact_digest_marker("def workflowSlices : List String :=");
+    let lean_transition_marker = artifact_digest_marker("def workflowTransitions : List String :=");
+    let quint_slice_marker = artifact_digest_marker("val workflowSlices =");
+    let quint_transition_marker = artifact_digest_marker("val workflowTransitions =");
     let module_name = module_name_from_model(workflow.name.clone());
     let workflow_slug = workflow.slug.as_ref();
     let workflow_path = project_path(format!(

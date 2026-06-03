@@ -87,13 +87,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowTransitions := [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
+                "def workflowTransitions : List String := [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
             ),
             "Lean artifact must represent the workflow transition"
         );
         assert!(
             quint.contains(
-                "const workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
+                "val workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
             ),
             "Quint artifact must represent the workflow transition"
         );

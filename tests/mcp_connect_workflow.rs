@@ -58,12 +58,12 @@ mod tests {
         assert!(workflow_json.contains("\"via_navigation\": \"review-ticket-screen\""));
         assert!(
             lean.contains(
-                "def workflowTransitions := [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
+                "def workflowTransitions : List String := [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
             )
         );
         assert!(
             quint.contains(
-                "const workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
+                "val workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
             )
         );
 

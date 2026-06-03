@@ -6,14 +6,14 @@
 
 **Architecture:** EMC uses a functional-core/imperative-shell design. All I/O is represented as step/trampoline variant effects interpreted only at the outer shell. The core owns semantic model transformations, emits synchronized Lean4 and Quint canonical representations, derives browser data, and validates drift between all artifacts.
 
-**Tech Stack:** Rust 2024, Clap, rmcp, serde, nutype 0.7.0, Lean4/Lake, Quint, Nix flakes, Vite/React browser copied from EMC for visual parity.
+**Tech Stack:** Rust 2024, Clap, rmcp, serde, nutype 0.7.0, Lean4/Lake, Quint, Nix flakes, Vite/React browser assets, and generated browser data.
 
 ---
 
 ## Non-Negotiable Engineering Rules
 
 - Warnings are errors everywhere: `RUSTFLAGS='-Dwarnings'` for build, test, fmt checks, clippy, and CI.
-- Mirror EMC's strict Rust lint posture: enumerate `clippy::all` lints, keep high-signal lints at `forbid`, and allow only documented exact-lint `deny` carve-outs when third-party macros require them.
+- Maintain a strict Rust lint posture: enumerate `clippy::all` lints, keep high-signal lints at `forbid`, and allow only documented exact-lint `deny` carve-outs when third-party macros require them.
 - Use functional-core/imperative-shell architecture. The model core must be deterministic and side-effect free.
 - All I/O must go through a step/trampoline variant effect pattern. Production code may describe effects but may not perform file, process, network, stdio, clock, or environment I/O inside core modules.
 - Use only semantic data types inside the system. Primitives and structural DTOs are allowed only at I/O boundaries.
@@ -24,7 +24,7 @@
 ## System Shape
 
 - `emc` is the single user-facing executable.
-- CLI subcommands: `init`, `import emc`, `list`, `show`, `add`, `update`, `connect`, `validate`, `verify`, `check`, `generate site`, and `mcp`.
+- CLI subcommands: `init`, `list`, `show`, `add`, `update`, `connect`, `validate`, `verify`, `check`, `generate site`, and `mcp`.
 - MCP transports:
   - `emc mcp stdio` for local editor/agent clients.
   - `emc mcp http` for container/network use with Origin validation, localhost-safe defaults, and authentication when exposed beyond local host.
@@ -39,17 +39,15 @@
 - Quint owns executable state/transition behavior and temporal checks.
 - External Lean4 and Quint tools are acceptable, but they must be pinned and hidden behind the `emc` executable and Nix packaging.
 
-## EMC Compatibility
+## Event Model Rule Coverage
 
-- EMC is an example and compatibility fixture, not EMC's default built-in model.
-- Import current EMC event-model JSON into EMC-generated Lean4 and Quint fixtures.
-- Port the current EMC rule surface as acceptance coverage:
+- Check in the current event-model rule surface as acceptance coverage:
   - 156 validator scenarios.
   - 9 review-gate scenarios.
   - 11 browser scenarios.
   - 6 runner/meta scenarios.
-- Preserve browser visual parity with EMC: layout, styling, workflow selector behavior, timeline composition, branch cards, source chains, control effects, navigation targets, and review overlays.
-- Make visible project title/branding configurable; do not hard-code EMC labels in EMC projects.
+- Preserve browser behavior for layout, styling, workflow selector behavior, timeline composition, branch cards, source chains, control effects, navigation targets, and review overlays.
+- Make visible project title/branding configurable; do not hard-code unrelated product labels in EMC projects.
 - Generate the same browser data shape: `data/index.json`, `data/workflows/*.eventmodel.json`, and `data/slices/*.eventmodel.json`.
 
 ## Implementation Sequence
@@ -58,7 +56,7 @@
 
 - 2026-06-02: `emc check` now rejects workflow drift between browser JSON and generated Lean4/Quint artifacts for workflow identity fields, composed slice lists, and navigation transition lists. It also rejects workflows that reference missing browser slice artifacts. This is deterministic artifact synchronization coverage, not yet the full normalized semantic graph drift check described above.
 - 2026-06-02: Review-gate fixture parity is checked in. `emc review gate --workflow <slug>` and MCP `review_gate` enforce current structured clean reviews for the workflow slug, model digest, required categories, mandatory findings, and clean follow-up review after corrected findings.
-- 2026-06-02: EMC-derived Gherkin fixtures are checked in with scenario-count guardrails for validator, review-gate, browser, and runner/meta suites.
+- 2026-06-02: Event-model Gherkin fixtures are checked in with scenario-count guardrails for validator, review-gate, browser, and runner/meta suites.
 
 ### Task 1: Guardrails and Project Skeleton
 
@@ -102,18 +100,21 @@
 - [ ] Make `emc init` create the full empty project layout through interpreted effects.
 - [ ] Ensure repeated init is deterministic and reports existing files without corrupting content.
 
-### Task 4: EMC Import Compatibility
+### Task 4: Workflow Mutation Coverage
 
 **Files:**
-- Create: `src/emc_import/mod.rs`
-- Create: `tests/fixtures/emc/`
-- Create: `tests/emc_import.rs`
+- Create/modify: `src/core/workflow.rs`
+- Create/modify: `src/core/slice.rs`
+- Create/modify: `src/core/connection.rs`
+- Create/modify: `tests/add_workflow.rs`
+- Create/modify: `tests/add_slice.rs`
+- Create/modify: `tests/connect_workflow.rs`
 
-- [ ] Copy the current EMC event-model workflow and slice fixtures into EMC tests.
-- [ ] Parse EMC JSON only at the import boundary.
-- [ ] Convert imported DTOs into semantic EMC model types immediately.
-- [ ] Emit Lean4, Quint, and browser JSON from the imported semantic graph.
-- [ ] Assert stable digests and no primitive DTO leakage beyond the import boundary.
+- [ ] Create workflows through EMC commands and MCP tools.
+- [ ] Create slices through EMC commands and MCP tools.
+- [ ] Connect workflow steps through EMC commands and MCP tools.
+- [ ] Emit Lean4, Quint, and browser JSON from the same semantic mutation.
+- [ ] Assert stable digests and no primitive DTO leakage beyond command boundaries.
 
 ### Task 5: Validation Rule Port
 
@@ -122,9 +123,9 @@
 - Create: `tests/features/event_model_validator/`
 - Create: `tests/validation_rules.rs`
 
-- [ ] Port EMC validator Gherkin into EMC test fixtures.
+- [ ] Check in validator Gherkin as EMC test fixtures.
 - [ ] Implement validation as pure functions over semantic model types.
-- [ ] Preserve current EMC diagnostics where tests depend on user-facing messages.
+- [ ] Preserve current diagnostics where tests depend on user-facing messages.
 - [ ] Fail validation on Lean/Quint/browser drift.
 
 ### Task 6: Lean4 and Quint Emission
@@ -137,7 +138,7 @@
 
 - [ ] Generate deterministic Lean4 modules for the actual business model.
 - [ ] Generate deterministic Quint modules for the same model.
-- [ ] Add golden tests for imports, workflows, slices, transitions, invariants, and proof/model-check entrypoints.
+- [ ] Add golden tests for workflows, slices, transitions, invariants, and proof/model-check entrypoints.
 - [ ] Ensure generated files are stable across repeated runs.
 
 ### Task 7: Verification Shell
@@ -159,9 +160,9 @@
 - Create: `tests/features/event_model_browser/`
 - Create: `tests/browser_generation.rs`
 
-- [ ] Port EMC browser UI for visual parity.
+- [ ] Preserve the browser UI behavior needed for event-model browsing.
 - [ ] Make title and project branding configurable.
-- [ ] Generate EMC-compatible `data/index.json`, workflow JSON, and slice JSON.
+- [ ] Generate stable `data/index.json`, workflow JSON, and slice JSON.
 - [ ] Preserve composed workflow loading, canonical lanes, timeline ordering, branch rendering, source chains, control effects, navigation targets, and review overlays.
 
 ### Task 9: Review Gate
@@ -171,7 +172,7 @@
 - Create: `tests/features/event_model_review_gate/`
 - Create: `tests/review_gate.rs`
 
-- [ ] Port EMC review-gate semantics.
+- [ ] Implement review-gate semantics from the checked-in rule fixtures.
 - [ ] Store review records by workflow slug and model digest.
 - [ ] Block advancement on stale clean reviews, missing categories, non-clean categories, and mandatory findings.
 - [ ] Require a clean follow-up review after model changes that address findings.
@@ -205,7 +206,7 @@
 - `just ci` passes.
 - `emc check` proves Lean4, Quint, and browser data are synchronized.
 - `emc verify` runs Lean4 and Quint verification through pinned tools.
-- All EMC-derived validator, review-gate, browser, and meta scenarios pass.
+- All validator, review-gate, browser, and meta scenarios pass.
 - Nix app and container image build and pass smoke tests.
 - Public core APIs expose semantic types, not primitives or structural DTOs.
 - Static guardrails prove I/O only appears in shell/interpreter modules.

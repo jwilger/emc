@@ -27,16 +27,19 @@ mod tests {
 
         assert!(quint.contains("module OpenTicket"));
         assert!(quint.contains("// EMC-DIGEST: workflow:Open ticket"));
-        assert!(quint.contains("const workflowName = \"Open ticket\""));
-        assert!(quint.contains("const workflowSlug = \"open-ticket\""));
-        assert!(quint.contains("const workflowDescription = \"Actor opens a repair ticket.\""));
-        assert!(quint.contains("const workflowSlices = [\"capture-ticket\"]"));
+        assert!(quint.contains("val workflowName = \"Open ticket\""));
+        assert!(quint.contains("val workflowSlug = \"open-ticket\""));
+        assert!(quint.contains("val workflowDescription = \"Actor opens a repair ticket.\""));
+        assert!(quint.contains("val workflowSlices = [\"capture-ticket\"]"));
         assert!(
             quint.contains(
-                "const workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
+                "val workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]"
             )
         );
         assert!(quint.contains("val workflowIdentityStable"));
+        assert!(quint.contains("var modelState: int"));
+        assert!(quint.contains("action init = modelState' = 0"));
+        assert!(quint.contains("action step = modelState' = modelState"));
 
         Ok(())
     }

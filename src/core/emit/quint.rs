@@ -15,7 +15,7 @@ pub fn emit_workflow_module(
     let slice_list = slice_list(workflow_slices);
     let transition_list = transition_list(workflow_transitions);
     file_contents(format!(
-        "module {module_name} {{\n  // EMC-DIGEST: {digest}\n  const workflowName = {workflow_name_json}\n  const workflowSlug = {workflow_slug_json}\n  const workflowDescription = {workflow_description_json}\n  const workflowSlices = {slice_list}\n  const workflowTransitions = {transition_list}\n  val workflowIdentityStable = workflowName == {workflow_name_json}\n}}\n",
+        "module {module_name} {{\n  // EMC-DIGEST: {digest}\n  val workflowName = {workflow_name_json}\n  val workflowSlug = {workflow_slug_json}\n  val workflowDescription = {workflow_description_json}\n  val workflowSlices = {slice_list}\n  val workflowTransitions = {transition_list}\n  val workflowIdentityStable = workflowName == {workflow_name_json}\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}}\n",
         module_name = module_name.as_ref(),
         digest = digest.as_ref(),
         workflow_name_json = quoted(workflow_name.as_ref()),

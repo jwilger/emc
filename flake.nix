@@ -63,9 +63,24 @@
 
         cargoToml = ./Cargo.toml;
         hasCargoProject = builtins.pathExists cargoToml;
+        packageSource = pkgs.lib.cleanSourceWith {
+          src = ./.;
+          filter = path: type:
+            let
+              pathText = builtins.toString path;
+            in
+            craneLib.filterCargoSources path type
+            || pkgs.lib.hasSuffix "/flake.nix" pathText
+            || pkgs.lib.hasSuffix "/.github" pathText
+            || pkgs.lib.hasInfix "/.github/" pathText
+            || pkgs.lib.hasSuffix "/browser" pathText
+            || pkgs.lib.hasInfix "/browser/" pathText
+            || pkgs.lib.hasSuffix "/tests" pathText
+            || pkgs.lib.hasInfix "/tests/" pathText;
+        };
 
         emcBinary = craneLib.buildPackage {
-          src = craneLib.cleanCargoSource ./.;
+          src = packageSource;
           strictDeps = true;
           buildInputs = commonBuildInputs;
           nativeBuildInputs = commonNativeBuildInputs;
@@ -105,7 +120,9 @@
             cd "$workdir"
 
             ${package}/bin/emc init --name "Package Smoke"
+            ${package}/bin/emc add workflow --slug package-smoke --name "Package smoke" --description "Packaged EMC verification smoke workflow."
             ${package}/bin/emc check
+            ${package}/bin/emc verify
             ${package}/bin/emc generate site --output site
 
             printf '%s\n' \
@@ -115,8 +132,10 @@
 
             ${package}/bin/emc mcp http --host 127.0.0.1 --port 7332 --once > http.log &
             server_pid="$!"
+            http_body='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"package-smoke","version":"0.0.0"}}}'
+            http_body_length="''${#http_body}"
             for attempt in $(seq 1 50); do
-              if printf 'POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:7332\r\nOrigin: http://127.0.0.1:7332\r\nContent-Type: application/json\r\nContent-Length: 155\r\nConnection: close\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"package-smoke","version":"0.0.0"}}}' \
+              if printf 'POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:7332\r\nOrigin: http://127.0.0.1:7332\r\nContent-Type: application/json\r\nContent-Length: %s\r\nConnection: close\r\n\r\n%s' "$http_body_length" "$http_body" \
                 | nc 127.0.0.1 7332 \
                 | grep '"serverInfo"'; then
                 wait "$server_pid"

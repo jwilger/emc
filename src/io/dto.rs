@@ -5,10 +5,8 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 use serde_json::{Map, Value};
 
 use crate::core::connection::ConnectionKind;
-use crate::core::emc::{EMCSliceImport, EMCWorkflowImport};
-use crate::core::effect::FileContents;
 use crate::core::gherkin::GherkinSuite;
-use crate::core::layout::ImportedWorkflowLayout;
+use crate::core::layout::ModeledWorkflowLayout;
 use crate::core::project::ProjectName;
 use crate::core::slice::SliceKind;
 use crate::core::types::{
@@ -103,7 +101,7 @@ pub fn parse_project_manifest_name(raw: &str) -> Result<ProjectName, BoundaryPar
 
 pub fn parse_browser_index_workflows(
     raw: &str,
-) -> Result<Vec<ImportedWorkflowLayout>, BoundaryParseError> {
+) -> Result<Vec<ModeledWorkflowLayout>, BoundaryParseError> {
     let value = serde_json::from_str::<Value>(raw)
         .map_err(|error| BoundaryParseError::new(format!("invalid browser index JSON: {error}")))?;
     let workflows = value
@@ -136,55 +134,9 @@ pub fn parse_browser_index_workflows(
                 .ok_or_else(|| BoundaryParseError::new("browser index workflow path is invalid"))
                 .and_then(parse_workflow_slug)?;
 
-            Ok(ImportedWorkflowLayout::new(name, description, slug))
+            Ok(ModeledWorkflowLayout::new(name, description, slug))
         })
         .collect()
-}
-
-pub fn parse_emc_workflow_import(
-    slug: WorkflowSlug,
-    raw_json: &str,
-    slices: Vec<EMCSliceImport>,
-) -> Result<EMCWorkflowImport, BoundaryParseError> {
-    let value = serde_json::from_str::<Value>(raw_json)
-        .map_err(|error| BoundaryParseError::new(format!("invalid EMC workflow JSON: {error}")))?;
-    let name = value
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| BoundaryParseError::new("EMC workflow is missing name"))
-        .and_then(parse_model_name)?;
-    let description = value
-        .get("description")
-        .and_then(Value::as_str)
-        .ok_or_else(|| BoundaryParseError::new("EMC workflow is missing description"))
-        .and_then(parse_model_description)?;
-    let json = FileContents::try_new(raw_json.to_owned()).map_err(|error| {
-        BoundaryParseError::new(format!("invalid EMC workflow content: {error}"))
-    })?;
-
-    Ok(EMCWorkflowImport::new(
-        name,
-        description,
-        slug,
-        json,
-        slices,
-    ))
-}
-
-pub fn parse_emc_slice_import(
-    slug: SliceSlug,
-    raw_json: &str,
-) -> Result<EMCSliceImport, BoundaryParseError> {
-    let value = serde_json::from_str::<Value>(raw_json)
-        .map_err(|error| BoundaryParseError::new(format!("invalid EMC slice JSON: {error}")))?;
-    value
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| BoundaryParseError::new("EMC slice is missing name"))?;
-    let json = FileContents::try_new(raw_json.to_owned())
-        .map_err(|error| BoundaryParseError::new(format!("invalid EMC slice content: {error}")))?;
-
-    Ok(EMCSliceImport::new(slug, json))
 }
 
 pub fn parse_workflow_slug(raw: &str) -> Result<WorkflowSlug, BoundaryParseError> {

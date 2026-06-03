@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-    use std::path::PathBuf;
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -10,7 +9,6 @@ mod tests {
     #[test]
     fn mcp_stdio_exposes_list_workflows_tool() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
-        let emc_event_model = workspace_root().join("../emc/docs/event-model");
 
         Command::cargo_bin("emc")?
             .args(["init", "--name", "Repair Desk"])
@@ -19,8 +17,16 @@ mod tests {
             .success();
 
         Command::cargo_bin("emc")?
-            .args(["import", "emc", "--source"])
-            .arg(&emc_event_model)
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -35,10 +41,10 @@ mod tests {
             .stdout(predicate::str::contains("\"list_workflows\""))
             .stdout(predicate::str::contains("\"show_workflow\""))
             .stdout(predicate::str::contains("\"generate_site\""))
-            .stdout(predicate::str::contains("Organization access"))
+            .stdout(predicate::str::contains("Open ticket"))
             .stdout(predicate::str::contains("generated site at mcp-site"))
             .stdout(predicate::str::contains(
-                "\\\"name\\\": \\\"Organization access\\\"",
+                "\\\"name\\\": \\\"Open ticket\\\"",
             ));
 
         assert!(temp_dir.path().join("mcp-site/index.html").is_file());
@@ -58,12 +64,8 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_workflows\",\"arguments\":{}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"show_workflow\",\"arguments\":{\"slug\":\"organization-access\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"show_workflow\",\"arguments\":{\"slug\":\"open-ticket\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"generate_site\",\"arguments\":{\"output\":\"mcp-site\"}}}\n",
         )
-    }
-
-    fn workspace_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
     }
 }
