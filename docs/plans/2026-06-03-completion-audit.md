@@ -30,7 +30,7 @@ output, and mechanical guardrails.
 | Deterministic drift checking | `emc check` rejects drift across browser data, Lean4 workflow artifacts, Quint workflow artifacts, slice artifacts, root artifacts, tool config, duplicate metadata, unmodeled artifacts, stale declarations, and generated browser data. | Strong evidence | Strengthen only if normalized graph reading is adopted. |
 | Lean4 proof surface | Generated Lean4 modules include identity, slice-detail, transition-structure, root namespace, and slice identity obligations. Check coverage rejects stale or tautological declarations in the current proof surface. | Strong evidence | Final proof-surface audit for meaningful obligations versus marker-only declarations before closing the goal. |
 | Quint model surface | Generated Quint modules include executable workflow and slice invariants, init and step surfaces, and pinned verification through `emc verify`. | Strong evidence | Final model-surface audit for each emitted invariant and transition surface. |
-| Event-model validation rules | Gherkin fixture counts are checked in for validator, review-gate, browser, and runner/meta suites. Validator tests cover a broad set of structure, source, slice, board, timeline, outcome, review, and browser-data diagnostics. | Partial evidence | Map every checked-in scenario to an executable Rust assertion or runner path, then close any skipped or fixture-only cases. |
+| Event-model validation rules | Gherkin fixture counts are checked in for validator, review-gate, browser, and runner/meta suites. Validator tests cover a broad set of structure, source, slice, board, timeline, outcome, review, and browser-data diagnostics. `docs/gherkin-traceability.md` maps every checked-in scenario to the Rust test target that executes its rule surface, and `tests/rule_fixtures.rs` keeps the map synchronized with feature paths, scenario titles, and expected executable targets. | Strong evidence | Keep scenario traceability current as rules are added, removed, or moved. |
 | Review gate | CLI and MCP review gate enforce current clean reviews for workflow slug, digest, categories, mandatory findings, stale reviews, and clean follow-up. Review record creation is deterministic, package-smoked, and advertises its strict timestamp contract over MCP. | Strong evidence | Keep review schema metadata synchronized with semantic boundary parsers. |
 | Generated browser site | `emc generate site` produces stable browser data and replaces stale output. Browser composition tests cover workflow selector data, lanes, main path, branch cards, source chains, controls, navigation targets, command/view definitions, and review overlays. Nix package smoke serves the generated site and renders it through headless Chromium, asserting project, workflow, and slice text in the rendered DOM. | Strong evidence | Keep rendered package smoke current as browser assets change. |
 | Browser visual parity | Browser assets now accept project branding and avoid unrelated labels. Composition tests preserve the key data contracts, and package smoke proves the browser runtime renders modeled content. | Partial evidence | Add higher-fidelity interaction or screenshot/pixel smoke if exact visual parity remains a closure requirement beyond rendered DOM behavior. |
@@ -42,18 +42,15 @@ output, and mechanical guardrails.
 
 ## Highest-Value Remaining Increments
 
-1. **Validation rule map:** create a mechanical map from each checked-in
-   validation, review-gate, browser, and runner/meta scenario to executable
-   coverage, then close any fixture-only scenarios.
-2. **Semantic-boundary audit:** scan public core APIs and validation internals
+1. **Semantic-boundary audit:** scan public core APIs and validation internals
    for primitive or structural DTO leakage and add static guardrails for any
    uncovered regression class.
-3. **Formal graph decision:** either implement Lean4/Quint artifact readers that
+2. **Formal graph decision:** either implement Lean4/Quint artifact readers that
    normalize formal artifacts back into semantic graph data, or explicitly
    narrow the goal to deterministic generated declarations, digests, and tool
    verification. The original goal wording leans toward the stronger graph
    reader, so treat this as an open decision until resolved.
-4. **Final closure pass:** rerun `just ci`, local mutation testing appropriate to
+3. **Final closure pass:** rerun `just ci`, local mutation testing appropriate to
    the touched Rust surface, `nix flake check`, package smoke, forbidden scan,
    and a line-by-line goal audit before declaring the full goal complete.
 
@@ -62,6 +59,6 @@ output, and mechanical guardrails.
 EMC has strong implementation evidence for the binary, command surfaces, MCP
 access, deterministic mutation paths, formal artifact emission, drift checks,
 review gate, rendered browser execution, strict lints, mutation-testing
-workflow, and Nix packaging. The goal should not be closed until validation
-scenario traceability, semantic-boundary coverage, and the Lean4/Quint
-normalized graph decision are resolved.
+workflow, validation scenario traceability, and Nix packaging. The goal should
+not be closed until semantic-boundary coverage and the Lean4/Quint normalized
+graph decision are resolved.
