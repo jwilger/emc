@@ -18,20 +18,33 @@ pub fn validate_event_model_sources(
     sources.iter().try_for_each(|(path, source)| {
         validate_workflow_referenced_slice_file_paths(path, source)
     })?;
-    let documents = sources
+    let parsed_sources = sources
         .iter()
         .map(|(path, source)| parse_and_validate_event_model_file(path, source))
         .collect::<Result<Vec<_>, _>>()?;
+    let documents = parsed_sources
+        .iter()
+        .map(|source| source.document.clone())
+        .collect::<Vec<_>>();
     validate_event_model_corpus(&documents)
         .map_err(|issue| ShellError::message(format!("{} in {}", issue, target.as_ref())))?;
-    let lookup_sources = sources
+    let parsed_referenced_sources = referenced_sources
         .iter()
-        .cloned()
-        .chain(referenced_sources.iter().cloned())
+        .map(|(path, source)| parse_and_validate_referenced_event_model_file(path, source))
+        .collect::<Result<Vec<_>, _>>()?;
+    let lookup_sources = parsed_sources
+        .into_iter()
+        .chain(parsed_referenced_sources)
         .collect::<Vec<_>>();
     sources.iter().try_for_each(|(path, source)| {
         validate_workflow_referenced_slice_files(&lookup_sources, path, source)
     })
+}
+
+#[derive(Clone)]
+struct ParsedEventModelSource {
+    path: ProjectPath,
+    document: EventModelDocument,
 }
 
 fn validate_workflow_referenced_slice_file_paths(
@@ -80,18 +93,65 @@ fn validate_referenced_slice_file_path(
 fn parse_and_validate_event_model_file(
     path: &ProjectPath,
     source: &FileContents,
-) -> Result<EventModelDocument, ShellError> {
+) -> Result<ParsedEventModelSource, ShellError> {
+    parse_and_validate_event_model_source(
+        path,
+        source,
+        event_model_file_kind(path),
+        EventModelParseContext::Primary,
+    )
+}
+
+fn parse_and_validate_referenced_event_model_file(
+    path: &ProjectPath,
+    source: &FileContents,
+) -> Result<ParsedEventModelSource, ShellError> {
+    parse_and_validate_event_model_source(
+        path,
+        source,
+        EventModelFileKind::Slice,
+        EventModelParseContext::ReferencedSlice,
+    )
+}
+
+fn parse_and_validate_event_model_source(
+    path: &ProjectPath,
+    source: &FileContents,
+    file_kind: EventModelFileKind,
+    context: EventModelParseContext,
+) -> Result<ParsedEventModelSource, ShellError> {
     JsonObjectDocument::reject_duplicate_keys(source)
-        .map_err(|error| ShellError::message(format!("{} in {}", error, path.as_ref())))?;
-    let document = parse_event_model_document(source.as_ref(), event_model_file_kind(path))
-        .map_err(|error| ShellError::message(format!("{} in {}", error, path.as_ref())))?;
-    validate_event_model(&document)
-        .map_err(|issue| ShellError::message(format!("{} in {}", issue, path.as_ref())))?;
-    Ok(document)
+        .map_err(|error| context.error(path, error.to_string()))?;
+    let document = parse_event_model_document(source.as_ref(), file_kind)
+        .map_err(|error| context.error(path, error.to_string()))?;
+    validate_event_model(&document).map_err(|issue| context.error(path, issue.to_string()))?;
+    Ok(ParsedEventModelSource {
+        path: path.clone(),
+        document,
+    })
+}
+
+#[derive(Clone, Copy)]
+enum EventModelParseContext {
+    Primary,
+    ReferencedSlice,
+}
+
+impl EventModelParseContext {
+    fn error(self, path: &ProjectPath, message: String) -> ShellError {
+        match self {
+            Self::Primary => ShellError::message(format!("{} in {}", message, path.as_ref())),
+            Self::ReferencedSlice => ShellError::message(format!(
+                "referenced slice file {} is invalid: {}",
+                path.as_ref(),
+                message
+            )),
+        }
+    }
 }
 
 fn validate_workflow_referenced_slice_files(
-    sources: &[(ProjectPath, FileContents)],
+    sources: &[ParsedEventModelSource],
     path: &ProjectPath,
     source: &FileContents,
 ) -> Result<(), ShellError> {
@@ -124,36 +184,18 @@ fn optional_workflow_slice_files(
 }
 
 fn validate_referenced_slice_file(
-    sources: &[(ProjectPath, FileContents)],
+    sources: &[ParsedEventModelSource],
     workflow_path: &ProjectPath,
     slice_file: ProjectPath,
 ) -> Result<(), ShellError> {
-    let Some((_path, source)) = sources
-        .iter()
-        .find(|(source_path, _contents)| source_path == &slice_file)
-    else {
+    let Some(_source) = sources.iter().find(|source| source.path == slice_file) else {
         return Err(ShellError::message(format!(
             "missing referenced slice file {} in {}",
             slice_file.as_ref(),
             workflow_path.as_ref()
         )));
     };
-    let document = parse_event_model_document(source.as_ref(), EventModelFileKind::Slice).map_err(
-        |error| {
-            ShellError::message(format!(
-                "referenced slice file {} is invalid: {}",
-                slice_file.as_ref(),
-                error
-            ))
-        },
-    )?;
-    validate_event_model(&document).map_err(|issue| {
-        ShellError::message(format!(
-            "referenced slice file {} is invalid: {}",
-            slice_file.as_ref(),
-            issue
-        ))
-    })
+    Ok(())
 }
 
 fn referenced_slice_path(

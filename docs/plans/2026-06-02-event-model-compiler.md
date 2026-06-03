@@ -168,6 +168,7 @@
 - 2026-06-03: MCP `record_clean_review` now advertises the deterministic UTC millisecond `reviewed_at` contract in its JSON Schema with `format: date-time` and the exact timestamp pattern accepted by the semantic boundary parser.
 - 2026-06-03: The Nix package smoke gate now serves the generated site and renders it through Nix-provided headless Chromium, asserting rendered project, workflow, and slice text from the packaged EMC output.
 - 2026-06-03: Every checked-in Gherkin scenario now has a checked-in traceability row mapping its feature path and scenario title to the expected executable Rust test target, and `tests/rule_fixtures.rs` keeps the map synchronized with validator, review-gate, browser, and runner/meta feature suites.
+- 2026-06-03: Validation orchestration now parses raw event-model source files through one shared raw-to-semantic path before rule checks, including referenced slice files. An architecture guardrail prevents a second `parse_event_model_document` call site from returning to `src/event_model_validation.rs`.
 
 ### Task 1: Guardrails and Project Skeleton
 
