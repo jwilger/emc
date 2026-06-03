@@ -8,6 +8,7 @@ use crate::core::emc::{EMCSliceImport, EMCWorkflowImport};
 use crate::core::effect::FileContents;
 use crate::core::layout::ImportedWorkflowLayout;
 use crate::core::project::ProjectName;
+use crate::core::slice::SliceKind;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelDigest, ModelName, QuintModuleName, SliceSlug,
     WorkflowSlug,
@@ -180,6 +181,18 @@ pub fn parse_workflow_slug(raw: &str) -> Result<WorkflowSlug, BoundaryParseError
 pub fn parse_slice_slug(raw: &str) -> Result<SliceSlug, BoundaryParseError> {
     SliceSlug::try_new(slugify(raw))
         .map_err(|error| BoundaryParseError::new(format!("invalid slice slug: {error}")))
+}
+
+pub fn parse_slice_kind(raw: &str) -> Result<SliceKind, BoundaryParseError> {
+    match raw.trim() {
+        "state_view" => Ok(SliceKind::state_view()),
+        "state_change" => Ok(SliceKind::state_change()),
+        "translation" => Ok(SliceKind::translation()),
+        "automation" => Ok(SliceKind::automation()),
+        _ => Err(BoundaryParseError::new(format!(
+            "invalid slice type: {raw}"
+        ))),
+    }
 }
 
 pub fn parse_lean_module_name(raw: &str) -> Result<LeanModuleName, BoundaryParseError> {

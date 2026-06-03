@@ -6,11 +6,13 @@ use serde_json::{Value, json};
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath};
 use crate::core::layout::{list_workflows, show_workflow};
 use crate::core::site::generate_site;
+use crate::core::slice::{NewSlice, add_slice};
 use crate::core::verify::verify_project;
 use crate::core::workflow::{NewWorkflow, add_workflow, update_workflow_description};
 use crate::event_model_validation::validate_target;
 use crate::io::dto::{
-    parse_browser_index_workflows, parse_model_description, parse_model_name, parse_workflow_slug,
+    parse_browser_index_workflows, parse_model_description, parse_model_name, parse_slice_kind,
+    parse_slice_slug, parse_workflow_slug,
 };
 use crate::shell::{ShellError, interpret_collect_reports};
 use std::path::Path;
@@ -155,6 +157,32 @@ fn tools_list_result() -> Value {
                 }
             },
             {
+                "name": "add_slice",
+                "description": "Add a business slice to a workflow composition.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "workflow": {
+                            "type": "string"
+                        },
+                        "slug": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "type": {
+                            "type": "string"
+                        },
+                        "description": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["workflow", "slug", "name", "type", "description"],
+                    "additionalProperties": false
+                }
+            },
+            {
                 "name": "update_workflow",
                 "description": "Update a business workflow and regenerate synchronized model artifacts.",
                 "inputSchema": {
@@ -212,6 +240,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "add_workflow" => Ok(Some(success_response(
             id,
             tool_result(add_workflow_tool_text(request)?),
+        ))),
+        "add_slice" => Ok(Some(success_response(
+            id,
+            tool_result(add_slice_tool_text(request)?),
         ))),
         "update_workflow" => Ok(Some(success_response(
             id,
@@ -323,6 +355,70 @@ fn add_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
         NewWorkflow::new(name, description, slug),
     ))
     .map(|reports| reports.join("\n"))
+}
+
+fn add_slice_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_slice requires arguments"))?;
+    let workflow_slug = arguments
+        .get("workflow")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_slice requires workflow"))
+        .and_then(|raw_workflow| {
+            parse_workflow_slug(raw_workflow)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let slice_slug = arguments
+        .get("slug")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_slice requires slug"))
+        .and_then(|raw_slug| {
+            parse_slice_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let slice_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_slice requires name"))
+        .and_then(|raw_name| {
+            parse_model_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let slice_kind = arguments
+        .get("type")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_slice requires type"))
+        .and_then(|raw_type| {
+            parse_slice_kind(raw_type).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let slice_description = arguments
+        .get("description")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_slice requires description"))
+        .and_then(|raw_description| {
+            parse_model_description(raw_description)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let workflow_document = fs::read_to_string(format!(
+        "model/browser/data/workflows/{}.eventmodel.json",
+        workflow_slug.as_ref()
+    ))
+    .map_err(|error| ShellError::message(error.to_string()))
+    .and_then(|contents| {
+        FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
+    })?;
+    let plan = add_slice(
+        workflow_document,
+        NewSlice::new(
+            workflow_slug,
+            slice_slug,
+            slice_name,
+            slice_description,
+            slice_kind,
+        ),
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(plan).map(|reports| reports.join("\n"))
 }
 
 fn update_workflow_tool_text(request: &Value) -> Result<String, ShellError> {

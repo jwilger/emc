@@ -4,6 +4,7 @@ pub mod emit;
 pub mod layout;
 pub mod project;
 pub mod site;
+pub mod slice;
 pub mod types;
 pub mod validation;
 pub mod verify;
