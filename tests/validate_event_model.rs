@@ -1114,6 +1114,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_views_that_do_not_handle_command_errors() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("submit-lesson.eventmodel.json"),
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lesson_submission\"}],\"events\":[{\"name\":\"LessonSubmittedForReview\",\"stream\":\"lesson_submission\",\"attributes\":[]}],\"commands\":[{\"name\":\"SubmitLessonForReview\",\"inputs\":[],\"produces\":[\"LessonSubmittedForReview\"],\"errors\":[\"checkpoint_evidence_required\"]}],\"read_models\":[],\"views\":[{\"name\":\"lesson_screen\",\"wireframe\":\"<button data-ref=\\\"Submit lesson\\\"></button>\",\"uses_read_models\":[],\"controls\":[{\"label\":\"Submit lesson\",\"command\":\"SubmitLessonForReview\"}]}],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_change\",\"commands\":[\"SubmitLessonForReview\"],\"events\":[\"LessonSubmittedForReview\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"submit lesson\",\"given\":[],\"given_streams\":[{\"stream\":\"lesson_submission\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"LessonSubmittedForReview\"]},{\"name\":\"checkpoint evidence required\",\"given\":[],\"when\":{},\"then\":[\"error checkpoint_evidence_required is returned\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "view 'lesson_screen' control 'Submit lesson' does not handle command error 'checkpoint_evidence_required'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_view_fields_without_source_provenance() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");
