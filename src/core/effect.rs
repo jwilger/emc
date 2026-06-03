@@ -77,31 +77,52 @@ pub enum Effect {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct EffectPlan {
-    effects: Vec<Effect>,
+    effects: Effects,
 }
 
 impl EffectPlan {
-    pub fn new(effects: Vec<Effect>) -> Self {
+    pub(crate) fn new(effects: Vec<Effect>) -> Self {
+        Self {
+            effects: Effects::new(effects),
+        }
+    }
+
+    pub fn effects(&self) -> &Effects {
+        &self.effects
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Effects {
+    effects: Vec<Effect>,
+}
+
+impl Effects {
+    pub(crate) fn new(effects: Vec<Effect>) -> Self {
         Self { effects }
     }
 
-    pub fn effects(&self) -> &[Effect] {
-        &self.effects
+    pub fn iter(&self) -> impl Iterator<Item = &Effect> {
+        self.effects.iter()
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ProcessInvocation {
     program: ProgramName,
-    arguments: Vec<ProcessArgument>,
+    arguments: ProcessArguments,
     success: ReportLine,
 }
 
 impl ProcessInvocation {
-    pub fn new(program: ProgramName, arguments: Vec<ProcessArgument>, success: ReportLine) -> Self {
+    pub(crate) fn new(
+        program: ProgramName,
+        arguments: Vec<ProcessArgument>,
+        success: ReportLine,
+    ) -> Self {
         Self {
             program,
-            arguments,
+            arguments: ProcessArguments::new(arguments),
             success,
         }
     }
@@ -110,12 +131,27 @@ impl ProcessInvocation {
         &self.program
     }
 
-    pub fn arguments(&self) -> &[ProcessArgument] {
+    pub fn arguments(&self) -> &ProcessArguments {
         &self.arguments
     }
 
     pub fn success(&self) -> &ReportLine {
         &self.success
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ProcessArguments {
+    arguments: Vec<ProcessArgument>,
+}
+
+impl ProcessArguments {
+    pub(crate) fn new(arguments: Vec<ProcessArgument>) -> Self {
+        Self { arguments }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &ProcessArgument> {
+        self.arguments.iter()
     }
 }
 
