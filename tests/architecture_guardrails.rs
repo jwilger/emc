@@ -412,6 +412,33 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn browser_transition_cards_use_semantic_workflow_documents() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/core/browser.rs")?;
+        let violations = [
+            "fn workflow_transition_cards(",
+            "fn step_transition_cards(",
+            "fn transition_target_name(",
+            "fn workflow_step_name_for_slice(",
+            "fn transition_kind_and_label(",
+            "fn transition_display_name(",
+        ]
+        .iter()
+        .filter(|marker| source.contains(**marker))
+        .map(|marker| {
+            format!("src/core/browser.rs duplicates workflow transition semantics via `{marker}`")
+        })
+        .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "browser composition must derive transition cards from WorkflowDocument"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",
