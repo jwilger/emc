@@ -195,7 +195,8 @@ Most day-to-day work follows this loop:
    model.
 
 If `emc check` fails, fix synchronization drift before running `emc verify`.
-Verification assumes the generated formal artifacts match the browser model.
+The generated Lean4 and Quint artifacts are the model authority; browser JSON is
+a generated projection for humans and the browser runtime.
 
 ## Mental model
 
@@ -222,15 +223,14 @@ An invariant is a rule that should remain true about the generated model. EMC
 generates Lean4 and Quint artifacts so those invariants can be checked
 mechanically for the actual business workflows and slices in the project.
 
-EMC writes three synchronized representations:
+EMC writes formal artifacts and browser projections:
 
-- browser JSON for the generated site;
 - Lean4 modules under `model/lean`;
-- Quint modules under `model/quint`.
+- Quint modules under `model/quint`;
+- browser JSON projected for the generated site.
 
-The browser representation is for humans. The Lean4 and Quint representations
-are for mechanical guardrails. All three should describe the same business
-event model.
+The browser representation is for humans. Lean4 and Quint are the authoritative
+representation of the business event model EMC is building.
 
 ## Project layout
 
@@ -370,9 +370,9 @@ timestamp such as `2026-06-03T00:00:00.000Z`.
 
 ## Browser output
 
-`emc generate site --output <directory>` copies the browser application and the
-current model data into a browsable site. The generated browser data shape is
-stable and intended for the EMC browser:
+`emc generate site --output <directory>` copies the browser application and
+projects synchronized Lean4 and Quint workflow artifacts into a browsable site.
+The generated browser data shape is stable and intended for the EMC browser:
 
 ```text
 data/index.json
@@ -382,7 +382,9 @@ data/slices/*.eventmodel.json
 
 The browser is meant for people who need to inspect workflows, timeline order,
 branch cards, source chains, control effects, navigation targets, and review
-overlays without reading generated formal artifacts.
+overlays without reading generated formal artifacts. The generated
+`data/**/*.eventmodel.json` files are read-model projections, not the source of
+truth for EMC-managed models.
 
 ## Validation and review gates
 

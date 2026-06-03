@@ -60,6 +60,7 @@ pub enum Effect {
     RequireWorkflowTransitions(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RunProcess(ProcessInvocation),
     RecordCleanReviewFromWorkflow(WorkflowSlug, ReviewerId, ReviewTimestamp),
+    RemoveDirectory(ProjectPath),
     RemoveFile(ProjectPath),
     RemoveSliceFromWorkflow(SliceSlug),
     RemoveTransitionFromWorkflow(WorkflowTransitionRemoval),

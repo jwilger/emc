@@ -184,11 +184,72 @@ mod tests {
     }
 
     #[test]
-    fn generate_site_rejects_invalid_modeled_workflows() -> Result<(), Box<dyn Error>> {
+    fn generate_site_projects_browser_data_from_formal_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let browser_workflow = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        write(
+            &browser_workflow,
+            "{\n  \"name\": \"Stale ticket\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Stale browser projection.\",\n  \"steps\": []\n}\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["generate", "site", "--output", "site"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("generated site at site"));
+
+        let projected_workflow = read_to_string(
+            temp_dir
+                .path()
+                .join("site/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        assert!(
+            projected_workflow.contains("\"name\": \"Open ticket\""),
+            "site data must use the formal workflow name, not stale browser JSON"
+        );
+        assert!(
+            projected_workflow.contains("\"description\": \"Actor opens a repair ticket.\""),
+            "site data must use the formal workflow description, not stale browser JSON"
+        );
+        assert!(
+            !projected_workflow.contains("Stale"),
+            "site data must not copy stale browser JSON"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn generate_site_rejects_unsynchronized_formal_workflows() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         initialize_navigation_chain(temp_dir.path())?;
 
-        remove_first_workflow_transition_fixture(temp_dir.path(), "intake-visit")?;
+        stale_first_lean_workflow_transition_fixture(temp_dir.path())?;
 
         Command::cargo_bin("emc")?
             .args(["generate", "site", "--output", "site"])
@@ -196,7 +257,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "Lean workflow transition drift for workflow Intake visit",
+                "Lean and Quint workflow artifacts disagree for workflow intake-visit",
             ));
 
         Ok(())
@@ -323,25 +384,13 @@ mod tests {
         Ok(())
     }
 
-    fn remove_first_workflow_transition_fixture(
-        cwd: &Path,
-        workflow: &str,
-    ) -> Result<(), Box<dyn Error>> {
-        let path = cwd.join(format!(
-            "model/browser/data/workflows/{workflow}.eventmodel.json"
-        ));
-        let mut workflow_json: serde_json::Value = serde_json::from_str(&read_to_string(&path)?)?;
-        let steps = workflow_json
-            .get_mut("steps")
-            .and_then(serde_json::Value::as_array_mut)
-            .ok_or("workflow fixture is missing steps")?;
-        let transitions = steps
-            .first_mut()
-            .and_then(|step| step.get_mut("transitions"))
-            .and_then(serde_json::Value::as_array_mut)
-            .ok_or("workflow fixture first step is missing transitions")?;
-        transitions.clear();
-        write(path, serde_json::to_string_pretty(&workflow_json)?)?;
+    fn stale_first_lean_workflow_transition_fixture(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        let path = cwd.join("model/lean/IntakeVisit.lean");
+        let artifact = read_to_string(&path)?;
+        write(
+            path,
+            artifact.replace("triage-intake-screen", "stale-intake-screen"),
+        )?;
         Ok(())
     }
 }

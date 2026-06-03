@@ -40,6 +40,23 @@ impl FormalWorkflowGraph {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct FormalWorkflowGraphs {
+    graphs: Vec<FormalWorkflowGraph>,
+}
+
+impl FormalWorkflowGraphs {
+    pub fn from_graphs(graphs: impl IntoIterator<Item = FormalWorkflowGraph>) -> Self {
+        Self {
+            graphs: graphs.into_iter().collect(),
+        }
+    }
+
+    pub(crate) fn into_inner(self) -> Vec<FormalWorkflowGraph> {
+        self.graphs
+    }
+}
+
 pub fn workflow_graph_from_document(
     workflow_slug: WorkflowSlug,
     workflow_document: FileContents,
