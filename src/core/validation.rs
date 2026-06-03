@@ -1811,6 +1811,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_views_have_wireframes(document))
         .and_then(|()| validate_wireframe_tokens_are_modeled(document))
         .and_then(|()| validate_view_fields_appear_in_wireframes(document))
+        .and_then(|()| validate_view_controls_appear_in_wireframes(document))
 }
 
 pub fn validate_event_model_corpus(
@@ -3461,6 +3462,30 @@ fn view_field_missing_from_wireframe(
         .iter()
         .find(|field| !view.wireframe.tokens().contains(field))
         .map(|field| (view, field))
+}
+
+fn validate_view_controls_appear_in_wireframes(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .find_map(view_control_missing_from_wireframe)
+        .map_or(Ok(()), |(view, control)| {
+            Err(validation_issue(format!(
+                "view '{}' wireframe does not reference control '{}'",
+                view.name, control.label
+            )))
+        })
+}
+
+fn view_control_missing_from_wireframe(
+    view: &ViewDefinition,
+) -> Option<(&ViewDefinition, &ViewControlDefinition)> {
+    view.controls
+        .iter()
+        .find(|control| !view.wireframe.tokens().contains(&control.label))
+        .map(|control| (view, control))
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
