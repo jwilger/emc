@@ -1,6 +1,12 @@
 # Event Model Compiler Full-System Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status:** This plan is retained as the historical implementation sequence.
+> The initial checklist below has been completed; the authoritative current
+> completion evidence is in `docs/plans/2026-06-03-completion-audit.md`.
+
+> **For agentic workers:** If future work reopens a new implementation plan,
+> use superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement that plan task-by-task.
 
 **Goal:** Build EMC as a Rust executable that lets users create, modify, validate, browse, and serve business event models through CLI and MCP without requiring Lean4 or Quint knowledge.
 
@@ -24,7 +30,7 @@
 ## System Shape
 
 - `emc` is the single user-facing executable.
-- CLI subcommands: `init`, `list`, `show`, `add`, `update`, `connect`, `validate`, `verify`, `check`, `generate site`, and `mcp`.
+- CLI subcommands: `init`, `list`, `show`, `add`, `update`, `remove`, `connect`, `validate`, `verify`, `check`, `generate site`, `gherkin`, `review`, and `mcp`.
 - MCP transports:
   - `emc mcp stdio` for local editor/agent clients.
   - `emc mcp http` for container/network use with Origin validation, localhost-safe defaults, and authentication when exposed beyond local host.
@@ -51,6 +57,11 @@
 - Generate the same browser data shape: `data/index.json`, `data/workflows/*.eventmodel.json`, and `data/slices/*.eventmodel.json`.
 
 ## Implementation Sequence
+
+The file lists below are the original implementation targets from the plan.
+Current paths differ in a few places after implementation; the progress notes
+above and completion audit are authoritative for current file names and test
+targets.
 
 ## Progress Notes
 
@@ -188,11 +199,11 @@
 - Create: `justfile`
 - Modify: `flake.nix`
 
-- [ ] Write failing tests for `emc init` producing a deterministic project effect plan without touching the filesystem in core code.
-- [ ] Add Rust manifest with `nutype = "0.7.0"`, strict lints, and CLI/test dependencies.
-- [ ] Add just recipes using `RUSTFLAGS='-Dwarnings'`.
-- [ ] Implement only enough step/trampoline infrastructure and shell interpretation for `emc init`.
-- [ ] Verify `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, and `just ci`.
+- [x] Write failing tests for `emc init` producing a deterministic project effect plan without touching the filesystem in core code.
+- [x] Add Rust manifest with `nutype = "0.7.0"`, strict lints, and CLI/test dependencies.
+- [x] Add just recipes using `RUSTFLAGS='-Dwarnings'`.
+- [x] Implement only enough step/trampoline infrastructure and shell interpretation for `emc init`.
+- [x] Verify `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, and `just ci`.
 
 ### Task 2: Semantic Type Layer
 
@@ -201,10 +212,10 @@
 - Create: `src/io/dto.rs`
 - Create: `tests/semantic_types.rs`
 
-- [ ] Define `nutype` semantic types for project names, model names, workflow slugs, slice slugs, definition names, file paths, digests, Lean module names, and Quint module names.
-- [ ] Keep raw primitives only in DTO modules and CLI argument structs.
-- [ ] Add parse-don't-validate tests proving invalid boundary data cannot enter core APIs.
-- [ ] Add lint tests that reject primitive-bearing public core APIs except explicitly marked boundary modules.
+- [x] Define `nutype` semantic types for project names, model names, workflow slugs, slice slugs, definition names, file paths, digests, Lean module names, and Quint module names.
+- [x] Keep raw primitives only in DTO modules and CLI argument structs.
+- [x] Add parse-don't-validate tests proving invalid boundary data cannot enter core APIs.
+- [x] Add lint tests that reject primitive-bearing public core APIs except explicitly marked boundary modules.
 
 ### Task 3: EMC Project Layout
 
@@ -212,9 +223,9 @@
 - Create: `src/core/layout.rs`
 - Create: `tests/project_layout.rs`
 
-- [ ] Define deterministic project paths for Lean4, Quint, browser data, generated site, review records, and compatibility fixtures.
-- [ ] Make `emc init` create the full empty project layout through interpreted effects.
-- [ ] Ensure repeated init is deterministic and reports existing files without corrupting content.
+- [x] Define deterministic project paths for Lean4, Quint, browser data, generated site, review records, and compatibility fixtures.
+- [x] Make `emc init` create the full empty project layout through interpreted effects.
+- [x] Ensure repeated init is deterministic and reports existing files without corrupting content.
 
 ### Task 4: Workflow Mutation Coverage
 
@@ -226,11 +237,11 @@
 - Create/modify: `tests/add_slice.rs`
 - Create/modify: `tests/connect_workflow.rs`
 
-- [ ] Create workflows through EMC commands and MCP tools.
-- [ ] Create slices through EMC commands and MCP tools.
-- [ ] Connect workflow steps through EMC commands and MCP tools.
-- [ ] Emit Lean4, Quint, and browser JSON from the same semantic mutation.
-- [ ] Assert stable digests and no primitive DTO leakage beyond command boundaries.
+- [x] Create workflows through EMC commands and MCP tools.
+- [x] Create slices through EMC commands and MCP tools.
+- [x] Connect workflow steps through EMC commands and MCP tools.
+- [x] Emit Lean4, Quint, and browser JSON from the same semantic mutation.
+- [x] Assert stable digests and no primitive DTO leakage beyond command boundaries.
 
 ### Task 5: Validation Rule Port
 
@@ -239,10 +250,10 @@
 - Create: `tests/features/event_model_validator/`
 - Create: `tests/validation_rules.rs`
 
-- [ ] Check in validator Gherkin as EMC test fixtures.
-- [ ] Implement validation as pure functions over semantic model types.
-- [ ] Preserve current diagnostics where tests depend on user-facing messages.
-- [ ] Fail validation on Lean/Quint/browser drift.
+- [x] Check in validator Gherkin as EMC test fixtures.
+- [x] Implement validation as pure functions over semantic model types.
+- [x] Preserve current diagnostics where tests depend on user-facing messages.
+- [x] Fail validation on Lean/Quint/browser drift.
 
 ### Task 6: Lean4 and Quint Emission
 
@@ -252,10 +263,10 @@
 - Create: `tests/emit_lean.rs`
 - Create: `tests/emit_quint.rs`
 
-- [ ] Generate deterministic Lean4 modules for the actual business model.
-- [ ] Generate deterministic Quint modules for the same model.
-- [ ] Add golden tests for workflows, slices, transitions, invariants, and proof/model-check entrypoints.
-- [ ] Ensure generated files are stable across repeated runs.
+- [x] Generate deterministic Lean4 modules for the actual business model.
+- [x] Generate deterministic Quint modules for the same model.
+- [x] Add golden tests for workflows, slices, transitions, invariants, and proof/model-check entrypoints.
+- [x] Ensure generated files are stable across repeated runs.
 
 ### Task 7: Verification Shell
 
@@ -263,10 +274,10 @@
 - Create: `src/shell/verify.rs`
 - Create: `tests/verify_shell.rs`
 
-- [ ] Interpret process effects for Lean/Lake and Quint.
-- [ ] Hide tool details behind `emc verify`.
-- [ ] Surface actionable diagnostics without requiring the user to read Lean4 or Quint output first.
-- [ ] Use pinned Nix tools in CI and release packaging.
+- [x] Interpret process effects for Lean/Lake and Quint.
+- [x] Hide tool details behind `emc verify`.
+- [x] Surface actionable diagnostics without requiring the user to read Lean4 or Quint output first.
+- [x] Use pinned Nix tools in CI and release packaging.
 
 ### Task 8: Browser Generation
 
@@ -276,10 +287,10 @@
 - Create: `tests/features/event_model_browser/`
 - Create: `tests/browser_generation.rs`
 
-- [ ] Preserve the browser UI behavior needed for event-model browsing.
-- [ ] Make title and project branding configurable.
-- [ ] Generate stable `data/index.json`, workflow JSON, and slice JSON.
-- [ ] Preserve composed workflow loading, canonical lanes, timeline ordering, branch rendering, source chains, control effects, navigation targets, and review overlays.
+- [x] Preserve the browser UI behavior needed for event-model browsing.
+- [x] Make title and project branding configurable.
+- [x] Generate stable `data/index.json`, workflow JSON, and slice JSON.
+- [x] Preserve composed workflow loading, canonical lanes, timeline ordering, branch rendering, source chains, control effects, navigation targets, and review overlays.
 
 ### Task 9: Review Gate
 
@@ -288,10 +299,10 @@
 - Create: `tests/features/event_model_review_gate/`
 - Create: `tests/review_gate.rs`
 
-- [ ] Implement review-gate semantics from the checked-in rule fixtures.
-- [ ] Store review records by workflow slug and model digest.
-- [ ] Block advancement on stale clean reviews, missing categories, non-clean categories, and mandatory findings.
-- [ ] Require a clean follow-up review after model changes that address findings.
+- [x] Implement review-gate semantics from the checked-in rule fixtures.
+- [x] Store review records by workflow slug and model digest.
+- [x] Block advancement on stale clean reviews, missing categories, non-clean categories, and mandatory findings.
+- [x] Require a clean follow-up review after model changes that address findings.
 
 ### Task 10: MCP Server
 
@@ -300,10 +311,10 @@
 - Create: `tests/mcp_stdio.rs`
 - Create: `tests/mcp_http.rs`
 
-- [ ] Expose read, validate, verify, generate, and mutation tools over MCP.
-- [ ] Route MCP operations through the same semantic command core as CLI operations.
-- [ ] Support stdio and Streamable HTTP transports.
-- [ ] Enforce HTTP Origin checks and authentication policy for non-local exposure.
+- [x] Expose read, validate, verify, generate, and mutation tools over MCP.
+- [x] Route MCP operations through the same semantic command core as CLI operations.
+- [x] Support stdio and Streamable HTTP transports.
+- [x] Enforce HTTP Origin checks and authentication policy for non-local exposure.
 
 ### Task 11: Packaging and CI
 
@@ -312,10 +323,10 @@
 - Create: `.github/workflows/ci.yml`
 - Create: `tests/package_smoke.rs`
 
-- [ ] Build `emc` with Nix.
-- [ ] Build a Docker-compatible image containing the full runtime closure.
-- [ ] Run `emc check`, `emc generate site`, `emc mcp stdio`, and `emc mcp http` smoke tests from the package.
-- [ ] Keep CI using the same strict warnings-as-errors and lint policy as local development.
+- [x] Build `emc` with Nix.
+- [x] Build a Docker-compatible image containing the full runtime closure.
+- [x] Run `emc check`, `emc generate site`, `emc mcp stdio`, and `emc mcp http` smoke tests from the package.
+- [x] Keep CI using the same strict warnings-as-errors and lint policy as local development.
 
 ## Completion Evidence
 

@@ -39,10 +39,10 @@ Feature: Event model Gherkin suites are executable by dedicated Cucumber runners
     Given the legacy TUI acceptance runner reads "tests/features/first_launch_setup.feature"
     When I list the event-model feature suites
     Then the legacy Rust-native acceptance runner is absent from event-model feature suite configuration
-    And the event-model validator features require a TypeScript/Node runner path
-    And the event-model browser features require a TypeScript/Node runner path
-    And the event-model review-gate features require a TypeScript/Node runner path
-    And the event-model Cucumber meta-check feature requires a TypeScript/Node runner path
+    And the event-model validator features run through the Rust EMC Gherkin suite command
+    And the event-model browser features run through the Rust EMC Gherkin suite command
+    And the event-model review-gate features run through the Rust EMC Gherkin suite command
+    And the event-model Cucumber meta-check feature runs through the Rust EMC Gherkin suite command
 
   Scenario: Retired Rust-native first-launch harness artifacts are absent
     Given the repository retirement check targets the Rust-native first-launch Cucumber harness artifacts
