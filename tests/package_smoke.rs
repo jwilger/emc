@@ -22,6 +22,18 @@ mod tests {
             "named emc flake check must build the EMC package"
         );
         assert!(
+            flake.contains("containerImage = pkgs.dockerTools.buildImage"),
+            "flake packages must include a Docker-compatible EMC image"
+        );
+        assert!(
+            flake.contains("emc-container = containerImage;"),
+            "flake packages must export the Docker-compatible EMC image"
+        );
+        assert!(
+            flake.contains("copyToRoot = pkgs.buildEnv"),
+            "EMC container image must include a runnable package closure"
+        );
+        assert!(
             ci_workflow.contains("nix flake check"),
             "hosted CI must run the Nix package smoke gate"
         );
