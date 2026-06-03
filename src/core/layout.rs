@@ -88,8 +88,28 @@ pub fn show_workflow(workflow_document: FileContents) -> EffectPlan {
 fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
     let workflow_name = workflow.name.as_ref().to_owned();
     let digest = artifact_digest(workflow.name.clone());
-    let browser_identity_marker =
+    let browser_name_marker =
         artifact_digest_marker(format!("\"name\": {}", json_string(workflow.name.as_ref())));
+    let browser_description_marker = artifact_digest_marker(format!(
+        "\"description\": {}",
+        json_string(workflow.description.as_ref())
+    ));
+    let lean_slug_marker = artifact_digest_marker(format!(
+        "def workflowSlug := {}",
+        json_string(workflow.slug.as_ref())
+    ));
+    let lean_description_marker = artifact_digest_marker(format!(
+        "def workflowDescription := {}",
+        json_string(workflow.description.as_ref())
+    ));
+    let quint_slug_marker = artifact_digest_marker(format!(
+        "const workflowSlug = {}",
+        json_string(workflow.slug.as_ref())
+    ));
+    let quint_description_marker = artifact_digest_marker(format!(
+        "const workflowDescription = {}",
+        json_string(workflow.description.as_ref())
+    ));
     let module_name = module_name_from_model(workflow.name.clone());
     let workflow_slug = workflow.slug.as_ref();
 
@@ -101,7 +121,16 @@ fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
             project_path(format!(
                 "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
             )),
-            browser_identity_marker,
+            browser_name_marker,
+            report_line(format!(
+                "browser workflow drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireDigest(
+            project_path(format!(
+                "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
+            )),
+            browser_description_marker,
             report_line(format!(
                 "browser workflow drift for workflow {workflow_name}"
             )),
@@ -120,6 +149,34 @@ fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
             digest,
             report_line(format!(
                 "artifact digest mismatch for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireDigest(
+            project_path(format!("model/lean/{module_name}.lean")),
+            lean_slug_marker,
+            report_line(format!(
+                "Lean workflow field drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireDigest(
+            project_path(format!("model/lean/{module_name}.lean")),
+            lean_description_marker,
+            report_line(format!(
+                "Lean workflow field drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireDigest(
+            project_path(format!("model/quint/{module_name}.qnt")),
+            quint_slug_marker,
+            report_line(format!(
+                "Quint workflow field drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireDigest(
+            project_path(format!("model/quint/{module_name}.qnt")),
+            quint_description_marker,
+            report_line(format!(
+                "Quint workflow field drift for workflow {workflow_name}"
             )),
         ),
     ]
