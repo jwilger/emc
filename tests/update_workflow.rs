@@ -249,8 +249,7 @@ mod tests {
     }
 
     #[test]
-    fn update_workflow_name_allows_already_missing_stale_formal_modules()
-    -> Result<(), Box<dyn Error>> {
+    fn update_workflow_name_rejects_missing_formal_source_modules() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
         Command::cargo_bin("emc")?
@@ -288,16 +287,10 @@ mod tests {
             ])
             .current_dir(temp_dir.path())
             .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "updated workflow Open repair ticket",
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow open-ticket is not modeled",
             ));
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
 
         Ok(())
     }

@@ -122,13 +122,8 @@ pub fn interpret_collect_reports(plan: EffectPlan) -> Result<Vec<String>, ShellE
 fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
     match effect {
         Effect::AddSliceFromWorkflow(slice) => {
-            let modeled_workflows = read_browser_index_workflows()?;
-            let workflow_layout =
-                find_indexed_workflow(slice.workflow_slug(), modeled_workflows.as_slice())?;
-            let workflow_document = read_indexed_workflow_document_from_layouts(
-                slice.workflow_slug(),
-                &modeled_workflows,
-            )?;
+            let (workflow_layout, workflow_document) =
+                read_formal_workflow_layout_and_projection(slice.workflow_slug())?;
             let plan = add_slice(
                 workflow_layout.name().clone(),
                 workflow_layout.description().clone(),
@@ -139,7 +134,8 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::AddWorkflowFromIndex(workflow) => {
-            let existing_workflows = read_browser_index_workflows()?;
+            let existing_workflows =
+                formal_workflow_layouts(read_synchronized_formal_workflow_graphs()?);
             let plan = add_workflow(
                 ModeledWorkflowLayouts::new(existing_workflows),
                 workflow.clone(),
@@ -153,13 +149,8 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(check_project(project_name, formal_workflows))
         }
         Effect::ConnectWorkflowFromWorkflow(connection) => {
-            let modeled_workflows = read_browser_index_workflows()?;
-            let workflow_layout =
-                find_indexed_workflow(connection.workflow_slug(), modeled_workflows.as_slice())?;
-            let workflow_document = read_indexed_workflow_document_from_layouts(
-                connection.workflow_slug(),
-                &modeled_workflows,
-            )?;
+            let (workflow_layout, workflow_document) =
+                read_formal_workflow_layout_and_projection(connection.workflow_slug())?;
             let plan = connect_workflow(
                 workflow_layout.name().clone(),
                 workflow_layout.description().clone(),
@@ -445,9 +436,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         }
         Effect::RemoveFile(path) => remove_file_if_present(path.as_ref()).map(|()| Vec::new()),
         Effect::RemoveSliceFromWorkflow(slug) => {
-            let existing_workflows = read_browser_index_workflows()?;
-            let (workflow_layout, workflow_document) =
-                find_workflow_containing_slice(slug, existing_workflows.as_slice())?;
+            let (workflow_layout, workflow_document) = find_formal_workflow_containing_slice(slug)?;
             let plan = remove_slice(
                 workflow_layout.name().clone(),
                 workflow_layout.description().clone(),
@@ -459,20 +448,8 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::RemoveTransitionFromWorkflow(removal) => {
-            let existing_workflows = read_browser_index_workflows()?;
-            let workflow_document = read_indexed_workflow_document_from_layouts(
-                removal.workflow_slug(),
-                existing_workflows.as_slice(),
-            )?;
-            let workflow_layout = existing_workflows
-                .iter()
-                .find(|workflow| workflow.slug() == removal.workflow_slug())
-                .ok_or_else(|| {
-                    ShellError::message(format!(
-                        "workflow {} is not indexed",
-                        removal.workflow_slug().as_ref()
-                    ))
-                })?;
+            let (workflow_layout, workflow_document) =
+                read_formal_workflow_layout_and_projection(removal.workflow_slug())?;
             let plan = remove_transition(
                 workflow_layout.name().clone(),
                 workflow_layout.description().clone(),
@@ -483,8 +460,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::RemoveWorkflowFromIndex(slug) => {
-            let existing_workflows = read_browser_index_workflows()?;
-            let workflow_documents = read_indexed_workflow_documents(&existing_workflows)?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let existing_workflows = formal_workflow_layouts(FormalWorkflowGraphs::from_graphs(
+                formal_workflows.clone(),
+            ));
+            let workflow_documents = formal_workflow_documents(&formal_workflows);
             let plan = remove_workflow(
                 ModeledWorkflowLayouts::new(existing_workflows),
                 IndexedWorkflowDocuments::new(workflow_documents),
@@ -502,9 +482,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(show_workflow(workflow_document))
         }
         Effect::UpdateWorkflowDescriptionFromIndexAndWorkflow(slug, description) => {
-            let existing_workflows = read_browser_index_workflows()?;
-            let workflow_document =
-                read_indexed_workflow_document_from_layouts(slug, existing_workflows.as_slice())?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let existing_workflows = formal_workflow_layouts(FormalWorkflowGraphs::from_graphs(
+                formal_workflows.clone(),
+            ));
+            let workflow_document = read_formal_workflow_projection(slug)?;
             let plan = update_workflow_description(
                 ModeledWorkflowLayouts::new(existing_workflows),
                 workflow_document,
@@ -515,9 +497,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::UpdateWorkflowNameFromIndexAndWorkflow(slug, name) => {
-            let existing_workflows = read_browser_index_workflows()?;
-            let workflow_document =
-                read_indexed_workflow_document_from_layouts(slug, existing_workflows.as_slice())?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let existing_workflows = formal_workflow_layouts(FormalWorkflowGraphs::from_graphs(
+                formal_workflows.clone(),
+            ));
+            let workflow_document = read_formal_workflow_projection(slug)?;
             let plan = update_workflow_name(
                 ModeledWorkflowLayouts::new(existing_workflows),
                 workflow_document,
@@ -528,9 +512,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::UpdateSliceDescriptionFromWorkflow(slug, description) => {
-            let existing_workflows = read_browser_index_workflows()?;
-            let (workflow_layout, workflow_document) =
-                find_workflow_containing_slice(slug, existing_workflows.as_slice())?;
+            let (workflow_layout, workflow_document) = find_formal_workflow_containing_slice(slug)?;
             let plan = update_slice_description(
                 workflow_layout.name().clone(),
                 workflow_layout.description().clone(),
@@ -543,9 +525,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::UpdateSliceKindFromWorkflow(slug, kind) => {
-            let existing_workflows = read_browser_index_workflows()?;
-            let (workflow_layout, workflow_document) =
-                find_workflow_containing_slice(slug, existing_workflows.as_slice())?;
+            let (workflow_layout, workflow_document) = find_formal_workflow_containing_slice(slug)?;
             let plan = update_slice_kind(
                 workflow_layout.name().clone(),
                 workflow_layout.description().clone(),
@@ -558,9 +538,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::UpdateSliceNameFromWorkflow(slug, name) => {
-            let existing_workflows = read_browser_index_workflows()?;
-            let (workflow_layout, workflow_document) =
-                find_workflow_containing_slice(slug, existing_workflows.as_slice())?;
+            let (workflow_layout, workflow_document) = find_formal_workflow_containing_slice(slug)?;
             let plan = update_slice_name(
                 workflow_layout.name().clone(),
                 workflow_layout.description().clone(),
@@ -575,8 +553,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::ValidateEventModelTarget(target) => validate_event_model_target(target.as_ref()),
         Effect::VerifyProjectFromIndex => {
             let project_name = read_project_manifest_name()?;
-            let modeled_workflows = read_browser_index_workflows()?;
-            let modeled_slices = read_modeled_workflow_slice_details(&modeled_workflows)?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?;
+            let modeled_slices = formal_workflow_slice_details(formal_workflows.clone());
+            let modeled_workflows = formal_workflow_layouts(formal_workflows);
             interpret_collect_reports(verify_project(
                 project_name,
                 ModeledWorkflowLayouts::new(modeled_workflows),
@@ -603,15 +582,6 @@ fn read_project_manifest_name() -> Result<ProjectName, ShellError> {
         .map_err(ShellError::io)
         .and_then(|manifest| {
             parse_project_manifest_name(&manifest).map_err(ShellError::project_name)
-        })
-}
-
-fn read_browser_index_workflows() -> Result<Vec<ModeledWorkflowLayout>, ShellError> {
-    fs::read_to_string("model/browser/data/index.json")
-        .map_err(ShellError::io)
-        .and_then(|index| {
-            parse_browser_index_workflows(&index)
-                .map_err(|error| ShellError::message(error.to_string()))
         })
 }
 
@@ -738,14 +708,16 @@ fn formal_workflow_layouts(graphs: FormalWorkflowGraphs) -> Vec<ModeledWorkflowL
     graphs
         .into_inner()
         .into_iter()
-        .map(|graph| {
-            ModeledWorkflowLayout::new(
-                graph.name().clone(),
-                graph.description().clone(),
-                graph.slug().clone(),
-            )
-        })
+        .map(|graph| formal_workflow_layout(&graph))
         .collect()
+}
+
+fn formal_workflow_layout(graph: &FormalWorkflowGraph) -> ModeledWorkflowLayout {
+    ModeledWorkflowLayout::new(
+        graph.name().clone(),
+        graph.description().clone(),
+        graph.slug().clone(),
+    )
 }
 
 fn formal_workflow_slice_details(graphs: FormalWorkflowGraphs) -> Vec<WorkflowSliceDetail> {
@@ -801,92 +773,53 @@ fn read_formal_slice_projection(slug: &SliceSlug) -> Result<FileContents, ShellE
         })
 }
 
-fn read_indexed_workflow_document_from_layouts(
+fn read_formal_workflow_layout_and_projection(
     slug: &WorkflowSlug,
-    modeled_workflows: &[ModeledWorkflowLayout],
-) -> Result<FileContents, ShellError> {
-    find_indexed_workflow(slug, modeled_workflows)
-        .and_then(|_workflow| read_workflow_document(slug.as_ref()))
+) -> Result<(ModeledWorkflowLayout, FileContents), ShellError> {
+    let graph = read_formal_workflow_graph(slug)?;
+    Ok((
+        formal_workflow_layout(&graph),
+        project_workflow_browser_document(&graph),
+    ))
 }
 
-fn read_indexed_workflow_documents(
-    modeled_workflows: &[ModeledWorkflowLayout],
-) -> Result<Vec<IndexedWorkflowDocument>, ShellError> {
-    modeled_workflows
+fn formal_workflow_documents(graphs: &[FormalWorkflowGraph]) -> Vec<IndexedWorkflowDocument> {
+    graphs
         .iter()
-        .map(|workflow| {
-            read_workflow_document(workflow.slug().as_ref())
-                .map(|contents| IndexedWorkflowDocument::new(workflow.slug().clone(), contents))
+        .map(|graph| {
+            IndexedWorkflowDocument::new(
+                graph.slug().clone(),
+                project_workflow_browser_document(graph),
+            )
         })
         .collect()
 }
 
-fn find_indexed_workflow<'a>(
-    slug: &WorkflowSlug,
-    modeled_workflows: &'a [ModeledWorkflowLayout],
-) -> Result<&'a ModeledWorkflowLayout, ShellError> {
-    modeled_workflows
-        .iter()
-        .find(|workflow| workflow.slug() == slug)
-        .ok_or_else(|| ShellError::message(format!("workflow {} is not indexed", slug.as_ref())))
-}
-
-fn read_modeled_workflow_slice_details(
-    modeled_workflows: &[ModeledWorkflowLayout],
-) -> Result<Vec<WorkflowSliceDetail>, ShellError> {
-    let mut slice_details = Vec::new();
-    for workflow in modeled_workflows {
-        let workflow_document =
-            read_workflow_document(workflow.slug().as_ref()).and_then(|contents| {
-                WorkflowDocument::parse(&contents)
-                    .map_err(|error| ShellError::message(error.to_string()))
-            })?;
-        slice_details.extend(
-            workflow_document
-                .slice_details()
-                .map_err(|error| ShellError::message(error.to_string()))?,
-        );
-    }
-    Ok(slice_details)
-}
-
-fn find_workflow_containing_slice<'workflow>(
+fn find_formal_workflow_containing_slice(
     slug: &SliceSlug,
-    modeled_workflows: &'workflow [ModeledWorkflowLayout],
-) -> Result<(&'workflow ModeledWorkflowLayout, FileContents), ShellError> {
-    modeled_workflows
-        .iter()
-        .map(|workflow| {
-            let workflow_document = read_workflow_document(workflow.slug().as_ref())?;
-            let contains_slice = WorkflowDocument::parse(&workflow_document)
-                .map_err(|error| ShellError::message(error.to_string()))?
+) -> Result<(ModeledWorkflowLayout, FileContents), ShellError> {
+    read_synchronized_formal_workflow_graphs()?
+        .into_inner()
+        .into_iter()
+        .find(|graph| {
+            graph
                 .slice_details()
-                .map_err(|error| ShellError::message(error.to_string()))?
+                .as_slice()
                 .iter()
-                .any(|slice| slice.slug() == slug);
-            Ok((workflow, workflow_document, contains_slice))
+                .any(|slice| slice.slug() == slug)
         })
-        .find_map(|result| match result {
-            Ok((workflow, document, true)) => Some(Ok((workflow, document))),
-            Ok((_workflow, _document, false)) => None,
-            Err(error) => Some(Err(error)),
+        .map(|graph| {
+            (
+                formal_workflow_layout(&graph),
+                project_workflow_browser_document(&graph),
+            )
         })
-        .unwrap_or_else(|| {
-            Err(ShellError::message(format!(
+        .ok_or_else(|| {
+            ShellError::message(format!(
                 "slice {} is not referenced by any indexed workflow",
                 slug.as_ref()
-            )))
+            ))
         })
-}
-
-fn read_workflow_document(slug: &str) -> Result<FileContents, ShellError> {
-    fs::read_to_string(format!(
-        "model/browser/data/workflows/{slug}.eventmodel.json"
-    ))
-    .map_err(ShellError::io)
-    .and_then(|contents| {
-        FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
-    })
 }
 
 fn validate_event_model_target(target: &str) -> Result<Vec<String>, ShellError> {
