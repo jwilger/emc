@@ -14,8 +14,8 @@ use crate::core::workflow::{NewWorkflow, add_workflow, update_workflow_descripti
 use crate::event_model_validation::validate_target;
 use crate::io::dto::{
     parse_browser_index_workflows, parse_connection_kind, parse_model_description,
-    parse_model_name, parse_slice_kind, parse_slice_slug, parse_transition_trigger_name,
-    parse_workflow_slug,
+    parse_model_name, parse_project_manifest_name, parse_slice_kind, parse_slice_slug,
+    parse_transition_trigger_name, parse_workflow_slug,
 };
 use crate::shell::{ShellError, interpret_collect_reports};
 use std::path::Path;
@@ -338,6 +338,9 @@ fn show_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
 }
 
 fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {
+    let manifest =
+        fs::read_to_string("emc.toml").map_err(|error| ShellError::message(error.to_string()))?;
+    let project_name = parse_project_manifest_name(&manifest).map_err(ShellError::project_name)?;
     let output = request
         .get("params")
         .and_then(|params| params.get("arguments"))
@@ -348,7 +351,7 @@ fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {
             ProjectPath::try_new(output.to_owned())
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(generate_site(output)).map(|reports| reports.join("\n"))
+    interpret_collect_reports(generate_site(project_name, output)).map(|reports| reports.join("\n"))
 }
 
 fn verify_project_tool_text() -> Result<String, ShellError> {

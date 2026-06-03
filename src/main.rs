@@ -125,7 +125,13 @@ fn run(cli: Cli) -> Result<(), ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             interpret(plan)
         }
-        Command::GenerateSite { output } => interpret(generate_site(output)),
+        Command::GenerateSite { output } => {
+            let manifest = fs::read_to_string("emc.toml")
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let project_name =
+                parse_project_manifest_name(&manifest).map_err(ShellError::project_name)?;
+            interpret(generate_site(project_name, output))
+        }
         Command::ImportEMC { source } => {
             interpret(import_emc_workflow(load_emc_import(&source)?))
         }

@@ -1,6 +1,7 @@
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
+use crate::core::project::ProjectName;
 
-pub fn generate_site(output: ProjectPath) -> EffectPlan {
+pub fn generate_site(project_name: ProjectName, output: ProjectPath) -> EffectPlan {
     let output_path = output.as_ref();
     EffectPlan::new(vec![
         Effect::EnsureDirectory(output.clone()),
@@ -10,7 +11,7 @@ pub fn generate_site(output: ProjectPath) -> EffectPlan {
         ),
         Effect::WriteFile(
             project_path(format!("{output_path}/index.html")),
-            file_contents(INDEX_HTML),
+            file_contents(index_html(&project_name)),
         ),
         Effect::WriteFile(
             project_path(format!("{output_path}/assets/index-CTzj-YfP.js")),
@@ -24,12 +25,15 @@ pub fn generate_site(output: ProjectPath) -> EffectPlan {
     ])
 }
 
-const INDEX_HTML: &str = r#"<!doctype html>
+fn index_html(project_name: &ProjectName) -> String {
+    let title = project_name.as_ref();
+    format!(
+        r#"<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EMC Event Model Browser</title>
+    <title>{title} Event Model Browser</title>
     <script type="module" crossorigin src="./assets/index-CTzj-YfP.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-DCPB_L_9.css">
   </head>
@@ -37,7 +41,9 @@ const INDEX_HTML: &str = r#"<!doctype html>
     <div id="root"></div>
   </body>
 </html>
-"#;
+"#
+    )
+}
 
 const BROWSER_JAVASCRIPT: &str = include_str!("../../browser/assets/index-CTzj-YfP.js");
 const BROWSER_STYLESHEET: &str = include_str!("../../browser/assets/index-DCPB_L_9.css");
