@@ -2539,11 +2539,19 @@ fn command_input_source_from_json_source(
 }
 
 fn command_input_source_kind_from_json(input_source: &Value) -> CommandInputSourceKind {
-    input_source
-        .get("source")
-        .and_then(Value::as_str)
-        .and_then(command_external_input_source)
+    let source = input_source.get("source").and_then(Value::as_str);
+
+    source
+        .and_then(command_actor_input_source)
+        .or_else(|| source.and_then(command_external_input_source))
         .unwrap_or(CommandInputSourceKind::Other)
+}
+
+fn command_actor_input_source(source: &str) -> Option<CommandInputSourceKind> {
+    source
+        .strip_prefix("user_input.")
+        .and_then(|input_name| DefinitionName::try_new(input_name.to_owned()).ok())
+        .map(CommandInputSourceKind::ActorInput)
 }
 
 fn command_external_input_source(source: &str) -> Option<CommandInputSourceKind> {

@@ -1607,6 +1607,7 @@ impl CommandInputSource {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum CommandInputSourceKind {
+    ActorInput(DefinitionName),
     ExternalField(DefinitionName, DefinitionName),
     Other,
 }
@@ -1814,6 +1815,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_read_model_sourced_event_attributes(document))
         .and_then(|()| validate_generated_event_attribute_sources(document))
         .and_then(|()| validate_command_input_external_source_fields(document))
+        .and_then(|()| validate_command_input_source_chains_are_reportable(document))
         .and_then(|()| validate_derived_read_model_field_provenance(document))
         .and_then(|()| validate_derived_read_model_field_scenarios(document))
         .and_then(|()| validate_absence_default_read_model_field_events(document))
@@ -5390,6 +5392,29 @@ fn validate_command_input_external_source_fields(
                 input_source.name, field_name
             )))
         })
+}
+
+fn validate_command_input_source_chains_are_reportable(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .command_definitions
+        .iter()
+        .flat_map(|command| command.input_sources.iter())
+        .find(|input_source| command_input_source_chain_is_incomplete(input_source))
+        .map_or(Ok(()), |input_source| {
+            Err(validation_issue(format!(
+                "command input '{}' source chain is incomplete",
+                input_source.name
+            )))
+        })
+}
+
+fn command_input_source_chain_is_incomplete(input_source: &CommandInputSource) -> bool {
+    matches!(
+        input_source.source,
+        CommandInputSourceKind::ActorInput(_) | CommandInputSourceKind::Other
+    )
 }
 
 fn validate_read_model_field_sources_are_present(
