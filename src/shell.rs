@@ -175,6 +175,18 @@ fn require_clean_review_record(
     let Some(record_object) = record.as_object() else {
         return Err(ShellError::message(fallback_message.to_owned()));
     };
+    let expected_workflow_slug = review_record_workflow_slug(path)?;
+    if record_object.get("workflow_slug").and_then(Value::as_str)
+        != Some(expected_workflow_slug.as_str())
+    {
+        let observed = record_object
+            .get("workflow_slug")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        return Err(ShellError::message(format!(
+            "review record workflow '{observed}' does not match '{expected_workflow_slug}'"
+        )));
+    }
     let current_digest = model_content_digest(workflow_path)?;
     if record_object.get("status").and_then(Value::as_str) != Some("clean") {
         if mandatory_findings_include_digest(record_object, &current_digest) {
@@ -211,6 +223,15 @@ fn require_clean_review_record(
             ))),
         }
     })
+}
+
+fn review_record_workflow_slug(path: &str) -> Result<String, ShellError> {
+    Path::new(path)
+        .file_name()
+        .and_then(|file_name| file_name.to_str())
+        .and_then(|file_name| file_name.strip_suffix(".review.json"))
+        .map(str::to_owned)
+        .ok_or_else(|| ShellError::message("review record path is invalid"))
 }
 
 fn mandatory_findings_include_digest(
