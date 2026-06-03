@@ -2,9 +2,12 @@
 mod tests {
     use std::error::Error;
 
-    use emc::io::dto::{
-        parse_lean_module_name, parse_model_digest, parse_model_name, parse_quint_module_name,
-        parse_slice_slug, parse_workflow_slug,
+    use emc::{
+        core::effect::ProjectPath,
+        io::dto::{
+            parse_lean_module_name, parse_model_digest, parse_model_name, parse_quint_module_name,
+            parse_slice_slug, parse_workflow_slug,
+        },
     };
 
     #[test]
@@ -68,5 +71,22 @@ mod tests {
             parse_model_digest("   ").is_err(),
             "blank model digests must not enter the core"
         );
+    }
+
+    #[test]
+    fn project_paths_are_relative_to_the_current_project() -> Result<(), Box<dyn Error>> {
+        let path = ProjectPath::try_new("model/browser/data/index.json".to_owned())?;
+
+        assert_eq!(path.as_ref(), "model/browser/data/index.json");
+        assert!(
+            ProjectPath::try_new("/tmp/site".to_owned()).is_err(),
+            "absolute paths must not enter project-local effects"
+        );
+        assert!(
+            ProjectPath::try_new("../outside-model".to_owned()).is_err(),
+            "parent traversal must not enter project-local effects"
+        );
+
+        Ok(())
     }
 }

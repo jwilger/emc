@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use crate::core::connection::connect_workflow;
@@ -52,6 +52,12 @@ impl ShellError {
     pub fn project_name(error: impl Display) -> Self {
         Self {
             message: format!("invalid project name: {error}"),
+        }
+    }
+
+    pub fn project_path(error: impl Display) -> Self {
+        Self {
+            message: format!("invalid project path: {error}"),
         }
     }
 
@@ -358,8 +364,7 @@ fn read_workflow_document(slug: &str) -> Result<FileContents, ShellError> {
 }
 
 fn validate_event_model_target(target: &str) -> Result<Vec<String>, ShellError> {
-    let target_path = ProjectPath::try_new(target.to_owned())
-        .map_err(|error| ShellError::message(error.to_string()))?;
+    let target_path = ProjectPath::try_new(target.to_owned()).map_err(ShellError::project_path)?;
     let sources = read_event_model_sources(event_model_files(Path::new(target))?)?;
     let referenced_slice_files = referenced_event_model_slice_files(&sources)?;
     let referenced_sources = read_event_model_sources(referenced_slice_files)?;
@@ -377,7 +382,7 @@ fn read_event_model_sources(
                 .map_err(ShellError::io)
                 .and_then(|contents| {
                     let project_path = ProjectPath::try_new(path.to_string_lossy().into_owned())
-                        .map_err(|error| ShellError::message(error.to_string()))?;
+                        .map_err(ShellError::project_path)?;
                     let file_contents = FileContents::try_new(contents)
                         .map_err(|error| ShellError::message(error.to_string()))?;
                     Ok((project_path, file_contents))
@@ -407,6 +412,7 @@ fn referenced_event_model_slice_files(
                 .iter()
                 .filter_map(Value::as_str)
                 .map(|slice_file| base_path.join(slice_file))
+                .filter_map(|slice_file| normalize_project_path(slice_file.as_path()).ok())
                 .filter(|slice_file| slice_file.is_file())
                 .collect::<Vec<_>>())
         })
@@ -416,7 +422,7 @@ fn referenced_event_model_slice_files(
 
 fn event_model_files(target: &Path) -> Result<Vec<PathBuf>, ShellError> {
     if target.is_file() {
-        return Ok(vec![target.to_path_buf()]);
+        return normalize_project_path(target).map(|path| vec![path]);
     }
 
     let mut files = fs::read_dir(target)
@@ -430,9 +436,33 @@ fn event_model_files(target: &Path) -> Result<Vec<PathBuf>, ShellError> {
                 .and_then(|file_name| file_name.to_str())
                 .is_some_and(|file_name| file_name.ends_with(".eventmodel.json"))
         })
-        .collect::<Vec<_>>();
+        .map(|path| normalize_project_path(path.as_path()))
+        .collect::<Result<Vec<_>, _>>()?;
     files.sort();
     Ok(files)
+}
+
+fn normalize_project_path(path: &Path) -> Result<PathBuf, ShellError> {
+    path.components().try_fold(
+        PathBuf::new(),
+        |mut normalized, component| match component {
+            Component::Normal(segment) => {
+                normalized.push(segment);
+                Ok(normalized)
+            }
+            Component::CurDir => Ok(normalized),
+            Component::ParentDir => {
+                if normalized.pop() {
+                    Ok(normalized)
+                } else {
+                    Err(ShellError::project_path("path escapes project root"))
+                }
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                Err(ShellError::project_path("path must be project-relative"))
+            }
+        },
+    )
 }
 
 fn require_indexed_workflow_files(

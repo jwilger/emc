@@ -82,6 +82,7 @@
 - 2026-06-02: Workflow-targeted shell reads now require the semantic workflow slug to be present in the browser index before reading workflow JSON, so `show`, update, connect, add-slice, and MCP callers cannot operate on stale unindexed workflow files.
 - 2026-06-02: `emc verify` now maps failed Lean4 or Quint process exits to actionable EMC diagnostics that name the verification surface and tell users to run `emc check` before retrying verification.
 - 2026-06-02: MCP `tools/call` now returns JSON-RPC error responses for tool execution failures, including failed formal verification, instead of terminating the stdio or HTTP transport with a shell error.
+- 2026-06-02: Project path arguments now reject absolute paths and parent-directory traversal at the semantic `ProjectPath` boundary, keeping validation and site generation scoped to deterministic project-local paths across CLI and MCP entrypoints.
 
 ### Task 1: Guardrails and Project Skeleton
 
