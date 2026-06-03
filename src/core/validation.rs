@@ -1799,6 +1799,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_absence_default_read_model_field_events(document))
         .and_then(|()| validate_absence_default_read_model_field_scenarios(document))
         .and_then(|()| validate_transitive_read_model_derivation(document))
+        .and_then(|()| validate_read_model_field_sources_are_present(document))
         .and_then(|()| validate_read_model_field_event_sources(document))
         .and_then(|()| validate_state_view_slices_own_views(document))
         .and_then(|()| validate_state_view_slices_do_not_own_commands(document))
@@ -5197,6 +5198,28 @@ fn validate_command_input_external_source_fields(
             Err(validation_issue(format!(
                 "command input '{}' references undeclared external input field '{}'",
                 input_source.name, field_name
+            )))
+        })
+}
+
+fn validate_read_model_field_sources_are_present(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .read_model_definitions
+        .iter()
+        .flat_map(|read_model| {
+            read_model
+                .fields
+                .iter()
+                .filter(|field| field.source == ReadModelFieldSource::Other)
+                .map(move |field| (read_model, field))
+        })
+        .next()
+        .map_or(Ok(()), |(read_model, field)| {
+            Err(validation_issue(format!(
+                "read model '{}' field '{}' is missing source",
+                read_model.name, field.name
             )))
         })
 }
