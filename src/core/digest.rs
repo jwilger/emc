@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 use crate::core::effect::{ArtifactDigest, FileContents};
 use crate::core::types::{
     ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSliceDetail, WorkflowSlug,
-    WorkflowTransitionLabel,
+    WorkflowTransitionRecord,
 };
 use crate::core::workflow_document::WorkflowDocument;
 
@@ -13,7 +13,7 @@ pub fn artifact_digest(
     workflow_slug: WorkflowSlug,
     workflow_description: ModelDescription,
     workflow_slice_details: Vec<WorkflowSliceDetail>,
-    workflow_transitions: Vec<WorkflowTransitionLabel>,
+    workflow_transitions: Vec<WorkflowTransitionRecord>,
 ) -> ArtifactDigest {
     ArtifactDigest::try_new(format!(
         "workflow:name={workflow_name};slug={workflow_slug};description={workflow_description};slices={};transitions={}",
@@ -100,10 +100,18 @@ fn slice_details_digest(workflow_slice_details: &[WorkflowSliceDetail]) -> Strin
         .join(",")
 }
 
-fn transitions_digest(workflow_transitions: &[WorkflowTransitionLabel]) -> String {
+fn transitions_digest(workflow_transitions: &[WorkflowTransitionRecord]) -> String {
     workflow_transitions
         .iter()
-        .map(WorkflowTransitionLabel::as_ref)
+        .map(|transition| {
+            format!(
+                "{}->{}:{}:{}",
+                transition.source().as_ref(),
+                transition.target().as_ref(),
+                transition.kind().as_ref(),
+                transition.trigger().as_ref()
+            )
+        })
         .collect::<Vec<_>>()
         .join(",")
 }

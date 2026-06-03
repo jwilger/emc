@@ -8,7 +8,7 @@ use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module
 use crate::core::layout::ModeledWorkflowLayout;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowSliceDetail,
-    WorkflowSlug, WorkflowTransitionLabel,
+    WorkflowSlug, WorkflowTransitionRecord,
 };
 use crate::core::workflow_document::{WorkflowDocument, workflow_path};
 
@@ -178,7 +178,7 @@ fn update_workflow_effect_plan(
     workflow: NewWorkflow,
     workflow_json: FileContents,
     workflow_slice_details: Vec<WorkflowSliceDetail>,
-    workflow_transitions: Vec<WorkflowTransitionLabel>,
+    workflow_transitions: Vec<WorkflowTransitionRecord>,
 ) -> EffectPlan {
     let workflow_name = workflow.name.as_ref();
     let module_name = module_name(workflow.name.as_ref());

@@ -108,6 +108,13 @@ pub struct WorkflowTransitionLabel(String);
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
+pub struct WorkflowTransitionEndpoint(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
 pub struct WorkflowSliceFileReference(String);
 
 #[nutype(
@@ -165,6 +172,46 @@ pub struct WorkflowTransitionKind(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
 pub struct WorkflowTransitionName(String);
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowTransitionRecord {
+    source: WorkflowTransitionEndpoint,
+    target: WorkflowTransitionEndpoint,
+    kind: WorkflowTransitionKind,
+    trigger: TransitionTriggerName,
+}
+
+impl WorkflowTransitionRecord {
+    pub fn new(
+        source: WorkflowTransitionEndpoint,
+        target: WorkflowTransitionEndpoint,
+        kind: WorkflowTransitionKind,
+        trigger: TransitionTriggerName,
+    ) -> Self {
+        Self {
+            source,
+            target,
+            kind,
+            trigger,
+        }
+    }
+
+    pub fn source(&self) -> &WorkflowTransitionEndpoint {
+        &self.source
+    }
+
+    pub fn target(&self) -> &WorkflowTransitionEndpoint {
+        &self.target
+    }
+
+    pub fn kind(&self) -> &WorkflowTransitionKind {
+        &self.kind
+    }
+
+    pub fn trigger(&self) -> &TransitionTriggerName {
+        &self.trigger
+    }
+}
 
 #[nutype(
     sanitize(trim),

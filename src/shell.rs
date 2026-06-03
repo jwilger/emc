@@ -17,7 +17,9 @@ use crate::core::project::ProjectName;
 use crate::core::review_record::{ReviewCategoryFinding, ReviewRecordDocument};
 use crate::core::site::generate_site;
 use crate::core::slice::add_slice;
-use crate::core::types::{ReviewRuleName, WorkflowSliceDetail, WorkflowSlug};
+use crate::core::types::{
+    ReviewRuleName, WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionRecord,
+};
 use crate::core::verify::verify_project;
 use crate::core::workflow::{add_workflow, update_workflow_description};
 use crate::core::workflow_document::WorkflowDocument;
@@ -1316,52 +1318,43 @@ fn workflow_slice_details(workflow_contents: &str) -> Result<Vec<WorkflowSliceDe
 fn workflow_transition_lean_record_labels(
     workflow_contents: &str,
 ) -> Result<Vec<String>, ShellError> {
-    workflow_transition_labels(workflow_contents)?
+    workflow_transitions(workflow_contents)?
         .into_iter()
-        .map(|label| {
-            transition_record_parts(&label).and_then(|(source, target, kind, trigger)| {
-                Ok(format!(
-                    "{{ source := {}, target := {}, kind := {}, trigger := {} }}",
-                    json_string(source.to_owned())?,
-                    json_string(target.to_owned())?,
-                    json_string(kind)?,
-                    json_string(trigger)?
-                ))
-            })
+        .map(|transition| {
+            Ok(format!(
+                "{{ source := {}, target := {}, kind := {}, trigger := {} }}",
+                json_string(transition.source().as_ref().to_owned())?,
+                json_string(transition.target().as_ref().to_owned())?,
+                json_string(transition.kind().as_ref().to_owned())?,
+                json_string(transition.trigger().as_ref().to_owned())?
+            ))
         })
         .collect()
 }
 
 fn workflow_transition_record_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    workflow_transition_labels(workflow_contents)?
+    workflow_transitions(workflow_contents)?
         .into_iter()
-        .map(|label| {
-            transition_record_parts(&label).and_then(|(source, target, kind, trigger)| {
-                Ok(format!(
-                    "{{ source: {}, target: {}, kind: {}, trigger: {} }}",
-                    json_string(source.to_owned())?,
-                    json_string(target.to_owned())?,
-                    json_string(kind)?,
-                    json_string(trigger)?
-                ))
-            })
+        .map(|transition| {
+            Ok(format!(
+                "{{ source: {}, target: {}, kind: {}, trigger: {} }}",
+                json_string(transition.source().as_ref().to_owned())?,
+                json_string(transition.target().as_ref().to_owned())?,
+                json_string(transition.kind().as_ref().to_owned())?,
+                json_string(transition.trigger().as_ref().to_owned())?
+            ))
         })
         .collect()
 }
 
-fn workflow_transition_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    workflow_document(workflow_contents)
-        .and_then(|workflow| {
-            workflow
-                .transitions()
-                .map_err(|error| ShellError::message(error.to_string()))
-        })
-        .map(|transitions| {
-            transitions
-                .into_iter()
-                .map(|transition| transition.as_ref().to_owned())
-                .collect()
-        })
+fn workflow_transitions(
+    workflow_contents: &str,
+) -> Result<Vec<WorkflowTransitionRecord>, ShellError> {
+    workflow_document(workflow_contents).and_then(|workflow| {
+        workflow
+            .transitions()
+            .map_err(|error| ShellError::message(error.to_string()))
+    })
 }
 
 fn workflow_document(workflow_contents: &str) -> Result<WorkflowDocument, ShellError> {
@@ -1391,23 +1384,6 @@ fn module_name_from_raw(raw: &str) -> String {
             }
         })
         .collect()
-}
-
-fn transition_record_parts(label: &str) -> Result<(&str, &str, String, String), ShellError> {
-    let (source, tail) = label
-        .split_once("->")
-        .ok_or_else(|| ShellError::message("workflow transition is missing source"))?;
-    let parts = tail.split(':').collect::<Vec<_>>();
-    match parts.as_slice() {
-        [target, kind, trigger] => Ok((source, target, (*kind).to_owned(), (*trigger).to_owned())),
-        [target, "workflow_exit", exit_kind, trigger] => Ok((
-            source,
-            target,
-            format!("workflow_exit:{exit_kind}"),
-            (*trigger).to_owned(),
-        )),
-        _ => Err(ShellError::message("workflow transition is not canonical")),
-    }
 }
 
 fn json_string(value: String) -> Result<String, ShellError> {

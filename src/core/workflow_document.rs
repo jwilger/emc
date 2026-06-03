@@ -8,8 +8,9 @@ use crate::core::types::{
     ModelDescription, ModelName, ReviewRuleName, ReviewStatus, SliceKindName, SliceSlug,
     TransitionTriggerName, WorkflowBranchDetail, WorkflowBranchLabel, WorkflowReviewOverlayDetail,
     WorkflowSliceDetail, WorkflowSliceFileReference, WorkflowSlug, WorkflowStepName,
-    WorkflowStepRelationshipName, WorkflowTransitionDetail, WorkflowTransitionFieldName,
-    WorkflowTransitionKind, WorkflowTransitionLabel, WorkflowTransitionName,
+    WorkflowStepRelationshipName, WorkflowTransitionDetail, WorkflowTransitionEndpoint,
+    WorkflowTransitionFieldName, WorkflowTransitionKind, WorkflowTransitionLabel,
+    WorkflowTransitionName, WorkflowTransitionRecord,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -173,7 +174,7 @@ impl WorkflowDocument {
             .transpose()
     }
 
-    pub fn transitions(&self) -> Result<Vec<WorkflowTransitionLabel>, WorkflowDocumentError> {
+    pub fn transitions(&self) -> Result<Vec<WorkflowTransitionRecord>, WorkflowDocumentError> {
         workflow_transitions(self.steps()?)
     }
 
@@ -423,14 +424,14 @@ fn reject_duplicate_transition(
     existing: &[Value],
     addition: &WorkflowTransitionAddition,
 ) -> Result<(), WorkflowDocumentError> {
-    let addition_label = transition_addition_label(addition)?;
+    let addition_record = transition_addition_record(addition)?;
     if workflow_transitions(existing)?
         .iter()
-        .any(|existing_label| existing_label == &addition_label)
+        .any(|existing_record| existing_record == &addition_record)
     {
         return Err(WorkflowDocumentError::new(format!(
             "workflow transition {} already exists",
-            addition_label.as_ref()
+            transition_record_label(&addition_record)
         )));
     }
     Ok(())
@@ -454,20 +455,20 @@ fn append_transition(
     Ok(Value::Object(next))
 }
 
-fn transition_addition_label(
+fn transition_addition_record(
     addition: &WorkflowTransitionAddition,
-) -> Result<WorkflowTransitionLabel, WorkflowDocumentError> {
+) -> Result<WorkflowTransitionRecord, WorkflowDocumentError> {
     let transition = transition_value(addition);
-    let label = match &addition.target {
+    let raw = match &addition.target {
         WorkflowTransitionTarget::Slice(target) => {
-            transition_label(addition.source.as_ref(), target.as_ref(), &transition)
+            transition_record(addition.source.as_ref(), target.as_ref(), &transition)
         }
         WorkflowTransitionTarget::Workflow { slug, reason: _ } => {
-            workflow_exit_transition_label(addition.source.as_ref(), slug.as_ref(), &transition)
+            workflow_exit_transition_record(addition.source.as_ref(), slug.as_ref(), &transition)
         }
     }
     .ok_or_else(|| WorkflowDocumentError::new("workflow transition addition is missing trigger"))?;
-    workflow_transition_label_value(&label)
+    workflow_transition_record(raw)
 }
 
 fn transition_value(addition: &WorkflowTransitionAddition) -> Value {
@@ -519,7 +520,7 @@ fn workflow_slice_detail(step: &Value) -> Result<WorkflowSliceDetail, WorkflowDo
 
 fn workflow_transitions(
     steps: &[Value],
-) -> Result<Vec<WorkflowTransitionLabel>, WorkflowDocumentError> {
+) -> Result<Vec<WorkflowTransitionRecord>, WorkflowDocumentError> {
     steps
         .iter()
         .filter_map(|step| {
@@ -532,26 +533,26 @@ fn workflow_transitions(
                 transition
                     .get("to")
                     .and_then(Value::as_str)
-                    .and_then(|target| transition_label(source, target, transition))
+                    .and_then(|target| transition_record(source, target, transition))
                     .or_else(|| {
                         transition
                             .get("to_workflow")
                             .and_then(Value::as_str)
                             .and_then(|target| {
-                                workflow_exit_transition_label(source, target, transition)
+                                workflow_exit_transition_record(source, target, transition)
                             })
                     })
             })
         })
-        .map(|label| {
-            WorkflowTransitionLabel::try_new(label).map_err(|error| {
-                WorkflowDocumentError::new(format!("invalid workflow transition: {error}"))
-            })
-        })
+        .map(workflow_transition_record)
         .collect()
 }
 
-fn transition_label(source: &str, target: &str, transition: &Value) -> Option<String> {
+fn transition_record<'a>(
+    source: &'a str,
+    target: &'a str,
+    transition: &'a Value,
+) -> Option<RawTransitionRecord<'a>> {
     [
         ("via_command", "command"),
         ("via_event", "event"),
@@ -565,15 +566,20 @@ fn transition_label(source: &str, target: &str, transition: &Value) -> Option<St
         transition
             .get(field)
             .and_then(Value::as_str)
-            .map(|trigger| format!("{source}->{target}:{kind}:{trigger}"))
+            .map(|trigger| RawTransitionRecord {
+                source,
+                target,
+                kind: RawTransitionKind::Plain(kind),
+                trigger,
+            })
     })
 }
 
-fn workflow_exit_transition_label(
-    source: &str,
-    target: &str,
-    transition: &Value,
-) -> Option<String> {
+fn workflow_exit_transition_record<'a>(
+    source: &'a str,
+    target: &'a str,
+    transition: &'a Value,
+) -> Option<RawTransitionRecord<'a>> {
     [
         ("via_command", "command"),
         ("via_event", "event"),
@@ -586,8 +592,25 @@ fn workflow_exit_transition_label(
         transition
             .get(field)
             .and_then(Value::as_str)
-            .map(|trigger| format!("{source}->{target}:workflow_exit:{kind}:{trigger}"))
+            .map(|trigger| RawTransitionRecord {
+                source,
+                target,
+                kind: RawTransitionKind::WorkflowExit(kind),
+                trigger,
+            })
     })
+}
+
+struct RawTransitionRecord<'a> {
+    source: &'a str,
+    target: &'a str,
+    kind: RawTransitionKind<'a>,
+    trigger: &'a str,
+}
+
+enum RawTransitionKind<'a> {
+    Plain(&'a str),
+    WorkflowExit(&'a str),
 }
 
 fn slice_slug(raw: &str) -> Result<SliceSlug, WorkflowDocumentError> {
@@ -616,6 +639,46 @@ fn workflow_slice_file_reference(
 fn workflow_step_name(raw: &str) -> Result<WorkflowStepName, WorkflowDocumentError> {
     WorkflowStepName::try_new(raw.to_owned())
         .map_err(|error| WorkflowDocumentError::new(format!("invalid workflow step name: {error}")))
+}
+
+fn workflow_transition_record(
+    raw: RawTransitionRecord<'_>,
+) -> Result<WorkflowTransitionRecord, WorkflowDocumentError> {
+    let kind = match raw.kind {
+        RawTransitionKind::Plain(kind) => kind.to_owned(),
+        RawTransitionKind::WorkflowExit(kind) => format!("workflow_exit:{kind}"),
+    };
+    Ok(WorkflowTransitionRecord::new(
+        workflow_transition_endpoint("source", raw.source)?,
+        workflow_transition_endpoint("target", raw.target)?,
+        workflow_transition_kind(&kind)?,
+        transition_trigger_name(raw.trigger)?,
+    ))
+}
+
+fn workflow_transition_endpoint(
+    context: &str,
+    raw: &str,
+) -> Result<WorkflowTransitionEndpoint, WorkflowDocumentError> {
+    WorkflowTransitionEndpoint::try_new(raw.to_owned()).map_err(|error| {
+        WorkflowDocumentError::new(format!("invalid workflow transition {context}: {error}"))
+    })
+}
+
+fn transition_trigger_name(raw: &str) -> Result<TransitionTriggerName, WorkflowDocumentError> {
+    TransitionTriggerName::try_new(raw.to_owned()).map_err(|error| {
+        WorkflowDocumentError::new(format!("invalid workflow transition trigger: {error}"))
+    })
+}
+
+fn transition_record_label(transition: &WorkflowTransitionRecord) -> String {
+    format!(
+        "{}->{}:{}:{}",
+        transition.source().as_ref(),
+        transition.target().as_ref(),
+        transition.kind().as_ref(),
+        transition.trigger().as_ref()
+    )
 }
 
 fn workflow_branch_label(
