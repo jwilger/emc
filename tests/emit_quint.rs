@@ -3,7 +3,7 @@ mod tests {
     use std::error::Error;
 
     use emc::core::digest::artifact_digest;
-    use emc::core::emit::quint::emit_workflow_module;
+    use emc::core::emit::quint::{emit_slice_module, emit_workflow_module};
     use emc::core::types::{SliceKindName, WorkflowSliceDetail, WorkflowTransitionLabel};
     use emc::io::dto::{
         parse_model_description, parse_model_name, parse_quint_module_name, parse_slice_slug,
@@ -75,6 +75,26 @@ mod tests {
             !quint.contains("length(workflowTransitions) == length(workflowTransitions)"),
             "Quint transition invariant must not be a tautological length self-comparison"
         );
+        assert!(quint.contains("var modelState: int"));
+        assert!(quint.contains("action init = modelState' = 0"));
+        assert!(quint.contains("action step = modelState' = modelState"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn quint_slice_module_exposes_verification_entrypoints() -> Result<(), Box<dyn Error>> {
+        let module = emit_slice_module(
+            parse_quint_module_name("CaptureTicket")?,
+            parse_model_name("Capture ticket")?,
+            parse_model_description("Actor enters repair ticket details.")?,
+            parse_slice_slug("capture-ticket")?,
+            SliceKindName::try_new("state_view".to_owned())?,
+        );
+        let quint = module.as_ref();
+
+        assert!(quint.contains("module CaptureTicket"));
+        assert!(quint.contains("val sliceIdentityStable = sliceName == \"Capture ticket\""));
         assert!(quint.contains("var modelState: int"));
         assert!(quint.contains("action init = modelState' = 0"));
         assert!(quint.contains("action step = modelState' = modelState"));
