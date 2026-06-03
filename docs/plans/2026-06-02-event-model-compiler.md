@@ -135,6 +135,7 @@
 - 2026-06-03: Generated browser sites now pass project-specific branding into the bundled browser runtime and the browser asset no longer carries unrelated product labels in its visible header.
 - 2026-06-03: `emc verify` now checks initialized project root formal artifacts before generated workflow and slice artifacts: Lean4 root modules run through `lake env lean`, and Quint root modules run through `quint typecheck` because root modules do not declare workflow invariants.
 - 2026-06-03: `emc check` now rejects initialized project root formal artifact drift: root Lean4 namespace/end declarations, root Quint module declarations, and root Quint verification config must match the initialized project module and invariant surface.
+- 2026-06-03: `emc check` now rejects Lean project verification config drift: generated `lakefile.lean` and `lean-toolchain` contents must match the deterministic Lake package and pinned Lean4 toolchain emitted by initialization.
 
 ### Task 1: Guardrails and Project Skeleton
 

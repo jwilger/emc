@@ -142,15 +142,31 @@ pub fn check_project(
 fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Effect> {
     let project_name_text = project_name.as_ref();
     let lean_path = project_path(format!("model/lean/{module_name}.lean"));
+    let lakefile_path = project_path("model/lean/lakefile.lean");
+    let lean_toolchain_path = project_path("model/lean/lean-toolchain");
     let quint_path = project_path(format!("model/quint/{module_name}.qnt"));
     let quint_config_path = project_path("model/quint/quint.json");
     let lean_message = report_line(format!("Lean project root drift for {project_name_text}"));
+    let lean_config_message =
+        report_line(format!("Lean project config drift for {project_name_text}"));
     let quint_message = report_line(format!("Quint project root drift for {project_name_text}"));
     let quint_config_message = report_line(format!(
         "Quint project config drift for {project_name_text}"
     ));
 
     vec![
+        Effect::RequireCanonicalDeclaration(
+            lakefile_path,
+            artifact_marker("package "),
+            artifact_marker("package EMCModel"),
+            lean_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_toolchain_path,
+            artifact_marker("leanprover/lean4:"),
+            artifact_marker("leanprover/lean4:4.29.1"),
+            lean_config_message,
+        ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
             artifact_marker("namespace "),

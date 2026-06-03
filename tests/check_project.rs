@@ -97,6 +97,60 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_lean_project_lakefile_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        write(
+            temp_dir.path().join("model/lean/lakefile.lean"),
+            "package StaleModel\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean project config drift for Repair Desk",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_lean_project_toolchain_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        write(
+            temp_dir.path().join("model/lean/lean-toolchain"),
+            "leanprover/lean4:4.28.0\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean project config drift for Repair Desk",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_project_root_formal_artifact_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
