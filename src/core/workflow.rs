@@ -33,6 +33,7 @@ pub fn add_workflow(
     existing_workflows: Vec<ModeledWorkflowLayout>,
     workflow: NewWorkflow,
 ) -> Result<EffectPlan, WorkflowMutationError> {
+    reject_workflow_slug_collision(&existing_workflows, &workflow)?;
     reject_workflow_module_collision(&existing_workflows, &workflow)?;
     Ok(workflow_effect_plan(existing_workflows, workflow))
 }
@@ -248,6 +249,21 @@ fn reject_workflow_module_collision(
         .map_or(Ok(()), |_existing| {
             Err(WorkflowMutationError::new(format!(
                 "workflow module {generated_module_name} already exists"
+            )))
+        })
+}
+
+fn reject_workflow_slug_collision(
+    existing_workflows: &[ModeledWorkflowLayout],
+    workflow: &NewWorkflow,
+) -> Result<(), WorkflowMutationError> {
+    existing_workflows
+        .iter()
+        .find(|existing| existing.slug() == &workflow.slug)
+        .map_or(Ok(()), |_existing| {
+            Err(WorkflowMutationError::new(format!(
+                "workflow {} already exists",
+                workflow.slug.as_ref()
             )))
         })
 }
