@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-    use std::fs::{remove_file, write};
+    use std::fs::{read_to_string, remove_file, write};
     use std::path::Path;
 
     use assert_cmd::Command;
@@ -413,6 +413,31 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_lean_workflow_extra_transition_declaration_drift() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let mut lean = read_to_string(&lean_path)?;
+        lean.push_str(
+            "\ndef workflowTransitions : List String := [\"capture-ticket->review-ticket:navigation:stale-screen\"]\n",
+        );
+        write(lean_path, lean)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean workflow transition drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_lean_workflow_slice_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -468,6 +493,31 @@ mod tests {
             temp_dir.path().join("model/quint/OpenTicket.qnt"),
             "module OpenTicket {\n  // EMC-DIGEST: workflow:Open ticket\n  val workflowName = \"Open ticket\"\n  val workflowSlug = \"open-ticket\"\n  val workflowDescription = \"Actor opens a repair ticket.\"\n  val workflowSlices = [\"capture-ticket\",\"review-ticket\"]\n  val workflowSliceDetails = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Slice description.\" },{ slug: \"review-ticket\", name: \"Review ticket\", kind: \"state_view\", description: \"Slice description.\" }]\n  val workflowTransitions = []\n  val workflowIdentityStable = workflowName == \"Open ticket\"\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}\n",
         )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint workflow transition drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_quint_workflow_extra_transition_declaration_drift()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let mut quint = read_to_string(&quint_path)?;
+        quint.push_str(
+            "  val workflowTransitions = [\"capture-ticket->review-ticket:navigation:stale-screen\"]\n",
+        );
+        write(quint_path, quint)?;
 
         Command::cargo_bin("emc")?
             .arg("check")
