@@ -1234,9 +1234,19 @@ fn run_process(invocation: &ProcessInvocation) -> Result<Vec<String>, ShellError
         Ok(vec![invocation.success().as_ref().to_owned()])
     } else {
         Err(ShellError::message(format!(
-            "verification command {} failed with {}",
-            invocation.program().as_ref(),
+            "{} failed with {}. Run `emc check` to confirm generated artifacts are synchronized, then run `emc verify` again",
+            verification_label(invocation),
             status
         )))
+    }
+}
+
+fn verification_label(invocation: &ProcessInvocation) -> &str {
+    if invocation.success().as_ref().starts_with("Lean4") {
+        "Lean4 verification"
+    } else if invocation.success().as_ref().starts_with("Quint") {
+        "Quint verification"
+    } else {
+        "verification command"
     }
 }

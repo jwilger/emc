@@ -80,6 +80,7 @@
 - 2026-06-02: `emc check` now rejects referenced browser slice filenames that do not round-trip through the semantic slice slug parser to the canonical generated filename, preventing path-level slice identity drift from bypassing formal artifact checks.
 - 2026-06-02: `emc validate` now applies the same semantic slice filename canonicalization at the raw workflow boundary before corpus validation, so noncanonical referenced slice paths cannot be interpreted as a different composed slice identity.
 - 2026-06-02: Workflow-targeted shell reads now require the semantic workflow slug to be present in the browser index before reading workflow JSON, so `show`, update, connect, add-slice, and MCP callers cannot operate on stale unindexed workflow files.
+- 2026-06-02: `emc verify` now maps failed Lean4 or Quint process exits to actionable EMC diagnostics that name the verification surface and tell users to run `emc check` before retrying verification.
 
 ### Task 1: Guardrails and Project Skeleton
 
