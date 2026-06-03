@@ -1,4 +1,3 @@
-use crate::core::digest::artifact_digest;
 use crate::core::effect::{
     ArtifactDigest, ArtifactFileExtension, ArtifactMarker, Effect, EffectPlan, FileContents,
     ProjectPath, ReportLine,
@@ -145,11 +144,6 @@ pub fn show_workflow(workflow_document: FileContents) -> EffectPlan {
 
 fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
     let workflow_name = workflow.name.as_ref().to_owned();
-    let digest = artifact_digest(
-        workflow.name.clone(),
-        workflow.slug.clone(),
-        workflow.description.clone(),
-    );
     let browser_name_marker = artifact_marker(format!(
         "  \"name\": {},",
         json_string(workflow.name.as_ref())
@@ -386,7 +380,7 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
             )),
         ),
         Effect::RequireWorkflowTransitions(
-            workflow_path,
+            workflow_path.clone(),
             quint_path.clone(),
             quint_transition_marker,
             report_line(format!(
@@ -433,16 +427,18 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
                 "Quint workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireDigest(
+        Effect::RequireWorkflowDigest(
+            workflow_path.clone(),
             lean_path,
-            digest.clone(),
+            workflow.slug.clone(),
             report_line(format!(
                 "artifact digest mismatch for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireDigest(
+        Effect::RequireWorkflowDigest(
+            workflow_path,
             quint_path,
-            digest,
+            workflow.slug,
             report_line(format!(
                 "artifact digest mismatch for workflow {workflow_name}"
             )),

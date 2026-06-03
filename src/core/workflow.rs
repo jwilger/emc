@@ -107,6 +107,8 @@ fn workflow_effect_plan(
         workflow.name.clone(),
         workflow.slug.clone(),
         workflow.description.clone(),
+        Vec::new(),
+        Vec::new(),
     );
     let workflow_layout = ModeledWorkflowLayout::new(
         workflow.name.clone(),
@@ -179,6 +181,8 @@ fn update_workflow_effect_plan(
         workflow.name.clone(),
         workflow.slug.clone(),
         workflow.description.clone(),
+        workflow_slice_details.clone(),
+        workflow_transitions.clone(),
     );
     let workflow_layout = ModeledWorkflowLayout::new(
         workflow.name.clone(),

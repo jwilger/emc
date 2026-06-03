@@ -33,6 +33,10 @@ mod tests {
             .assert()
             .success();
 
+        let initial_lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let initial_digest = digest_marker(&initial_lean)
+            .ok_or("generated workflow artifact is missing an initial digest")?;
+
         Command::cargo_bin("emc")?
             .args([
                 "add",
@@ -109,6 +113,16 @@ mod tests {
                 "val workflowSliceDetails = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Actor enters repair ticket details.\" }]"
             ),
             "Quint artifact must represent the workflow's business slice details"
+        );
+        assert_ne!(
+            initial_digest,
+            digest_marker(&lean).ok_or("Lean artifact is missing an updated digest")?,
+            "Lean digest must change when the composed workflow slice details change"
+        );
+        assert_ne!(
+            initial_digest,
+            digest_marker(&quint).ok_or("Quint artifact is missing an updated digest")?,
+            "Quint digest must change when the composed workflow slice details change"
         );
 
         Ok(())
@@ -339,5 +353,14 @@ mod tests {
             .assert()
             .success();
         Ok(())
+    }
+
+    fn digest_marker(contents: &str) -> Option<String> {
+        contents.lines().find_map(|line| {
+            line.trim()
+                .strip_prefix("-- EMC-DIGEST: ")
+                .or_else(|| line.trim().strip_prefix("// EMC-DIGEST: "))
+                .map(str::to_owned)
+        })
     }
 }

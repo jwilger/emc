@@ -1049,6 +1049,22 @@ mod tests {
     }
 
     #[test]
+    fn check_accepts_synchronized_workflow_navigation_transition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("project layout is complete"));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_lean_workflow_slice_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
