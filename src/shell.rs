@@ -99,9 +99,19 @@ pub fn interpret_collect_reports(plan: EffectPlan) -> Result<Vec<String>, ShellE
 fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
     match effect {
         Effect::AddSliceFromWorkflow(slice) => {
-            let workflow_document = read_indexed_workflow_document(slice.workflow_slug())?;
-            let plan = add_slice(workflow_document, slice.clone())
-                .map_err(|error| ShellError::message(error.to_string()))?;
+            let modeled_workflows = read_browser_index_workflows()?;
+            let workflow_layout =
+                find_indexed_workflow(slice.workflow_slug(), modeled_workflows.as_slice())?;
+            let workflow_document = read_indexed_workflow_document_from_layouts(
+                slice.workflow_slug(),
+                &modeled_workflows,
+            )?;
+            let plan = add_slice(
+                workflow_layout.name().clone(),
+                workflow_document,
+                slice.clone(),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
         }
         Effect::AddWorkflowFromIndex(workflow) => {
@@ -392,17 +402,18 @@ fn read_indexed_workflow_document_from_layouts(
     slug: &WorkflowSlug,
     modeled_workflows: &[ModeledWorkflowLayout],
 ) -> Result<FileContents, ShellError> {
-    if modeled_workflows
+    find_indexed_workflow(slug, modeled_workflows)
+        .and_then(|_workflow| read_workflow_document(slug.as_ref()))
+}
+
+fn find_indexed_workflow<'a>(
+    slug: &WorkflowSlug,
+    modeled_workflows: &'a [ModeledWorkflowLayout],
+) -> Result<&'a ModeledWorkflowLayout, ShellError> {
+    modeled_workflows
         .iter()
-        .any(|workflow| workflow.slug() == slug)
-    {
-        read_workflow_document(slug.as_ref())
-    } else {
-        Err(ShellError::message(format!(
-            "workflow {} is not indexed",
-            slug.as_ref()
-        )))
-    }
+        .find(|workflow| workflow.slug() == slug)
+        .ok_or_else(|| ShellError::message(format!("workflow {} is not indexed", slug.as_ref())))
 }
 
 fn read_modeled_workflow_slice_details(

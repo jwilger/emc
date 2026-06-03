@@ -83,11 +83,22 @@ impl NewSlice {
 }
 
 pub fn add_slice(
+    indexed_workflow_name: ModelName,
     workflow_document: FileContents,
     new_slice: NewSlice,
 ) -> Result<EffectPlan, SliceMutationError> {
     let workflow_document = WorkflowDocument::parse(&workflow_document)
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    let workflow_name = workflow_document
+        .name()
+        .map_err(|error| SliceMutationError::new(error.to_string()))?;
+    if workflow_name != indexed_workflow_name {
+        return Err(SliceMutationError::new(format!(
+            "workflow document name '{}' does not match index name '{}'",
+            workflow_name.as_ref(),
+            indexed_workflow_name.as_ref()
+        )));
+    }
     let existing_slice_details = workflow_document
         .slice_details()
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
@@ -118,9 +129,6 @@ pub fn add_slice(
             workflow_slice_detail(&new_slice),
             relationship,
         ))
-        .map_err(|error| SliceMutationError::new(error.to_string()))?;
-    let workflow_name = workflow_document
-        .name()
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
     let workflow_description = workflow_document
         .description()
