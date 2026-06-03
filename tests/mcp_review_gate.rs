@@ -105,6 +105,33 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_stdio_record_clean_review_schema_advertises_review_timestamp_format()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(tools_list_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"record_clean_review\""))
+            .stdout(predicate::str::contains("\"reviewed_at\""))
+            .stdout(predicate::str::contains("\"format\":\"date-time\""))
+            .stdout(predicate::str::contains(
+                "\"pattern\":\"^\\\\d{4}-\\\\d{2}-\\\\d{2}T\\\\d{2}:\\\\d{2}:\\\\d{2}\\\\.\\\\d{3}Z$\"",
+            ));
+
+        Ok(())
+    }
+
     fn mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
@@ -118,6 +145,13 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"record_clean_review\",\"arguments\":{\"workflow\":\"open-ticket\",\"reviewer\":\"event-model-reviewer\",\"reviewed_at\":\"2026-06-03T00:00:00.000Z\"}}}\n",
+        )
+    }
+
+    fn tools_list_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
         )
     }
 
