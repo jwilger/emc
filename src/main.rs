@@ -8,7 +8,7 @@ use emc::core::effect::ProjectPath;
 use emc::core::gherkin::GherkinSuite;
 use emc::core::project::ProjectName;
 use emc::core::slice::{NewSlice, SliceKind};
-use emc::core::types::{ModelDescription, SliceSlug, WorkflowSlug};
+use emc::core::types::{ModelDescription, ModelName, SliceSlug, WorkflowSlug};
 use emc::core::workflow::NewWorkflow;
 use emc::io::dto::{
     parse_connection_kind, parse_gherkin_suite, parse_model_description, parse_model_name,
@@ -78,6 +78,10 @@ enum Command {
         slug: WorkflowSlug,
         description: ModelDescription,
     },
+    UpdateWorkflowName {
+        slug: WorkflowSlug,
+        name: ModelName,
+    },
     Validate {
         target: ProjectPath,
     },
@@ -127,6 +131,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         }
         Command::UpdateWorkflowDescription { slug, description } => {
             interpret(command::update_workflow_description(slug, description))
+        }
+        Command::UpdateWorkflowName { slug, name } => {
+            interpret(command::update_workflow_name(slug, name))
         }
         Command::Validate { target } => interpret(command::validate(target)),
         Command::Verify => interpret(command::verify()),
@@ -540,6 +547,23 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        [command, subject, slug_flag, slug, name_flag, name]
+            if command == "update"
+                && subject == "workflow"
+                && slug_flag == "--slug"
+                && name_flag == "--name" =>
+        {
+            let workflow_slug = parse_workflow_slug(slug)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let workflow_name =
+                parse_model_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::UpdateWorkflowName {
+                    slug: workflow_slug,
+                    name: workflow_name,
+                },
+            })
+        }
         [command, target] if command == "validate" => Ok(Cli {
             command: Command::Validate {
                 target: parse_project_path(target)
@@ -642,6 +666,7 @@ fn help_command() -> ClapCommand {
             "Common commands:
   emc init --name <project-name>
   emc add workflow --slug <slug> --name <name> --description <text>
+  emc update workflow --slug <workflow> --name <name>
   emc add slice --workflow <workflow> --slug <slug> --name <name> --type <kind> --description <text>
   emc update slice --slug <slice> --description <text>
   emc update slice --slug <slice> --type <kind>

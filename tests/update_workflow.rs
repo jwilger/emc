@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-    use std::fs::read_to_string;
+    use std::fs::{create_dir, exists, read_to_string, remove_file};
     use std::path::Path;
 
     use assert_cmd::Command;
@@ -77,6 +77,318 @@ mod tests {
             ),
             "Quint artifact must represent the updated workflow description"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn update_workflow_name_rewrites_synchronized_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open repair ticket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated workflow Open repair ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let index_json = read_to_string(temp_dir.path().join("model/browser/data/index.json"))?;
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenRepairTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenRepairTicket.qnt"))?;
+
+        assert!(
+            index_json.contains("\"name\": \"Open repair ticket\""),
+            "browser index must preserve the updated workflow name"
+        );
+        assert!(
+            workflow_json.contains("\"name\": \"Open repair ticket\""),
+            "workflow browser data must preserve the updated workflow name"
+        );
+        assert!(
+            lean.contains("namespace OpenRepairTicket"),
+            "Lean artifact must move to the updated workflow module"
+        );
+        assert!(
+            lean.contains("def workflowName := \"Open repair ticket\""),
+            "Lean artifact must represent the updated workflow name"
+        );
+        assert!(
+            quint.contains("module OpenRepairTicket {"),
+            "Quint artifact must move to the updated workflow module"
+        );
+        assert!(
+            quint.contains("val workflowName = \"Open repair ticket\""),
+            "Quint artifact must represent the updated workflow name"
+        );
+        assert!(
+            !exists(temp_dir.path().join("model/lean/OpenTicket.lean"))?,
+            "workflow name update must remove the old Lean module"
+        );
+        assert!(
+            !exists(temp_dir.path().join("model/quint/OpenTicket.qnt"))?,
+            "workflow name update must remove the old Quint module"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn update_workflow_name_rejects_formal_module_name_collisions() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-bug",
+                "--name",
+                "Open bug",
+                "--description",
+                "Actor opens a bug report.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow",
+                "--slug",
+                "open-bug",
+                "--name",
+                "Open-ticket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow module OpenTicket already exists",
+            ));
+
+        let index_json = read_to_string(temp_dir.path().join("model/browser/data/index.json"))?;
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-bug.eventmodel.json"),
+        )?;
+
+        assert!(
+            index_json.contains("\"name\": \"Open bug\""),
+            "rejected workflow rename must not mutate the browser index"
+        );
+        assert!(
+            workflow_json.contains("\"name\": \"Open bug\""),
+            "rejected workflow rename must not mutate the workflow document"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn update_workflow_name_allows_already_missing_stale_formal_modules()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        remove_file(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        remove_file(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open repair ticket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated workflow Open repair ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    #[test]
+    fn update_workflow_name_rejects_stale_formal_module_cleanup_errors()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let stale_lean_module = temp_dir.path().join("model/lean/OpenTicket.lean");
+        remove_file(&stale_lean_module)?;
+        create_dir(&stale_lean_module)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open repair ticket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure();
+
+        assert!(
+            !exists(temp_dir.path().join("model/lean/OpenRepairTicket.lean"))?,
+            "failed stale-module cleanup must not write the new Lean module"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn update_workflow_name_rejects_non_slug_flag() -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--name",
+                "Open repair ticket",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "usage: emc init --name <project-name>",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn update_workflow_name_rejects_non_name_flag() -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--title",
+                "Open repair ticket",
+            ])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "usage: emc init --name <project-name>",
+            ));
 
         Ok(())
     }
