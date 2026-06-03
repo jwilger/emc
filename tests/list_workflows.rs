@@ -113,6 +113,62 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn list_transitions_reports_modeled_workflow_transitions() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_workflow(temp_dir.path())?;
+        add_slice(temp_dir.path(), "capture-ticket", "Capture ticket")?;
+        add_slice(temp_dir.path(), "review-ticket", "Review ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "event",
+                "--name",
+                "TicketCaptured",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["list", "transitions"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("capture-ticket"))
+            .stdout(predicate::str::contains("review-ticket"))
+            .stdout(predicate::str::contains("event"))
+            .stdout(predicate::str::contains("TicketCaptured"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn list_transitions_requires_exact_command_subject() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_workflow(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["show", "transitions"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "usage: emc init --name <project-name>",
+            ));
+
+        Ok(())
+    }
+
     fn initialize_project_with_workflow(cwd: &Path) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args(["init", "--name", "Repair Desk"])
@@ -135,6 +191,28 @@ mod tests {
             .assert()
             .success();
 
+        Ok(())
+    }
+
+    fn add_slice(cwd: &Path, slug: &str, name: &str) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                slug,
+                "--name",
+                name,
+                "--type",
+                "state_view",
+                "--description",
+                "Slice description.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
         Ok(())
     }
 }

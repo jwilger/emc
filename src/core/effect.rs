@@ -17,6 +17,7 @@ pub enum Effect {
     Fail(ReportLine),
     GenerateSiteFromManifest(ProjectPath),
     ListSlicesFromIndex,
+    ListTransitionsFromIndex,
     ListWorkflowsFromIndex,
     RequireCanonicalDeclaration(ProjectPath, ArtifactMarker, ArtifactMarker, ReportLine),
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),

@@ -154,6 +154,7 @@
 - 2026-06-03: CLI `show slice <slug>` and MCP `show_slice` now read modeled business slice documents through the shared command/effect path, rejecting unreferenced slice files instead of exposing arbitrary stale browser data.
 - 2026-06-03: CLI `list slices` and MCP `list_slices` now report modeled business slices from semantic workflow slice details, giving users symmetric read access to first-class slice artifacts without reading generated files directly.
 - 2026-06-03: CLI `update slice --slug <slug> --description <text>` and MCP `update_slice` now rewrite first-class business slice descriptions and regenerate the owning workflow, browser slice document, Lean4 slice module, Quint slice module, and workflow formal artifacts from the shared semantic command path.
+- 2026-06-03: CLI `list transitions` and MCP `list_transitions` now report modeled workflow transitions from semantic workflow transition records, exposing source, target, kind, and trigger without requiring users to inspect generated workflow JSON.
 
 ### Task 1: Guardrails and Project Skeleton
 

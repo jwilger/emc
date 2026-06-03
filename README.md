@@ -257,6 +257,7 @@ Current user-facing commands include:
 emc init --name <project-name>
 emc list workflows
 emc list slices
+emc list transitions
 emc show workflow <workflow-slug>
 emc show slice <slice-slug>
 emc add workflow --slug <slug> --name <name> --description <description>

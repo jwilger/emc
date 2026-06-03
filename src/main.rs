@@ -48,6 +48,7 @@ enum Command {
         name: ProjectName,
     },
     ListSlices,
+    ListTransitions,
     ListWorkflows,
     McpStdio,
     McpHttp {
@@ -102,6 +103,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::Help => print_help(),
         Command::Init { name } => interpret(command::init(name)),
         Command::ListSlices => interpret(command::list_slices()),
+        Command::ListTransitions => interpret(command::list_transitions()),
         Command::ListWorkflows => interpret(command::list_workflows()),
         Command::McpHttp {
             host,
@@ -343,6 +345,9 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         [command, subject] if command == "list" && subject == "slices" => Ok(Cli {
             command: Command::ListSlices,
         }),
+        [command, subject] if command == "list" && subject == "transitions" => Ok(Cli {
+            command: Command::ListTransitions,
+        }),
         [command, transport] if command == "mcp" && transport == "stdio" => Ok(Cli {
             command: Command::McpStdio,
         }),
@@ -546,7 +551,11 @@ fn help_command() -> ClapCommand {
             ClapCommand::new("list").about("Read model indexes").subcommand(
                 ClapCommand::new("workflows").about("List modeled workflows in the project"),
             )
-            .subcommand(ClapCommand::new("slices").about("List modeled slices in the project")),
+            .subcommand(ClapCommand::new("slices").about("List modeled slices in the project"))
+            .subcommand(
+                ClapCommand::new("transitions")
+                    .about("List modeled workflow transitions in the project"),
+            ),
         )
         .subcommand(
             ClapCommand::new("show")
@@ -613,6 +622,7 @@ fn help_command() -> ClapCommand {
   emc update slice --slug <slice> --description <text>
   emc connect workflow --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
   emc list slices
+  emc list transitions
   emc validate <path>
   emc verify
   emc check

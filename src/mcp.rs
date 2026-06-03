@@ -325,6 +325,15 @@ fn tools_list_result() -> Result<Value, ShellError> {
             })),
         ),
         Tool::new(
+            "list_transitions",
+            "List modeled workflow transitions in the EMC event model.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
             "show_workflow",
             "Show a modeled workflow document by workflow slug.",
             schema_object(json!({
@@ -555,6 +564,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
             list_workflows_tool_text(),
         ))),
         "list_slices" => Ok(Some(tool_call_result_response(id, list_slices_tool_text()))),
+        "list_transitions" => Ok(Some(tool_call_result_response(
+            id,
+            list_transitions_tool_text(),
+        ))),
         "show_workflow" => Ok(Some(tool_call_result_response(
             id,
             show_workflow_tool_text(request),
@@ -636,6 +649,10 @@ fn list_workflows_tool_text() -> Result<String, ShellError> {
 
 fn list_slices_tool_text() -> Result<String, ShellError> {
     interpret_collect_reports(command::list_slices()).map(|reports| reports.join("\n"))
+}
+
+fn list_transitions_tool_text() -> Result<String, ShellError> {
+    interpret_collect_reports(command::list_transitions()).map(|reports| reports.join("\n"))
 }
 
 fn show_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
