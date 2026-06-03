@@ -1609,6 +1609,7 @@ impl CommandInputSource {
 pub enum CommandInputSourceKind {
     ActorInput(DefinitionName),
     ExternalField(DefinitionName, DefinitionName),
+    ReadModelField(DefinitionName, DefinitionName),
     Other,
 }
 
@@ -1817,6 +1818,9 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_command_input_external_source_fields(document))
         .and_then(|()| validate_command_input_source_chains_are_reportable(document))
         .and_then(|()| validate_command_inputs_have_source_provenance(document))
+        .and_then(|()| {
+            validate_command_input_read_model_sources_trace_to_event_provenance(document)
+        })
         .and_then(|()| validate_derived_read_model_field_provenance(document))
         .and_then(|()| validate_derived_read_model_field_scenarios(document))
         .and_then(|()| validate_absence_default_read_model_field_events(document))
@@ -5450,6 +5454,37 @@ fn command_input_has_source(command: &CommandDefinition, input_name: &Definition
         .input_sources
         .iter()
         .any(|input_source| input_source.name == *input_name)
+}
+
+fn validate_command_input_read_model_sources_trace_to_event_provenance(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .command_definitions
+        .iter()
+        .flat_map(|command| command.input_sources.iter())
+        .find(|input_source| {
+            !command_input_read_model_source_traces_to_event_provenance(document, input_source)
+        })
+        .map_or(Ok(()), |input_source| {
+            Err(validation_issue(format!(
+                "command input '{}' source chain stops before event provenance",
+                input_source.name
+            )))
+        })
+}
+
+fn command_input_read_model_source_traces_to_event_provenance(
+    document: &EventModelDocument,
+    input_source: &CommandInputSource,
+) -> bool {
+    let CommandInputSourceKind::ReadModelField(read_model_name, field_name) = &input_source.source
+    else {
+        return true;
+    };
+
+    read_model_field(document, read_model_name, field_name)
+        .is_some_and(|field| matches!(field.source, ReadModelFieldSource::EventAttribute(_, _)))
 }
 
 fn validate_read_model_field_sources_are_present(

@@ -2544,6 +2544,7 @@ fn command_input_source_kind_from_json(input_source: &Value) -> CommandInputSour
     source
         .and_then(command_actor_input_source)
         .or_else(|| source.and_then(command_external_input_source))
+        .or_else(|| source.and_then(command_read_model_input_source))
         .unwrap_or(CommandInputSourceKind::Other)
 }
 
@@ -2562,6 +2563,17 @@ fn command_external_input_source(source: &str) -> Option<CommandInputSourceKind>
         .zip(DefinitionName::try_new(field_name.to_owned()).ok())
         .map(|(payload_name, field_name)| {
             CommandInputSourceKind::ExternalField(payload_name, field_name)
+        })
+}
+
+fn command_read_model_input_source(source: &str) -> Option<CommandInputSourceKind> {
+    let read_model_reference = source.strip_prefix("read_model.")?;
+    let (read_model_name, field_name) = read_model_reference.rsplit_once('.')?;
+    DefinitionName::try_new(read_model_name.to_owned())
+        .ok()
+        .zip(DefinitionName::try_new(field_name.to_owned()).ok())
+        .map(|(read_model_name, field_name)| {
+            CommandInputSourceKind::ReadModelField(read_model_name, field_name)
         })
 }
 
