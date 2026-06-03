@@ -101,6 +101,127 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn connect_workflow_adds_command_and_event_transitions_to_canonical_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+        add_slice(
+            temp_dir.path(),
+            "submit-ticket",
+            "Submit ticket",
+            "Actor submits repair ticket details.",
+        )?;
+        add_slice(
+            temp_dir.path(),
+            "review-ticket",
+            "Review ticket",
+            "Actor reviews repair ticket details.",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "submit-ticket",
+                "--via",
+                "command",
+                "--name",
+                "SubmitTicketForReview",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "connected capture-ticket to submit-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "submit-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "event",
+                "--name",
+                "TicketSubmittedForReview",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "connected submit-ticket to review-ticket",
+            ));
+
+        let workflow_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
+        )?;
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        assert!(
+            workflow_json.contains("\"via_command\": \"SubmitTicketForReview\""),
+            "workflow data must include the command trigger"
+        );
+        assert!(
+            workflow_json.contains("\"via_event\": \"TicketSubmittedForReview\""),
+            "workflow data must include the event trigger"
+        );
+        assert!(
+            lean.contains(
+                "def workflowTransitions : List String := [\"capture-ticket->submit-ticket:command:SubmitTicketForReview\",\"submit-ticket->review-ticket:event:TicketSubmittedForReview\"]"
+            ),
+            "Lean artifact must represent command and event workflow transitions"
+        );
+        assert!(
+            quint.contains(
+                "val workflowTransitions = [\"capture-ticket->submit-ticket:command:SubmitTicketForReview\",\"submit-ticket->review-ticket:event:TicketSubmittedForReview\"]"
+            ),
+            "Quint artifact must represent command and event workflow transitions"
+        );
+
+        Ok(())
+    }
+
     fn add_slice(
         cwd: &Path,
         slug: &str,

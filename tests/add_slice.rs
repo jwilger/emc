@@ -2,6 +2,7 @@
 mod tests {
     use std::error::Error;
     use std::fs::read_to_string;
+    use std::path::Path;
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -110,6 +111,96 @@ mod tests {
             "Quint artifact must represent the workflow's business slice details"
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn add_slice_preserves_existing_canonical_workflow_transitions() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(temp_dir.path(), "capture-ticket", "Capture ticket")?;
+        add_slice(temp_dir.path(), "submit-ticket", "Submit ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "submit-ticket",
+                "--via",
+                "command",
+                "--name",
+                "SubmitTicketForReview",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(temp_dir.path(), "review-ticket", "Review ticket")?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        assert!(
+            lean.contains(
+                "def workflowTransitions : List String := [\"capture-ticket->submit-ticket:command:SubmitTicketForReview\"]"
+            ),
+            "Lean artifact must preserve existing command transitions when a later slice is added"
+        );
+        assert!(
+            quint.contains(
+                "val workflowTransitions = [\"capture-ticket->submit-ticket:command:SubmitTicketForReview\"]"
+            ),
+            "Quint artifact must preserve existing command transitions when a later slice is added"
+        );
+
+        Ok(())
+    }
+
+    fn add_slice(cwd: &Path, slug: &str, name: &str) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                slug,
+                "--name",
+                name,
+                "--type",
+                "state_view",
+                "--description",
+                "Slice description.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
         Ok(())
     }
 }

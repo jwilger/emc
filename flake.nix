@@ -71,6 +71,7 @@
             in
             craneLib.filterCargoSources path type
             || pkgs.lib.hasSuffix "/flake.nix" pathText
+            || pkgs.lib.hasSuffix "/justfile" pathText
             || pkgs.lib.hasSuffix "/.github" pathText
             || pkgs.lib.hasInfix "/.github/" pathText
             || pkgs.lib.hasSuffix "/browser" pathText

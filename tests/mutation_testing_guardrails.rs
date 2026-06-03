@@ -14,8 +14,8 @@ mod tests {
             "justfile must expose a diff-scoped mutation testing gate"
         );
         assert!(
-            justfile.contains("git diff HEAD"),
-            "diff-scoped mutation testing must build a diff from touched code"
+            justfile.contains("git diff --no-ext-diff HEAD"),
+            "diff-scoped mutation testing must build a standard diff from touched code"
         );
         assert!(
             justfile.contains("cargo mutants --in-diff"),

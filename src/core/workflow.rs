@@ -341,10 +341,7 @@ fn workflow_transitions(
         .flat_map(|(source, transitions)| {
             transitions.iter().filter_map(move |transition| {
                 let target = transition.get("to").and_then(Value::as_str)?;
-                transition
-                    .get("via_navigation")
-                    .and_then(Value::as_str)
-                    .map(|trigger| format!("{source}->{target}:navigation:{trigger}"))
+                transition_label(source, target, transition)
             })
         })
         .map(|label| {
@@ -353,6 +350,21 @@ fn workflow_transitions(
             })
         })
         .collect()
+}
+
+fn transition_label(source: &str, target: &str, transition: &Value) -> Option<String> {
+    [
+        ("via_command", "command"),
+        ("via_event", "event"),
+        ("via_navigation", "navigation"),
+    ]
+    .into_iter()
+    .find_map(|(field, kind)| {
+        transition
+            .get(field)
+            .and_then(Value::as_str)
+            .map(|trigger| format!("{source}->{target}:{kind}:{trigger}"))
+    })
 }
 
 fn module_name(raw: &str) -> String {

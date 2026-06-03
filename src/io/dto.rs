@@ -163,6 +163,8 @@ pub fn parse_slice_kind(raw: &str) -> Result<SliceKind, BoundaryParseError> {
 
 pub fn parse_connection_kind(raw: &str) -> Result<ConnectionKind, BoundaryParseError> {
     match raw.trim() {
+        "command" => Ok(ConnectionKind::command()),
+        "event" => Ok(ConnectionKind::event()),
         "navigation" => Ok(ConnectionKind::navigation()),
         _ => Err(BoundaryParseError::new(format!(
             "invalid connection kind: {raw}"
