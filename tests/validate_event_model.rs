@@ -892,6 +892,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_state_change_slices_without_emitted_events() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("open-repair-ticket.eventmodel.json"),
+            "{\"name\":\"Repair queue\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[{\"name\":\"OpenRepairTicket\",\"inputs\":[],\"produces\":[]}],\"read_models\":[],\"slices\":[{\"name\":\"Open repair ticket\",\"type\":\"state_change\",\"commands\":[\"OpenRepairTicket\"],\"events\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"open repair ticket\",\"given\":[],\"when\":{},\"then\":[]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "state_change slice 'Open repair ticket' must emit at least one event",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_slice_outcome_labels() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");
@@ -1888,7 +1910,7 @@ mod tests {
         )?;
         write(
             workflows.join("submit-lesson.eventmodel.json"),
-            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_change\",\"events\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lessons\"}],\"events\":[{\"name\":\"LessonDrafted\",\"stream\":\"lessons\",\"attributes\":[]}],\"commands\":[{\"name\":\"DraftLesson\",\"inputs\":[],\"produces\":[\"LessonDrafted\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_change\",\"commands\":[\"DraftLesson\"],\"events\":[\"LessonDrafted\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"draft lesson\",\"given\":[],\"given_streams\":[{\"stream\":\"lessons\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"LessonDrafted\"]}]}]}",
         )?;
         write(
             workflows.join("review-lesson.eventmodel.json"),
@@ -1919,7 +1941,7 @@ mod tests {
         )?;
         write(
             workflows.join("submit-lesson.eventmodel.json"),
-            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_change\",\"events\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lessons\"}],\"events\":[{\"name\":\"LessonDrafted\",\"stream\":\"lessons\",\"attributes\":[]}],\"commands\":[{\"name\":\"DraftLesson\",\"inputs\":[],\"produces\":[\"LessonDrafted\"]}],\"read_models\":[],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_change\",\"commands\":[\"DraftLesson\"],\"events\":[\"LessonDrafted\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"draft lesson\",\"given\":[],\"given_streams\":[{\"stream\":\"lessons\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"LessonDrafted\"]}]}]}",
         )?;
         write(
             workflows.join("review-lesson.eventmodel.json"),
