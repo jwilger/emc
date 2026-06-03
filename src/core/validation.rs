@@ -1767,6 +1767,8 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
 
     validate_control_error_handling_recovery(document)?;
 
+    validate_controls_reference_known_commands(document)?;
+
     validate_navigation_controls_declare_type(document)?;
 
     validate_modeled_view_navigation_targets(document)?;
@@ -5001,6 +5003,40 @@ fn control_handles_command_error(
         .command_error_handling
         .iter()
         .any(|handling| handling.error_name == *error_name)
+}
+
+fn validate_controls_reference_known_commands(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .find_map(|view| control_unknown_command(document, view))
+        .map_or(Ok(()), |(view, control, command_name)| {
+            Err(validation_issue(format!(
+                "view '{}' control '{}' references unknown command '{}'",
+                view.name, control.label, command_name
+            )))
+        })
+}
+
+fn control_unknown_command<'a>(
+    document: &EventModelDocument,
+    view: &'a ViewDefinition,
+) -> Option<(
+    &'a ViewDefinition,
+    &'a ViewControlDefinition,
+    &'a DefinitionName,
+)> {
+    view.controls
+        .iter()
+        .filter_map(|control| {
+            control
+                .command
+                .as_ref()
+                .map(|command_name| (view, control, command_name))
+        })
+        .find(|(_, _, command_name)| command_definition(document, command_name).is_none())
 }
 
 fn validate_control_error_handling_recovery(
