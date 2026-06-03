@@ -139,6 +139,7 @@
 - 2026-06-03: `emc check` now rejects project manifest drift: generated `emc.toml` project name, Lean module, and Quint module declarations must remain canonical for the initialized project root.
 - 2026-06-03: `emc init` now creates empty formal slice artifact directories under `model/lean/slices` and `model/quint/slices`, and `emc check` requires their keep files as part of the deterministic project skeleton.
 - 2026-06-03: `emc check` now rejects missing Quint module closing declarations for generated project root, workflow, and business slice artifacts, so malformed formal modules fail deterministic synchronization checks before `emc verify`.
+- 2026-06-03: `emc validate` now rejects duplicate JSON object keys before event-model parsing, sharing the deterministic JSON key guardrail used by `emc check` so boundary parsing cannot silently accept last-key-wins model data.
 
 ### Task 1: Guardrails and Project Skeleton
 
