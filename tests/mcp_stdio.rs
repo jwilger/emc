@@ -1,8 +1,15 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::{Command as ProcessCommand, Stdio};
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
 
     use assert_cmd::Command;
+    use assert_cmd::cargo::cargo_bin;
+    use predicates::Predicate;
     use predicates::prelude::predicate;
     use tempfile::TempDir;
 
@@ -75,6 +82,54 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_stdio_responds_to_each_request_without_waiting_for_stdin_eof()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let mut server = ProcessCommand::new(cargo_bin("emc"))
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        let mut stdin = server
+            .stdin
+            .take()
+            .ok_or("MCP stdio child stdin is unavailable")?;
+        let stdout = server
+            .stdout
+            .take()
+            .ok_or("MCP stdio child stdout is unavailable")?;
+
+        writeln!(stdin, "{}", initialize_request())?;
+        stdin.flush()?;
+
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let mut lines = BufReader::new(stdout).lines();
+            let line = lines.next().transpose();
+            let _send_result = sender.send(line);
+        });
+
+        let line = receiver
+            .recv_timeout(Duration::from_millis(500))
+            .map_err(|_| "MCP stdio did not respond before stdin EOF")??
+            .ok_or("MCP stdio closed stdout without a response")?;
+
+        server.kill()?;
+        let output = server.wait_with_output()?;
+
+        assert!(output.status.success() || output.status.code().is_none());
+        assert!(String::from_utf8(output.stderr)?.is_empty());
+        assert!(
+            predicate::str::contains("\"serverInfo\"").eval(&line),
+            "MCP stdio response must be sent before the client closes stdin"
+        );
+
+        Ok(())
+    }
+
     fn mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
@@ -83,5 +138,9 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"show_workflow\",\"arguments\":{\"slug\":\"open-ticket\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"generate_site\",\"arguments\":{\"output\":\"mcp-site\"}}}\n",
         )
+    }
+
+    fn initialize_request() -> &'static str {
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}"
     }
 }
