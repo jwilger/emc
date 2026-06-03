@@ -110,73 +110,90 @@ fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
         "const workflowDescription = {}",
         json_string(workflow.description.as_ref())
     ));
+    let lean_transition_marker = artifact_digest_marker("def workflowTransitions :=");
+    let quint_transition_marker = artifact_digest_marker("const workflowTransitions =");
     let module_name = module_name_from_model(workflow.name.clone());
     let workflow_slug = workflow.slug.as_ref();
+    let workflow_path = project_path(format!(
+        "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
+    ));
+    let lean_path = project_path(format!("model/lean/{module_name}.lean"));
+    let quint_path = project_path(format!("model/quint/{module_name}.qnt"));
 
     vec![
-        Effect::RequireFile(project_path(format!(
-            "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
-        ))),
+        Effect::RequireFile(workflow_path.clone()),
         Effect::RequireDigest(
-            project_path(format!(
-                "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
-            )),
+            workflow_path.clone(),
             browser_name_marker,
             report_line(format!(
                 "browser workflow drift for workflow {workflow_name}"
             )),
         ),
         Effect::RequireDigest(
-            project_path(format!(
-                "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
-            )),
+            workflow_path.clone(),
             browser_description_marker,
             report_line(format!(
                 "browser workflow drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireFile(project_path(format!("model/lean/{module_name}.lean"))),
-        Effect::RequireFile(project_path(format!("model/quint/{module_name}.qnt"))),
+        Effect::RequireFile(lean_path.clone()),
+        Effect::RequireFile(quint_path.clone()),
         Effect::RequireDigest(
-            project_path(format!("model/lean/{module_name}.lean")),
+            lean_path.clone(),
             digest.clone(),
             report_line(format!(
                 "artifact digest mismatch for workflow {workflow_name}"
             )),
         ),
         Effect::RequireDigest(
-            project_path(format!("model/quint/{module_name}.qnt")),
+            quint_path.clone(),
             digest,
             report_line(format!(
                 "artifact digest mismatch for workflow {workflow_name}"
             )),
         ),
         Effect::RequireDigest(
-            project_path(format!("model/lean/{module_name}.lean")),
+            lean_path.clone(),
             lean_slug_marker,
             report_line(format!(
                 "Lean workflow field drift for workflow {workflow_name}"
             )),
         ),
         Effect::RequireDigest(
-            project_path(format!("model/lean/{module_name}.lean")),
+            lean_path.clone(),
             lean_description_marker,
             report_line(format!(
                 "Lean workflow field drift for workflow {workflow_name}"
             )),
         ),
         Effect::RequireDigest(
-            project_path(format!("model/quint/{module_name}.qnt")),
+            quint_path.clone(),
             quint_slug_marker,
             report_line(format!(
                 "Quint workflow field drift for workflow {workflow_name}"
             )),
         ),
         Effect::RequireDigest(
-            project_path(format!("model/quint/{module_name}.qnt")),
+            quint_path.clone(),
             quint_description_marker,
             report_line(format!(
                 "Quint workflow field drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireWorkflowTransitions(
+            workflow_path.clone(),
+            lean_path,
+            lean_transition_marker,
+            report_line(format!(
+                "Lean workflow transition drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireWorkflowTransitions(
+            workflow_path,
+            quint_path,
+            quint_transition_marker,
+            report_line(format!(
+                "Quint workflow transition drift for workflow {workflow_name}"
             )),
         ),
     ]
