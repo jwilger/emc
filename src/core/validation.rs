@@ -1892,6 +1892,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_wireframe_tokens_are_modeled(document))
         .and_then(|()| validate_view_fields_appear_in_wireframes(document))
         .and_then(|()| validate_view_controls_appear_in_wireframes(document))
+        .and_then(|()| validate_actor_control_inputs_appear_in_wireframes(document))
         .and_then(|()| validate_view_field_sources_are_present(document))
         .and_then(|()| validate_view_field_sources_reference_read_models(document))
         .and_then(|()| validate_view_field_source_chains_reach_original_provenance(document))
@@ -3570,6 +3571,34 @@ fn view_control_missing_from_wireframe(
         .iter()
         .find(|control| !view.wireframe.tokens().contains(&control.label))
         .map(|control| (view, control))
+}
+
+fn validate_actor_control_inputs_appear_in_wireframes(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .find_map(actor_control_input_missing_from_wireframe)
+        .map_or(Ok(()), |(view, input)| {
+            Err(validation_issue(format!(
+                "view '{}' wireframe does not reference control input '{}'",
+                view.name, input.name
+            )))
+        })
+}
+
+fn actor_control_input_missing_from_wireframe(
+    view: &ViewDefinition,
+) -> Option<(&ViewDefinition, &ControlInputProvision)> {
+    view.controls
+        .iter()
+        .flat_map(|control| control.input_provisions.iter())
+        .find(|input| {
+            matches!(input.source, ControlInputSource::UserInput(_))
+                && !view.wireframe.tokens().contains(&input.name)
+        })
+        .map(|input| (view, input))
 }
 
 fn validate_view_field_sources_are_present(
