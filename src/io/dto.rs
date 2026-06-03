@@ -16,15 +16,15 @@ use crate::core::validation::{
     BoardGraphConnection, BoardLane, BoardLanes, BoardReadModelCommandDependency, BoardSliceGraph,
     CommandDefinition, CommandDefinitionParts, CommandInputSource, CommandInputSourceKind,
     CommandReadModelReads, ControlCommandErrorHandling, ControlErrorRecoveryBehavior,
-    DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource, EventDefinition,
-    EventModelDocument, EventModelDocumentParts, EventModelFileKind, ExternalInputSchema,
-    ExternalPayloadVariant, LegacyScenariosField, NamedDefinition, NavigationType,
-    OutcomeDefinition, ReadModelDefinition, ReadModelField, ReadModelFieldAbsenceDefault,
-    ReadModelFieldDerivation, ReadModelFieldSource, ReadModelState, ReadModelTransitiveDerivation,
-    ScenarioSetKind, ScenarioStepField, SingletonBehavior, SliceDefinition, SliceDefinitionCount,
-    SliceDefinitionParts, SliceScenario, SliceScenarioParts, SliceType, TopLevelKey,
-    TranslationContract, ViewControlDefinition, ViewControlDefinitionParts, ViewDefinition,
-    ViewFieldDefinition, ViewFieldSource, ViewWireframe, WorkflowCommandTransition,
+    ControlInputProvision, DefinitionKind, DefinitionName, EventAttribute, EventAttributeSource,
+    EventDefinition, EventModelDocument, EventModelDocumentParts, EventModelFileKind,
+    ExternalInputSchema, ExternalPayloadVariant, LegacyScenariosField, NamedDefinition,
+    NavigationType, OutcomeDefinition, ReadModelDefinition, ReadModelField,
+    ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource, ReadModelState,
+    ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField, SingletonBehavior,
+    SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario, SliceScenarioParts,
+    SliceType, TopLevelKey, TranslationContract, ViewControlDefinition, ViewControlDefinitionParts,
+    ViewDefinition, ViewFieldDefinition, ViewFieldSource, ViewWireframe, WorkflowCommandTransition,
     WorkflowComposition, WorkflowEntryStepCount, WorkflowEventTransition, WorkflowExitRationale,
     WorkflowExitTransition, WorkflowExternalTriggerTransition, WorkflowInternalDefinitions,
     WorkflowNavigationTransition, WorkflowStep, WorkflowStepExit, WorkflowStepLifecycleRole,
@@ -1981,6 +1981,7 @@ fn view_control_definitions_from_json_view(
                 "payload_contract",
                 "payload contract",
             )?;
+            let input_provisions = control_input_provisions_from_json_control(control)?;
             let navigation_type = navigation_type_from_json_control(control);
             let command_error_handling = command_error_handling_from_json_control(control)?;
             DefinitionName::try_new(label.to_owned())
@@ -1988,6 +1989,7 @@ fn view_control_definitions_from_json_view(
                     ViewControlDefinition::new(
                         ViewControlDefinitionParts::new(label)
                             .with_command(command)
+                            .with_input_provisions(input_provisions)
                             .with_command_error_handling(command_error_handling)
                             .with_navigation_target(navigation_target)
                             .with_navigation_type(navigation_type)
@@ -1999,6 +2001,31 @@ fn view_control_definitions_from_json_view(
                 .map_err(|error| BoundaryParseError::new(format!("invalid control label: {error}")))
         })
         .collect()
+}
+
+fn control_input_provisions_from_json_control(
+    control: &Value,
+) -> Result<Vec<ControlInputProvision>, BoundaryParseError> {
+    control
+        .get("inputs")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(control_input_provision_from_json_input)
+        .collect()
+}
+
+fn control_input_provision_from_json_input(
+    input: &Value,
+) -> Result<ControlInputProvision, BoundaryParseError> {
+    let name = input
+        .as_str()
+        .or_else(|| input.get("name").and_then(Value::as_str))
+        .ok_or_else(|| BoundaryParseError::new("control input is missing name"))?;
+
+    DefinitionName::try_new(name.to_owned())
+        .map(ControlInputProvision::new)
+        .map_err(|error| BoundaryParseError::new(format!("invalid control input name: {error}")))
 }
 
 fn navigation_type_from_json_control(control: &Value) -> NavigationType {
