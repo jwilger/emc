@@ -111,6 +111,7 @@ fn handle_http_stream(
 struct HttpRequest {
     method: String,
     path: String,
+    host: Option<String>,
     origin: Option<String>,
     authorization: Option<String>,
     body: String,
@@ -132,6 +133,7 @@ fn read_http_request(reader: &mut BufReader<TcpStream>) -> Result<HttpRequest, S
         .to_owned();
 
     let mut content_length = 0_usize;
+    let mut host = None;
     let mut origin = None;
     let mut authorization = None;
     loop {
@@ -149,6 +151,8 @@ fn read_http_request(reader: &mut BufReader<TcpStream>) -> Result<HttpRequest, S
                 content_length = normalized_value
                     .parse::<usize>()
                     .map_err(|error| ShellError::message(error.to_string()))?;
+            } else if normalized_name == "host" {
+                host = Some(normalized_value);
             } else if normalized_name == "origin" {
                 origin = Some(normalized_value);
             } else if normalized_name == "authorization" {
@@ -167,6 +171,7 @@ fn read_http_request(reader: &mut BufReader<TcpStream>) -> Result<HttpRequest, S
     Ok(HttpRequest {
         method,
         path,
+        host,
         origin,
         authorization,
         body,
@@ -181,7 +186,8 @@ fn http_response_for_request(
     if request.method != "POST" || request.path != "/mcp" {
         return Ok(http_response("404 Not Found", "{\"error\":\"not found\"}"));
     }
-    if !origin_is_allowed(request.origin.as_deref(), authority) {
+    let request_authority = request.host.as_deref().unwrap_or(authority);
+    if !origin_is_allowed(request.origin.as_deref(), request_authority) {
         return Ok(http_response(
             "403 Forbidden",
             "{\"error\":\"forbidden origin\"}",
