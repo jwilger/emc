@@ -59,7 +59,7 @@ Feature: Event model validator enforces slice architecture boundaries
         | wireframe       | lesson_screen                |
 
     Scenario: Legacy command read-model reads are rejected
-      Given command "SubmitLessonForReview" reads read model "lesson_submission_context"
+      Given command "SubmitLessonForReview" declares legacy read-model dependency "lesson_submission_context"
       When I validate the event model
       Then validation fails with "command 'SubmitLessonForReview' uses legacy read-model reads"
 
@@ -87,8 +87,8 @@ Feature: Event model validator enforces slice architecture boundaries
       When I validate the event model
       Then validation fails with "translation slice 'Activate member from SAML claim' must not own view 'organization_sign_in_screen'"
 
-    Scenario: Translation command reads are explicit dependencies rather than fake automations
-      Given translation command "RecordSCIMMember" reads read model "scim_configuration"
+    Scenario: Board read-model to command dependencies require declared automations
+      Given board read model "scim_configuration" influences command "RecordSCIMMember"
       And the board inserts an undeclared automation element between "scim_configuration" and "RecordSCIMMember"
       When I validate the event model
       Then validation fails with "board element between read model 'scim_configuration' and command 'RecordSCIMMember' is not a declared automation"
