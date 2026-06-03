@@ -42,6 +42,10 @@ mod tests {
             "Nix package source filtering must preserve flake metadata inspected by tests"
         );
         assert!(
+            flake.contains("/justfile"),
+            "Nix package source filtering must preserve just recipes inspected by tests"
+        );
+        assert!(
             flake.contains("nativeBuildInputs = [ pkgs.makeWrapper ];"),
             "Nix package must wrap the EMC executable"
         );

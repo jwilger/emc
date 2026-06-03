@@ -14,12 +14,30 @@ use crate::core::types::{
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ConnectionKind {
+    Command,
+    Event,
     Navigation,
 }
 
 impl ConnectionKind {
+    pub fn command() -> Self {
+        Self::Command
+    }
+
+    pub fn event() -> Self {
+        Self::Event
+    }
+
     pub fn navigation() -> Self {
         Self::Navigation
+    }
+
+    fn trigger_field(self) -> &'static str {
+        match self {
+            Self::Command => "via_command",
+            Self::Event => "via_event",
+            Self::Navigation => "via_navigation",
+        }
     }
 }
 
@@ -174,12 +192,10 @@ fn append_transition(
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
-    transitions.push(match connection.kind {
-        ConnectionKind::Navigation => json!({
-            "to": connection.target.as_ref(),
-            "via_navigation": connection.trigger.as_ref()
-        }),
-    });
+    transitions.push(json!({
+        "to": connection.target.as_ref(),
+        connection.kind.trigger_field(): connection.trigger.as_ref()
+    }));
     next.insert("transitions".to_owned(), Value::Array(transitions));
     Ok(Value::Object(next))
 }
@@ -282,10 +298,7 @@ fn workflow_transitions(
         .flat_map(|(source, transitions)| {
             transitions.iter().filter_map(move |transition| {
                 let target = transition.get("to").and_then(Value::as_str)?;
-                transition
-                    .get("via_navigation")
-                    .and_then(Value::as_str)
-                    .map(|trigger| format!("{source}->{target}:navigation:{trigger}"))
+                transition_label(source, target, transition)
             })
         })
         .map(|label| {
@@ -294,6 +307,21 @@ fn workflow_transitions(
             })
         })
         .collect()
+}
+
+fn transition_label(source: &str, target: &str, transition: &Value) -> Option<String> {
+    [
+        ("via_command", "command"),
+        ("via_event", "event"),
+        ("via_navigation", "navigation"),
+    ]
+    .into_iter()
+    .find_map(|(field, kind)| {
+        transition
+            .get(field)
+            .and_then(Value::as_str)
+            .map(|trigger| format!("{source}->{target}:{kind}:{trigger}"))
+    })
 }
 
 fn module_name(raw: &str) -> String {
