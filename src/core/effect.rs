@@ -6,6 +6,7 @@ pub enum Effect {
     EnsureDirectory(ProjectPath),
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
+    RequireReviewRecord(ProjectPath, ReportLine),
     RequireWorkflowSliceFiles(ProjectPath, ReportLine),
     RequireWorkflowSlices(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),
     RequireWorkflowTransitions(ProjectPath, ProjectPath, ArtifactDigest, ReportLine),

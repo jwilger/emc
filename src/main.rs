@@ -9,6 +9,7 @@ use emc::core::effect::FileContents;
 use emc::core::effect::ProjectPath;
 use emc::core::layout::{check_project, list_workflows, show_workflow};
 use emc::core::project::{ProjectName, init_project};
+use emc::core::review_gate::review_gate;
 use emc::core::site::generate_site;
 use emc::core::slice::{NewSlice, add_slice};
 use emc::core::types::{ModelDescription, WorkflowSlug};
@@ -50,6 +51,9 @@ enum Command {
     },
     ListWorkflows,
     McpStdio,
+    ReviewGate {
+        slug: WorkflowSlug,
+    },
     ShowWorkflow {
         slug: WorkflowSlug,
     },
@@ -137,6 +141,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
             interpret(list_workflows(imported_workflows))
         }
         Command::McpStdio => serve_stdio(),
+        Command::ReviewGate { slug } => interpret(review_gate(slug)),
         Command::ShowWorkflow { slug } => {
             let workflow_path = format!(
                 "model/browser/data/workflows/{}.eventmodel.json",
@@ -315,6 +320,15 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         [command, transport] if command == "mcp" && transport == "stdio" => Ok(Cli {
             command: Command::McpStdio,
         }),
+        [command, subject, workflow_flag, workflow]
+            if command == "review" && subject == "gate" && workflow_flag == "--workflow" =>
+        {
+            parse_workflow_slug(workflow)
+                .map(|slug| Cli {
+                    command: Command::ReviewGate { slug },
+                })
+                .map_err(|error| ShellError::message(error.to_string()))
+        }
         [command, subject, slug] if command == "show" && subject == "workflow" => {
             parse_workflow_slug(slug)
                 .map(|slug| Cli {
