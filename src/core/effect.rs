@@ -58,6 +58,7 @@ pub enum Effect {
     ShowWorkflowFromWorkflow(WorkflowSlug),
     UpdateSliceDescriptionFromWorkflow(SliceSlug, ModelDescription),
     UpdateSliceKindFromWorkflow(SliceSlug, SliceKind),
+    UpdateSliceNameFromWorkflow(SliceSlug, ModelName),
     UpdateWorkflowDescriptionFromIndexAndWorkflow(WorkflowSlug, ModelDescription),
     UpdateWorkflowNameFromIndexAndWorkflow(WorkflowSlug, ModelName),
     ValidateEventModelTarget(ProjectPath),

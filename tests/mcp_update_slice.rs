@@ -176,6 +176,99 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_stdio_updates_slice_name() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor enters repair ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(mcp_name_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"update_slice_name\""))
+            .stdout(predicate::str::contains(
+                "updated slice Capture repair ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_json = read_to_string(
+            temp_dir
+                .path()
+                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
+        )?;
+        let slice_lean = read_to_string(
+            temp_dir
+                .path()
+                .join("model/lean/slices/CaptureRepairTicket.lean"),
+        )?;
+        let slice_quint = read_to_string(
+            temp_dir
+                .path()
+                .join("model/quint/slices/CaptureRepairTicket.qnt"),
+        )?;
+
+        assert!(
+            slice_json.contains("\"name\": \"Capture repair ticket\""),
+            "slice browser data must preserve the MCP-updated name"
+        );
+        assert!(
+            slice_lean.contains("def sliceName := \"Capture repair ticket\""),
+            "slice Lean artifact must represent the MCP-updated name"
+        );
+        assert!(
+            slice_quint.contains("val sliceName = \"Capture repair ticket\""),
+            "slice Quint artifact must represent the MCP-updated name"
+        );
+
+        Ok(())
+    }
+
     fn mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
@@ -189,6 +282,14 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice_kind\",\"arguments\":{\"slug\":\"capture-ticket\",\"type\":\"automation\"}}}\n",
+        )
+    }
+
+    fn mcp_name_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice_name\",\"arguments\":{\"slug\":\"capture-ticket\",\"name\":\"Capture repair ticket\"}}}\n",
         )
     }
 }
