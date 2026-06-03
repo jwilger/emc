@@ -1071,6 +1071,26 @@ mod tests {
     }
 
     #[test]
+    fn validate_allows_hidden_session_control_inputs_with_descriptions()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("open-repair-ticket.eventmodel.json"),
+            "{\"name\":\"Open repair ticket\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"repair_ticket\"}],\"events\":[{\"name\":\"RepairTicketOpened\",\"stream\":\"repair_ticket\",\"attributes\":[{\"name\":\"actor_user_id\",\"source\":\"command.actor_user_id\"}]}],\"commands\":[{\"name\":\"OpenRepairTicket\",\"inputs\":[\"actor_user_id\"],\"produces\":[\"RepairTicketOpened\"]}],\"read_models\":[],\"views\":[{\"name\":\"repair_queue_screen\",\"wireframe\":\"<button data-ref=\\\"Open repair ticket\\\"></button>\",\"uses_read_models\":[],\"controls\":[{\"label\":\"Open repair ticket\",\"command\":\"OpenRepairTicket\",\"inputs\":[{\"name\":\"actor_user_id\",\"source\":\"session.user_id\",\"description\":\"Authenticated actor identifier.\"}]}]}],\"slices\":[{\"name\":\"Show repair queue\",\"type\":\"state_view\",\"events\":[\"RepairTicketOpened\"],\"views\":[\"repair_queue_screen\"],\"acceptance_scenarios\":[{\"name\":\"show repair queue\",\"given\":[],\"when\":{},\"then\":[]}],\"contract_scenarios\":[]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_view_fields_without_source_provenance() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");
