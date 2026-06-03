@@ -4,6 +4,7 @@ pub mod digest;
 pub mod effect;
 pub mod emit;
 pub mod gherkin;
+pub mod json_object_document;
 pub mod layout;
 pub mod project;
 pub mod review_gate;

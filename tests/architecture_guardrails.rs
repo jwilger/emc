@@ -352,6 +352,24 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn shell_json_object_checks_use_semantic_document_parser() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/shell.rs")?;
+        let violations = ["serde_json::Value", "serde_json::from_str::<Value>"]
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| format!("src/shell.rs parses raw JSON values via `{marker}`"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "shell JSON object checks must use a semantic document parser"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",

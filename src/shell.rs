@@ -11,6 +11,7 @@ use crate::core::digest::artifact_digest_from_workflow_document;
 use crate::core::effect::{
     ArtifactDigest, Effect, EffectPlan, FileContents, ProcessInvocation, ProjectPath,
 };
+use crate::core::json_object_document::JsonObjectDocument;
 use crate::core::layout::{ModeledWorkflowLayout, check_project, list_workflows, show_workflow};
 use crate::core::project::ProjectName;
 use crate::core::review_record::{ReviewCategoryFinding, ReviewRecordDocument};
@@ -24,7 +25,6 @@ use crate::event_model_validation::validate_event_model_sources;
 use crate::io::dto::{
     parse_browser_index_workflows, parse_project_manifest_name, parse_slice_slug,
 };
-use serde_json::Value;
 
 const REQUIRED_REVIEW_CATEGORIES: &[&str] = &[
     "lifecycle-entry",
@@ -549,13 +549,11 @@ fn require_workflow_slice_json_objects(
 
 fn require_json_object(path: &str, message: &str) -> Result<(), ShellError> {
     let contents = fs::read_to_string(Path::new(path)).map_err(ShellError::io)?;
-    let json = serde_json::from_str::<Value>(&contents)
+    let file_contents = FileContents::try_new(contents)
         .map_err(|_error| ShellError::message(message.to_owned()))?;
-    if json.is_object() {
-        Ok(())
-    } else {
-        Err(ShellError::message(message.to_owned()))
-    }
+    JsonObjectDocument::parse(&file_contents)
+        .map(|_document| ())
+        .map_err(|_error| ShellError::message(message.to_owned()))
 }
 
 fn require_workflow_slice_json_object_keys_unique(
