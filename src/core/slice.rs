@@ -3,8 +3,13 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::digest::artifact_digest;
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
-use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
-use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
+use crate::core::emit::lean::{
+    emit_slice_module as emit_lean_slice_module, emit_workflow_module as emit_lean_workflow_module,
+};
+use crate::core::emit::quint::{
+    emit_slice_module as emit_quint_slice_module,
+    emit_workflow_module as emit_quint_workflow_module,
+};
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceKindName, SliceSlug,
     WorkflowSliceDetail, WorkflowSliceFileReference, WorkflowSlug,
@@ -99,7 +104,7 @@ pub fn add_slice(
     let workflow_description = workflow_document
         .description()
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
-    let module_name = module_name(workflow_name.as_ref());
+    let workflow_module_name = module_name(workflow_name.as_ref());
     let workflow_slice_details = workflow_document
         .slice_details()
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
@@ -118,6 +123,8 @@ pub fn add_slice(
         .map_err(|error| SliceMutationError::new(error.to_string()))?;
     let slice_json = slice_json(&new_slice);
     let slice_name = new_slice.name.as_ref();
+    let slice_module_name = module_name(slice_name);
+    let slice_kind = slice_kind_name(new_slice.kind);
 
     Ok(EffectPlan::new(vec![
         Effect::WriteFile(workflow_path(&new_slice.workflow_slug), workflow_json),
@@ -129,9 +136,29 @@ pub fn add_slice(
             file_contents(slice_json),
         ),
         Effect::WriteFile(
-            project_path(format!("model/lean/{module_name}.lean")),
+            project_path(format!("model/lean/slices/{slice_module_name}.lean")),
+            emit_lean_slice_module(
+                lean_module_name(slice_module_name.clone()),
+                new_slice.name.clone(),
+                new_slice.description.clone(),
+                new_slice.slug.clone(),
+                slice_kind.clone(),
+            ),
+        ),
+        Effect::WriteFile(
+            project_path(format!("model/quint/slices/{slice_module_name}.qnt")),
+            emit_quint_slice_module(
+                quint_module_name(slice_module_name),
+                new_slice.name.clone(),
+                new_slice.description.clone(),
+                new_slice.slug.clone(),
+                slice_kind,
+            ),
+        ),
+        Effect::WriteFile(
+            project_path(format!("model/lean/{workflow_module_name}.lean")),
             emit_lean_workflow_module(
-                lean_module_name(module_name.clone()),
+                lean_module_name(workflow_module_name.clone()),
                 workflow_name.clone(),
                 workflow_description.clone(),
                 new_slice.workflow_slug.clone(),
@@ -141,9 +168,9 @@ pub fn add_slice(
             ),
         ),
         Effect::WriteFile(
-            project_path(format!("model/quint/{module_name}.qnt")),
+            project_path(format!("model/quint/{workflow_module_name}.qnt")),
             emit_quint_workflow_module(
-                quint_module_name(module_name),
+                quint_module_name(workflow_module_name),
                 workflow_name,
                 workflow_description,
                 new_slice.workflow_slug.clone(),

@@ -1,7 +1,7 @@
 use crate::core::effect::{ArtifactDigest, FileContents};
 use crate::core::types::{
-    ModelDescription, ModelName, QuintModuleName, WorkflowSliceDetail, WorkflowSlug,
-    WorkflowTransitionLabel,
+    ModelDescription, ModelName, QuintModuleName, SliceKindName, SliceSlug, WorkflowSliceDetail,
+    WorkflowSlug, WorkflowTransitionLabel,
 };
 
 pub fn emit_workflow_module(
@@ -26,6 +26,23 @@ pub fn emit_workflow_module(
         slice_list = slice_list,
         slice_detail_list = slice_detail_list,
         transition_list = transition_list,
+    ))
+}
+
+pub fn emit_slice_module(
+    module_name: QuintModuleName,
+    slice_name: ModelName,
+    slice_description: ModelDescription,
+    slice_slug: SliceSlug,
+    slice_kind: SliceKindName,
+) -> FileContents {
+    file_contents(format!(
+        "module {module_name} {{\n  // EMC generated Quint business slice model.\n  val sliceName = {slice_name_json}\n  val sliceSlug = {slice_slug_json}\n  val sliceKind = {slice_kind_json}\n  val sliceDescription = {slice_description_json}\n  val sliceIdentityStable = sliceName == {slice_name_json}\n}}\n",
+        module_name = module_name.as_ref(),
+        slice_name_json = quoted(slice_name.as_ref()),
+        slice_slug_json = quoted(slice_slug.as_ref()),
+        slice_kind_json = quoted(slice_kind.as_ref()),
+        slice_description_json = quoted(slice_description.as_ref()),
     ))
 }
 

@@ -67,6 +67,10 @@ mod tests {
                 .path()
                 .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
         )?;
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
@@ -93,6 +97,46 @@ mod tests {
         assert!(
             slice_json.contains("\"description\": \"Actor enters repair ticket details.\""),
             "slice data must preserve the slice description"
+        );
+        assert!(
+            slice_lean.contains("namespace CaptureTicket"),
+            "Lean slice artifact must use the business slice module name"
+        );
+        assert!(
+            slice_lean.contains("def sliceName := \"Capture ticket\""),
+            "Lean slice artifact must represent the business slice name"
+        );
+        assert!(
+            slice_lean.contains("def sliceSlug := \"capture-ticket\""),
+            "Lean slice artifact must represent the business slice slug"
+        );
+        assert!(
+            slice_lean.contains("def sliceKind := \"state_view\""),
+            "Lean slice artifact must represent the semantic slice kind"
+        );
+        assert!(
+            slice_lean.contains("def sliceDescription := \"Actor enters repair ticket details.\""),
+            "Lean slice artifact must represent the business slice description"
+        );
+        assert!(
+            slice_quint.contains("module CaptureTicket"),
+            "Quint slice artifact must use the business slice module name"
+        );
+        assert!(
+            slice_quint.contains("val sliceName = \"Capture ticket\""),
+            "Quint slice artifact must represent the business slice name"
+        );
+        assert!(
+            slice_quint.contains("val sliceSlug = \"capture-ticket\""),
+            "Quint slice artifact must represent the business slice slug"
+        );
+        assert!(
+            slice_quint.contains("val sliceKind = \"state_view\""),
+            "Quint slice artifact must represent the semantic slice kind"
+        );
+        assert!(
+            slice_quint.contains("val sliceDescription = \"Actor enters repair ticket details.\""),
+            "Quint slice artifact must represent the business slice description"
         );
         assert!(
             lean.contains("def workflowSlices : List String := [\"capture-ticket\"]"),
