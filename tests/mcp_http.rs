@@ -4,6 +4,7 @@ mod tests {
     use std::io::{Error as IoError, ErrorKind, Read, Write};
     use std::net::{TcpListener, TcpStream};
     use std::process::{Command as ProcessCommand, Stdio};
+    use std::sync::{Mutex, MutexGuard};
     use std::thread;
     use std::time::Duration;
 
@@ -12,8 +13,11 @@ mod tests {
     use predicates::prelude::predicate;
     use tempfile::TempDir;
 
+    static MCP_HTTP_TEST_LOCK: Mutex<()> = Mutex::new(());
+
     #[test]
     fn mcp_http_serves_initialize_on_localhost_with_origin_check() -> Result<(), Box<dyn Error>> {
+        let _guard = mcp_http_test_lock()?;
         let temp_dir = TempDir::new()?;
         let port = available_loopback_port()?;
         let server = ProcessCommand::new(cargo_bin("emc"))
@@ -49,6 +53,7 @@ mod tests {
 
     #[test]
     fn mcp_http_accepts_explicit_local_bind_for_server_mode() -> Result<(), Box<dyn Error>> {
+        let _guard = mcp_http_test_lock()?;
         let temp_dir = TempDir::new()?;
         let port = available_loopback_port()?;
         let mut server = ProcessCommand::new(cargo_bin("emc"))
@@ -79,6 +84,7 @@ mod tests {
 
     #[test]
     fn mcp_http_rejects_non_local_bind_without_auth_token() -> Result<(), Box<dyn Error>> {
+        let _guard = mcp_http_test_lock()?;
         let temp_dir = TempDir::new()?;
         let port = available_loopback_port()?;
 
@@ -106,6 +112,7 @@ mod tests {
 
     #[test]
     fn mcp_http_requires_bearer_token_for_non_local_bind() -> Result<(), Box<dyn Error>> {
+        let _guard = mcp_http_test_lock()?;
         let temp_dir = TempDir::new()?;
         let port = available_loopback_port()?;
         let server = ProcessCommand::new(cargo_bin("emc"))
@@ -137,6 +144,12 @@ mod tests {
         assert!(predicate::str::contains("HTTP/1.1 401 Unauthorized").eval(&response));
 
         Ok(())
+    }
+
+    fn mcp_http_test_lock() -> Result<MutexGuard<'static, ()>, Box<dyn Error>> {
+        MCP_HTTP_TEST_LOCK
+            .lock()
+            .map_err(|error| IoError::other(error.to_string()).into())
     }
 
     fn available_loopback_port() -> Result<u16, Box<dyn Error>> {

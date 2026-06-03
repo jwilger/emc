@@ -111,7 +111,7 @@ fn workflow_effect_plan(
                 "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
             )),
             file_contents(format!(
-                "{{\n  \"name\": {},\n  \"version\": \"0.1.0\",\n  \"description\": {},\n  \"slice_files\": [],\n  \"steps\": []\n}}\n",
+                "{{\n  \"name\": {},\n  \"version\": \"0.1.0\",\n  \"description\": {},\n  \"board\": {{}},\n  \"streams\": [],\n  \"events\": [],\n  \"commands\": [],\n  \"read_models\": [],\n  \"slices\": [],\n  \"slice_files\": [],\n  \"steps\": []\n}}\n",
                 json_string(workflow_name),
                 json_string(workflow_description)
             )),

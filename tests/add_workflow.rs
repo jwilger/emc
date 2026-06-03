@@ -59,6 +59,14 @@ mod tests {
             "workflow browser data must preserve the workflow description"
         );
         assert!(
+            workflow_json.contains("\"streams\": []")
+                && workflow_json.contains("\"events\": []")
+                && workflow_json.contains("\"commands\": []")
+                && workflow_json.contains("\"read_models\": []")
+                && workflow_json.contains("\"slices\": []"),
+            "workflow browser data must include the full event-model validation shape"
+        );
+        assert!(
             lean.contains("def workflowName := \"Open ticket\""),
             "Lean artifact must represent the added business workflow"
         );
