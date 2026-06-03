@@ -13,7 +13,7 @@ use crate::core::layout::{ModeledWorkflowLayout, check_project, list_workflows, 
 use crate::core::project::ProjectName;
 use crate::core::site::generate_site;
 use crate::core::slice::add_slice;
-use crate::core::types::WorkflowSlug;
+use crate::core::types::{WorkflowSliceDetail, WorkflowSlug};
 use crate::core::verify::verify_project;
 use crate::core::workflow::{add_workflow, update_workflow_description};
 use crate::core::workflow_document::WorkflowDocument;
@@ -1067,82 +1067,48 @@ fn canonical_declaration_line<'a>(line: &'a str, prefix: &str) -> Option<&'a str
 }
 
 fn workflow_slice_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    let workflow = workflow_json(workflow_contents)?;
-    let steps = workflow_steps(&workflow)?;
-
-    steps
-        .iter()
-        .filter_map(|step| step.get("slice").and_then(Value::as_str))
-        .map(|slice| json_string(slice.to_owned()))
+    workflow_slice_details(workflow_contents)?
+        .into_iter()
+        .map(|slice| json_string(slice.slug().as_ref().to_owned()))
         .collect()
 }
 
 fn workflow_slice_detail_tuple_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    let workflow = workflow_json(workflow_contents)?;
-    let steps = workflow_steps(&workflow)?;
-
-    steps
-        .iter()
-        .map(|step| {
-            let slug = step
-                .get("slice")
-                .and_then(Value::as_str)
-                .ok_or_else(|| ShellError::message("workflow step is missing slice"))?;
-            let name = step
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| ShellError::message("workflow step is missing name"))?;
-            let kind = step
-                .get("type")
-                .and_then(Value::as_str)
-                .ok_or_else(|| ShellError::message("workflow step is missing type"))?;
-            let description = step
-                .get("description")
-                .and_then(Value::as_str)
-                .ok_or_else(|| ShellError::message("workflow step is missing description"))?;
+    workflow_slice_details(workflow_contents)?
+        .into_iter()
+        .map(|slice| {
             Ok(format!(
                 "({}, {}, {}, {})",
-                json_string(slug.to_owned())?,
-                json_string(name.to_owned())?,
-                json_string(kind.to_owned())?,
-                json_string(description.to_owned())?
+                json_string(slice.slug().as_ref().to_owned())?,
+                json_string(slice.name().as_ref().to_owned())?,
+                json_string(slice.kind().as_ref().to_owned())?,
+                json_string(slice.description().as_ref().to_owned())?
             ))
         })
         .collect()
 }
 
 fn workflow_slice_detail_record_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    let workflow = workflow_json(workflow_contents)?;
-    let steps = workflow_steps(&workflow)?;
-
-    steps
-        .iter()
-        .map(|step| {
-            let slug = step
-                .get("slice")
-                .and_then(Value::as_str)
-                .ok_or_else(|| ShellError::message("workflow step is missing slice"))?;
-            let name = step
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| ShellError::message("workflow step is missing name"))?;
-            let kind = step
-                .get("type")
-                .and_then(Value::as_str)
-                .ok_or_else(|| ShellError::message("workflow step is missing type"))?;
-            let description = step
-                .get("description")
-                .and_then(Value::as_str)
-                .ok_or_else(|| ShellError::message("workflow step is missing description"))?;
+    workflow_slice_details(workflow_contents)?
+        .into_iter()
+        .map(|slice| {
             Ok(format!(
                 "{{ slug: {}, name: {}, kind: {}, description: {} }}",
-                json_string(slug.to_owned())?,
-                json_string(name.to_owned())?,
-                json_string(kind.to_owned())?,
-                json_string(description.to_owned())?
+                json_string(slice.slug().as_ref().to_owned())?,
+                json_string(slice.name().as_ref().to_owned())?,
+                json_string(slice.kind().as_ref().to_owned())?,
+                json_string(slice.description().as_ref().to_owned())?
             ))
         })
         .collect()
+}
+
+fn workflow_slice_details(workflow_contents: &str) -> Result<Vec<WorkflowSliceDetail>, ShellError> {
+    workflow_document(workflow_contents).and_then(|workflow| {
+        workflow
+            .slice_details()
+            .map_err(|error| ShellError::message(error.to_string()))
+    })
 }
 
 fn workflow_transition_tuple_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
@@ -1180,12 +1146,7 @@ fn workflow_transition_record_labels(workflow_contents: &str) -> Result<Vec<Stri
 }
 
 fn workflow_transition_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    FileContents::try_new(workflow_contents.to_owned())
-        .map_err(|error| ShellError::message(error.to_string()))
-        .and_then(|contents| {
-            WorkflowDocument::parse(&contents)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })
+    workflow_document(workflow_contents)
         .and_then(|workflow| {
             workflow
                 .transitions()
@@ -1196,6 +1157,15 @@ fn workflow_transition_labels(workflow_contents: &str) -> Result<Vec<String>, Sh
                 .into_iter()
                 .map(|transition| transition.as_ref().to_owned())
                 .collect()
+        })
+}
+
+fn workflow_document(workflow_contents: &str) -> Result<WorkflowDocument, ShellError> {
+    FileContents::try_new(workflow_contents.to_owned())
+        .map_err(|error| ShellError::message(error.to_string()))
+        .and_then(|contents| {
+            WorkflowDocument::parse(&contents)
+                .map_err(|error| ShellError::message(error.to_string()))
         })
 }
 
@@ -1219,13 +1189,6 @@ fn transition_record_parts(label: &str) -> Result<(&str, &str, String, String), 
 fn workflow_json(workflow_contents: &str) -> Result<Value, ShellError> {
     serde_json::from_str::<Value>(workflow_contents)
         .map_err(|error| ShellError::message(format!("invalid workflow JSON: {error}")))
-}
-
-fn workflow_steps(workflow: &Value) -> Result<&Vec<Value>, ShellError> {
-    workflow
-        .get("steps")
-        .and_then(Value::as_array)
-        .ok_or_else(|| ShellError::message("workflow document is missing steps"))
 }
 
 fn json_string(value: String) -> Result<String, ShellError> {
