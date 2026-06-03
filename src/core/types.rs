@@ -174,3 +174,24 @@ pub struct ViewFieldName(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
 pub struct SourceChainHop(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ControlLabel(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ControlEffectKind(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ControlEffectTarget(String);
