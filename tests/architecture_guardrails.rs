@@ -900,6 +900,35 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn check_project_uses_normalized_formal_graph_readers() -> Result<(), Box<dyn Error>> {
+        let layout = read_workspace_file("src/core/layout.rs")?;
+        let shell = read_workspace_file("src/shell.rs")?;
+        let effect = read_workspace_file("src/core/effect.rs")?;
+        let required_markers = [
+            (&effect, "RequireLeanWorkflowGraph"),
+            (&effect, "RequireQuintWorkflowGraph"),
+            (&layout, "Effect::RequireLeanWorkflowGraph"),
+            (&layout, "Effect::RequireQuintWorkflowGraph"),
+            (&shell, "parse_lean_workflow_graph"),
+            (&shell, "parse_quint_workflow_graph"),
+            (&shell, "workflow_graph_from_document"),
+        ];
+        let violations = required_markers
+            .iter()
+            .filter(|(source, marker)| !source.contains(*marker))
+            .map(|(_, marker)| format!("formal graph check is missing `{marker}`"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "check_project must read Lean and Quint artifacts back into normalized semantic workflow graphs"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",

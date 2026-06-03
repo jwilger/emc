@@ -11,6 +11,10 @@ use crate::core::digest::{artifact_digest_from_workflow_document, slice_artifact
 use crate::core::effect::{
     ArtifactDigest, Effect, EffectPlan, FileContents, ProcessInvocation, ProjectPath,
 };
+use crate::core::formal_graph::{
+    FormalGraphError, FormalWorkflowGraph, parse_lean_workflow_graph, parse_quint_workflow_graph,
+    workflow_graph_from_document,
+};
 use crate::core::json_object_document::JsonObjectDocument;
 use crate::core::layout::{
     ModeledWorkflowLayout, ModeledWorkflowLayouts, ModeledWorkflowSliceDetails,
@@ -232,6 +236,16 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             )
             .map(|()| Vec::new())
         }
+        Effect::RequireLeanWorkflowGraph(workflow_path, artifact_path, workflow_slug, message) => {
+            require_formal_workflow_graph(
+                workflow_path.as_ref(),
+                artifact_path.as_ref(),
+                workflow_slug.clone(),
+                message.as_ref(),
+                parse_lean_workflow_graph,
+            )
+            .map(|()| Vec::new())
+        }
         Effect::RequireJsonObjectKeysUnique(path, message) => {
             require_json_object_keys_unique(path.as_ref(), message.as_ref()).map(|()| Vec::new())
         }
@@ -256,6 +270,16 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             message.as_ref(),
         )
         .map(|()| Vec::new()),
+        Effect::RequireQuintWorkflowGraph(workflow_path, artifact_path, workflow_slug, message) => {
+            require_formal_workflow_graph(
+                workflow_path.as_ref(),
+                artifact_path.as_ref(),
+                workflow_slug.clone(),
+                message.as_ref(),
+                parse_quint_workflow_graph,
+            )
+            .map(|()| Vec::new())
+        }
         Effect::RequireReferencedSliceFiles(workflows_path, slices_path, message) => {
             require_referenced_slice_files(
                 workflows_path.as_ref(),
@@ -868,6 +892,33 @@ fn indexed_workflow_paths(index_contents: &str) -> Result<Vec<ProjectPath>, Shel
         .iter()
         .map(ModeledWorkflowLayout::browser_data_path)
         .collect())
+}
+
+fn require_formal_workflow_graph(
+    workflow_path: &str,
+    artifact_path: &str,
+    workflow_slug: WorkflowSlug,
+    message: &str,
+    parse_artifact: fn(&FileContents) -> Result<FormalWorkflowGraph, FormalGraphError>,
+) -> Result<(), ShellError> {
+    let workflow_contents = FileContents::try_new(
+        fs::read_to_string(Path::new(workflow_path)).map_err(ShellError::io)?,
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    let artifact_contents = FileContents::try_new(
+        fs::read_to_string(Path::new(artifact_path)).map_err(ShellError::io)?,
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    let expected = workflow_graph_from_document(workflow_slug, workflow_contents)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let actual = parse_artifact(&artifact_contents)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+
+    if expected == actual {
+        Ok(())
+    } else {
+        Err(ShellError::message(message.to_owned()))
+    }
 }
 
 fn require_json_object_keys_unique(path: &str, message: &str) -> Result<(), ShellError> {
@@ -1603,5 +1654,51 @@ fn verification_label(invocation: &ProcessInvocation) -> &str {
         "Quint verification"
     } else {
         "verification command"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error;
+    use std::fs;
+
+    use tempfile::TempDir;
+
+    use super::{parse_lean_workflow_graph, require_formal_workflow_graph};
+    use crate::io::dto::parse_workflow_slug;
+
+    #[test]
+    fn formal_workflow_graph_requirement_reports_stale_lean_transition()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let workflow_path = temp_dir.path().join("workflow.eventmodel.json");
+        let lean_path = temp_dir.path().join("OpenTicket.lean");
+        fs::write(&workflow_path, workflow_document())?;
+        fs::write(&lean_path, stale_lean_artifact())?;
+
+        let result = require_formal_workflow_graph(
+            workflow_path
+                .to_str()
+                .ok_or("workflow path must be UTF-8")?,
+            lean_path.to_str().ok_or("Lean path must be UTF-8")?,
+            parse_workflow_slug("open-ticket")?,
+            "Lean workflow graph drift",
+            parse_lean_workflow_graph,
+        );
+        let Err(error) = result else {
+            return Err("stale formal transition must be detected by graph comparison".into());
+        };
+
+        assert_eq!(error.to_string(), "Lean workflow graph drift");
+
+        Ok(())
+    }
+
+    fn workflow_document() -> &'static str {
+        "{\n  \"name\": \"Open ticket\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Actor opens a repair ticket.\",\n  \"board\": {},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"capture-ticket\", \"name\": \"Capture ticket\", \"type\": \"state_view\", \"description\": \"Actor enters repair ticket details.\", \"relationship\": \"entry\", \"transitions\": [{\"to\": \"review-ticket\", \"via_navigation\": \"review-ticket-screen\"}]},\n    {\"slice\": \"review-ticket\", \"name\": \"Review ticket\", \"type\": \"state_view\", \"description\": \"Actor reviews the repair ticket.\", \"relationship\": \"main\"}\n  ]\n}\n"
+    }
+
+    fn stale_lean_artifact() -> &'static str {
+        "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:name=Open ticket;slug=open-ticket;description=Actor opens a repair ticket.;slices=capture-ticket|Capture ticket|state_view|Actor enters repair ticket details.,review-ticket|Review ticket|state_view|Actor reviews the repair ticket.;transitions=capture-ticket->review-ticket:navigation:review-ticket-screen\n-- EMC generated Lean4 business workflow model.\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := [\"capture-ticket\",\"review-ticket\"]\n\ndef workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Actor enters repair ticket details.\"),(\"review-ticket\", \"Review ticket\", \"state_view\", \"Actor reviews the repair ticket.\")]\n\nstructure WorkflowTransition where\n  source : String\n  target : String\n  kind : String\n  trigger : String\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"stale-screen\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\ntheorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl\n\ntheorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl\n\nend OpenTicket\n"
     }
 }

@@ -25,6 +25,7 @@ pub enum Effect {
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
     RequireIndexedWorkflowFiles(ProjectPath, ProjectPath, ReportLine),
+    RequireLeanWorkflowGraph(ProjectPath, ProjectPath, WorkflowSlug, ReportLine),
     RequireJsonObjectKeysUnique(ProjectPath, ReportLine),
     RequireOnlyModeledArtifacts(
         ProjectPath,
@@ -38,6 +39,7 @@ pub enum Effect {
         ArtifactFileExtension,
         ReportLine,
     ),
+    RequireQuintWorkflowGraph(ProjectPath, ProjectPath, WorkflowSlug, ReportLine),
     RequireReferencedSliceFileIdentities(ProjectPath, ReportLine),
     RequireReferencedSliceFiles(ProjectPath, ProjectPath, ReportLine),
     RequireReviewRecord(ProjectPath, ProjectPath, ReportLine),
