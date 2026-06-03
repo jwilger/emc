@@ -1834,6 +1834,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_view_fields_appear_in_wireframes(document))
         .and_then(|()| validate_view_controls_appear_in_wireframes(document))
         .and_then(|()| validate_view_field_sources_are_present(document))
+        .and_then(|()| validate_view_field_sources_reference_read_models(document))
 }
 
 pub fn validate_event_model_corpus(
@@ -3533,6 +3534,62 @@ fn view_field_missing_source(
         .iter()
         .find(|field| field.source == ViewFieldSource::Other)
         .map(|field| (view, field))
+}
+
+fn validate_view_field_sources_reference_read_models(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .find_map(|view| invalid_view_field_source(document, view))
+        .map_or(Ok(()), |(view, field)| {
+            Err(validation_issue(format!(
+                "view '{}' field '{}' must source from a referenced read model field",
+                view.name, field.name
+            )))
+        })
+}
+
+fn invalid_view_field_source<'a>(
+    document: &EventModelDocument,
+    view: &'a ViewDefinition,
+) -> Option<(&'a ViewDefinition, &'a ViewFieldDefinition)> {
+    view.fields
+        .iter()
+        .find(|field| !view_field_sources_referenced_read_model(document, view, field))
+        .map(|field| (view, field))
+}
+
+fn view_field_sources_referenced_read_model(
+    document: &EventModelDocument,
+    view: &ViewDefinition,
+    field: &ViewFieldDefinition,
+) -> bool {
+    match &field.source {
+        ViewFieldSource::ReadModelField(read_model_name, field_name) => {
+            view.read_models.contains(read_model_name)
+                && read_model_field_exists(document, read_model_name, field_name)
+        }
+        ViewFieldSource::EventAttribute(_, _) | ViewFieldSource::Other => false,
+    }
+}
+
+fn read_model_field_exists(
+    document: &EventModelDocument,
+    read_model_name: &DefinitionName,
+    field_name: &DefinitionName,
+) -> bool {
+    document
+        .read_model_definitions
+        .iter()
+        .find(|read_model| read_model.name == *read_model_name)
+        .is_some_and(|read_model| {
+            read_model
+                .fields
+                .iter()
+                .any(|field| field.name == *field_name)
+        })
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
