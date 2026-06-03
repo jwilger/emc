@@ -306,6 +306,46 @@ impl BrowserErrorRecoveryDetail {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserCommandDefinitionDetail {
+    name: CommandName,
+    owning_slice: SliceName,
+    source_controls: Vec<SourceControlReference>,
+    section_labels: Vec<DefinitionSectionLabel>,
+}
+
+impl BrowserCommandDefinitionDetail {
+    pub fn new(
+        name: CommandName,
+        owning_slice: SliceName,
+        source_controls: Vec<SourceControlReference>,
+        section_labels: Vec<DefinitionSectionLabel>,
+    ) -> Self {
+        Self {
+            name,
+            owning_slice,
+            source_controls,
+            section_labels,
+        }
+    }
+
+    pub fn name(&self) -> &CommandName {
+        &self.name
+    }
+
+    pub fn owning_slice(&self) -> &SliceName {
+        &self.owning_slice
+    }
+
+    pub fn source_controls(&self) -> &[SourceControlReference] {
+        &self.source_controls
+    }
+
+    pub fn section_labels(&self) -> &[DefinitionSectionLabel] {
+        &self.section_labels
+    }
+}
+
 #[nutype(
     sanitize(trim),
     validate(not_empty),

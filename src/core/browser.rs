@@ -4,7 +4,7 @@ use std::iter;
 
 use serde_json::Value;
 
-use crate::core::browser_data_document::BrowserDataDocument;
+use crate::core::browser_data_document::{BrowserDataCorpus, BrowserDataDocument};
 use crate::core::effect::FileContents;
 use crate::core::types::{
     BoardLaneId, BrowserEventElementName, CommandErrorName, CommandName, ControlEffectKind,
@@ -248,23 +248,18 @@ pub fn compose_browser_workflow(
         .map(BrowserDataDocument::parse)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
+    let browser_data = BrowserDataCorpus::new(
+        iter::once(workflow_browser_data)
+            .chain(slice_browser_data)
+            .collect(),
+    );
     let slice_values = slice_documents
         .iter()
         .map(|document| parse_json(document.as_ref()))
         .collect::<Result<Vec<_>, _>>()?;
-    let lane_ids = iter::once(&workflow_browser_data)
-        .chain(slice_browser_data.iter())
-        .map(BrowserDataDocument::board_lane_ids)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| BrowserCompositionError::new(error.to_string()))?
-        .into_iter()
-        .flatten()
-        .fold(Vec::<BoardLaneId>::new(), |mut lanes, lane| {
-            if !lanes.iter().any(|existing| existing == &lane) {
-                lanes.push(lane);
-            }
-            lanes
-        });
+    let lane_ids = browser_data
+        .board_lane_ids()
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
     let main_path_names = workflow_semantics
         .main_path_step_names()
         .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
@@ -292,26 +287,18 @@ pub fn compose_browser_workflow(
     let composed_values = iter::once(&workflow_value)
         .chain(slice_values.iter())
         .collect::<Vec<_>>();
-    let error_recovery_cards = iter::once(&workflow_browser_data)
-        .chain(slice_browser_data.iter())
-        .map(BrowserDataDocument::error_recovery_details)
-        .collect::<Result<Vec<_>, _>>()
+    let error_recovery_cards = browser_data
+        .error_recovery_details()
         .map_err(|error| BrowserCompositionError::new(error.to_string()))?
         .into_iter()
-        .flatten()
         .map(|detail| BrowserErrorRecoveryCard {
             name: detail.name().clone(),
             source_screen: detail.source_screen().clone(),
         })
         .collect();
-    let event_element_names = iter::once(&workflow_browser_data)
-        .chain(slice_browser_data.iter())
-        .map(BrowserDataDocument::event_element_names)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| BrowserCompositionError::new(error.to_string()))?
-        .into_iter()
-        .flatten()
-        .collect();
+    let event_element_names = browser_data
+        .event_element_names()
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
     let review_overlays = workflow_semantics
         .review_overlay_details()
         .map_err(|error| BrowserCompositionError::new(error.to_string()))?
@@ -322,7 +309,17 @@ pub fn compose_browser_workflow(
             missing_rule: detail.missing_rule().clone(),
         })
         .collect();
-    let command_definitions = command_definitions(&composed_values)?;
+    let command_definitions = browser_data
+        .command_definition_details()
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?
+        .into_iter()
+        .map(|detail| BrowserCommandDefinition {
+            name: detail.name().clone(),
+            owning_slice: detail.owning_slice().clone(),
+            source_controls: detail.source_controls().to_vec(),
+            section_labels: detail.section_labels().to_vec(),
+        })
+        .collect();
     let view_definitions = view_definitions(&composed_values)?;
 
     Ok(BrowserWorkflow {
@@ -362,127 +359,6 @@ impl Error for BrowserCompositionError {}
 fn parse_json(source: &str) -> Result<Value, BrowserCompositionError> {
     serde_json::from_str::<Value>(source)
         .map_err(|error| BrowserCompositionError::new(format!("invalid browser JSON: {error}")))
-}
-
-fn command_definitions(
-    values: &[&Value],
-) -> Result<Vec<BrowserCommandDefinition>, BrowserCompositionError> {
-    values
-        .iter()
-        .flat_map(|value| {
-            value
-                .get("commands")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-        })
-        .filter_map(|command| command.get("name").and_then(Value::as_str))
-        .map(|name| {
-            Ok(BrowserCommandDefinition {
-                name: CommandName::try_new(name.to_owned()).map_err(|error| {
-                    BrowserCompositionError::new(format!("invalid command name: {error}"))
-                })?,
-                owning_slice: command_owning_slice(values, name)?,
-                source_controls: command_source_controls(values, name)?,
-                section_labels: command_section_labels()?,
-            })
-        })
-        .collect()
-}
-
-fn command_owning_slice(
-    values: &[&Value],
-    command_name: &str,
-) -> Result<SliceName, BrowserCompositionError> {
-    values
-        .iter()
-        .flat_map(|value| {
-            value
-                .get("slices")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-        })
-        .find(|slice| {
-            slice
-                .get("commands")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .any(|command| {
-                    command
-                        .as_str()
-                        .is_some_and(|slice_command| slice_command == command_name)
-                })
-        })
-        .and_then(|slice| slice.get("name").and_then(Value::as_str))
-        .ok_or_else(|| {
-            BrowserCompositionError::new(format!("command '{command_name}' has no owning slice"))
-        })
-        .and_then(|slice| {
-            SliceName::try_new(slice.to_owned()).map_err(|error| {
-                BrowserCompositionError::new(format!("invalid owning slice name: {error}"))
-            })
-        })
-}
-
-fn command_source_controls(
-    values: &[&Value],
-    command_name: &str,
-) -> Result<Vec<SourceControlReference>, BrowserCompositionError> {
-    values
-        .iter()
-        .flat_map(|value| {
-            value
-                .get("views")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-        })
-        .flat_map(|view| view_command_source_controls(view, command_name))
-        .map(|source| {
-            SourceControlReference::try_new(source).map_err(|error| {
-                BrowserCompositionError::new(format!("invalid source control reference: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn view_command_source_controls(view: &Value, command_name: &str) -> Vec<String> {
-    view.get("name")
-        .and_then(Value::as_str)
-        .map(|view_name| {
-            view.get("controls")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter(|control| {
-                    control
-                        .get("command")
-                        .and_then(Value::as_str)
-                        .is_some_and(|command| command == command_name)
-                })
-                .filter_map(|control| control.get("label").and_then(Value::as_str))
-                .map(|label| format!("{view_name} / {label}"))
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default()
-}
-
-fn command_section_labels() -> Result<Vec<DefinitionSectionLabel>, BrowserCompositionError> {
-    [
-        "Produced events",
-        "Read models",
-        "Returned errors",
-        "Workflow transitions",
-    ]
-    .into_iter()
-    .map(|label| {
-        DefinitionSectionLabel::try_new(label.to_owned()).map_err(|error| {
-            BrowserCompositionError::new(format!("invalid definition section label: {error}"))
-        })
-    })
-    .collect()
 }
 
 fn view_definitions(
