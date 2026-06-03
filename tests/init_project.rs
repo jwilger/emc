@@ -84,4 +84,25 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn init_requires_exact_name_flag() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--wrong-name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "usage: emc init --name <project-name>",
+            ));
+
+        assert!(
+            !temp_dir.path().join("emc.toml").exists(),
+            "unsupported init syntax must not create project files"
+        );
+
+        Ok(())
+    }
 }
