@@ -16,6 +16,7 @@ use crate::core::slice::add_slice;
 use crate::core::types::WorkflowSlug;
 use crate::core::verify::verify_project;
 use crate::core::workflow::{add_workflow, update_workflow_description};
+use crate::core::workflow_document::WorkflowDocument;
 use crate::event_model_validation::validate_event_model_sources;
 use crate::io::dto::{
     parse_browser_index_workflows, parse_project_manifest_name, parse_slice_slug,
@@ -1179,34 +1180,23 @@ fn workflow_transition_record_labels(workflow_contents: &str) -> Result<Vec<Stri
 }
 
 fn workflow_transition_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    let workflow = workflow_json(workflow_contents)?;
-    let steps = workflow_steps(&workflow)?;
-
-    let labels = steps
-        .iter()
-        .filter_map(|step| {
-            let source = step.get("slice").and_then(Value::as_str)?;
-            let transitions = step.get("transitions").and_then(Value::as_array)?;
-            Some((source, transitions))
+    FileContents::try_new(workflow_contents.to_owned())
+        .map_err(|error| ShellError::message(error.to_string()))
+        .and_then(|contents| {
+            WorkflowDocument::parse(&contents)
+                .map_err(|error| ShellError::message(error.to_string()))
         })
-        .flat_map(|(source, transitions)| {
-            transitions.iter().filter_map(move |transition| {
-                transition
-                    .get("to")
-                    .and_then(Value::as_str)
-                    .and_then(|target| transition_label(source, target, transition))
-                    .or_else(|| {
-                        transition
-                            .get("to_workflow")
-                            .and_then(Value::as_str)
-                            .and_then(|target| {
-                                workflow_exit_transition_label(source, target, transition)
-                            })
-                    })
-            })
+        .and_then(|workflow| {
+            workflow
+                .transitions()
+                .map_err(|error| ShellError::message(error.to_string()))
         })
-        .collect::<Vec<_>>();
-    Ok(labels)
+        .map(|transitions| {
+            transitions
+                .into_iter()
+                .map(|transition| transition.as_ref().to_owned())
+                .collect()
+        })
 }
 
 fn transition_record_parts(label: &str) -> Result<(&str, &str, String, String), ShellError> {
@@ -1224,45 +1214,6 @@ fn transition_record_parts(label: &str) -> Result<(&str, &str, String, String), 
         )),
         _ => Err(ShellError::message("workflow transition is not canonical")),
     }
-}
-
-fn transition_label(source: &str, target: &str, transition: &Value) -> Option<String> {
-    [
-        ("via_command", "command"),
-        ("via_event", "event"),
-        ("via_navigation", "navigation"),
-        ("via_external_trigger", "external_trigger"),
-        ("via_outcome", "outcome"),
-    ]
-    .into_iter()
-    .find_map(|(field, kind)| {
-        transition
-            .get(field)
-            .and_then(Value::as_str)
-            .map(|trigger| format!("{source}->{target}:{kind}:{trigger}"))
-    })
-}
-
-fn workflow_exit_transition_label(
-    source: &str,
-    target: &str,
-    transition: &Value,
-) -> Option<String> {
-    [
-        ("via_command", "command"),
-        ("via_event", "event"),
-        ("via_navigation", "navigation"),
-        ("via_external_trigger", "external_trigger"),
-        ("via_outcome", "outcome"),
-        ("exit_reason", "reason"),
-    ]
-    .into_iter()
-    .find_map(|(field, kind)| {
-        transition
-            .get(field)
-            .and_then(Value::as_str)
-            .map(|trigger| format!("{source}->{target}:workflow_exit:{kind}:{trigger}"))
-    })
 }
 
 fn workflow_json(workflow_contents: &str) -> Result<Value, ShellError> {

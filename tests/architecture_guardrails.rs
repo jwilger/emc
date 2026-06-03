@@ -227,6 +227,25 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn shell_check_transition_markers_use_semantic_workflow_documents() -> Result<(), Box<dyn Error>>
+    {
+        let source = read_workspace_file("src/shell.rs")?;
+        let violations = ["fn transition_label(", "fn workflow_exit_transition_label("]
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| format!("src/shell.rs duplicates transition semantics via `{marker}`"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "shell check markers must derive workflow transitions from WorkflowDocument"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",
