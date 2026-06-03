@@ -430,7 +430,8 @@ fn tools_list_result() -> Value {
                             "type": "string"
                         },
                         "via": {
-                            "type": "string"
+                            "type": "string",
+                            "enum": ["command", "event", "navigation"]
                         },
                         "name": {
                             "type": "string"
