@@ -392,6 +392,26 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn browser_branch_cards_use_semantic_workflow_documents() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/core/browser.rs")?;
+        let violations = ["fn workflow_branch_cards(", "fn workflow_branch_label("]
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| {
+                format!("src/core/browser.rs duplicates workflow branch semantics via `{marker}`")
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "browser composition must derive branch cards from WorkflowDocument"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",

@@ -187,6 +187,26 @@ pub struct ViewName(String);
 )]
 pub struct BrowserEventElementName(String);
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowBranchDetail {
+    name: WorkflowStepName,
+    label: WorkflowBranchLabel,
+}
+
+impl WorkflowBranchDetail {
+    pub fn new(name: WorkflowStepName, label: WorkflowBranchLabel) -> Self {
+        Self { name, label }
+    }
+
+    pub fn name(&self) -> &WorkflowStepName {
+        &self.name
+    }
+
+    pub fn label(&self) -> &WorkflowBranchLabel {
+        &self.label
+    }
+}
+
 #[nutype(
     sanitize(trim),
     validate(not_empty),

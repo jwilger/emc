@@ -259,7 +259,15 @@ pub fn compose_browser_workflow(
     let main_path_names = workflow_semantics
         .main_path_step_names()
         .map_err(|error| BrowserCompositionError::new(error.to_string()))?;
-    let branch_cards = workflow_branch_cards(&workflow_value)?;
+    let branch_cards = workflow_semantics
+        .branch_details()
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?
+        .into_iter()
+        .map(|detail| BrowserBranchCard {
+            name: detail.name().clone(),
+            label: detail.label().clone(),
+        })
+        .collect();
     let transition_cards = workflow_transition_cards(&workflow_value)?;
     let composed_values = iter::once(&workflow_value)
         .chain(slice_values.iter())
@@ -317,81 +325,6 @@ fn board_lane_ids(value: &Value) -> impl Iterator<Item = &str> {
         .into_iter()
         .flatten()
         .filter_map(|lane| lane.get("id").and_then(Value::as_str))
-}
-
-fn workflow_branch_cards(value: &Value) -> Result<Vec<BrowserBranchCard>, BrowserCompositionError> {
-    value
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter(|step| {
-            step.get("relationship")
-                .and_then(Value::as_str)
-                .is_some_and(|relationship| relationship != "entry" && relationship != "main")
-        })
-        .filter_map(|step| {
-            step.get("name")
-                .and_then(Value::as_str)
-                .zip(step.get("relationship").and_then(Value::as_str))
-                .zip(Some(step))
-        })
-        .map(|((name, relationship), step)| {
-            Ok(BrowserBranchCard {
-                name: WorkflowStepName::try_new(name.to_owned()).map_err(|error| {
-                    BrowserCompositionError::new(format!("invalid workflow step name: {error}"))
-                })?,
-                label: WorkflowBranchLabel::try_new(workflow_branch_label(
-                    value,
-                    step,
-                    relationship,
-                ))
-                .map_err(|error| {
-                    BrowserCompositionError::new(format!("invalid workflow branch label: {error}"))
-                })?,
-            })
-        })
-        .collect()
-}
-
-fn workflow_branch_label(workflow_value: &Value, step: &Value, relationship: &str) -> String {
-    step.get("slice")
-        .and_then(Value::as_str)
-        .filter(|slice| {
-            relationship == "alternate" && has_incoming_outcome_transition(workflow_value, slice)
-        })
-        .map_or_else(
-            || branch_label(relationship),
-            |_| "alternate outcome".to_owned(),
-        )
-}
-
-fn branch_label(relationship: &str) -> String {
-    relationship.replace('_', " ")
-}
-
-fn has_incoming_outcome_transition(workflow_value: &Value, target_slice: &str) -> bool {
-    workflow_value
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .flat_map(|step| {
-            step.get("transitions")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-        })
-        .any(|transition| {
-            transition
-                .get("to")
-                .and_then(Value::as_str)
-                .is_some_and(|target| target == target_slice)
-                && transition
-                    .get("via_outcome")
-                    .and_then(Value::as_str)
-                    .is_some()
-        })
 }
 
 fn workflow_transition_cards(

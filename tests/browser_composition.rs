@@ -144,6 +144,72 @@ mod tests {
     }
 
     #[test]
+    fn composed_browser_workflow_keeps_plain_alternate_label_without_incoming_outcome()
+    -> Result<(), Box<dyn Error>> {
+        let workflow = file_contents(
+            "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\"},\n    {\"slice\": \"review\", \"name\": \"review\", \"relationship\": \"main\", \"transitions\": [\n      {\"to_workflow\": \"course-lesson-02\", \"target_name\": \"next lesson\", \"via_outcome\": \"LessonAccepted\"}\n    ]},\n    {\"slice\": \"checkpoint\", \"name\": \"checkpoint\", \"relationship\": \"alternate\"}\n  ]\n}\n",
+        );
+
+        let composed = compose_browser_workflow(workflow, Vec::new())?;
+
+        assert_eq!(
+            composed
+                .branch_cards()
+                .iter()
+                .map(|card| (card.name().as_ref(), card.label().as_ref()))
+                .collect::<Vec<_>>(),
+            [("checkpoint", "alternate")]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn composed_browser_workflow_does_not_mark_non_alternate_branches_as_outcomes()
+    -> Result<(), Box<dyn Error>> {
+        let workflow = file_contents(
+            "{\n  \"name\": \"Organization access\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Member access lifecycle.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\"},\n    {\"slice\": \"activate-member\", \"name\": \"activate-member\", \"relationship\": \"main\", \"transitions\": [\n      {\"to\": \"record-member-suspension\", \"via_outcome\": \"MemberSuspended\"}\n    ]},\n    {\"slice\": \"record-member-suspension\", \"name\": \"record-member-suspension\", \"relationship\": \"async_lifecycle\"}\n  ]\n}\n",
+        );
+
+        let composed = compose_browser_workflow(workflow, Vec::new())?;
+
+        assert_eq!(
+            composed
+                .branch_cards()
+                .iter()
+                .map(|card| (card.name().as_ref(), card.label().as_ref()))
+                .collect::<Vec<_>>(),
+            [("record-member-suspension", "async lifecycle")]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn composed_browser_workflow_requires_same_transition_to_target_and_outcome()
+    -> Result<(), Box<dyn Error>> {
+        let workflow = file_contents(
+            "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"entry\", \"name\": \"entry\", \"relationship\": \"entry\", \"transitions\": [\n      {\"to\": \"checkpoint\", \"via_navigation\": \"checkpoint_screen\"},\n      {\"to\": \"revision\", \"via_outcome\": \"LessonRevisionRequested\"}\n    ]},\n    {\"slice\": \"checkpoint\", \"name\": \"checkpoint\", \"relationship\": \"alternate\"},\n    {\"slice\": \"revision\", \"name\": \"revision\", \"relationship\": \"alternate\"}\n  ]\n}\n",
+        );
+
+        let composed = compose_browser_workflow(workflow, Vec::new())?;
+
+        assert_eq!(
+            composed
+                .branch_cards()
+                .iter()
+                .map(|card| (card.name().as_ref(), card.label().as_ref()))
+                .collect::<Vec<_>>(),
+            [
+                ("checkpoint", "alternate"),
+                ("revision", "alternate outcome")
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn composed_browser_workflow_labels_retry_transition() -> Result<(), Box<dyn Error>> {
         let workflow = file_contents(
             "{\n  \"name\": \"Lesson 01\",\n  \"version\": \"0.1.0\",\n  \"description\": \"A composed lesson workflow.\",\n  \"board\": {\"lanes\": []},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"review\", \"name\": \"review\", \"relationship\": \"entry\", \"transitions\": [\n      {\"name\": \"RegenerateTeacherReview\", \"to\": \"review\", \"retry\": true}\n    ]}\n  ]\n}\n",
