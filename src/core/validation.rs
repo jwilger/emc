@@ -1810,6 +1810,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_state_change_slices_do_not_own_translations(document))
         .and_then(|()| validate_views_have_wireframes(document))
         .and_then(|()| validate_wireframe_tokens_are_modeled(document))
+        .and_then(|()| validate_view_fields_appear_in_wireframes(document))
 }
 
 pub fn validate_event_model_corpus(
@@ -3436,6 +3437,30 @@ fn unmodeled_wireframe_token(view: &ViewDefinition) -> Option<(&ViewDefinition, 
 
 fn wireframe_token_is_modeled(view: &ViewDefinition, token: &DefinitionName) -> bool {
     view.fields.contains(token) || view.controls.iter().any(|control| control.label == *token)
+}
+
+fn validate_view_fields_appear_in_wireframes(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .view_definitions
+        .iter()
+        .find_map(view_field_missing_from_wireframe)
+        .map_or(Ok(()), |(view, field)| {
+            Err(validation_issue(format!(
+                "view '{}' wireframe does not reference field '{}'",
+                view.name, field
+            )))
+        })
+}
+
+fn view_field_missing_from_wireframe(
+    view: &ViewDefinition,
+) -> Option<(&ViewDefinition, &DefinitionName)> {
+    view.fields
+        .iter()
+        .find(|field| !view.wireframe.tokens().contains(field))
+        .map(|field| (view, field))
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
