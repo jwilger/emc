@@ -502,6 +502,24 @@ fn tools_list_result() -> Result<Value, ShellError> {
             })),
         ),
         Tool::new(
+            "update_slice_kind",
+            "Update a business slice kind and regenerate synchronized model artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slug": {
+                            "type": "string"
+                        },
+                        "type": {
+                            "type": "string",
+                            "enum": ["state_view", "state_change", "translation", "automation"]
+                        }
+                    },
+                    "required": ["slug", "type"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
             "connect_workflow",
             "Connect workflow steps with a transition and regenerate synchronized model artifacts.",
             schema_object(json!({
@@ -611,6 +629,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "update_slice" => Ok(Some(tool_call_result_response(
             id,
             update_slice_tool_text(request),
+        ))),
+        "update_slice_kind" => Ok(Some(tool_call_result_response(
+            id,
+            update_slice_kind_tool_text(request),
         ))),
         "connect_workflow" => Ok(Some(tool_call_result_response(
             id,
@@ -860,6 +882,29 @@ fn update_slice_tool_text(request: &Value) -> Result<String, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
     interpret_collect_reports(command::update_slice_description(slug, description))
+        .map(|reports| reports.join("\n"))
+}
+
+fn update_slice_kind_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("update_slice_kind requires arguments"))?;
+    let slug = arguments
+        .get("slug")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("update_slice_kind requires slug"))
+        .and_then(|raw_slug| {
+            parse_slice_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let kind = arguments
+        .get("type")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("update_slice_kind requires type"))
+        .and_then(|raw_type| {
+            parse_slice_kind(raw_type).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    interpret_collect_reports(command::update_slice_kind(slug, kind))
         .map(|reports| reports.join("\n"))
 }
 

@@ -7,7 +7,7 @@ use emc::core::connection::WorkflowConnection;
 use emc::core::effect::ProjectPath;
 use emc::core::gherkin::GherkinSuite;
 use emc::core::project::ProjectName;
-use emc::core::slice::NewSlice;
+use emc::core::slice::{NewSlice, SliceKind};
 use emc::core::types::{ModelDescription, SliceSlug, WorkflowSlug};
 use emc::core::workflow::NewWorkflow;
 use emc::io::dto::{
@@ -70,6 +70,10 @@ enum Command {
         slug: SliceSlug,
         description: ModelDescription,
     },
+    UpdateSliceKind {
+        slug: SliceSlug,
+        kind: SliceKind,
+    },
     UpdateWorkflowDescription {
         slug: WorkflowSlug,
         description: ModelDescription,
@@ -117,6 +121,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::ShowWorkflow { slug } => interpret(command::show_workflow(slug)),
         Command::UpdateSliceDescription { slug, description } => {
             interpret(command::update_slice_description(slug, description))
+        }
+        Command::UpdateSliceKind { slug, kind } => {
+            interpret(command::update_slice_kind(slug, kind))
         }
         Command::UpdateWorkflowDescription { slug, description } => {
             interpret(command::update_workflow_description(slug, description))
@@ -493,6 +500,23 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        [command, subject, slug_flag, slug, type_flag, slice_type]
+            if command == "update"
+                && subject == "slice"
+                && slug_flag == "--slug"
+                && type_flag == "--type" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slug).map_err(|error| ShellError::message(error.to_string()))?;
+            let slice_kind = parse_slice_kind(slice_type)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::UpdateSliceKind {
+                    slug: slice_slug,
+                    kind: slice_kind,
+                },
+            })
+        }
         [
             command,
             subject,
@@ -620,6 +644,7 @@ fn help_command() -> ClapCommand {
   emc add workflow --slug <slug> --name <name> --description <text>
   emc add slice --workflow <workflow> --slug <slug> --name <name> --type <kind> --description <text>
   emc update slice --slug <slice> --description <text>
+  emc update slice --slug <slice> --type <kind>
   emc connect workflow --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
   emc list slices
   emc list transitions
