@@ -1,12 +1,8 @@
-use std::error::Error;
-use std::fmt::{Display, Formatter, Result as FormatResult};
-
-use crate::core::effect::{ArtifactDigest, FileContents};
+use crate::core::effect::ArtifactDigest;
 use crate::core::types::{
     ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSliceDetail,
     WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
-use crate::core::workflow_document::WorkflowDocument;
 
 pub fn artifact_digest(
     workflow_name: ModelName,
@@ -25,34 +21,6 @@ pub fn artifact_digest(
     })
 }
 
-pub fn artifact_digest_from_workflow_document(
-    workflow_slug: WorkflowSlug,
-    workflow_document: FileContents,
-) -> Result<ArtifactDigest, ArtifactDigestError> {
-    let workflow = WorkflowDocument::parse(&workflow_document)
-        .map_err(|error| ArtifactDigestError::new(error.to_string()))?;
-
-    Ok(artifact_digest(
-        workflow
-            .name()
-            .map_err(|error| ArtifactDigestError::new(error.to_string()))?,
-        workflow_slug,
-        workflow
-            .description()
-            .map_err(|error| ArtifactDigestError::new(error.to_string()))?,
-        WorkflowSliceDetails::from_details(
-            workflow
-                .slice_details()
-                .map_err(|error| ArtifactDigestError::new(error.to_string()))?,
-        ),
-        WorkflowTransitionRecords::from_records(
-            workflow
-                .transitions()
-                .map_err(|error| ArtifactDigestError::new(error.to_string()))?,
-        ),
-    ))
-}
-
 pub fn slice_artifact_digest(
     slice_name: ModelName,
     slice_slug: SliceSlug,
@@ -66,27 +34,6 @@ pub fn slice_artifact_digest(
         unreachable!("EMC generated slice artifact digest must be valid: {error}");
     })
 }
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ArtifactDigestError {
-    message: String,
-}
-
-impl ArtifactDigestError {
-    fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
-    }
-}
-
-impl Display for ArtifactDigestError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
-        formatter.write_str(&self.message)
-    }
-}
-
-impl Error for ArtifactDigestError {}
 
 fn slice_details_digest(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
     workflow_slice_details

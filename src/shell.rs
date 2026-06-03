@@ -7,7 +7,7 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use crate::core::connection::{connect_workflow, remove_transition};
-use crate::core::digest::{artifact_digest_from_workflow_document, slice_artifact_digest};
+use crate::core::digest::slice_artifact_digest;
 use crate::core::effect::{
     ArtifactDigest, Effect, EffectPlan, FileContents, ProcessInvocation, ProjectPath,
 };
@@ -345,59 +345,6 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 message.as_ref(),
             )
             .map(|()| Vec::new())
-        }
-        Effect::RequireWorkflowSliceDetails(
-            workflow_path,
-            artifact_path,
-            marker_prefix,
-            message,
-        ) => {
-            let workflow_contents =
-                fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
-            let artifact_contents =
-                fs::read_to_string(Path::new(artifact_path.as_ref())).map_err(ShellError::io)?;
-            let marker = workflow_slice_detail_marker(marker_prefix.as_ref(), &workflow_contents)?;
-            if artifact_contains_one_canonical_declaration(
-                &artifact_contents,
-                marker_prefix.as_ref(),
-                &marker,
-            ) {
-                Ok(Vec::new())
-            } else {
-                Err(ShellError::message(message.as_ref().to_owned()))
-            }
-        }
-        Effect::RequireWorkflowSlices(workflow_path, artifact_path, marker_prefix, message) => {
-            let workflow_contents =
-                fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
-            let artifact_contents =
-                fs::read_to_string(Path::new(artifact_path.as_ref())).map_err(ShellError::io)?;
-            let marker = workflow_slice_marker(marker_prefix.as_ref(), &workflow_contents)?;
-            if artifact_contains_one_canonical_declaration(
-                &artifact_contents,
-                marker_prefix.as_ref(),
-                &marker,
-            ) {
-                Ok(Vec::new())
-            } else {
-                Err(ShellError::message(message.as_ref().to_owned()))
-            }
-        }
-        Effect::RequireWorkflowDigest(workflow_path, artifact_path, workflow_slug, message) => {
-            let workflow_contents =
-                fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
-            let artifact_contents =
-                fs::read_to_string(Path::new(artifact_path.as_ref())).map_err(ShellError::io)?;
-            let workflow_document = FileContents::try_new(workflow_contents)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let digest =
-                artifact_digest_from_workflow_document(workflow_slug.clone(), workflow_document)
-                    .map_err(|error| ShellError::message(error.to_string()))?;
-            if artifact_contains_one_digest_marker(&artifact_contents, digest.as_ref()) {
-                Ok(Vec::new())
-            } else {
-                Err(ShellError::message(message.as_ref().to_owned()))
-            }
         }
         Effect::RunProcess(invocation) => run_process(invocation),
         Effect::RecordCleanReviewFromWorkflow(slug, reviewer_id, reviewed_at) => {
@@ -1465,25 +1412,6 @@ impl StableDigest {
     }
 }
 
-fn workflow_slice_marker(prefix: &str, workflow_contents: &str) -> Result<String, ShellError> {
-    let labels = workflow_slice_labels(workflow_contents)?;
-    let joined_labels = labels.join(",");
-    Ok(format!("{prefix} [{joined_labels}]"))
-}
-
-fn workflow_slice_detail_marker(
-    prefix: &str,
-    workflow_contents: &str,
-) -> Result<String, ShellError> {
-    let labels = if prefix.starts_with("val ") {
-        workflow_slice_detail_record_labels(workflow_contents)?
-    } else {
-        workflow_slice_detail_tuple_labels(workflow_contents)?
-    };
-    let joined_labels = labels.join(",");
-    Ok(format!("{prefix} [{joined_labels}]"))
-}
-
 fn workflow_slice_file_paths(
     workflow_path: &str,
     workflow_contents: &str,
@@ -1638,43 +1566,6 @@ fn canonical_declaration_line<'a>(line: &'a str, prefix: &str) -> Option<&'a str
         let trimmed = line.trim_start();
         trimmed.starts_with(prefix).then_some(trimmed)
     }
-}
-
-fn workflow_slice_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    workflow_slice_details(workflow_contents)?
-        .into_iter()
-        .map(|slice| json_string(slice.slug().as_ref().to_owned()))
-        .collect()
-}
-
-fn workflow_slice_detail_tuple_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    workflow_slice_details(workflow_contents)?
-        .into_iter()
-        .map(|slice| {
-            Ok(format!(
-                "({}, {}, {}, {})",
-                json_string(slice.slug().as_ref().to_owned())?,
-                json_string(slice.name().as_ref().to_owned())?,
-                json_string(slice.kind().as_ref().to_owned())?,
-                json_string(slice.description().as_ref().to_owned())?
-            ))
-        })
-        .collect()
-}
-
-fn workflow_slice_detail_record_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    workflow_slice_details(workflow_contents)?
-        .into_iter()
-        .map(|slice| {
-            Ok(format!(
-                "{{ slug: {}, name: {}, kind: {}, description: {} }}",
-                json_string(slice.slug().as_ref().to_owned())?,
-                json_string(slice.name().as_ref().to_owned())?,
-                json_string(slice.kind().as_ref().to_owned())?,
-                json_string(slice.description().as_ref().to_owned())?
-            ))
-        })
-        .collect()
 }
 
 fn workflow_slice_details(workflow_contents: &str) -> Result<Vec<WorkflowSliceDetail>, ShellError> {
