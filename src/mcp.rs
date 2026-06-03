@@ -5,12 +5,12 @@ use serde_json::{Value, json};
 
 use crate::command;
 use crate::core::connection::WorkflowConnection;
-use crate::core::effect::ProjectPath;
 use crate::core::slice::NewSlice;
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
     parse_connection_kind, parse_model_description, parse_model_name, parse_project_name,
-    parse_slice_kind, parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
+    parse_project_path, parse_slice_kind, parse_slice_slug, parse_transition_trigger_name,
+    parse_workflow_slug,
 };
 use crate::shell::{ShellError, interpret_collect_reports};
 
@@ -606,7 +606,7 @@ fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {
         .and_then(Value::as_str)
         .ok_or_else(|| ShellError::message("generate_site requires output"))
         .and_then(|output| {
-            ProjectPath::try_new(output.to_owned()).map_err(ShellError::project_path)
+            parse_project_path(output).map_err(|error| ShellError::message(error.to_string()))
         })?;
     interpret_collect_reports(command::generate_site(output)).map(|reports| reports.join("\n"))
 }
@@ -627,7 +627,7 @@ fn validate_event_model_tool_text(request: &Value) -> Result<String, ShellError>
         .and_then(Value::as_str)
         .ok_or_else(|| ShellError::message("validate_event_model requires target"))
         .and_then(|target| {
-            ProjectPath::try_new(target.to_owned()).map_err(ShellError::project_path)
+            parse_project_path(target).map_err(|error| ShellError::message(error.to_string()))
         })?;
     interpret_collect_reports(command::validate(target)).map(|reports| reports.join("\n"))
 }

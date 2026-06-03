@@ -80,6 +80,39 @@ mod tests {
     }
 
     #[test]
+    fn entrypoints_use_boundary_parsers_for_project_paths() -> Result<(), Box<dyn Error>> {
+        let violations = ["src/main.rs", "src/mcp.rs"]
+            .iter()
+            .map(|relative_path| {
+                read_workspace_file(relative_path).map(|source| {
+                    source
+                        .lines()
+                        .enumerate()
+                        .filter(|(_, line)| line.contains("ProjectPath::try_new"))
+                        .map(|(index, line)| {
+                            format!(
+                                "{relative_path}:{} bypasses DTO project-path parsing: {line}",
+                                index + 1
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "CLI and MCP boundary parsing must convert raw project paths through DTO parsers before command execution"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_tool_handlers_do_not_perform_filesystem_io_directly() -> Result<(), Box<dyn Error>> {
         let source = read_workspace_file("src/mcp.rs")?;
         let violations = filesystem_io_markers()

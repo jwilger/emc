@@ -2,14 +2,11 @@
 mod tests {
     use std::error::Error;
 
-    use emc::{
-        core::effect::ProjectPath,
-        io::dto::{
-            parse_definition_name, parse_lean_module_name, parse_model_description,
-            parse_model_digest, parse_model_name, parse_project_name, parse_quint_module_name,
-            parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
-            parse_workflow_transition_endpoint, parse_workflow_transition_kind,
-        },
+    use emc::io::dto::{
+        parse_definition_name, parse_lean_module_name, parse_model_description, parse_model_digest,
+        parse_model_name, parse_project_name, parse_project_path, parse_quint_module_name,
+        parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
+        parse_workflow_transition_endpoint, parse_workflow_transition_kind,
     };
 
     #[test]
@@ -137,15 +134,15 @@ mod tests {
 
     #[test]
     fn project_paths_are_relative_to_the_current_project() -> Result<(), Box<dyn Error>> {
-        let path = ProjectPath::try_new("model/browser/data/index.json".to_owned())?;
+        let path = parse_project_path("model/browser/data/index.json")?;
 
         assert_eq!(path.as_ref(), "model/browser/data/index.json");
         assert!(
-            ProjectPath::try_new("/tmp/site".to_owned()).is_err(),
+            parse_project_path("/tmp/site").is_err(),
             "absolute paths must not enter project-local effects"
         );
         assert!(
-            ProjectPath::try_new("../outside-model".to_owned()).is_err(),
+            parse_project_path("../outside-model").is_err(),
             "parent traversal must not enter project-local effects"
         );
 
