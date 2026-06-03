@@ -209,6 +209,24 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn artifact_digest_core_uses_semantic_json_document_types() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/core/digest.rs")?;
+        let violations = raw_json_markers()
+            .iter()
+            .filter(|marker| source.contains(**marker))
+            .map(|marker| format!("src/core/digest.rs manipulates raw JSON `{marker}`"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            violations,
+            Vec::<String>::new(),
+            "artifact digests must derive from semantic workflow documents instead of raw JSON values"
+        );
+
+        Ok(())
+    }
+
     fn forbidden_io_markers() -> &'static [&'static str] {
         &[
             "std::fs",
@@ -242,6 +260,18 @@ mod tests {
             "-> String",
             "-> PathBuf",
             "-> Vec<String>",
+        ]
+    }
+
+    fn raw_json_markers() -> &'static [&'static str] {
+        &[
+            "serde_json::Value",
+            "Value::",
+            "<Value>",
+            "&Value",
+            " Value",
+            "serde_json::Map",
+            "serde_json::from_str",
         ]
     }
 
