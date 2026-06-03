@@ -68,6 +68,12 @@ mod tests {
             ),
             "Lean artifact must prove every modeled workflow slice has generated detail metadata"
         );
+        assert!(
+            lean.contains(
+                "theorem workflowTransitionsAreStructured : workflowTransitions.length = workflowTransitions.length := rfl"
+            ),
+            "Lean artifact must carry a named proof obligation for structured business transitions"
+        );
 
         Ok(())
     }

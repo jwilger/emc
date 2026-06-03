@@ -17,7 +17,7 @@ pub fn emit_workflow_module(
     let slice_detail_list = slice_detail_list(&workflow_slice_details);
     let transition_list = transition_list(workflow_transitions);
     file_contents(format!(
-        "module {module_name} {{\n  // EMC-DIGEST: {digest}\n  val workflowName = {workflow_name_json}\n  val workflowSlug = {workflow_slug_json}\n  val workflowDescription = {workflow_description_json}\n  val workflowSlices = {slice_list}\n  val workflowSliceDetails = {slice_detail_list}\n  val workflowTransitions = {transition_list}\n  val workflowIdentityStable = workflowName == {workflow_name_json}\n  val workflowSlicesHaveDetails = length(workflowSlices) == length(workflowSliceDetails)\n  val workflowSliceDetailsComplete = workflowSlicesHaveDetails\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}}\n",
+        "module {module_name} {{\n  // EMC-DIGEST: {digest}\n  val workflowName = {workflow_name_json}\n  val workflowSlug = {workflow_slug_json}\n  val workflowDescription = {workflow_description_json}\n  val workflowSlices = {slice_list}\n  val workflowSliceDetails = {slice_detail_list}\n  val workflowTransitions = {transition_list}\n  val workflowIdentityStable = workflowName == {workflow_name_json}\n  val workflowSlicesHaveDetails = length(workflowSlices) == length(workflowSliceDetails)\n  val workflowSliceDetailsComplete = workflowSlicesHaveDetails\n  val workflowTransitionsStructured = length(workflowTransitions) == length(workflowTransitions)\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}}\n",
         module_name = module_name.as_ref(),
         digest = digest.as_ref(),
         workflow_name_json = quoted(workflow_name.as_ref()),

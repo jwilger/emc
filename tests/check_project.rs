@@ -1206,6 +1206,30 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_lean_workflow_transition_invariant_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let lean = read_to_string(&lean_path)?.replace(
+            "theorem workflowTransitionsAreStructured : workflowTransitions.length = workflowTransitions.length := rfl",
+            "theorem workflowTransitionsAreStructured : workflowTransitions.length = 0 := rfl",
+        );
+        write(lean_path, lean)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean workflow invariant drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_quint_workflow_transition_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -1334,6 +1358,30 @@ mod tests {
         let quint = read_to_string(&quint_path)?.replace(
             "  val workflowIdentityStable = workflowName == \"Open ticket\"\n",
             "  val workflowIdentityStable = true\n",
+        );
+        write(quint_path, quint)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint workflow invariant drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_quint_workflow_transition_invariant_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let quint = read_to_string(&quint_path)?.replace(
+            "  val workflowTransitionsStructured = length(workflowTransitions) == length(workflowTransitions)\n",
+            "  val workflowTransitionsStructured = true\n",
         );
         write(quint_path, quint)?;
 

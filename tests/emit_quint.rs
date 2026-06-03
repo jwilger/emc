@@ -64,6 +64,9 @@ mod tests {
         assert!(quint.contains("val workflowIdentityStable"));
         assert!(quint.contains("val workflowSlicesHaveDetails ="));
         assert!(quint.contains("val workflowSliceDetailsComplete = workflowSlicesHaveDetails"));
+        assert!(quint.contains(
+            "val workflowTransitionsStructured = length(workflowTransitions) == length(workflowTransitions)"
+        ));
         assert!(quint.contains("var modelState: int"));
         assert!(quint.contains("action init = modelState' = 0"));
         assert!(quint.contains("action step = modelState' = modelState"));
