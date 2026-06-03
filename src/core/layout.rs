@@ -110,7 +110,9 @@ fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
         "const workflowDescription = {}",
         json_string(workflow.description.as_ref())
     ));
+    let lean_slice_marker = artifact_digest_marker("def workflowSlices :=");
     let lean_transition_marker = artifact_digest_marker("def workflowTransitions :=");
+    let quint_slice_marker = artifact_digest_marker("const workflowSlices =");
     let quint_transition_marker = artifact_digest_marker("const workflowTransitions =");
     let module_name = module_name_from_model(workflow.name.clone());
     let workflow_slug = workflow.slug.as_ref();
@@ -178,6 +180,22 @@ fn imported_workflow_effects(workflow: ImportedWorkflowLayout) -> Vec<Effect> {
             quint_description_marker,
             report_line(format!(
                 "Quint workflow field drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireWorkflowSlices(
+            workflow_path.clone(),
+            lean_path.clone(),
+            lean_slice_marker,
+            report_line(format!(
+                "Lean workflow slice drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireWorkflowSlices(
+            workflow_path.clone(),
+            quint_path.clone(),
+            quint_slice_marker,
+            report_line(format!(
+                "Quint workflow slice drift for workflow {workflow_name}"
             )),
         ),
         Effect::RequireWorkflowTransitions(

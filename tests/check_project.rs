@@ -249,6 +249,29 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_lean_workflow_slice_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+
+        write(
+            temp_dir.path().join("model/lean/OpenTicket.lean"),
+            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices := []\n\ndef workflowTransitions := [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean workflow slice drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_quint_workflow_transition_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -266,6 +289,29 @@ mod tests {
             .failure()
             .stderr(predicate::str::contains(
                 "Quint workflow transition drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_quint_workflow_slice_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+
+        write(
+            temp_dir.path().join("model/quint/OpenTicket.qnt"),
+            "module OpenTicket\n\n// EMC-DIGEST: workflow:Open ticket\nconst workflowName = \"Open ticket\"\n\nconst workflowSlug = \"open-ticket\"\n\nconst workflowDescription = \"Actor opens a repair ticket.\"\n\nconst workflowSlices = []\n\nconst workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint workflow slice drift for workflow Open ticket",
             ));
 
         Ok(())
