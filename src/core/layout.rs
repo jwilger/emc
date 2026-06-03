@@ -78,6 +78,10 @@ pub fn check_project(
                 Effect::RequireFile(project_path("model/quint/quint.json")),
                 Effect::RequireFile(project_path(format!("model/quint/{module_name}.qnt"))),
                 Effect::RequireFile(project_path("model/browser/data/index.json")),
+                Effect::RequireJsonObjectKeysUnique(
+                    project_path("model/browser/data/index.json"),
+                    report_line("browser index drift"),
+                ),
                 Effect::RequireIndexedWorkflowFiles(
                     project_path("model/browser/data/index.json"),
                     project_path("model/browser/data/workflows"),

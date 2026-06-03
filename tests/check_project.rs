@@ -506,6 +506,28 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_browser_index_duplicate_workflows_field_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let index_path = temp_dir.path().join("model/browser/data/index.json");
+        let index = read_to_string(&index_path)?.replace(
+            "  \"workflows\": [\n",
+            "  \"workflows\": [],\n  \"workflows\": [\n",
+        );
+        write(index_path, index)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("browser index drift"));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_lean_workflow_field_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
