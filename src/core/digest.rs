@@ -109,11 +109,14 @@ fn transitions_digest(workflow_transitions: &[WorkflowTransitionRecord]) -> Stri
         .iter()
         .map(|transition| {
             format!(
-                "{}->{}:{}:{}",
+                "{}->{}:{}:{}:{}",
                 transition.source().as_ref(),
                 transition.target().as_ref(),
                 transition.kind().as_ref(),
-                transition.trigger().as_ref()
+                transition.trigger().as_ref(),
+                transition
+                    .rationale()
+                    .map_or("", |rationale| rationale.as_ref())
             )
         })
         .collect::<Vec<_>>()

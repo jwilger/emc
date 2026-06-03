@@ -890,11 +890,16 @@ fn lean_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> ArtifactMa
             .iter()
             .map(|transition| {
                 format!(
-                    "{{ source := {}, target := {}, kind := {}, trigger := {} }}",
+                    "{{ source := {}, target := {}, kind := {}, trigger := {}, rationale := {} }}",
                     json_string(transition.source().as_ref()),
                     json_string(transition.target().as_ref()),
                     json_string(transition.kind().as_ref()),
-                    json_string(transition.trigger().as_ref())
+                    json_string(transition.trigger().as_ref()),
+                    json_string(
+                        transition
+                            .rationale()
+                            .map_or("", |rationale| rationale.as_ref())
+                    )
                 )
             })
             .collect::<Vec<_>>()
@@ -945,11 +950,16 @@ fn quint_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> ArtifactM
             .iter()
             .map(|transition| {
                 format!(
-                    "{{ source: {}, target: {}, kind: {}, trigger: {} }}",
+                    "{{ source: {}, target: {}, kind: {}, trigger: {}, rationale: {} }}",
                     json_string(transition.source().as_ref()),
                     json_string(transition.target().as_ref()),
                     json_string(transition.kind().as_ref()),
-                    json_string(transition.trigger().as_ref())
+                    json_string(transition.trigger().as_ref()),
+                    json_string(
+                        transition
+                            .rationale()
+                            .map_or("", |rationale| rationale.as_ref())
+                    )
                 )
             })
             .collect::<Vec<_>>()

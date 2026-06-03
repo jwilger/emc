@@ -685,7 +685,7 @@ mod tests {
         write(
             lean_path,
             lean.replace(
-                "{ source := \"capture-intake\", target := \"triage-intake\", kind := \"navigation\", trigger := \"triage-intake-screen\" },",
+                "{ source := \"capture-intake\", target := \"triage-intake\", kind := \"navigation\", trigger := \"triage-intake-screen\", rationale := \"\" },",
                 "",
             ),
         )?;
@@ -695,7 +695,7 @@ mod tests {
         write(
             quint_path,
             quint.replace(
-                "{ source: \"capture-intake\", target: \"triage-intake\", kind: \"navigation\", trigger: \"triage-intake-screen\" },",
+                "{ source: \"capture-intake\", target: \"triage-intake\", kind: \"navigation\", trigger: \"triage-intake-screen\", rationale: \"\" },",
                 "",
             ),
         )?;

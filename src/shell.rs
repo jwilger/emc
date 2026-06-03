@@ -395,27 +395,6 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
         }
-        Effect::RequireWorkflowTransitions(
-            workflow_path,
-            artifact_path,
-            marker_prefix,
-            message,
-        ) => {
-            let workflow_contents =
-                fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
-            let artifact_contents =
-                fs::read_to_string(Path::new(artifact_path.as_ref())).map_err(ShellError::io)?;
-            let marker = workflow_transition_marker(marker_prefix.as_ref(), &workflow_contents)?;
-            if artifact_contains_one_canonical_declaration(
-                &artifact_contents,
-                marker_prefix.as_ref(),
-                &marker,
-            ) {
-                Ok(Vec::new())
-            } else {
-                Err(ShellError::message(message.as_ref().to_owned()))
-            }
-        }
         Effect::RunProcess(invocation) => run_process(invocation),
         Effect::RecordCleanReviewFromWorkflow(slug, reviewer_id, reviewed_at) => {
             validate_formal_workflow_if_modeled(slug)?;
@@ -1557,16 +1536,6 @@ fn formal_slice_artifact_is_canonical(
     }))
 }
 
-fn workflow_transition_marker(prefix: &str, workflow_contents: &str) -> Result<String, ShellError> {
-    let labels = if prefix.starts_with("val ") {
-        workflow_transition_record_labels(workflow_contents)?
-    } else {
-        workflow_transition_lean_record_labels(workflow_contents)?
-    };
-    let joined_labels = labels.join(",");
-    Ok(format!("{prefix} [{joined_labels}]"))
-}
-
 fn artifact_contains_one_canonical_declaration(
     artifact_contents: &str,
     prefix: &str,
@@ -1650,48 +1619,6 @@ fn workflow_slice_details(workflow_contents: &str) -> Result<Vec<WorkflowSliceDe
     workflow_document(workflow_contents).and_then(|workflow| {
         workflow
             .slice_details()
-            .map_err(|error| ShellError::message(error.to_string()))
-    })
-}
-
-fn workflow_transition_lean_record_labels(
-    workflow_contents: &str,
-) -> Result<Vec<String>, ShellError> {
-    workflow_transitions(workflow_contents)?
-        .into_iter()
-        .map(|transition| {
-            Ok(format!(
-                "{{ source := {}, target := {}, kind := {}, trigger := {} }}",
-                json_string(transition.source().as_ref().to_owned())?,
-                json_string(transition.target().as_ref().to_owned())?,
-                json_string(transition.kind().as_ref().to_owned())?,
-                json_string(transition.trigger().as_ref().to_owned())?
-            ))
-        })
-        .collect()
-}
-
-fn workflow_transition_record_labels(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    workflow_transitions(workflow_contents)?
-        .into_iter()
-        .map(|transition| {
-            Ok(format!(
-                "{{ source: {}, target: {}, kind: {}, trigger: {} }}",
-                json_string(transition.source().as_ref().to_owned())?,
-                json_string(transition.target().as_ref().to_owned())?,
-                json_string(transition.kind().as_ref().to_owned())?,
-                json_string(transition.trigger().as_ref().to_owned())?
-            ))
-        })
-        .collect()
-}
-
-fn workflow_transitions(
-    workflow_contents: &str,
-) -> Result<Vec<WorkflowTransitionRecord>, ShellError> {
-    workflow_document(workflow_contents).and_then(|workflow| {
-        workflow
-            .transitions()
             .map_err(|error| ShellError::message(error.to_string()))
     })
 }
@@ -1879,6 +1806,6 @@ mod tests {
     }
 
     fn stale_lean_artifact() -> &'static str {
-        "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:name=Open ticket;slug=open-ticket;description=Actor opens a repair ticket.;slices=capture-ticket|Capture ticket|state_view|Actor enters repair ticket details.,review-ticket|Review ticket|state_view|Actor reviews the repair ticket.;transitions=capture-ticket->review-ticket:navigation:review-ticket-screen\n-- EMC generated Lean4 business workflow model.\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := [\"capture-ticket\",\"review-ticket\"]\n\ndef workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Actor enters repair ticket details.\"),(\"review-ticket\", \"Review ticket\", \"state_view\", \"Actor reviews the repair ticket.\")]\n\nstructure WorkflowTransition where\n  source : String\n  target : String\n  kind : String\n  trigger : String\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"stale-screen\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\ntheorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl\n\ntheorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl\n\nend OpenTicket\n"
+        "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:name=Open ticket;slug=open-ticket;description=Actor opens a repair ticket.;slices=capture-ticket|Capture ticket|state_view|Actor enters repair ticket details.,review-ticket|Review ticket|state_view|Actor reviews the repair ticket.;transitions=capture-ticket->review-ticket:navigation:review-ticket-screen\n-- EMC generated Lean4 business workflow model.\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := [\"capture-ticket\",\"review-ticket\"]\n\ndef workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Actor enters repair ticket details.\"),(\"review-ticket\", \"Review ticket\", \"state_view\", \"Actor reviews the repair ticket.\")]\n\nstructure WorkflowTransition where\n  source : String\n  target : String\n  kind : String\n  trigger : String\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"stale-screen\", rationale := \"\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\ntheorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl\n\ntheorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl\n\nend OpenTicket\n"
     }
 }

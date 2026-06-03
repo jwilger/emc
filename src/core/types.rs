@@ -200,6 +200,7 @@ pub struct WorkflowTransitionRecord {
     target: WorkflowTransitionEndpoint,
     kind: WorkflowTransitionKind,
     trigger: TransitionTriggerName,
+    rationale: Option<ModelDescription>,
 }
 
 impl WorkflowTransitionRecord {
@@ -214,6 +215,23 @@ impl WorkflowTransitionRecord {
             target,
             kind,
             trigger,
+            rationale: None,
+        }
+    }
+
+    pub fn new_with_rationale(
+        source: WorkflowTransitionEndpoint,
+        target: WorkflowTransitionEndpoint,
+        kind: WorkflowTransitionKind,
+        trigger: TransitionTriggerName,
+        rationale: ModelDescription,
+    ) -> Self {
+        Self {
+            source,
+            target,
+            kind,
+            trigger,
+            rationale: Some(rationale),
         }
     }
 
@@ -231,6 +249,10 @@ impl WorkflowTransitionRecord {
 
     pub fn trigger(&self) -> &TransitionTriggerName {
         &self.trigger
+    }
+
+    pub fn rationale(&self) -> Option<&ModelDescription> {
+        self.rationale.as_ref()
     }
 }
 

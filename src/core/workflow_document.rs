@@ -602,7 +602,7 @@ fn reject_duplicate_transition(
     let addition_record = transition_addition_record(addition)?;
     if workflow_transitions(existing)?
         .iter()
-        .any(|existing_record| existing_record == &addition_record)
+        .any(|existing_record| same_transition_identity(existing_record, &addition_record))
     {
         return Err(WorkflowDocumentError::new(format!(
             "workflow transition {} already exists",
@@ -649,7 +649,7 @@ fn removed_transition_steps(
                             transition_record_for_value(source, transition)
                                 .map(|record| {
                                     record.is_some_and(|record| {
-                                        if &record == removal {
+                                        if same_transition_identity(&record, removal) {
                                             removed_transition = true;
                                             true
                                         } else {
@@ -683,6 +683,16 @@ fn removed_transition_steps(
             transition_record_label(removal)
         )))
     }
+}
+
+fn same_transition_identity(
+    left: &WorkflowTransitionRecord,
+    right: &WorkflowTransitionRecord,
+) -> bool {
+    left.source() == right.source()
+        && left.target() == right.target()
+        && left.kind() == right.kind()
+        && left.trigger() == right.trigger()
 }
 
 fn reject_main_steps_without_incoming_transitions(
@@ -846,6 +856,7 @@ fn transition_record<'a>(
                 target,
                 kind: RawTransitionKind::Plain(kind),
                 trigger,
+                rationale: None,
             })
     })
 }
@@ -872,6 +883,7 @@ fn workflow_exit_transition_record<'a>(
                 target,
                 kind: RawTransitionKind::WorkflowExit(kind),
                 trigger,
+                rationale: transition.get("exit_reason").and_then(Value::as_str),
             })
     })
 }
@@ -881,6 +893,7 @@ struct RawTransitionRecord<'a> {
     target: &'a str,
     kind: RawTransitionKind<'a>,
     trigger: &'a str,
+    rationale: Option<&'a str>,
 }
 
 enum RawTransitionKind<'a> {
@@ -923,12 +936,20 @@ fn workflow_transition_record(
         RawTransitionKind::Plain(kind) => kind.to_owned(),
         RawTransitionKind::WorkflowExit(kind) => format!("workflow_exit:{kind}"),
     };
-    Ok(WorkflowTransitionRecord::new(
-        workflow_transition_endpoint("source", raw.source)?,
-        workflow_transition_endpoint("target", raw.target)?,
-        workflow_transition_kind(&kind)?,
-        transition_trigger_name(raw.trigger)?,
-    ))
+    let source = workflow_transition_endpoint("source", raw.source)?;
+    let target = workflow_transition_endpoint("target", raw.target)?;
+    let kind = workflow_transition_kind(&kind)?;
+    let trigger = transition_trigger_name(raw.trigger)?;
+    match raw.rationale {
+        Some(rationale) => Ok(WorkflowTransitionRecord::new_with_rationale(
+            source,
+            target,
+            kind,
+            trigger,
+            model_description("workflow transition rationale", rationale)?,
+        )),
+        None => Ok(WorkflowTransitionRecord::new(source, target, kind, trigger)),
+    }
 }
 
 fn workflow_transition_endpoint(
