@@ -285,7 +285,16 @@ pub fn compose_browser_workflow(
         .collect::<Vec<_>>();
     let error_recovery_cards = error_recovery_cards(&composed_values)?;
     let event_element_names = event_element_names(&composed_values)?;
-    let review_overlays = review_overlays(&workflow_value)?;
+    let review_overlays = workflow_semantics
+        .review_overlay_details()
+        .map_err(|error| BrowserCompositionError::new(error.to_string()))?
+        .into_iter()
+        .map(|detail| BrowserReviewOverlay {
+            step: detail.step().clone(),
+            status: detail.status().clone(),
+            missing_rule: detail.missing_rule().clone(),
+        })
+        .collect();
     let command_definitions = command_definitions(&composed_values)?;
     let view_definitions = view_definitions(&composed_values)?;
 
@@ -420,41 +429,6 @@ fn event_element_names(
         .map(|name| {
             BrowserEventElementName::try_new(name.to_owned()).map_err(|error| {
                 BrowserCompositionError::new(format!("invalid event element name: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn parse_workflow_step_name(value: &str) -> Result<WorkflowStepName, BrowserCompositionError> {
-    WorkflowStepName::try_new(value.to_owned()).map_err(|error| {
-        BrowserCompositionError::new(format!("invalid workflow step name: {error}"))
-    })
-}
-
-fn review_overlays(value: &Value) -> Result<Vec<BrowserReviewOverlay>, BrowserCompositionError> {
-    value
-        .get("review_diagnostics")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|diagnostic| {
-            Some((
-                diagnostic.get("step").and_then(Value::as_str)?,
-                diagnostic.get("status").and_then(Value::as_str)?,
-                diagnostic.get("missing_rule").and_then(Value::as_str)?,
-            ))
-        })
-        .map(|(step, status, missing_rule)| {
-            Ok(BrowserReviewOverlay {
-                step: parse_workflow_step_name(step)?,
-                status: ReviewStatus::try_new(status.to_owned()).map_err(|error| {
-                    BrowserCompositionError::new(format!("invalid review status: {error}"))
-                })?,
-                missing_rule: ReviewRuleName::try_new(missing_rule.to_owned()).map_err(
-                    |error| {
-                        BrowserCompositionError::new(format!("invalid review rule name: {error}"))
-                    },
-                )?,
             })
         })
         .collect()

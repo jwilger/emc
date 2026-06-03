@@ -254,6 +254,35 @@ impl WorkflowTransitionDetail {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowReviewOverlayDetail {
+    step: WorkflowStepName,
+    status: ReviewStatus,
+    missing_rule: ReviewRuleName,
+}
+
+impl WorkflowReviewOverlayDetail {
+    pub fn new(step: WorkflowStepName, status: ReviewStatus, missing_rule: ReviewRuleName) -> Self {
+        Self {
+            step,
+            status,
+            missing_rule,
+        }
+    }
+
+    pub fn step(&self) -> &WorkflowStepName {
+        &self.step
+    }
+
+    pub fn status(&self) -> &ReviewStatus {
+        &self.status
+    }
+
+    pub fn missing_rule(&self) -> &ReviewRuleName {
+        &self.missing_rule
+    }
+}
+
 #[nutype(
     sanitize(trim),
     validate(not_empty),

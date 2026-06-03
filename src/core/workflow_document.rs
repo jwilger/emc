@@ -5,11 +5,11 @@ use serde_json::Value;
 
 use crate::core::effect::{FileContents, ProjectPath};
 use crate::core::types::{
-    ModelDescription, ModelName, SliceKindName, SliceSlug, TransitionTriggerName,
-    WorkflowBranchDetail, WorkflowBranchLabel, WorkflowSliceDetail, WorkflowSliceFileReference,
-    WorkflowSlug, WorkflowStepName, WorkflowStepRelationshipName, WorkflowTransitionDetail,
-    WorkflowTransitionFieldName, WorkflowTransitionKind, WorkflowTransitionLabel,
-    WorkflowTransitionName,
+    ModelDescription, ModelName, ReviewRuleName, ReviewStatus, SliceKindName, SliceSlug,
+    TransitionTriggerName, WorkflowBranchDetail, WorkflowBranchLabel, WorkflowReviewOverlayDetail,
+    WorkflowSliceDetail, WorkflowSliceFileReference, WorkflowSlug, WorkflowStepName,
+    WorkflowStepRelationshipName, WorkflowTransitionDetail, WorkflowTransitionFieldName,
+    WorkflowTransitionKind, WorkflowTransitionLabel, WorkflowTransitionName,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -185,6 +185,31 @@ impl WorkflowDocument {
             .map(|step| step_transition_details(steps, step))
             .collect::<Result<Vec<_>, _>>()
             .map(|details| details.into_iter().flatten().collect())
+    }
+
+    pub fn review_overlay_details(
+        &self,
+    ) -> Result<Vec<WorkflowReviewOverlayDetail>, WorkflowDocumentError> {
+        self.object()?
+            .get("review_diagnostics")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|diagnostic| {
+                Some((
+                    diagnostic.get("step").and_then(Value::as_str)?,
+                    diagnostic.get("status").and_then(Value::as_str)?,
+                    diagnostic.get("missing_rule").and_then(Value::as_str)?,
+                ))
+            })
+            .map(|(step, status, missing_rule)| {
+                Ok(WorkflowReviewOverlayDetail::new(
+                    workflow_step_name(step)?,
+                    review_status(status)?,
+                    review_rule_name(missing_rule)?,
+                ))
+            })
+            .collect()
     }
 
     pub fn contents(&self) -> Result<FileContents, WorkflowDocumentError> {
@@ -697,6 +722,16 @@ fn workflow_transition_label_value(
     WorkflowTransitionLabel::try_new(raw.to_owned()).map_err(|error| {
         WorkflowDocumentError::new(format!("invalid workflow transition label: {error}"))
     })
+}
+
+fn review_status(raw: &str) -> Result<ReviewStatus, WorkflowDocumentError> {
+    ReviewStatus::try_new(raw.to_owned())
+        .map_err(|error| WorkflowDocumentError::new(format!("invalid review status: {error}")))
+}
+
+fn review_rule_name(raw: &str) -> Result<ReviewRuleName, WorkflowDocumentError> {
+    ReviewRuleName::try_new(raw.to_owned())
+        .map_err(|error| WorkflowDocumentError::new(format!("invalid review rule name: {error}")))
 }
 
 fn model_description(context: &str, raw: &str) -> Result<ModelDescription, WorkflowDocumentError> {
