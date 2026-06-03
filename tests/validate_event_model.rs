@@ -936,6 +936,28 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_state_change_slices_that_own_read_models() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let slices = temp_dir.path().join("model/browser/data/slices");
+        create_dir_all(&slices)?;
+        write(
+            slices.join("submit-lesson.eventmodel.json"),
+            "{\"name\":\"Submit lesson\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[{\"name\":\"lessons\"}],\"events\":[{\"name\":\"LessonSubmitted\",\"stream\":\"lessons\",\"attributes\":[]}],\"commands\":[{\"name\":\"SubmitLesson\",\"inputs\":[],\"produces\":[\"LessonSubmitted\"]}],\"read_models\":[{\"name\":\"lesson_submission_projection\",\"fields\":[]}],\"slices\":[{\"name\":\"Submit lesson\",\"type\":\"state_change\",\"commands\":[\"SubmitLesson\"],\"events\":[\"LessonSubmitted\"],\"read_models\":[\"lesson_submission_projection\"],\"acceptance_scenarios\":[],\"contract_scenarios\":[{\"name\":\"submit lesson\",\"given\":[],\"given_streams\":[{\"stream\":\"lessons\",\"state\":\"empty\"}],\"when\":{},\"then\":[\"LessonSubmitted\"]}]}]}",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["validate", "model/browser/data/slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "state_change slice 'Submit lesson' must not own read model 'lesson_submission_projection'",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn validate_rejects_duplicate_slice_outcome_labels() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let slices = temp_dir.path().join("model/browser/data/slices");

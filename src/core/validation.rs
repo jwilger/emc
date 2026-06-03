@@ -1783,6 +1783,7 @@ pub fn validate_event_model(document: &EventModelDocument) -> Result<(), Validat
         .and_then(|()| validate_state_view_slices_do_not_own_commands(document))
         .and_then(|()| validate_state_change_slices_emit_events(document))
         .and_then(|()| validate_state_change_slices_do_not_own_views(document))
+        .and_then(|()| validate_state_change_slices_do_not_own_read_models(document))
 }
 
 pub fn validate_event_model_corpus(
@@ -3250,6 +3251,28 @@ fn validate_state_change_slices_do_not_own_views(
             Err(validation_issue(format!(
                 "state_change slice '{}' must not own view '{}'",
                 slice.name, view
+            )))
+        })
+}
+
+fn validate_state_change_slices_do_not_own_read_models(
+    document: &EventModelDocument,
+) -> Result<(), ValidationIssue> {
+    document
+        .slice_definitions
+        .iter()
+        .filter(|slice| slice.slice_type == SliceType::StateChange)
+        .flat_map(|slice| {
+            slice
+                .owned_read_models
+                .iter()
+                .map(move |read_model| (slice, read_model))
+        })
+        .next()
+        .map_or(Ok(()), |(slice, read_model)| {
+            Err(validation_issue(format!(
+                "state_change slice '{}' must not own read model '{}'",
+                slice.name, read_model
             )))
         })
 }
