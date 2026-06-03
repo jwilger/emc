@@ -157,7 +157,11 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
             let artifact_contents =
                 fs::read_to_string(Path::new(artifact_path.as_ref())).map_err(ShellError::io)?;
             let marker = workflow_slice_detail_marker(marker_prefix.as_ref(), &workflow_contents)?;
-            if artifact_contents.contains(&marker) {
+            if artifact_contains_one_canonical_declaration(
+                &artifact_contents,
+                marker_prefix.as_ref(),
+                &marker,
+            ) {
                 Ok(None)
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
@@ -169,7 +173,11 @@ fn interpret_effect(effect: &Effect) -> Result<Option<String>, ShellError> {
             let artifact_contents =
                 fs::read_to_string(Path::new(artifact_path.as_ref())).map_err(ShellError::io)?;
             let marker = workflow_slice_marker(marker_prefix.as_ref(), &workflow_contents)?;
-            if artifact_contents.contains(&marker) {
+            if artifact_contains_one_canonical_declaration(
+                &artifact_contents,
+                marker_prefix.as_ref(),
+                &marker,
+            ) {
                 Ok(None)
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))

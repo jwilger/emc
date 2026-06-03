@@ -461,6 +461,28 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_lean_workflow_extra_slice_declaration_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let mut lean = read_to_string(&lean_path)?;
+        lean.push_str("\ndef workflowSlices : List String := [\"stale-slice\"]\n");
+        write(lean_path, lean)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean workflow slice drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_lean_workflow_slice_detail_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -470,6 +492,31 @@ mod tests {
             temp_dir.path().join("model/lean/OpenTicket.lean"),
             "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := [\"capture-ticket\",\"review-ticket\"]\n\ndef workflowSliceDetails : List (String × String × String × String) := []\n\ndef workflowTransitions : List String := [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
         )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean workflow slice detail drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_lean_workflow_extra_slice_detail_declaration_drift()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let mut lean = read_to_string(&lean_path)?;
+        lean.push_str(
+            "\ndef workflowSliceDetails : List (String × String × String × String) := [(\"stale-slice\", \"Stale slice\", \"state_view\", \"Stale description.\")]\n",
+        );
+        write(lean_path, lean)?;
 
         Command::cargo_bin("emc")?
             .arg("check")
@@ -555,6 +602,31 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_quint_workflow_extra_slice_detail_declaration_drift()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let mut quint = read_to_string(&quint_path)?;
+        quint.push_str(
+            "  val workflowSliceDetails = [{ slug: \"stale-slice\", name: \"Stale slice\", kind: \"state_view\", description: \"Stale description.\" }]\n",
+        );
+        write(quint_path, quint)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint workflow slice detail drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_quint_workflow_slice_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -564,6 +636,28 @@ mod tests {
             temp_dir.path().join("model/quint/OpenTicket.qnt"),
             "module OpenTicket\n\n// EMC-DIGEST: workflow:Open ticket\nval workflowName = \"Open ticket\"\n\nval workflowSlug = \"open-ticket\"\n\nval workflowDescription = \"Actor opens a repair ticket.\"\n\nval workflowSlices = []\n\nval workflowTransitions = [\"capture-ticket->review-ticket:navigation:review-ticket-screen\"]\n",
         )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Quint workflow slice drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_quint_workflow_extra_slice_declaration_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let mut quint = read_to_string(&quint_path)?;
+        quint.push_str("  val workflowSlices = [\"stale-slice\"]\n");
+        write(quint_path, quint)?;
 
         Command::cargo_bin("emc")?
             .arg("check")
