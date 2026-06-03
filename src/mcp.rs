@@ -7,7 +7,7 @@ use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath};
 use crate::core::layout::{list_workflows, show_workflow};
 use crate::core::site::generate_site;
 use crate::core::verify::verify_project;
-use crate::core::workflow::{NewWorkflow, add_workflow};
+use crate::core::workflow::{NewWorkflow, add_workflow, update_workflow_description};
 use crate::event_model_validation::validate_target;
 use crate::io::dto::{
     parse_browser_index_workflows, parse_model_description, parse_model_name, parse_workflow_slug,
@@ -153,6 +153,23 @@ fn tools_list_result() -> Value {
                     "required": ["slug", "name", "description"],
                     "additionalProperties": false
                 }
+            },
+            {
+                "name": "update_workflow",
+                "description": "Update a business workflow and regenerate synchronized model artifacts.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "slug": {
+                            "type": "string"
+                        },
+                        "description": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slug", "description"],
+                    "additionalProperties": false
+                }
             }
         ]
     })
@@ -195,6 +212,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "add_workflow" => Ok(Some(success_response(
             id,
             tool_result(add_workflow_tool_text(request)?),
+        ))),
+        "update_workflow" => Ok(Some(success_response(
+            id,
+            tool_result(update_workflow_tool_text(request)?),
         ))),
         _ => Ok(Some(error_response(
             id,
@@ -302,6 +323,35 @@ fn add_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
         NewWorkflow::new(name, description, slug),
     ))
     .map(|reports| reports.join("\n"))
+}
+
+fn update_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("update_workflow requires arguments"))?;
+    let slug = arguments
+        .get("slug")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("update_workflow requires slug"))
+        .and_then(|raw_slug| {
+            parse_workflow_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let description = arguments
+        .get("description")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("update_workflow requires description"))
+        .and_then(|raw_description| {
+            parse_model_description(raw_description)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let index = fs::read_to_string("model/browser/data/index.json")
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let existing_workflows = parse_browser_index_workflows(&index)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let plan = update_workflow_description(existing_workflows, slug, description)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(plan).map(|reports| reports.join("\n"))
 }
 
 fn report_text(plan: EffectPlan) -> String {
