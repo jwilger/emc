@@ -104,14 +104,21 @@ mod tests {
         assert!(
             flake.contains("--headless")
                 && flake.contains("--dump-dom")
+                && flake.contains("--screenshot=rendered-site.png")
+                && flake.contains("--window-size=1440,1000")
                 && flake.contains("--virtual-time-budget=5000"),
-            "package smoke checks must execute the generated site in a real headless browser"
+            "package smoke checks must execute the generated site in a real headless browser and capture a visual smoke screenshot"
         );
         assert!(
             flake.contains("grep 'Package Smoke Event Model Browser' rendered-site.html")
                 && flake.contains("grep 'Package smoke' rendered-site.html")
                 && flake.contains("grep 'Capture smoke' rendered-site.html"),
             "package smoke checks must assert rendered project and model content, not only static site files"
+        );
+        assert!(
+            flake.contains("browser screenshot is unexpectedly small")
+                && flake.contains("browser screenshot has unexpected dimensions"),
+            "package smoke checks must reject a missing or malformed browser screenshot"
         );
         assert!(
             flake.contains("${package}/bin/emc mcp stdio"),
