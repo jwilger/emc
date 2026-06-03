@@ -47,7 +47,8 @@ mod tests {
     }
 
     #[test]
-    fn show_workflow_rejects_unindexed_workflow_files() -> Result<(), Box<dyn Error>> {
+    fn show_workflow_reports_formal_workflow_when_browser_index_is_stale()
+    -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
         Command::cargo_bin("emc")?
@@ -80,9 +81,36 @@ mod tests {
             .args(["show", "workflow", "open-ticket"])
             .current_dir(temp_dir.path())
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "workflow open-ticket is not indexed",
+            .success()
+            .stdout(predicate::str::contains("\"name\": \"Open ticket\""))
+            .stdout(predicate::str::contains(
+                "\"description\": \"Actor opens a repair ticket.\"",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn show_slice_reports_formal_slice_when_browser_slice_is_stale() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_workflow(temp_dir.path())?;
+        add_slice(temp_dir.path())?;
+
+        write(
+            temp_dir
+                .path()
+                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
+            "{\n  \"name\": \"Stale slice\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Stale browser projection.\"\n}\n",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args(["show", "slice", "capture-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"name\": \"Capture ticket\""))
+            .stdout(predicate::str::contains(
+                "\"description\": \"Actor enters repair ticket details.\"",
             ));
 
         Ok(())
@@ -207,6 +235,28 @@ mod tests {
             .assert()
             .success();
 
+        Ok(())
+    }
+
+    fn add_slice(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor enters repair ticket details.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
         Ok(())
     }
 }

@@ -5,6 +5,7 @@ pub mod digest;
 pub mod effect;
 pub mod emit;
 pub mod formal_graph;
+pub mod formal_projection;
 pub mod gherkin;
 pub mod json_object_document;
 pub mod layout;
