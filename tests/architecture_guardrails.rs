@@ -411,6 +411,19 @@ mod tests {
     }
 
     #[test]
+    fn validation_sources_are_parsed_once_before_rule_checks() -> Result<(), Box<dyn Error>> {
+        let source = read_workspace_file("src/event_model_validation.rs")?;
+        let parse_calls = source.matches("parse_event_model_document(").count();
+
+        assert_eq!(
+            parse_calls, 1,
+            "validation orchestration must parse raw event-model files once into semantic documents before rule checks"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn shell_browser_index_paths_use_boundary_parser() -> Result<(), Box<dyn Error>> {
         let source = read_workspace_file("src/shell.rs")?;
         let violations = ["get(\"workflows\")", "workflow.get(\"path\")"]

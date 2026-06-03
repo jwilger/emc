@@ -25,7 +25,7 @@ output, and mechanical guardrails.
 | Functional core and imperative shell | Core operations describe effects through `src/core/effect.rs`; shell modules interpret filesystem, process, stdio, network, and environment effects. Architecture guardrails cover the known direct-I/O regressions. | Partial evidence | Run a final direct-I/O audit across `src/core` and add static guardrails for any uncovered I/O classes found. |
 | Step/trampoline variant effect pattern | Command planning returns effect plans interpreted at the shell boundary. CLI and MCP route through that effect plan layer. | Strong evidence | Confirm final command additions keep using `EffectPlan` instead of direct shell calls. |
 | Semantic data types only past boundaries | `nutype = 0.7.0` is pinned. Boundary parsers cover project names, paths, model descriptions, workflow slugs, slice slugs, transition endpoints and kinds, review timestamps, reviewers, and validation definition names. Static guardrails reject several primitive-bearing core API regressions. | Partial evidence | Complete a public core API audit for primitive or structural DTO leakage, then add or extend guardrails for any uncovered module patterns. |
-| Parse-don't-validate | CLI and MCP DTO parsing convert raw strings and JSON fields into semantic types before command execution. Duplicate-key and project-path checks happen at boundary parsing. | Partial evidence | Audit validation internals to ensure source files are parsed once into semantic documents before rules execute. |
+| Parse-don't-validate | CLI and MCP DTO parsing convert raw strings and JSON fields into semantic types before command execution. Duplicate-key and project-path checks happen at boundary parsing. Validation orchestration now routes raw event-model files through one shared parse path into semantic documents before rule checks, and architecture guardrails prevent a second raw event-model parse path from returning. | Strong evidence | Keep new boundary parsers and validation entrypoints on the shared raw-to-semantic path. |
 | Actual business model represented in Lean4 and Quint | Workflow and slice mutations emit Lean4 and Quint modules for the modeled workflows, slices, transitions, identity fields, slice details, and digests. Verification runs Lean4/Lake and Quint against project root, workflow, and slice artifacts. | Partial evidence | Decide whether the goal requires EMC to parse Lean4 and Quint artifacts back into a normalized semantic graph, not only compare deterministic declarations, markers, digests, and invariant names. If yes, add that graph reader and drift tests. |
 | Deterministic drift checking | `emc check` rejects drift across browser data, Lean4 workflow artifacts, Quint workflow artifacts, slice artifacts, root artifacts, tool config, duplicate metadata, unmodeled artifacts, stale declarations, and generated browser data. | Strong evidence | Strengthen only if normalized graph reading is adopted. |
 | Lean4 proof surface | Generated Lean4 modules include identity, slice-detail, transition-structure, root namespace, and slice identity obligations. Check coverage rejects stale or tautological declarations in the current proof surface. | Strong evidence | Final proof-surface audit for meaningful obligations versus marker-only declarations before closing the goal. |
@@ -42,9 +42,9 @@ output, and mechanical guardrails.
 
 ## Highest-Value Remaining Increments
 
-1. **Semantic-boundary audit:** scan public core APIs and validation internals
-   for primitive or structural DTO leakage and add static guardrails for any
-   uncovered regression class.
+1. **Semantic-boundary audit:** finish scanning public core APIs for primitive
+   or structural DTO leakage and add static guardrails for any uncovered
+   regression class.
 2. **Formal graph decision:** either implement Lean4/Quint artifact readers that
    normalize formal artifacts back into semantic graph data, or explicitly
    narrow the goal to deterministic generated declarations, digests, and tool
