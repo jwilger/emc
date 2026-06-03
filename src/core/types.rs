@@ -12,6 +12,13 @@ pub struct ModelName(String);
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
+pub struct ModelDescription(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
 pub struct WorkflowSlug(String);
 
 #[nutype(

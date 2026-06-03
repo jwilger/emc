@@ -9,7 +9,8 @@ use crate::core::effect::FileContents;
 use crate::core::layout::ImportedWorkflowLayout;
 use crate::core::project::ProjectName;
 use crate::core::types::{
-    LeanModuleName, ModelDigest, ModelName, QuintModuleName, SliceSlug, WorkflowSlug,
+    LeanModuleName, ModelDescription, ModelDigest, ModelName, QuintModuleName, SliceSlug,
+    WorkflowSlug,
 };
 use crate::core::validation::{
     AutomationCommandPolicy, AutomationTrigger, BoardElement, BoardElementKind,
@@ -56,6 +57,11 @@ impl Error for BoundaryParseError {}
 pub fn parse_model_name(raw: &str) -> Result<ModelName, BoundaryParseError> {
     ModelName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid model name: {error}")))
+}
+
+pub fn parse_model_description(raw: &str) -> Result<ModelDescription, BoundaryParseError> {
+    ModelDescription::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid model description: {error}")))
 }
 
 pub fn parse_event_model_document(
@@ -125,11 +131,22 @@ pub fn parse_emc_workflow_import(
         .and_then(Value::as_str)
         .ok_or_else(|| BoundaryParseError::new("EMC workflow is missing name"))
         .and_then(parse_model_name)?;
+    let description = value
+        .get("description")
+        .and_then(Value::as_str)
+        .ok_or_else(|| BoundaryParseError::new("EMC workflow is missing description"))
+        .and_then(parse_model_description)?;
     let json = FileContents::try_new(raw_json.to_owned()).map_err(|error| {
         BoundaryParseError::new(format!("invalid EMC workflow content: {error}"))
     })?;
 
-    Ok(EMCWorkflowImport::new(name, slug, json, slices))
+    Ok(EMCWorkflowImport::new(
+        name,
+        description,
+        slug,
+        json,
+        slices,
+    ))
 }
 
 pub fn parse_emc_slice_import(
