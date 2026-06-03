@@ -84,6 +84,7 @@ impl WorkflowDocument {
         &self,
         addition: WorkflowTransitionAddition,
     ) -> Result<Self, WorkflowDocumentError> {
+        reject_duplicate_transition(self.steps()?, &addition)?;
         let mut next = self.object()?.clone();
         next.insert(
             "steps".to_owned(),
@@ -396,6 +397,23 @@ fn connected_steps(
     }
 }
 
+fn reject_duplicate_transition(
+    existing: &[Value],
+    addition: &WorkflowTransitionAddition,
+) -> Result<(), WorkflowDocumentError> {
+    let addition_label = transition_addition_label(addition)?;
+    if workflow_transitions(existing)?
+        .iter()
+        .any(|existing_label| existing_label == &addition_label)
+    {
+        return Err(WorkflowDocumentError::new(format!(
+            "workflow transition {} already exists",
+            addition_label.as_ref()
+        )));
+    }
+    Ok(())
+}
+
 fn append_transition(
     step: &Value,
     addition: &WorkflowTransitionAddition,
@@ -409,18 +427,32 @@ fn append_transition(
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
-    transitions.push(Value::Object(
-        [(
-            addition.trigger_field.as_ref().to_owned(),
-            Value::String(addition.trigger.as_ref().to_owned()),
-        )]
-        .into_iter()
-        .collect(),
-    ));
-    let transition = transitions
-        .last_mut()
-        .and_then(Value::as_object_mut)
-        .ok_or_else(|| WorkflowDocumentError::new("workflow transition must be a JSON object"))?;
+    transitions.push(transition_value(addition));
+    next.insert("transitions".to_owned(), Value::Array(transitions));
+    Ok(Value::Object(next))
+}
+
+fn transition_addition_label(
+    addition: &WorkflowTransitionAddition,
+) -> Result<WorkflowTransitionLabel, WorkflowDocumentError> {
+    let transition = transition_value(addition);
+    let label = match &addition.target {
+        WorkflowTransitionTarget::Slice(target) => {
+            transition_label(addition.source.as_ref(), target.as_ref(), &transition)
+        }
+        WorkflowTransitionTarget::Workflow { slug, reason: _ } => {
+            workflow_exit_transition_label(addition.source.as_ref(), slug.as_ref(), &transition)
+        }
+    }
+    .ok_or_else(|| WorkflowDocumentError::new("workflow transition addition is missing trigger"))?;
+    workflow_transition_label_value(&label)
+}
+
+fn transition_value(addition: &WorkflowTransitionAddition) -> Value {
+    let mut transition = serde_json::Map::from_iter([(
+        addition.trigger_field.as_ref().to_owned(),
+        Value::String(addition.trigger.as_ref().to_owned()),
+    )]);
     match &addition.target {
         WorkflowTransitionTarget::Slice(target) => {
             transition.insert("to".to_owned(), Value::String(target.as_ref().to_owned()));
@@ -436,8 +468,7 @@ fn append_transition(
             );
         }
     }
-    next.insert("transitions".to_owned(), Value::Array(transitions));
-    Ok(Value::Object(next))
+    Value::Object(transition)
 }
 
 fn workflow_slice_detail(step: &Value) -> Result<WorkflowSliceDetail, WorkflowDocumentError> {
