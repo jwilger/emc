@@ -77,4 +77,56 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn add_workflow_rejects_duplicate_formal_workflow_module_names() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket-copy",
+                "--name",
+                "Open-ticket",
+                "--description",
+                "Alternate workflow with colliding formal module.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "workflow module OpenTicket already exists",
+            ));
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        assert!(
+            lean.contains("def workflowName := \"Open ticket\""),
+            "rejected duplicate module names must not overwrite the existing formal workflow artifact"
+        );
+
+        Ok(())
+    }
 }

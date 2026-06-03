@@ -106,7 +106,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         }
         Effect::AddWorkflowFromIndex(workflow) => {
             let existing_workflows = read_browser_index_workflows()?;
-            interpret_collect_reports(add_workflow(existing_workflows, workflow.clone()))
+            let plan = add_workflow(existing_workflows, workflow.clone())
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret_collect_reports(plan)
         }
         Effect::CheckCurrentProject => {
             let project_name = read_project_manifest_name()?;

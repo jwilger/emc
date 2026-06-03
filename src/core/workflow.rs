@@ -32,8 +32,9 @@ impl NewWorkflow {
 pub fn add_workflow(
     existing_workflows: Vec<ModeledWorkflowLayout>,
     workflow: NewWorkflow,
-) -> EffectPlan {
-    workflow_effect_plan(existing_workflows, workflow)
+) -> Result<EffectPlan, WorkflowMutationError> {
+    reject_workflow_module_collision(&existing_workflows, &workflow)?;
+    Ok(workflow_effect_plan(existing_workflows, workflow))
 }
 
 pub fn update_workflow_description(
@@ -233,6 +234,22 @@ fn update_workflow_effect_plan(
         ),
         Effect::Report(report_line(format!("updated workflow {workflow_name}"))),
     ])
+}
+
+fn reject_workflow_module_collision(
+    existing_workflows: &[ModeledWorkflowLayout],
+    workflow: &NewWorkflow,
+) -> Result<(), WorkflowMutationError> {
+    let generated_module_name = module_name(workflow.name.as_ref());
+    existing_workflows
+        .iter()
+        .filter(|existing| existing.slug() != &workflow.slug)
+        .find(|existing| module_name(existing.name().as_ref()) == generated_module_name)
+        .map_or(Ok(()), |_existing| {
+            Err(WorkflowMutationError::new(format!(
+                "workflow module {generated_module_name} already exists"
+            )))
+        })
 }
 
 fn browser_index(mut workflows: Vec<ModeledWorkflowLayout>) -> String {
