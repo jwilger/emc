@@ -127,8 +127,7 @@ pub fn add_slice(
         ),
         Effect::WriteFile(
             project_path(format!(
-                "model/browser/data/slices/{}-{}.eventmodel.json",
-                new_slice.workflow_slug.as_ref(),
+                "model/browser/data/slices/{}.eventmodel.json",
                 new_slice.slug.as_ref()
             )),
             file_contents(slice_json),
@@ -221,11 +220,7 @@ fn appended_array_values(existing: Option<&Vec<Value>>, new_value: Value) -> Vec
 }
 
 fn slice_file(new_slice: &NewSlice) -> String {
-    format!(
-        "../slices/{}-{}.eventmodel.json",
-        new_slice.workflow_slug.as_ref(),
-        new_slice.slug.as_ref()
-    )
+    format!("../slices/{}.eventmodel.json", new_slice.slug.as_ref())
 }
 
 fn workflow_name(

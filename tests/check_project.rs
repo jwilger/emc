@@ -405,7 +405,7 @@ mod tests {
         remove_file(
             temp_dir
                 .path()
-                .join("model/browser/data/slices/open-ticket-capture-ticket.eventmodel.json"),
+                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
         )?;
 
         Command::cargo_bin("emc")?
