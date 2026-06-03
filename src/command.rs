@@ -6,7 +6,7 @@ use crate::core::gherkin::{
 use crate::core::project::{ProjectName, init_project};
 use crate::core::review_gate::review_gate;
 use crate::core::slice::NewSlice;
-use crate::core::types::{ModelDescription, WorkflowSlug};
+use crate::core::types::{ModelDescription, SliceSlug, WorkflowSlug};
 use crate::core::workflow::NewWorkflow;
 
 pub fn add_slice(slice: NewSlice) -> EffectPlan {
@@ -55,6 +55,10 @@ pub fn review_gate_for_workflow(slug: WorkflowSlug) -> EffectPlan {
 
 pub fn show_workflow(slug: WorkflowSlug) -> EffectPlan {
     EffectPlan::new(vec![Effect::ShowWorkflowFromWorkflow(slug)])
+}
+
+pub fn show_slice(slug: SliceSlug) -> EffectPlan {
+    EffectPlan::new(vec![Effect::ShowSliceFromSlice(slug)])
 }
 
 pub fn update_workflow_description(

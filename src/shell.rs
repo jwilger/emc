@@ -12,13 +12,15 @@ use crate::core::effect::{
     ArtifactDigest, Effect, EffectPlan, FileContents, ProcessInvocation, ProjectPath,
 };
 use crate::core::json_object_document::JsonObjectDocument;
-use crate::core::layout::{ModeledWorkflowLayout, check_project, list_workflows, show_workflow};
+use crate::core::layout::{
+    ModeledWorkflowLayout, check_project, list_workflows, show_document, show_workflow,
+};
 use crate::core::project::ProjectName;
 use crate::core::review_record::{ReviewCategoryFinding, ReviewRecordDocument};
 use crate::core::site::generate_site;
 use crate::core::slice::add_slice;
 use crate::core::types::{
-    ReviewRuleName, WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionRecord,
+    ReviewRuleName, SliceSlug, WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionRecord,
 };
 use crate::core::verify::verify_project;
 use crate::core::workflow::{add_workflow, update_workflow_description};
@@ -352,6 +354,10 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             }
         }
         Effect::RunProcess(invocation) => run_process(invocation),
+        Effect::ShowSliceFromSlice(slug) => {
+            let slice_document = read_referenced_slice_document(slug)?;
+            interpret_collect_reports(show_document(slice_document))
+        }
         Effect::ShowWorkflowFromWorkflow(slug) => {
             let workflow_document = read_indexed_workflow_document(slug)?;
             interpret_collect_reports(show_workflow(workflow_document))
@@ -454,6 +460,20 @@ fn read_modeled_workflow_slice_details(
     Ok(slice_details)
 }
 
+fn read_referenced_slice_document(slug: &SliceSlug) -> Result<FileContents, ShellError> {
+    let modeled_workflows = read_browser_index_workflows()?;
+    let slice_is_referenced = read_modeled_workflow_slice_details(&modeled_workflows)?
+        .iter()
+        .any(|slice| slice.slug() == slug);
+    if !slice_is_referenced {
+        return Err(ShellError::message(format!(
+            "slice {} is not referenced by any indexed workflow",
+            slug.as_ref()
+        )));
+    }
+    read_slice_document(slug.as_ref())
+}
+
 fn read_workflow_document(slug: &str) -> Result<FileContents, ShellError> {
     fs::read_to_string(format!(
         "model/browser/data/workflows/{slug}.eventmodel.json"
@@ -462,6 +482,14 @@ fn read_workflow_document(slug: &str) -> Result<FileContents, ShellError> {
     .and_then(|contents| {
         FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
     })
+}
+
+fn read_slice_document(slug: &str) -> Result<FileContents, ShellError> {
+    fs::read_to_string(format!("model/browser/data/slices/{slug}.eventmodel.json"))
+        .map_err(ShellError::io)
+        .and_then(|contents| {
+            FileContents::try_new(contents).map_err(|error| ShellError::message(error.to_string()))
+        })
 }
 
 fn validate_event_model_target(target: &str) -> Result<Vec<String>, ShellError> {

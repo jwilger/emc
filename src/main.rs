@@ -8,7 +8,7 @@ use emc::core::effect::ProjectPath;
 use emc::core::gherkin::GherkinSuite;
 use emc::core::project::ProjectName;
 use emc::core::slice::NewSlice;
-use emc::core::types::{ModelDescription, WorkflowSlug};
+use emc::core::types::{ModelDescription, SliceSlug, WorkflowSlug};
 use emc::core::workflow::NewWorkflow;
 use emc::io::dto::{
     parse_connection_kind, parse_gherkin_suite, parse_model_description, parse_model_name,
@@ -58,6 +58,9 @@ enum Command {
     ReviewGate {
         slug: WorkflowSlug,
     },
+    ShowSlice {
+        slug: SliceSlug,
+    },
     ShowWorkflow {
         slug: WorkflowSlug,
     },
@@ -102,6 +105,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         } => serve_http(&host, port, once, auth_token.as_deref()),
         Command::McpStdio => serve_stdio(),
         Command::ReviewGate { slug } => interpret(command::review_gate_for_workflow(slug)),
+        Command::ShowSlice { slug } => interpret(command::show_slice(slug)),
         Command::ShowWorkflow { slug } => interpret(command::show_workflow(slug)),
         Command::UpdateWorkflowDescription { slug, description } => {
             interpret(command::update_workflow_description(slug, description))
@@ -442,6 +446,13 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 })
                 .map_err(|error| ShellError::message(error.to_string()))
         }
+        [command, subject, slug] if command == "show" && subject == "slice" => {
+            parse_slice_slug(slug)
+                .map(|slug| Cli {
+                    command: Command::ShowSlice { slug },
+                })
+                .map_err(|error| ShellError::message(error.to_string()))
+        }
         [
             command,
             subject,
@@ -504,7 +515,8 @@ fn help_command() -> ClapCommand {
         .subcommand(
             ClapCommand::new("show")
                 .about("Read modeled artifacts")
-                .subcommand(ClapCommand::new("workflow").about("Show a workflow by slug")),
+                .subcommand(ClapCommand::new("workflow").about("Show a workflow by slug"))
+                .subcommand(ClapCommand::new("slice").about("Show a slice by slug")),
         )
         .subcommand(
             ClapCommand::new("add")

@@ -262,7 +262,11 @@ pub fn list_workflows(modeled_workflows: Vec<ModeledWorkflowLayout>) -> EffectPl
 }
 
 pub fn show_workflow(workflow_document: FileContents) -> EffectPlan {
-    EffectPlan::new(vec![Effect::ReportDocument(workflow_document)])
+    show_document(workflow_document)
+}
+
+pub fn show_document(document: FileContents) -> EffectPlan {
+    EffectPlan::new(vec![Effect::ReportDocument(document)])
 }
 
 fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
