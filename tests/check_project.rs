@@ -306,6 +306,59 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_browser_workflow_extra_name_field_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let workflow = read_to_string(&workflow_path)?.replace(
+            "  \"name\": \"Open ticket\",\n",
+            "  \"name\": \"Stale ticket\",\n  \"name\": \"Open ticket\",\n",
+        );
+        write(workflow_path, workflow)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser workflow drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_reports_browser_workflow_extra_description_field_drift() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let workflow_path = temp_dir
+            .path()
+            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
+        let workflow = read_to_string(&workflow_path)?.replace(
+            "  \"description\": \"Actor opens a repair ticket.\",\n",
+            "  \"description\": \"Stale description.\",\n  \"description\": \"Actor opens a repair ticket.\",\n",
+        );
+        write(workflow_path, workflow)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "browser workflow drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_unindexed_browser_workflow_files() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
