@@ -62,6 +62,50 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_stdio_reports_verify_failures_as_json_rpc_errors() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let tool_dir = temp_dir.path().join("tools");
+
+        create_failing_tool(&tool_dir, "lake")?;
+        create_fake_tool(&tool_dir, "quint", "quint.log")?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .env("PATH", path_with_fake_tools(&tool_dir)?)
+            .write_stdin(mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"error\""))
+            .stdout(predicate::str::contains("\"code\":-32000"))
+            .stdout(predicate::str::contains("Lean4 verification failed"))
+            .stdout(predicate::str::contains("Run `emc check`"));
+
+        Ok(())
+    }
+
     fn mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
@@ -81,6 +125,14 @@ mod tests {
             &tool_path,
             format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log_file}\n"),
         )?;
+        set_permissions(&tool_path, Permissions::from_mode(0o755))?;
+        Ok(())
+    }
+
+    fn create_failing_tool(tool_dir: &Path, tool_name: &str) -> Result<(), Box<dyn Error>> {
+        create_dir_all(tool_dir)?;
+        let tool_path = tool_dir.join(tool_name);
+        write(&tool_path, "#!/bin/sh\nexit 7\n")?;
         set_permissions(&tool_path, Permissions::from_mode(0o755))?;
         Ok(())
     }
