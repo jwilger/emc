@@ -305,6 +305,27 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_lean_workflow_end_module_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        create_connected_workflow(&temp_dir)?;
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let lean = read_to_string(&lean_path)?.replace("end OpenTicket", "end Stale");
+        write(lean_path, lean)?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean workflow module drift for workflow Open ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_quint_workflow_module_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 

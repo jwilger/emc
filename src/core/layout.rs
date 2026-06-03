@@ -214,6 +214,8 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
     let module_name = module_name_from_model(workflow.name.clone());
     let lean_module_marker = artifact_marker(format!("namespace {module_name}"));
     let lean_module_prefix = artifact_marker("namespace ");
+    let lean_module_end_marker = artifact_marker(format!("end {module_name}"));
+    let lean_module_end_prefix = artifact_marker("end ");
     let quint_module_marker = artifact_marker(format!("module {module_name} {{"));
     let quint_module_prefix = artifact_marker("module ");
     let workflow_slug = workflow.slug.as_ref();
@@ -281,6 +283,14 @@ fn modeled_workflow_effects(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
             lean_path.clone(),
             lean_module_prefix,
             lean_module_marker,
+            report_line(format!(
+                "Lean workflow module drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_module_end_prefix,
+            lean_module_end_marker,
             report_line(format!(
                 "Lean workflow module drift for workflow {workflow_name}"
             )),
