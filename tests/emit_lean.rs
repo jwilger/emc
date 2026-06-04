@@ -487,6 +487,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def workflowExternalTriggerPayloadContractHasProvenance (transition : WorkflowTransition) : Bool := transition.kind != \"external_trigger\" || workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == transition.source && definition.definitionKind == \"external_payload\" && definition.definitionName == transition.payloadContract && definition.sourceProvenance.isEmpty == false)"
+            ),
+            "Lean workflow artifacts must require external-trigger payload contracts to carry provenance"
+        );
+        assert!(
+            lean.contains(
+                "def workflowExternalTriggerPayloadContractsHaveProvenance : Bool := workflowTransitions.all workflowExternalTriggerPayloadContractHasProvenance"
+            ),
+            "Lean workflow artifacts must expose external-trigger payload provenance as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "theorem workflowExternallyRelevantOutcomesHandledIsStable : workflowExternallyRelevantOutcomesHandled = true := rfl"
             ),
             "Lean workflow artifacts must prove current externally relevant outcomes are handled"
@@ -556,6 +568,12 @@ mod tests {
                 "theorem workflowExternalTriggersDeclarePayloadContractsIsStable : workflowExternalTriggersDeclarePayloadContracts = true := rfl"
             ),
             "Lean workflow artifacts must prove current external triggers declare payload contracts"
+        );
+        assert!(
+            lean.contains(
+                "theorem workflowExternalTriggerPayloadContractsHaveProvenanceIsStable : workflowExternalTriggerPayloadContractsHaveProvenance = true := rfl"
+            ),
+            "Lean workflow artifacts must prove current external trigger payload contract provenance"
         );
         assert!(
             !lean.contains("transition.1.isEmpty"),
