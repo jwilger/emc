@@ -803,6 +803,12 @@ mod tests {
             "val viewControlsHandleCommandErrors = sliceViewDefinitions.select(view => view.controls.select(control => sliceCommandDefinitions.select(command => command.name != control.commandName or command.errors.select(error => control.handledErrors.select(handledError => handledError == error.name).length() > 0 and control.recoveryBehavior != \"\").length() == command.errors.length()).length() == sliceCommandDefinitions.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
+            "def controlRecoveryBehaviorIsModeled(control) = control.handledErrors.length() == 0 or allowedRecoveryKinds.select(recoveryKind => recoveryKind == control.recoveryBehavior).length() > 0"
+        ));
+        assert!(quint.contains(
+            "val viewControlRecoveryBehaviorIsModeled = sliceViewDefinitions.select(view => view.controls.select(control => controlRecoveryBehaviorIsModeled(control)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
+        ));
+        assert!(quint.contains(
             "val stateViewSlicesDoNotOwnCommands = sliceKind != \"state_view\" or (sliceCommands.length() == 0 and sliceCommandDefinitions.length() == 0)"
         ));
         assert!(quint.contains(

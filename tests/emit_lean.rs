@@ -1521,6 +1521,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def controlRecoveryBehaviorIsModeled (control : ControlDefinition) : Bool := control.handledErrors.isEmpty || allowedRecoveryKinds.contains control.recoveryBehavior"
+            ),
+            "Lean slice artifacts must require controls that handle errors to use modeled recovery behavior"
+        );
+        assert!(
+            lean.contains(
                 "def navigationTargetTypeIsModeled (target : NavigationTarget) : Bool := target.targetType.isEmpty || allowedNavigationTargetTypes.contains target.targetType"
             ),
             "Lean slice artifacts must require navigation targets to use modeled target types"
@@ -1608,6 +1614,12 @@ mod tests {
                 "def viewControlsHandleCommandErrors : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => sliceCommandDefinitions.all (commandErrorsHandledByControl control)))"
             ),
             "Lean slice artifacts must prove controls handle returned command errors"
+        );
+        assert!(
+            lean.contains(
+                "def viewControlRecoveryBehaviorIsModeled : Bool := sliceViewDefinitions.all (fun view => view.controls.all controlRecoveryBehaviorIsModeled)"
+            ),
+            "Lean slice artifacts must prove control recovery behavior is modeled"
         );
         assert!(
             lean.contains(
@@ -2026,6 +2038,12 @@ mod tests {
                 "theorem viewControlsHandleCommandErrorsIsStable : viewControlsHandleCommandErrors = true := rfl"
             ),
             "Lean slice artifacts must prove current controls handle returned command errors"
+        );
+        assert!(
+            lean.contains(
+                "theorem viewControlRecoveryBehaviorIsModeledIsStable : viewControlRecoveryBehaviorIsModeled = true := rfl"
+            ),
+            "Lean slice artifacts must prove current control recovery behavior is modeled"
         );
         assert!(
             lean.contains(
