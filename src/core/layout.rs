@@ -1,4 +1,4 @@
-use crate::core::digest::{artifact_digest, slice_artifact_digest};
+use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest};
 use crate::core::effect::{
     ArtifactFileExtension, ArtifactMarker, Effect, EffectPlan, FileContents, ProjectPath,
     ReportLine,
@@ -6,10 +6,6 @@ use crate::core::effect::{
 use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
-use crate::core::formal_projection::{
-    project_browser_index_document, project_slice_browser_document,
-    project_workflow_browser_document,
-};
 use crate::core::project::ProjectName;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowSliceDetail,
@@ -42,13 +38,6 @@ impl ModeledWorkflowLayout {
 
     pub fn slug(&self) -> &WorkflowSlug {
         &self.slug
-    }
-
-    pub fn browser_data_path(&self) -> ProjectPath {
-        project_path(format!(
-            "data/workflows/{}.eventmodel.json",
-            self.slug.as_ref()
-        ))
     }
 
     pub fn lean_artifact_path(&self) -> ProjectPath {
@@ -132,26 +121,6 @@ pub fn check_project(
         modeled_slice_artifact_paths(&formal_workflows, "model/lean/slices", ".lean");
     let quint_slice_artifact_paths =
         modeled_slice_artifact_paths(&formal_workflows, "model/quint/slices", ".qnt");
-    let browser_workflow_paths = formal_workflows
-        .iter()
-        .map(|workflow| {
-            project_path(format!(
-                "model/browser/data/workflows/{}.eventmodel.json",
-                workflow.slug().as_ref()
-            ))
-        })
-        .collect::<Vec<_>>();
-    let browser_slice_paths = formal_workflows
-        .iter()
-        .flat_map(|workflow| {
-            workflow.slice_details().as_slice().iter().map(|slice| {
-                project_path(format!(
-                    "model/browser/data/slices/{}.eventmodel.json",
-                    slice.slug().as_ref()
-                ))
-            })
-        })
-        .collect::<Vec<_>>();
     let modeled_effects = formal_workflows
         .iter()
         .flat_map(formal_workflow_effects)
@@ -168,42 +137,6 @@ pub fn check_project(
                 Effect::RequireFile(project_path("model/quint/quint.json")),
                 Effect::RequireFile(project_path(format!("model/quint/{module_name}.qnt"))),
                 Effect::RequireFile(project_path("model/quint/slices/.gitkeep")),
-                Effect::RequireFile(project_path("model/browser/data/index.json")),
-                Effect::RequireJsonObjectKeysUnique(
-                    project_path("model/browser/data/index.json"),
-                    report_line("browser index drift"),
-                ),
-                Effect::RequireIndexedWorkflowFiles(
-                    project_path("model/browser/data/index.json"),
-                    project_path("model/browser/data/workflows"),
-                    report_line("browser workflow index drift"),
-                ),
-                Effect::RequireFileContents(
-                    project_path("model/browser/data/index.json"),
-                    project_browser_index_document(&formal_workflows),
-                    report_line("browser index projection drift"),
-                ),
-                Effect::RequireReferencedSliceFiles(
-                    project_path("model/browser/data/workflows"),
-                    project_path("model/browser/data/slices"),
-                    report_line("browser slice reference drift"),
-                ),
-                Effect::RequireReferencedSliceFileIdentities(
-                    project_path("model/browser/data/workflows"),
-                    report_line("browser slice identity drift"),
-                ),
-                Effect::RequireOnlyModeledArtifacts(
-                    project_path("model/browser/data/workflows"),
-                    artifact_file_extension(".eventmodel.json"),
-                    browser_workflow_paths,
-                    report_line("browser workflow projection drift"),
-                ),
-                Effect::RequireOnlyModeledArtifacts(
-                    project_path("model/browser/data/slices"),
-                    artifact_file_extension(".eventmodel.json"),
-                    browser_slice_paths,
-                    report_line("browser slice projection drift"),
-                ),
                 Effect::RequireOnlyModeledArtifacts(
                     project_path("model/lean"),
                     artifact_file_extension(".lean"),
@@ -228,8 +161,6 @@ pub fn check_project(
                     quint_slice_artifact_paths,
                     report_line("Quint slice artifact drift"),
                 ),
-                Effect::RequireFile(project_path("model/browser/data/workflows/.gitkeep")),
-                Effect::RequireFile(project_path("model/browser/data/slices/.gitkeep")),
                 Effect::RequireFile(project_path("reviews/.gitkeep")),
             ],
             root_effects,
@@ -360,9 +291,81 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowTransitionsStructured\""),
+            artifact_marker("    \"workflowTransitionsStructured\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowTransitionSourcesResolve\""),
+            artifact_marker("    \"workflowTransitionSourcesResolve\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowTransitionTargetsResolve\""),
+            artifact_marker("    \"workflowTransitionTargetsResolve\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowStepRelationshipsAreAllowed\""),
+            artifact_marker("    \"workflowStepRelationshipsAreAllowed\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowHasExactlyOneEntryStep\""),
+            artifact_marker("    \"workflowHasExactlyOneEntryStep\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowMainStepsHaveIncomingReachability\""),
+            artifact_marker("    \"workflowMainStepsHaveIncomingReachability\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\""),
+            artifact_marker("    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowTransitionsHaveModeledKinds\""),
+            artifact_marker("    \"workflowTransitionsHaveModeledKinds\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowExitsNameTargetsAndRationale\""),
+            artifact_marker("    \"workflowExitsNameTargetsAndRationale\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowExternallyRelevantOutcomesHandled\""),
+            artifact_marker("    \"workflowExternallyRelevantOutcomesHandled\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\""),
+            artifact_marker("    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowExternalTriggersDeclarePayloadContracts\""),
+            artifact_marker("    \"workflowExternalTriggersDeclarePayloadContracts\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
             quint_config_path,
-            artifact_marker("    \"workflowTransitionsStructured\""),
-            artifact_marker("    \"workflowTransitionsStructured\""),
+            artifact_marker("    \"workflowTransitionsHaveRequiredEvidence\""),
+            artifact_marker("    \"workflowTransitionsHaveRequiredEvidence\""),
             quint_config_message,
         ),
     ]
@@ -427,16 +430,6 @@ pub fn show_document(document: FileContents) -> EffectPlan {
 
 fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let workflow_name = workflow.name().as_ref().to_owned();
-    let browser_name_marker = artifact_marker(format!(
-        "  \"name\": {},",
-        json_string(workflow.name().as_ref())
-    ));
-    let browser_name_prefix = artifact_marker("  \"name\":");
-    let browser_description_marker = artifact_marker(format!(
-        "  \"description\": {},",
-        json_string(workflow.description().as_ref())
-    ));
-    let browser_description_prefix = artifact_marker("  \"description\":");
     let lean_name_marker = artifact_marker(format!(
         "def workflowName := {}",
         json_string(workflow.name().as_ref())
@@ -470,17 +463,21 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let lean_slice_marker = lean_workflow_slice_marker(workflow);
     let lean_slice_detail_marker = lean_workflow_slice_detail_marker(workflow);
     let lean_transition_marker = lean_workflow_transition_marker(workflow);
+    let lean_exit_target_marker = lean_workflow_exit_target_marker(workflow);
     let quint_slice_marker = quint_workflow_slice_marker(workflow);
     let quint_slice_detail_marker = quint_workflow_slice_detail_marker(workflow);
     let quint_transition_marker = quint_workflow_transition_marker(workflow);
+    let quint_exit_target_marker = quint_workflow_exit_target_marker(workflow);
     let lean_slice_prefix = artifact_marker("def workflowSlices : List String :=");
     let lean_slice_detail_prefix =
         artifact_marker("def workflowSliceDetails : List (String × String × String × String) :=");
     let lean_transition_prefix =
         artifact_marker("def workflowTransitions : List WorkflowTransition :=");
-    let quint_slice_prefix = artifact_marker("val workflowSlices =");
-    let quint_slice_detail_prefix = artifact_marker("val workflowSliceDetails =");
-    let quint_transition_prefix = artifact_marker("val workflowTransitions =");
+    let lean_exit_target_prefix = artifact_marker("def workflowExitTargets : List String :=");
+    let quint_slice_prefix = artifact_marker("val workflowSlices:");
+    let quint_slice_detail_prefix = artifact_marker("val workflowSliceDetails:");
+    let quint_transition_prefix = artifact_marker("val workflowTransitions:");
+    let quint_exit_target_prefix = artifact_marker("val workflowExitTargets:");
     let lean_identity_invariant_marker = artifact_marker(format!(
         "theorem workflowIdentityIsStable : workflowName = {} := rfl",
         json_string(workflow.name().as_ref())
@@ -495,6 +492,16 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     );
     let lean_transition_invariant_prefix =
         artifact_marker("theorem workflowTransitionsAreStructured :");
+    let lean_transition_source_resolution_marker = artifact_marker(
+        "theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSlices.contains transition.source) = true := rfl",
+    );
+    let lean_transition_source_resolution_prefix =
+        artifact_marker("theorem workflowTransitionSourcesResolve :");
+    let lean_transition_target_resolution_marker = artifact_marker(
+        "theorem workflowTransitionTargetsResolve : workflowTransitions.all (fun transition => workflowSlices.contains transition.target || workflowExitTargets.contains transition.target) = true := rfl",
+    );
+    let lean_transition_target_resolution_prefix =
+        artifact_marker("theorem workflowTransitionTargetsResolve :");
     let quint_identity_invariant_marker = artifact_marker(format!(
         "val workflowIdentityStable = workflowName == {}",
         json_string(workflow.name().as_ref())
@@ -511,6 +518,16 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
         "val workflowTransitionsStructured = workflowTransitions.select(transition => transition.source != \"\" and transition.target != \"\" and transition.kind != \"\" and transition.trigger != \"\").length() == workflowTransitions.length()",
     );
     let quint_transition_invariant_prefix = artifact_marker("val workflowTransitionsStructured =");
+    let quint_transition_source_resolution_marker = artifact_marker(
+        "val workflowTransitionSourcesResolve = workflowTransitions.select(transition => workflowSlices.select(step => step == transition.source).length() > 0).length() == workflowTransitions.length()",
+    );
+    let quint_transition_source_resolution_prefix =
+        artifact_marker("val workflowTransitionSourcesResolve =");
+    let quint_transition_target_resolution_marker = artifact_marker(
+        "val workflowTransitionTargetsResolve = workflowTransitions.select(transition => workflowSlices.select(step => step == transition.target).length() > 0 or workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() > 0).length() == workflowTransitions.length()",
+    );
+    let quint_transition_target_resolution_prefix =
+        artifact_marker("val workflowTransitionTargetsResolve =");
     let module_name = module_name_from_model(workflow.name().clone());
     let lean_module_marker = artifact_marker(format!("namespace {module_name}"));
     let lean_module_prefix = artifact_marker("namespace ");
@@ -519,272 +536,270 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let quint_module_marker = artifact_marker(format!("module {module_name} {{"));
     let quint_module_prefix = artifact_marker("module ");
     let quint_module_close_marker = artifact_marker("}");
-    let workflow_slug = workflow.slug().as_ref();
-    let workflow_path = project_path(format!(
-        "model/browser/data/workflows/{workflow_slug}.eventmodel.json"
-    ));
     let lean_path = project_path(format!("model/lean/{module_name}.lean"));
     let quint_path = project_path(format!("model/quint/{module_name}.qnt"));
-    let digest = artifact_digest(
-        workflow.name().clone(),
-        workflow.slug().clone(),
-        workflow.description().clone(),
-        workflow.slice_details().clone(),
-        workflow.transitions().clone(),
-    );
+    let digest = artifact_digest(WorkflowArtifactDigestInput {
+        workflow_name: workflow.name().clone(),
+        workflow_slug: workflow.slug().clone(),
+        workflow_description: workflow.description().clone(),
+        workflow_slice_details: workflow.slice_details().clone(),
+        workflow_transitions: workflow.transitions().clone(),
+        workflow_outcomes: workflow.outcomes().clone(),
+        workflow_command_errors: workflow.command_errors().clone(),
+        workflow_owned_definitions: workflow.owned_definitions().clone(),
+        workflow_transition_evidences: workflow.transition_evidences().clone(),
+    });
 
-    let workflow_effects = [
-        vec![
-            Effect::RequireFile(workflow_path.clone()),
-            Effect::RequireWorkflowProjection(
-                workflow_path.clone(),
-                project_workflow_browser_document(workflow),
-                report_line(format!(
-                    "browser workflow drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireWorkflowSliceFiles(
-                workflow_path.clone(),
-                report_line(format!(
-                    "workflow {workflow_name} references missing slice artifact"
-                )),
-            ),
-            Effect::RequireWorkflowSliceJsonObjects(
-                workflow_path.clone(),
-                report_line(format!("browser slice drift for workflow {workflow_name}")),
-            ),
-            Effect::RequireWorkflowSliceJsonObjectKeysUnique(
-                workflow_path.clone(),
-                report_line(format!("browser slice drift for workflow {workflow_name}")),
-            ),
-            Effect::RequireJsonObjectKeysUnique(
-                workflow_path.clone(),
-                report_line(format!(
-                    "browser workflow drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                workflow_path.clone(),
-                browser_name_prefix,
-                browser_name_marker,
-                report_line(format!(
-                    "browser workflow drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                workflow_path.clone(),
-                browser_description_prefix,
-                browser_description_marker,
-                report_line(format!(
-                    "browser workflow drift for workflow {workflow_name}"
-                )),
-            ),
-        ],
-        Vec::new(),
-        vec![
-            Effect::RequireFile(lean_path.clone()),
-            Effect::RequireFile(quint_path.clone()),
-            Effect::RequireCanonicalDeclaration(
-                lean_path.clone(),
-                lean_module_prefix,
-                lean_module_marker,
-                report_line(format!(
-                    "Lean workflow module drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                lean_path.clone(),
-                lean_module_end_prefix,
-                lean_module_end_marker,
-                report_line(format!(
-                    "Lean workflow module drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                quint_path.clone(),
-                quint_module_prefix,
-                quint_module_marker,
-                report_line(format!(
-                    "Quint workflow module drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                quint_path.clone(),
-                quint_module_close_marker.clone(),
-                quint_module_close_marker,
-                report_line(format!(
-                    "Quint workflow module drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                lean_path.clone(),
-                lean_name_prefix,
-                lean_name_marker,
-                report_line(format!(
-                    "Lean workflow field drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                lean_path.clone(),
-                lean_slug_prefix,
-                lean_slug_marker,
-                report_line(format!(
-                    "Lean workflow field drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                lean_path.clone(),
-                lean_description_prefix,
-                lean_description_marker,
-                report_line(format!(
-                    "Lean workflow field drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                quint_path.clone(),
-                quint_name_prefix,
-                quint_name_marker,
-                report_line(format!(
-                    "Quint workflow field drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                quint_path.clone(),
-                quint_slug_prefix,
-                quint_slug_marker,
-                report_line(format!(
-                    "Quint workflow field drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                quint_path.clone(),
-                quint_description_prefix,
-                quint_description_marker,
-                report_line(format!(
-                    "Quint workflow field drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                lean_path.clone(),
-                lean_slice_prefix,
-                lean_slice_marker,
-                report_line(format!(
-                    "Lean workflow slice drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                lean_path.clone(),
-                lean_slice_detail_prefix,
-                lean_slice_detail_marker,
-                report_line(format!(
-                    "Lean workflow slice detail drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                quint_path.clone(),
-                quint_slice_prefix,
-                quint_slice_marker,
-                report_line(format!(
-                    "Quint workflow slice drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                quint_path.clone(),
-                quint_slice_detail_prefix,
-                quint_slice_detail_marker,
-                report_line(format!(
-                    "Quint workflow slice detail drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                lean_path.clone(),
-                lean_transition_prefix,
-                lean_transition_marker,
-                report_line(format!(
-                    "Lean workflow transition drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                quint_path.clone(),
-                quint_transition_prefix,
-                quint_transition_marker,
-                report_line(format!(
-                    "Quint workflow transition drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                lean_path.clone(),
-                lean_identity_invariant_prefix,
-                lean_identity_invariant_marker,
-                report_line(format!(
-                    "Lean workflow invariant drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                quint_path.clone(),
-                quint_identity_invariant_prefix,
-                quint_identity_invariant_marker,
-                report_line(format!(
-                    "Quint workflow invariant drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                lean_path.clone(),
-                lean_slice_detail_invariant_prefix,
-                lean_slice_detail_invariant_marker,
-                report_line(format!(
-                    "Lean workflow invariant drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                quint_path.clone(),
-                quint_slice_detail_invariant_prefix,
-                quint_slice_detail_invariant_marker,
-                report_line(format!(
-                    "Quint workflow invariant drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                quint_path.clone(),
-                quint_slice_detail_complete_prefix,
-                quint_slice_detail_complete_marker,
-                report_line(format!(
-                    "Quint workflow invariant drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                lean_path.clone(),
-                lean_transition_invariant_prefix,
-                lean_transition_invariant_marker,
-                report_line(format!(
-                    "Lean workflow invariant drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireCanonicalDeclaration(
-                quint_path.clone(),
-                quint_transition_invariant_prefix,
-                quint_transition_invariant_marker,
-                report_line(format!(
-                    "Quint workflow invariant drift for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireDigest(
-                lean_path,
-                digest.clone(),
-                report_line(format!(
-                    "artifact digest mismatch for workflow {workflow_name}"
-                )),
-            ),
-            Effect::RequireDigest(
-                quint_path,
-                digest,
-                report_line(format!(
-                    "artifact digest mismatch for workflow {workflow_name}"
-                )),
-            ),
-        ],
-    ]
-    .concat();
+    let workflow_effects = vec![
+        Effect::RequireFile(lean_path.clone()),
+        Effect::RequireFile(quint_path.clone()),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_module_prefix,
+            lean_module_marker,
+            report_line(format!(
+                "Lean workflow module drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_module_end_prefix,
+            lean_module_end_marker,
+            report_line(format!(
+                "Lean workflow module drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_module_prefix,
+            quint_module_marker,
+            report_line(format!(
+                "Quint workflow module drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_module_close_marker.clone(),
+            quint_module_close_marker,
+            report_line(format!(
+                "Quint workflow module drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_name_prefix,
+            lean_name_marker,
+            report_line(format!(
+                "Lean workflow field drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_slug_prefix,
+            lean_slug_marker,
+            report_line(format!(
+                "Lean workflow field drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_description_prefix,
+            lean_description_marker,
+            report_line(format!(
+                "Lean workflow field drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_name_prefix,
+            quint_name_marker,
+            report_line(format!(
+                "Quint workflow field drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_slug_prefix,
+            quint_slug_marker,
+            report_line(format!(
+                "Quint workflow field drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_description_prefix,
+            quint_description_marker,
+            report_line(format!(
+                "Quint workflow field drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_slice_prefix,
+            lean_slice_marker,
+            report_line(format!(
+                "Lean workflow slice drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_slice_detail_prefix,
+            lean_slice_detail_marker,
+            report_line(format!(
+                "Lean workflow slice detail drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_slice_prefix,
+            quint_slice_marker,
+            report_line(format!(
+                "Quint workflow slice drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_slice_detail_prefix,
+            quint_slice_detail_marker,
+            report_line(format!(
+                "Quint workflow slice detail drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_transition_prefix,
+            lean_transition_marker,
+            report_line(format!(
+                "Lean workflow transition drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_exit_target_prefix,
+            lean_exit_target_marker,
+            report_line(format!(
+                "Lean workflow transition drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_transition_prefix,
+            quint_transition_marker,
+            report_line(format!(
+                "Quint workflow transition drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_exit_target_prefix,
+            quint_exit_target_marker,
+            report_line(format!(
+                "Quint workflow transition drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_identity_invariant_prefix,
+            lean_identity_invariant_marker,
+            report_line(format!(
+                "Lean workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_identity_invariant_prefix,
+            quint_identity_invariant_marker,
+            report_line(format!(
+                "Quint workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_slice_detail_invariant_prefix,
+            lean_slice_detail_invariant_marker,
+            report_line(format!(
+                "Lean workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_slice_detail_invariant_prefix,
+            quint_slice_detail_invariant_marker,
+            report_line(format!(
+                "Quint workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_slice_detail_complete_prefix,
+            quint_slice_detail_complete_marker,
+            report_line(format!(
+                "Quint workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_transition_invariant_prefix,
+            lean_transition_invariant_marker,
+            report_line(format!(
+                "Lean workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_transition_invariant_prefix,
+            quint_transition_invariant_marker,
+            report_line(format!(
+                "Quint workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_transition_source_resolution_prefix,
+            lean_transition_source_resolution_marker,
+            report_line(format!(
+                "Lean workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_transition_target_resolution_prefix,
+            lean_transition_target_resolution_marker,
+            report_line(format!(
+                "Lean workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_transition_source_resolution_prefix,
+            quint_transition_source_resolution_marker,
+            report_line(format!(
+                "Quint workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_transition_target_resolution_prefix,
+            quint_transition_target_resolution_marker,
+            report_line(format!(
+                "Quint workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireDigest(
+            lean_path,
+            digest.clone(),
+            report_line(format!(
+                "artifact digest mismatch for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireDigest(
+            quint_path,
+            digest,
+            report_line(format!(
+                "artifact digest mismatch for workflow {workflow_name}"
+            )),
+        ),
+    ];
 
     workflow_effects
         .into_iter()
@@ -806,23 +821,11 @@ fn formal_slice_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 slice.kind().clone(),
                 slice.description().clone(),
             );
-            let browser_slice_path = project_path(format!(
-                "model/browser/data/slices/{}.eventmodel.json",
-                slice.slug().as_ref()
-            ));
             let lean_slice_path = project_path(format!("model/lean/slices/{module_name}.lean"));
             let quint_slice_path = project_path(format!("model/quint/slices/{module_name}.qnt"));
 
             [
-                Effect::RequireFileContents(
-                    browser_slice_path,
-                    project_slice_browser_document(workflow, slice),
-                    report_line(format!(
-                        "browser slice projection drift for slice {}",
-                        slice.name().as_ref()
-                    )),
-                ),
-                Effect::RequireFileContents(
+                Effect::RequireFileContentsWithAuthoredFormalFacts(
                     lean_slice_path,
                     emit_lean_slice_module(
                         lean_module_name(module_name.clone()),
@@ -836,7 +839,7 @@ fn formal_slice_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                         "Lean slice artifact drift for workflow {workflow_name}"
                     )),
                 ),
-                Effect::RequireFileContents(
+                Effect::RequireFileContentsWithAuthoredFormalFacts(
                     quint_slice_path,
                     emit_quint_slice_module(
                         quint_module_name(module_name),
@@ -898,7 +901,7 @@ fn lean_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> ArtifactMa
             .iter()
             .map(|transition| {
                 format!(
-                    "{{ source := {}, target := {}, kind := {}, trigger := {}, rationale := {} }}",
+                    "{{ source := {}, target := {}, kind := {}, trigger := {}, rationale := {}, payloadContract := {} }}",
                     json_string(transition.source().as_ref()),
                     json_string(transition.target().as_ref()),
                     json_string(transition.kind().as_ref()),
@@ -907,6 +910,11 @@ fn lean_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> ArtifactMa
                         transition
                             .rationale()
                             .map_or("", |rationale| rationale.as_ref())
+                    ),
+                    json_string(
+                        transition
+                            .payload_contract()
+                            .map_or("", |payload_contract| payload_contract.as_ref())
                     )
                 )
             })
@@ -915,9 +923,16 @@ fn lean_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> ArtifactMa
     ))
 }
 
+fn lean_workflow_exit_target_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
+    artifact_marker(format!(
+        "def workflowExitTargets : List String := [{}]",
+        workflow_exit_targets(workflow).join(",")
+    ))
+}
+
 fn quint_workflow_slice_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
     artifact_marker(format!(
-        "val workflowSlices = [{}]",
+        "val workflowSlices: List[str] = [{}]",
         workflow
             .slice_details()
             .as_slice()
@@ -930,7 +945,7 @@ fn quint_workflow_slice_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker
 
 fn quint_workflow_slice_detail_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
     artifact_marker(format!(
-        "val workflowSliceDetails = [{}]",
+        "val workflowSliceDetails: List[WorkflowSliceDetail] = [{}]",
         workflow
             .slice_details()
             .as_slice()
@@ -951,14 +966,14 @@ fn quint_workflow_slice_detail_marker(workflow: &FormalWorkflowGraph) -> Artifac
 
 fn quint_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
     artifact_marker(format!(
-        "val workflowTransitions = [{}]",
+        "val workflowTransitions: List[WorkflowTransition] = [{}]",
         workflow
             .transitions()
             .as_slice()
             .iter()
             .map(|transition| {
                 format!(
-                    "{{ source: {}, target: {}, kind: {}, trigger: {}, rationale: {} }}",
+                    "{{ source: {}, target: {}, kind: {}, trigger: {}, rationale: {}, payloadContract: {} }}",
                     json_string(transition.source().as_ref()),
                     json_string(transition.target().as_ref()),
                     json_string(transition.kind().as_ref()),
@@ -967,12 +982,34 @@ fn quint_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> ArtifactM
                         transition
                             .rationale()
                             .map_or("", |rationale| rationale.as_ref())
+                    ),
+                    json_string(
+                        transition
+                            .payload_contract()
+                            .map_or("", |payload_contract| payload_contract.as_ref())
                     )
                 )
             })
             .collect::<Vec<_>>()
             .join(",")
     ))
+}
+
+fn quint_workflow_exit_target_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
+    artifact_marker(format!(
+        "val workflowExitTargets: List[str] = [{}]",
+        workflow_exit_targets(workflow).join(",")
+    ))
+}
+
+fn workflow_exit_targets(workflow: &FormalWorkflowGraph) -> Vec<String> {
+    workflow
+        .transitions()
+        .as_slice()
+        .iter()
+        .filter(|transition| transition.kind().as_ref().starts_with("workflow_exit:"))
+        .map(|transition| json_string(transition.target().as_ref()))
+        .collect()
 }
 
 fn module_name(project_name: &ProjectName) -> String {

@@ -60,21 +60,11 @@ mod tests {
             .stdout(predicate::str::contains("\"update_slice\""))
             .stdout(predicate::str::contains("updated slice Capture ticket"));
 
-        let slice_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
-        )?;
         let slice_lean =
             read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let slice_quint =
             read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
 
-        assert!(
-            slice_json
-                .contains("\"description\": \"Actor enters repair ticket details and priority.\""),
-            "slice browser data must preserve the MCP-updated description"
-        );
         assert!(
             slice_lean.contains(
                 "def sliceDescription := \"Actor enters repair ticket details and priority.\""
@@ -150,20 +140,11 @@ mod tests {
             .assert()
             .success();
 
-        let slice_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
-        )?;
         let slice_lean =
             read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let slice_quint =
             read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
 
-        assert!(
-            slice_json.contains("\"type\": \"automation\""),
-            "slice browser data must preserve the MCP-updated kind"
-        );
         assert!(
             slice_lean.contains("def sliceKind := \"automation\""),
             "slice Lean artifact must represent the MCP-updated kind"
@@ -237,11 +218,6 @@ mod tests {
             .assert()
             .success();
 
-        let slice_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
-        )?;
         let slice_lean = read_to_string(
             temp_dir
                 .path()
@@ -254,16 +230,20 @@ mod tests {
         )?;
 
         assert!(
-            slice_json.contains("\"name\": \"Capture repair ticket\""),
-            "slice browser data must preserve the MCP-updated name"
-        );
-        assert!(
             slice_lean.contains("def sliceName := \"Capture repair ticket\""),
             "slice Lean artifact must represent the MCP-updated name"
         );
         assert!(
             slice_quint.contains("val sliceName = \"Capture repair ticket\""),
             "slice Quint artifact must represent the MCP-updated name"
+        );
+        assert!(
+            !exists(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?,
+            "slice rename must remove the stale Lean artifact"
+        );
+        assert!(
+            !exists(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?,
+            "slice rename must remove the stale Quint artifact"
         );
 
         Ok(())
@@ -328,33 +308,16 @@ mod tests {
             .assert()
             .success();
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let workflow_lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let workflow_quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
-        assert!(
-            !workflow_json.contains("capture-ticket"),
-            "workflow data must remove the MCP-removed slice"
-        );
         assert!(
             workflow_lean.contains("def workflowSlices : List String := []"),
             "workflow Lean artifact must remove the MCP-removed slice"
         );
         assert!(
-            workflow_quint.contains("val workflowSlices = []"),
+            workflow_quint.contains("val workflowSlices: List[str] = []"),
             "workflow Quint artifact must remove the MCP-removed slice"
-        );
-        assert!(
-            !exists(
-                temp_dir
-                    .path()
-                    .join("model/browser/data/slices/capture-ticket.eventmodel.json")
-            )?,
-            "slice browser data must be deleted by MCP removal"
         );
         assert!(
             !exists(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?,

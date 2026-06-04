@@ -41,19 +41,9 @@ mod tests {
             .stdout(predicate::str::contains("\"update_workflow\""))
             .stdout(predicate::str::contains("updated workflow Open ticket"));
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
-        assert!(
-            workflow_json
-                .contains("\"description\": \"Actor opens a repair ticket with priority.\""),
-            "workflow browser data must preserve the MCP-updated description"
-        );
         assert!(
             lean.contains(
                 "def workflowDescription := \"Actor opens a repair ticket with priority.\""
@@ -112,18 +102,9 @@ mod tests {
             .assert()
             .success();
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenRepairTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenRepairTicket.qnt"))?;
 
-        assert!(
-            workflow_json.contains("\"name\": \"Open repair ticket\""),
-            "workflow browser data must preserve the MCP-updated name"
-        );
         assert!(
             lean.contains("def workflowName := \"Open repair ticket\""),
             "Lean artifact must represent the MCP-updated name"
@@ -195,27 +176,6 @@ mod tests {
             .assert()
             .success();
 
-        let index_json = read_to_string(temp_dir.path().join("model/browser/data/index.json"))?;
-        assert!(
-            !index_json.contains("open-ticket"),
-            "MCP-removed workflow must be removed from the browser index"
-        );
-        assert!(
-            !exists(
-                temp_dir
-                    .path()
-                    .join("model/browser/data/workflows/open-ticket.eventmodel.json")
-            )?,
-            "MCP-removed workflow browser JSON must be deleted"
-        );
-        assert!(
-            !exists(
-                temp_dir
-                    .path()
-                    .join("model/browser/data/slices/capture-request.eventmodel.json")
-            )?,
-            "MCP-removed workflow must delete owned slice browser JSON"
-        );
         assert!(
             !exists(temp_dir.path().join("model/lean/OpenTicket.lean"))?,
             "MCP-removed workflow Lean module must be deleted"

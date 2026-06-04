@@ -1,39 +1,27 @@
-use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
-
-use serde_json::{Map, Value};
 
 use crate::core::connection::ConnectionKind;
 use crate::core::effect::ProjectPath;
 use crate::core::gherkin::GherkinSuite;
-use crate::core::layout::ModeledWorkflowLayout;
 use crate::core::project::ProjectName;
 use crate::core::slice::SliceKind;
 use crate::core::types::{
-    LeanModuleName, ModelDescription, ModelDigest, ModelName, QuintModuleName, ReviewTimestamp,
-    ReviewerId, SliceSlug, TransitionTriggerName, WorkflowSlug, WorkflowTransitionEndpoint,
-    WorkflowTransitionKind,
-};
-use crate::core::validation::{
-    AutomationCommandPolicy, AutomationTrigger, BoardElement, BoardElementKind,
-    BoardGraphConnection, BoardLane, BoardLanes, BoardReadModelCommandDependency, BoardSliceGraph,
-    CommandDefinition, CommandDefinitionParts, CommandInputSource, CommandInputSourceKind,
-    CommandReadModelReads, ControlCommandErrorHandling, ControlErrorRecoveryBehavior,
-    ControlInputDescription, ControlInputProvision, ControlInputSource, DefinitionKind,
-    DefinitionName, EventAttribute, EventAttributeSource, EventDefinition, EventModelDocument,
-    EventModelDocumentParts, EventModelFileKind, ExternalInputSchema, ExternalPayloadVariant,
-    LegacyScenariosField, NamedDefinition, NavigationType, OutcomeDefinition, ReadModelDefinition,
-    ReadModelField, ReadModelFieldAbsenceDefault, ReadModelFieldDerivation, ReadModelFieldSource,
-    ReadModelState, ReadModelTransitiveDerivation, ScenarioSetKind, ScenarioStepField,
-    SingletonBehavior, SliceDefinition, SliceDefinitionCount, SliceDefinitionParts, SliceScenario,
-    SliceScenarioParts, SliceType, TopLevelKey, TranslationContract, ViewControlDefinition,
-    ViewControlDefinitionParts, ViewDefinition, ViewFieldDefinition, ViewFieldSource,
-    ViewWireframe, WorkflowCommandTransition, WorkflowComposition, WorkflowEntryStepCount,
-    WorkflowEventTransition, WorkflowExitRationale, WorkflowExitTransition,
-    WorkflowExternalTriggerTransition, WorkflowInternalDefinitions, WorkflowNavigationTransition,
-    WorkflowStep, WorkflowStepExit, WorkflowStepLifecycleRole, WorkflowStepRelationship,
-    WorkflowStepTrigger, empty_top_level_key_issue, model_must_be_object_issue,
+    AutomationName, AutomationReactionDescription, AutomationTriggerName, BitEncodingSemantics,
+    BoardConnectionEndpoint, BoardConnectionEndpointKind, BoardElementDeclaredName,
+    BoardElementKind, BoardElementName, BoardLaneId, CommandErrorName, CommandErrorRecoveryKind,
+    CommandInputSourceDescription, CommandInputSourceKind, CommandName, ContractKindName,
+    ControlName, ControlRecoveryBehavior, CoveredDefinitionName, DataFlowSource, DataFlowTarget,
+    DatumName, EventAttributeName, EventAttributeSourceField, EventAttributeSourceKind,
+    EventAttributeSourceName, EventName, LeanModuleName, ModelDescription, ModelDigest, ModelName,
+    NavigationTargetName, NavigationTargetType, OutcomeLabelName, PayloadContractName,
+    ProvenanceDescription, QuintModuleName, ReadModelDerivationRule, ReadModelFieldSourceKind,
+    ReadModelName, ReadModelTransitiveRule, ReviewTimestamp, ReviewerId, ScenarioName,
+    ScenarioStepText, SingletonRepeatBehavior, SketchToken, SliceSlug, SourceChainHop, StreamName,
+    TransformationSemantics, TransitionTriggerName, TranslationExternalEventName, TranslationName,
+    ViewFieldName, ViewFieldSourceKind, ViewName, WorkflowOwnedDefinitionKind,
+    WorkflowOwnedDefinitionName, WorkflowSlug, WorkflowTransitionEndpoint,
+    WorkflowTransitionEvidenceText, WorkflowTransitionKind,
 };
 
 #[derive(Debug)]
@@ -69,23 +57,12 @@ pub fn parse_model_description(raw: &str) -> Result<ModelDescription, BoundaryPa
 
 pub fn parse_gherkin_suite(raw: &str) -> Result<GherkinSuite, BoundaryParseError> {
     match raw {
-        "browser" => Ok(GherkinSuite::Browser),
         "meta" => Ok(GherkinSuite::Meta),
         "review-gate" => Ok(GherkinSuite::ReviewGate),
-        "validator" => Ok(GherkinSuite::Validator),
         _ => Err(BoundaryParseError::new(format!(
             "invalid Gherkin suite '{raw}'"
         ))),
     }
-}
-
-pub fn parse_event_model_document(
-    raw: &str,
-    file_kind: EventModelFileKind,
-) -> Result<EventModelDocument, BoundaryParseError> {
-    serde_json::from_str::<Value>(raw)
-        .map_err(|error| BoundaryParseError::new(format!("invalid JSON: {error}")))
-        .and_then(|value| event_model_document_from_json(value, file_kind))
 }
 
 pub fn parse_project_name(raw: &str) -> Result<ProjectName, BoundaryParseError> {
@@ -107,95 +84,6 @@ pub fn parse_project_manifest_name(raw: &str) -> Result<ProjectName, BoundaryPar
         .and_then(quoted_value)
         .ok_or_else(|| BoundaryParseError::new("emc.toml is missing project name"))
         .and_then(parse_project_name)
-}
-
-pub fn parse_browser_index_workflows(
-    raw: &str,
-) -> Result<Vec<ModeledWorkflowLayout>, BoundaryParseError> {
-    let value = serde_json::from_str::<Value>(raw)
-        .map_err(|error| BoundaryParseError::new(format!("invalid browser index JSON: {error}")))?;
-    let workflows = value
-        .get("workflows")
-        .and_then(Value::as_array)
-        .ok_or_else(|| BoundaryParseError::new("browser index is missing workflows"))?;
-
-    workflows
-        .iter()
-        .try_fold(BTreeSet::new(), |mut seen_paths, workflow| {
-            let path = workflow
-                .get("path")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("browser index workflow is missing path"))?;
-            if !seen_paths.insert(path.to_owned()) {
-                return Err(BoundaryParseError::new(
-                    "browser index workflow path is duplicated",
-                ));
-            }
-            Ok(seen_paths)
-        })?;
-
-    workflows
-        .iter()
-        .try_fold(BTreeSet::new(), |mut seen_names, workflow| {
-            let name = workflow
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("browser index workflow is missing name"))?;
-            if !seen_names.insert(name.to_owned()) {
-                return Err(BoundaryParseError::new(
-                    "browser index workflow name is duplicated",
-                ));
-            }
-            Ok(seen_names)
-        })?;
-
-    workflows
-        .iter()
-        .try_fold(BTreeSet::new(), |mut seen_slugs, workflow| {
-            let path = workflow
-                .get("path")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("browser index workflow is missing path"))?;
-            let slug = workflow_slug_from_index_path(path)?;
-            if !seen_slugs.insert(slug.as_ref().to_owned()) {
-                return Err(BoundaryParseError::new(
-                    "browser index workflow slug is duplicated",
-                ));
-            }
-            Ok(seen_slugs)
-        })?;
-
-    workflows
-        .iter()
-        .map(|workflow| {
-            let name = workflow
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("browser index workflow is missing name"))
-                .and_then(parse_model_name)?;
-            let description = workflow
-                .get("description")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    BoundaryParseError::new("browser index workflow is missing description")
-                })
-                .and_then(parse_model_description)?;
-            let path = workflow
-                .get("path")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("browser index workflow is missing path"))?;
-            let slug = workflow_slug_from_index_path(path)?;
-
-            Ok(ModeledWorkflowLayout::new(name, description, slug))
-        })
-        .collect()
-}
-
-fn workflow_slug_from_index_path(path: &str) -> Result<WorkflowSlug, BoundaryParseError> {
-    path.strip_prefix("data/workflows/")
-        .and_then(|file_name| file_name.strip_suffix(".eventmodel.json"))
-        .ok_or_else(|| BoundaryParseError::new("browser index workflow path is invalid"))
-        .and_then(parse_workflow_slug)
 }
 
 pub fn parse_workflow_slug(raw: &str) -> Result<WorkflowSlug, BoundaryParseError> {
@@ -241,6 +129,352 @@ pub fn parse_transition_trigger_name(
     })
 }
 
+pub fn parse_payload_contract_name(raw: &str) -> Result<PayloadContractName, BoundaryParseError> {
+    PayloadContractName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid payload contract name: {error}")))
+}
+
+pub fn parse_translation_name(raw: &str) -> Result<TranslationName, BoundaryParseError> {
+    TranslationName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid translation name: {error}")))
+}
+
+pub fn parse_translation_external_event_name(
+    raw: &str,
+) -> Result<TranslationExternalEventName, BoundaryParseError> {
+    TranslationExternalEventName::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid translation external event name: {error}"))
+    })
+}
+
+pub fn parse_outcome_label_name(raw: &str) -> Result<OutcomeLabelName, BoundaryParseError> {
+    OutcomeLabelName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid outcome label: {error}")))
+}
+
+pub fn parse_scenario_name(raw: &str) -> Result<ScenarioName, BoundaryParseError> {
+    ScenarioName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid scenario name: {error}")))
+}
+
+pub fn parse_scenario_step_text(raw: &str) -> Result<ScenarioStepText, BoundaryParseError> {
+    ScenarioStepText::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid scenario step text: {error}")))
+}
+
+pub fn parse_contract_kind_name(raw: &str) -> Result<ContractKindName, BoundaryParseError> {
+    ContractKindName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid contract kind: {error}")))
+}
+
+pub fn parse_covered_definition_name(
+    raw: &str,
+) -> Result<CoveredDefinitionName, BoundaryParseError> {
+    CoveredDefinitionName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid covered definition: {error}")))
+}
+
+pub fn parse_datum_name(raw: &str) -> Result<DatumName, BoundaryParseError> {
+    DatumName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid datum name: {error}")))
+}
+
+pub fn parse_datum_names(raw: &str) -> Result<Vec<DatumName>, BoundaryParseError> {
+    parse_comma_separated(raw, "datum names")?
+        .into_iter()
+        .map(|name| {
+            DatumName::try_new(name)
+                .map_err(|error| BoundaryParseError::new(format!("invalid datum name: {error}")))
+        })
+        .collect()
+}
+
+pub fn parse_data_flow_source(raw: &str) -> Result<DataFlowSource, BoundaryParseError> {
+    DataFlowSource::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid data-flow source: {error}")))
+}
+
+pub fn parse_transformation_semantics(
+    raw: &str,
+) -> Result<TransformationSemantics, BoundaryParseError> {
+    TransformationSemantics::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid transformation semantics: {error}"))
+    })
+}
+
+pub fn parse_data_flow_target(raw: &str) -> Result<DataFlowTarget, BoundaryParseError> {
+    DataFlowTarget::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid data-flow target: {error}")))
+}
+
+pub fn parse_bit_encoding_semantics(raw: &str) -> Result<BitEncodingSemantics, BoundaryParseError> {
+    BitEncodingSemantics::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid bit encoding: {error}")))
+}
+
+pub fn parse_board_element_name(raw: &str) -> Result<BoardElementName, BoundaryParseError> {
+    BoardElementName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid board element name: {error}")))
+}
+
+pub fn parse_board_element_kind(raw: &str) -> Result<BoardElementKind, BoundaryParseError> {
+    BoardElementKind::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid board element kind: {error}")))
+}
+
+pub fn parse_board_lane_id(raw: &str) -> Result<BoardLaneId, BoundaryParseError> {
+    BoardLaneId::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid board lane id: {error}")))
+}
+
+pub fn parse_board_element_declared_name(
+    raw: &str,
+) -> Result<BoardElementDeclaredName, BoundaryParseError> {
+    BoardElementDeclaredName::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid board element declared name: {error}"))
+    })
+}
+
+pub fn parse_board_connection_endpoint(
+    raw: &str,
+) -> Result<BoardConnectionEndpoint, BoundaryParseError> {
+    BoardConnectionEndpoint::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid board connection endpoint: {error}"))
+    })
+}
+
+pub fn parse_board_connection_endpoint_kind(
+    raw: &str,
+) -> Result<BoardConnectionEndpointKind, BoundaryParseError> {
+    BoardConnectionEndpointKind::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid board connection endpoint kind: {error}"))
+    })
+}
+
+pub fn parse_command_name(raw: &str) -> Result<CommandName, BoundaryParseError> {
+    CommandName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid command name: {error}")))
+}
+
+pub fn parse_command_error_name(raw: &str) -> Result<CommandErrorName, BoundaryParseError> {
+    CommandErrorName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid command error: {error}")))
+}
+
+pub fn parse_command_error_names(raw: &str) -> Result<Vec<CommandErrorName>, BoundaryParseError> {
+    parse_comma_separated(raw, "command error names")?
+        .into_iter()
+        .map(|name| {
+            CommandErrorName::try_new(name)
+                .map_err(|error| BoundaryParseError::new(format!("invalid command error: {error}")))
+        })
+        .collect()
+}
+
+pub fn parse_command_error_recovery_kind(
+    raw: &str,
+) -> Result<CommandErrorRecoveryKind, BoundaryParseError> {
+    CommandErrorRecoveryKind::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid command error recovery kind: {error}"))
+    })
+}
+
+pub fn parse_singleton_repeat_behavior(
+    raw: &str,
+) -> Result<SingletonRepeatBehavior, BoundaryParseError> {
+    SingletonRepeatBehavior::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid singleton repeat behavior: {error}"))
+    })
+}
+
+pub fn parse_automation_name(raw: &str) -> Result<AutomationName, BoundaryParseError> {
+    AutomationName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid automation name: {error}")))
+}
+
+pub fn parse_automation_trigger_name(
+    raw: &str,
+) -> Result<AutomationTriggerName, BoundaryParseError> {
+    AutomationTriggerName::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid automation trigger name: {error}"))
+    })
+}
+
+pub fn parse_automation_reaction_description(
+    raw: &str,
+) -> Result<AutomationReactionDescription, BoundaryParseError> {
+    AutomationReactionDescription::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid automation reaction description: {error}"))
+    })
+}
+
+pub fn parse_control_name(raw: &str) -> Result<ControlName, BoundaryParseError> {
+    ControlName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid control name: {error}")))
+}
+
+pub fn parse_control_recovery_behavior(
+    raw: &str,
+) -> Result<ControlRecoveryBehavior, BoundaryParseError> {
+    ControlRecoveryBehavior::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid control recovery behavior: {error}"))
+    })
+}
+
+pub fn parse_navigation_target_type(raw: &str) -> Result<NavigationTargetType, BoundaryParseError> {
+    NavigationTargetType::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid navigation target type: {error}"))
+    })
+}
+
+pub fn parse_navigation_target_name(raw: &str) -> Result<NavigationTargetName, BoundaryParseError> {
+    NavigationTargetName::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid navigation target name: {error}"))
+    })
+}
+
+pub fn parse_command_input_source_kind(
+    raw: &str,
+) -> Result<CommandInputSourceKind, BoundaryParseError> {
+    CommandInputSourceKind::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid command input source: {error}")))
+}
+
+pub fn parse_command_input_source_description(
+    raw: &str,
+) -> Result<CommandInputSourceDescription, BoundaryParseError> {
+    CommandInputSourceDescription::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid command input source description: {error}"))
+    })
+}
+
+pub fn parse_event_names(raw: &str) -> Result<Vec<EventName>, BoundaryParseError> {
+    parse_comma_separated(raw, "event names")?
+        .into_iter()
+        .map(|name| {
+            EventName::try_new(name)
+                .map_err(|error| BoundaryParseError::new(format!("invalid event name: {error}")))
+        })
+        .collect()
+}
+
+pub fn parse_event_name(raw: &str) -> Result<EventName, BoundaryParseError> {
+    EventName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid event name: {error}")))
+}
+
+pub fn parse_stream_name(raw: &str) -> Result<StreamName, BoundaryParseError> {
+    StreamName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid stream name: {error}")))
+}
+
+pub fn parse_stream_names(raw: &str) -> Result<Vec<StreamName>, BoundaryParseError> {
+    parse_comma_separated(raw, "stream names")?
+        .into_iter()
+        .map(|name| {
+            StreamName::try_new(name)
+                .map_err(|error| BoundaryParseError::new(format!("invalid stream name: {error}")))
+        })
+        .collect()
+}
+
+pub fn parse_event_attribute_name(raw: &str) -> Result<EventAttributeName, BoundaryParseError> {
+    EventAttributeName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid event attribute: {error}")))
+}
+
+pub fn parse_event_attribute_source_kind(
+    raw: &str,
+) -> Result<EventAttributeSourceKind, BoundaryParseError> {
+    EventAttributeSourceKind::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid event attribute source kind: {error}"))
+    })
+}
+
+pub fn parse_event_attribute_source_name(
+    raw: &str,
+) -> Result<EventAttributeSourceName, BoundaryParseError> {
+    EventAttributeSourceName::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid event attribute source name: {error}"))
+    })
+}
+
+pub fn parse_event_attribute_source_field(
+    raw: &str,
+) -> Result<EventAttributeSourceField, BoundaryParseError> {
+    EventAttributeSourceField::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid event attribute source field: {error}"))
+    })
+}
+
+pub fn parse_provenance_description(
+    raw: &str,
+) -> Result<ProvenanceDescription, BoundaryParseError> {
+    ProvenanceDescription::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid provenance: {error}")))
+}
+
+pub fn parse_read_model_name(raw: &str) -> Result<ReadModelName, BoundaryParseError> {
+    ReadModelName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid read model name: {error}")))
+}
+
+pub fn parse_read_model_field_source_kind(
+    raw: &str,
+) -> Result<ReadModelFieldSourceKind, BoundaryParseError> {
+    ReadModelFieldSourceKind::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid read model field source kind: {error}"))
+    })
+}
+
+pub fn parse_read_model_derivation_rule(
+    raw: &str,
+) -> Result<ReadModelDerivationRule, BoundaryParseError> {
+    ReadModelDerivationRule::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid read model derivation rule: {error}"))
+    })
+}
+
+pub fn parse_read_model_transitive_rule(
+    raw: &str,
+) -> Result<ReadModelTransitiveRule, BoundaryParseError> {
+    ReadModelTransitiveRule::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid read model transitive rule: {error}"))
+    })
+}
+
+pub fn parse_view_name(raw: &str) -> Result<ViewName, BoundaryParseError> {
+    ViewName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid view name: {error}")))
+}
+
+pub fn parse_view_field_name(raw: &str) -> Result<ViewFieldName, BoundaryParseError> {
+    ViewFieldName::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid view field name: {error}")))
+}
+
+pub fn parse_view_field_source_kind(raw: &str) -> Result<ViewFieldSourceKind, BoundaryParseError> {
+    ViewFieldSourceKind::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid view field source kind: {error}"))
+    })
+}
+
+pub fn parse_sketch_token(raw: &str) -> Result<SketchToken, BoundaryParseError> {
+    SketchToken::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid sketch token: {error}")))
+}
+
+pub fn parse_source_chain_hops(raw: &str) -> Result<Vec<SourceChainHop>, BoundaryParseError> {
+    parse_comma_separated(raw, "source chain hops")?
+        .into_iter()
+        .map(|hop| {
+            SourceChainHop::try_new(hop).map_err(|error| {
+                BoundaryParseError::new(format!("invalid source chain hop: {error}"))
+            })
+        })
+        .collect()
+}
+
 pub fn parse_workflow_transition_endpoint(
     raw: &str,
 ) -> Result<WorkflowTransitionEndpoint, BoundaryParseError> {
@@ -254,6 +488,30 @@ pub fn parse_workflow_transition_kind(
 ) -> Result<WorkflowTransitionKind, BoundaryParseError> {
     WorkflowTransitionKind::try_new(raw.to_owned()).map_err(|error| {
         BoundaryParseError::new(format!("invalid workflow transition kind: {error}"))
+    })
+}
+
+pub fn parse_workflow_transition_evidence_text(
+    raw: &str,
+) -> Result<WorkflowTransitionEvidenceText, BoundaryParseError> {
+    WorkflowTransitionEvidenceText::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid workflow transition evidence: {error}"))
+    })
+}
+
+pub fn parse_workflow_owned_definition_kind(
+    raw: &str,
+) -> Result<WorkflowOwnedDefinitionKind, BoundaryParseError> {
+    WorkflowOwnedDefinitionKind::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid workflow owned definition kind: {error}"))
+    })
+}
+
+pub fn parse_workflow_owned_definition_name(
+    raw: &str,
+) -> Result<WorkflowOwnedDefinitionName, BoundaryParseError> {
+    WorkflowOwnedDefinitionName::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid workflow owned definition name: {error}"))
     })
 }
 
@@ -285,11 +543,6 @@ pub fn parse_review_timestamp(raw: &str) -> Result<ReviewTimestamp, BoundaryPars
     })
 }
 
-pub fn parse_definition_name(raw: &str) -> Result<DefinitionName, BoundaryParseError> {
-    DefinitionName::try_new(raw.to_owned())
-        .map_err(|error| BoundaryParseError::new(format!("invalid definition name: {error}")))
-}
-
 fn slugify(raw: &str) -> String {
     raw.trim()
         .chars()
@@ -314,2643 +567,18 @@ fn quoted_value(raw: &str) -> Option<&str> {
     raw.strip_prefix('"')?.strip_suffix('"')
 }
 
-fn event_model_document_from_json(
-    value: Value,
-    file_kind: EventModelFileKind,
-) -> Result<EventModelDocument, BoundaryParseError> {
-    let object = value
-        .as_object()
-        .ok_or_else(|| BoundaryParseError::new(model_must_be_object_issue().to_string()))?;
-    object
-        .keys()
-        .map(|key| {
-            TopLevelKey::try_new(key.to_owned())
-                .map_err(|_| BoundaryParseError::new(empty_top_level_key_issue().to_string()))
-        })
-        .collect::<Result<BTreeSet<_>, _>>()
-        .and_then(|top_level_keys| {
-            let name = optional_definition_name_from_json_object(object, "name", "model")?;
-            let slice_definitions = slice_definitions_from_json_object(object)?;
-            let event_names = event_names_from_json_object(object)?;
-            let view_definitions = view_definitions_from_json_object(object)?;
-            let stream_names = stream_names_from_json_object(object)?;
-            let event_definitions = event_definitions_from_json_object(object)?;
-            let command_definitions = command_definitions_from_json_object(object)?;
-            let read_model_definitions = read_model_definitions_from_json_object(object)?;
-            let workflow_slice_references = workflow_slice_references_from_json_object(object)?;
-            let workflow_step_slices = workflow_step_slices_from_json_object(object)?;
-            let workflow_steps = workflow_steps_from_json_object(object)?;
-            let workflow_event_transitions = workflow_event_transitions_from_json_object(object)?;
-            let workflow_command_transitions =
-                workflow_command_transitions_from_json_object(object)?;
-            let workflow_navigation_transitions =
-                workflow_navigation_transitions_from_json_object(object)?;
-            let workflow_external_trigger_transitions =
-                workflow_external_trigger_transitions_from_json_object(object)?;
-            let workflow_exit_transitions = workflow_exit_transitions_from_json_object(object)?;
-            let duplicate_workflow_step_slice =
-                duplicate_workflow_step_slice_from_json_object(object)?;
-            let workflow_composition = workflow_composition_from_json_object(object);
-            let workflow_entry_step_count =
-                workflow_entry_step_count_from_json_object(object, workflow_composition);
-            let workflow_internal_definitions =
-                workflow_internal_definitions_from_json_object(object);
-            let workflow_transition_errors = workflow_transition_errors_from_json_object(object)?;
-            let workflow_transition_outcomes =
-                workflow_transition_outcomes_from_json_object(object)?;
-            let board_read_model_command_dependencies =
-                board_read_model_command_dependencies_from_json_object(object)?;
-            let board_lanes = board_lanes_from_json_object(object)?;
-            let board_slices = board_slices_from_json_object(object)?;
-            let command_produced_events = command_produced_events_from_json_object(object)?;
-            let state_view_observed_events =
-                state_view_observed_events_from_slices(&slice_definitions);
-            named_definitions_from_json_object(object).map(|named_definitions| {
-                EventModelDocument::new(
-                    EventModelDocumentParts::new(file_kind)
-                        .with_name(name)
-                        .with_top_level_keys(top_level_keys)
-                        .with_event_names(event_names)
-                        .with_stream_names(stream_names)
-                        .with_event_definitions(event_definitions)
-                        .with_command_definitions(command_definitions)
-                        .with_command_produced_events(command_produced_events)
-                        .with_state_view_observed_events(state_view_observed_events)
-                        .with_named_definitions(named_definitions)
-                        .with_read_model_definitions(read_model_definitions)
-                        .with_board_read_model_command_dependencies(
-                            board_read_model_command_dependencies,
-                        )
-                        .with_board_lanes(board_lanes)
-                        .with_board_slices(board_slices)
-                        .with_slice_count(slice_definition_count(&slice_definitions))
-                        .with_slice_definitions(slice_definitions)
-                        .with_view_definitions(view_definitions)
-                        .with_workflow_slice_references(workflow_slice_references)
-                        .with_workflow_step_slices(workflow_step_slices)
-                        .with_workflow_steps(workflow_steps)
-                        .with_workflow_event_transitions(workflow_event_transitions)
-                        .with_workflow_command_transitions(workflow_command_transitions)
-                        .with_workflow_navigation_transitions(workflow_navigation_transitions)
-                        .with_workflow_external_trigger_transitions(
-                            workflow_external_trigger_transitions,
-                        )
-                        .with_workflow_exit_transitions(workflow_exit_transitions)
-                        .with_duplicate_workflow_step_slice(duplicate_workflow_step_slice)
-                        .with_workflow_composition(workflow_composition)
-                        .with_workflow_entry_step_count(workflow_entry_step_count)
-                        .with_workflow_internal_definitions(workflow_internal_definitions)
-                        .with_workflow_transition_errors(workflow_transition_errors)
-                        .with_workflow_transition_outcomes(workflow_transition_outcomes),
-                )
-            })
-        })
-}
-
-fn slice_definition_count(slice_definitions: &[SliceDefinition]) -> SliceDefinitionCount {
-    match slice_definitions.len() {
-        0 => SliceDefinitionCount::Zero,
-        1 => SliceDefinitionCount::One,
-        _ => SliceDefinitionCount::Multiple,
-    }
-}
-
-fn workflow_composition_from_json_object(object: &Map<String, Value>) -> WorkflowComposition {
-    if object.get("slice_files").is_some() {
-        if object
-            .get("steps")
-            .and_then(Value::as_array)
-            .is_some_and(|steps| !steps.is_empty())
-        {
-            WorkflowComposition::DeclaresSteps
-        } else {
-            WorkflowComposition::MissingSteps
-        }
+fn parse_comma_separated(raw: &str, label: &str) -> Result<Vec<String>, BoundaryParseError> {
+    let values = raw
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    if values.is_empty() {
+        Err(BoundaryParseError::new(format!(
+            "invalid {label}: expected at least one value"
+        )))
     } else {
-        WorkflowComposition::NotComposition
+        Ok(values)
     }
-}
-
-fn workflow_slice_references_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
-    object
-        .get("slice_files")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(workflow_slice_reference_from_path)
-        .collect()
-}
-
-fn workflow_slice_reference_from_path(path: &str) -> Result<DefinitionName, BoundaryParseError> {
-    let file_name = path
-        .rsplit('/')
-        .next()
-        .and_then(|file_name| file_name.strip_suffix(".eventmodel.json"))
-        .unwrap_or(path);
-    DefinitionName::try_new(file_name.to_owned()).map_err(|error| {
-        BoundaryParseError::new(format!("invalid workflow slice reference: {error}"))
-    })
-}
-
-fn workflow_step_slices_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
-    workflow_step_slice_values(object)
-        .map(|step_slice| {
-            DefinitionName::try_new(step_slice.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid workflow step slice: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn workflow_steps_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<WorkflowStep>, BoundaryParseError> {
-    object
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_object)
-        .filter(|step| step.get("slice").and_then(Value::as_str).is_some())
-        .map(workflow_step_from_json_object)
-        .collect()
-}
-
-fn workflow_step_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<WorkflowStep, BoundaryParseError> {
-    let slice = object
-        .get("slice")
-        .and_then(Value::as_str)
-        .ok_or_else(|| BoundaryParseError::new("workflow step is missing slice"))
-        .and_then(|slice| {
-            DefinitionName::try_new(slice.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid workflow step slice: {error}"))
-            })
-        })?;
-    let relationship = workflow_step_relationship_from_json_object(object);
-    let trigger = workflow_step_trigger_from_json_object(object);
-    let workflow_exit = workflow_step_exit_from_json_object(object);
-    let transition_targets = workflow_step_transition_targets_from_json_object(object)?;
-    let selected_scenario = workflow_step_selected_scenario_from_json_object(object)?;
-    let lifecycle_role = workflow_step_lifecycle_role_from_json_object(object);
-
-    Ok(WorkflowStep::new(
-        slice,
-        relationship,
-        trigger,
-        workflow_exit,
-        transition_targets,
-        selected_scenario,
-        lifecycle_role,
-    ))
-}
-
-fn workflow_step_selected_scenario_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Option<DefinitionName>, BoundaryParseError> {
-    object
-        .get("scenario")
-        .and_then(Value::as_str)
-        .map(|scenario| {
-            DefinitionName::try_new(scenario.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid workflow step scenario: {error}"))
-            })
-        })
-        .transpose()
-}
-
-fn workflow_step_lifecycle_role_from_json_object(
-    object: &Map<String, Value>,
-) -> WorkflowStepLifecycleRole {
-    let label = workflow_step_label_from_json_object(object);
-    if object
-        .get("type")
-        .and_then(Value::as_str)
-        .is_some_and(|step_type| step_type == "state_change")
-        && object
-            .get("relationship")
-            .and_then(Value::as_str)
-            .is_some_and(|relationship| relationship == "entry")
-        && label.contains("bootstrap")
-        && label.contains("root")
-    {
-        WorkflowStepLifecycleRole::BootstrapRootEntryStateChange
-    } else if object
-        .get("type")
-        .and_then(Value::as_str)
-        .is_some_and(|step_type| step_type == "state_view")
-        && (label.contains("application entry") || label.contains("root bootstrap"))
-    {
-        WorkflowStepLifecycleRole::ApplicationEntryStateView
-    } else {
-        WorkflowStepLifecycleRole::Other
-    }
-}
-
-fn workflow_step_label_from_json_object(object: &Map<String, Value>) -> String {
-    ["slice", "name", "relationship"]
-        .into_iter()
-        .filter_map(|key| object.get(key).and_then(Value::as_str))
-        .fold(String::new(), |label, value| {
-            if label.is_empty() {
-                value.to_lowercase()
-            } else {
-                format!("{label} {}", value.to_lowercase())
-            }
-        })
-}
-
-fn workflow_step_relationship_from_json_object(
-    object: &Map<String, Value>,
-) -> WorkflowStepRelationship {
-    match object.get("relationship").and_then(Value::as_str) {
-        Some("alternate") => WorkflowStepRelationship::Alternate,
-        Some("async_lifecycle") => WorkflowStepRelationship::AsyncLifecycle,
-        Some("branch") => WorkflowStepRelationship::Branch,
-        Some("entry") => WorkflowStepRelationship::Entry,
-        Some("main") => WorkflowStepRelationship::Main,
-        Some("supporting") => WorkflowStepRelationship::Supporting,
-        Some(_) | None => WorkflowStepRelationship::Other,
-    }
-}
-
-fn workflow_step_trigger_from_json_object(object: &Map<String, Value>) -> WorkflowStepTrigger {
-    if object.get("trigger").and_then(Value::as_str).is_some() {
-        WorkflowStepTrigger::Present
-    } else {
-        WorkflowStepTrigger::Absent
-    }
-}
-
-fn workflow_step_exit_from_json_object(object: &Map<String, Value>) -> WorkflowStepExit {
-    if object
-        .get("transitions")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_object)
-        .any(|transition| {
-            transition
-                .get("to_workflow")
-                .and_then(Value::as_str)
-                .is_some()
-        })
-    {
-        WorkflowStepExit::Present
-    } else {
-        WorkflowStepExit::Absent
-    }
-}
-
-fn workflow_step_transition_targets_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
-    object
-        .get("transitions")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_object)
-        .filter_map(|transition| transition.get("to").and_then(Value::as_str))
-        .map(|target| {
-            DefinitionName::try_new(target.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid workflow transition target: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn workflow_event_transitions_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<WorkflowEventTransition>, BoundaryParseError> {
-    object
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_object)
-        .map(workflow_event_transitions_from_json_step)
-        .collect::<Result<Vec<_>, _>>()
-        .map(|transitions| transitions.into_iter().flatten().collect())
-}
-
-fn workflow_event_transitions_from_json_step(
-    step: &Map<String, Value>,
-) -> Result<Vec<WorkflowEventTransition>, BoundaryParseError> {
-    let Some(source_slice) = step.get("slice").and_then(Value::as_str) else {
-        return Ok(Vec::new());
-    };
-    let source_slice = DefinitionName::try_new(source_slice.to_owned()).map_err(|error| {
-        BoundaryParseError::new(format!("invalid workflow transition source: {error}"))
-    })?;
-
-    step.get("transitions")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_object)
-        .filter(|transition| {
-            transition
-                .get("via_event")
-                .and_then(Value::as_str)
-                .is_some()
-        })
-        .map(|transition| {
-            let target_slice = transition
-                .get("to")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    BoundaryParseError::new("workflow event transition is missing target")
-                })
-                .and_then(|target| {
-                    DefinitionName::try_new(target.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!(
-                            "invalid workflow transition target: {error}"
-                        ))
-                    })
-                })?;
-            let event = transition
-                .get("via_event")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    BoundaryParseError::new("workflow event transition is missing event")
-                })
-                .and_then(|event| {
-                    DefinitionName::try_new(event.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!(
-                            "invalid workflow transition event: {error}"
-                        ))
-                    })
-                })?;
-            Ok(WorkflowEventTransition::new(
-                source_slice.clone(),
-                target_slice,
-                event,
-            ))
-        })
-        .collect()
-}
-
-fn workflow_command_transitions_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<WorkflowCommandTransition>, BoundaryParseError> {
-    object
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_object)
-        .map(workflow_command_transitions_from_json_step)
-        .collect::<Result<Vec<_>, _>>()
-        .map(|transitions| transitions.into_iter().flatten().collect())
-}
-
-fn workflow_command_transitions_from_json_step(
-    step: &Map<String, Value>,
-) -> Result<Vec<WorkflowCommandTransition>, BoundaryParseError> {
-    let Some(source_slice) = step.get("slice").and_then(Value::as_str) else {
-        return Ok(Vec::new());
-    };
-    let source_slice = DefinitionName::try_new(source_slice.to_owned()).map_err(|error| {
-        BoundaryParseError::new(format!("invalid workflow transition source: {error}"))
-    })?;
-
-    step.get("transitions")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_object)
-        .filter(|transition| {
-            transition
-                .get("via_command")
-                .and_then(Value::as_str)
-                .is_some()
-        })
-        .map(|transition| {
-            let target_slice = transition
-                .get("to")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    BoundaryParseError::new("workflow command transition is missing target")
-                })
-                .and_then(|target| {
-                    DefinitionName::try_new(target.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!(
-                            "invalid workflow transition target: {error}"
-                        ))
-                    })
-                })?;
-            let command = transition
-                .get("via_command")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    BoundaryParseError::new("workflow command transition is missing command")
-                })
-                .and_then(|command| {
-                    DefinitionName::try_new(command.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!(
-                            "invalid workflow transition command: {error}"
-                        ))
-                    })
-                })?;
-            Ok(WorkflowCommandTransition::new(
-                source_slice.clone(),
-                target_slice,
-                command,
-            ))
-        })
-        .collect()
-}
-
-fn workflow_navigation_transitions_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<WorkflowNavigationTransition>, BoundaryParseError> {
-    object
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_object)
-        .map(workflow_navigation_transitions_from_json_step)
-        .collect::<Result<Vec<_>, _>>()
-        .map(|transitions| transitions.into_iter().flatten().collect())
-}
-
-fn workflow_navigation_transitions_from_json_step(
-    step: &Map<String, Value>,
-) -> Result<Vec<WorkflowNavigationTransition>, BoundaryParseError> {
-    let Some(source_slice) = step.get("slice").and_then(Value::as_str) else {
-        return Ok(Vec::new());
-    };
-    let source_slice = DefinitionName::try_new(source_slice.to_owned()).map_err(|error| {
-        BoundaryParseError::new(format!("invalid workflow transition source: {error}"))
-    })?;
-
-    step.get("transitions")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_object)
-        .filter(|transition| {
-            transition
-                .get("via_navigation")
-                .and_then(Value::as_str)
-                .is_some()
-        })
-        .map(|transition| {
-            let target_slice = transition
-                .get("to")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    BoundaryParseError::new("workflow navigation transition is missing target")
-                })
-                .and_then(|target| {
-                    DefinitionName::try_new(target.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!(
-                            "invalid workflow transition target: {error}"
-                        ))
-                    })
-                })?;
-            let navigation_target = transition
-                .get("via_navigation")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    BoundaryParseError::new("workflow navigation transition is missing navigation")
-                })
-                .and_then(|navigation| {
-                    DefinitionName::try_new(navigation.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!(
-                            "invalid workflow transition navigation: {error}"
-                        ))
-                    })
-                })?;
-            Ok(WorkflowNavigationTransition::new(
-                source_slice.clone(),
-                target_slice,
-                navigation_target,
-            ))
-        })
-        .collect()
-}
-
-fn workflow_external_trigger_transitions_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<WorkflowExternalTriggerTransition>, BoundaryParseError> {
-    object
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_object)
-        .map(workflow_external_trigger_transitions_from_json_step)
-        .collect::<Result<Vec<_>, _>>()
-        .map(|transitions| transitions.into_iter().flatten().collect())
-}
-
-fn workflow_external_trigger_transitions_from_json_step(
-    step: &Map<String, Value>,
-) -> Result<Vec<WorkflowExternalTriggerTransition>, BoundaryParseError> {
-    let Some(source_slice) = step.get("slice").and_then(Value::as_str) else {
-        return Ok(Vec::new());
-    };
-    let source_slice = DefinitionName::try_new(source_slice.to_owned()).map_err(|error| {
-        BoundaryParseError::new(format!("invalid workflow transition source: {error}"))
-    })?;
-
-    step.get("transitions")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_object)
-        .filter_map(|transition| {
-            workflow_external_trigger_from_json_transition(transition)
-                .map(|external_trigger| (transition, external_trigger))
-        })
-        .map(|(transition, external_trigger)| {
-            let target_slice = transition
-                .get("to")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    BoundaryParseError::new(
-                        "workflow external trigger transition is missing target",
-                    )
-                })
-                .and_then(|target| {
-                    DefinitionName::try_new(target.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!(
-                            "invalid workflow transition target: {error}"
-                        ))
-                    })
-                })?;
-            DefinitionName::try_new(external_trigger.to_owned())
-                .map(|external_trigger| {
-                    WorkflowExternalTriggerTransition::new(
-                        source_slice.clone(),
-                        target_slice,
-                        external_trigger,
-                    )
-                })
-                .map_err(|error| {
-                    BoundaryParseError::new(format!(
-                        "invalid workflow transition external trigger: {error}"
-                    ))
-                })
-        })
-        .collect()
-}
-
-fn workflow_external_trigger_from_json_transition(transition: &Map<String, Value>) -> Option<&str> {
-    transition
-        .get("via_external_trigger")
-        .and_then(Value::as_str)
-        .or_else(|| transition.get("external_trigger").and_then(Value::as_str))
-}
-
-fn workflow_exit_transitions_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<WorkflowExitTransition>, BoundaryParseError> {
-    object
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_object)
-        .map(workflow_exit_transitions_from_json_step)
-        .collect::<Result<Vec<_>, _>>()
-        .map(|transitions| transitions.into_iter().flatten().collect())
-}
-
-fn workflow_exit_transitions_from_json_step(
-    step: &Map<String, Value>,
-) -> Result<Vec<WorkflowExitTransition>, BoundaryParseError> {
-    step.get("transitions")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_object)
-        .filter_map(|transition| {
-            transition
-                .get("to_workflow")
-                .and_then(Value::as_str)
-                .map(|workflow| (transition, workflow))
-        })
-        .map(|(transition, workflow)| {
-            DefinitionName::try_new(workflow.to_owned())
-                .map(|workflow| {
-                    WorkflowExitTransition::new(
-                        workflow,
-                        workflow_exit_rationale_from_json_transition(transition),
-                    )
-                })
-                .map_err(|error| {
-                    BoundaryParseError::new(format!(
-                        "invalid workflow exit transition target: {error}"
-                    ))
-                })
-        })
-        .collect()
-}
-
-fn workflow_exit_rationale_from_json_transition(
-    transition: &Map<String, Value>,
-) -> WorkflowExitRationale {
-    if [
-        "via_event",
-        "via_navigation",
-        "via_command",
-        "via_external_trigger",
-        "external_trigger",
-        "exit_reason",
-        "reason",
-    ]
-    .into_iter()
-    .any(|key| transition.get(key).and_then(Value::as_str).is_some())
-    {
-        WorkflowExitRationale::Present
-    } else {
-        WorkflowExitRationale::Missing
-    }
-}
-
-fn duplicate_workflow_step_slice_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Option<DefinitionName>, BoundaryParseError> {
-    let mut seen = BTreeSet::new();
-    workflow_step_slice_values(object)
-        .find_map(|step_slice| {
-            DefinitionName::try_new(step_slice.to_owned())
-                .map(|step_slice| {
-                    if seen.insert(step_slice.clone()) {
-                        None
-                    } else {
-                        Some(step_slice)
-                    }
-                })
-                .map_err(|error| {
-                    BoundaryParseError::new(format!("invalid workflow step slice: {error}"))
-                })
-                .transpose()
-        })
-        .transpose()
-}
-
-fn workflow_step_slice_values(object: &Map<String, Value>) -> impl Iterator<Item = &str> {
-    object
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|step| step.get("slice").and_then(Value::as_str))
-}
-
-fn workflow_entry_step_count_from_json_object(
-    object: &Map<String, Value>,
-    workflow_composition: WorkflowComposition,
-) -> WorkflowEntryStepCount {
-    if workflow_composition != WorkflowComposition::DeclaresSteps {
-        WorkflowEntryStepCount::NotComposition
-    } else if workflow_entry_steps_from_json_object(object) == 1 {
-        WorkflowEntryStepCount::One
-    } else {
-        WorkflowEntryStepCount::NotOne
-    }
-}
-
-fn workflow_entry_steps_from_json_object(object: &Map<String, Value>) -> usize {
-    object
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter(|step| {
-            step.get("relationship")
-                .and_then(Value::as_str)
-                .is_some_and(|relationship| relationship == "entry")
-        })
-        .count()
-}
-
-fn workflow_internal_definitions_from_json_object(
-    object: &Map<String, Value>,
-) -> WorkflowInternalDefinitions {
-    if [
-        "commands",
-        "views",
-        "read_models",
-        "automations",
-        "scenarios",
-    ]
-    .into_iter()
-    .any(|key| {
-        object
-            .get(key)
-            .and_then(Value::as_array)
-            .is_some_and(|definitions| !definitions.is_empty())
-    }) {
-        WorkflowInternalDefinitions::Present
-    } else {
-        WorkflowInternalDefinitions::Absent
-    }
-}
-
-fn workflow_transition_errors_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
-    workflow_transition_references_from_json_object(
-        object,
-        "via_error",
-        "workflow transition error",
-    )
-}
-
-fn workflow_transition_outcomes_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
-    workflow_transition_references_from_json_object(
-        object,
-        "via_outcome",
-        "workflow transition outcome",
-    )
-}
-
-fn workflow_transition_references_from_json_object(
-    object: &Map<String, Value>,
-    field: &str,
-    label: &str,
-) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
-    object
-        .get("steps")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .flat_map(|step| workflow_transition_references_from_json_step(step, field))
-        .map(|reference| {
-            DefinitionName::try_new(reference.to_owned())
-                .map_err(|error| BoundaryParseError::new(format!("invalid {label}: {error}")))
-        })
-        .collect()
-}
-
-fn workflow_transition_references_from_json_step<'a>(step: &'a Value, field: &str) -> Vec<&'a str> {
-    step.get("transitions")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|transition| transition.get(field).and_then(Value::as_str))
-        .collect()
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct BoardDependencyElement {
-    kind: BoardElementKind,
-    name: DefinitionName,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct BoardConnection {
-    from: String,
-    to: String,
-}
-
-fn board_read_model_command_dependencies_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<BoardReadModelCommandDependency>, BoundaryParseError> {
-    object
-        .get("board")
-        .and_then(|board| board.get("slices"))
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(board_read_model_command_dependencies_from_json_slice)
-        .collect::<Result<Vec<_>, _>>()
-        .map(|dependencies| dependencies.into_iter().flatten().collect())
-}
-
-fn board_read_model_command_dependencies_from_json_slice(
-    board_slice: &Value,
-) -> Result<Vec<BoardReadModelCommandDependency>, BoundaryParseError> {
-    let elements = board_elements_from_json_slice(board_slice)?;
-    let connections = board_connections_from_json_slice(board_slice);
-    Ok(connections
-        .iter()
-        .flat_map(|connection| {
-            board_read_model_command_dependency_from_connection(&elements, &connections, connection)
-        })
-        .collect())
-}
-
-fn board_lanes_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<BoardLanes, BoundaryParseError> {
-    let Some(lanes) = object
-        .get("board")
-        .and_then(|board| board.get("lanes"))
-        .and_then(Value::as_array)
-    else {
-        return Ok(BoardLanes::Absent);
-    };
-
-    lanes
-        .iter()
-        .filter_map(|lane| lane.get("id").and_then(Value::as_str).map(|id| (lane, id)))
-        .map(|(lane, id)| {
-            DefinitionName::try_new(id.to_owned())
-                .map_err(|error| BoundaryParseError::new(format!("invalid board lane: {error}")))
-                .and_then(|id| {
-                    optional_definition_name_from_json_field(lane, "name", "board lane name")
-                        .map(|name| BoardLane::new(id, name))
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .map(BoardLanes::Present)
-}
-
-fn board_slices_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<BoardSliceGraph>, BoundaryParseError> {
-    object
-        .get("board")
-        .and_then(|board| board.get("slices"))
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|board_slice| {
-            board_slice
-                .get("name")
-                .and_then(Value::as_str)
-                .map(|name| (board_slice, name))
-        })
-        .map(|(board_slice, name)| {
-            DefinitionName::try_new(name.to_owned())
-                .map_err(|error| BoundaryParseError::new(format!("invalid board slice: {error}")))
-                .and_then(|name| {
-                    board_graph_elements_from_json_slice(board_slice).and_then(|elements| {
-                        board_graph_connections_from_json_slice(board_slice)
-                            .map(|connections| BoardSliceGraph::new(name, elements, connections))
-                    })
-                })
-        })
-        .collect()
-}
-
-fn board_graph_elements_from_json_slice(
-    board_slice: &Value,
-) -> Result<Vec<BoardElement>, BoundaryParseError> {
-    board_slice
-        .get("elements")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|element| {
-            element
-                .get("id")
-                .and_then(Value::as_str)
-                .map(|id| (element, id))
-        })
-        .map(|(element, id)| {
-            DefinitionName::try_new(id.to_owned())
-                .map_err(|error| {
-                    BoundaryParseError::new(format!("invalid board element id: {error}"))
-                })
-                .and_then(|id| {
-                    optional_definition_name_from_json_field(element, "lane", "board element lane")
-                        .and_then(|lane| {
-                            optional_definition_name_from_json_field(
-                                element,
-                                "name",
-                                "board element name",
-                            )
-                            .map(|name| {
-                                BoardElement::new(
-                                    id,
-                                    board_element_kind_from_json(element),
-                                    lane,
-                                    name,
-                                )
-                            })
-                        })
-                })
-        })
-        .collect()
-}
-
-fn board_graph_connections_from_json_slice(
-    board_slice: &Value,
-) -> Result<Vec<BoardGraphConnection>, BoundaryParseError> {
-    board_slice
-        .get("connections")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|connection| {
-            connection
-                .get("from")
-                .and_then(Value::as_str)
-                .zip(connection.get("to").and_then(Value::as_str))
-        })
-        .map(|(from, to)| {
-            DefinitionName::try_new(from.to_owned())
-                .map_err(|error| {
-                    BoundaryParseError::new(format!("invalid board connection source: {error}"))
-                })
-                .and_then(|from| {
-                    DefinitionName::try_new(to.to_owned())
-                        .map(|to| BoardGraphConnection::new(from, to))
-                        .map_err(|error| {
-                            BoundaryParseError::new(format!(
-                                "invalid board connection target: {error}"
-                            ))
-                        })
-                })
-        })
-        .collect()
-}
-
-fn board_elements_from_json_slice(
-    board_slice: &Value,
-) -> Result<BTreeMap<String, BoardDependencyElement>, BoundaryParseError> {
-    board_slice
-        .get("elements")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|element| {
-            element
-                .get("id")
-                .and_then(Value::as_str)
-                .zip(element.get("name").and_then(Value::as_str))
-                .map(|(id, name)| (id, name, board_element_kind_from_json(element)))
-        })
-        .map(|(id, name, kind)| {
-            DefinitionName::try_new(name.to_owned())
-                .map(|name| (id.to_owned(), BoardDependencyElement { kind, name }))
-                .map_err(|error| {
-                    BoundaryParseError::new(format!("invalid board element name: {error}"))
-                })
-        })
-        .collect()
-}
-
-fn board_element_kind_from_json(element: &Value) -> BoardElementKind {
-    match element.get("kind").and_then(Value::as_str) {
-        Some("automation") => BoardElementKind::Automation,
-        Some("command") => BoardElementKind::Command,
-        Some("event") => BoardElementKind::Event,
-        Some("external_event") => BoardElementKind::ExternalEvent,
-        Some("read_model") => BoardElementKind::ReadModel,
-        Some("view") => BoardElementKind::View,
-        _ => BoardElementKind::Other,
-    }
-}
-
-fn board_connections_from_json_slice(board_slice: &Value) -> Vec<BoardConnection> {
-    board_slice
-        .get("connections")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|connection| {
-            connection
-                .get("from")
-                .and_then(Value::as_str)
-                .zip(connection.get("to").and_then(Value::as_str))
-                .map(|(from, to)| BoardConnection {
-                    from: from.to_owned(),
-                    to: to.to_owned(),
-                })
-        })
-        .collect()
-}
-
-fn board_read_model_command_dependency_from_connection(
-    elements: &BTreeMap<String, BoardDependencyElement>,
-    connections: &[BoardConnection],
-    connection: &BoardConnection,
-) -> Vec<BoardReadModelCommandDependency> {
-    let Some(read_model) = elements
-        .get(&connection.from)
-        .filter(|element| element.kind == BoardElementKind::ReadModel)
-    else {
-        return Vec::new();
-    };
-    let Some(intermediate) = elements
-        .get(&connection.to)
-        .filter(|element| element.kind == BoardElementKind::Automation)
-    else {
-        return Vec::new();
-    };
-    connections
-        .iter()
-        .filter(|candidate| candidate.from == connection.to)
-        .filter_map(|candidate| {
-            elements
-                .get(&candidate.to)
-                .filter(|command| command.kind == BoardElementKind::Command)
-                .map(|command| {
-                    BoardReadModelCommandDependency::new(
-                        read_model.name.clone(),
-                        command.name.clone(),
-                        intermediate.name.clone(),
-                    )
-                })
-        })
-        .collect()
-}
-
-fn slice_definitions_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<SliceDefinition>, BoundaryParseError> {
-    object
-        .get("slices")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|slice| {
-            slice
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("slice is missing name"))
-                .and_then(|name| {
-                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!("invalid slice name: {error}"))
-                    })
-                })
-                .map(|name| {
-                    let slug = optional_definition_name_from_json_field(slice, "slug", "slug")?;
-                    let issued_commands =
-                        definition_names_from_json_array_field(slice, "commands", "command")?;
-                    let handled_command_errors = handled_command_errors_from_json_slice(slice)?;
-                    let owned_automations =
-                        definition_names_from_json_array_field(slice, "automations", "automation")?;
-                    let owned_read_models =
-                        definition_names_from_json_array_field(slice, "read_models", "read model")?;
-                    let owned_translations = definition_names_from_json_array_field(
-                        slice,
-                        "translations",
-                        "translation",
-                    )?;
-                    let owned_views =
-                        definition_names_from_json_array_field(slice, "views", "view")?;
-                    let owned_events =
-                        definition_names_from_json_array_field(slice, "events", "event")?;
-                    let external_triggers = external_triggers_from_json_slice(slice)?;
-                    let external_payload_variants =
-                        external_payload_variants_from_json_slice(slice)?;
-                    let outcome_labels = outcome_labels_from_json_slice(slice)?;
-                    let outcomes = outcomes_from_json_slice(slice)?;
-                    let automation_trigger = automation_trigger_from_json_slice(slice)?;
-                    slice_scenarios_from_json_slice(slice).map(|scenarios| {
-                        SliceDefinition::new(
-                            SliceDefinitionParts::new(name, slice_type_from_json_slice(slice))
-                                .with_slug(slug)
-                                .with_issued_commands(issued_commands)
-                                .with_handled_command_errors(handled_command_errors)
-                                .with_owned_automations(owned_automations)
-                                .with_owned_read_models(owned_read_models)
-                                .with_owned_translations(owned_translations)
-                                .with_owned_views(owned_views)
-                                .with_owned_events(owned_events)
-                                .with_external_triggers(external_triggers)
-                                .with_external_payload_variants(external_payload_variants)
-                                .with_outcome_labels(outcome_labels)
-                                .with_outcomes(outcomes)
-                                .with_legacy_scenarios(legacy_scenarios_field_from_json_slice(
-                                    slice,
-                                ))
-                                .with_singleton_behavior(singleton_behavior_from_json_slice(slice))
-                                .with_automation_trigger(automation_trigger)
-                                .with_automation_command_policy(
-                                    automation_command_policy_from_json_slice(slice),
-                                )
-                                .with_translation_contract(translation_contract_from_json_slice(
-                                    slice,
-                                ))
-                                .with_scenarios(scenarios),
-                        )
-                    })
-                })
-                .and_then(|slice_definition| slice_definition)
-        })
-        .collect()
-}
-
-fn outcomes_from_json_slice(slice: &Value) -> Result<Vec<OutcomeDefinition>, BoundaryParseError> {
-    slice
-        .get("outcomes")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|outcome| {
-            outcome
-                .get("label")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("outcome is missing label"))
-                .and_then(|label| {
-                    DefinitionName::try_new(label.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!("invalid outcome label: {error}"))
-                    })
-                })
-                .and_then(|label| {
-                    definition_names_from_json_array_field(outcome, "events", "event").map(
-                        |mut events| {
-                            events.sort();
-                            OutcomeDefinition::new(label, events)
-                        },
-                    )
-                })
-        })
-        .collect()
-}
-
-fn handled_command_errors_from_json_slice(
-    slice: &Value,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    slice
-        .get("error_handling")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|handling| handling.get("error").and_then(Value::as_str))
-        .map(|error| {
-            DefinitionName::try_new(error.to_owned()).map_err(|parse_error| {
-                BoundaryParseError::new(format!("invalid handled command error: {parse_error}"))
-            })
-        })
-        .collect()
-}
-
-fn automation_command_policy_from_json_slice(slice: &Value) -> AutomationCommandPolicy {
-    if slice_type_from_json_slice(slice) == SliceType::Automation {
-        if slice_command_count(slice) > 1 {
-            AutomationCommandPolicy::MultipleCommands
-        } else {
-            AutomationCommandPolicy::SingleCommand
-        }
-    } else {
-        AutomationCommandPolicy::NotAutomation
-    }
-}
-
-fn slice_command_count(slice: &Value) -> usize {
-    slice
-        .get("commands")
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len)
-}
-
-fn automation_trigger_from_json_slice(
-    slice: &Value,
-) -> Result<AutomationTrigger, BoundaryParseError> {
-    if slice_type_from_json_slice(slice) == SliceType::Automation {
-        let trigger_events = automation_trigger_events_from_json_slice(slice)?;
-        if trigger_events.is_empty() {
-            Ok(AutomationTrigger::MissingTrigger)
-        } else {
-            Ok(AutomationTrigger::DeclaresTriggers(trigger_events))
-        }
-    } else {
-        Ok(AutomationTrigger::NotAutomation)
-    }
-}
-
-fn automation_trigger_events_from_json_slice(
-    slice: &Value,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    optional_definition_names_from_json_fields(slice, &["trigger", "external_event"]).and_then(
-        |single_triggers| {
-            definition_names_from_json_array_field(slice, "triggers", "trigger").map(
-                |trigger_array| {
-                    single_triggers
-                        .into_iter()
-                        .chain(trigger_array)
-                        .collect::<BTreeSet<_>>()
-                        .into_iter()
-                        .collect()
-                },
-            )
-        },
-    )
-}
-
-fn external_triggers_from_json_slice(
-    slice: &Value,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    optional_definition_names_from_json_fields(slice, &["external_event"]).and_then(
-        |single_triggers| {
-            definition_names_from_json_array_field(slice, "external_events", "external event").map(
-                |trigger_array| {
-                    single_triggers
-                        .into_iter()
-                        .chain(trigger_array)
-                        .collect::<BTreeSet<_>>()
-                        .into_iter()
-                        .collect()
-                },
-            )
-        },
-    )
-}
-
-fn translation_contract_from_json_slice(slice: &Value) -> TranslationContract {
-    if slice_type_from_json_slice(slice) == SliceType::Translation {
-        if slice_has_external_contract(slice) {
-            TranslationContract::DeclaresExternalContract
-        } else {
-            TranslationContract::MissingExternalContract
-        }
-    } else {
-        TranslationContract::NotTranslation
-    }
-}
-
-fn external_payload_variants_from_json_slice(
-    slice: &Value,
-) -> Result<Vec<ExternalPayloadVariant>, BoundaryParseError> {
-    slice
-        .get("external_input_schemas")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(external_payload_variants_from_json_schema)
-        .collect::<Result<Vec<_>, _>>()
-        .map(|variants| variants.into_iter().flatten().collect())
-}
-
-fn external_payload_variants_from_json_schema(
-    schema: &Value,
-) -> Result<Vec<ExternalPayloadVariant>, BoundaryParseError> {
-    schema
-        .get("variants")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(|variant| {
-            external_payload_name_from_json_schema(schema).and_then(|payload| {
-                DefinitionName::try_new(variant.to_owned())
-                    .map(|variant| ExternalPayloadVariant::new(payload, variant))
-                    .map_err(|error| {
-                        BoundaryParseError::new(format!(
-                            "invalid external payload variant: {error}"
-                        ))
-                    })
-            })
-        })
-        .collect()
-}
-
-fn external_payload_name_from_json_schema(
-    schema: &Value,
-) -> Result<DefinitionName, BoundaryParseError> {
-    schema
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| BoundaryParseError::new("external input schema is missing name"))
-        .and_then(|name| {
-            DefinitionName::try_new(name.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid external input schema name: {error}"))
-            })
-        })
-}
-
-fn slice_has_external_contract(slice: &Value) -> bool {
-    slice_has_non_empty_string(slice, "external_event")
-        || slice
-            .get("external_input_schemas")
-            .and_then(Value::as_array)
-            .is_some_and(|schemas| !schemas.is_empty())
-}
-
-fn slice_has_non_empty_string(slice: &Value, key: &str) -> bool {
-    slice
-        .get(key)
-        .and_then(Value::as_str)
-        .is_some_and(|value| !value.trim().is_empty())
-}
-
-fn singleton_behavior_from_json_slice(slice: &Value) -> SingletonBehavior {
-    slice
-        .get("singleton")
-        .and_then(Value::as_bool)
-        .filter(|singleton| *singleton)
-        .map_or(SingletonBehavior::NotSingleton, |_| {
-            if slice_declares_repeat_behavior(slice) {
-                SingletonBehavior::DeclaresRepeatBehavior
-            } else {
-                SingletonBehavior::MissingRepeatBehavior
-            }
-        })
-}
-
-fn slice_declares_repeat_behavior(slice: &Value) -> bool {
-    first_class_scenario_fields()
-        .iter()
-        .filter_map(|spec| slice.get(spec.key).and_then(Value::as_array))
-        .flatten()
-        .map(|scenario| scenario.to_string().to_lowercase())
-        .any(|scenario_text| {
-            scenario_text.contains("already-exists")
-                || scenario_text.contains("already exists")
-                || scenario_text.contains("idempotent")
-        })
-}
-
-fn legacy_scenarios_field_from_json_slice(slice: &Value) -> LegacyScenariosField {
-    if slice.get("scenarios").is_some() {
-        LegacyScenariosField::Present
-    } else {
-        LegacyScenariosField::Absent
-    }
-}
-
-fn slice_scenarios_from_json_slice(
-    slice: &Value,
-) -> Result<Vec<SliceScenario>, BoundaryParseError> {
-    first_class_scenario_fields()
-        .iter()
-        .map(|spec| slice_scenarios_from_json_field(slice, spec))
-        .collect::<Result<Vec<_>, _>>()
-        .map(|scenarios| scenarios.into_iter().flatten().collect())
-}
-
-fn outcome_labels_from_json_slice(
-    slice: &Value,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    slice
-        .get("outcomes")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|outcome| outcome.get("label").and_then(Value::as_str))
-        .map(|label| {
-            DefinitionName::try_new(label.to_owned())
-                .map_err(|error| BoundaryParseError::new(format!("invalid outcome label: {error}")))
-        })
-        .collect()
-}
-
-fn slice_scenarios_from_json_field(
-    slice: &Value,
-    spec: &ScenarioFieldSpec,
-) -> Result<Vec<SliceScenario>, BoundaryParseError> {
-    slice
-        .get(spec.key)
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|scenario| {
-            scenario
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("scenario is missing name"))
-                .and_then(|name| {
-                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!("invalid scenario name: {error}"))
-                    })
-                })
-                .map(|name| {
-                    let read_model_states = read_model_states_from_json_scenario(scenario)?;
-                    let read_model_state_values =
-                        read_model_state_values_from_json_scenario(scenario)?;
-                    let then_events = event_references_from_json_field(scenario, "then")?;
-                    let command_errors = command_errors_from_json_scenario(scenario)?;
-                    let given_streams = given_streams_from_json_scenario(scenario)?;
-                    let scenario_step_references =
-                        scenario_step_references_from_json_scenario(scenario)?;
-                    event_references_from_json_scenario(scenario).map(|referenced_events| {
-                        SliceScenario::new(
-                            SliceScenarioParts::new(
-                                name,
-                                scenario_step_field(scenario, "when"),
-                                spec.kind,
-                            )
-                            .with_referenced_events(referenced_events)
-                            .with_scenario_step_references(scenario_step_references)
-                            .with_then_events(then_events)
-                            .with_command_errors(command_errors)
-                            .with_given_streams(given_streams)
-                            .with_read_model_states(read_model_states)
-                            .with_read_model_state_values(read_model_state_values),
-                        )
-                    })
-                })
-                .and_then(|scenario| scenario)
-        })
-        .collect()
-}
-fn given_streams_from_json_scenario(
-    scenario: &Value,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    scenario
-        .get("given_streams")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|given_stream| given_stream.get("stream").and_then(Value::as_str))
-        .map(|stream| {
-            DefinitionName::try_new(stream.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid given stream reference: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn read_model_states_from_json_scenario(
-    scenario: &Value,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    scenario
-        .get("read_model_states")
-        .and_then(Value::as_object)
-        .into_iter()
-        .flat_map(Map::keys)
-        .map(|read_model| {
-            DefinitionName::try_new(read_model.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid read model state name: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn read_model_state_values_from_json_scenario(
-    scenario: &Value,
-) -> Result<Vec<ReadModelState>, BoundaryParseError> {
-    scenario
-        .get("read_model_states")
-        .and_then(Value::as_object)
-        .into_iter()
-        .flat_map(Map::iter)
-        .map(|(read_model, state)| {
-            let read_model = DefinitionName::try_new(read_model.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid read model state name: {error}"))
-            })?;
-            let state = state
-                .as_str()
-                .ok_or_else(|| BoundaryParseError::new("read model state value must be a string"))
-                .and_then(|state| {
-                    DefinitionName::try_new(state.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!("invalid read model state value: {error}"))
-                    })
-                })?;
-            Ok(ReadModelState::new(read_model, state))
-        })
-        .collect()
-}
-
-fn command_errors_from_json_scenario(
-    scenario: &Value,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    scenario_reference_fields()
-        .iter()
-        .filter_map(|field| scenario.get(field).and_then(Value::as_array))
-        .flatten()
-        .filter_map(Value::as_str)
-        .filter_map(command_error_from_scenario_reference)
-        .map(|error_name| {
-            DefinitionName::try_new(error_name.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid scenario command error: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn command_error_from_scenario_reference(reference: &str) -> Option<&str> {
-    reference
-        .strip_prefix("error ")
-        .and_then(|raw_error| raw_error.strip_suffix(" is returned"))
-}
-
-fn event_references_from_json_scenario(
-    scenario: &Value,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    scenario_reference_fields()
-        .iter()
-        .map(|field| event_references_from_json_field(scenario, field))
-        .collect::<Result<Vec<_>, _>>()
-        .map(|references| references.into_iter().flatten().collect())
-}
-
-fn scenario_step_references_from_json_scenario(
-    scenario: &Value,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    scenario_reference_fields()
-        .iter()
-        .map(|field| scenario_step_references_from_json_field(scenario, field))
-        .collect::<Result<Vec<_>, _>>()
-        .map(|references| references.into_iter().flatten().collect())
-}
-
-fn scenario_step_references_from_json_field(
-    scenario: &Value,
-    field: &str,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    scenario
-        .get(field)
-        .into_iter()
-        .flat_map(scenario_step_reference_values)
-        .map(|reference| {
-            DefinitionName::try_new(reference.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid scenario step reference: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn scenario_step_reference_values(value: &Value) -> Vec<&str> {
-    value.as_str().map_or_else(
-        || {
-            value
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(Value::as_str)
-                .collect()
-        },
-        |reference| vec![reference],
-    )
-}
-
-fn event_references_from_json_field(
-    scenario: &Value,
-    field: &str,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    scenario
-        .get(field)
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(|reference| {
-            DefinitionName::try_new(reference.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid scenario reference: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn scenario_reference_fields() -> &'static [&'static str] {
-    &["given", "when", "then"]
-}
-
-fn scenario_step_field(scenario: &Value, field: &str) -> ScenarioStepField {
-    if scenario.get(field).is_some() {
-        ScenarioStepField::Present
-    } else {
-        ScenarioStepField::Absent
-    }
-}
-
-struct ScenarioFieldSpec {
-    key: &'static str,
-    kind: ScenarioSetKind,
-}
-
-fn first_class_scenario_fields() -> &'static [ScenarioFieldSpec] {
-    &[
-        ScenarioFieldSpec {
-            key: "acceptance_scenarios",
-            kind: ScenarioSetKind::Acceptance,
-        },
-        ScenarioFieldSpec {
-            key: "contract_scenarios",
-            kind: ScenarioSetKind::Contract,
-        },
-    ]
-}
-
-fn slice_type_from_json_slice(slice: &Value) -> SliceType {
-    match slice.get("type").and_then(Value::as_str) {
-        Some("automation") => SliceType::Automation,
-        Some("state_change") => SliceType::StateChange,
-        Some("state_view") => SliceType::StateView,
-        Some("translation") => SliceType::Translation,
-        _ => SliceType::Other,
-    }
-}
-
-fn view_definitions_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<ViewDefinition>, BoundaryParseError> {
-    object
-        .get("views")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|view| {
-            view.get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("view is missing name"))
-                .and_then(|name| {
-                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!("invalid view name: {error}"))
-                    })
-                })
-                .and_then(|name| {
-                    let controls = view_control_definitions_from_json_view(view)?;
-                    let local_states = definition_names_from_json_array_field(
-                        view,
-                        "local_states",
-                        "local state",
-                    )?;
-                    let fields = view_field_definitions_from_json_view(view)?;
-                    let wireframe = view_wireframe_from_json_view(view)?;
-                    definition_names_from_json_array_field(view, "uses_read_models", "read model")
-                        .map(|read_models| {
-                            ViewDefinition::new(
-                                name,
-                                read_models,
-                                fields,
-                                controls,
-                                local_states,
-                                wireframe,
-                            )
-                        })
-                })
-        })
-        .collect()
-}
-
-fn view_field_definitions_from_json_view(
-    view: &Value,
-) -> Result<Vec<ViewFieldDefinition>, BoundaryParseError> {
-    view.get("fields")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(view_field_definition_from_json_field)
-        .collect()
-}
-
-fn view_field_definition_from_json_field(
-    field: &Value,
-) -> Result<ViewFieldDefinition, BoundaryParseError> {
-    let name = match field {
-        Value::String(name) => name,
-        Value::Object(object) => object
-            .get("name")
-            .and_then(Value::as_str)
-            .ok_or_else(|| BoundaryParseError::new("view field is missing name"))?,
-        _ => {
-            return Err(BoundaryParseError::new(
-                "view field must be a string or object",
-            ));
-        }
-    };
-    let name = DefinitionName::try_new(name.to_owned())
-        .map_err(|error| BoundaryParseError::new(format!("invalid view field name: {error}")))?;
-
-    Ok(ViewFieldDefinition::new(
-        name,
-        view_field_source_from_json_field(field),
-    ))
-}
-
-fn view_field_source_from_json_field(field: &Value) -> ViewFieldSource {
-    field
-        .get("source")
-        .and_then(Value::as_str)
-        .and_then(view_field_source_from_reference)
-        .unwrap_or(ViewFieldSource::Other)
-}
-
-fn view_field_source_from_reference(source: &str) -> Option<ViewFieldSource> {
-    if let Some(read_model_reference) = source.strip_prefix("read_model.") {
-        let (read_model_name, field_name) = read_model_reference.rsplit_once('.')?;
-        return DefinitionName::try_new(read_model_name.to_owned())
-            .ok()
-            .zip(DefinitionName::try_new(field_name.to_owned()).ok())
-            .map(|(read_model_name, field_name)| {
-                ViewFieldSource::ReadModelField(read_model_name, field_name)
-            });
-    }
-
-    let (event_name, attribute_name) = source.split_once('.')?;
-    DefinitionName::try_new(event_name.to_owned())
-        .ok()
-        .zip(DefinitionName::try_new(attribute_name.to_owned()).ok())
-        .map(|(event_name, attribute_name)| {
-            ViewFieldSource::EventAttribute(event_name, attribute_name)
-        })
-}
-
-fn view_wireframe_from_json_view(view: &Value) -> Result<ViewWireframe, BoundaryParseError> {
-    view.get("wireframe")
-        .and_then(Value::as_str)
-        .filter(|wireframe| !wireframe.trim().is_empty())
-        .map_or(Ok(ViewWireframe::Absent), |wireframe| {
-            wireframe_tokens_from_markup(wireframe).map(ViewWireframe::Present)
-        })
-}
-
-fn wireframe_tokens_from_markup(
-    wireframe: &str,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    let marker = "data-ref=\"";
-    let mut rest = wireframe;
-    let mut tokens = Vec::new();
-
-    while let Some(marker_start) = rest.find(marker) {
-        let token_start = marker_start + marker.len();
-        let token_and_tail = &rest[token_start..];
-        let token_end = token_and_tail.find('"').ok_or_else(|| {
-            BoundaryParseError::new("wireframe data-ref is missing closing quote")
-        })?;
-        let raw_token = &token_and_tail[..token_end];
-        let token = DefinitionName::try_new(raw_token.to_owned()).map_err(|error| {
-            BoundaryParseError::new(format!("invalid wireframe token: {error}"))
-        })?;
-        tokens.push(token);
-        rest = &token_and_tail[token_end + 1..];
-    }
-
-    Ok(tokens)
-}
-
-fn view_control_definitions_from_json_view(
-    view: &Value,
-) -> Result<Vec<ViewControlDefinition>, BoundaryParseError> {
-    view.get("controls")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|control| {
-            control
-                .get("label")
-                .and_then(Value::as_str)
-                .map(|label| (control, label))
-        })
-        .map(|(control, label)| {
-            let command = optional_definition_name_from_json_field(control, "command", "command")?;
-            let navigation_target =
-                optional_definition_name_from_json_field(control, "navigation", "navigation")?;
-            let workflow_target =
-                optional_definition_name_from_json_field(control, "workflow_target", "workflow")?;
-            let external_system = optional_definition_name_from_json_field(
-                control,
-                "external_system",
-                "external system",
-            )?;
-            let payload_contract = optional_definition_name_from_json_field(
-                control,
-                "payload_contract",
-                "payload contract",
-            )?;
-            let input_provisions = control_input_provisions_from_json_control(control)?;
-            let decision_fields = definition_names_from_json_array_field(
-                control,
-                "decision_fields",
-                "decision field",
-            )?;
-            let navigation_type = navigation_type_from_json_control(control);
-            let command_error_handling = command_error_handling_from_json_control(control)?;
-            DefinitionName::try_new(label.to_owned())
-                .map(|label| {
-                    ViewControlDefinition::new(
-                        ViewControlDefinitionParts::new(label)
-                            .with_command(command)
-                            .with_input_provisions(input_provisions)
-                            .with_decision_fields(decision_fields)
-                            .with_command_error_handling(command_error_handling)
-                            .with_navigation_target(navigation_target)
-                            .with_navigation_type(navigation_type)
-                            .with_workflow_target(workflow_target)
-                            .with_external_system(external_system)
-                            .with_payload_contract(payload_contract),
-                    )
-                })
-                .map_err(|error| BoundaryParseError::new(format!("invalid control label: {error}")))
-        })
-        .collect()
-}
-
-fn control_input_provisions_from_json_control(
-    control: &Value,
-) -> Result<Vec<ControlInputProvision>, BoundaryParseError> {
-    control
-        .get("inputs")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(control_input_provision_from_json_input)
-        .collect()
-}
-
-fn control_input_provision_from_json_input(
-    input: &Value,
-) -> Result<ControlInputProvision, BoundaryParseError> {
-    let name = input
-        .as_str()
-        .or_else(|| input.get("name").and_then(Value::as_str))
-        .ok_or_else(|| BoundaryParseError::new("control input is missing name"))?;
-    let source = control_input_source_from_json_input(input);
-    let description = control_input_description_from_json_input(input);
-
-    DefinitionName::try_new(name.to_owned())
-        .map(|name| ControlInputProvision::new(name, source, description))
-        .map_err(|error| BoundaryParseError::new(format!("invalid control input name: {error}")))
-}
-
-fn control_input_description_from_json_input(input: &Value) -> ControlInputDescription {
-    input
-        .get("description")
-        .and_then(Value::as_str)
-        .filter(|description| !description.trim().is_empty())
-        .map_or(ControlInputDescription::Missing, |_| {
-            ControlInputDescription::Present
-        })
-}
-
-fn control_input_source_from_json_input(input: &Value) -> ControlInputSource {
-    let source = input.get("source").and_then(Value::as_str);
-
-    source
-        .and_then(control_user_input_source)
-        .or_else(|| source.and_then(control_session_input_source))
-        .unwrap_or(ControlInputSource::Other)
-}
-
-fn control_user_input_source(source: &str) -> Option<ControlInputSource> {
-    source
-        .strip_prefix("user_input.")
-        .and_then(|input_name| DefinitionName::try_new(input_name.to_owned()).ok())
-        .map(ControlInputSource::UserInput)
-}
-
-fn control_session_input_source(source: &str) -> Option<ControlInputSource> {
-    source
-        .strip_prefix("session.")
-        .and_then(|input_name| DefinitionName::try_new(input_name.to_owned()).ok())
-        .map(ControlInputSource::SessionValue)
-}
-
-fn navigation_type_from_json_control(control: &Value) -> NavigationType {
-    match control.get("navigation_type").and_then(Value::as_str) {
-        Some("modeled_view") => NavigationType::ModeledView,
-        Some("local_view_state") => NavigationType::LocalViewState,
-        Some("external_system") => NavigationType::ExternalSystem,
-        Some("external_workflow") => NavigationType::ExternalWorkflow,
-        _ => NavigationType::Absent,
-    }
-}
-
-fn command_error_handling_from_json_control(
-    control: &Value,
-) -> Result<Vec<ControlCommandErrorHandling>, BoundaryParseError> {
-    control
-        .get("error_handling")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|handling| {
-            handling
-                .get("error")
-                .and_then(Value::as_str)
-                .map(|error_name| (handling, error_name))
-        })
-        .map(|(handling, error_name)| {
-            DefinitionName::try_new(error_name.to_owned())
-                .map_err(|error| {
-                    BoundaryParseError::new(format!("invalid control command error: {error}"))
-                })
-                .map(|error_name| {
-                    ControlCommandErrorHandling::new(
-                        error_name,
-                        control_error_recovery_behavior_from_json_handling(handling),
-                    )
-                })
-        })
-        .collect()
-}
-
-fn control_error_recovery_behavior_from_json_handling(
-    handling: &Value,
-) -> ControlErrorRecoveryBehavior {
-    if handling_has_recovery_action(handling)
-        || handling_has_navigation_target(handling)
-        || handling_has_retry(handling)
-        || handling_stays_on_screen(handling)
-    {
-        ControlErrorRecoveryBehavior::Present
-    } else {
-        ControlErrorRecoveryBehavior::Missing
-    }
-}
-
-fn handling_has_recovery_action(handling: &Value) -> bool {
-    handling
-        .get("recovery_action")
-        .and_then(Value::as_str)
-        .is_some_and(|recovery_action| !recovery_action.trim().is_empty())
-}
-
-fn handling_has_navigation_target(handling: &Value) -> bool {
-    handling
-        .get("navigation")
-        .and_then(Value::as_str)
-        .is_some_and(|navigation| !navigation.trim().is_empty())
-}
-
-fn handling_has_retry(handling: &Value) -> bool {
-    handling
-        .get("retry")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-}
-
-fn handling_stays_on_screen(handling: &Value) -> bool {
-    handling
-        .get("stay_on_screen")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-}
-
-fn read_model_definitions_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<ReadModelDefinition>, BoundaryParseError> {
-    object
-        .get("read_models")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|read_model| {
-            read_model
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("read model is missing name"))
-                .and_then(|name| {
-                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!("invalid read model name: {error}"))
-                    })
-                })
-                .and_then(|name| {
-                    read_model_fields_from_json_read_model(read_model).map(|fields| {
-                        let transitive_derivation =
-                            read_model_transitive_derivation_from_json(read_model, &fields);
-                        ReadModelDefinition::new(name, fields, transitive_derivation)
-                    })
-                })
-        })
-        .collect()
-}
-
-fn read_model_fields_from_json_read_model(
-    read_model: &Value,
-) -> Result<Vec<ReadModelField>, BoundaryParseError> {
-    read_model
-        .get("fields")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|field| {
-            field
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("read model field is missing name"))
-                .and_then(|name| {
-                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!("invalid read model field name: {error}"))
-                    })
-                })
-                .map(|name| {
-                    ReadModelField::new(
-                        name,
-                        read_model_field_source_from_json(field),
-                        read_model_field_derivation_from_json(field),
-                        read_model_field_absence_default_from_json(field),
-                    )
-                })
-        })
-        .collect()
-}
-
-fn read_model_field_source_from_json(field: &Value) -> ReadModelFieldSource {
-    field
-        .get("source")
-        .and_then(Value::as_str)
-        .and_then(read_model_event_attribute_source)
-        .unwrap_or(ReadModelFieldSource::Other)
-}
-
-fn read_model_event_attribute_source(source: &str) -> Option<ReadModelFieldSource> {
-    if let Some(derivation_name) = source.strip_prefix("derivation.") {
-        return DefinitionName::try_new(derivation_name.to_owned())
-            .ok()
-            .map(ReadModelFieldSource::Derivation);
-    }
-    let (event_name, attribute_name) = source.split_once('.')?;
-    DefinitionName::try_new(event_name.to_owned())
-        .ok()
-        .zip(DefinitionName::try_new(attribute_name.to_owned()).ok())
-        .map(|(event_name, attribute_name)| {
-            ReadModelFieldSource::EventAttribute(event_name, attribute_name)
-        })
-}
-
-fn read_model_field_derivation_from_json(field: &Value) -> ReadModelFieldDerivation {
-    field
-        .get("derived")
-        .and_then(Value::as_bool)
-        .filter(|derived| *derived)
-        .map_or(ReadModelFieldDerivation::NotDerived, |_| {
-            if !read_model_field_has_derivation_provenance(field) {
-                ReadModelFieldDerivation::DerivedWithoutProvenance
-            } else if !read_model_field_has_derivation_scenarios(field) {
-                ReadModelFieldDerivation::DerivedWithoutScenarios
-            } else {
-                ReadModelFieldDerivation::DerivedComplete
-            }
-        })
-}
-
-fn read_model_field_has_derivation_provenance(field: &Value) -> bool {
-    field
-        .get("derivation_source_fields")
-        .and_then(Value::as_array)
-        .is_some_and(|source_fields| !source_fields.is_empty())
-        && field
-            .get("derivation_description")
-            .and_then(Value::as_str)
-            .is_some_and(|description| !description.is_empty())
-}
-
-fn read_model_field_has_derivation_scenarios(field: &Value) -> bool {
-    field
-        .get("derivation_scenarios")
-        .and_then(Value::as_array)
-        .is_some_and(|scenarios| !scenarios.is_empty())
-}
-
-fn read_model_field_absence_default_from_json(field: &Value) -> ReadModelFieldAbsenceDefault {
-    field
-        .get("defaulted_from_absence")
-        .and_then(Value::as_bool)
-        .filter(|defaulted| *defaulted)
-        .map_or(ReadModelFieldAbsenceDefault::NotDefaulted, |_| {
-            if !read_model_field_has_absence_event(field) {
-                ReadModelFieldAbsenceDefault::DefaultedWithoutAbsenceEvent
-            } else if !read_model_field_has_absence_scenarios(field) {
-                ReadModelFieldAbsenceDefault::DefaultedWithoutScenarios
-            } else {
-                ReadModelFieldAbsenceDefault::DefaultedComplete
-            }
-        })
-}
-
-fn read_model_field_has_absence_event(field: &Value) -> bool {
-    field
-        .get("absence_event")
-        .and_then(Value::as_str)
-        .is_some_and(|event| !event.is_empty())
-}
-
-fn read_model_field_has_absence_scenarios(field: &Value) -> bool {
-    field
-        .get("absence_scenarios")
-        .and_then(Value::as_array)
-        .is_some_and(|scenarios| !scenarios.is_empty())
-}
-
-fn read_model_transitive_derivation_from_json(
-    read_model: &Value,
-    fields: &[ReadModelField],
-) -> ReadModelTransitiveDerivation {
-    read_model
-        .get("transitive")
-        .and_then(Value::as_bool)
-        .filter(|transitive| *transitive)
-        .map_or(ReadModelTransitiveDerivation::NotTransitive, |_| {
-            if read_model_has_complete_transitive_derivation(read_model, fields) {
-                ReadModelTransitiveDerivation::TransitiveComplete
-            } else {
-                ReadModelTransitiveDerivation::TransitiveWithoutRule
-            }
-        })
-}
-
-fn read_model_has_complete_transitive_derivation(
-    read_model: &Value,
-    fields: &[ReadModelField],
-) -> bool {
-    read_model
-        .get("fields")
-        .and_then(Value::as_array)
-        .is_some_and(|field_records| {
-            field_records.len() == fields.len()
-                && field_records
-                    .iter()
-                    .all(read_model_field_has_complete_transitive_derivation)
-        })
-}
-
-fn read_model_field_has_complete_transitive_derivation(field: &Value) -> bool {
-    field
-        .get("source_relationship_fields")
-        .and_then(Value::as_array)
-        .is_some_and(|source_fields| !source_fields.is_empty())
-        && field
-            .get("transitive_derivation_rule")
-            .and_then(Value::as_str)
-            .is_some_and(|rule| !rule.is_empty())
-        && read_model_field_has_derivation_scenarios(field)
-}
-
-fn definition_names_from_json_array_field(
-    object: &Value,
-    field: &str,
-    label: &str,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    object
-        .get(field)
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(|value| {
-            DefinitionName::try_new(value.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid {label} reference: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn named_definitions_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<NamedDefinition>, BoundaryParseError> {
-    named_definition_specs()
-        .iter()
-        .map(|spec| named_definitions_for_spec(object, spec))
-        .collect::<Result<Vec<_>, _>>()
-        .map(|definitions| definitions.into_iter().flatten().collect())
-}
-
-fn event_names_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
-    named_definitions_for_spec(
-        object,
-        &NamedDefinitionSpec {
-            key: "events",
-            label: "event",
-            kind: DefinitionKind::Event,
-        },
-    )
-    .map(|definitions| {
-        definitions
-            .into_iter()
-            .map(NamedDefinition::into_name)
-            .collect()
-    })
-}
-
-fn stream_names_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
-    named_definitions_for_spec(
-        object,
-        &NamedDefinitionSpec {
-            key: "streams",
-            label: "stream",
-            kind: DefinitionKind::Stream,
-        },
-    )
-    .map(|definitions| {
-        definitions
-            .into_iter()
-            .map(NamedDefinition::into_name)
-            .collect()
-    })
-}
-
-fn event_definitions_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<EventDefinition>, BoundaryParseError> {
-    object
-        .get("events")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|event| {
-            event
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("event is missing name"))
-                .and_then(|name| {
-                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!("invalid event name: {error}"))
-                    })
-                })
-                .and_then(|name| {
-                    let attributes = event_attributes_from_json_event(event)?;
-                    optional_definition_name_from_json_field(event, "stream", "stream")
-                        .map(|stream| EventDefinition::new(name, stream, attributes))
-                })
-        })
-        .collect()
-}
-
-fn event_attributes_from_json_event(
-    event: &Value,
-) -> Result<Vec<EventAttribute>, BoundaryParseError> {
-    event
-        .get("attributes")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|attribute| {
-            attribute
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("event attribute is missing name"))
-                .and_then(|name| {
-                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!("invalid event attribute name: {error}"))
-                    })
-                })
-                .map(|name| EventAttribute::new(name, event_attribute_source_from_json(attribute)))
-        })
-        .collect()
-}
-
-fn event_attribute_source_from_json(attribute: &Value) -> EventAttributeSource {
-    let source = attribute.get("source").and_then(Value::as_str);
-
-    source
-        .and_then(command_attribute_source)
-        .or_else(|| source.and_then(external_attribute_source))
-        .or_else(|| source.and_then(generated_attribute_source))
-        .or_else(|| source.and_then(read_model_attribute_source))
-        .or_else(|| source.and_then(unmodeled_attribute_source))
-        .unwrap_or(EventAttributeSource::Other)
-}
-
-fn command_attribute_source(source: &str) -> Option<EventAttributeSource> {
-    source
-        .strip_prefix("command.")
-        .and_then(|input_name| DefinitionName::try_new(input_name.to_owned()).ok())
-        .map(EventAttributeSource::CommandInput)
-}
-
-fn external_attribute_source(source: &str) -> Option<EventAttributeSource> {
-    let external_reference = source.strip_prefix("external.")?;
-    let (payload_name, field_name) = external_reference.split_once('.')?;
-    DefinitionName::try_new(payload_name.to_owned())
-        .ok()
-        .zip(DefinitionName::try_new(field_name.to_owned()).ok())
-        .map(|(payload_name, field_name)| {
-            EventAttributeSource::ExternalField(payload_name, field_name)
-        })
-}
-
-fn read_model_attribute_source(source: &str) -> Option<EventAttributeSource> {
-    let read_model_reference = source.strip_prefix("read_model.")?;
-    let (read_model_name, field_name) = read_model_reference.split_once('.')?;
-    DefinitionName::try_new(read_model_name.to_owned())
-        .ok()
-        .zip(DefinitionName::try_new(field_name.to_owned()).ok())
-        .map(|(read_model_name, field_name)| {
-            EventAttributeSource::ReadModelField(read_model_name, field_name)
-        })
-}
-
-fn generated_attribute_source(source: &str) -> Option<EventAttributeSource> {
-    (source == "generated.").then_some(EventAttributeSource::GeneratedEmpty)
-}
-
-fn unmodeled_attribute_source(source: &str) -> Option<EventAttributeSource> {
-    source
-        .strip_prefix("unmodeled.")
-        .and_then(|source_name| DefinitionName::try_new(source_name.to_owned()).ok())
-        .map(EventAttributeSource::Unmodeled)
-}
-
-fn command_definitions_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<Vec<CommandDefinition>, BoundaryParseError> {
-    object
-        .get("commands")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|command| {
-            let name = optional_definition_name_from_json_field(command, "name", "command")?;
-            let inputs = definition_names_from_json_array_field(command, "inputs", "input")?;
-            let input_sources = command_input_sources_from_json_command(command)?;
-            let read_model_reads = command_read_model_reads_from_json_command(command);
-            let external_inputs = definition_names_from_json_array_field(
-                command,
-                "external_inputs",
-                "external input",
-            )?;
-            let external_input_schemas = external_input_schemas_from_json_command(command)?;
-            let command_errors = command_errors_from_json_command(command)?;
-            definition_names_from_json_array_field(command, "produces", "event").map(|produces| {
-                CommandDefinition::new(
-                    CommandDefinitionParts::new(name)
-                        .with_inputs(inputs)
-                        .with_input_sources(input_sources)
-                        .with_read_model_reads(read_model_reads)
-                        .with_external_inputs(external_inputs)
-                        .with_external_input_schemas(external_input_schemas)
-                        .with_produces(produces)
-                        .with_errors(command_errors),
-                )
-            })
-        })
-        .collect()
-}
-
-fn command_errors_from_json_command(
-    command: &Value,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    command
-        .get("errors")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(command_error_name)
-        .map(|error_name| {
-            DefinitionName::try_new(error_name.to_owned())
-                .map_err(|error| BoundaryParseError::new(format!("invalid command error: {error}")))
-        })
-        .collect()
-}
-
-fn command_error_name(error: &Value) -> Option<&str> {
-    error
-        .as_str()
-        .or_else(|| error.get("name").and_then(Value::as_str))
-}
-
-fn command_read_model_reads_from_json_command(command: &Value) -> CommandReadModelReads {
-    command
-        .get("reads")
-        .and_then(Value::as_array)
-        .filter(|reads| !reads.is_empty())
-        .map_or(CommandReadModelReads::Absent, |_| {
-            CommandReadModelReads::Present
-        })
-}
-
-fn command_input_sources_from_json_command(
-    command: &Value,
-) -> Result<Vec<CommandInputSource>, BoundaryParseError> {
-    command
-        .get("input_sources")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(command_input_source_from_json_source)
-        .collect()
-}
-
-fn command_input_source_from_json_source(
-    input_source: &Value,
-) -> Result<CommandInputSource, BoundaryParseError> {
-    input_source
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| BoundaryParseError::new("command input source is missing name"))
-        .and_then(|name| {
-            DefinitionName::try_new(name.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid command input source name: {error}"))
-            })
-        })
-        .map(|name| {
-            CommandInputSource::new(name, command_input_source_kind_from_json(input_source))
-        })
-}
-
-fn command_input_source_kind_from_json(input_source: &Value) -> CommandInputSourceKind {
-    let source = input_source.get("source").and_then(Value::as_str);
-
-    source
-        .and_then(command_actor_input_source)
-        .or_else(|| source.and_then(command_external_input_source))
-        .or_else(|| source.and_then(command_read_model_input_source))
-        .unwrap_or(CommandInputSourceKind::Other)
-}
-
-fn command_actor_input_source(source: &str) -> Option<CommandInputSourceKind> {
-    source
-        .strip_prefix("user_input.")
-        .and_then(|input_name| DefinitionName::try_new(input_name.to_owned()).ok())
-        .map(CommandInputSourceKind::ActorInput)
-}
-
-fn command_external_input_source(source: &str) -> Option<CommandInputSourceKind> {
-    let external_reference = source.strip_prefix("external.")?;
-    let (payload_name, field_name) = external_reference.split_once('.')?;
-    DefinitionName::try_new(payload_name.to_owned())
-        .ok()
-        .zip(DefinitionName::try_new(field_name.to_owned()).ok())
-        .map(|(payload_name, field_name)| {
-            CommandInputSourceKind::ExternalField(payload_name, field_name)
-        })
-}
-
-fn command_read_model_input_source(source: &str) -> Option<CommandInputSourceKind> {
-    let read_model_reference = source.strip_prefix("read_model.")?;
-    let (read_model_name, field_name) = read_model_reference.rsplit_once('.')?;
-    DefinitionName::try_new(read_model_name.to_owned())
-        .ok()
-        .zip(DefinitionName::try_new(field_name.to_owned()).ok())
-        .map(|(read_model_name, field_name)| {
-            CommandInputSourceKind::ReadModelField(read_model_name, field_name)
-        })
-}
-
-fn external_input_schemas_from_json_command(
-    command: &Value,
-) -> Result<Vec<ExternalInputSchema>, BoundaryParseError> {
-    command
-        .get("external_input_schemas")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|schema| {
-            schema
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new("external input schema is missing name"))
-                .and_then(|name| {
-                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!(
-                            "invalid external input schema name: {error}"
-                        ))
-                    })
-                })
-                .and_then(|name| {
-                    schema_fields_from_json_schema(schema)
-                        .map(|fields| ExternalInputSchema::new(name, fields))
-                })
-        })
-        .collect()
-}
-
-fn schema_fields_from_json_schema(
-    schema: &Value,
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    schema
-        .get("fields")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|field| {
-            field
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    BoundaryParseError::new("external input schema field is missing name")
-                })
-                .and_then(|name| {
-                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!(
-                            "invalid external input schema field name: {error}"
-                        ))
-                    })
-                })
-        })
-        .collect()
-}
-
-fn command_produced_events_from_json_object(
-    object: &Map<String, Value>,
-) -> Result<BTreeSet<DefinitionName>, BoundaryParseError> {
-    object
-        .get("commands")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|command| definition_names_from_json_array_field(command, "produces", "event"))
-        .collect::<Result<Vec<_>, _>>()
-        .map(|events| events.into_iter().flatten().collect())
-}
-
-fn state_view_observed_events_from_slices(
-    slice_definitions: &[SliceDefinition],
-) -> BTreeSet<DefinitionName> {
-    slice_definitions
-        .iter()
-        .filter(|slice| slice.is_state_view())
-        .flat_map(SliceDefinition::owned_events)
-        .cloned()
-        .collect()
-}
-
-fn optional_definition_name_from_json_field(
-    object: &Value,
-    field: &str,
-    label: &str,
-) -> Result<Option<DefinitionName>, BoundaryParseError> {
-    object
-        .get(field)
-        .and_then(Value::as_str)
-        .map(|value| {
-            DefinitionName::try_new(value.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid {label} reference: {error}"))
-            })
-        })
-        .transpose()
-}
-
-fn optional_definition_name_from_json_object(
-    object: &Map<String, Value>,
-    field: &str,
-    label: &str,
-) -> Result<Option<DefinitionName>, BoundaryParseError> {
-    object
-        .get(field)
-        .and_then(Value::as_str)
-        .map(|value| {
-            DefinitionName::try_new(value.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid {label} reference: {error}"))
-            })
-        })
-        .transpose()
-}
-
-fn optional_definition_names_from_json_fields(
-    object: &Value,
-    fields: &[&str],
-) -> Result<Vec<DefinitionName>, BoundaryParseError> {
-    fields
-        .iter()
-        .filter_map(|field| {
-            object
-                .get(field)
-                .and_then(Value::as_str)
-                .map(|value| (*field, value))
-        })
-        .filter(|(_, value)| !value.trim().is_empty())
-        .map(|(field, value)| {
-            DefinitionName::try_new(value.to_owned()).map_err(|error| {
-                BoundaryParseError::new(format!("invalid {field} reference: {error}"))
-            })
-        })
-        .collect()
-}
-
-fn named_definitions_for_spec(
-    object: &Map<String, Value>,
-    spec: &NamedDefinitionSpec,
-) -> Result<Vec<NamedDefinition>, BoundaryParseError> {
-    object
-        .get(spec.key)
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|definition| {
-            definition
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| BoundaryParseError::new(format!("{} is missing name", spec.label)))
-                .and_then(|name| {
-                    DefinitionName::try_new(name.to_owned()).map_err(|error| {
-                        BoundaryParseError::new(format!("invalid {} name: {error}", spec.label))
-                    })
-                })
-                .map(|name| NamedDefinition::new(spec.kind, name))
-        })
-        .collect()
-}
-
-struct NamedDefinitionSpec {
-    key: &'static str,
-    label: &'static str,
-    kind: DefinitionKind,
-}
-
-fn named_definition_specs() -> &'static [NamedDefinitionSpec] {
-    &[
-        NamedDefinitionSpec {
-            key: "streams",
-            label: "stream",
-            kind: DefinitionKind::Stream,
-        },
-        NamedDefinitionSpec {
-            key: "events",
-            label: "event",
-            kind: DefinitionKind::Event,
-        },
-        NamedDefinitionSpec {
-            key: "commands",
-            label: "command",
-            kind: DefinitionKind::Command,
-        },
-        NamedDefinitionSpec {
-            key: "read_models",
-            label: "read model",
-            kind: DefinitionKind::ReadModel,
-        },
-        NamedDefinitionSpec {
-            key: "views",
-            label: "view",
-            kind: DefinitionKind::View,
-        },
-    ]
 }

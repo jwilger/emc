@@ -43,7 +43,7 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         Effect::WriteFileIfMissing(
             project_path("model/quint/quint.json"),
             file_contents(format!(
-                "{{\n  \"main\": \"{module_name}.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowTransitionsStructured\"\n  ]\n}}\n"
+                "{{\n  \"main\": \"{module_name}.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowTransitionsStructured\",\n    \"workflowTransitionSourcesResolve\",\n    \"workflowTransitionTargetsResolve\",\n    \"workflowStepRelationshipsAreAllowed\",\n    \"workflowHasExactlyOneEntryStep\",\n    \"workflowMainStepsHaveIncomingReachability\",\n    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\",\n    \"workflowTransitionsHaveModeledKinds\",\n    \"workflowExitsNameTargetsAndRationale\",\n    \"workflowExternallyRelevantOutcomesHandled\",\n    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\",\n    \"workflowExternalTriggersDeclarePayloadContracts\",\n    \"workflowTransitionsHaveRequiredEvidence\"\n  ]\n}}\n"
             )),
         ),
         Effect::WriteFileIfMissing(
@@ -53,22 +53,6 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         Effect::WriteFileIfMissing(
             project_path("model/quint/slices/.gitkeep"),
             file_contents("\n"),
-        ),
-        Effect::EnsureDirectory(project_path("model/browser/data/workflows")),
-        Effect::WriteFileIfMissing(
-            project_path("model/browser/data/workflows/.gitkeep"),
-            file_contents("\n"),
-        ),
-        Effect::EnsureDirectory(project_path("model/browser/data/slices")),
-        Effect::WriteFileIfMissing(
-            project_path("model/browser/data/slices/.gitkeep"),
-            file_contents("\n"),
-        ),
-        Effect::WriteFileIfMissing(
-            project_path("model/browser/data/index.json"),
-            file_contents(
-                "{\n  \"generated_at\": \"1970-01-01T00:00:00.000Z\",\n  \"workflows\": []\n}\n",
-            ),
         ),
         Effect::EnsureDirectory(project_path("reviews")),
         Effect::WriteFileIfMissing(project_path("reviews/.gitkeep"), file_contents("\n")),

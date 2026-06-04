@@ -3,10 +3,10 @@ mod tests {
     use std::error::Error;
 
     use emc::io::dto::{
-        parse_definition_name, parse_lean_module_name, parse_model_description, parse_model_digest,
-        parse_model_name, parse_project_name, parse_project_path, parse_quint_module_name,
-        parse_review_timestamp, parse_reviewer_id, parse_slice_slug, parse_transition_trigger_name,
-        parse_workflow_slug, parse_workflow_transition_endpoint, parse_workflow_transition_kind,
+        parse_lean_module_name, parse_model_description, parse_model_digest, parse_model_name,
+        parse_project_name, parse_project_path, parse_quint_module_name, parse_review_timestamp,
+        parse_reviewer_id, parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
+        parse_workflow_transition_endpoint, parse_workflow_transition_kind,
     };
 
     #[test]
@@ -22,7 +22,6 @@ mod tests {
         let transition_trigger = parse_transition_trigger_name(" Open request ")?;
         let transition_endpoint = parse_workflow_transition_endpoint(" capture-ticket ")?;
         let transition_kind = parse_workflow_transition_kind(" navigation ")?;
-        let definition_name = parse_definition_name(" Submit request ")?;
         let reviewer = parse_reviewer_id(" event-model-reviewer ")?;
         let reviewed_at = parse_review_timestamp(" 2026-06-03T00:00:00.000Z ")?;
 
@@ -72,11 +71,6 @@ mod tests {
             transition_kind.as_ref(),
             "navigation",
             "workflow transition kind is trimmed"
-        );
-        assert_eq!(
-            definition_name.as_ref(),
-            "Submit request",
-            "definition name is trimmed"
         );
         assert_eq!(
             reviewer.as_ref(),
@@ -137,10 +131,6 @@ mod tests {
         assert!(
             parse_workflow_transition_kind("   ").is_err(),
             "blank workflow transition kinds must not enter the core"
-        );
-        assert!(
-            parse_definition_name("   ").is_err(),
-            "blank definition names must not enter the core"
         );
         assert!(
             parse_reviewer_id("   ").is_err(),
@@ -206,9 +196,9 @@ mod tests {
 
     #[test]
     fn project_paths_are_relative_to_the_current_project() -> Result<(), Box<dyn Error>> {
-        let path = parse_project_path("model/browser/data/index.json")?;
+        let path = parse_project_path("model/lean/OpenTicket.lean")?;
 
-        assert_eq!(path.as_ref(), "model/browser/data/index.json");
+        assert_eq!(path.as_ref(), "model/lean/OpenTicket.lean");
         assert!(
             parse_project_path("/tmp/site").is_err(),
             "absolute paths must not enter project-local effects"

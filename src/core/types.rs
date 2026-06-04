@@ -1,5 +1,7 @@
 use nutype::nutype;
 
+use crate::core::effect::ArtifactDigest;
+
 #[nutype(
     sanitize(trim),
     validate(not_empty),
@@ -34,6 +36,7 @@ pub struct WorkflowSliceDetail {
     name: ModelName,
     kind: SliceKindName,
     description: ModelDescription,
+    relationship: WorkflowStepRelationshipName,
 }
 
 impl WorkflowSliceDetail {
@@ -43,11 +46,28 @@ impl WorkflowSliceDetail {
         kind: SliceKindName,
         description: ModelDescription,
     ) -> Self {
+        Self::new_with_relationship(
+            slug,
+            name,
+            kind,
+            description,
+            workflow_step_relationship_name("main"),
+        )
+    }
+
+    pub fn new_with_relationship(
+        slug: SliceSlug,
+        name: ModelName,
+        kind: SliceKindName,
+        description: ModelDescription,
+        relationship: WorkflowStepRelationshipName,
+    ) -> Self {
         Self {
             slug,
             name,
             kind,
             description,
+            relationship,
         }
     }
 
@@ -65,6 +85,10 @@ impl WorkflowSliceDetail {
 
     pub fn description(&self) -> &ModelDescription {
         &self.description
+    }
+
+    pub fn relationship(&self) -> &WorkflowStepRelationshipName {
+        &self.relationship
     }
 }
 
@@ -122,13 +146,6 @@ pub struct ModelDigest(String);
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
-pub struct WorkflowTransitionLabel(String);
-
-#[nutype(
-    sanitize(trim),
-    validate(not_empty),
-    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
-)]
 pub struct WorkflowTransitionEndpoint(String);
 
 #[nutype(
@@ -144,6 +161,12 @@ pub struct WorkflowSliceFileReference(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
 pub struct WorkflowStepRelationshipName(String);
+
+fn workflow_step_relationship_name(value: &str) -> WorkflowStepRelationshipName {
+    WorkflowStepRelationshipName::try_new(value.to_owned()).unwrap_or_else(|error| {
+        unreachable!("EMC generated workflow step relationship must be valid: {error}");
+    })
+}
 
 #[nutype(
     sanitize(trim),
@@ -164,6 +187,111 @@ pub struct TransitionTriggerName(String);
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
+pub struct PayloadContractName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct TranslationName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct TranslationExternalEventName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct OutcomeLabelName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ScenarioName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ScenarioStepText(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ContractKindName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct CoveredDefinitionName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct DatumName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct DataFlowSource(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct TransformationSemantics(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ReadModelDerivationRule(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ReadModelTransitiveRule(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct DataFlowTarget(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct BitEncodingSemantics(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
 pub struct BoardLaneId(String);
 
 #[nutype(
@@ -171,14 +299,35 @@ pub struct BoardLaneId(String);
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
-pub struct WorkflowStepName(String);
+pub struct BoardElementName(String);
 
 #[nutype(
     sanitize(trim),
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
-pub struct WorkflowBranchLabel(String);
+pub struct BoardElementKind(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct BoardElementDeclaredName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct BoardConnectionEndpoint(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct BoardConnectionEndpointKind(String);
 
 #[nutype(
     sanitize(trim),
@@ -192,7 +341,7 @@ pub struct WorkflowTransitionKind(String);
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
-pub struct WorkflowTransitionName(String);
+pub struct WorkflowTransitionEvidenceText(String);
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct WorkflowTransitionRecord {
@@ -201,6 +350,7 @@ pub struct WorkflowTransitionRecord {
     kind: WorkflowTransitionKind,
     trigger: TransitionTriggerName,
     rationale: Option<ModelDescription>,
+    payload_contract: Option<PayloadContractName>,
 }
 
 impl WorkflowTransitionRecord {
@@ -216,6 +366,7 @@ impl WorkflowTransitionRecord {
             kind,
             trigger,
             rationale: None,
+            payload_contract: None,
         }
     }
 
@@ -232,6 +383,24 @@ impl WorkflowTransitionRecord {
             kind,
             trigger,
             rationale: Some(rationale),
+            payload_contract: None,
+        }
+    }
+
+    pub fn new_with_payload_contract(
+        source: WorkflowTransitionEndpoint,
+        target: WorkflowTransitionEndpoint,
+        kind: WorkflowTransitionKind,
+        trigger: TransitionTriggerName,
+        payload_contract: PayloadContractName,
+    ) -> Self {
+        Self {
+            source,
+            target,
+            kind,
+            trigger,
+            rationale: None,
+            payload_contract: Some(payload_contract),
         }
     }
 
@@ -254,6 +423,10 @@ impl WorkflowTransitionRecord {
     pub fn rationale(&self) -> Option<&ModelDescription> {
         self.rationale.as_ref()
     }
+
+    pub fn payload_contract(&self) -> Option<&PayloadContractName> {
+        self.payload_contract.as_ref()
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -273,82 +446,204 @@ impl WorkflowTransitionRecords {
     }
 }
 
-#[nutype(
-    sanitize(trim),
-    validate(not_empty),
-    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
-)]
-pub struct CommandErrorName(String);
-
-#[nutype(
-    sanitize(trim),
-    validate(not_empty),
-    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
-)]
-pub struct ViewName(String);
-
-#[nutype(
-    sanitize(trim),
-    validate(not_empty),
-    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
-)]
-pub struct BrowserEventElementName(String);
-
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct WorkflowBranchDetail {
-    name: WorkflowStepName,
-    label: WorkflowBranchLabel,
+pub struct WorkflowOutcomeRecord {
+    source_slice: WorkflowTransitionEndpoint,
+    label: OutcomeLabelName,
+    externally_relevant: bool,
 }
 
-impl WorkflowBranchDetail {
-    pub fn new(name: WorkflowStepName, label: WorkflowBranchLabel) -> Self {
-        Self { name, label }
-    }
-
-    pub fn name(&self) -> &WorkflowStepName {
-        &self.name
-    }
-
-    pub fn label(&self) -> &WorkflowBranchLabel {
-        &self.label
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct WorkflowTransitionDetail {
-    name: WorkflowTransitionName,
-    source: WorkflowStepName,
-    target: WorkflowStepName,
-    kind: WorkflowTransitionKind,
-    label: WorkflowTransitionLabel,
-}
-
-impl WorkflowTransitionDetail {
+impl WorkflowOutcomeRecord {
     pub fn new(
-        name: WorkflowTransitionName,
-        source: WorkflowStepName,
-        target: WorkflowStepName,
-        kind: WorkflowTransitionKind,
-        label: WorkflowTransitionLabel,
+        source_slice: WorkflowTransitionEndpoint,
+        label: OutcomeLabelName,
+        externally_relevant: bool,
     ) -> Self {
         Self {
-            name,
-            source,
-            target,
-            kind,
+            source_slice,
             label,
+            externally_relevant,
         }
     }
 
-    pub fn name(&self) -> &WorkflowTransitionName {
-        &self.name
+    pub fn source_slice(&self) -> &WorkflowTransitionEndpoint {
+        &self.source_slice
     }
 
-    pub fn source(&self) -> &WorkflowStepName {
+    pub fn label(&self) -> &OutcomeLabelName {
+        &self.label
+    }
+
+    pub fn externally_relevant(&self) -> bool {
+        self.externally_relevant
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowOutcomeRecords {
+    records: Vec<WorkflowOutcomeRecord>,
+}
+
+impl WorkflowOutcomeRecords {
+    pub fn from_records(records: impl IntoIterator<Item = WorkflowOutcomeRecord>) -> Self {
+        Self {
+            records: records.into_iter().collect(),
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[WorkflowOutcomeRecord] {
+        &self.records
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowCommandErrorRecord {
+    source_slice: WorkflowTransitionEndpoint,
+    command_name: CommandName,
+    error_name: CommandErrorName,
+}
+
+impl WorkflowCommandErrorRecord {
+    pub fn new(
+        source_slice: WorkflowTransitionEndpoint,
+        command_name: CommandName,
+        error_name: CommandErrorName,
+    ) -> Self {
+        Self {
+            source_slice,
+            command_name,
+            error_name,
+        }
+    }
+
+    pub fn source_slice(&self) -> &WorkflowTransitionEndpoint {
+        &self.source_slice
+    }
+
+    pub fn command_name(&self) -> &CommandName {
+        &self.command_name
+    }
+
+    pub fn error_name(&self) -> &CommandErrorName {
+        &self.error_name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowCommandErrorRecords {
+    records: Vec<WorkflowCommandErrorRecord>,
+}
+
+impl WorkflowCommandErrorRecords {
+    pub fn from_records(records: impl IntoIterator<Item = WorkflowCommandErrorRecord>) -> Self {
+        Self {
+            records: records.into_iter().collect(),
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[WorkflowCommandErrorRecord] {
+        &self.records
+    }
+}
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct WorkflowOwnedDefinitionKind(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct WorkflowOwnedDefinitionName(String);
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowOwnedDefinitionRecord {
+    source_slice: WorkflowTransitionEndpoint,
+    definition_kind: WorkflowOwnedDefinitionKind,
+    definition_name: WorkflowOwnedDefinitionName,
+}
+
+impl WorkflowOwnedDefinitionRecord {
+    pub fn new(
+        source_slice: WorkflowTransitionEndpoint,
+        definition_kind: WorkflowOwnedDefinitionKind,
+        definition_name: WorkflowOwnedDefinitionName,
+    ) -> Self {
+        Self {
+            source_slice,
+            definition_kind,
+            definition_name,
+        }
+    }
+
+    pub fn source_slice(&self) -> &WorkflowTransitionEndpoint {
+        &self.source_slice
+    }
+
+    pub fn definition_kind(&self) -> &WorkflowOwnedDefinitionKind {
+        &self.definition_kind
+    }
+
+    pub fn definition_name(&self) -> &WorkflowOwnedDefinitionName {
+        &self.definition_name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowOwnedDefinitionRecords {
+    records: Vec<WorkflowOwnedDefinitionRecord>,
+}
+
+impl WorkflowOwnedDefinitionRecords {
+    pub fn from_records(records: impl IntoIterator<Item = WorkflowOwnedDefinitionRecord>) -> Self {
+        Self {
+            records: records.into_iter().collect(),
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[WorkflowOwnedDefinitionRecord] {
+        &self.records
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowTransitionEvidenceRecord {
+    source: WorkflowTransitionEndpoint,
+    target: WorkflowTransitionEndpoint,
+    kind: WorkflowTransitionKind,
+    trigger: TransitionTriggerName,
+    source_evidence: WorkflowTransitionEvidenceText,
+    target_evidence: WorkflowTransitionEvidenceText,
+}
+
+impl WorkflowTransitionEvidenceRecord {
+    pub fn new(
+        source: WorkflowTransitionEndpoint,
+        target: WorkflowTransitionEndpoint,
+        kind: WorkflowTransitionKind,
+        trigger: TransitionTriggerName,
+        source_evidence: WorkflowTransitionEvidenceText,
+        target_evidence: WorkflowTransitionEvidenceText,
+    ) -> Self {
+        Self {
+            source,
+            target,
+            kind,
+            trigger,
+            source_evidence,
+            target_evidence,
+        }
+    }
+
+    pub fn source(&self) -> &WorkflowTransitionEndpoint {
         &self.source
     }
 
-    pub fn target(&self) -> &WorkflowStepName {
+    pub fn target(&self) -> &WorkflowTransitionEndpoint {
         &self.target
     }
 
@@ -356,182 +651,156 @@ impl WorkflowTransitionDetail {
         &self.kind
     }
 
-    pub fn label(&self) -> &WorkflowTransitionLabel {
-        &self.label
+    pub fn trigger(&self) -> &TransitionTriggerName {
+        &self.trigger
+    }
+
+    pub fn source_evidence(&self) -> &WorkflowTransitionEvidenceText {
+        &self.source_evidence
+    }
+
+    pub fn target_evidence(&self) -> &WorkflowTransitionEvidenceText {
+        &self.target_evidence
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct WorkflowReviewOverlayDetail {
-    step: WorkflowStepName,
-    status: ReviewStatus,
-    missing_rule: ReviewRuleName,
+pub struct WorkflowTransitionEvidenceRecords {
+    records: Vec<WorkflowTransitionEvidenceRecord>,
 }
 
-impl WorkflowReviewOverlayDetail {
-    pub fn new(step: WorkflowStepName, status: ReviewStatus, missing_rule: ReviewRuleName) -> Self {
-        Self {
-            step,
-            status,
-            missing_rule,
-        }
-    }
-
-    pub fn step(&self) -> &WorkflowStepName {
-        &self.step
-    }
-
-    pub fn status(&self) -> &ReviewStatus {
-        &self.status
-    }
-
-    pub fn missing_rule(&self) -> &ReviewRuleName {
-        &self.missing_rule
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct BrowserErrorRecoveryDetail {
-    name: CommandErrorName,
-    source_screen: ViewName,
-}
-
-impl BrowserErrorRecoveryDetail {
-    pub fn new(name: CommandErrorName, source_screen: ViewName) -> Self {
-        Self {
-            name,
-            source_screen,
-        }
-    }
-
-    pub fn name(&self) -> &CommandErrorName {
-        &self.name
-    }
-
-    pub fn source_screen(&self) -> &ViewName {
-        &self.source_screen
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct BrowserCommandDefinitionDetail {
-    name: CommandName,
-    owning_slice: SliceName,
-    source_controls: Vec<SourceControlReference>,
-    section_labels: Vec<DefinitionSectionLabel>,
-}
-
-impl BrowserCommandDefinitionDetail {
-    pub(crate) fn new(
-        name: CommandName,
-        owning_slice: SliceName,
-        source_controls: Vec<SourceControlReference>,
-        section_labels: Vec<DefinitionSectionLabel>,
+impl WorkflowTransitionEvidenceRecords {
+    pub fn from_records(
+        records: impl IntoIterator<Item = WorkflowTransitionEvidenceRecord>,
     ) -> Self {
         Self {
-            name,
-            owning_slice,
-            source_controls,
-            section_labels,
+            records: records.into_iter().collect(),
         }
     }
 
-    pub fn name(&self) -> &CommandName {
-        &self.name
+    pub(crate) fn as_slice(&self) -> &[WorkflowTransitionEvidenceRecord] {
+        &self.records
     }
+}
 
-    pub fn owning_slice(&self) -> &SliceName {
-        &self.owning_slice
-    }
-
-    pub(crate) fn source_controls(&self) -> &[SourceControlReference] {
-        &self.source_controls
-    }
-
-    pub(crate) fn section_labels(&self) -> &[DefinitionSectionLabel] {
-        &self.section_labels
+impl Default for WorkflowTransitionEvidenceRecords {
+    fn default() -> Self {
+        Self::from_records([])
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct BrowserViewDefinitionDetail {
-    name: ViewName,
-    field_source_chains: Vec<BrowserFieldSourceChainDetail>,
-    control_effects: Vec<BrowserControlEffectDetail>,
+pub struct WorkflowModuleData {
+    workflow_name: ModelName,
+    workflow_description: ModelDescription,
+    workflow_slug: WorkflowSlug,
+    workflow_slice_details: WorkflowSliceDetails,
+    workflow_transitions: WorkflowTransitionRecords,
+    workflow_outcomes: WorkflowOutcomeRecords,
+    workflow_command_errors: WorkflowCommandErrorRecords,
+    workflow_owned_definitions: WorkflowOwnedDefinitionRecords,
+    workflow_transition_evidences: WorkflowTransitionEvidenceRecords,
+    digest: ArtifactDigest,
 }
 
-impl BrowserViewDefinitionDetail {
-    pub(crate) fn new(
-        name: ViewName,
-        field_source_chains: Vec<BrowserFieldSourceChainDetail>,
-        control_effects: Vec<BrowserControlEffectDetail>,
+impl WorkflowModuleData {
+    pub fn new(
+        workflow_name: ModelName,
+        workflow_description: ModelDescription,
+        workflow_slug: WorkflowSlug,
+        digest: ArtifactDigest,
     ) -> Self {
         Self {
-            name,
-            field_source_chains,
-            control_effects,
+            workflow_name,
+            workflow_description,
+            workflow_slug,
+            workflow_slice_details: WorkflowSliceDetails::from_details([]),
+            workflow_transitions: WorkflowTransitionRecords::from_records([]),
+            workflow_outcomes: WorkflowOutcomeRecords::from_records([]),
+            workflow_command_errors: WorkflowCommandErrorRecords::from_records([]),
+            workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
+            workflow_transition_evidences: WorkflowTransitionEvidenceRecords::from_records([]),
+            digest,
         }
     }
 
-    pub fn name(&self) -> &ViewName {
-        &self.name
+    pub fn with_slice_details(mut self, workflow_slice_details: WorkflowSliceDetails) -> Self {
+        self.workflow_slice_details = workflow_slice_details;
+        self
     }
 
-    pub(crate) fn field_source_chains(&self) -> &[BrowserFieldSourceChainDetail] {
-        &self.field_source_chains
+    pub fn with_transitions(mut self, workflow_transitions: WorkflowTransitionRecords) -> Self {
+        self.workflow_transitions = workflow_transitions;
+        self
     }
 
-    pub(crate) fn control_effects(&self) -> &[BrowserControlEffectDetail] {
-        &self.control_effects
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct BrowserFieldSourceChainDetail {
-    field: ViewFieldName,
-    hops: Vec<SourceChainHop>,
-}
-
-impl BrowserFieldSourceChainDetail {
-    pub(crate) fn new(field: ViewFieldName, hops: Vec<SourceChainHop>) -> Self {
-        Self { field, hops }
+    pub fn with_outcomes(mut self, workflow_outcomes: WorkflowOutcomeRecords) -> Self {
+        self.workflow_outcomes = workflow_outcomes;
+        self
     }
 
-    pub fn field(&self) -> &ViewFieldName {
-        &self.field
+    pub fn with_command_errors(
+        mut self,
+        workflow_command_errors: WorkflowCommandErrorRecords,
+    ) -> Self {
+        self.workflow_command_errors = workflow_command_errors;
+        self
     }
 
-    pub(crate) fn hops(&self) -> &[SourceChainHop] {
-        &self.hops
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct BrowserControlEffectDetail {
-    label: ControlLabel,
-    kind: ControlEffectKind,
-    target: ControlEffectTarget,
-}
-
-impl BrowserControlEffectDetail {
-    pub fn new(label: ControlLabel, kind: ControlEffectKind, target: ControlEffectTarget) -> Self {
-        Self {
-            label,
-            kind,
-            target,
-        }
+    pub fn with_owned_definitions(
+        mut self,
+        workflow_owned_definitions: WorkflowOwnedDefinitionRecords,
+    ) -> Self {
+        self.workflow_owned_definitions = workflow_owned_definitions;
+        self
     }
 
-    pub fn label(&self) -> &ControlLabel {
-        &self.label
+    pub fn with_transition_evidences(
+        mut self,
+        workflow_transition_evidences: WorkflowTransitionEvidenceRecords,
+    ) -> Self {
+        self.workflow_transition_evidences = workflow_transition_evidences;
+        self
     }
 
-    pub fn kind(&self) -> &ControlEffectKind {
-        &self.kind
+    pub fn workflow_name(&self) -> &ModelName {
+        &self.workflow_name
     }
 
-    pub fn target(&self) -> &ControlEffectTarget {
-        &self.target
+    pub fn workflow_description(&self) -> &ModelDescription {
+        &self.workflow_description
+    }
+
+    pub fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn workflow_slice_details(&self) -> &WorkflowSliceDetails {
+        &self.workflow_slice_details
+    }
+
+    pub(crate) fn workflow_transitions(&self) -> &WorkflowTransitionRecords {
+        &self.workflow_transitions
+    }
+
+    pub(crate) fn workflow_outcomes(&self) -> &WorkflowOutcomeRecords {
+        &self.workflow_outcomes
+    }
+
+    pub(crate) fn workflow_command_errors(&self) -> &WorkflowCommandErrorRecords {
+        &self.workflow_command_errors
+    }
+
+    pub(crate) fn workflow_owned_definitions(&self) -> &WorkflowOwnedDefinitionRecords {
+        &self.workflow_owned_definitions
+    }
+
+    pub(crate) fn workflow_transition_evidences(&self) -> &WorkflowTransitionEvidenceRecords {
+        &self.workflow_transition_evidences
+    }
+
+    pub fn digest(&self) -> &ArtifactDigest {
+        &self.digest
     }
 }
 
@@ -606,6 +875,174 @@ pub struct ReviewTimestamp(String);
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
 pub struct CommandName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct CommandErrorName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct CommandErrorRecoveryKind(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct SingletonRepeatBehavior(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct AutomationName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct AutomationTriggerName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct AutomationReactionDescription(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ControlName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ControlRecoveryBehavior(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct NavigationTargetType(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct NavigationTargetName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct CommandInputSourceKind(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct CommandInputSourceDescription(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct EventName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct StreamName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct EventAttributeName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct EventAttributeSourceKind(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct EventAttributeSourceName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct EventAttributeSourceField(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ProvenanceDescription(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ReadModelName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ReadModelFieldSourceKind(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ViewName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct ViewFieldSourceKind(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct SketchToken(String);
 
 #[nutype(
     sanitize(trim),

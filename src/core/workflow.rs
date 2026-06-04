@@ -1,16 +1,19 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
-use crate::core::digest::artifact_digest;
-use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
+use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest};
+use crate::core::effect::{Effect, EffectPlan, ProjectPath, ReportLine};
 use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
+use crate::core::formal_graph::FormalWorkflowGraph;
 use crate::core::layout::{ModeledWorkflowLayout, ModeledWorkflowLayouts};
 use crate::core::types::{
-    LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowSliceDetail,
-    WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionRecord, WorkflowTransitionRecords,
+    LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowCommandErrorRecord,
+    WorkflowCommandErrorRecords, WorkflowModuleData, WorkflowOutcomeRecord, WorkflowOutcomeRecords,
+    WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
+    WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionEvidenceRecords, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
-use crate::core::workflow_document::{WorkflowDocument, workflow_path};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NewWorkflow {
@@ -30,37 +33,37 @@ impl NewWorkflow {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct IndexedWorkflowDocument {
+pub struct IndexedWorkflowGraph {
     slug: WorkflowSlug,
-    contents: FileContents,
+    graph: FormalWorkflowGraph,
 }
 
-impl IndexedWorkflowDocument {
-    pub fn new(slug: WorkflowSlug, contents: FileContents) -> Self {
-        Self { slug, contents }
+impl IndexedWorkflowGraph {
+    pub fn new(slug: WorkflowSlug, graph: FormalWorkflowGraph) -> Self {
+        Self { slug, graph }
     }
 
     pub fn slug(&self) -> &WorkflowSlug {
         &self.slug
     }
 
-    pub fn contents(&self) -> &FileContents {
-        &self.contents
+    pub fn graph(&self) -> &FormalWorkflowGraph {
+        &self.graph
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct IndexedWorkflowDocuments {
-    documents: Vec<IndexedWorkflowDocument>,
+pub struct IndexedWorkflowGraphs {
+    graphs: Vec<IndexedWorkflowGraph>,
 }
 
-impl IndexedWorkflowDocuments {
-    pub(crate) fn new(documents: Vec<IndexedWorkflowDocument>) -> Self {
-        Self { documents }
+impl IndexedWorkflowGraphs {
+    pub(crate) fn new(graphs: Vec<IndexedWorkflowGraph>) -> Self {
+        Self { graphs }
     }
 
-    fn as_slice(&self) -> &[IndexedWorkflowDocument] {
-        &self.documents
+    fn as_slice(&self) -> &[IndexedWorkflowGraph] {
+        &self.graphs
     }
 }
 
@@ -78,7 +81,7 @@ pub fn add_workflow(
 
 pub fn update_workflow_description(
     existing_workflows: ModeledWorkflowLayouts,
-    workflow_document: FileContents,
+    workflow_graph: FormalWorkflowGraph,
     slug: WorkflowSlug,
     description: ModelDescription,
 ) -> Result<EffectPlan, WorkflowMutationError> {
@@ -88,44 +91,39 @@ pub fn update_workflow_description(
         .find(|existing| existing.slug() == &slug)
         .cloned()
         .ok_or_else(|| WorkflowMutationError::new(format!("unknown workflow {}", slug.as_ref())))?;
-    let workflow_document = WorkflowDocument::parse(&workflow_document)
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
-    let workflow_name = workflow_document
-        .name()
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    let workflow_name = workflow_graph.name().clone();
     if workflow_name != *existing_workflow.name() {
         return Err(WorkflowMutationError::new(format!(
-            "workflow document name '{}' does not match index name '{}'",
+            "workflow graph name '{}' does not match index name '{}'",
             workflow_name.as_ref(),
             existing_workflow.name().as_ref()
         )));
     }
-    let workflow_document = workflow_document
-        .with_description(&description)
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
-    let workflow_json = workflow_document
-        .contents()
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
-    let workflow_slice_details = workflow_document
-        .slice_details()
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
-    let workflow_transitions = workflow_document
-        .transitions()
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    let workflow_slice_details = workflow_graph.slice_details().as_slice().to_owned();
+    let workflow_transitions = workflow_graph.transitions().as_slice().to_owned();
+    let workflow_outcomes = workflow_graph.outcomes().as_slice().to_owned();
+    let workflow_command_errors = workflow_graph.command_errors().as_slice().to_owned();
+    let workflow_owned_definitions = workflow_graph.owned_definitions().as_slice().to_owned();
+    let workflow_transition_evidences = workflow_graph.transition_evidences().as_slice().to_owned();
 
     Ok(update_workflow_effect_plan(
         existing_workflows.into_inner(),
         NewWorkflow::new(workflow_name, description, slug),
-        workflow_json,
-        workflow_slice_details,
-        workflow_transitions,
+        WorkflowUpdateArtifacts {
+            slice_details: workflow_slice_details,
+            transitions: workflow_transitions,
+            outcomes: workflow_outcomes,
+            command_errors: workflow_command_errors,
+            owned_definitions: workflow_owned_definitions,
+            transition_evidences: workflow_transition_evidences,
+        },
         None,
     ))
 }
 
 pub fn update_workflow_name(
     existing_workflows: ModeledWorkflowLayouts,
-    workflow_document: FileContents,
+    workflow_graph: FormalWorkflowGraph,
     slug: WorkflowSlug,
     name: ModelName,
 ) -> Result<EffectPlan, WorkflowMutationError> {
@@ -142,55 +140,48 @@ pub fn update_workflow_name(
     );
     reject_workflow_module_collision(existing_workflows.as_slice(), &updated_workflow)?;
 
-    let workflow_document = WorkflowDocument::parse(&workflow_document)
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
-    let workflow_name = workflow_document
-        .name()
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    let workflow_name = workflow_graph.name().clone();
     if workflow_name != *existing_workflow.name() {
         return Err(WorkflowMutationError::new(format!(
-            "workflow document name '{}' does not match index name '{}'",
+            "workflow graph name '{}' does not match index name '{}'",
             workflow_name.as_ref(),
             existing_workflow.name().as_ref()
         )));
     }
-    let workflow_description = workflow_document
-        .description()
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    let workflow_description = workflow_graph.description().clone();
     if workflow_description != *existing_workflow.description() {
         return Err(WorkflowMutationError::new(format!(
-            "workflow document description '{}' does not match index description '{}'",
+            "workflow graph description '{}' does not match index description '{}'",
             workflow_description.as_ref(),
             existing_workflow.description().as_ref()
         )));
     }
 
-    let workflow_document = workflow_document
-        .with_name(&name)
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
-    let workflow_json = workflow_document
-        .contents()
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
-    let workflow_slice_details = workflow_document
-        .slice_details()
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
-    let workflow_transitions = workflow_document
-        .transitions()
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    let workflow_slice_details = workflow_graph.slice_details().as_slice().to_owned();
+    let workflow_transitions = workflow_graph.transitions().as_slice().to_owned();
+    let workflow_outcomes = workflow_graph.outcomes().as_slice().to_owned();
+    let workflow_command_errors = workflow_graph.command_errors().as_slice().to_owned();
+    let workflow_owned_definitions = workflow_graph.owned_definitions().as_slice().to_owned();
+    let workflow_transition_evidences = workflow_graph.transition_evidences().as_slice().to_owned();
 
     Ok(update_workflow_effect_plan(
         existing_workflows.into_inner(),
         updated_workflow,
-        workflow_json,
-        workflow_slice_details,
-        workflow_transitions,
+        WorkflowUpdateArtifacts {
+            slice_details: workflow_slice_details,
+            transitions: workflow_transitions,
+            outcomes: workflow_outcomes,
+            command_errors: workflow_command_errors,
+            owned_definitions: workflow_owned_definitions,
+            transition_evidences: workflow_transition_evidences,
+        },
         Some(module_name(existing_workflow.name().as_ref())),
     ))
 }
 
 pub fn remove_workflow(
     existing_workflows: ModeledWorkflowLayouts,
-    workflow_documents: IndexedWorkflowDocuments,
+    workflow_graphs: IndexedWorkflowGraphs,
     slug: WorkflowSlug,
 ) -> Result<EffectPlan, WorkflowMutationError> {
     let removed_workflow = existing_workflows
@@ -199,37 +190,24 @@ pub fn remove_workflow(
         .find(|existing| existing.slug() == &slug)
         .cloned()
         .ok_or_else(|| WorkflowMutationError::new(format!("unknown workflow {}", slug.as_ref())))?;
-    reject_incoming_workflow_references(workflow_documents.as_slice(), &slug)?;
-    let workflow_document = workflow_documents
+    reject_incoming_workflow_references(workflow_graphs.as_slice(), &slug)?;
+    let workflow_graph = workflow_graphs
         .as_slice()
         .iter()
-        .find(|document| document.slug() == &slug)
+        .find(|graph| graph.slug() == &slug)
         .ok_or_else(|| {
-            WorkflowMutationError::new(format!("workflow {} document is missing", slug.as_ref()))
-        })
-        .and_then(|document| {
-            WorkflowDocument::parse(document.contents())
-                .map_err(|error| WorkflowMutationError::new(error.to_string()))
+            WorkflowMutationError::new(format!("workflow {} graph is missing", slug.as_ref()))
         })?;
-    let workflow_name = workflow_document
-        .name()
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    let workflow_name = workflow_graph.graph().name().clone();
     if workflow_name != *removed_workflow.name() {
         return Err(WorkflowMutationError::new(format!(
-            "workflow document name '{}' does not match index name '{}'",
+            "workflow graph name '{}' does not match index name '{}'",
             workflow_name.as_ref(),
             removed_workflow.name().as_ref()
         )));
     }
 
-    let remaining_workflows = existing_workflows
-        .into_inner()
-        .into_iter()
-        .filter(|existing| existing.slug() != &slug)
-        .collect::<Vec<_>>();
-    let removed_slice_details = workflow_document
-        .slice_details()
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
+    let removed_slice_details = workflow_graph.graph().slice_details().as_slice().to_owned();
     let workflow_module_name = module_name(removed_workflow.name().as_ref());
     let workflow_name = removed_workflow.name().as_ref().to_owned();
 
@@ -237,11 +215,6 @@ pub fn remove_workflow(
         .into_iter()
         .flat_map(remove_slice_artifact_effects);
     let effects = [
-        Effect::WriteFile(
-            project_path("model/browser/data/index.json"),
-            file_contents(browser_index(remaining_workflows)),
-        ),
-        Effect::RemoveFile(workflow_path(&slug)),
         Effect::RemoveFile(project_path(format!(
             "model/lean/{workflow_module_name}.lean"
         ))),
@@ -281,68 +254,47 @@ impl Display for WorkflowMutationError {
 impl Error for WorkflowMutationError {}
 
 fn workflow_effect_plan(
-    existing_workflows: Vec<ModeledWorkflowLayout>,
+    _existing_workflows: Vec<ModeledWorkflowLayout>,
     workflow: NewWorkflow,
 ) -> EffectPlan {
     let workflow_name = workflow.name.as_ref();
-    let workflow_description = workflow.description.as_ref();
     let module_name = module_name(workflow.name.as_ref());
     let lean_module_name = lean_module_name(module_name.clone());
     let quint_module_name = quint_module_name(module_name.clone());
-    let digest = artifact_digest(
-        workflow.name.clone(),
-        workflow.slug.clone(),
-        workflow.description.clone(),
-        WorkflowSliceDetails::from_details([]),
-        WorkflowTransitionRecords::from_records([]),
-    );
-    let workflow_layout = ModeledWorkflowLayout::new(
-        workflow.name.clone(),
-        workflow.description.clone(),
-        workflow.slug.clone(),
-    );
-    let added_slug = workflow.slug.clone();
-    let workflows = existing_workflows
-        .into_iter()
-        .filter(|existing| existing.slug() != &added_slug)
-        .chain([workflow_layout])
-        .collect::<Vec<_>>();
-
+    let digest = artifact_digest(WorkflowArtifactDigestInput {
+        workflow_name: workflow.name.clone(),
+        workflow_slug: workflow.slug.clone(),
+        workflow_description: workflow.description.clone(),
+        workflow_slice_details: WorkflowSliceDetails::from_details([]),
+        workflow_transitions: WorkflowTransitionRecords::from_records([]),
+        workflow_outcomes: WorkflowOutcomeRecords::from_records([]),
+        workflow_command_errors: WorkflowCommandErrorRecords::from_records([]),
+        workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
+        workflow_transition_evidences: Default::default(),
+    });
     EffectPlan::new(vec![
-        Effect::WriteFile(
-            workflow_path(&workflow.slug),
-            file_contents(format!(
-                "{{\n  \"name\": {},\n  \"version\": \"0.1.0\",\n  \"description\": {},\n  \"board\": {{}},\n  \"streams\": [],\n  \"events\": [],\n  \"commands\": [],\n  \"read_models\": [],\n  \"slices\": [],\n  \"slice_files\": [],\n  \"steps\": []\n}}\n",
-                json_string(workflow_name),
-                json_string(workflow_description)
-            )),
-        ),
-        Effect::WriteFile(
-            project_path("model/browser/data/index.json"),
-            file_contents(browser_index(workflows)),
-        ),
         Effect::WriteFile(
             project_path(format!("model/lean/{module_name}.lean")),
             emit_lean_workflow_module(
                 lean_module_name,
-                workflow.name.clone(),
-                workflow.description.clone(),
-                workflow.slug.clone(),
-                WorkflowSliceDetails::from_details([]),
-                WorkflowTransitionRecords::from_records([]),
-                digest.clone(),
+                WorkflowModuleData::new(
+                    workflow.name.clone(),
+                    workflow.description.clone(),
+                    workflow.slug.clone(),
+                    digest.clone(),
+                ),
             ),
         ),
         Effect::WriteFile(
             project_path(format!("model/quint/{module_name}.qnt")),
             emit_quint_workflow_module(
                 quint_module_name,
-                workflow.name.clone(),
-                workflow.description.clone(),
-                workflow.slug.clone(),
-                WorkflowSliceDetails::from_details([]),
-                WorkflowTransitionRecords::from_records([]),
-                digest,
+                WorkflowModuleData::new(
+                    workflow.name.clone(),
+                    workflow.description.clone(),
+                    workflow.slug.clone(),
+                    digest,
+                ),
             ),
         ),
         Effect::Report(report_line(format!("added workflow {workflow_name}"))),
@@ -350,13 +302,13 @@ fn workflow_effect_plan(
 }
 
 fn reject_incoming_workflow_references(
-    workflow_documents: &[IndexedWorkflowDocument],
+    workflow_graphs: &[IndexedWorkflowGraph],
     removed_slug: &WorkflowSlug,
 ) -> Result<(), WorkflowMutationError> {
-    workflow_documents
+    workflow_graphs
         .iter()
-        .filter(|document| document.slug() != removed_slug)
-        .find_map(|document| incoming_workflow_reference(document, removed_slug).transpose())
+        .filter(|graph| graph.slug() != removed_slug)
+        .find_map(|graph| incoming_workflow_reference(graph, removed_slug))
         .transpose()
         .map(|reference| {
             reference.map_or(Ok(()), |referencing_slug| {
@@ -370,32 +322,24 @@ fn reject_incoming_workflow_references(
 }
 
 fn incoming_workflow_reference(
-    document: &IndexedWorkflowDocument,
+    graph: &IndexedWorkflowGraph,
     removed_slug: &WorkflowSlug,
-) -> Result<Option<WorkflowSlug>, WorkflowMutationError> {
-    let workflow_document = WorkflowDocument::parse(document.contents())
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))?;
-    workflow_document
+) -> Option<Result<WorkflowSlug, WorkflowMutationError>> {
+    graph
+        .graph()
         .transitions()
-        .map_err(|error| WorkflowMutationError::new(error.to_string()))
-        .map(|transitions| {
-            transitions
-                .into_iter()
-                .any(|transition| {
-                    transition.kind().as_ref().starts_with("workflow_exit:")
-                        && transition.target().as_ref() == removed_slug.as_ref()
-                })
-                .then(|| document.slug().clone())
+        .as_slice()
+        .iter()
+        .any(|transition| {
+            transition.kind().as_ref().starts_with("workflow_exit:")
+                && transition.target().as_ref() == removed_slug.as_ref()
         })
+        .then(|| Ok(graph.slug().clone()))
 }
 
-fn remove_slice_artifact_effects(slice: WorkflowSliceDetail) -> [Effect; 3] {
-    let slice_slug = slice.slug().as_ref();
+fn remove_slice_artifact_effects(slice: WorkflowSliceDetail) -> [Effect; 2] {
     let module_name = module_name(slice.name().as_ref());
     [
-        Effect::RemoveFile(project_path(format!(
-            "model/browser/data/slices/{slice_slug}.eventmodel.json"
-        ))),
         Effect::RemoveFile(project_path(format!(
             "model/lean/slices/{module_name}.lean"
         ))),
@@ -405,37 +349,44 @@ fn remove_slice_artifact_effects(slice: WorkflowSliceDetail) -> [Effect; 3] {
     ]
 }
 
+struct WorkflowUpdateArtifacts {
+    slice_details: Vec<WorkflowSliceDetail>,
+    transitions: Vec<WorkflowTransitionRecord>,
+    outcomes: Vec<WorkflowOutcomeRecord>,
+    command_errors: Vec<WorkflowCommandErrorRecord>,
+    owned_definitions: Vec<WorkflowOwnedDefinitionRecord>,
+    transition_evidences: Vec<WorkflowTransitionEvidenceRecord>,
+}
+
 fn update_workflow_effect_plan(
-    existing_workflows: Vec<ModeledWorkflowLayout>,
+    _existing_workflows: Vec<ModeledWorkflowLayout>,
     workflow: NewWorkflow,
-    workflow_json: FileContents,
-    workflow_slice_details: Vec<WorkflowSliceDetail>,
-    workflow_transitions: Vec<WorkflowTransitionRecord>,
+    artifacts: WorkflowUpdateArtifacts,
     previous_module_name: Option<String>,
 ) -> EffectPlan {
     let workflow_name = workflow.name.as_ref();
     let module_name = module_name(workflow.name.as_ref());
     let lean_module_name = lean_module_name(module_name.clone());
     let quint_module_name = quint_module_name(module_name.clone());
-    let digest = artifact_digest(
-        workflow.name.clone(),
-        workflow.slug.clone(),
-        workflow.description.clone(),
-        WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
-        WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
-    );
-    let workflow_layout = ModeledWorkflowLayout::new(
-        workflow.name.clone(),
-        workflow.description.clone(),
-        workflow.slug.clone(),
-    );
-    let updated_slug = workflow.slug.clone();
-    let workflows = existing_workflows
-        .into_iter()
-        .filter(|existing| existing.slug() != &updated_slug)
-        .chain([workflow_layout])
-        .collect::<Vec<_>>();
-
+    let digest = artifact_digest(WorkflowArtifactDigestInput {
+        workflow_name: workflow.name.clone(),
+        workflow_slug: workflow.slug.clone(),
+        workflow_description: workflow.description.clone(),
+        workflow_slice_details: WorkflowSliceDetails::from_details(artifacts.slice_details.clone()),
+        workflow_transitions: WorkflowTransitionRecords::from_records(
+            artifacts.transitions.clone(),
+        ),
+        workflow_outcomes: WorkflowOutcomeRecords::from_records(artifacts.outcomes.clone()),
+        workflow_command_errors: WorkflowCommandErrorRecords::from_records(
+            artifacts.command_errors.clone(),
+        ),
+        workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records(
+            artifacts.owned_definitions.clone(),
+        ),
+        workflow_transition_evidences: WorkflowTransitionEvidenceRecords::from_records(
+            artifacts.transition_evidences.clone(),
+        ),
+    });
     let cleanup_effects = previous_module_name
         .filter(|previous_module_name| previous_module_name != &module_name)
         .into_iter()
@@ -453,33 +404,66 @@ fn update_workflow_effect_plan(
     EffectPlan::new(
         cleanup_effects
             .chain([
-                Effect::WriteFile(workflow_path(&workflow.slug), workflow_json),
-                Effect::WriteFile(
-                    project_path("model/browser/data/index.json"),
-                    file_contents(browser_index(workflows)),
-                ),
                 Effect::WriteFile(
                     project_path(format!("model/lean/{module_name}.lean")),
                     emit_lean_workflow_module(
                         lean_module_name,
-                        workflow.name.clone(),
-                        workflow.description.clone(),
-                        workflow.slug.clone(),
-                        WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
-                        WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
-                        digest.clone(),
+                        WorkflowModuleData::new(
+                            workflow.name.clone(),
+                            workflow.description.clone(),
+                            workflow.slug.clone(),
+                            digest.clone(),
+                        )
+                        .with_slice_details(WorkflowSliceDetails::from_details(
+                            artifacts.slice_details.clone(),
+                        ))
+                        .with_transitions(WorkflowTransitionRecords::from_records(
+                            artifacts.transitions.clone(),
+                        ))
+                        .with_outcomes(WorkflowOutcomeRecords::from_records(
+                            artifacts.outcomes.clone(),
+                        ))
+                        .with_command_errors(WorkflowCommandErrorRecords::from_records(
+                            artifacts.command_errors.clone(),
+                        ))
+                        .with_owned_definitions(WorkflowOwnedDefinitionRecords::from_records(
+                            artifacts.owned_definitions.clone(),
+                        ))
+                        .with_transition_evidences(
+                            WorkflowTransitionEvidenceRecords::from_records(
+                                artifacts.transition_evidences.clone(),
+                            ),
+                        ),
                     ),
                 ),
                 Effect::WriteFile(
                     project_path(format!("model/quint/{module_name}.qnt")),
                     emit_quint_workflow_module(
                         quint_module_name,
-                        workflow.name.clone(),
-                        workflow.description.clone(),
-                        workflow.slug.clone(),
-                        WorkflowSliceDetails::from_details(workflow_slice_details),
-                        WorkflowTransitionRecords::from_records(workflow_transitions),
-                        digest,
+                        WorkflowModuleData::new(
+                            workflow.name.clone(),
+                            workflow.description.clone(),
+                            workflow.slug.clone(),
+                            digest,
+                        )
+                        .with_slice_details(WorkflowSliceDetails::from_details(
+                            artifacts.slice_details,
+                        ))
+                        .with_transitions(WorkflowTransitionRecords::from_records(
+                            artifacts.transitions,
+                        ))
+                        .with_outcomes(WorkflowOutcomeRecords::from_records(artifacts.outcomes))
+                        .with_command_errors(WorkflowCommandErrorRecords::from_records(
+                            artifacts.command_errors,
+                        ))
+                        .with_owned_definitions(WorkflowOwnedDefinitionRecords::from_records(
+                            artifacts.owned_definitions,
+                        ))
+                        .with_transition_evidences(
+                            WorkflowTransitionEvidenceRecords::from_records(
+                                artifacts.transition_evidences,
+                            ),
+                        ),
                     ),
                 ),
                 Effect::Report(report_line(format!("updated workflow {workflow_name}"))),
@@ -519,31 +503,6 @@ fn reject_workflow_slug_collision(
         })
 }
 
-fn browser_index(mut workflows: Vec<ModeledWorkflowLayout>) -> String {
-    workflows.sort_by(|left, right| left.slug().as_ref().cmp(right.slug().as_ref()));
-    let entries = workflows
-        .iter()
-        .map(workflow_index_entry)
-        .collect::<Vec<_>>()
-        .join(",\n");
-    if entries.is_empty() {
-        "{\n  \"generated_at\": \"1970-01-01T00:00:00.000Z\",\n  \"workflows\": []\n}\n".to_owned()
-    } else {
-        format!(
-            "{{\n  \"generated_at\": \"1970-01-01T00:00:00.000Z\",\n  \"workflows\": [\n{entries}\n  ]\n}}\n"
-        )
-    }
-}
-
-fn workflow_index_entry(workflow: &ModeledWorkflowLayout) -> String {
-    format!(
-        "    {{\n      \"name\": {},\n      \"path\": \"data/workflows/{}.eventmodel.json\",\n      \"description\": {}\n    }}",
-        json_string(workflow.name().as_ref()),
-        workflow.slug().as_ref(),
-        json_string(workflow.description().as_ref())
-    )
-}
-
 fn module_name(raw: &str) -> String {
     let mut capitalize_next = true;
     raw.chars()
@@ -570,12 +529,6 @@ fn project_path(value: impl Into<String>) -> ProjectPath {
     })
 }
 
-fn file_contents(value: impl Into<String>) -> FileContents {
-    FileContents::try_new(value.into()).unwrap_or_else(|error| {
-        unreachable!("EMC generated file contents must be valid: {error}");
-    })
-}
-
 fn lean_module_name(value: impl Into<String>) -> LeanModuleName {
     LeanModuleName::try_new(value.into()).unwrap_or_else(|error| {
         unreachable!("EMC generated Lean4 module name must be valid: {error}");
@@ -591,11 +544,5 @@ fn quint_module_name(value: impl Into<String>) -> QuintModuleName {
 fn report_line(value: impl Into<String>) -> ReportLine {
     ReportLine::try_new(value.into()).unwrap_or_else(|error| {
         unreachable!("EMC generated report line must be valid: {error}");
-    })
-}
-
-fn json_string(value: &str) -> String {
-    serde_json::to_string(value).unwrap_or_else(|error| {
-        unreachable!("EMC generated JSON string must be valid: {error}");
     })
 }

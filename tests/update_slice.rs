@@ -27,16 +27,6 @@ mod tests {
             .success()
             .stdout(predicate::str::contains("updated slice Capture ticket"));
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
-        let slice_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
-        )?;
         let workflow_lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let workflow_quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
         let slice_lean =
@@ -44,16 +34,6 @@ mod tests {
         let slice_quint =
             read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
 
-        assert!(
-            workflow_json
-                .contains("\"description\": \"Actor enters repair ticket details and priority.\""),
-            "workflow composition must preserve the updated slice description"
-        );
-        assert!(
-            slice_json
-                .contains("\"description\": \"Actor enters repair ticket details and priority.\""),
-            "slice browser data must preserve the updated slice description"
-        );
         assert!(
             workflow_lean.contains(
                 "(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Actor enters repair ticket details and priority.\")"
@@ -106,16 +86,6 @@ mod tests {
             .assert()
             .success();
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
-        let slice_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
-        )?;
         let workflow_lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let workflow_quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
         let slice_lean =
@@ -123,14 +93,6 @@ mod tests {
         let slice_quint =
             read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
 
-        assert!(
-            workflow_json.contains("\"type\": \"automation\""),
-            "workflow composition must preserve the updated slice kind"
-        );
-        assert!(
-            slice_json.contains("\"type\": \"automation\""),
-            "slice browser data must preserve the updated slice kind"
-        );
         assert!(
             workflow_lean.contains(
                 "(\"capture-ticket\", \"Capture ticket\", \"automation\", \"Actor enters repair ticket details.\")"
@@ -180,16 +142,6 @@ mod tests {
             .assert()
             .success();
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
-        let slice_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
-        )?;
         let workflow_lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let workflow_quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
         let slice_lean = read_to_string(
@@ -203,14 +155,6 @@ mod tests {
                 .join("model/quint/slices/CaptureRepairTicket.qnt"),
         )?;
 
-        assert!(
-            workflow_json.contains("\"name\": \"Capture repair ticket\""),
-            "workflow composition must preserve the updated slice name"
-        );
-        assert!(
-            slice_json.contains("\"name\": \"Capture repair ticket\""),
-            "slice browser data must preserve the updated slice name"
-        );
         assert!(
             workflow_lean.contains(
                 "(\"capture-ticket\", \"Capture repair ticket\", \"state_view\", \"Actor enters repair ticket details.\")"
@@ -250,7 +194,7 @@ mod tests {
     }
 
     #[test]
-    fn update_slice_name_preserves_outgoing_navigation_controls() -> Result<(), Box<dyn Error>> {
+    fn update_slice_name_preserves_outgoing_workflow_transitions() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         initialize_project_with_navigation_chain(temp_dir.path())?;
 
@@ -269,33 +213,24 @@ mod tests {
             .stdout(predicate::str::contains("updated slice Clinical triage"));
 
         Command::cargo_bin("emc")?
-            .args([
-                "validate",
-                "model/browser/data/workflows/intake-visit.eventmodel.json",
-            ])
+            .arg("check")
             .current_dir(temp_dir.path())
             .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "event model is valid at model/browser/data/workflows/intake-visit.eventmodel.json",
-            ));
-        Command::cargo_bin("emc")?
-            .args(["validate", "model/browser/data/slices"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "event model is valid at model/browser/data/slices",
-            ));
+            .success();
 
-        let slice_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/triage-intake.eventmodel.json"),
-        )?;
+        let workflow_lean = read_to_string(temp_dir.path().join("model/lean/IntakeVisit.lean"))?;
+        let workflow_quint = read_to_string(temp_dir.path().join("model/quint/IntakeVisit.qnt"))?;
         assert!(
-            slice_json.contains("\"navigation\": \"schedule-visit-screen\""),
-            "slice rename must preserve outgoing navigation controls"
+            workflow_lean.contains(
+                "{ source := \"triage-intake\", target := \"schedule-visit\", kind := \"navigation\", trigger := \"schedule-visit-screen\", rationale := \"\", payloadContract := \"\" }"
+            ),
+            "slice rename must preserve outgoing workflow transitions"
+        );
+        assert!(
+            workflow_quint.contains(
+                "{ source: \"triage-intake\", target: \"schedule-visit\", kind: \"navigation\", trigger: \"schedule-visit-screen\", rationale: \"\", payloadContract: \"\" }"
+            ),
+            "slice rename must preserve outgoing workflow transitions"
         );
 
         Ok(())
@@ -341,24 +276,30 @@ mod tests {
                 "slice module CaptureTicket already exists",
             ));
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
-        let slice_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/review-ticket.eventmodel.json"),
-        )?;
+        let workflow_lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let workflow_quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/ReviewTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/ReviewTicket.qnt"))?;
 
         assert!(
-            workflow_json.contains("\"name\": \"Review ticket\""),
-            "rejected slice rename must not mutate the workflow document"
+            workflow_lean.contains(
+                "(\"review-ticket\", \"Review ticket\", \"state_view\", \"Actor reviews repair ticket details.\")"
+            ),
+            "rejected slice rename must not mutate the workflow Lean artifact"
         );
         assert!(
-            slice_json.contains("\"name\": \"Review ticket\""),
-            "rejected slice rename must not mutate the slice document"
+            workflow_quint.contains("name: \"Review ticket\""),
+            "rejected slice rename must not mutate the workflow Quint artifact"
+        );
+        assert!(
+            slice_lean.contains("def sliceName := \"Review ticket\""),
+            "rejected slice rename must not mutate the slice Lean artifact"
+        );
+        assert!(
+            slice_quint.contains("val sliceName = \"Review ticket\""),
+            "rejected slice rename must not mutate the slice Quint artifact"
         );
 
         Ok(())
@@ -461,22 +402,9 @@ mod tests {
             .assert()
             .success();
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let workflow_lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let workflow_quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
-        assert!(
-            workflow_json.contains("\"slice\": \"capture-ticket\""),
-            "remaining slice must stay in workflow composition"
-        );
-        assert!(
-            !workflow_json.contains("review-ticket"),
-            "removed slice and transitions to it must leave workflow data"
-        );
         assert!(
             workflow_lean.contains("def workflowSlices : List String := [\"capture-ticket\"]"),
             "workflow Lean artifact must keep only remaining slices"
@@ -486,20 +414,12 @@ mod tests {
             "workflow Lean artifact must remove transitions involving the slice"
         );
         assert!(
-            workflow_quint.contains("val workflowSlices = [\"capture-ticket\"]"),
+            workflow_quint.contains("val workflowSlices: List[str] = [\"capture-ticket\"]"),
             "workflow Quint artifact must keep only remaining slices"
         );
         assert!(
-            workflow_quint.contains("val workflowTransitions = []"),
+            workflow_quint.contains("val workflowTransitions: List[WorkflowTransition] = []"),
             "workflow Quint artifact must remove transitions involving the slice"
-        );
-        assert!(
-            !exists(
-                temp_dir
-                    .path()
-                    .join("model/browser/data/slices/review-ticket.eventmodel.json")
-            )?,
-            "removed slice browser data must be deleted"
         );
         assert!(
             !exists(temp_dir.path().join("model/lean/slices/ReviewTicket.lean"))?,
@@ -533,26 +453,15 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
-        Command::cargo_bin("emc")?
-            .args([
-                "validate",
-                "model/browser/data/workflows/intake-visit.eventmodel.json",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/intake-visit.eventmodel.json"),
-        )?;
+        let workflow_lean = read_to_string(temp_dir.path().join("model/lean/IntakeVisit.lean"))?;
+        let workflow_quint = read_to_string(temp_dir.path().join("model/quint/IntakeVisit.qnt"))?;
         assert!(
-            workflow_json.contains("triage-intake-screen"),
+            workflow_lean.contains("triage-intake-screen"),
             "rejected middle slice removal must preserve incoming navigation transitions"
         );
         assert!(
-            workflow_json.contains("schedule-visit-screen"),
+            workflow_quint.contains("schedule-visit-screen"),
             "rejected middle slice removal must preserve outgoing navigation transitions"
         );
 

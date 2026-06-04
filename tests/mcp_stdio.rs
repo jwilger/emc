@@ -31,13 +31,6 @@ mod tests {
         assert!(temp_dir.path().join("emc.toml").is_file());
         assert!(temp_dir.path().join("model/lean/RepairDesk.lean").is_file());
         assert!(temp_dir.path().join("model/quint/RepairDesk.qnt").is_file());
-        assert!(
-            temp_dir
-                .path()
-                .join("model/browser/data/index.json")
-                .is_file()
-        );
-
         Ok(())
     }
 
@@ -90,22 +83,12 @@ mod tests {
             .stdout(predicate::str::contains("\"serverInfo\""))
             .stdout(predicate::str::contains("\"list_workflows\""))
             .stdout(predicate::str::contains("\"show_workflow\""))
-            .stdout(predicate::str::contains("\"generate_site\""))
             .stdout(predicate::str::contains("Open ticket"))
             .stdout(predicate::str::contains("Close ticket"))
-            .stdout(predicate::str::contains("generated site at mcp-site"))
+            .stdout(predicate::str::contains("# model/lean/OpenTicket.lean"))
             .stdout(predicate::str::contains(
-                "\\\"name\\\": \\\"Open ticket\\\"",
+                "def workflowName := \\\"Open ticket\\\"",
             ));
-
-        assert!(temp_dir.path().join("mcp-site/index.html").is_file());
-        assert!(
-            temp_dir
-                .path()
-                .join("mcp-site/assets/index-CTzj-YfP.js")
-                .is_file()
-        );
-        assert!(temp_dir.path().join("mcp-site/data/index.json").is_file());
 
         Ok(())
     }
@@ -316,7 +299,6 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_workflows\",\"arguments\":{}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"show_workflow\",\"arguments\":{\"slug\":\"open-ticket\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"generate_site\",\"arguments\":{\"output\":\"mcp-site\"}}}\n",
         )
     }
 

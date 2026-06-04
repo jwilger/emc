@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-    use std::fs::{read_to_string, write};
+    use std::fs::read_to_string;
     use std::path::Path;
 
     use assert_cmd::Command;
@@ -40,12 +40,14 @@ mod tests {
             "Capture ticket",
             "Actor enters repair ticket details.",
         )?;
+        add_complete_state_view_facts(temp_dir.path(), "capture-ticket")?;
         add_slice(
             temp_dir.path(),
             "review-ticket",
             "Review ticket",
             "Actor reviews repair ticket details.",
         )?;
+        add_complete_state_view_facts(temp_dir.path(), "review-ticket")?;
 
         let initial_lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let initial_digest = digest_marker(&initial_lean)
@@ -73,31 +75,18 @@ mod tests {
                 "connected capture-ticket to review-ticket",
             ));
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
         assert!(
-            workflow_json.contains("\"to\": \"review-ticket\""),
-            "workflow data must include the transition target"
-        );
-        assert!(
-            workflow_json.contains("\"via_navigation\": \"review-ticket-screen\""),
-            "workflow data must include the navigation trigger"
-        );
-        assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]"
             ),
             "Lean artifact must represent the workflow transition"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\", rationale: \"\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\", rationale: \"\", payloadContract: \"\" }]"
             ),
             "Quint artifact must represent the workflow transition"
         );
@@ -111,6 +100,582 @@ mod tests {
             digest_marker(&quint).ok_or("Quint artifact is missing an updated digest")?,
             "Quint digest must change when workflow transitions change"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn add_workflow_outcome_updates_canonical_workflow_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+
+        let initial_digest = digest_marker(&read_to_string(
+            temp_dir.path().join("model/lean/OpenTicket.lean"),
+        )?)
+        .ok_or("Lean artifact is missing its initial digest")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-outcome",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--externally-relevant",
+                "true",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added workflow outcome ticket_captured to workflow open-ticket",
+            ));
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        let updated_digest = digest_marker(&lean).ok_or("Lean artifact is missing digest")?;
+
+        assert!(lean.contains(
+            "def workflowOutcomes : List WorkflowOutcome := [{ sourceSlice := \"capture-ticket\", label := \"ticket_captured\", externallyRelevant := true }]"
+        ));
+        assert!(quint.contains(
+            "val workflowOutcomes: List[WorkflowOutcome] = [{ sourceSlice: \"capture-ticket\", label: \"ticket_captured\", externallyRelevant: true }]"
+        ));
+        assert_ne!(
+            initial_digest, updated_digest,
+            "workflow digest must change when an outcome fact is authored"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn add_workflow_command_error_updates_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+
+        let initial_digest = digest_marker(&read_to_string(
+            temp_dir.path().join("model/lean/OpenTicket.lean"),
+        )?)
+        .ok_or("Lean artifact is missing its initial digest")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-command-error",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--command",
+                "CaptureTicket",
+                "--error",
+                "DuplicateTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added workflow command error DuplicateTicket to workflow open-ticket",
+            ));
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        let updated_digest = digest_marker(&lean).ok_or("Lean artifact is missing digest")?;
+
+        assert!(lean.contains(
+            "def workflowCommandErrors : List WorkflowCommandError := [{ sourceSlice := \"capture-ticket\", commandName := \"CaptureTicket\", errorName := \"DuplicateTicket\" }]"
+        ));
+        assert!(quint.contains(
+            "val workflowCommandErrors: List[WorkflowCommandError] = [{ sourceSlice: \"capture-ticket\", commandName: \"CaptureTicket\", errorName: \"DuplicateTicket\" }]"
+        ));
+        assert_ne!(
+            initial_digest, updated_digest,
+            "workflow digest must change when a command error fact is authored"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn add_workflow_owned_definition_updates_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+
+        let initial_digest = digest_marker(&read_to_string(
+            temp_dir.path().join("model/lean/OpenTicket.lean"),
+        )?)
+        .ok_or("Lean artifact is missing its initial digest")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-owned-definition",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--definition-kind",
+                "command",
+                "--definition-name",
+                "CaptureTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added workflow owned definition command CaptureTicket to workflow open-ticket",
+            ));
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        let updated_digest = digest_marker(&lean).ok_or("Lean artifact is missing digest")?;
+
+        assert!(lean.contains(
+            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"command\", definitionName := \"CaptureTicket\" }]"
+        ));
+        assert!(quint.contains(
+            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"command\", definitionName: \"CaptureTicket\" }]"
+        ));
+        assert_ne!(
+            initial_digest, updated_digest,
+            "workflow digest must change when an owned definition fact is authored"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn add_workflow_transition_evidence_updates_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+        add_complete_state_view_facts(temp_dir.path(), "capture-ticket")?;
+        add_slice(
+            temp_dir.path(),
+            "review-ticket",
+            "Review ticket",
+            "Actor reviews repair ticket details.",
+        )?;
+        add_complete_state_view_facts(temp_dir.path(), "review-ticket")?;
+
+        let initial_digest = digest_marker(&read_to_string(
+            temp_dir.path().join("model/lean/OpenTicket.lean"),
+        )?)
+        .ok_or("Lean artifact is missing its initial digest")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-transition-evidence",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+                "--source-evidence",
+                "capture-ticket view owns the review-ticket-screen navigation control",
+                "--target-evidence",
+                "review-ticket workflow step exposes review-ticket-screen as its entry view",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added workflow transition evidence navigation review-ticket-screen to workflow open-ticket",
+            ));
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        let updated_digest = digest_marker(&lean).ok_or("Lean artifact is missing digest")?;
+
+        assert!(lean.contains(
+            "def workflowTransitionEvidences : List WorkflowTransitionEvidence := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", sourceEvidence := \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence := \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
+        ));
+        assert!(quint.contains(
+            "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
+        ));
+        assert_ne!(
+            initial_digest, updated_digest,
+            "workflow digest must change when transition evidence is authored"
+        );
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        Command::cargo_bin("emc")?
+            .args(["verify"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_accepts_synchronized_formal_workflow_outcome_and_error_facts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-outcome",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--label",
+                "draft_saved",
+                "--externally-relevant",
+                "false",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-command-error",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--command",
+                "CaptureTicket",
+                "--error",
+                "DuplicateTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("project layout is complete"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn workflow_updates_preserve_authored_workflow_facts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+        add_slice(
+            temp_dir.path(),
+            "review-ticket",
+            "Review ticket",
+            "Actor reviews repair ticket details.",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-outcome",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--externally-relevant",
+                "true",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-command-error",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--command",
+                "CaptureTicket",
+                "--error",
+                "DuplicateTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-transition-evidence",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+                "--source-evidence",
+                "capture-ticket view owns the review-ticket-screen navigation control",
+                "--target-evidence",
+                "review-ticket workflow step exposes review-ticket-screen as its entry view",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--description",
+                "Actor opens and reviews a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+
+        assert!(lean.contains(
+            "def workflowOutcomes : List WorkflowOutcome := [{ sourceSlice := \"capture-ticket\", label := \"ticket_captured\", externallyRelevant := true }]"
+        ));
+        assert!(quint.contains(
+            "val workflowOutcomes: List[WorkflowOutcome] = [{ sourceSlice: \"capture-ticket\", label: \"ticket_captured\", externallyRelevant: true }]"
+        ));
+        assert!(lean.contains(
+            "def workflowCommandErrors : List WorkflowCommandError := [{ sourceSlice := \"capture-ticket\", commandName := \"CaptureTicket\", errorName := \"DuplicateTicket\" }]"
+        ));
+        assert!(quint.contains(
+            "val workflowCommandErrors: List[WorkflowCommandError] = [{ sourceSlice: \"capture-ticket\", commandName: \"CaptureTicket\", errorName: \"DuplicateTicket\" }]"
+        ));
+        assert!(lean.contains(
+            "def workflowTransitionEvidences : List WorkflowTransitionEvidence := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", sourceEvidence := \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence := \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
+        ));
+        assert!(quint.contains(
+            "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
+        ));
 
         Ok(())
     }
@@ -204,31 +769,18 @@ mod tests {
                 "connected submit-ticket to review-ticket",
             ));
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
         assert!(
-            workflow_json.contains("\"via_command\": \"SubmitTicketForReview\""),
-            "workflow data must include the command trigger"
-        );
-        assert!(
-            workflow_json.contains("\"via_event\": \"TicketSubmittedForReview\""),
-            "workflow data must include the event trigger"
-        );
-        assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"submit-ticket\", kind := \"command\", trigger := \"SubmitTicketForReview\", rationale := \"\" },{ source := \"submit-ticket\", target := \"review-ticket\", kind := \"event\", trigger := \"TicketSubmittedForReview\", rationale := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"submit-ticket\", kind := \"command\", trigger := \"SubmitTicketForReview\", rationale := \"\", payloadContract := \"\" },{ source := \"submit-ticket\", target := \"review-ticket\", kind := \"event\", trigger := \"TicketSubmittedForReview\", rationale := \"\", payloadContract := \"\" }]"
             ),
             "Lean artifact must represent command and event workflow transitions"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"submit-ticket\", kind: \"command\", trigger: \"SubmitTicketForReview\", rationale: \"\" },{ source: \"submit-ticket\", target: \"review-ticket\", kind: \"event\", trigger: \"TicketSubmittedForReview\", rationale: \"\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"submit-ticket\", kind: \"command\", trigger: \"SubmitTicketForReview\", rationale: \"\", payloadContract: \"\" },{ source: \"submit-ticket\", target: \"review-ticket\", kind: \"event\", trigger: \"TicketSubmittedForReview\", rationale: \"\", payloadContract: \"\" }]"
             ),
             "Quint artifact must represent command and event workflow transitions"
         );
@@ -341,22 +893,9 @@ mod tests {
             .assert()
             .success();
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
-        assert!(
-            !workflow_json.contains("\"via_navigation\": \"review-ticket-screen\""),
-            "workflow data must remove the transition trigger"
-        );
-        assert!(
-            workflow_json.contains("\"via_navigation\": \"alternate-review-ticket-screen\""),
-            "workflow data must preserve the remaining transition to the target step"
-        );
         assert!(
             lean.contains("alternate-review-ticket-screen"),
             "Lean artifact must preserve the remaining workflow transition"
@@ -427,11 +966,10 @@ mod tests {
             .assert()
             .success();
 
-        let workflow_before = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let lean_before = read_to_string(&lean_path)?;
+        let quint_before = read_to_string(&quint_path)?;
 
         Command::cargo_bin("emc")?
             .args([
@@ -455,15 +993,15 @@ mod tests {
                 "removing transition would leave workflow step 'review-ticket' without an incoming transition",
             ));
 
-        let workflow_after = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
-
         assert_eq!(
-            workflow_before, workflow_after,
-            "rejected transition removal must not mutate workflow data"
+            lean_before,
+            read_to_string(lean_path)?,
+            "rejected transition removal must not mutate Lean workflow data"
+        );
+        assert_eq!(
+            quint_before,
+            read_to_string(quint_path)?,
+            "rejected transition removal must not mutate Quint workflow data"
         );
 
         Ok(())
@@ -508,11 +1046,10 @@ mod tests {
             "Actor reviews repair ticket details.",
         )?;
 
-        let workflow_before = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let lean_before = read_to_string(&lean_path)?;
+        let quint_before = read_to_string(&quint_path)?;
 
         Command::cargo_bin("emc")?
             .args([
@@ -536,15 +1073,15 @@ mod tests {
                 "workflow transition capture-ticket->review-ticket:navigation:review-ticket-screen does not exist",
             ));
 
-        let workflow_after = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
-
         assert_eq!(
-            workflow_before, workflow_after,
-            "rejected transition removal must not mutate workflow data"
+            lean_before,
+            read_to_string(lean_path)?,
+            "rejected transition removal must not mutate Lean workflow data"
+        );
+        assert_eq!(
+            quint_before,
+            read_to_string(quint_path)?,
+            "rejected transition removal must not mutate Quint workflow data"
         );
 
         Ok(())
@@ -646,24 +1183,15 @@ mod tests {
             .assert()
             .success();
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
-        assert!(
-            !workflow_json.contains("\"via_outcome\": \"ticket-closed\""),
-            "workflow data must remove the workflow-exit trigger"
-        );
         assert!(
             lean.contains("def workflowTransitions : List WorkflowTransition := []"),
             "Lean artifact must remove the workflow-exit transition"
         );
         assert!(
-            quint.contains("val workflowTransitions = []"),
+            quint.contains("val workflowTransitions: List[WorkflowTransition] = []"),
             "Quint artifact must remove the workflow-exit transition"
         );
 
@@ -940,6 +1468,8 @@ mod tests {
                 "external_trigger",
                 "--name",
                 "callback_received",
+                "--payload-contract",
+                "CallbackReceivedPayload",
             ])
             .current_dir(temp_dir.path())
             .assert()
@@ -948,27 +1478,18 @@ mod tests {
                 "connected capture-ticket to record-callback",
             ));
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
         assert!(
-            workflow_json.contains("\"via_external_trigger\": \"callback_received\""),
-            "workflow data must include the external trigger"
-        );
-        assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"record-callback\", kind := \"external_trigger\", trigger := \"callback_received\", rationale := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"record-callback\", kind := \"external_trigger\", trigger := \"callback_received\", rationale := \"\", payloadContract := \"CallbackReceivedPayload\" }]"
             ),
             "Lean artifact must represent the external trigger workflow transition"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"record-callback\", kind: \"external_trigger\", trigger: \"callback_received\", rationale: \"\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"record-callback\", kind: \"external_trigger\", trigger: \"callback_received\", rationale: \"\", payloadContract: \"CallbackReceivedPayload\" }]"
             ),
             "Quint artifact must represent the external trigger workflow transition"
         );
@@ -1032,35 +1553,18 @@ mod tests {
                 "connected capture-ticket to repair-complete",
             ));
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
         assert!(
-            workflow_json.contains("\"to_workflow\": \"repair-complete\""),
-            "workflow data must include the target workflow"
-        );
-        assert!(
-            workflow_json.contains("\"via_outcome\": \"ticket_closed\""),
-            "workflow data must include the workflow exit outcome"
-        );
-        assert!(
-            workflow_json.contains("\"exit_reason\": \"Closed tickets continue to completion.\""),
-            "workflow data must include the workflow exit rationale"
-        );
-        assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := \"workflow_exit:outcome\", trigger := \"ticket_closed\", rationale := \"Closed tickets continue to completion.\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := \"workflow_exit:outcome\", trigger := \"ticket_closed\", rationale := \"Closed tickets continue to completion.\", payloadContract := \"\" }]"
             ),
             "Lean artifact must represent the workflow exit"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"repair-complete\", kind: \"workflow_exit:outcome\", trigger: \"ticket_closed\", rationale: \"Closed tickets continue to completion.\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"repair-complete\", kind: \"workflow_exit:outcome\", trigger: \"ticket_closed\", rationale: \"Closed tickets continue to completion.\", payloadContract: \"\" }]"
             ),
             "Quint artifact must represent the workflow exit"
         );
@@ -1126,12 +1630,8 @@ mod tests {
             .assert()
             .success();
 
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
-        let workflow_before = read_to_string(&workflow_path)?;
         let lean_before = read_to_string(&lean_path)?;
         let quint_before = read_to_string(&quint_path)?;
 
@@ -1157,11 +1657,6 @@ mod tests {
                 "workflow transition capture-ticket->submit-ticket:command:SubmitTicketForReview already exists",
             ));
 
-        assert_eq!(
-            workflow_before,
-            read_to_string(workflow_path)?,
-            "duplicate transition rejection must leave browser workflow data unchanged"
-        );
         assert_eq!(
             lean_before,
             read_to_string(lean_path)?,
@@ -1209,12 +1704,8 @@ mod tests {
             "Actor enters repair ticket details.",
         )?;
 
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
-        let workflow_before = read_to_string(&workflow_path)?;
         let lean_before = read_to_string(&lean_path)?;
         let quint_before = read_to_string(&quint_path)?;
 
@@ -1241,11 +1732,6 @@ mod tests {
             ));
 
         assert_eq!(
-            workflow_before,
-            read_to_string(workflow_path)?,
-            "unknown target rejection must leave browser workflow data unchanged"
-        );
-        assert_eq!(
             lean_before,
             read_to_string(lean_path)?,
             "unknown target rejection must leave Lean workflow data unchanged"
@@ -1254,207 +1740,6 @@ mod tests {
             quint_before,
             read_to_string(quint_path)?,
             "unknown target rejection must leave Quint workflow data unchanged"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn connect_workflow_uses_formal_workflow_when_browser_document_identity_is_stale()
-    -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
-                "open-ticket",
-                "--name",
-                "Open ticket",
-                "--description",
-                "Actor opens a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        add_slice(
-            temp_dir.path(),
-            "capture-ticket",
-            "Capture ticket",
-            "Actor enters repair ticket details.",
-        )?;
-        add_slice(
-            temp_dir.path(),
-            "review-ticket",
-            "Review ticket",
-            "Actor reviews repair ticket details.",
-        )?;
-
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
-        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
-        let workflow_before = read_to_string(&workflow_path)?;
-        let lean_before = read_to_string(&lean_path)?;
-        let quint_before = read_to_string(&quint_path)?;
-        let drifted_workflow =
-            workflow_before.replace("\"name\": \"Open ticket\"", "\"name\": \"Altered ticket\"");
-        write(&workflow_path, &drifted_workflow)?;
-
-        Command::cargo_bin("emc")?
-            .args([
-                "connect",
-                "workflow",
-                "--workflow",
-                "open-ticket",
-                "--from",
-                "capture-ticket",
-                "--to",
-                "review-ticket",
-                "--via",
-                "navigation",
-                "--name",
-                "review-ticket-screen",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "connected capture-ticket to review-ticket",
-            ));
-
-        let workflow_after = read_to_string(workflow_path)?;
-        assert!(
-            workflow_after.contains("\"name\": \"Open ticket\""),
-            "connect workflow must restore the workflow name from formal artifacts"
-        );
-        assert!(
-            workflow_after.contains("\"via_navigation\": \"review-ticket-screen\""),
-            "connect workflow must write the requested transition to the browser projection"
-        );
-        assert_ne!(
-            lean_before,
-            read_to_string(lean_path)?,
-            "connect workflow must update Lean workflow data from the formal source state"
-        );
-        assert_ne!(
-            quint_before,
-            read_to_string(quint_path)?,
-            "connect workflow must update Quint workflow data from the formal source state"
-        );
-        assert!(
-            !temp_dir
-                .path()
-                .join("model/lean/AlteredTicket.lean")
-                .exists(),
-            "connect workflow must not create formal artifacts for the stale browser workflow name"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn connect_workflow_uses_formal_workflow_when_browser_document_description_is_stale()
-    -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
-                "open-ticket",
-                "--name",
-                "Open ticket",
-                "--description",
-                "Actor opens a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        add_slice(
-            temp_dir.path(),
-            "capture-ticket",
-            "Capture ticket",
-            "Actor enters repair ticket details.",
-        )?;
-        add_slice(
-            temp_dir.path(),
-            "review-ticket",
-            "Review ticket",
-            "Actor reviews repair ticket details.",
-        )?;
-
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
-        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
-        let workflow_before = read_to_string(&workflow_path)?;
-        let lean_before = read_to_string(&lean_path)?;
-        let quint_before = read_to_string(&quint_path)?;
-        let drifted_workflow = workflow_before.replace(
-            "\"description\": \"Actor opens a repair ticket.\"",
-            "\"description\": \"Altered workflow description.\"",
-        );
-        write(&workflow_path, &drifted_workflow)?;
-
-        Command::cargo_bin("emc")?
-            .args([
-                "connect",
-                "workflow",
-                "--workflow",
-                "open-ticket",
-                "--from",
-                "capture-ticket",
-                "--to",
-                "review-ticket",
-                "--via",
-                "navigation",
-                "--name",
-                "review-ticket-screen",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "connected capture-ticket to review-ticket",
-            ));
-
-        let workflow_after = read_to_string(workflow_path)?;
-        assert!(
-            workflow_after.contains("\"description\": \"Actor opens a repair ticket.\""),
-            "connect workflow must restore the workflow description from formal artifacts"
-        );
-        assert!(
-            workflow_after.contains("\"via_navigation\": \"review-ticket-screen\""),
-            "connect workflow must write the requested transition to the browser projection"
-        );
-        assert_ne!(
-            lean_before,
-            read_to_string(lean_path)?,
-            "connect workflow must update Lean workflow data from the formal source state"
-        );
-        assert_ne!(
-            quint_before,
-            read_to_string(quint_path)?,
-            "connect workflow must update Quint workflow data from the formal source state"
         );
 
         Ok(())
@@ -1639,6 +1924,160 @@ mod tests {
                 "state_view",
                 "--description",
                 description,
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn add_complete_state_view_facts(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                slug,
+                "--kind",
+                "contract",
+                "--name",
+                "Ticket state projects title",
+                "--given",
+                "TicketCaptured carries ticket_title",
+                "--when",
+                "ticket_state projects TicketCaptured",
+                "--then",
+                "ticket_state.ticket_title equals TicketCaptured.ticket_title",
+                "--contract-kind",
+                "projector",
+                "--covered-definition",
+                "ticket_state",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                slug,
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "tickets",
+                "--attribute",
+                "ticket_title",
+                "--attribute-source",
+                "generated",
+                "--attribute-source-name",
+                "upstream_event_store",
+                "--attribute-source-field",
+                "ticket_title",
+                "--attribute-provenance",
+                "TicketCaptured.ticket_title",
+                "--observed",
+                "true",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "read-model",
+                "--slice",
+                slug,
+                "--name",
+                "ticket_state",
+                "--field",
+                "ticket_title",
+                "--field-source",
+                "event_attribute",
+                "--source-event",
+                "TicketCaptured",
+                "--source-attribute",
+                "ticket_title",
+                "--field-provenance",
+                "TicketCaptured.ticket_title",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "view",
+                "--slice",
+                slug,
+                "--name",
+                "ticket_summary",
+                "--read-model",
+                "ticket_state",
+                "--field",
+                "ticket_title",
+                "--source-field",
+                "ticket_title",
+                "--sketch-token",
+                "title-label",
+                "--field-provenance",
+                "ticket_state.ticket_title",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        add_data_flow(
+            cwd,
+            slug,
+            "upstream event store",
+            "observed without transformation",
+            "TicketCaptured",
+        )?;
+        add_data_flow(
+            cwd,
+            slug,
+            "TicketCaptured.ticket_title",
+            "projected without transformation",
+            "ticket_state",
+        )?;
+        add_data_flow(
+            cwd,
+            slug,
+            "ticket_state.ticket_title",
+            "displayed without transformation",
+            "ticket_summary",
+        )
+    }
+
+    fn add_data_flow(
+        cwd: &Path,
+        slug: &str,
+        source: &str,
+        transformation: &str,
+        target: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                slug,
+                "--datum",
+                "ticket_title",
+                "--source",
+                source,
+                "--transformation",
+                transformation,
+                "--target",
+                target,
+                "--bit-encoding",
+                "UTF-8 string",
             ])
             .current_dir(cwd)
             .assert()

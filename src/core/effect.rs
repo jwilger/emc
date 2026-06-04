@@ -2,24 +2,44 @@ use nutype::nutype;
 use std::path::{Component, Path};
 
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
+use crate::core::formal_slice_facts::{
+    NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
+    NewCommandDefinition, NewEventDefinition, NewExternalPayloadDefinition, NewOutcomeDefinition,
+    NewReadModelDefinition, NewSliceScenario, NewTranslationDefinition, NewViewDefinition,
+};
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceSlug, TransitionTriggerName,
-    WorkflowSlug,
+    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceSlug,
+    WorkflowCommandErrorRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug,
+    WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Effect {
+    AddAutomationDefinitionFromSlice(NewAutomationDefinition),
+    AddBitLevelDataFlowFromSlice(NewBitLevelDataFlow),
+    AddBoardConnectionFromSlice(NewBoardConnection),
+    AddBoardElementFromSlice(NewBoardElement),
+    AddCommandDefinitionFromSlice(NewCommandDefinition),
+    AddEventDefinitionFromSlice(NewEventDefinition),
+    AddExternalPayloadDefinitionFromSlice(NewExternalPayloadDefinition),
+    AddOutcomeDefinitionFromSlice(NewOutcomeDefinition),
+    AddReadModelDefinitionFromSlice(NewReadModelDefinition),
+    AddViewDefinitionFromSlice(NewViewDefinition),
     AddSliceFromWorkflow(NewSlice),
+    AddSliceScenarioFromSlice(NewSliceScenario),
+    AddTranslationDefinitionFromSlice(NewTranslationDefinition),
     AddWorkflowFromIndex(NewWorkflow),
+    AddWorkflowCommandErrorFromWorkflow(WorkflowSlug, WorkflowCommandErrorRecord),
+    AddWorkflowOwnedDefinitionFromWorkflow(WorkflowSlug, WorkflowOwnedDefinitionRecord),
+    AddWorkflowOutcomeFromWorkflow(WorkflowSlug, WorkflowOutcomeRecord),
+    AddWorkflowTransitionEvidenceFromWorkflow(WorkflowSlug, WorkflowTransitionEvidenceRecord),
     CheckCurrentProject,
     ConnectWorkflowFromWorkflow(WorkflowConnection),
     CopyDirectory(ProjectPath, ProjectPath),
     EnsureDirectory(ProjectPath),
-    EnsureNavigationControlInSlice(SliceSlug, TransitionTriggerName),
     Fail(ReportLine),
-    GenerateSiteFromManifest(ProjectPath),
     ListSlicesFromIndex,
     ListTransitionsFromIndex,
     ListWorkflowsFromIndex,
@@ -27,7 +47,7 @@ pub enum Effect {
     RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
     RequireFile(ProjectPath),
     RequireFileContents(ProjectPath, FileContents, ReportLine),
-    RequireIndexedWorkflowFiles(ProjectPath, ProjectPath, ReportLine),
+    RequireFileContentsWithAuthoredFormalFacts(ProjectPath, FileContents, ReportLine),
     RequireLeanWorkflowGraph(ProjectPath, ProjectPath, WorkflowSlug, ReportLine),
     RequireJsonObjectKeysUnique(ProjectPath, ReportLine),
     RequireOnlyModeledArtifacts(
@@ -55,7 +75,6 @@ pub enum Effect {
         ArtifactFileExtension,
         ReportLine,
     ),
-    RequireWorkflowProjection(ProjectPath, FileContents, ReportLine),
     RunProcess(ProcessInvocation),
     RecordCleanReviewFromWorkflow(WorkflowSlug, ReviewerId, ReviewTimestamp),
     RemoveDirectory(ProjectPath),
@@ -70,9 +89,9 @@ pub enum Effect {
     UpdateSliceNameFromWorkflow(SliceSlug, ModelName),
     UpdateWorkflowDescriptionFromIndexAndWorkflow(WorkflowSlug, ModelDescription),
     UpdateWorkflowNameFromIndexAndWorkflow(WorkflowSlug, ModelName),
-    ValidateEventModelTarget(ProjectPath),
     VerifyProjectFromIndex,
     WriteFile(ProjectPath, FileContents),
+    WriteFormalSliceArtifactPreservingAuthoredFacts(ProjectPath, ProjectPath, FileContents),
     WriteFileIfMissing(ProjectPath, FileContents),
     Report(ReportLine),
     ReportDocument(FileContents),

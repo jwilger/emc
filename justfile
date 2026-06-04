@@ -8,7 +8,7 @@ clippy:
 	RUSTFLAGS='-Dwarnings' cargo clippy --all-targets --all-features -- -D warnings
 
 test:
-	RUSTFLAGS='-Dwarnings' cargo test
+	RUSTFLAGS='-Dwarnings' cargo test -- --test-threads=1
 
 build:
 	RUSTFLAGS='-Dwarnings' cargo build

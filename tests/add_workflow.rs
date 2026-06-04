@@ -33,39 +33,9 @@ mod tests {
             .success()
             .stdout(predicate::str::contains("added workflow Open ticket"));
 
-        let index_json = read_to_string(temp_dir.path().join("model/browser/data/index.json"))?;
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
-        assert!(
-            index_json.contains("\"name\": \"Open ticket\""),
-            "browser index must list the added workflow"
-        );
-        assert!(
-            index_json.contains("\"path\": \"data/workflows/open-ticket.eventmodel.json\""),
-            "browser index must point at the added workflow data"
-        );
-        assert!(
-            workflow_json.contains("\"name\": \"Open ticket\""),
-            "workflow browser data must represent the added business workflow"
-        );
-        assert!(
-            workflow_json.contains("\"description\": \"Actor opens a repair ticket.\""),
-            "workflow browser data must preserve the workflow description"
-        );
-        assert!(
-            workflow_json.contains("\"streams\": []")
-                && workflow_json.contains("\"events\": []")
-                && workflow_json.contains("\"commands\": []")
-                && workflow_json.contains("\"read_models\": []")
-                && workflow_json.contains("\"slices\": []"),
-            "workflow browser data must include the full event-model validation shape"
-        );
         assert!(
             lean.contains("def workflowName := \"Open ticket\""),
             "Lean artifact must represent the added business workflow"
@@ -172,16 +142,6 @@ mod tests {
             .stderr(predicate::str::contains(
                 "workflow open-ticket already exists",
             ));
-
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
-        assert!(
-            workflow_json.contains("\"name\": \"Open ticket\""),
-            "rejected duplicate workflow slugs must not overwrite existing workflow data"
-        );
 
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         assert!(

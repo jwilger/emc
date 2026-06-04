@@ -75,6 +75,25 @@ mod tests {
             .success();
 
         Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Capture ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
             .arg("verify")
             .current_dir(temp_dir.path())
             .env("PATH", path_with_fake_tools(&tool_dir)?)
@@ -86,12 +105,14 @@ mod tests {
         assert_eq!(
             read_to_string(temp_dir.path().join("lake.log"))?,
             "env lean model/lean/RepairDesk.lean\n\
-             env lean model/lean/OpenTicket.lean\n"
+             env lean model/lean/OpenTicket.lean\n\
+             env lean model/lean/slices/CaptureTicket.lean\n"
         );
         assert_eq!(
             read_to_string(temp_dir.path().join("quint.log"))?,
             "typecheck model/quint/RepairDesk.qnt\n\
-             verify --invariant workflowIdentityStable,workflowSliceDetailsComplete,workflowTransitionsStructured model/quint/OpenTicket.qnt\n"
+             verify --invariant workflowIdentityStable,workflowSliceDetailsComplete,workflowTransitionsStructured,workflowTransitionSourcesResolve,workflowTransitionTargetsResolve,workflowStepRelationshipsAreAllowed,workflowStepSlugsAreUnique,workflowHasExactlyOneEntryStep,workflowMainStepsHaveIncomingReachability,workflowBranchAndAlternateStepsHaveTriggerOrRationale,workflowTransitionsHaveModeledKinds,workflowExitsNameTargetsAndRationale,workflowExternallyRelevantOutcomesHandled,workflowOutcomesSourceResolve,workflowCommandErrorsSourceResolve,workflowTransitionsDoNotUseCommandErrorsAsOutcomes,workflowNonEventDefinitionsAreUniquelyOwned,workflowExternalTriggersDeclarePayloadContracts,workflowTransitionsHaveRequiredEvidence model/quint/OpenTicket.qnt\n\
+             verify --invariant sliceIdentityStable,sliceStateChangeRequiresEvent,sliceBitLevelDataFlowsStructured,modeledDataFlowsAreBitComplete,sliceScenariosHaveGwt,sliceScenarioNamesAreUnique,sliceScenarioStreamsResolve,stateChangeScenariosNameStreams,acceptanceScenariosAreUserFacing,stateViewReadModelsHaveProjectorContracts,commandInputsHaveAllowedSources,commandInputsHaveProvenance,commandInputsSourcedFromEventStreamsResolve,commandErrorsAreDeclared,commandErrorsHaveAllowedRecovery,commandErrorsHaveScenarioCoverage,singletonCommandsDeclareRepeatBehavior,automationSlicesDeclareTriggers,automationsIssueKnownCommands,automationsHandleCommandErrors,translationSlicesDeclareExternalContracts,translationsTargetKnownCommands,boardLanesAreCanonical,boardElementsUseCanonicalLanes,boardElementsReferenceDeclarations,boardConnectionsHaveCausalSemantics,readModelsDoNotFeedCommands,readModelsFeedingViewsHaveIncomingEventUpdates,commandsHaveIncomingTriggers,mainPathBoardHasNoDisconnectedIslands,outcomeLabelsAreUnique,outcomeEventSetsAreNonEmpty,outcomeEventSetsAreDistinct,outcomeEventsAreKnownToSlice,eventsReferenceKnownStreams,commandEmittedEventsAreKnown,locallyEmittedEventsAreProducedByCommands,externalPayloadFieldsHaveProvenance,eventAttributesHaveAllowedSources,eventAttributesHaveProvenance,eventAttributeSourcesAreComplete,readModelFieldsHaveAllowedSources,readModelFieldsHaveProvenance,readModelFieldSourcesAreComplete,readModelFieldEventAttributeSourcesResolve,derivedReadModelFieldsHaveScenarioCoverage,absenceReadModelFieldsHaveScenarioCoverage,transitiveReadModelsHaveSemantics,viewFieldsHaveAllowedSources,viewFieldsHaveProvenance,viewFieldSourcesAreComplete,viewFieldsSourceFromUsedReadModels,viewsHaveInformationSketches,viewFieldsAppearInSketch,viewSketchTokensMapToModeledElements,viewFieldReadModelFieldSourcesResolve,viewControlsHaveSketchTokens,viewControlsAppearInSketch,viewControlsReferenceKnownCommands,viewControlsProvideCommandInputs,viewControlInputsHaveAllowedSources,viewControlInputsHaveProvenance,viewControlInputVisibilityIsModeled,viewControlsHandleCommandErrors,stateViewSlicesDoNotOwnCommands,stateViewSlicesOwnViews,stateViewSlicesOwnReadModels,stateChangeSlicesOwnCommands,stateChangeSlicesDoNotOwnReadModelsOrViews,stateChangeSlicesDoNotOwnAutomationsOrTranslations,translationSlicesDoNotOwnViews,viewControlNavigationTypesAreModeled,viewControlNavigationTargetsAreComplete model/quint/slices/CaptureTicket.qnt\n"
         );
 
         Ok(())
@@ -163,8 +184,81 @@ mod tests {
         assert_eq!(
             read_to_string(temp_dir.path().join("quint.log"))?,
             "typecheck model/quint/RepairDesk.qnt\n\
-             verify --invariant workflowIdentityStable,workflowSliceDetailsComplete,workflowTransitionsStructured model/quint/OpenTicket.qnt\n\
-             verify --invariant sliceIdentityStable model/quint/slices/CaptureTicket.qnt\n"
+             verify --invariant workflowIdentityStable,workflowSliceDetailsComplete,workflowTransitionsStructured,workflowTransitionSourcesResolve,workflowTransitionTargetsResolve,workflowStepRelationshipsAreAllowed,workflowStepSlugsAreUnique,workflowHasExactlyOneEntryStep,workflowMainStepsHaveIncomingReachability,workflowBranchAndAlternateStepsHaveTriggerOrRationale,workflowTransitionsHaveModeledKinds,workflowExitsNameTargetsAndRationale,workflowExternallyRelevantOutcomesHandled,workflowOutcomesSourceResolve,workflowCommandErrorsSourceResolve,workflowTransitionsDoNotUseCommandErrorsAsOutcomes,workflowNonEventDefinitionsAreUniquelyOwned,workflowExternalTriggersDeclarePayloadContracts,workflowTransitionsHaveRequiredEvidence model/quint/OpenTicket.qnt\n\
+             verify --invariant sliceIdentityStable,sliceStateChangeRequiresEvent,sliceBitLevelDataFlowsStructured,modeledDataFlowsAreBitComplete,sliceScenariosHaveGwt,sliceScenarioNamesAreUnique,sliceScenarioStreamsResolve,stateChangeScenariosNameStreams,acceptanceScenariosAreUserFacing,stateViewReadModelsHaveProjectorContracts,commandInputsHaveAllowedSources,commandInputsHaveProvenance,commandInputsSourcedFromEventStreamsResolve,commandErrorsAreDeclared,commandErrorsHaveAllowedRecovery,commandErrorsHaveScenarioCoverage,singletonCommandsDeclareRepeatBehavior,automationSlicesDeclareTriggers,automationsIssueKnownCommands,automationsHandleCommandErrors,translationSlicesDeclareExternalContracts,translationsTargetKnownCommands,boardLanesAreCanonical,boardElementsUseCanonicalLanes,boardElementsReferenceDeclarations,boardConnectionsHaveCausalSemantics,readModelsDoNotFeedCommands,readModelsFeedingViewsHaveIncomingEventUpdates,commandsHaveIncomingTriggers,mainPathBoardHasNoDisconnectedIslands,outcomeLabelsAreUnique,outcomeEventSetsAreNonEmpty,outcomeEventSetsAreDistinct,outcomeEventsAreKnownToSlice,eventsReferenceKnownStreams,commandEmittedEventsAreKnown,locallyEmittedEventsAreProducedByCommands,externalPayloadFieldsHaveProvenance,eventAttributesHaveAllowedSources,eventAttributesHaveProvenance,eventAttributeSourcesAreComplete,readModelFieldsHaveAllowedSources,readModelFieldsHaveProvenance,readModelFieldSourcesAreComplete,readModelFieldEventAttributeSourcesResolve,derivedReadModelFieldsHaveScenarioCoverage,absenceReadModelFieldsHaveScenarioCoverage,transitiveReadModelsHaveSemantics,viewFieldsHaveAllowedSources,viewFieldsHaveProvenance,viewFieldSourcesAreComplete,viewFieldsSourceFromUsedReadModels,viewsHaveInformationSketches,viewFieldsAppearInSketch,viewSketchTokensMapToModeledElements,viewFieldReadModelFieldSourcesResolve,viewControlsHaveSketchTokens,viewControlsAppearInSketch,viewControlsReferenceKnownCommands,viewControlsProvideCommandInputs,viewControlInputsHaveAllowedSources,viewControlInputsHaveProvenance,viewControlInputVisibilityIsModeled,viewControlsHandleCommandErrors,stateViewSlicesDoNotOwnCommands,stateViewSlicesOwnViews,stateViewSlicesOwnReadModels,stateChangeSlicesOwnCommands,stateChangeSlicesDoNotOwnReadModelsOrViews,stateChangeSlicesDoNotOwnAutomationsOrTranslations,translationSlicesDoNotOwnViews,viewControlNavigationTypesAreModeled,viewControlNavigationTargetsAreComplete model/quint/slices/CaptureTicket.qnt\n"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn verify_runs_formal_tools_without_json_validation_precheck() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let tool_dir = temp_dir.path().join("tools");
+
+        create_fake_tool(&tool_dir, "lake", "lake.log")?;
+        create_fake_tool(&tool_dir, "quint", "quint.log")?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_change",
+                "--description",
+                "Capture ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .arg("verify")
+            .current_dir(temp_dir.path())
+            .env("PATH", path_with_fake_tools(&tool_dir)?)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Lean4 artifacts verified"))
+            .stdout(predicate::str::contains("Quint artifacts verified"));
+
+        assert_eq!(
+            read_to_string(temp_dir.path().join("lake.log"))?,
+            "env lean model/lean/RepairDesk.lean\n\
+             env lean model/lean/OpenTicket.lean\n\
+             env lean model/lean/slices/CaptureTicket.lean\n"
+        );
+        assert_eq!(
+            read_to_string(temp_dir.path().join("quint.log"))?,
+            "typecheck model/quint/RepairDesk.qnt\n\
+             verify --invariant workflowIdentityStable,workflowSliceDetailsComplete,workflowTransitionsStructured,workflowTransitionSourcesResolve,workflowTransitionTargetsResolve,workflowStepRelationshipsAreAllowed,workflowStepSlugsAreUnique,workflowHasExactlyOneEntryStep,workflowMainStepsHaveIncomingReachability,workflowBranchAndAlternateStepsHaveTriggerOrRationale,workflowTransitionsHaveModeledKinds,workflowExitsNameTargetsAndRationale,workflowExternallyRelevantOutcomesHandled,workflowOutcomesSourceResolve,workflowCommandErrorsSourceResolve,workflowTransitionsDoNotUseCommandErrorsAsOutcomes,workflowNonEventDefinitionsAreUniquelyOwned,workflowExternalTriggersDeclarePayloadContracts,workflowTransitionsHaveRequiredEvidence model/quint/OpenTicket.qnt\n\
+             verify --invariant sliceIdentityStable,sliceStateChangeRequiresEvent,sliceBitLevelDataFlowsStructured,modeledDataFlowsAreBitComplete,sliceScenariosHaveGwt,sliceScenarioNamesAreUnique,sliceScenarioStreamsResolve,stateChangeScenariosNameStreams,acceptanceScenariosAreUserFacing,stateViewReadModelsHaveProjectorContracts,commandInputsHaveAllowedSources,commandInputsHaveProvenance,commandInputsSourcedFromEventStreamsResolve,commandErrorsAreDeclared,commandErrorsHaveAllowedRecovery,commandErrorsHaveScenarioCoverage,singletonCommandsDeclareRepeatBehavior,automationSlicesDeclareTriggers,automationsIssueKnownCommands,automationsHandleCommandErrors,translationSlicesDeclareExternalContracts,translationsTargetKnownCommands,boardLanesAreCanonical,boardElementsUseCanonicalLanes,boardElementsReferenceDeclarations,boardConnectionsHaveCausalSemantics,readModelsDoNotFeedCommands,readModelsFeedingViewsHaveIncomingEventUpdates,commandsHaveIncomingTriggers,mainPathBoardHasNoDisconnectedIslands,outcomeLabelsAreUnique,outcomeEventSetsAreNonEmpty,outcomeEventSetsAreDistinct,outcomeEventsAreKnownToSlice,eventsReferenceKnownStreams,commandEmittedEventsAreKnown,locallyEmittedEventsAreProducedByCommands,externalPayloadFieldsHaveProvenance,eventAttributesHaveAllowedSources,eventAttributesHaveProvenance,eventAttributeSourcesAreComplete,readModelFieldsHaveAllowedSources,readModelFieldsHaveProvenance,readModelFieldSourcesAreComplete,readModelFieldEventAttributeSourcesResolve,derivedReadModelFieldsHaveScenarioCoverage,absenceReadModelFieldsHaveScenarioCoverage,transitiveReadModelsHaveSemantics,viewFieldsHaveAllowedSources,viewFieldsHaveProvenance,viewFieldSourcesAreComplete,viewFieldsSourceFromUsedReadModels,viewsHaveInformationSketches,viewFieldsAppearInSketch,viewSketchTokensMapToModeledElements,viewFieldReadModelFieldSourcesResolve,viewControlsHaveSketchTokens,viewControlsAppearInSketch,viewControlsReferenceKnownCommands,viewControlsProvideCommandInputs,viewControlInputsHaveAllowedSources,viewControlInputsHaveProvenance,viewControlInputVisibilityIsModeled,viewControlsHandleCommandErrors,stateViewSlicesDoNotOwnCommands,stateViewSlicesOwnViews,stateViewSlicesOwnReadModels,stateChangeSlicesOwnCommands,stateChangeSlicesDoNotOwnReadModelsOrViews,stateChangeSlicesDoNotOwnAutomationsOrTranslations,translationSlicesDoNotOwnViews,viewControlNavigationTypesAreModeled,viewControlNavigationTargetsAreComplete model/quint/slices/CaptureTicket.qnt\n"
         );
 
         Ok(())
@@ -194,6 +288,25 @@ mod tests {
                 "Open ticket",
                 "--description",
                 "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Capture ticket details.",
             ])
             .current_dir(temp_dir.path())
             .assert()

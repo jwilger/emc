@@ -41,33 +41,21 @@ mod tests {
             .stdout(predicate::str::contains("\"add_slice\""))
             .stdout(predicate::str::contains("added slice Capture ticket"));
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
-        let slice_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
 
         assert!(
-            workflow_json.contains("\"slice\": \"capture-ticket\""),
-            "workflow must add a step for the MCP-created slice"
-        );
-        assert!(
-            slice_json.contains("\"description\": \"Actor enters repair ticket details.\""),
-            "slice data must preserve the MCP-created slice description"
+            slice_lean.contains("def sliceDescription := \"Actor enters repair ticket details.\""),
+            "slice artifact must preserve the MCP-created slice description"
         );
         assert!(
             lean.contains("def workflowSlices : List String := [\"capture-ticket\"]"),
             "Lean artifact must represent the MCP-created workflow slice"
         );
         assert!(
-            quint.contains("val workflowSlices = [\"capture-ticket\"]"),
+            quint.contains("val workflowSlices: List[str] = [\"capture-ticket\"]"),
             "Quint artifact must represent the MCP-created workflow slice"
         );
 
@@ -126,10 +114,16 @@ mod tests {
             .success()
             .stdout(predicate::str::contains("\"show_slice\""))
             .stdout(predicate::str::contains(
-                "\\\"name\\\": \\\"Capture ticket\\\"",
+                "# model/lean/slices/CaptureTicket.lean",
             ))
             .stdout(predicate::str::contains(
-                "\\\"description\\\": \\\"Actor enters repair ticket details.\\\"",
+                "# model/quint/slices/CaptureTicket.qnt",
+            ))
+            .stdout(predicate::str::contains(
+                "def sliceName := \\\"Capture ticket\\\"",
+            ))
+            .stdout(predicate::str::contains(
+                "val sliceDescription = \\\"Actor enters repair ticket details.\\\"",
             ));
 
         Ok(())
