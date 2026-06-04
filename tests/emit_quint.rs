@@ -880,7 +880,13 @@ mod tests {
         assert!(quint.contains("val sliceIdentityStable = sliceName == \"Capture ticket\""));
         assert!(
             quint.contains(
-                "val sliceStateChangeRequiresEvent = sliceKind != \"state_change\" or length(sliceEvents) > 0"
+                "val sliceHasLocallyEmittedEvent = sliceEvents.length() > 0 or sliceEventDefinitions.select(event => not(event.observed) and not(event.shared)).length() > 0"
+            ),
+            "Quint slice artifacts must count locally emitted formal event definitions"
+        );
+        assert!(
+            quint.contains(
+                "val sliceStateChangeRequiresEvent = sliceKind != \"state_change\" or sliceHasLocallyEmittedEvent"
             ),
             "Quint slice artifacts must expose the state-change event obligation"
         );

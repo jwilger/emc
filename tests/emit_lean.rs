@@ -1743,13 +1743,19 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def sliceStateChangeRequiresEvent : Prop := sliceKind = \"state_change\" -> sliceEvents.length > 0"
+                "def sliceHasLocallyEmittedEvent : Bool := sliceEvents.isEmpty == false || sliceEventDefinitions.any (fun event => event.observed == false && event.shared == false)"
             ),
-            "Lean slice artifacts must state the event-emission proof obligation for state changes"
+            "Lean slice artifacts must count locally emitted formal event definitions"
         );
         assert!(
             lean.contains(
-                "theorem sliceStateChangeRequiresEventIsStable : sliceStateChangeRequiresEvent := by\n  simp [sliceStateChangeRequiresEvent, sliceKind, sliceEvents]"
+                "def sliceStateChangeRequiresEvent : Prop := sliceKind = \"state_change\" -> sliceHasLocallyEmittedEvent"
+            ),
+            "Lean slice artifacts must state the local event-emission proof obligation for state changes"
+        );
+        assert!(
+            lean.contains(
+                "theorem sliceStateChangeRequiresEventIsStable : sliceStateChangeRequiresEvent := by\n  simp [sliceStateChangeRequiresEvent, sliceHasLocallyEmittedEvent, sliceKind, sliceEvents, sliceEventDefinitions]"
             ),
             "Lean slice artifacts must prove current state-change slices emit at least one event"
         );
