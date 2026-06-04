@@ -473,13 +473,25 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
             "def controlInputVisibilityIsModeled (input : ControlInputProvision) : Bool := (input.sourceKind != \"actor\" || input.sketchToken.isEmpty == false || input.visibleToActor) && (input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor)\n\ndef controlInputDecisionFieldIsVisible (input : ControlInputProvision) : Bool := input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor\n\ndef controlHasSketchToken",
         )
         .replace(
+            "def controlInputDecisionFieldIsVisible (input : ControlInputProvision) : Bool := input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor\n\ndef controlHasSketchToken",
+            "def controlInputDecisionFieldIsVisible (input : ControlInputProvision) : Bool := input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor\n\ndef controlInputActorInputIsVisible (input : ControlInputProvision) : Bool := input.sourceKind != \"actor\" || input.sketchToken.isEmpty == false || input.visibleToActor\n\ndef controlHasSketchToken",
+        )
+        .replace(
             "def viewControlInputVisibilityIsModeled : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputVisibilityIsModeled))\n\ndef viewControlsHandleCommandErrors",
             "def viewControlInputVisibilityIsModeled : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputVisibilityIsModeled))\n\ndef viewControlDecisionFieldsAreVisible : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputDecisionFieldIsVisible))\n\ndef viewControlsHandleCommandErrors",
+        )
+        .replace(
+            "def viewControlDecisionFieldsAreVisible : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputDecisionFieldIsVisible))\n\ndef viewControlsHandleCommandErrors",
+            "def viewControlDecisionFieldsAreVisible : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputDecisionFieldIsVisible))\n\ndef viewControlActorInputsAreVisible : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputActorInputIsVisible))\n\ndef viewControlsHandleCommandErrors",
         )
         .replace(
             "theorem viewControlInputVisibilityIsModeledIsStable : viewControlInputVisibilityIsModeled = true := rfl\n\ntheorem viewControlsHandleCommandErrorsIsStable",
             "theorem viewControlInputVisibilityIsModeledIsStable : viewControlInputVisibilityIsModeled = true := rfl\n\ntheorem viewControlDecisionFieldsAreVisibleIsStable : viewControlDecisionFieldsAreVisible = true := rfl\n\ntheorem viewControlsHandleCommandErrorsIsStable",
         );
+    let contents = contents.replace(
+        "theorem viewControlDecisionFieldsAreVisibleIsStable : viewControlDecisionFieldsAreVisible = true := rfl\n\ntheorem viewControlsHandleCommandErrorsIsStable",
+        "theorem viewControlDecisionFieldsAreVisibleIsStable : viewControlDecisionFieldsAreVisible = true := rfl\n\ntheorem viewControlActorInputsAreVisibleIsStable : viewControlActorInputsAreVisible = true := rfl\n\ntheorem viewControlsHandleCommandErrorsIsStable",
+    );
     file_contents(contents)
 }
 
