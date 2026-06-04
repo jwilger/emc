@@ -439,6 +439,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def workflowCommandTransitionsSourceOwnedControls : Bool := workflowTransitions.all workflowCommandTransitionSourceOwnsControl"
+            ),
+            "Lean workflow artifacts must expose command transition source-control resolution as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def workflowCommandTransitionsResolveControlsAndCommands : Bool := workflowTransitions.all (fun transition => workflowCommandTransitionSourceOwnsControl transition && workflowCommandTransitionTargetsOwnedCommand transition)"
             ),
             "Lean workflow artifacts must expose command transition control/command resolution as a proof obligation"
@@ -538,6 +544,12 @@ mod tests {
                 "theorem workflowCommandTransitionsResolveControlsAndCommandsIsStable : workflowCommandTransitionsResolveControlsAndCommands = true := rfl"
             ),
             "Lean workflow artifacts must prove current command transitions resolve source controls and target commands"
+        );
+        assert!(
+            lean.contains(
+                "theorem workflowCommandTransitionsSourceOwnedControlsIsStable : workflowCommandTransitionsSourceOwnedControls = true := rfl"
+            ),
+            "Lean workflow artifacts must prove current command transitions come from source-owned controls"
         );
         assert!(
             lean.contains(
