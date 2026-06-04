@@ -93,7 +93,8 @@ pub fn emit_workflow_module(
   val workflowNonEventDefinitionsAreUniquelyOwned = workflowOwnedDefinitions.select(definition => workflowNonEventDefinitionOwnedOnce(definition)).length() == workflowOwnedDefinitions.length()
   def workflowOwnsDefinition(sourceSlice, definitionKind, definitionName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == definitionKind and definition.definitionName == definitionName).length() > 0
   def workflowCommandTransitionTargetsOwnedCommand(transition) = transition.kind != "command" or workflowOwnsDefinition(transition.target, "command", transition.trigger)
-  val workflowCommandTransitionsTargetOwnedCommands = workflowTransitions.select(transition => workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()
+  def workflowCommandTransitionSourceOwnsControl(transition) = transition.kind != "command" or workflowOwnsDefinition(transition.source, "control", transition.trigger)
+  val workflowCommandTransitionsResolveControlsAndCommands = workflowTransitions.select(transition => workflowCommandTransitionSourceOwnsControl(transition) and workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()
   def workflowEventTransitionIsSharedByEndpoints(transition) = transition.kind != "event" or (workflowOwnsDefinition(transition.source, "event", transition.trigger) and workflowOwnsDefinition(transition.target, "event", transition.trigger))
   val workflowEventTransitionsAreSharedByEndpointSlices = workflowTransitions.select(transition => workflowEventTransitionIsSharedByEndpoints(transition)).length() == workflowTransitions.length()
   def workflowNavigationTransitionSourceOwnsControl(transition) = transition.kind != "navigation" or workflowOwnsDefinition(transition.source, "control", transition.trigger)

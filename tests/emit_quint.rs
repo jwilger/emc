@@ -288,7 +288,10 @@ mod tests {
             "def workflowCommandTransitionTargetsOwnedCommand(transition) = transition.kind != \"command\" or workflowOwnsDefinition(transition.target, \"command\", transition.trigger)"
         ));
         assert!(quint.contains(
-            "val workflowCommandTransitionsTargetOwnedCommands = workflowTransitions.select(transition => workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()"
+            "def workflowCommandTransitionSourceOwnsControl(transition) = transition.kind != \"command\" or workflowOwnsDefinition(transition.source, \"control\", transition.trigger)"
+        ));
+        assert!(quint.contains(
+            "val workflowCommandTransitionsResolveControlsAndCommands = workflowTransitions.select(transition => workflowCommandTransitionSourceOwnsControl(transition) and workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()"
         ));
         assert!(quint.contains(
             "def workflowEventTransitionIsSharedByEndpoints(transition) = transition.kind != \"event\" or (workflowOwnsDefinition(transition.source, \"event\", transition.trigger) and workflowOwnsDefinition(transition.target, \"event\", transition.trigger))"
