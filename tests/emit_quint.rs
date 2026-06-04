@@ -878,6 +878,9 @@ mod tests {
             "val stateChangeSlicesOwnCommands = sliceKind != \"state_change\" or (sliceCommands.length() > 0 or sliceCommandDefinitions.length() > 0)"
         ));
         assert!(quint.contains(
+            "val stateChangeSlicesOwnEvents = sliceKind != \"state_change\" or (sliceEvents.length() > 0 or sliceEventDefinitions.length() > 0)"
+        ));
+        assert!(quint.contains(
             "val stateChangeSlicesOwnOutcomes = sliceKind != \"state_change\" or sliceOutcomeDefinitions.length() > 0"
         ));
         assert!(quint.contains(

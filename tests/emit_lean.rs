@@ -1764,6 +1764,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def stateChangeSlicesOwnEvents : Bool := sliceKind != \"state_change\" || (sliceEvents.isEmpty == false || sliceEventDefinitions.isEmpty == false)"
+            ),
+            "Lean slice artifacts must prove state-change slices own emitted event facts"
+        );
+        assert!(
+            lean.contains(
                 "def stateChangeSlicesOwnOutcomes : Bool := sliceKind != \"state_change\" || sliceOutcomeDefinitions.isEmpty == false"
             ),
             "Lean slice artifacts must prove state-change slices own outcome facts"
@@ -2229,6 +2235,12 @@ mod tests {
                 "theorem stateChangeSlicesOwnCommandsIsStable : stateChangeSlicesOwnCommands = true := rfl"
             ),
             "Lean slice artifacts must prove current state-change slices own commands"
+        );
+        assert!(
+            lean.contains(
+                "theorem stateChangeSlicesOwnEventsIsStable : stateChangeSlicesOwnEvents = true := by\n  simp [stateChangeSlicesOwnEvents, sliceKind, sliceEvents, sliceEventDefinitions]"
+            ),
+            "Lean slice artifacts must prove current state-change slices own emitted event facts"
         );
         assert!(
             lean.contains(
