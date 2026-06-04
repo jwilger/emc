@@ -534,6 +534,12 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         },
                         "definition_name": {
                             "type": "string"
+                        },
+                        "definition_stream": {
+                            "type": "string"
+                        },
+                        "source_provenance": {
+                            "type": "string"
                         }
                     },
                     "required": ["workflow", "source_slice", "definition_kind", "definition_name"],
@@ -1730,10 +1736,38 @@ fn add_workflow_owned_definition_tool_text(request: &Value) -> Result<String, Sh
             parse_workflow_owned_definition_name(raw_definition_name)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
+    let definition_stream = arguments
+        .get("definition_stream")
+        .and_then(Value::as_str)
+        .map(|raw_definition_stream| {
+            parse_stream_name(raw_definition_stream)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .transpose()?;
+    let source_provenance = arguments
+        .get("source_provenance")
+        .and_then(Value::as_str)
+        .map(|raw_source_provenance| {
+            parse_model_description(raw_source_provenance)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .transpose()?;
+    let definition = match (definition_stream, source_provenance) {
+        (Some(definition_stream), Some(source_provenance)) => {
+            WorkflowOwnedDefinitionRecord::new_with_event_identity(
+                source_slice,
+                definition_kind,
+                definition_name,
+                definition_stream,
+                source_provenance,
+            )
+        }
+        _ => WorkflowOwnedDefinitionRecord::new(source_slice, definition_kind, definition_name),
+    };
 
     interpret_collect_reports(command::add_workflow_owned_definition(
         workflow_slug,
-        WorkflowOwnedDefinitionRecord::new(source_slice, definition_kind, definition_name),
+        definition,
     ))
     .map(|reports| reports.join("\n"))
 }

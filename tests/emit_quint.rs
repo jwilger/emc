@@ -119,7 +119,7 @@ mod tests {
             "type WorkflowCommandError = { sourceSlice: str, commandName: str, errorName: str }"
         ));
         assert!(quint.contains(
-            "type WorkflowOwnedDefinition = { sourceSlice: str, definitionKind: str, definitionName: str }"
+            "type WorkflowOwnedDefinition = { sourceSlice: str, definitionKind: str, definitionName: str, definitionStream: str, sourceProvenance: str }"
         ));
         assert!(quint.contains(
             "type WorkflowEntryLifecycleState = { state: str, step: str, evidence: str }"
@@ -144,7 +144,7 @@ mod tests {
         assert!(quint.contains(
             "val workflowCommandErrors: List[WorkflowCommandError] = [{ sourceSlice: \"capture-ticket\", commandName: \"CaptureTicket\", errorName: \"DuplicateTicket\" }]"
         ));
-        assert!(quint.contains("val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"external_payload\", definitionName: \"CallbackReceivedPayload\" }]"));
+        assert!(quint.contains("val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"external_payload\", definitionName: \"CallbackReceivedPayload\", definitionStream: \"\", sourceProvenance: \"\" }]"));
         assert!(quint.contains("val workflowRequiresEntryLifecycleCoverage = false"));
         assert!(
             quint.contains(
@@ -289,6 +289,15 @@ mod tests {
         ));
         assert!(quint.contains(
             "val workflowNonEventDefinitionsAreUniquelyOwned = workflowOwnedDefinitions.select(definition => workflowNonEventDefinitionOwnedOnce(definition)).length() == workflowOwnedDefinitions.length()"
+        ));
+        assert!(quint.contains(
+            "def workflowEventDefinitionHasIdentity(definition) = definition.definitionKind != \"event\" or (definition.definitionStream != \"\" and definition.sourceProvenance != \"\")"
+        ));
+        assert!(quint.contains(
+            "def workflowSharedEventDefinitionMatches(left, right) = left.definitionKind != \"event\" or right.definitionKind != \"event\" or left.definitionName != right.definitionName or (left.definitionStream == right.definitionStream and left.sourceProvenance == right.sourceProvenance)"
+        ));
+        assert!(quint.contains(
+            "val workflowSharedEventDefinitionsHaveIdenticalIdentity = workflowOwnedDefinitions.select(definition => workflowEventDefinitionHasIdentity(definition)).length() == workflowOwnedDefinitions.length() and workflowOwnedDefinitions.select(definition => workflowOwnedDefinitions.select(other => workflowSharedEventDefinitionMatches(definition, other)).length() == workflowOwnedDefinitions.length()).length() == workflowOwnedDefinitions.length()"
         ));
         assert!(quint.contains(
             "def workflowOwnsDefinition(sourceSlice, definitionKind, definitionName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == definitionKind and definition.definitionName == definitionName).length() > 0"

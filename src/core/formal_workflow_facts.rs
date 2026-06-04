@@ -262,19 +262,39 @@ fn quint_workflow_command_error_record(error: &WorkflowCommandErrorRecord) -> St
 
 fn lean_workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) -> String {
     format!(
-        "{{ sourceSlice := {}, definitionKind := {}, definitionName := {} }}",
+        "{{ sourceSlice := {}, definitionKind := {}, definitionName := {}, definitionStream := {}, sourceProvenance := {} }}",
         quoted(definition.source_slice().as_ref()),
         quoted(definition.definition_kind().as_ref()),
         quoted(definition.definition_name().as_ref()),
+        quoted(
+            definition
+                .definition_stream()
+                .map_or("", |definition_stream| definition_stream.as_ref()),
+        ),
+        quoted(
+            definition
+                .source_provenance()
+                .map_or("", |source_provenance| source_provenance.as_ref()),
+        ),
     )
 }
 
 fn quint_workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) -> String {
     format!(
-        "{{ sourceSlice: {}, definitionKind: {}, definitionName: {} }}",
+        "{{ sourceSlice: {}, definitionKind: {}, definitionName: {}, definitionStream: {}, sourceProvenance: {} }}",
         quoted(definition.source_slice().as_ref()),
         quoted(definition.definition_kind().as_ref()),
         quoted(definition.definition_name().as_ref()),
+        quoted(
+            definition
+                .definition_stream()
+                .map_or("", |definition_stream| definition_stream.as_ref()),
+        ),
+        quoted(
+            definition
+                .source_provenance()
+                .map_or("", |source_provenance| source_provenance.as_ref()),
+        ),
     )
 }
 

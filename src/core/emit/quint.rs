@@ -39,7 +39,7 @@ pub fn emit_workflow_module(
   type WorkflowTransition = {{ source: str, target: str, kind: str, trigger: str, rationale: str, payloadContract: str }}
   type WorkflowOutcome = {{ sourceSlice: str, label: str, externallyRelevant: bool }}
   type WorkflowCommandError = {{ sourceSlice: str, commandName: str, errorName: str }}
-  type WorkflowOwnedDefinition = {{ sourceSlice: str, definitionKind: str, definitionName: str }}
+  type WorkflowOwnedDefinition = {{ sourceSlice: str, definitionKind: str, definitionName: str, definitionStream: str, sourceProvenance: str }}
   type WorkflowTransitionEvidence = {{ source: str, target: str, kind: str, trigger: str, sourceEvidence: str, targetEvidence: str }}
   type WorkflowEntryLifecycleState = {{ state: str, step: str, evidence: str }}
   val workflowName = {workflow_name_json}
@@ -91,6 +91,9 @@ pub fn emit_workflow_module(
   val workflowTransitionsDoNotUseCommandErrorsAsOutcomes = workflowTransitions.select(transition => transition.kind != "outcome" or workflowCommandErrors.select(error => error.sourceSlice == transition.source and error.errorName == transition.trigger).length() == 0).length() == workflowTransitions.length()
   def workflowNonEventDefinitionOwnedOnce(definition) = definition.definitionKind == "event" or workflowOwnedDefinitions.select(other => other.definitionKind == definition.definitionKind and other.definitionName == definition.definitionName).length() == 1
   val workflowNonEventDefinitionsAreUniquelyOwned = workflowOwnedDefinitions.select(definition => workflowNonEventDefinitionOwnedOnce(definition)).length() == workflowOwnedDefinitions.length()
+  def workflowEventDefinitionHasIdentity(definition) = definition.definitionKind != "event" or (definition.definitionStream != "" and definition.sourceProvenance != "")
+  def workflowSharedEventDefinitionMatches(left, right) = left.definitionKind != "event" or right.definitionKind != "event" or left.definitionName != right.definitionName or (left.definitionStream == right.definitionStream and left.sourceProvenance == right.sourceProvenance)
+  val workflowSharedEventDefinitionsHaveIdenticalIdentity = workflowOwnedDefinitions.select(definition => workflowEventDefinitionHasIdentity(definition)).length() == workflowOwnedDefinitions.length() and workflowOwnedDefinitions.select(definition => workflowOwnedDefinitions.select(other => workflowSharedEventDefinitionMatches(definition, other)).length() == workflowOwnedDefinitions.length()).length() == workflowOwnedDefinitions.length()
   def workflowOwnsDefinition(sourceSlice, definitionKind, definitionName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == definitionKind and definition.definitionName == definitionName).length() > 0
   def workflowCommandTransitionTargetsOwnedCommand(transition) = transition.kind != "command" or workflowOwnsDefinition(transition.target, "command", transition.trigger)
   def workflowCommandTransitionSourceOwnsControl(transition) = transition.kind != "command" or workflowOwnsDefinition(transition.source, "control", transition.trigger)
@@ -378,10 +381,20 @@ fn workflow_owned_definition_list(
 
 fn workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) -> String {
     format!(
-        "{{ sourceSlice: {}, definitionKind: {}, definitionName: {} }}",
+        "{{ sourceSlice: {}, definitionKind: {}, definitionName: {}, definitionStream: {}, sourceProvenance: {} }}",
         quoted(definition.source_slice().as_ref()),
         quoted(definition.definition_kind().as_ref()),
         quoted(definition.definition_name().as_ref()),
+        quoted(
+            definition
+                .definition_stream()
+                .map_or("", |definition_stream| definition_stream.as_ref()),
+        ),
+        quoted(
+            definition
+                .source_provenance()
+                .map_or("", |source_provenance| source_provenance.as_ref()),
+        ),
     )
 }
 

@@ -67,6 +67,8 @@ structure WorkflowOwnedDefinition where
   sourceSlice : String
   definitionKind : String
   definitionName : String
+  definitionStream : String
+  sourceProvenance : String
 
 structure WorkflowTransitionEvidence where
   source : String
@@ -165,6 +167,12 @@ def workflowNonEventDefinitionOwnedOnce (definition : WorkflowOwnedDefinition) :
 
 def workflowNonEventDefinitionsAreUniquelyOwned : Bool := workflowOwnedDefinitions.all workflowNonEventDefinitionOwnedOnce
 
+def workflowEventDefinitionHasIdentity (definition : WorkflowOwnedDefinition) : Bool := definition.definitionKind != "event" || (definition.definitionStream.isEmpty == false && definition.sourceProvenance.isEmpty == false)
+
+def workflowSharedEventDefinitionMatches (left : WorkflowOwnedDefinition) (right : WorkflowOwnedDefinition) : Bool := left.definitionKind != "event" || right.definitionKind != "event" || left.definitionName != right.definitionName || (left.definitionStream == right.definitionStream && left.sourceProvenance == right.sourceProvenance)
+
+def workflowSharedEventDefinitionsHaveIdenticalIdentity : Bool := workflowOwnedDefinitions.all workflowEventDefinitionHasIdentity && workflowOwnedDefinitions.all (fun definition => workflowOwnedDefinitions.all (workflowSharedEventDefinitionMatches definition))
+
 def workflowOwnsDefinition (sourceSlice : String) (definitionKind : String) (definitionName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == definitionKind && definition.definitionName == definitionName)
 
 def workflowCommandTransitionTargetsOwnedCommand (transition : WorkflowTransition) : Bool := transition.kind != "command" || workflowOwnsDefinition transition.target "command" transition.trigger
@@ -234,6 +242,8 @@ theorem workflowCommandErrorsSourceResolveIsStable : workflowCommandErrorsSource
 theorem workflowTransitionsDoNotUseCommandErrorsAsOutcomesIsStable : workflowTransitionsDoNotUseCommandErrorsAsOutcomes = true := rfl
 
 theorem workflowNonEventDefinitionsAreUniquelyOwnedIsStable : workflowNonEventDefinitionsAreUniquelyOwned = true := rfl
+
+theorem workflowSharedEventDefinitionsHaveIdenticalIdentityIsStable : workflowSharedEventDefinitionsHaveIdenticalIdentity = true := rfl
 
 theorem workflowCommandTransitionsResolveControlsAndCommandsIsStable : workflowCommandTransitionsResolveControlsAndCommands = true := rfl
 
@@ -591,10 +601,20 @@ fn workflow_owned_definition_list(
 
 fn workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) -> String {
     format!(
-        "{{ sourceSlice := {}, definitionKind := {}, definitionName := {} }}",
+        "{{ sourceSlice := {}, definitionKind := {}, definitionName := {}, definitionStream := {}, sourceProvenance := {} }}",
         quoted(definition.source_slice().as_ref()),
         quoted(definition.definition_kind().as_ref()),
         quoted(definition.definition_name().as_ref()),
+        quoted(
+            definition
+                .definition_stream()
+                .map_or("", |definition_stream| definition_stream.as_ref()),
+        ),
+        quoted(
+            definition
+                .source_provenance()
+                .map_or("", |source_provenance| source_provenance.as_ref()),
+        ),
     )
 }
 

@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 use crate::core::effect::FileContents;
 use crate::core::types::{
     CommandErrorName, CommandName, ModelDescription, ModelName, OutcomeLabelName,
-    PayloadContractName, SliceKindName, SliceSlug, TransitionTriggerName,
+    PayloadContractName, SliceKindName, SliceSlug, StreamName, TransitionTriggerName,
     WorkflowCommandErrorRecord, WorkflowCommandErrorRecords, WorkflowEntryLifecycleEvidenceText,
     WorkflowEntryLifecycleStateName, WorkflowEntryLifecycleStateRecord,
     WorkflowEntryLifecycleStateRecords, WorkflowOutcomeRecord, WorkflowOutcomeRecords,
@@ -510,16 +510,49 @@ fn parse_workflow_command_errors(
 fn parse_workflow_owned_definitions(
     value: &str,
 ) -> Result<Vec<WorkflowOwnedDefinitionRecord>, FormalGraphError> {
-    quoted_string_groups(value, 3)?
-        .chunks_exact(3)
-        .map(|chunk| {
-            Ok(WorkflowOwnedDefinitionRecord::new(
-                transition_endpoint(&chunk[0])?,
-                workflow_owned_definition_kind(&chunk[1])?,
-                workflow_owned_definition_name(&chunk[2])?,
-            ))
-        })
-        .collect()
+    let strings = parse_quoted_strings(value)?;
+    if value.contains("definitionStream") || value.contains("sourceProvenance") {
+        if strings.len() % 5 != 0 {
+            return Err(FormalGraphError::new(
+                "workflow owned definition declarations must contain groups of 5 strings",
+            ));
+        }
+        strings
+            .chunks_exact(5)
+            .map(|chunk| {
+                if chunk[3].is_empty() && chunk[4].is_empty() {
+                    Ok(WorkflowOwnedDefinitionRecord::new(
+                        transition_endpoint(&chunk[0])?,
+                        workflow_owned_definition_kind(&chunk[1])?,
+                        workflow_owned_definition_name(&chunk[2])?,
+                    ))
+                } else {
+                    Ok(WorkflowOwnedDefinitionRecord::new_with_event_identity(
+                        transition_endpoint(&chunk[0])?,
+                        workflow_owned_definition_kind(&chunk[1])?,
+                        workflow_owned_definition_name(&chunk[2])?,
+                        stream_name(&chunk[3])?,
+                        model_description(chunk[4].clone())?,
+                    ))
+                }
+            })
+            .collect()
+    } else if strings.len() % 3 == 0 {
+        strings
+            .chunks_exact(3)
+            .map(|chunk| {
+                Ok(WorkflowOwnedDefinitionRecord::new(
+                    transition_endpoint(&chunk[0])?,
+                    workflow_owned_definition_kind(&chunk[1])?,
+                    workflow_owned_definition_name(&chunk[2])?,
+                ))
+            })
+            .collect()
+    } else {
+        Err(FormalGraphError::new(
+            "workflow owned definition declarations must contain groups of 3 or 5 strings",
+        ))
+    }
 }
 
 fn parse_workflow_transition_evidences(
@@ -736,6 +769,10 @@ fn workflow_entry_lifecycle_evidence_text(
 fn payload_contract_name(value: &str) -> Result<PayloadContractName, FormalGraphError> {
     PayloadContractName::try_new(value.to_owned())
         .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn stream_name(value: &str) -> Result<StreamName, FormalGraphError> {
+    StreamName::try_new(value.to_owned()).map_err(|error| FormalGraphError::new(error.to_string()))
 }
 
 fn outcome_label_name(value: &str) -> Result<OutcomeLabelName, FormalGraphError> {

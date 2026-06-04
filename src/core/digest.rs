@@ -132,10 +132,16 @@ fn owned_definitions_digest(
         .iter()
         .map(|definition| {
             format!(
-                "{}:{}:{}",
+                "{}:{}:{}:{}:{}",
                 definition.source_slice().as_ref(),
                 definition.definition_kind().as_ref(),
-                definition.definition_name().as_ref()
+                definition.definition_name().as_ref(),
+                definition
+                    .definition_stream()
+                    .map_or("", |definition_stream| definition_stream.as_ref()),
+                definition
+                    .source_provenance()
+                    .map_or("", |source_provenance| source_provenance.as_ref())
             )
         })
         .collect::<Vec<_>>()
