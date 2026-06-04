@@ -1794,6 +1794,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def stateChangeSlicesDoNotOwnControlsOrSketches : Bool := sliceKind != \"state_change\" || sliceViewDefinitions.all (fun view => view.controls.isEmpty && view.sketchTokens.isEmpty)"
+            ),
+            "Lean slice artifacts must prove state-change slices do not own controls or wireframe/sketch tokens"
+        );
+        assert!(
+            lean.contains(
                 "def translationSlicesDoNotOwnViews : Bool := sliceKind != \"translation\" || (sliceViews.isEmpty && sliceViewDefinitions.isEmpty)"
             ),
             "Lean slice artifacts must prove translation slices do not own screens"
@@ -2265,6 +2271,12 @@ mod tests {
                 "theorem stateChangeSlicesDoNotOwnAutomationsOrTranslationsIsStable : stateChangeSlicesDoNotOwnAutomationsOrTranslations = true := rfl"
             ),
             "Lean slice artifacts must prove current state-change slices do not own automations or translations"
+        );
+        assert!(
+            lean.contains(
+                "theorem stateChangeSlicesDoNotOwnControlsOrSketchesIsStable : stateChangeSlicesDoNotOwnControlsOrSketches = true := rfl"
+            ),
+            "Lean slice artifacts must prove current state-change slices do not own controls or wireframe/sketch tokens"
         );
         assert!(
             lean.contains(

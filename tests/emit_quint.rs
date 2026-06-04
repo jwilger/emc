@@ -893,6 +893,9 @@ mod tests {
             "val stateChangeSlicesDoNotOwnAutomationsOrTranslations = sliceKind != \"state_change\" or (sliceAutomations.length() == 0 and sliceTranslations.length() == 0)"
         ));
         assert!(quint.contains(
+            "val stateChangeSlicesDoNotOwnControlsOrSketches = sliceKind != \"state_change\" or sliceViewDefinitions.select(view => view.controls.length() == 0 and view.sketchTokens.length() == 0).length() == sliceViewDefinitions.length()"
+        ));
+        assert!(quint.contains(
             "val translationSlicesDoNotOwnViews = sliceKind != \"translation\" or (sliceViews.length() == 0 and sliceViewDefinitions.length() == 0)"
         ));
         assert!(quint.contains(
