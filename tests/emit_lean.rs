@@ -433,6 +433,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def workflowCommandTransitionsTargetOwnedCommands : Bool := workflowTransitions.all workflowCommandTransitionTargetsOwnedCommand"
+            ),
+            "Lean workflow artifacts must expose command transition target-command resolution as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def workflowCommandTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != \"command\" || workflowOwnsDefinition transition.source \"control\" transition.trigger"
             ),
             "Lean workflow artifacts must require command transitions to come from source-owned controls"
@@ -544,6 +550,12 @@ mod tests {
                 "theorem workflowCommandTransitionsResolveControlsAndCommandsIsStable : workflowCommandTransitionsResolveControlsAndCommands = true := rfl"
             ),
             "Lean workflow artifacts must prove current command transitions resolve source controls and target commands"
+        );
+        assert!(
+            lean.contains(
+                "theorem workflowCommandTransitionsTargetOwnedCommandsIsStable : workflowCommandTransitionsTargetOwnedCommands = true := rfl"
+            ),
+            "Lean workflow artifacts must prove current command transitions target command-owning slices"
         );
         assert!(
             lean.contains(

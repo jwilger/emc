@@ -177,6 +177,8 @@ def workflowOwnsDefinition (sourceSlice : String) (definitionKind : String) (def
 
 def workflowCommandTransitionTargetsOwnedCommand (transition : WorkflowTransition) : Bool := transition.kind != "command" || workflowOwnsDefinition transition.target "command" transition.trigger
 
+def workflowCommandTransitionsTargetOwnedCommands : Bool := workflowTransitions.all workflowCommandTransitionTargetsOwnedCommand
+
 def workflowCommandTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != "command" || workflowOwnsDefinition transition.source "control" transition.trigger
 
 def workflowCommandTransitionsSourceOwnedControls : Bool := workflowTransitions.all workflowCommandTransitionSourceOwnsControl
@@ -250,6 +252,8 @@ theorem workflowTransitionsDoNotUseCommandErrorsAsOutcomesIsStable : workflowTra
 theorem workflowNonEventDefinitionsAreUniquelyOwnedIsStable : workflowNonEventDefinitionsAreUniquelyOwned = true := rfl
 
 theorem workflowSharedEventDefinitionsHaveIdenticalIdentityIsStable : workflowSharedEventDefinitionsHaveIdenticalIdentity = true := rfl
+
+theorem workflowCommandTransitionsTargetOwnedCommandsIsStable : workflowCommandTransitionsTargetOwnedCommands = true := rfl
 
 theorem workflowCommandTransitionsSourceOwnedControlsIsStable : workflowCommandTransitionsSourceOwnedControls = true := rfl
 

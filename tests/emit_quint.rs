@@ -306,6 +306,9 @@ mod tests {
             "def workflowCommandTransitionTargetsOwnedCommand(transition) = transition.kind != \"command\" or workflowOwnsDefinition(transition.target, \"command\", transition.trigger)"
         ));
         assert!(quint.contains(
+            "val workflowCommandTransitionsTargetOwnedCommands = workflowTransitions.select(transition => workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()"
+        ));
+        assert!(quint.contains(
             "def workflowCommandTransitionSourceOwnsControl(transition) = transition.kind != \"command\" or workflowOwnsDefinition(transition.source, \"control\", transition.trigger)"
         ));
         assert!(quint.contains(
