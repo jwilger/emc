@@ -860,18 +860,21 @@ mod tests {
             "Capture ticket",
             "Actor enters repair ticket details.",
         )?;
+        add_complete_state_view_facts(temp_dir.path(), "capture-ticket")?;
         add_slice(
             temp_dir.path(),
             "submit-ticket",
             "Submit ticket",
             "Actor submits repair ticket details.",
         )?;
+        add_complete_state_view_facts(temp_dir.path(), "submit-ticket")?;
         add_slice(
             temp_dir.path(),
             "review-ticket",
             "Review ticket",
             "Actor reviews repair ticket details.",
         )?;
+        add_complete_state_view_facts(temp_dir.path(), "review-ticket")?;
 
         Command::cargo_bin("emc")?
             .args([
@@ -917,6 +920,59 @@ mod tests {
                 "connected submit-ticket to review-ticket",
             ));
 
+        add_workflow_transition_evidence(
+            temp_dir.path(),
+            WorkflowTransitionEvidenceFixture {
+                workflow: "open-ticket",
+                source: "capture-ticket",
+                target: "submit-ticket",
+                kind: "command",
+                trigger: "SubmitTicketForReview",
+                source_evidence: "capture-ticket view owns the SubmitTicketForReview control",
+                target_evidence: "submit-ticket owns the SubmitTicketForReview command",
+            },
+        )?;
+        add_workflow_owned_definition(
+            temp_dir.path(),
+            "open-ticket",
+            "capture-ticket",
+            "control",
+            "SubmitTicketForReview",
+        )?;
+        add_workflow_owned_definition(
+            temp_dir.path(),
+            "open-ticket",
+            "submit-ticket",
+            "command",
+            "SubmitTicketForReview",
+        )?;
+        add_workflow_transition_evidence(
+            temp_dir.path(),
+            WorkflowTransitionEvidenceFixture {
+                workflow: "open-ticket",
+                source: "submit-ticket",
+                target: "review-ticket",
+                kind: "event",
+                trigger: "TicketSubmittedForReview",
+                source_evidence: "submit-ticket emits TicketSubmittedForReview",
+                target_evidence: "review-ticket observes TicketSubmittedForReview",
+            },
+        )?;
+        add_workflow_owned_definition(
+            temp_dir.path(),
+            "open-ticket",
+            "submit-ticket",
+            "event",
+            "TicketSubmittedForReview",
+        )?;
+        add_workflow_owned_definition(
+            temp_dir.path(),
+            "open-ticket",
+            "review-ticket",
+            "event",
+            "TicketSubmittedForReview",
+        )?;
+
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
@@ -932,6 +988,23 @@ mod tests {
             ),
             "Quint artifact must represent command and event workflow transitions"
         );
+        assert!(lean.contains(
+            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"control\", definitionName := \"SubmitTicketForReview\" },{ sourceSlice := \"submit-ticket\", definitionKind := \"command\", definitionName := \"SubmitTicketForReview\" },{ sourceSlice := \"submit-ticket\", definitionKind := \"event\", definitionName := \"TicketSubmittedForReview\" },{ sourceSlice := \"review-ticket\", definitionKind := \"event\", definitionName := \"TicketSubmittedForReview\" }]"
+        ));
+        assert!(quint.contains(
+            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"control\", definitionName: \"SubmitTicketForReview\" },{ sourceSlice: \"submit-ticket\", definitionKind: \"command\", definitionName: \"SubmitTicketForReview\" },{ sourceSlice: \"submit-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmittedForReview\" },{ sourceSlice: \"review-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmittedForReview\" }]"
+        ));
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        Command::cargo_bin("emc")?
+            .args(["verify"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
 
         Ok(())
     }
@@ -2277,6 +2350,45 @@ mod tests {
                 definition_kind,
                 "--definition-name",
                 definition_name,
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    struct WorkflowTransitionEvidenceFixture<'a> {
+        workflow: &'a str,
+        source: &'a str,
+        target: &'a str,
+        kind: &'a str,
+        trigger: &'a str,
+        source_evidence: &'a str,
+        target_evidence: &'a str,
+    }
+
+    fn add_workflow_transition_evidence(
+        cwd: &Path,
+        evidence: WorkflowTransitionEvidenceFixture<'_>,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-transition-evidence",
+                "--workflow",
+                evidence.workflow,
+                "--from",
+                evidence.source,
+                "--to",
+                evidence.target,
+                "--via",
+                evidence.kind,
+                "--name",
+                evidence.trigger,
+                "--source-evidence",
+                evidence.source_evidence,
+                "--target-evidence",
+                evidence.target_evidence,
             ])
             .current_dir(cwd)
             .assert()
