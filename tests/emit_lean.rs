@@ -855,6 +855,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def contractScenarioTargetsKnownDefinition (scenario : EventModelScenario) : Bool := (scenario.contractKind == \"projector\" && (sliceReadModels.contains scenario.coveredDefinition || sliceReadModelDefinitions.any (fun readModel => readModel.name == scenario.coveredDefinition))) || (scenario.contractKind == \"command\" && (sliceCommands.contains scenario.coveredDefinition || sliceCommandDefinitions.any (fun command => command.name == scenario.coveredDefinition))) || (scenario.contractKind == \"automation\" && sliceAutomations.any (fun automation => automation.name == scenario.coveredDefinition)) || (scenario.contractKind == \"translation\" && sliceTranslations.any (fun translation => translation.name == scenario.coveredDefinition)) || (scenario.contractKind == \"derivation\" && scenario.coveredDefinition.isEmpty == false && sliceReadModelDefinitions.any (fun readModel => readModel.fields.any (fun field => field.sourceKind == \"derivation\" && field.derivationScenarioName == scenario.name))) || (scenario.contractKind == \"absence\" && scenario.coveredDefinition.isEmpty == false && sliceReadModelDefinitions.any (fun readModel => readModel.fields.any (fun field => field.sourceKind == \"absence_default\" && field.absenceScenarioName == scenario.name))) || (scenario.contractKind == \"transitive\" && sliceReadModelDefinitions.any (fun readModel => readModel.transitive && readModel.name == scenario.coveredDefinition && readModel.exampleScenarioName == scenario.name))"
+            ),
+            "Lean slice artifacts must resolve contract scenario targets to modeled definitions"
+        );
+        assert!(
+            lean.contains(
+                "def contractScenariosTargetKnownDefinitions : Bool := sliceContractScenarios.all contractScenarioTargetsKnownDefinition"
+            ),
+            "Lean slice artifacts must expose contract target resolution as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def commandInputHasAllowedSource (input : CommandInput) : Bool := allowedCommandInputSourceKinds.contains input.sourceKind"
             ),
             "Lean slice artifacts must reject read-model command input sources by construction"
@@ -1722,6 +1734,12 @@ mod tests {
                 "theorem stateViewReadModelsHaveProjectorContractsIsStable : stateViewReadModelsHaveProjectorContracts = true := rfl"
             ),
             "Lean slice artifacts must prove state-view read models have projector contract scenarios"
+        );
+        assert!(
+            lean.contains(
+                "theorem contractScenariosTargetKnownDefinitionsIsStable : contractScenariosTargetKnownDefinitions = true := rfl"
+            ),
+            "Lean slice artifacts must prove current contract scenarios target known definitions"
         );
         assert!(
             lean.contains(
