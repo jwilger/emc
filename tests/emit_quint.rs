@@ -593,6 +593,9 @@ mod tests {
             "val automationSlicesDeclareTriggers = sliceKind != \"automation\" or (sliceAutomations.length() > 0 and sliceAutomations.select(automation => automationHasTrigger(automation)).length() == sliceAutomations.length())"
         ));
         assert!(quint.contains(
+            "val automationSlicesRepresentOneReaction = sliceKind != \"automation\" or sliceAutomations.length() == 1"
+        ));
+        assert!(quint.contains(
             "val automationsIssueKnownCommands = sliceAutomations.select(automation => automationIssuesKnownCommand(automation)).length() == sliceAutomations.length()"
         ));
         assert!(quint.contains(
