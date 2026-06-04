@@ -22,6 +22,24 @@ The intended MCP workflow is that an LLM authors and updates the model directly
 through EMC operations that emit Lean4 and Quint. A model is acceptable only when
 `emc check` and `emc verify` pass.
 
+## Why Lean4 And Quint
+
+Rust is useful for construction discipline in EMC itself: parsing CLI and MCP
+inputs, preserving authored facts while rewriting artifacts, preventing invalid
+tooling states such as empty slugs, and running the formal verification tools.
+Those checks prove properties of the authoring engine.
+
+Lean4 and Quint represent the event model itself. The model carries the
+definitions, proof obligations, state-machine structure, and invariants for
+workflow reachability, transition legality, scenario completeness, provenance,
+source chains, and bit-level data-flow completeness. Lean4 proves static model
+properties; Quint typechecks and verifies behavioral invariants.
+
+Keeping those obligations in Lean4 and Quint prevents Rust from becoming a
+duplicate semantic validator. Rust may reject malformed edits and artifact
+drift, but event-model correctness is accepted only from the formal artifacts
+mechanically verifying.
+
 ## Quick start
 
 From this repository:
