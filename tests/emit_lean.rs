@@ -945,6 +945,24 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def scenarioErrorReferenceIsDeclared (scenario : EventModelScenario) (errorName : String) : Bool := scenario.contractKind != \"command\" || sliceCommandDefinitions.any (fun command => command.name == scenario.coveredDefinition && command.errors.any (fun error => error.name == errorName))"
+            ),
+            "Lean slice artifacts must resolve command-contract scenario error references to declared command errors"
+        );
+        assert!(
+            lean.contains(
+                "def scenarioErrorReferencesAreDeclaredForScenario (scenario : EventModelScenario) : Bool := scenario.errorReferences.all (scenarioErrorReferenceIsDeclared scenario)"
+            ),
+            "Lean slice artifacts must define per-scenario error-reference declaration coverage"
+        );
+        assert!(
+            lean.contains(
+                "def scenarioErrorReferencesAreDeclared : Bool := sliceContractScenarios.all scenarioErrorReferencesAreDeclaredForScenario"
+            ),
+            "Lean slice artifacts must expose scenario error-reference declaration as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def singletonCommandDeclaresRepeatBehavior (command : CommandDefinition) : Bool := command.singleton == false || allowedSingletonRepeatBehaviors.contains command.repeatBehavior"
             ),
             "Lean slice artifacts must define the singleton repeat-behavior obligation on commands"
@@ -1728,6 +1746,12 @@ mod tests {
                 "theorem commandErrorsHaveScenarioCoverageIsStable : commandErrorsHaveScenarioCoverage = true := rfl"
             ),
             "Lean slice artifacts must prove current command-local errors have scenario coverage"
+        );
+        assert!(
+            lean.contains(
+                "theorem scenarioErrorReferencesAreDeclaredIsStable : scenarioErrorReferencesAreDeclared = true := rfl"
+            ),
+            "Lean slice artifacts must prove current scenario error references are declared command errors"
         );
         assert!(
             lean.contains(
