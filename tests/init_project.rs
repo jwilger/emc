@@ -42,6 +42,30 @@ mod tests {
             "leanprover/lean4:4.29.1\n"
         );
         assert!(
+            fs::read_to_string(temp_dir.path().join("emc.toml"))?.contains("version = \"0.1.0\""),
+            "project manifest must carry the formal model version"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelVersion := \"0.1.0\""),
+            "Lean project root must carry the formal model version"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("theorem modelVersionIsStable : modelVersion = \"0.1.0\" := rfl"),
+            "Lean project root must prove the formal model version"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?
+                .contains("val modelVersion = \"0.1.0\""),
+            "Quint project root must carry the formal model version"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?
+                .contains("val modelVersionStable = modelVersion == \"0.1.0\""),
+            "Quint project root must expose the formal model version check"
+        );
+        assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/lakefile.lean"))?
                 .contains("package EMCModel")
         );

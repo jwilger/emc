@@ -9,6 +9,8 @@ use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportL
 )]
 pub struct ProjectName(String);
 
+const FORMAL_MODEL_VERSION: &str = "0.1.0";
+
 pub fn init_project(project_name: ProjectName) -> EffectPlan {
     let module_name = module_name(&project_name);
     let project_name_text = project_name.as_ref();
@@ -17,7 +19,7 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         Effect::WriteFileIfMissing(
             project_path("emc.toml"),
             file_contents(format!(
-                "[project]\nname = \"{project_name_text}\"\nlean_module = \"{module_name}\"\nquint_module = \"{module_name}\"\n"
+                "[project]\nname = \"{project_name_text}\"\nversion = \"{FORMAL_MODEL_VERSION}\"\nlean_module = \"{module_name}\"\nquint_module = \"{module_name}\"\n"
             )),
         ),
         Effect::EnsureDirectory(project_path("model/lean")),
@@ -32,7 +34,7 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         Effect::WriteFileIfMissing(
             project_path(format!("model/lean/{module_name}.lean")),
             file_contents(format!(
-                "namespace {module_name}\n\n-- EMC generated Lean4 model root.\n\nend {module_name}\n"
+                "namespace {module_name}\n\n-- EMC generated Lean4 model root.\n\ndef modelVersion := \"{FORMAL_MODEL_VERSION}\"\n\ntheorem modelVersionIsStable : modelVersion = \"{FORMAL_MODEL_VERSION}\" := rfl\n\nend {module_name}\n"
             )),
         ),
         Effect::WriteFileIfMissing(
@@ -48,7 +50,9 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         ),
         Effect::WriteFileIfMissing(
             project_path(format!("model/quint/{module_name}.qnt")),
-            file_contents(format!("module {module_name} {{\n}}\n")),
+            file_contents(format!(
+                "module {module_name} {{\n  val modelVersion = \"{FORMAL_MODEL_VERSION}\"\n  val modelVersionStable = modelVersion == \"{FORMAL_MODEL_VERSION}\"\n}}\n"
+            )),
         ),
         Effect::WriteFileIfMissing(
             project_path("model/quint/slices/.gitkeep"),
