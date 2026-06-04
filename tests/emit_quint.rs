@@ -683,6 +683,9 @@ mod tests {
             "def viewCommandBoardEdgeMatchesControl(connection) = connection.sourceKind != \"view\" or connection.targetKind != \"command\" or sliceViewDefinitions.select(view => view.name == connection.source and view.controls.select(control => control.commandName == connection.target).length() > 0).length() > 0"
         ));
         assert!(quint.contains(
+            "val viewCommandBoardEdgesMatchControls = sliceBoardConnections.select(connection => viewCommandBoardEdgeMatchesControl(connection)).length() == sliceBoardConnections.length()"
+        ));
+        assert!(quint.contains(
             "val boardLanesAreCanonical = canonicalBoardLanes == [\"ux\",\"actions\",\"events\"]"
         ));
         assert!(quint.contains(

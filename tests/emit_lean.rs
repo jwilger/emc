@@ -1260,6 +1260,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def viewCommandBoardEdgesMatchControls : Bool := sliceBoardConnections.all viewCommandBoardEdgeMatchesControl"
+            ),
+            "Lean slice artifacts must expose view-to-command board control matching as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def boardLanesAreCanonical : Bool := canonicalBoardLanes == [\"ux\",\"actions\",\"events\"]"
             ),
             "Lean slice artifacts must prove the canonical board lanes"
@@ -2117,6 +2123,10 @@ mod tests {
         assert!(
             lean.contains("theorem eventReadModelBoardEdgesMatchProjectionSourcesIsStable : eventReadModelBoardEdgesMatchProjectionSources = true := rfl"),
             "Lean slice artifacts must prove current event-to-read-model board edges match projection sources"
+        );
+        assert!(
+            lean.contains("theorem viewCommandBoardEdgesMatchControlsIsStable : viewCommandBoardEdgesMatchControls = true := rfl"),
+            "Lean slice artifacts must prove current view-to-command board edges match controls"
         );
         assert!(
             lean.contains("theorem boardConnectionsHaveCausalSemanticsIsStable : boardConnectionsHaveCausalSemantics = true := rfl"),
