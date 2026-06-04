@@ -799,9 +799,15 @@ mod tests {
         assert!(lean.contains("def sliceEventDefinitions : List EventDefinition := []"));
         assert!(
             lean.contains(
-                "def allowedEventAttributeSourceKinds : List String := [\"command_input\",\"external_payload\",\"generated\",\"session\",\"constant\",\"derivation\"]"
+                "def storedEventFactSourceKinds : List String := [\"command_input\",\"external_payload\",\"generated\",\"session\",\"derivation\"]"
             ),
-            "Lean slice artifacts must enumerate event attribute source kinds without read_model"
+            "Lean slice artifacts must enumerate the source kinds that may feed stored event facts"
+        );
+        assert!(
+            lean.contains(
+                "def allowedEventAttributeSourceKinds : List String := storedEventFactSourceKinds"
+            ),
+            "Lean slice artifacts must constrain event attributes to stored event fact source kinds"
         );
         assert!(lean.contains("def sliceReadModels : List String := []"));
         assert!(lean.contains("def sliceReadModelDefinitions : List ReadModelDefinition := []"));
@@ -1320,9 +1326,15 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def eventAttributeSourceIsComplete (event : EventDefinition) (eventAttribute : EventAttribute) : Bool := (eventAttribute.sourceKind == \"command_input\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.sourceField.isEmpty == false && sliceCommandDefinitions.any (commandInputReferencesAttributeSource event eventAttribute)) || (eventAttribute.sourceKind == \"external_payload\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.sourceField.isEmpty == false && externalPayloadFieldIsDeclared eventAttribute) || (eventAttribute.sourceKind == \"generated\" && eventAttribute.sourceName.isEmpty == false) || (eventAttribute.sourceKind == \"session\" && eventAttribute.sourceName.isEmpty == false) || (eventAttribute.sourceKind == \"constant\" && eventAttribute.sourceField.isEmpty == false) || (eventAttribute.sourceKind == \"derivation\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.sourceField.isEmpty == false)"
+                "def eventAttributeSourceIsComplete (event : EventDefinition) (eventAttribute : EventAttribute) : Bool := (eventAttribute.sourceKind == \"command_input\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.sourceField.isEmpty == false && sliceCommandDefinitions.any (commandInputReferencesAttributeSource event eventAttribute)) || (eventAttribute.sourceKind == \"external_payload\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.sourceField.isEmpty == false && externalPayloadFieldIsDeclared eventAttribute) || (eventAttribute.sourceKind == \"generated\" && eventAttribute.sourceName.isEmpty == false) || (eventAttribute.sourceKind == \"session\" && eventAttribute.sourceName.isEmpty == false) || (eventAttribute.sourceKind == \"derivation\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.sourceField.isEmpty == false)"
             ),
             "Lean slice artifacts must require event attribute source details to be complete for each source kind"
+        );
+        assert!(
+            lean.contains(
+                "def eventAttributeTracesToStoredFactSource (eventAttribute : EventAttribute) : Bool := storedEventFactSourceKinds.contains eventAttribute.sourceKind"
+            ),
+            "Lean slice artifacts must classify event attributes by modeled stored-fact source kinds"
         );
         assert!(
             lean.contains(
@@ -1359,6 +1371,12 @@ mod tests {
                 "def eventAttributeSourcesAreComplete : Bool := sliceEventDefinitions.all (fun event => event.attributes.all (eventAttributeSourceIsComplete event))"
             ),
             "Lean slice artifacts must prove event attribute sources are complete"
+        );
+        assert!(
+            lean.contains(
+                "def storedEventFactsTraceToOriginalSources : Bool := sliceEventDefinitions.all (fun event => event.attributes.all eventAttributeTracesToStoredFactSource)"
+            ),
+            "Lean slice artifacts must prove every stored event fact traces to an original modeled source"
         );
         assert!(
             lean.contains(
@@ -2085,6 +2103,12 @@ mod tests {
                 "theorem eventAttributeSourcesAreCompleteIsStable : eventAttributeSourcesAreComplete = true := rfl"
             ),
             "Lean slice artifacts must prove current event attribute source details are complete"
+        );
+        assert!(
+            lean.contains(
+                "theorem storedEventFactsTraceToOriginalSourcesIsStable : storedEventFactsTraceToOriginalSources = true := rfl"
+            ),
+            "Lean slice artifacts must prove current stored event facts trace to original modeled sources"
         );
         assert!(
             lean.contains(
