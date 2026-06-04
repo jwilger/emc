@@ -875,6 +875,12 @@ mod tests {
             "val stateChangeSlicesOwnCommands = sliceKind != \"state_change\" or (sliceCommands.length() > 0 or sliceCommandDefinitions.length() > 0)"
         ));
         assert!(quint.contains(
+            "val stateChangeSlicesOwnOutcomes = sliceKind != \"state_change\" or sliceOutcomeDefinitions.length() > 0"
+        ));
+        assert!(quint.contains(
+            "val stateChangeSlicesOwnErrors = sliceKind != \"state_change\" or commandErrorsAreDeclared"
+        ));
+        assert!(quint.contains(
             "val stateChangeSlicesDoNotOwnReadModelsOrViews = sliceKind != \"state_change\" or (sliceReadModels.length() == 0 and sliceReadModelDefinitions.length() == 0 and sliceViews.length() == 0 and sliceViewDefinitions.length() == 0)"
         ));
         assert!(quint.contains(

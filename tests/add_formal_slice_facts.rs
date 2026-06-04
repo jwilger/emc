@@ -243,6 +243,23 @@ mod tests {
         Command::cargo_bin("emc")?
             .args([
                 "add",
+                "outcome",
+                "--slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--events",
+                "TicketCaptured",
+                "--externally-relevant",
+                "false",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
                 "data-flow",
                 "--slice",
                 "capture-ticket",
@@ -644,6 +661,23 @@ mod tests {
         Command::cargo_bin("emc")?
             .args([
                 "add",
+                "outcome",
+                "--slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--events",
+                "TicketCaptured",
+                "--externally-relevant",
+                "false",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
                 "data-flow",
                 "--slice",
                 "capture-ticket",
@@ -806,6 +840,7 @@ mod tests {
         let temp_dir = initialized_project_with_slice()?;
 
         author_state_change_ticket_capture(&temp_dir)?;
+        author_ticket_captured_outcome(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args([
@@ -1295,6 +1330,8 @@ mod tests {
             .stdout(predicate::str::contains(
                 "added event TicketCaptured to slice capture-ticket",
             ));
+
+        author_ticket_captured_outcome(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args([
@@ -2753,6 +2790,7 @@ mod tests {
         let temp_dir = initialized_project_with_slice()?;
 
         author_state_change_ticket_capture(&temp_dir)?;
+        author_ticket_captured_outcome(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args([
@@ -2888,6 +2926,7 @@ mod tests {
         let temp_dir = initialized_project_with_slice()?;
 
         author_state_change_ticket_capture(&temp_dir)?;
+        author_ticket_captured_outcome(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args(["mcp", "stdio"])
@@ -2971,6 +3010,27 @@ mod tests {
             .success();
 
         Ok(temp_dir)
+    }
+
+    fn author_ticket_captured_outcome(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "outcome",
+                "--slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--events",
+                "TicketCaptured",
+                "--externally-relevant",
+                "false",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
     }
 
     fn author_state_change_ticket_capture(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {

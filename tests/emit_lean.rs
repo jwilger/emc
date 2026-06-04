@@ -1758,6 +1758,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def stateChangeSlicesOwnOutcomes : Bool := sliceKind != \"state_change\" || sliceOutcomeDefinitions.isEmpty == false"
+            ),
+            "Lean slice artifacts must prove state-change slices own outcome facts"
+        );
+        assert!(
+            lean.contains(
+                "def stateChangeSlicesOwnErrors : Bool := sliceKind != \"state_change\" || commandErrorsAreDeclared"
+            ),
+            "Lean slice artifacts must prove state-change command-local errors are owned by command definitions"
+        );
+        assert!(
+            lean.contains(
                 "def stateChangeSlicesDoNotOwnReadModelsOrViews : Bool := sliceKind != \"state_change\" || (sliceReadModels.isEmpty && sliceReadModelDefinitions.isEmpty && sliceViews.isEmpty && sliceViewDefinitions.isEmpty)"
             ),
             "Lean slice artifacts must prove state-change slices do not own read models or views"
@@ -2205,6 +2217,18 @@ mod tests {
                 "theorem stateChangeSlicesOwnCommandsIsStable : stateChangeSlicesOwnCommands = true := rfl"
             ),
             "Lean slice artifacts must prove current state-change slices own commands"
+        );
+        assert!(
+            lean.contains(
+                "theorem stateChangeSlicesOwnOutcomesIsStable : stateChangeSlicesOwnOutcomes = true := by\n  simp [stateChangeSlicesOwnOutcomes, sliceKind, sliceOutcomeDefinitions]"
+            ),
+            "Lean slice artifacts must prove current state-change slices own outcome facts"
+        );
+        assert!(
+            lean.contains(
+                "theorem stateChangeSlicesOwnErrorsIsStable : stateChangeSlicesOwnErrors = true := by\n  by_cases h : sliceKind != \"state_change\"\n  · simp [stateChangeSlicesOwnErrors, h]\n  · simp [stateChangeSlicesOwnErrors, h]\n    exact commandErrorsAreDeclaredIsStable"
+            ),
+            "Lean slice artifacts must prove current state-change slices own command-local errors"
         );
         assert!(
             lean.contains(
