@@ -100,7 +100,7 @@ pub fn emit_workflow_module(
   def workflowNavigationTransitionSourceOwnsControl(transition) = transition.kind != "navigation" or workflowOwnsDefinition(transition.source, "control", transition.trigger)
   def workflowNavigationTransitionTargetsOwnedView(transition) = transition.kind != "navigation" or workflowOwnsDefinition(transition.target, "view", transition.trigger)
   val workflowNavigationTransitionsResolveControlsAndViews = workflowTransitions.select(transition => workflowNavigationTransitionSourceOwnsControl(transition) and workflowNavigationTransitionTargetsOwnedView(transition)).length() == workflowTransitions.length()
-  def workflowExternalTriggerDeclaresPayloadContract(transition) = transition.kind != "external_trigger" or transition.payloadContract != ""
+  def workflowExternalTriggerDeclaresPayloadContract(transition) = transition.kind != "external_trigger" or (transition.payloadContract != "" and workflowOwnsDefinition(transition.source, "external_payload", transition.payloadContract))
   val workflowExternalTriggersDeclarePayloadContracts = workflowTransitions.select(transition => workflowExternalTriggerDeclaresPayloadContract(transition)).length() == workflowTransitions.length()
   def workflowTransitionRequiresEvidence(transition) = transition.kind == "event" or transition.kind == "command" or transition.kind == "navigation"
   def workflowTransitionEvidenceMatches(transition, evidence) = evidence.source == transition.source and evidence.target == transition.target and evidence.kind == transition.kind and evidence.trigger == transition.trigger and evidence.sourceEvidence != "" and evidence.targetEvidence != ""
