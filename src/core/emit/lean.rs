@@ -179,6 +179,8 @@ def workflowCommandTransitionTargetsOwnedCommand (transition : WorkflowTransitio
 
 def workflowCommandTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != "command" || workflowOwnsDefinition transition.source "control" transition.trigger
 
+def workflowCommandTransitionsSourceOwnedControls : Bool := workflowTransitions.all workflowCommandTransitionSourceOwnsControl
+
 def workflowCommandTransitionsResolveControlsAndCommands : Bool := workflowTransitions.all (fun transition => workflowCommandTransitionSourceOwnsControl transition && workflowCommandTransitionTargetsOwnedCommand transition)
 
 def workflowEventTransitionIsSharedByEndpoints (transition : WorkflowTransition) : Bool := transition.kind != "event" || (workflowOwnsDefinition transition.source "event" transition.trigger && workflowOwnsDefinition transition.target "event" transition.trigger)
@@ -248,6 +250,8 @@ theorem workflowTransitionsDoNotUseCommandErrorsAsOutcomesIsStable : workflowTra
 theorem workflowNonEventDefinitionsAreUniquelyOwnedIsStable : workflowNonEventDefinitionsAreUniquelyOwned = true := rfl
 
 theorem workflowSharedEventDefinitionsHaveIdenticalIdentityIsStable : workflowSharedEventDefinitionsHaveIdenticalIdentity = true := rfl
+
+theorem workflowCommandTransitionsSourceOwnedControlsIsStable : workflowCommandTransitionsSourceOwnedControls = true := rfl
 
 theorem workflowCommandTransitionsResolveControlsAndCommandsIsStable : workflowCommandTransitionsResolveControlsAndCommands = true := rfl
 
