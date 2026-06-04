@@ -1842,6 +1842,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def navigationTargetHasPayload (target : NavigationTarget) : Bool := target.targetName.isEmpty == false || target.externalWorkflowName.isEmpty == false || target.externalSystemName.isEmpty == false || target.handoffContract.isEmpty == false"
+            ),
+            "Lean slice artifacts must identify controls carrying navigation target data"
+        );
+        assert!(
+            lean.contains(
+                "def navigationControlDeclaresType (target : NavigationTarget) : Bool := navigationTargetHasPayload target == false || target.targetType.isEmpty == false"
+            ),
+            "Lean slice artifacts must require navigation controls to declare a navigation type"
+        );
+        assert!(
+            lean.contains(
                 "def navigationTargetIsComplete (view : ViewDefinition) (target : NavigationTarget) : Bool := (target.targetType.isEmpty && target.targetName.isEmpty && target.externalWorkflowName.isEmpty && target.externalSystemName.isEmpty && target.handoffContract.isEmpty) || (target.targetType == \"modeled_view\" && target.targetName.isEmpty == false && sliceViews.contains target.targetName) || (target.targetType == \"local_view_state\" && target.targetName.isEmpty == false && view.localStates.contains target.targetName) || (target.targetType == \"external_workflow\" && target.externalWorkflowName.isEmpty == false) || (target.targetType == \"external_system\" && target.externalSystemName.isEmpty == false && target.handoffContract.isEmpty == false)"
             ),
             "Lean slice artifacts must require navigation targets to be complete for their target type"
@@ -1851,6 +1863,12 @@ mod tests {
                 "def viewControlNavigationTypesAreModeled : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => navigationTargetTypeIsModeled control.navigation))"
             ),
             "Lean slice artifacts must prove control navigation target types are modeled"
+        );
+        assert!(
+            lean.contains(
+                "def viewControlNavigationTypesAreDeclared : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => navigationControlDeclaresType control.navigation))"
+            ),
+            "Lean slice artifacts must prove navigation controls declare navigation types"
         );
         assert!(
             lean.contains(
@@ -2609,6 +2627,12 @@ mod tests {
                 "theorem viewControlNavigationTypesAreModeledIsStable : viewControlNavigationTypesAreModeled = true := rfl"
             ),
             "Lean slice artifacts must prove current navigation target types are modeled"
+        );
+        assert!(
+            lean.contains(
+                "theorem viewControlNavigationTypesAreDeclaredIsStable : viewControlNavigationTypesAreDeclared = true := rfl"
+            ),
+            "Lean slice artifacts must prove current navigation controls declare navigation types"
         );
         assert!(
             lean.contains(
