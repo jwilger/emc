@@ -1758,6 +1758,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def readModelOwnsProjectionPath (readModel : ReadModelDefinition) : Bool := readModel.fields.isEmpty == false && readModel.fields.all readModelFieldSourceIsComplete"
+            ),
+            "Lean slice artifacts must define state-view projection paths as complete read-model field sources"
+        );
+        assert!(
+            lean.contains(
+                "def stateViewSlicesOwnProjectionPaths : Bool := sliceKind != \"state_view\" || sliceReadModelDefinitions.all readModelOwnsProjectionPath"
+            ),
+            "Lean slice artifacts must prove state-view slices own projection paths"
+        );
+        assert!(
+            lean.contains(
                 "def stateChangeSlicesOwnCommands : Bool := sliceKind != \"state_change\" || (sliceCommands.isEmpty == false || sliceCommandDefinitions.isEmpty == false)"
             ),
             "Lean slice artifacts must prove state-change slices own commands"
@@ -2235,6 +2247,12 @@ mod tests {
                 "theorem stateViewSlicesOwnReadModelsIsStable : stateViewSlicesOwnReadModels = true := rfl"
             ),
             "Lean slice artifacts must prove current state-view slices own read models"
+        );
+        assert!(
+            lean.contains(
+                "theorem stateViewSlicesOwnProjectionPathsIsStable : stateViewSlicesOwnProjectionPaths = true := rfl"
+            ),
+            "Lean slice artifacts must prove current state-view slices own projection paths"
         );
         assert!(
             lean.contains(
