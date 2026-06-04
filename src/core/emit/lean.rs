@@ -469,8 +469,32 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
     );
     let contents = contents
         .replace(
+            "def commandInputHasProvenance (input : CommandInput) : Bool := input.name.isEmpty == false && input.sourceKind.isEmpty == false && input.sourceDescription.isEmpty == false && input.provenanceChain.isEmpty == false\n\ndef commandInputsHaveAllowedSources",
+            "def commandInputHasProvenance (input : CommandInput) : Bool := input.name.isEmpty == false && input.sourceKind.isEmpty == false && input.sourceDescription.isEmpty == false && input.provenanceChain.isEmpty == false\n\ndef commandInputSessionInputHasDescription (input : CommandInput) : Bool := input.sourceKind != \"session\" || input.sourceDescription.isEmpty == false\n\ndef commandInputsHaveAllowedSources",
+        )
+        .replace(
+            "def commandInputsHaveProvenance : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputHasProvenance)\n\ndef commandErrorHasDeclaration",
+            "def commandInputsHaveProvenance : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputHasProvenance)\n\ndef commandSessionInputsHaveDescriptions : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputSessionInputHasDescription)\n\ndef commandErrorHasDeclaration",
+        )
+        .replace(
+            "theorem commandInputsHaveProvenanceIsStable : commandInputsHaveProvenance = true := rfl\n\ntheorem commandErrorsAreDeclaredIsStable",
+            "theorem commandInputsHaveProvenanceIsStable : commandInputsHaveProvenance = true := rfl\n\ntheorem commandSessionInputsHaveDescriptionsIsStable : commandSessionInputsHaveDescriptions = true := rfl\n\ntheorem commandErrorsAreDeclaredIsStable",
+        )
+        .replace(
+            "def commandInputsHaveProvenance : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputHasProvenance)\n\ndef commandInputTracesToInvocationSource",
+            "def commandInputsHaveProvenance : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputHasProvenance)\n\ndef commandSessionInputsHaveDescriptions : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputSessionInputHasDescription)\n\ndef commandInputTracesToInvocationSource",
+        )
+        .replace(
+            "theorem commandInputsHaveProvenanceIsStable : commandInputsHaveProvenance = true := rfl\n\ntheorem commandInputsTraceToInvocationSourcesIsStable",
+            "theorem commandInputsHaveProvenanceIsStable : commandInputsHaveProvenance = true := rfl\n\ntheorem commandSessionInputsHaveDescriptionsIsStable : commandSessionInputsHaveDescriptions = true := rfl\n\ntheorem commandInputsTraceToInvocationSourcesIsStable",
+        )
+        .replace(
             "def controlInputVisibilityIsModeled (input : ControlInputProvision) : Bool := (input.sourceKind != \"actor\" || input.sketchToken.isEmpty == false || input.visibleToActor) && (input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor)\n\ndef controlHasSketchToken",
             "def controlInputVisibilityIsModeled (input : ControlInputProvision) : Bool := (input.sourceKind != \"actor\" || input.sketchToken.isEmpty == false || input.visibleToActor) && (input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor)\n\ndef controlInputDecisionFieldIsVisible (input : ControlInputProvision) : Bool := input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor\n\ndef controlHasSketchToken",
+        )
+        .replace(
+            "def controlInputHasProvenance (input : ControlInputProvision) : Bool := input.name.isEmpty == false && input.sourceKind.isEmpty == false && input.sourceDescription.isEmpty == false\n\ndef controlInputVisibilityIsModeled",
+            "def controlInputHasProvenance (input : ControlInputProvision) : Bool := input.name.isEmpty == false && input.sourceKind.isEmpty == false && input.sourceDescription.isEmpty == false\n\ndef controlInputSessionInputHasDescription (input : ControlInputProvision) : Bool := input.sourceKind != \"session\" || input.sourceDescription.isEmpty == false\n\ndef controlInputVisibilityIsModeled",
         )
         .replace(
             "def controlInputDecisionFieldIsVisible (input : ControlInputProvision) : Bool := input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor\n\ndef controlHasSketchToken",
@@ -479,6 +503,10 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
         .replace(
             "def viewControlInputVisibilityIsModeled : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputVisibilityIsModeled))\n\ndef viewControlsHandleCommandErrors",
             "def viewControlInputVisibilityIsModeled : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputVisibilityIsModeled))\n\ndef viewControlDecisionFieldsAreVisible : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputDecisionFieldIsVisible))\n\ndef viewControlsHandleCommandErrors",
+        )
+        .replace(
+            "def viewControlInputsHaveProvenance : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputHasProvenance))\n\ndef viewControlInputVisibilityIsModeled",
+            "def viewControlInputsHaveProvenance : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputHasProvenance))\n\ndef viewControlSessionInputsHaveDescriptions : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputSessionInputHasDescription))\n\ndef viewControlInputVisibilityIsModeled",
         )
         .replace(
             "def viewControlDecisionFieldsAreVisible : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputDecisionFieldIsVisible))\n\ndef viewControlsHandleCommandErrors",
@@ -491,6 +519,10 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
     let contents = contents.replace(
         "theorem viewControlDecisionFieldsAreVisibleIsStable : viewControlDecisionFieldsAreVisible = true := rfl\n\ntheorem viewControlsHandleCommandErrorsIsStable",
         "theorem viewControlDecisionFieldsAreVisibleIsStable : viewControlDecisionFieldsAreVisible = true := rfl\n\ntheorem viewControlActorInputsAreVisibleIsStable : viewControlActorInputsAreVisible = true := rfl\n\ntheorem viewControlsHandleCommandErrorsIsStable",
+    );
+    let contents = contents.replace(
+        "theorem viewControlInputsHaveProvenanceIsStable : viewControlInputsHaveProvenance = true := rfl\n\ntheorem viewControlInputVisibilityIsModeledIsStable",
+        "theorem viewControlInputsHaveProvenanceIsStable : viewControlInputsHaveProvenance = true := rfl\n\ntheorem viewControlSessionInputsHaveDescriptionsIsStable : viewControlSessionInputsHaveDescriptions = true := rfl\n\ntheorem viewControlInputVisibilityIsModeledIsStable",
     );
     file_contents(contents)
 }

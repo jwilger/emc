@@ -554,6 +554,12 @@ mod tests {
             "val commandInputsHaveProvenance = sliceCommandDefinitions.select(command => command.inputs.select(input => input.name != \"\" and input.sourceKind != \"\" and input.sourceDescription != \"\" and input.provenanceChain.length() > 0).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(
+            "def commandInputSessionInputHasDescription(input) = input.sourceKind != \"session\" or input.sourceDescription != \"\""
+        ));
+        assert!(quint.contains(
+            "val commandSessionInputsHaveDescriptions = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputSessionInputHasDescription(input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
+        ));
+        assert!(quint.contains(
             "def commandInputTracesToInvocationSource(input) = allowedCommandInputSourceKinds.select(sourceKind => sourceKind == input.sourceKind).length() > 0 and input.provenanceChain.length() > 0"
         ));
         assert!(quint.contains(
@@ -918,6 +924,12 @@ mod tests {
         ));
         assert!(quint.contains(
             "val viewControlInputsHaveProvenance = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => input.name != \"\" and input.sourceKind != \"\" and input.sourceDescription != \"\").length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
+        ));
+        assert!(quint.contains(
+            "def controlInputSessionInputHasDescription(input) = input.sourceKind != \"session\" or input.sourceDescription != \"\""
+        ));
+        assert!(quint.contains(
+            "val viewControlSessionInputsHaveDescriptions = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => controlInputSessionInputHasDescription(input)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
             "val viewControlInputVisibilityIsModeled = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => (input.sourceKind != \"actor\" or input.sketchToken != \"\" or input.visibleToActor) and (not(input.decisionField) or input.sketchToken != \"\" or input.visibleToActor)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"

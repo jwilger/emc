@@ -990,6 +990,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def commandInputSessionInputHasDescription (input : CommandInput) : Bool := input.sourceKind != \"session\" || input.sourceDescription.isEmpty == false"
+            ),
+            "Lean slice artifacts must name session command-input descriptions as their own proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def commandInputTracesToInvocationSource (input : CommandInput) : Bool := allowedCommandInputSourceKinds.contains input.sourceKind && input.provenanceChain.isEmpty == false"
             ),
             "Lean slice artifacts must require command inputs to trace to modeled invocation source categories"
@@ -1005,6 +1011,12 @@ mod tests {
                 "def commandInputsHaveProvenance : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputHasProvenance)"
             ),
             "Lean slice artifacts must prove command inputs have source provenance"
+        );
+        assert!(
+            lean.contains(
+                "def commandSessionInputsHaveDescriptions : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputSessionInputHasDescription)"
+            ),
+            "Lean slice artifacts must expose session command-input descriptions as a proof obligation"
         );
         assert!(
             lean.contains(
@@ -1758,6 +1770,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def controlInputSessionInputHasDescription (input : ControlInputProvision) : Bool := input.sourceKind != \"session\" || input.sourceDescription.isEmpty == false"
+            ),
+            "Lean slice artifacts must name hidden session control-input descriptions as their own proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def controlInputVisibilityIsModeled (input : ControlInputProvision) : Bool := (input.sourceKind != \"actor\" || input.sketchToken.isEmpty == false || input.visibleToActor) && (input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor)"
             ),
             "Lean slice artifacts must require actor and decision inputs to be visible in the sketch"
@@ -1875,6 +1893,12 @@ mod tests {
                 "def viewControlInputsHaveProvenance : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputHasProvenance))"
             ),
             "Lean slice artifacts must prove control inputs declare provenance"
+        );
+        assert!(
+            lean.contains(
+                "def viewControlSessionInputsHaveDescriptions : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputSessionInputHasDescription))"
+            ),
+            "Lean slice artifacts must expose hidden session control-input descriptions as a proof obligation"
         );
         assert!(
             lean.contains(
@@ -2067,6 +2091,12 @@ mod tests {
                 "theorem commandInputsHaveProvenanceIsStable : commandInputsHaveProvenance = true := rfl"
             ),
             "Lean slice artifacts must prove command inputs carry reportable provenance"
+        );
+        assert!(
+            lean.contains(
+                "theorem commandSessionInputsHaveDescriptionsIsStable : commandSessionInputsHaveDescriptions = true := rfl"
+            ),
+            "Lean slice artifacts must prove current session command inputs have descriptions"
         );
         assert!(
             lean.contains(
@@ -2423,6 +2453,12 @@ mod tests {
                 "theorem viewControlInputsHaveProvenanceIsStable : viewControlInputsHaveProvenance = true := rfl"
             ),
             "Lean slice artifacts must prove current control inputs carry provenance"
+        );
+        assert!(
+            lean.contains(
+                "theorem viewControlSessionInputsHaveDescriptionsIsStable : viewControlSessionInputsHaveDescriptions = true := rfl"
+            ),
+            "Lean slice artifacts must prove current hidden session control inputs have descriptions"
         );
         assert!(
             lean.contains(
