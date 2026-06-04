@@ -5,12 +5,13 @@ mod tests {
     use emc::core::digest::{WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest};
     use emc::core::emit::lean::{emit_slice_module, emit_workflow_module};
     use emc::core::types::{
-        CommandErrorName, CommandName, OutcomeLabelName, SliceKindName, TransitionTriggerName,
-        WorkflowCommandErrorRecord, WorkflowCommandErrorRecords, WorkflowModuleData,
-        WorkflowOutcomeRecord, WorkflowOutcomeRecords, WorkflowOwnedDefinitionRecords,
-        WorkflowSliceDetail, WorkflowSliceDetails, WorkflowStepRelationshipName,
-        WorkflowTransitionEndpoint, WorkflowTransitionKind, WorkflowTransitionRecord,
-        WorkflowTransitionRecords,
+        CommandErrorName, CommandName, OutcomeLabelName, PayloadContractName, SliceKindName,
+        TransitionTriggerName, WorkflowCommandErrorRecord, WorkflowCommandErrorRecords,
+        WorkflowModuleData, WorkflowOutcomeRecord, WorkflowOutcomeRecords,
+        WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
+        WorkflowOwnedDefinitionRecords, WorkflowSliceDetail, WorkflowSliceDetails,
+        WorkflowStepRelationshipName, WorkflowTransitionEndpoint, WorkflowTransitionKind,
+        WorkflowTransitionRecord, WorkflowTransitionRecords,
     };
     use emc::io::dto::{
         parse_lean_module_name, parse_model_description, parse_model_name, parse_slice_slug,
@@ -38,11 +39,12 @@ mod tests {
                 WorkflowStepRelationshipName::try_new("main".to_owned())?,
             ),
         ];
-        let workflow_transitions = vec![WorkflowTransitionRecord::new(
+        let workflow_transitions = vec![WorkflowTransitionRecord::new_with_payload_contract(
             WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
             WorkflowTransitionEndpoint::try_new("review-ticket".to_owned())?,
-            WorkflowTransitionKind::try_new("navigation".to_owned())?,
-            TransitionTriggerName::try_new("review-ticket-screen".to_owned())?,
+            WorkflowTransitionKind::try_new("external_trigger".to_owned())?,
+            TransitionTriggerName::try_new("callback_received".to_owned())?,
+            PayloadContractName::try_new("CallbackReceivedPayload".to_owned())?,
         )];
         let workflow_outcomes = WorkflowOutcomeRecords::from_records([WorkflowOutcomeRecord::new(
             WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
@@ -54,6 +56,12 @@ mod tests {
                 WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
                 CommandName::try_new("CaptureTicket".to_owned())?,
                 CommandErrorName::try_new("DuplicateTicket".to_owned())?,
+            )]);
+        let workflow_owned_definitions =
+            WorkflowOwnedDefinitionRecords::from_records([WorkflowOwnedDefinitionRecord::new(
+                WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
+                WorkflowOwnedDefinitionKind::try_new("external_payload".to_owned())?,
+                WorkflowOwnedDefinitionName::try_new("CallbackReceivedPayload".to_owned())?,
             )]);
         let module = emit_workflow_module(
             parse_lean_module_name("OpenTicket")?,
@@ -73,7 +81,7 @@ mod tests {
                     ),
                     workflow_outcomes: workflow_outcomes.clone(),
                     workflow_command_errors: workflow_command_errors.clone(),
-                    workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
+                    workflow_owned_definitions: workflow_owned_definitions.clone(),
                     workflow_transition_evidences: Default::default(),
                     workflow_requires_entry_lifecycle_coverage: false,
                     workflow_entry_lifecycle_states: Default::default(),
@@ -84,14 +92,15 @@ mod tests {
                 workflow_transitions,
             ))
             .with_outcomes(workflow_outcomes)
-            .with_command_errors(workflow_command_errors),
+            .with_command_errors(workflow_command_errors)
+            .with_owned_definitions(workflow_owned_definitions),
         );
         let lean = module.as_ref();
 
         assert!(lean.contains("namespace OpenTicket"));
         assert!(
             lean.contains(
-                "-- EMC-DIGEST: workflow:name=Open ticket;slug=open-ticket;description=Actor opens a repair ticket.;slices=capture-ticket|Capture ticket|state_view|Actor enters repair ticket details.|entry,review-ticket|Review ticket|state_view|Actor reviews repair ticket details.|main;transitions=capture-ticket->review-ticket:navigation:review-ticket-screen:"
+                "-- EMC-DIGEST: workflow:name=Open ticket;slug=open-ticket;description=Actor opens a repair ticket.;slices=capture-ticket|Capture ticket|state_view|Actor enters repair ticket details.|entry,review-ticket|Review ticket|state_view|Actor reviews repair ticket details.|main;transitions=capture-ticket->review-ticket:external_trigger:callback_received::CallbackReceivedPayload"
             )
         );
         assert!(lean.contains("def workflowName := \"Open ticket\""));
@@ -136,7 +145,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"external_trigger\", trigger := \"callback_received\", rationale := \"\", payloadContract := \"CallbackReceivedPayload\" }]"
             ),
             "Lean artifact must model transitions as named business records, not anonymous tuples"
         );
@@ -153,7 +162,7 @@ mod tests {
             "Lean workflow artifacts must carry command-local errors so outcome transitions cannot use them"
         );
         assert!(
-            lean.contains("def workflowOwnedDefinitions : List WorkflowOwnedDefinition := []"),
+            lean.contains("def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"external_payload\", definitionName := \"CallbackReceivedPayload\" }]"),
             "Lean workflow artifacts must carry the authored cross-slice ownership inventory"
         );
         assert!(
@@ -448,9 +457,9 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransition) : Bool := transition.kind != \"external_trigger\" || transition.payloadContract.isEmpty == false"
+                "def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransition) : Bool := transition.kind != \"external_trigger\" || (transition.payloadContract.isEmpty == false && workflowOwnsDefinition transition.source \"external_payload\" transition.payloadContract)"
             ),
-            "Lean workflow artifacts must require external-trigger transitions to declare payload contracts"
+            "Lean workflow artifacts must require external-trigger transitions to declare owned payload contracts"
         );
         assert!(
             lean.contains(

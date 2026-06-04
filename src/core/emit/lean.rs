@@ -183,7 +183,7 @@ def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransitio
 
 def workflowNavigationTransitionsResolveControlsAndViews : Bool := workflowTransitions.all (fun transition => workflowNavigationTransitionSourceOwnsControl transition && workflowNavigationTransitionTargetsOwnedView transition)
 
-def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransition) : Bool := transition.kind != "external_trigger" || transition.payloadContract.isEmpty == false
+def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransition) : Bool := transition.kind != "external_trigger" || (transition.payloadContract.isEmpty == false && workflowOwnsDefinition transition.source "external_payload" transition.payloadContract)
 
 def workflowExternalTriggersDeclarePayloadContracts : Bool := workflowTransitions.all workflowExternalTriggerDeclaresPayloadContract
 
