@@ -35,6 +35,66 @@ workflow reachability, transition legality, scenario completeness, provenance,
 source chains, and bit-level data-flow completeness. Lean4 proves static model
 properties; Quint typechecks and verifies behavioral invariants.
 
+Lean4 is a programming language plus a proof checker. You write definitions,
+statements, and proofs, and Lean checks whether each proof really proves the
+statement.
+
+```lean
+theorem two_plus_two : 2 + 2 = 4 := by
+  rfl
+```
+
+Lean is not testing that `2 + 2 = 4`; it is mechanically checking that the
+statement follows from the rules of logic and the definitions involved. A
+normal test says, "I tried some examples and they worked." A Lean theorem says,
+"given these definitions, this claim is impossible to violate."
+
+In EMC, Lean artifacts define the event model facts and the rules those facts
+must satisfy, then include machine-checkable theorems proving that the current
+model satisfies those rules.
+
+```lean
+def commandEmitsKnownEvents : Bool := ...
+
+theorem commandEmitsKnownEventsIsStable :
+  commandEmitsKnownEvents = true := rfl
+```
+
+If the model changes and the rule no longer holds, Lean verification stops
+accepting the artifact.
+
+Quint is a modeling language for systems that change over time. It describes
+the possible states of a system, the actions that can move it from one state to
+another, and invariants that must always hold.
+
+```quint
+module Counter {
+  var count: int
+
+  action Init = count' = 0
+
+  action Increment = count' = count + 1
+
+  val countNeverNegative = count >= 0
+}
+```
+
+In Quint, `count` is system state, `Init` describes how the system starts,
+`Increment` describes an allowed state transition, `count'` is the next value
+of `count`, and `countNeverNegative` is an invariant to check. Quint asks
+whether an allowed model behavior can ever violate that invariant.
+
+In EMC, Quint artifacts are useful for workflow and state behavior: which
+slices exist, which transitions are allowed, whether workflow steps are
+reachable, whether command transitions target the right owner, whether external
+triggers declare payload contracts, and whether forbidden dependencies such as
+read models feeding commands can occur.
+
+Lean4 is strongest at exact logical structure and static proof obligations.
+Quint is strongest at workflows, state machines, transitions, reachability, and
+behavioral invariants. Together, they provide different mechanical checks over
+the same event model.
+
 Keeping those obligations in Lean4 and Quint prevents Rust from becoming a
 duplicate semantic validator. Rust may reject malformed edits and artifact
 drift, but event-model correctness is accepted only from the formal artifacts
