@@ -328,6 +328,12 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
+            artifact_marker("    \"workflowNonSupportingStepsReachableFromEntry\""),
+            artifact_marker("    \"workflowNonSupportingStepsReachableFromEntry\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
             artifact_marker("    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\""),
             artifact_marker("    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\","),
             quint_config_message.clone(),

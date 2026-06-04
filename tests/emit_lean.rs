@@ -215,6 +215,30 @@ mod tests {
             "Lean workflow artifacts must prove main workflow steps have incoming reachability"
         );
         assert!(
+            lean.contains(
+                "def workflowReachableStepsAfterFuel : Nat -> List String -> List String"
+            ),
+            "Lean workflow artifacts must compute workflow reachability from the entry step"
+        );
+        assert!(
+            lean.contains(
+                "def workflowReachableStepsFromEntry : List String := workflowReachableStepsAfterFuel workflowSlices.length workflowEntrySteps"
+            ),
+            "Lean workflow artifacts must bound reachability traversal by the composed workflow size"
+        );
+        assert!(
+            lean.contains(
+                "def workflowStepIsReachableFromEntry (step : String × String) : Bool := step.2 == \"supporting\" || workflowReachableStepsFromEntry.contains step.1"
+            ),
+            "Lean workflow artifacts must exempt only supporting steps from required entry reachability"
+        );
+        assert!(
+            lean.contains(
+                "def workflowNonSupportingStepsReachableFromEntry : Bool := workflowStepRelationships.all workflowStepIsReachableFromEntry"
+            ),
+            "Lean workflow artifacts must expose non-supporting workflow reachability as a proof obligation"
+        );
+        assert!(
             lean.contains("def workflowBranchOrAlternateStepHasTriggerOrRationale (step : String × String) : Bool := (step.2 != \"branch\" && step.2 != \"alternate\") || workflowTransitions.any (fun transition => transition.target == step.1 && (transition.trigger.isEmpty == false || transition.rationale.isEmpty == false))"),
             "Lean workflow artifacts must define branch and alternate step trigger/rationale obligations"
         );
@@ -277,6 +301,12 @@ mod tests {
                 "theorem workflowMainStepsHaveIncomingReachabilityIsStable : workflowMainStepsHaveIncomingReachability = true := rfl"
             ),
             "Lean workflow artifacts must prove current main workflow steps are reachable"
+        );
+        assert!(
+            lean.contains(
+                "theorem workflowNonSupportingStepsReachableFromEntryIsStable : workflowNonSupportingStepsReachableFromEntry = true := rfl"
+            ),
+            "Lean workflow artifacts must prove current non-supporting workflow steps are reachable from entry"
         );
         assert!(
             lean.contains(

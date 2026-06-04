@@ -14,6 +14,7 @@ pub fn emit_workflow_module(
 ) -> FileContents {
     let slice_list = slice_list(workflow_module.workflow_slice_details().as_slice());
     let slice_detail_list = slice_detail_list(workflow_module.workflow_slice_details().as_slice());
+    let workflow_slice_count = workflow_module.workflow_slice_details().as_slice().len();
     let workflow_step_relationship_list =
         workflow_step_relationship_list(workflow_module.workflow_slice_details().as_slice());
     let workflow_exit_target_list =
@@ -69,6 +70,12 @@ pub fn emit_workflow_module(
   val workflowHasExactlyOneEntryStep = workflowStepRelationships.select(step => step.relationship == "entry").length() == 1
   def workflowMainStepHasIncomingTransition(step) = step.relationship != "main" or workflowTransitions.select(transition => transition.target == step.step).length() > 0
   val workflowMainStepsHaveIncomingReachability = workflowStepRelationships.select(step => workflowMainStepHasIncomingTransition(step)).length() == workflowStepRelationships.length()
+  val workflowEntrySteps: List[str] = workflowStepRelationships.select(step => step.relationship == "entry").foldl([], (entrySteps, step) => entrySteps.append(step.step))
+  def workflowTargetsFromReachable(reachable) = workflowTransitions.select(transition => reachable.select(step => step == transition.source).length() > 0 and workflowSlices.select(step => step == transition.target).length() > 0).foldl([], (targets, transition) => targets.append(transition.target))
+  def workflowReachableStepsAfterFuel(fuel, reachable) = range(0, fuel).foldl(reachable, (currentReachable, _) => currentReachable.concat(workflowTargetsFromReachable(currentReachable)))
+  val workflowReachableStepsFromEntry = workflowReachableStepsAfterFuel({workflow_slice_count}, workflowEntrySteps)
+  def workflowStepIsReachableFromEntry(step) = step.relationship == "supporting" or workflowReachableStepsFromEntry.select(reachableStep => reachableStep == step.step).length() > 0
+  val workflowNonSupportingStepsReachableFromEntry = workflowStepRelationships.select(step => workflowStepIsReachableFromEntry(step)).length() == workflowStepRelationships.length()
   def workflowBranchOrAlternateStepHasTriggerOrRationale(step) = (step.relationship != "branch" and step.relationship != "alternate") or workflowTransitions.select(transition => transition.target == step.step and (transition.trigger != "" or transition.rationale != "")).length() > 0
   val workflowBranchAndAlternateStepsHaveTriggerOrRationale = workflowStepRelationships.select(step => workflowBranchOrAlternateStepHasTriggerOrRationale(step)).length() == workflowStepRelationships.length()
   def workflowTransitionKindIsModeled(transition) = transition.kind == "navigation" or transition.kind == "command" or transition.kind == "event" or transition.kind == "external_trigger" or transition.kind == "outcome" or workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() > 0
@@ -104,6 +111,7 @@ pub fn emit_workflow_module(
         workflow_description_json = quoted(workflow_module.workflow_description().as_ref()),
         slice_list = slice_list,
         slice_detail_list = slice_detail_list,
+        workflow_slice_count = workflow_slice_count,
         workflow_step_relationship_list = workflow_step_relationship_list,
         transition_list = transition_list,
         workflow_outcome_list = workflow_outcome_list,
