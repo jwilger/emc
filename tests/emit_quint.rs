@@ -929,6 +929,12 @@ mod tests {
             "val viewControlDecisionFieldsAreVisible = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => controlInputDecisionFieldIsVisible(input)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
+            "def controlInputActorInputIsVisible(input) = input.sourceKind != \"actor\" or input.sketchToken != \"\" or input.visibleToActor"
+        ));
+        assert!(quint.contains(
+            "val viewControlActorInputsAreVisible = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => controlInputActorInputIsVisible(input)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
+        ));
+        assert!(quint.contains(
             "val viewControlsHandleCommandErrors = sliceViewDefinitions.select(view => view.controls.select(control => sliceCommandDefinitions.select(command => command.name != control.commandName or command.errors.select(error => control.handledErrors.select(handledError => handledError == error.name).length() > 0 and control.recoveryBehavior != \"\").length() == command.errors.length()).length() == sliceCommandDefinitions.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(

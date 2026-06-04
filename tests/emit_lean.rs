@@ -1770,6 +1770,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def controlInputActorInputIsVisible (input : ControlInputProvision) : Bool := input.sourceKind != \"actor\" || input.sketchToken.isEmpty == false || input.visibleToActor"
+            ),
+            "Lean slice artifacts must name actor-input visibility as its own proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def controlHasSketchToken (control : ControlDefinition) : Bool := control.name.isEmpty == false && control.commandName.isEmpty == false && control.sketchToken.isEmpty == false"
             ),
             "Lean slice artifacts must require controls to appear in the information sketch"
@@ -1881,6 +1887,12 @@ mod tests {
                 "def viewControlDecisionFieldsAreVisible : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputDecisionFieldIsVisible))"
             ),
             "Lean slice artifacts must expose decision-field visibility as a proof obligation"
+        );
+        assert!(
+            lean.contains(
+                "def viewControlActorInputsAreVisible : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputActorInputIsVisible))"
+            ),
+            "Lean slice artifacts must expose actor-input visibility as a proof obligation"
         );
         assert!(
             lean.contains(
@@ -2423,6 +2435,12 @@ mod tests {
                 "theorem viewControlDecisionFieldsAreVisibleIsStable : viewControlDecisionFieldsAreVisible = true := rfl"
             ),
             "Lean slice artifacts must prove current decision fields are visible"
+        );
+        assert!(
+            lean.contains(
+                "theorem viewControlActorInputsAreVisibleIsStable : viewControlActorInputsAreVisible = true := rfl"
+            ),
+            "Lean slice artifacts must prove current actor-provided inputs are visible"
         );
         assert!(
             lean.contains(
