@@ -316,6 +316,12 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
+            artifact_marker("    \"workflowStepSlugsAreUnique\""),
+            artifact_marker("    \"workflowStepSlugsAreUnique\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
             artifact_marker("    \"workflowHasExactlyOneEntryStep\""),
             artifact_marker("    \"workflowHasExactlyOneEntryStep\","),
             quint_config_message.clone(),
@@ -358,20 +364,44 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
+            artifact_marker("    \"workflowOutcomesSourceResolve\""),
+            artifact_marker("    \"workflowOutcomesSourceResolve\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowCommandErrorsSourceResolve\""),
+            artifact_marker("    \"workflowCommandErrorsSourceResolve\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
             artifact_marker("    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\""),
             artifact_marker("    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
-            artifact_marker("    \"workflowCommandTransitionsTargetOwnedCommands\""),
-            artifact_marker("    \"workflowCommandTransitionsTargetOwnedCommands\","),
+            artifact_marker("    \"workflowNonEventDefinitionsAreUniquelyOwned\""),
+            artifact_marker("    \"workflowNonEventDefinitionsAreUniquelyOwned\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowCommandTransitionsResolveControlsAndCommands\""),
+            artifact_marker("    \"workflowCommandTransitionsResolveControlsAndCommands\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
             artifact_marker("    \"workflowEventTransitionsAreSharedByEndpointSlices\""),
             artifact_marker("    \"workflowEventTransitionsAreSharedByEndpointSlices\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowNavigationTransitionsResolveControlsAndViews\""),
+            artifact_marker("    \"workflowNavigationTransitionsResolveControlsAndViews\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
