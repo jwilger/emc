@@ -1116,6 +1116,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def externalBoundaryHasPayloadContractAndFieldProvenance (translation : TranslationDefinition) : Bool := translationHasExternalContract translation && sliceExternalPayloads.any (fun payload => payload.name == translation.payloadContractName && payload.fields.isEmpty == false && payload.fields.all externalPayloadFieldHasProvenance)"
+            ),
+            "Lean slice artifacts must require each external boundary to bind a payload contract with field-level provenance"
+        );
+        assert!(
+            lean.contains(
+                "def externalBoundariesHavePayloadContractsAndFieldProvenance : Bool := sliceTranslations.all externalBoundaryHasPayloadContractAndFieldProvenance"
+            ),
+            "Lean slice artifacts must expose external boundary payload provenance as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def translationTargetsKnownCommand (translation : TranslationDefinition) : Bool := sliceCommands.contains translation.commandName || sliceReferencedCommands.contains translation.commandName || sliceCommandDefinitions.any (fun command => command.name == translation.commandName)"
             ),
             "Lean slice artifacts must require translations to target known commands"
@@ -2019,6 +2031,12 @@ mod tests {
                 "theorem translationSlicesDeclareExternalContractsIsStable : translationSlicesDeclareExternalContracts = true := rfl"
             ),
             "Lean slice artifacts must prove current translation slices declare external contracts"
+        );
+        assert!(
+            lean.contains(
+                "theorem externalBoundariesHavePayloadContractsAndFieldProvenanceIsStable : externalBoundariesHavePayloadContractsAndFieldProvenance = true := rfl"
+            ),
+            "Lean slice artifacts must prove current external boundaries bind payload contracts with field-level provenance"
         );
         assert!(
             lean.contains(
