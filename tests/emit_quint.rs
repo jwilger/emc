@@ -665,6 +665,9 @@ mod tests {
             "def eventReadModelBoardEdgeMatchesProjection(connection) = connection.sourceKind != \"event\" or connection.targetKind != \"read_model\" or sliceReadModelDefinitions.select(readModel => readModel.name == connection.target and readModel.fields.select(readModelField => readModelField.sourceEvent == connection.source).length() > 0).length() > 0"
         ));
         assert!(quint.contains(
+            "val eventReadModelBoardEdgesMatchProjectionSources = sliceBoardConnections.select(connection => eventReadModelBoardEdgeMatchesProjection(connection)).length() == sliceBoardConnections.length()"
+        ));
+        assert!(quint.contains(
             "def externalEventCommandBoardEdgeMatchesTranslation(connection) = connection.sourceKind != \"external_event\" or connection.targetKind != \"command\" or sliceTranslations.select(translation => translation.externalEventName == connection.source and translation.commandName == connection.target).length() > 0"
         ));
         assert!(quint.contains(

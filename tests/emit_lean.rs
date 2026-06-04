@@ -1224,6 +1224,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def eventReadModelBoardEdgesMatchProjectionSources : Bool := sliceBoardConnections.all eventReadModelBoardEdgeMatchesProjection"
+            ),
+            "Lean slice artifacts must expose event-to-read-model board projection matching as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def externalEventCommandBoardEdgeMatchesTranslation (connection : BoardConnection) : Bool := connection.sourceKind != \"external_event\" || connection.targetKind != \"command\" || sliceTranslations.any (fun translation => translation.externalEventName == connection.source && translation.commandName == connection.target)"
             ),
             "Lean slice artifacts must require external-event command edges to match translations"
@@ -2107,6 +2113,10 @@ mod tests {
         assert!(
             lean.contains("theorem commandEventBoardEdgesMatchEmissionsIsStable : commandEventBoardEdgesMatchEmissions = true := rfl"),
             "Lean slice artifacts must prove current command-to-event board edges match command emissions"
+        );
+        assert!(
+            lean.contains("theorem eventReadModelBoardEdgesMatchProjectionSourcesIsStable : eventReadModelBoardEdgesMatchProjectionSources = true := rfl"),
+            "Lean slice artifacts must prove current event-to-read-model board edges match projection sources"
         );
         assert!(
             lean.contains("theorem boardConnectionsHaveCausalSemanticsIsStable : boardConnectionsHaveCausalSemantics = true := rfl"),
