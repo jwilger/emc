@@ -1107,6 +1107,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def externalEventDoesNotUpdateReadModel (connection : BoardConnection) : Bool := connection.sourceKind != \"event\" || connection.targetKind != \"read_model\" || sliceEventDefinitions.any (fun event => event.name == connection.source && event.observed) == false"
+            ),
+            "Lean slice artifacts must reject direct external-event updates to read models"
+        );
+        assert!(
+            lean.contains(
+                "def externalEventsDoNotUpdateReadModels : Bool := sliceBoardConnections.all externalEventDoesNotUpdateReadModel"
+            ),
+            "Lean slice artifacts must expose external-event read-model isolation as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def viewCommandBoardEdgeMatchesControl (connection : BoardConnection) : Bool := connection.sourceKind != \"view\" || connection.targetKind != \"command\" || sliceViewDefinitions.any (fun view => view.name == connection.source && view.controls.any (fun control => control.commandName == connection.target))"
             ),
             "Lean slice artifacts must require view-to-command edges to match controls"
@@ -1131,7 +1143,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def boardConnectionsHaveCausalSemantics : Bool := sliceBoardConnections.all (fun connection => boardConnectionHasAllowedShape connection && commandEventBoardEdgeMatchesEmission connection && eventReadModelBoardEdgeMatchesProjection connection && viewCommandBoardEdgeMatchesControl connection)"
+                "def boardConnectionsHaveCausalSemantics : Bool := sliceBoardConnections.all (fun connection => boardConnectionHasAllowedShape connection && commandEventBoardEdgeMatchesEmission connection && eventReadModelBoardEdgeMatchesProjection connection && externalEventDoesNotUpdateReadModel connection && viewCommandBoardEdgeMatchesControl connection)"
             ),
             "Lean slice artifacts must prove board connections match causal semantics"
         );
@@ -1866,6 +1878,10 @@ mod tests {
         assert!(
             lean.contains("theorem boardConnectionsHaveCausalSemanticsIsStable : boardConnectionsHaveCausalSemantics = true := rfl"),
             "Lean slice artifacts must prove current board connections have causal semantics"
+        );
+        assert!(
+            lean.contains("theorem externalEventsDoNotUpdateReadModelsIsStable : externalEventsDoNotUpdateReadModels = true := rfl"),
+            "Lean slice artifacts must prove current external events do not update read models"
         );
         assert!(
             lean.contains("theorem readModelsDoNotFeedCommandsIsStable : readModelsDoNotFeedCommands = true := rfl"),
