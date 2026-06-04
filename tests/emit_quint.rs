@@ -587,10 +587,16 @@ mod tests {
             "def translationTargetsKnownCommand(translation) = sliceCommands.select(command => command == translation.commandName).length() > 0 or sliceReferencedCommands.select(command => command == translation.commandName).length() > 0 or sliceCommandDefinitions.select(command => command.name == translation.commandName).length() > 0"
         ));
         assert!(quint.contains(
+            "def translationReferencesObservedExternalEvent(translation) = sliceEventDefinitions.select(event => event.name == translation.externalEventName and event.observed).length() > 0"
+        ));
+        assert!(quint.contains(
             "val translationSlicesDeclareExternalContracts = sliceKind != \"translation\" or (sliceTranslations.length() > 0 and sliceTranslations.select(translation => translationHasExternalContract(translation)).length() == sliceTranslations.length())"
         ));
         assert!(quint.contains(
             "val translationsTargetKnownCommands = sliceTranslations.select(translation => translationTargetsKnownCommand(translation)).length() == sliceTranslations.length()"
+        ));
+        assert!(quint.contains(
+            "val translationsReferenceObservedExternalEvents = sliceTranslations.select(translation => translationReferencesObservedExternalEvent(translation)).length() == sliceTranslations.length()"
         ));
         assert!(quint.contains(
             "def boardElementLaneMatchesKind(element) = (element.kind == \"view\" and element.lane == \"ux\") or (element.kind == \"automation\" and element.lane == \"ux\") or (element.kind == \"external_event\" and element.lane == \"ux\") or (element.kind == \"command\" and element.lane == \"actions\") or (element.kind == \"read_model\" and element.lane == \"actions\") or (element.kind == \"event\" and element.lane == \"events\")"

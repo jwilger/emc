@@ -1065,6 +1065,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def translationReferencesObservedExternalEvent (translation : TranslationDefinition) : Bool := sliceEventDefinitions.any (fun event => event.name == translation.externalEventName && event.observed)"
+            ),
+            "Lean slice artifacts must require translations to reference observed external events"
+        );
+        assert!(
+            lean.contains(
                 "def translationSlicesDeclareExternalContracts : Bool := sliceKind != \"translation\" || (sliceTranslations.isEmpty == false && sliceTranslations.all translationHasExternalContract)"
             ),
             "Lean slice artifacts must prove translation slices declare at least one external contract"
@@ -1074,6 +1080,12 @@ mod tests {
                 "def translationsTargetKnownCommands : Bool := sliceTranslations.all translationTargetsKnownCommand"
             ),
             "Lean slice artifacts must prove translation commands resolve"
+        );
+        assert!(
+            lean.contains(
+                "def translationsReferenceObservedExternalEvents : Bool := sliceTranslations.all translationReferencesObservedExternalEvent"
+            ),
+            "Lean slice artifacts must expose observed external event resolution as a proof obligation"
         );
         assert!(
             lean.contains(
@@ -1872,6 +1884,12 @@ mod tests {
                 "theorem translationsTargetKnownCommandsIsStable : translationsTargetKnownCommands = true := rfl"
             ),
             "Lean slice artifacts must prove current translations target known commands"
+        );
+        assert!(
+            lean.contains(
+                "theorem translationsReferenceObservedExternalEventsIsStable : translationsReferenceObservedExternalEvents = true := rfl"
+            ),
+            "Lean slice artifacts must prove current translations reference observed external events"
         );
         assert!(
             lean.contains(

@@ -2585,6 +2585,54 @@ mod tests {
         Command::cargo_bin("emc")?
             .args([
                 "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "intake_webhook_received",
+                "--stream",
+                "intake-webhooks",
+                "--attribute",
+                "ticket_title",
+                "--attribute-source",
+                "external_payload",
+                "--attribute-source-name",
+                "intake_webhook",
+                "--attribute-source-field",
+                "ticket_title",
+                "--attribute-provenance",
+                "intake_webhook.ticket_title",
+                "--observed",
+                "true",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "intake_webhook.ticket_title",
+                "--transformation",
+                "observed without transformation",
+                "--target",
+                "intake_webhook_received",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
                 "translation",
                 "--slice",
                 "capture-ticket",
@@ -3439,7 +3487,9 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_translation_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"intake-webhook-translator\",\"external_event\":\"intake_webhook_received\",\"payload_contract\":\"intake_webhook\",\"command\":\"CaptureTicket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_event_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"intake_webhook_received\",\"stream\":\"intake-webhooks\",\"attribute\":\"ticket_title\",\"attribute_source\":\"external_payload\",\"attribute_source_name\":\"intake_webhook\",\"attribute_source_field\":\"ticket_title\",\"attribute_provenance\":\"intake_webhook.ticket_title\",\"observed\":true}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"intake_webhook.ticket_title\",\"transformation\":\"observed without transformation\",\"target\":\"intake_webhook_received\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"add_translation_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"intake-webhook-translator\",\"external_event\":\"intake_webhook_received\",\"payload_contract\":\"intake_webhook\",\"command\":\"CaptureTicket\"}}}\n",
         )
     }
 
