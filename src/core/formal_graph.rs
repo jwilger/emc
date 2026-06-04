@@ -5,13 +5,14 @@ use crate::core::effect::FileContents;
 use crate::core::types::{
     CommandErrorName, CommandName, ModelDescription, ModelName, OutcomeLabelName,
     PayloadContractName, SliceKindName, SliceSlug, TransitionTriggerName,
-    WorkflowCommandErrorRecord, WorkflowCommandErrorRecords, WorkflowOutcomeRecord,
-    WorkflowOutcomeRecords, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
-    WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
-    WorkflowSliceDetails, WorkflowSlug, WorkflowStepRelationshipName, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceRecord, WorkflowTransitionEvidenceRecords,
-    WorkflowTransitionEvidenceText, WorkflowTransitionKind, WorkflowTransitionRecord,
-    WorkflowTransitionRecords,
+    WorkflowCommandErrorRecord, WorkflowCommandErrorRecords, WorkflowEntryLifecycleEvidenceText,
+    WorkflowEntryLifecycleStateName, WorkflowEntryLifecycleStateRecord,
+    WorkflowEntryLifecycleStateRecords, WorkflowOutcomeRecord, WorkflowOutcomeRecords,
+    WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
+    WorkflowOwnedDefinitionRecords, WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSlug,
+    WorkflowStepRelationshipName, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionEvidenceRecords, WorkflowTransitionEvidenceText, WorkflowTransitionKind,
+    WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 use crate::core::workflow_document::WorkflowDocument;
 
@@ -26,6 +27,8 @@ pub struct FormalWorkflowGraph {
     command_errors: WorkflowCommandErrorRecords,
     owned_definitions: WorkflowOwnedDefinitionRecords,
     transition_evidences: WorkflowTransitionEvidenceRecords,
+    entry_lifecycle_required: bool,
+    entry_lifecycle_states: WorkflowEntryLifecycleStateRecords,
 }
 
 impl FormalWorkflowGraph {
@@ -63,6 +66,14 @@ impl FormalWorkflowGraph {
 
     pub fn transition_evidences(&self) -> &WorkflowTransitionEvidenceRecords {
         &self.transition_evidences
+    }
+
+    pub fn entry_lifecycle_required(&self) -> bool {
+        self.entry_lifecycle_required
+    }
+
+    pub fn entry_lifecycle_states(&self) -> &WorkflowEntryLifecycleStateRecords {
+        &self.entry_lifecycle_states
     }
 }
 
@@ -112,6 +123,8 @@ pub fn workflow_graph_from_document(
         command_errors: WorkflowCommandErrorRecords::from_records([]),
         owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
         transition_evidences: WorkflowTransitionEvidenceRecords::from_records([]),
+        entry_lifecycle_required: false,
+        entry_lifecycle_states: WorkflowEntryLifecycleStateRecords::from_records([]),
     })
 }
 
@@ -131,6 +144,8 @@ pub fn parse_lean_workflow_graph(
             command_errors: "def workflowCommandErrors : List WorkflowCommandError := ",
             owned_definitions: "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := ",
             transition_evidences: "def workflowTransitionEvidences : List WorkflowTransitionEvidence := ",
+            entry_lifecycle_required: "def workflowRequiresEntryLifecycleCoverage : Bool := ",
+            entry_lifecycle_states: "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := ",
         },
     )
 }
@@ -168,6 +183,16 @@ pub fn parse_quint_workflow_graph(
         transition_evidences: parse_optional_workflow_transition_evidences(
             quint_val_value_optional(artifact, "workflowTransitionEvidences")?,
         )?,
+        entry_lifecycle_required: quint_val_value_optional(
+            artifact,
+            "workflowRequiresEntryLifecycleCoverage",
+        )?
+        .map(parse_bool_value)
+        .transpose()?
+        .unwrap_or(false),
+        entry_lifecycle_states: parse_optional_workflow_entry_lifecycle_states(
+            quint_val_value_optional(artifact, "workflowEntryLifecycleStates")?,
+        )?,
     })
 }
 
@@ -189,6 +214,17 @@ fn parse_optional_workflow_transition_evidences(
         .map(|records| WorkflowTransitionEvidenceRecords::from_records(records.unwrap_or_default()))
 }
 
+fn parse_optional_workflow_entry_lifecycle_states(
+    value: Option<&str>,
+) -> Result<WorkflowEntryLifecycleStateRecords, FormalGraphError> {
+    value
+        .map(parse_workflow_entry_lifecycle_states)
+        .transpose()
+        .map(|records| {
+            WorkflowEntryLifecycleStateRecords::from_records(records.unwrap_or_default())
+        })
+}
+
 struct WorkflowGraphPrefixes {
     name: &'static str,
     slug: &'static str,
@@ -200,6 +236,8 @@ struct WorkflowGraphPrefixes {
     command_errors: &'static str,
     owned_definitions: &'static str,
     transition_evidences: &'static str,
+    entry_lifecycle_required: &'static str,
+    entry_lifecycle_states: &'static str,
 }
 
 fn parse_workflow_graph(
@@ -236,6 +274,13 @@ fn parse_workflow_graph(
             artifact,
             prefixes.transition_evidences,
         )?)?,
+        entry_lifecycle_required: line_value_optional(artifact, prefixes.entry_lifecycle_required)?
+            .map(parse_bool_value)
+            .transpose()?
+            .unwrap_or(false),
+        entry_lifecycle_states: parse_optional_workflow_entry_lifecycle_states(
+            line_value_optional(artifact, prefixes.entry_lifecycle_states)?,
+        )?,
     })
 }
 
@@ -495,6 +540,21 @@ fn parse_workflow_transition_evidences(
         .collect()
 }
 
+fn parse_workflow_entry_lifecycle_states(
+    value: &str,
+) -> Result<Vec<WorkflowEntryLifecycleStateRecord>, FormalGraphError> {
+    quoted_string_groups(value, 3)?
+        .chunks_exact(3)
+        .map(|chunk| {
+            Ok(WorkflowEntryLifecycleStateRecord::new(
+                workflow_entry_lifecycle_state_name(&chunk[0])?,
+                transition_endpoint(&chunk[1])?,
+                workflow_entry_lifecycle_evidence_text(&chunk[2])?,
+            ))
+        })
+        .collect()
+}
+
 fn transition_record_from_formal_fields(
     source: &str,
     target: &str,
@@ -599,6 +659,16 @@ fn parse_bool_field_values(value: &str, field_name: &str) -> Result<Vec<bool>, F
         .collect()
 }
 
+fn parse_bool_value(value: &str) -> Result<bool, FormalGraphError> {
+    match value.trim() {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(FormalGraphError::new(
+            "formal bool declaration must be true or false",
+        )),
+    }
+}
+
 fn model_name(value: String) -> Result<ModelName, FormalGraphError> {
     ModelName::try_new(value).map_err(|error| FormalGraphError::new(error.to_string()))
 }
@@ -646,6 +716,20 @@ fn workflow_transition_evidence_text(
     value: &str,
 ) -> Result<WorkflowTransitionEvidenceText, FormalGraphError> {
     WorkflowTransitionEvidenceText::try_new(value.to_owned())
+        .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn workflow_entry_lifecycle_state_name(
+    value: &str,
+) -> Result<WorkflowEntryLifecycleStateName, FormalGraphError> {
+    WorkflowEntryLifecycleStateName::try_new(value.to_owned())
+        .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn workflow_entry_lifecycle_evidence_text(
+    value: &str,
+) -> Result<WorkflowEntryLifecycleEvidenceText, FormalGraphError> {
+    WorkflowEntryLifecycleEvidenceText::try_new(value.to_owned())
         .map_err(|error| FormalGraphError::new(error.to_string()))
 }
 

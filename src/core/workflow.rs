@@ -9,9 +9,10 @@ use crate::core::formal_graph::FormalWorkflowGraph;
 use crate::core::layout::{ModeledWorkflowLayout, ModeledWorkflowLayouts};
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowCommandErrorRecord,
-    WorkflowCommandErrorRecords, WorkflowModuleData, WorkflowOutcomeRecord, WorkflowOutcomeRecords,
-    WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
-    WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionEvidenceRecord,
+    WorkflowCommandErrorRecords, WorkflowEntryLifecycleStateRecord,
+    WorkflowEntryLifecycleStateRecords, WorkflowModuleData, WorkflowOutcomeRecord,
+    WorkflowOutcomeRecords, WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords,
+    WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionEvidenceRecord,
     WorkflowTransitionEvidenceRecords, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 
@@ -105,6 +106,10 @@ pub fn update_workflow_description(
     let workflow_command_errors = workflow_graph.command_errors().as_slice().to_owned();
     let workflow_owned_definitions = workflow_graph.owned_definitions().as_slice().to_owned();
     let workflow_transition_evidences = workflow_graph.transition_evidences().as_slice().to_owned();
+    let workflow_entry_lifecycle_states = workflow_graph
+        .entry_lifecycle_states()
+        .as_slice()
+        .to_owned();
 
     Ok(update_workflow_effect_plan(
         existing_workflows.into_inner(),
@@ -116,6 +121,8 @@ pub fn update_workflow_description(
             command_errors: workflow_command_errors,
             owned_definitions: workflow_owned_definitions,
             transition_evidences: workflow_transition_evidences,
+            entry_lifecycle_required: workflow_graph.entry_lifecycle_required(),
+            entry_lifecycle_states: workflow_entry_lifecycle_states,
         },
         None,
     ))
@@ -163,6 +170,10 @@ pub fn update_workflow_name(
     let workflow_command_errors = workflow_graph.command_errors().as_slice().to_owned();
     let workflow_owned_definitions = workflow_graph.owned_definitions().as_slice().to_owned();
     let workflow_transition_evidences = workflow_graph.transition_evidences().as_slice().to_owned();
+    let workflow_entry_lifecycle_states = workflow_graph
+        .entry_lifecycle_states()
+        .as_slice()
+        .to_owned();
 
     Ok(update_workflow_effect_plan(
         existing_workflows.into_inner(),
@@ -174,6 +185,8 @@ pub fn update_workflow_name(
             command_errors: workflow_command_errors,
             owned_definitions: workflow_owned_definitions,
             transition_evidences: workflow_transition_evidences,
+            entry_lifecycle_required: workflow_graph.entry_lifecycle_required(),
+            entry_lifecycle_states: workflow_entry_lifecycle_states,
         },
         Some(module_name(existing_workflow.name().as_ref())),
     ))
@@ -271,6 +284,8 @@ fn workflow_effect_plan(
         workflow_command_errors: WorkflowCommandErrorRecords::from_records([]),
         workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
         workflow_transition_evidences: Default::default(),
+        workflow_requires_entry_lifecycle_coverage: false,
+        workflow_entry_lifecycle_states: Default::default(),
     });
     EffectPlan::new(vec![
         Effect::WriteFile(
@@ -356,6 +371,8 @@ struct WorkflowUpdateArtifacts {
     command_errors: Vec<WorkflowCommandErrorRecord>,
     owned_definitions: Vec<WorkflowOwnedDefinitionRecord>,
     transition_evidences: Vec<WorkflowTransitionEvidenceRecord>,
+    entry_lifecycle_required: bool,
+    entry_lifecycle_states: Vec<WorkflowEntryLifecycleStateRecord>,
 }
 
 fn update_workflow_effect_plan(
@@ -385,6 +402,10 @@ fn update_workflow_effect_plan(
         ),
         workflow_transition_evidences: WorkflowTransitionEvidenceRecords::from_records(
             artifacts.transition_evidences.clone(),
+        ),
+        workflow_requires_entry_lifecycle_coverage: artifacts.entry_lifecycle_required,
+        workflow_entry_lifecycle_states: WorkflowEntryLifecycleStateRecords::from_records(
+            artifacts.entry_lifecycle_states.clone(),
         ),
     });
     let cleanup_effects = previous_module_name
@@ -429,9 +450,13 @@ fn update_workflow_effect_plan(
                         .with_owned_definitions(WorkflowOwnedDefinitionRecords::from_records(
                             artifacts.owned_definitions.clone(),
                         ))
-                        .with_transition_evidences(
-                            WorkflowTransitionEvidenceRecords::from_records(
-                                artifacts.transition_evidences.clone(),
+                        .with_transition_evidences(WorkflowTransitionEvidenceRecords::from_records(
+                            artifacts.transition_evidences.clone(),
+                        ))
+                        .with_entry_lifecycle_required(artifacts.entry_lifecycle_required)
+                        .with_entry_lifecycle_states(
+                            WorkflowEntryLifecycleStateRecords::from_records(
+                                artifacts.entry_lifecycle_states.clone(),
                             ),
                         ),
                     ),
@@ -459,9 +484,13 @@ fn update_workflow_effect_plan(
                         .with_owned_definitions(WorkflowOwnedDefinitionRecords::from_records(
                             artifacts.owned_definitions,
                         ))
-                        .with_transition_evidences(
-                            WorkflowTransitionEvidenceRecords::from_records(
-                                artifacts.transition_evidences,
+                        .with_transition_evidences(WorkflowTransitionEvidenceRecords::from_records(
+                            artifacts.transition_evidences,
+                        ))
+                        .with_entry_lifecycle_required(artifacts.entry_lifecycle_required)
+                        .with_entry_lifecycle_states(
+                            WorkflowEntryLifecycleStateRecords::from_records(
+                                artifacts.entry_lifecycle_states,
                             ),
                         ),
                     ),

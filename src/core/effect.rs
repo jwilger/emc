@@ -10,8 +10,8 @@ use crate::core::formal_slice_facts::{
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceSlug,
-    WorkflowCommandErrorRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug,
-    WorkflowTransitionEvidenceRecord,
+    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
 
@@ -35,6 +35,7 @@ pub enum Effect {
     AddWorkflowOwnedDefinitionFromWorkflow(WorkflowSlug, WorkflowOwnedDefinitionRecord),
     AddWorkflowOutcomeFromWorkflow(WorkflowSlug, WorkflowOutcomeRecord),
     AddWorkflowTransitionEvidenceFromWorkflow(WorkflowSlug, WorkflowTransitionEvidenceRecord),
+    AddWorkflowEntryLifecycleStateFromWorkflow(WorkflowSlug, WorkflowEntryLifecycleStateRecord),
     CheckCurrentProject,
     ConnectWorkflowFromWorkflow(WorkflowConnection),
     CopyDirectory(ProjectPath, ProjectPath),
@@ -77,6 +78,7 @@ pub enum Effect {
     ),
     RunProcess(ProcessInvocation),
     RecordCleanReviewFromWorkflow(WorkflowSlug, ReviewerId, ReviewTimestamp),
+    RequireWorkflowEntryLifecycleCoverageFromWorkflow(WorkflowSlug),
     RemoveDirectory(ProjectPath),
     RemoveFile(ProjectPath),
     RemoveSliceFromWorkflow(SliceSlug),

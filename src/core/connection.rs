@@ -235,6 +235,8 @@ pub fn connect_workflow(
     let workflow_command_errors = workflow_graph.command_errors().as_slice().to_owned();
     let workflow_owned_definitions = workflow_graph.owned_definitions().as_slice().to_owned();
     let workflow_transition_evidences = workflow_graph.transition_evidences().clone();
+    let workflow_entry_lifecycle_required = workflow_graph.entry_lifecycle_required();
+    let workflow_entry_lifecycle_states = workflow_graph.entry_lifecycle_states().clone();
     reject_unknown_transition_source(&workflow_slice_details, &connection.source)?;
     reject_unknown_transition_target(&workflow_slice_details, &connection.target)?;
     let mut workflow_transitions = workflow_graph.transitions().as_slice().to_owned();
@@ -255,6 +257,8 @@ pub fn connect_workflow(
             workflow_owned_definitions.clone(),
         ),
         workflow_transition_evidences: workflow_transition_evidences.clone(),
+        workflow_requires_entry_lifecycle_coverage: workflow_entry_lifecycle_required,
+        workflow_entry_lifecycle_states: workflow_entry_lifecycle_states.clone(),
     });
     let source = connection.source.as_ref();
     let target = connection.target.as_ref();
@@ -284,7 +288,9 @@ pub fn connect_workflow(
                 .with_owned_definitions(WorkflowOwnedDefinitionRecords::from_records(
                     workflow_owned_definitions.clone(),
                 ))
-                .with_transition_evidences(workflow_transition_evidences.clone()),
+                .with_transition_evidences(workflow_transition_evidences.clone())
+                .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
+                .with_entry_lifecycle_states(workflow_entry_lifecycle_states.clone()),
             ),
         ),
         Effect::WriteFile(
@@ -308,7 +314,9 @@ pub fn connect_workflow(
                 .with_owned_definitions(WorkflowOwnedDefinitionRecords::from_records(
                     workflow_owned_definitions,
                 ))
-                .with_transition_evidences(workflow_transition_evidences),
+                .with_transition_evidences(workflow_transition_evidences)
+                .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
+                .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
             ),
         ),
         Effect::Report(report_line(format!("connected {source} to {target}"))),
@@ -345,6 +353,8 @@ pub fn remove_transition(
     let workflow_command_errors = workflow_graph.command_errors().as_slice().to_owned();
     let workflow_owned_definitions = workflow_graph.owned_definitions().as_slice().to_owned();
     let workflow_transition_evidences = workflow_graph.transition_evidences().clone();
+    let workflow_entry_lifecycle_required = workflow_graph.entry_lifecycle_required();
+    let workflow_entry_lifecycle_states = workflow_graph.entry_lifecycle_states().clone();
     let removal_record = removal_transition_record(&removal)?;
     let mut removed_transition = false;
     let workflow_transitions = workflow_graph
@@ -384,6 +394,8 @@ pub fn remove_transition(
             workflow_owned_definitions.clone(),
         ),
         workflow_transition_evidences: workflow_transition_evidences.clone(),
+        workflow_requires_entry_lifecycle_coverage: workflow_entry_lifecycle_required,
+        workflow_entry_lifecycle_states: workflow_entry_lifecycle_states.clone(),
     });
     let source = removal.source.as_ref();
     let target = removal.target.as_ref();
@@ -414,7 +426,9 @@ pub fn remove_transition(
                 .with_owned_definitions(WorkflowOwnedDefinitionRecords::from_records(
                     workflow_owned_definitions.clone(),
                 ))
-                .with_transition_evidences(workflow_transition_evidences.clone()),
+                .with_transition_evidences(workflow_transition_evidences.clone())
+                .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
+                .with_entry_lifecycle_states(workflow_entry_lifecycle_states.clone()),
             ),
         ),
         Effect::WriteFile(
@@ -438,7 +452,9 @@ pub fn remove_transition(
                 .with_owned_definitions(WorkflowOwnedDefinitionRecords::from_records(
                     workflow_owned_definitions,
                 ))
-                .with_transition_evidences(workflow_transition_evidences),
+                .with_transition_evidences(workflow_transition_evidences)
+                .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
+                .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
             ),
         ),
         Effect::Report(report_line(format!(

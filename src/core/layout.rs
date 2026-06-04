@@ -363,9 +363,15 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowTransitionsHaveRequiredEvidence\""),
+            artifact_marker("    \"workflowTransitionsHaveRequiredEvidence\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
             quint_config_path,
-            artifact_marker("    \"workflowTransitionsHaveRequiredEvidence\""),
-            artifact_marker("    \"workflowTransitionsHaveRequiredEvidence\""),
+            artifact_marker("    \"workflowEntryLifecycleStatesCoverRequiredStates\""),
+            artifact_marker("    \"workflowEntryLifecycleStatesCoverRequiredStates\""),
             quint_config_message,
         ),
     ]
@@ -548,6 +554,8 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
         workflow_command_errors: workflow.command_errors().clone(),
         workflow_owned_definitions: workflow.owned_definitions().clone(),
         workflow_transition_evidences: workflow.transition_evidences().clone(),
+        workflow_requires_entry_lifecycle_coverage: workflow.entry_lifecycle_required(),
+        workflow_entry_lifecycle_states: workflow.entry_lifecycle_states().clone(),
     });
 
     let workflow_effects = vec![

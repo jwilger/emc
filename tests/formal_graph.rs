@@ -162,6 +162,8 @@ mod tests {
             workflow_command_errors: WorkflowCommandErrorRecords::from_records([]),
             workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
             workflow_transition_evidences: Default::default(),
+            workflow_requires_entry_lifecycle_coverage: false,
+            workflow_entry_lifecycle_states: Default::default(),
         }))
     }
 
@@ -191,6 +193,8 @@ mod tests {
                 workflow_command_errors: workflow_command_errors.clone(),
                 workflow_owned_definitions: workflow_owned_definitions.clone(),
                 workflow_transition_evidences: Default::default(),
+                workflow_requires_entry_lifecycle_coverage: false,
+                workflow_entry_lifecycle_states: Default::default(),
             }),
         )
         .with_slice_details(workflow_slice_details)

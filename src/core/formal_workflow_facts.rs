@@ -5,8 +5,8 @@ use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest};
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::formal_graph::{parse_lean_workflow_graph, parse_quint_workflow_graph};
 use crate::core::types::{
-    WorkflowCommandErrorRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug,
-    WorkflowTransitionEvidenceRecord,
+    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -160,6 +160,66 @@ pub fn add_workflow_transition_evidence(
     ]))
 }
 
+pub fn require_workflow_entry_lifecycle_coverage(
+    lean_path: ProjectPath,
+    lean_contents: FileContents,
+    quint_path: ProjectPath,
+    quint_contents: FileContents,
+    workflow_slug: WorkflowSlug,
+) -> Result<EffectPlan, FormalWorkflowFactError> {
+    let lean = refresh_lean_digest(replace_declaration_value(
+        lean_contents.as_ref(),
+        "def workflowRequiresEntryLifecycleCoverage : Bool := ",
+        "true",
+    )?)?;
+    let quint = refresh_quint_digest(replace_declaration_value(
+        quint_contents.as_ref(),
+        "val workflowRequiresEntryLifecycleCoverage = ",
+        "true",
+    )?)?;
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(lean_path, file_contents(lean)?),
+        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::Report(report_line(format!(
+            "marked workflow {} as requiring entry lifecycle coverage",
+            workflow_slug.as_ref()
+        ))?),
+    ]))
+}
+
+pub fn add_workflow_entry_lifecycle_state(
+    lean_path: ProjectPath,
+    lean_contents: FileContents,
+    quint_path: ProjectPath,
+    quint_contents: FileContents,
+    workflow_slug: WorkflowSlug,
+    coverage: WorkflowEntryLifecycleStateRecord,
+) -> Result<EffectPlan, FormalWorkflowFactError> {
+    let lean_record = lean_workflow_entry_lifecycle_state_record(&coverage);
+    let quint_record = quint_workflow_entry_lifecycle_state_record(&coverage);
+    let lean = refresh_lean_digest(append_record(
+        lean_contents.as_ref(),
+        "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := ",
+        &lean_record,
+    )?)?;
+    let quint = refresh_quint_digest(append_record(
+        quint_contents.as_ref(),
+        "val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = ",
+        &quint_record,
+    )?)?;
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(lean_path, file_contents(lean)?),
+        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::Report(report_line(format!(
+            "added workflow entry lifecycle state {} to workflow {}",
+            coverage.state().as_ref(),
+            workflow_slug.as_ref()
+        ))?),
+    ]))
+}
+
 fn lean_workflow_outcome_record(outcome: &WorkflowOutcomeRecord) -> String {
     format!(
         "{{ sourceSlice := {}, label := {}, externallyRelevant := {} }}",
@@ -244,6 +304,61 @@ fn quint_workflow_transition_evidence_record(
     )
 }
 
+fn lean_workflow_entry_lifecycle_state_record(
+    coverage: &WorkflowEntryLifecycleStateRecord,
+) -> String {
+    format!(
+        "{{ state := {}, step := {}, evidence := {} }}",
+        quoted(coverage.state().as_ref()),
+        quoted(coverage.step().as_ref()),
+        quoted(coverage.evidence().as_ref()),
+    )
+}
+
+fn quint_workflow_entry_lifecycle_state_record(
+    coverage: &WorkflowEntryLifecycleStateRecord,
+) -> String {
+    format!(
+        "{{ state: {}, step: {}, evidence: {} }}",
+        quoted(coverage.state().as_ref()),
+        quoted(coverage.step().as_ref()),
+        quoted(coverage.evidence().as_ref()),
+    )
+}
+
+fn replace_declaration_value(
+    contents: &str,
+    marker: &str,
+    new_value: &str,
+) -> Result<String, FormalWorkflowFactError> {
+    let mut replaced = false;
+    let lines = contents
+        .lines()
+        .map(|line| {
+            let indentation_length = line.len() - line.trim_start().len();
+            let (indentation, declaration) = line.split_at(indentation_length);
+            if declaration.strip_prefix(marker).is_some() {
+                replaced = true;
+                format!("{indentation}{marker}{new_value}")
+            } else {
+                line.to_owned()
+            }
+        })
+        .collect::<Vec<_>>();
+
+    if replaced {
+        let mut updated = lines.join("\n");
+        if contents.ends_with('\n') {
+            updated.push('\n');
+        }
+        Ok(updated)
+    } else {
+        Err(FormalWorkflowFactError::new(format!(
+            "formal workflow artifact is missing declaration {marker}"
+        )))
+    }
+}
+
 fn append_record(
     contents: &str,
     marker: &str,
@@ -308,6 +423,8 @@ fn refresh_lean_digest(contents: String) -> Result<String, FormalWorkflowFactErr
         workflow_command_errors: graph.command_errors().clone(),
         workflow_owned_definitions: graph.owned_definitions().clone(),
         workflow_transition_evidences: graph.transition_evidences().clone(),
+        workflow_requires_entry_lifecycle_coverage: graph.entry_lifecycle_required(),
+        workflow_entry_lifecycle_states: graph.entry_lifecycle_states().clone(),
     });
     replace_digest_marker(contents, "-- EMC-DIGEST: ", digest.as_ref())
 }
@@ -326,6 +443,8 @@ fn refresh_quint_digest(contents: String) -> Result<String, FormalWorkflowFactEr
         workflow_command_errors: graph.command_errors().clone(),
         workflow_owned_definitions: graph.owned_definitions().clone(),
         workflow_transition_evidences: graph.transition_evidences().clone(),
+        workflow_requires_entry_lifecycle_coverage: graph.entry_lifecycle_required(),
+        workflow_entry_lifecycle_states: graph.entry_lifecycle_states().clone(),
     });
     replace_digest_marker(contents, "// EMC-DIGEST: ", digest.as_ref())
 }

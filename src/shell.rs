@@ -22,8 +22,9 @@ use crate::core::formal_slice_facts::{
     add_translation_definition, add_view_definition,
 };
 use crate::core::formal_workflow_facts::{
-    add_workflow_command_error, add_workflow_outcome, add_workflow_owned_definition,
-    add_workflow_transition_evidence,
+    add_workflow_command_error, add_workflow_entry_lifecycle_state, add_workflow_outcome,
+    add_workflow_owned_definition, add_workflow_transition_evidence,
+    require_workflow_entry_lifecycle_coverage,
 };
 use crate::core::json_object_document::JsonObjectDocument;
 use crate::core::layout::{
@@ -351,6 +352,33 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 workflow_artifacts.quint_contents,
                 workflow_slug.clone(),
                 evidence.clone(),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret_collect_reports(plan)
+        }
+        Effect::RequireWorkflowEntryLifecycleCoverageFromWorkflow(workflow_slug) => {
+            let workflow_artifacts =
+                read_formal_workflow_artifact_paths_and_contents(workflow_slug)?;
+            let plan = require_workflow_entry_lifecycle_coverage(
+                workflow_artifacts.lean_path,
+                workflow_artifacts.lean_contents,
+                workflow_artifacts.quint_path,
+                workflow_artifacts.quint_contents,
+                workflow_slug.clone(),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            interpret_collect_reports(plan)
+        }
+        Effect::AddWorkflowEntryLifecycleStateFromWorkflow(workflow_slug, coverage) => {
+            let workflow_artifacts =
+                read_formal_workflow_artifact_paths_and_contents(workflow_slug)?;
+            let plan = add_workflow_entry_lifecycle_state(
+                workflow_artifacts.lean_path,
+                workflow_artifacts.lean_contents,
+                workflow_artifacts.quint_path,
+                workflow_artifacts.quint_contents,
+                workflow_slug.clone(),
+                coverage.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)

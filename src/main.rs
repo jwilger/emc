@@ -18,8 +18,9 @@ use emc::core::project::ProjectName;
 use emc::core::slice::{NewSlice, SliceKind};
 use emc::core::types::{
     ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceSlug,
-    WorkflowCommandErrorRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug,
-    WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecord,
+    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
+    WorkflowTransitionEvidenceRecord,
 };
 use emc::core::workflow::NewWorkflow;
 use emc::io::dto::{
@@ -43,6 +44,7 @@ use emc::io::dto::{
     parse_source_chain_hops, parse_stream_name, parse_stream_names, parse_transformation_semantics,
     parse_transition_trigger_name, parse_translation_external_event_name, parse_translation_name,
     parse_view_field_name, parse_view_field_source_kind, parse_view_name,
+    parse_workflow_entry_lifecycle_evidence_text, parse_workflow_entry_lifecycle_state_name,
     parse_workflow_owned_definition_kind, parse_workflow_owned_definition_name,
     parse_workflow_slug, parse_workflow_transition_endpoint,
     parse_workflow_transition_evidence_text, parse_workflow_transition_kind,
@@ -109,6 +111,10 @@ enum Command {
         workflow_slug: WorkflowSlug,
         evidence: WorkflowTransitionEvidenceRecord,
     },
+    AddWorkflowEntryLifecycleState {
+        workflow_slug: WorkflowSlug,
+        coverage: WorkflowEntryLifecycleStateRecord,
+    },
     AddWorkflowOutcome {
         workflow_slug: WorkflowSlug,
         outcome: WorkflowOutcomeRecord,
@@ -131,6 +137,9 @@ enum Command {
     ListSlices,
     ListTransitions,
     ListWorkflows,
+    RequireWorkflowEntryLifecycleCoverage {
+        workflow_slug: WorkflowSlug,
+    },
     McpStdio,
     McpHttp {
         host: String,
@@ -244,6 +253,13 @@ fn run(cli: Cli) -> Result<(), ShellError> {
             workflow_slug,
             evidence,
         )),
+        Command::AddWorkflowEntryLifecycleState {
+            workflow_slug,
+            coverage,
+        } => interpret(command::add_workflow_entry_lifecycle_state(
+            workflow_slug,
+            coverage,
+        )),
         Command::AddWorkflowOutcome {
             workflow_slug,
             outcome,
@@ -258,6 +274,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::ListSlices => interpret(command::list_slices()),
         Command::ListTransitions => interpret(command::list_transitions()),
         Command::ListWorkflows => interpret(command::list_workflows()),
+        Command::RequireWorkflowEntryLifecycleCoverage { workflow_slug } => interpret(
+            command::require_workflow_entry_lifecycle_coverage(workflow_slug),
+        ),
         Command::McpHttp {
             host,
             port,
@@ -2205,6 +2224,39 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            state_flag,
+            state,
+            step_flag,
+            step,
+            evidence_flag,
+            evidence,
+        ] if command == "add"
+            && subject == "workflow-entry-lifecycle-state"
+            && workflow_flag == "--workflow"
+            && state_flag == "--state"
+            && step_flag == "--step"
+            && evidence_flag == "--evidence" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let state = parse_workflow_entry_lifecycle_state_name(state)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let step = parse_workflow_transition_endpoint(step)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let evidence = parse_workflow_entry_lifecycle_evidence_text(evidence)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::AddWorkflowEntryLifecycleState {
+                    workflow_slug,
+                    coverage: WorkflowEntryLifecycleStateRecord::new(state, step, evidence),
+                },
+            })
+        }
         [command] if command == "check" => Ok(Cli {
             command: Command::Check,
         }),
@@ -2417,6 +2469,17 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                     .map_err(|error| ShellError::message(error.to_string()))?,
             },
         }),
+        [command, subject, workflow_flag, workflow]
+            if command == "mark"
+                && subject == "workflow-entry-lifecycle-required"
+                && workflow_flag == "--workflow" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::RequireWorkflowEntryLifecycleCoverage { workflow_slug },
+            })
+        }
         [command, subject] if command == "list" && subject == "workflows" => Ok(Cli {
             command: Command::ListWorkflows,
         }),
