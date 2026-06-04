@@ -614,6 +614,12 @@ mod tests {
             "def translationHasExternalContract(translation) = translation.name != \"\" and translation.externalEventName != \"\" and translation.payloadContractName != \"\" and sliceExternalPayloads.select(payload => payload.name == translation.payloadContractName).length() > 0"
         ));
         assert!(quint.contains(
+            "def externalBoundaryHasPayloadContractAndFieldProvenance(translation) = translationHasExternalContract(translation) and sliceExternalPayloads.select(payload => payload.name == translation.payloadContractName and payload.fields.length() > 0 and payload.fields.select(payloadField => externalPayloadFieldHasProvenance(payloadField)).length() == payload.fields.length()).length() > 0"
+        ));
+        assert!(quint.contains(
+            "val externalBoundariesHavePayloadContractsAndFieldProvenance = sliceTranslations.select(translation => externalBoundaryHasPayloadContractAndFieldProvenance(translation)).length() == sliceTranslations.length()"
+        ));
+        assert!(quint.contains(
             "def translationTargetsKnownCommand(translation) = sliceCommands.select(command => command == translation.commandName).length() > 0 or sliceReferencedCommands.select(command => command == translation.commandName).length() > 0 or sliceCommandDefinitions.select(command => command.name == translation.commandName).length() > 0"
         ));
         assert!(quint.contains(
