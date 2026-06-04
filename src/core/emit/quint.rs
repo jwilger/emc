@@ -96,6 +96,9 @@ pub fn emit_workflow_module(
   val workflowCommandTransitionsTargetOwnedCommands = workflowTransitions.select(transition => workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()
   def workflowEventTransitionIsSharedByEndpoints(transition) = transition.kind != "event" or (workflowOwnsDefinition(transition.source, "event", transition.trigger) and workflowOwnsDefinition(transition.target, "event", transition.trigger))
   val workflowEventTransitionsAreSharedByEndpointSlices = workflowTransitions.select(transition => workflowEventTransitionIsSharedByEndpoints(transition)).length() == workflowTransitions.length()
+  def workflowNavigationTransitionSourceOwnsControl(transition) = transition.kind != "navigation" or workflowOwnsDefinition(transition.source, "control", transition.trigger)
+  def workflowNavigationTransitionTargetsOwnedView(transition) = transition.kind != "navigation" or workflowOwnsDefinition(transition.target, "view", transition.trigger)
+  val workflowNavigationTransitionsResolveControlsAndViews = workflowTransitions.select(transition => workflowNavigationTransitionSourceOwnsControl(transition) and workflowNavigationTransitionTargetsOwnedView(transition)).length() == workflowTransitions.length()
   def workflowExternalTriggerDeclaresPayloadContract(transition) = transition.kind != "external_trigger" or transition.payloadContract != ""
   val workflowExternalTriggersDeclarePayloadContracts = workflowTransitions.select(transition => workflowExternalTriggerDeclaresPayloadContract(transition)).length() == workflowTransitions.length()
   def workflowTransitionRequiresEvidence(transition) = transition.kind == "event" or transition.kind == "command" or transition.kind == "navigation"

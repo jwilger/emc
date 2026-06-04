@@ -424,6 +424,24 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != \"navigation\" || workflowOwnsDefinition transition.source \"control\" transition.trigger"
+            ),
+            "Lean workflow artifacts must require navigation transitions to come from source-owned controls"
+        );
+        assert!(
+            lean.contains(
+                "def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransition) : Bool := transition.kind != \"navigation\" || workflowOwnsDefinition transition.target \"view\" transition.trigger"
+            ),
+            "Lean workflow artifacts must require navigation transitions to resolve to target-owned views"
+        );
+        assert!(
+            lean.contains(
+                "def workflowNavigationTransitionsResolveControlsAndViews : Bool := workflowTransitions.all (fun transition => workflowNavigationTransitionSourceOwnsControl transition && workflowNavigationTransitionTargetsOwnedView transition)"
+            ),
+            "Lean workflow artifacts must expose navigation transition control/view resolution as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransition) : Bool := transition.kind != \"external_trigger\" || transition.payloadContract.isEmpty == false"
             ),
             "Lean workflow artifacts must require external-trigger transitions to declare payload contracts"
@@ -475,6 +493,12 @@ mod tests {
                 "theorem workflowEventTransitionsAreSharedByEndpointSlicesIsStable : workflowEventTransitionsAreSharedByEndpointSlices = true := rfl"
             ),
             "Lean workflow artifacts must prove current event transitions are shared by endpoint slices"
+        );
+        assert!(
+            lean.contains(
+                "theorem workflowNavigationTransitionsResolveControlsAndViewsIsStable : workflowNavigationTransitionsResolveControlsAndViews = true := rfl"
+            ),
+            "Lean workflow artifacts must prove current navigation transitions resolve source controls and target views"
         );
         assert!(
             lean.contains(

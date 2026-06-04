@@ -297,6 +297,15 @@ mod tests {
             "val workflowEventTransitionsAreSharedByEndpointSlices = workflowTransitions.select(transition => workflowEventTransitionIsSharedByEndpoints(transition)).length() == workflowTransitions.length()"
         ));
         assert!(quint.contains(
+            "def workflowNavigationTransitionSourceOwnsControl(transition) = transition.kind != \"navigation\" or workflowOwnsDefinition(transition.source, \"control\", transition.trigger)"
+        ));
+        assert!(quint.contains(
+            "def workflowNavigationTransitionTargetsOwnedView(transition) = transition.kind != \"navigation\" or workflowOwnsDefinition(transition.target, \"view\", transition.trigger)"
+        ));
+        assert!(quint.contains(
+            "val workflowNavigationTransitionsResolveControlsAndViews = workflowTransitions.select(transition => workflowNavigationTransitionSourceOwnsControl(transition) and workflowNavigationTransitionTargetsOwnedView(transition)).length() == workflowTransitions.length()"
+        ));
+        assert!(quint.contains(
             "def workflowExternalTriggerDeclaresPayloadContract(transition) = transition.kind != \"external_trigger\" or transition.payloadContract != \"\""
         ));
         assert!(quint.contains(

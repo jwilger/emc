@@ -422,6 +422,21 @@ mod tests {
                 "added workflow transition evidence navigation review-ticket-screen to workflow open-ticket",
             ));
 
+        add_workflow_owned_definition(
+            temp_dir.path(),
+            "open-ticket",
+            "capture-ticket",
+            "control",
+            "review-ticket-screen",
+        )?;
+        add_workflow_owned_definition(
+            temp_dir.path(),
+            "open-ticket",
+            "review-ticket",
+            "view",
+            "review-ticket-screen",
+        )?;
+
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
         let updated_digest = digest_marker(&lean).ok_or("Lean artifact is missing digest")?;
@@ -432,9 +447,15 @@ mod tests {
         assert!(quint.contains(
             "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
         ));
+        assert!(lean.contains(
+            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"control\", definitionName := \"review-ticket-screen\" },{ sourceSlice := \"review-ticket\", definitionKind := \"view\", definitionName := \"review-ticket-screen\" }]"
+        ));
+        assert!(quint.contains(
+            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"control\", definitionName: \"review-ticket-screen\" },{ sourceSlice: \"review-ticket\", definitionKind: \"view\", definitionName: \"review-ticket-screen\" }]"
+        ));
         assert_ne!(
             initial_digest, updated_digest,
-            "workflow digest must change when transition evidence is authored"
+            "workflow digest must change when transition evidence and ownership facts are authored"
         );
 
         Command::cargo_bin("emc")?
@@ -2230,6 +2251,32 @@ mod tests {
                 step,
                 "--evidence",
                 evidence,
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn add_workflow_owned_definition(
+        cwd: &Path,
+        workflow: &str,
+        source_slice: &str,
+        definition_kind: &str,
+        definition_name: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-owned-definition",
+                "--workflow",
+                workflow,
+                "--source-slice",
+                source_slice,
+                "--definition-kind",
+                definition_kind,
+                "--definition-name",
+                definition_name,
             ])
             .current_dir(cwd)
             .assert()
