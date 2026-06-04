@@ -1035,9 +1035,9 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def automationSlicesDeclareTriggers : Bool := sliceKind != \"automation\" || sliceAutomations.all automationHasTrigger"
+                "def automationSlicesDeclareTriggers : Bool := sliceKind != \"automation\" || (sliceAutomations.isEmpty == false && sliceAutomations.all automationHasTrigger)"
             ),
-            "Lean slice artifacts must prove automation slices declare triggers"
+            "Lean slice artifacts must prove automation slices declare at least one triggered automation"
         );
         assert!(
             lean.contains(
@@ -1065,9 +1065,9 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def translationSlicesDeclareExternalContracts : Bool := sliceKind != \"translation\" || sliceTranslations.all translationHasExternalContract"
+                "def translationSlicesDeclareExternalContracts : Bool := sliceKind != \"translation\" || (sliceTranslations.isEmpty == false && sliceTranslations.all translationHasExternalContract)"
             ),
-            "Lean slice artifacts must prove translation slices declare external contracts"
+            "Lean slice artifacts must prove translation slices declare at least one external contract"
         );
         assert!(
             lean.contains(

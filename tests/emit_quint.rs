@@ -572,7 +572,7 @@ mod tests {
             "def automationHandlesCommandErrors(automation, command) = command.name != automation.commandName or command.errors.select(error => automation.handledErrors.select(handledError => handledError == error.name).length() > 0).length() == command.errors.length()"
         ));
         assert!(quint.contains(
-            "val automationSlicesDeclareTriggers = sliceKind != \"automation\" or sliceAutomations.select(automation => automationHasTrigger(automation)).length() == sliceAutomations.length()"
+            "val automationSlicesDeclareTriggers = sliceKind != \"automation\" or (sliceAutomations.length() > 0 and sliceAutomations.select(automation => automationHasTrigger(automation)).length() == sliceAutomations.length())"
         ));
         assert!(quint.contains(
             "val automationsIssueKnownCommands = sliceAutomations.select(automation => automationIssuesKnownCommand(automation)).length() == sliceAutomations.length()"
@@ -587,7 +587,7 @@ mod tests {
             "def translationTargetsKnownCommand(translation) = sliceCommands.select(command => command == translation.commandName).length() > 0 or sliceReferencedCommands.select(command => command == translation.commandName).length() > 0 or sliceCommandDefinitions.select(command => command.name == translation.commandName).length() > 0"
         ));
         assert!(quint.contains(
-            "val translationSlicesDeclareExternalContracts = sliceKind != \"translation\" or sliceTranslations.select(translation => translationHasExternalContract(translation)).length() == sliceTranslations.length()"
+            "val translationSlicesDeclareExternalContracts = sliceKind != \"translation\" or (sliceTranslations.length() > 0 and sliceTranslations.select(translation => translationHasExternalContract(translation)).length() == sliceTranslations.length())"
         ));
         assert!(quint.contains(
             "val translationsTargetKnownCommands = sliceTranslations.select(translation => translationTargetsKnownCommand(translation)).length() == sliceTranslations.length()"
