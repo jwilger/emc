@@ -91,6 +91,11 @@ pub fn emit_workflow_module(
   val workflowTransitionsDoNotUseCommandErrorsAsOutcomes = workflowTransitions.select(transition => transition.kind != "outcome" or workflowCommandErrors.select(error => error.sourceSlice == transition.source and error.errorName == transition.trigger).length() == 0).length() == workflowTransitions.length()
   def workflowNonEventDefinitionOwnedOnce(definition) = definition.definitionKind == "event" or workflowOwnedDefinitions.select(other => other.definitionKind == definition.definitionKind and other.definitionName == definition.definitionName).length() == 1
   val workflowNonEventDefinitionsAreUniquelyOwned = workflowOwnedDefinitions.select(definition => workflowNonEventDefinitionOwnedOnce(definition)).length() == workflowOwnedDefinitions.length()
+  def workflowOwnsDefinition(sourceSlice, definitionKind, definitionName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == definitionKind and definition.definitionName == definitionName).length() > 0
+  def workflowCommandTransitionTargetsOwnedCommand(transition) = transition.kind != "command" or workflowOwnsDefinition(transition.target, "command", transition.trigger)
+  val workflowCommandTransitionsTargetOwnedCommands = workflowTransitions.select(transition => workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()
+  def workflowEventTransitionIsSharedByEndpoints(transition) = transition.kind != "event" or (workflowOwnsDefinition(transition.source, "event", transition.trigger) and workflowOwnsDefinition(transition.target, "event", transition.trigger))
+  val workflowEventTransitionsAreSharedByEndpointSlices = workflowTransitions.select(transition => workflowEventTransitionIsSharedByEndpoints(transition)).length() == workflowTransitions.length()
   def workflowExternalTriggerDeclaresPayloadContract(transition) = transition.kind != "external_trigger" or transition.payloadContract != ""
   val workflowExternalTriggersDeclarePayloadContracts = workflowTransitions.select(transition => workflowExternalTriggerDeclaresPayloadContract(transition)).length() == workflowTransitions.length()
   def workflowTransitionRequiresEvidence(transition) = transition.kind == "event" or transition.kind == "command" or transition.kind == "navigation"

@@ -364,6 +364,18 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
+            artifact_marker("    \"workflowCommandTransitionsTargetOwnedCommands\""),
+            artifact_marker("    \"workflowCommandTransitionsTargetOwnedCommands\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowEventTransitionsAreSharedByEndpointSlices\""),
+            artifact_marker("    \"workflowEventTransitionsAreSharedByEndpointSlices\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
             artifact_marker("    \"workflowExternalTriggersDeclarePayloadContracts\""),
             artifact_marker("    \"workflowExternalTriggersDeclarePayloadContracts\","),
             quint_config_message.clone(),

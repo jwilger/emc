@@ -282,6 +282,21 @@ mod tests {
             "val workflowNonEventDefinitionsAreUniquelyOwned = workflowOwnedDefinitions.select(definition => workflowNonEventDefinitionOwnedOnce(definition)).length() == workflowOwnedDefinitions.length()"
         ));
         assert!(quint.contains(
+            "def workflowOwnsDefinition(sourceSlice, definitionKind, definitionName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == definitionKind and definition.definitionName == definitionName).length() > 0"
+        ));
+        assert!(quint.contains(
+            "def workflowCommandTransitionTargetsOwnedCommand(transition) = transition.kind != \"command\" or workflowOwnsDefinition(transition.target, \"command\", transition.trigger)"
+        ));
+        assert!(quint.contains(
+            "val workflowCommandTransitionsTargetOwnedCommands = workflowTransitions.select(transition => workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()"
+        ));
+        assert!(quint.contains(
+            "def workflowEventTransitionIsSharedByEndpoints(transition) = transition.kind != \"event\" or (workflowOwnsDefinition(transition.source, \"event\", transition.trigger) and workflowOwnsDefinition(transition.target, \"event\", transition.trigger))"
+        ));
+        assert!(quint.contains(
+            "val workflowEventTransitionsAreSharedByEndpointSlices = workflowTransitions.select(transition => workflowEventTransitionIsSharedByEndpoints(transition)).length() == workflowTransitions.length()"
+        ));
+        assert!(quint.contains(
             "def workflowExternalTriggerDeclaresPayloadContract(transition) = transition.kind != \"external_trigger\" or transition.payloadContract != \"\""
         ));
         assert!(quint.contains(

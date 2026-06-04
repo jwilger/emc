@@ -394,6 +394,36 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def workflowOwnsDefinition (sourceSlice : String) (definitionKind : String) (definitionName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == definitionKind && definition.definitionName == definitionName)"
+            ),
+            "Lean workflow artifacts must define workflow-scoped definition ownership lookup"
+        );
+        assert!(
+            lean.contains(
+                "def workflowCommandTransitionTargetsOwnedCommand (transition : WorkflowTransition) : Bool := transition.kind != \"command\" || workflowOwnsDefinition transition.target \"command\" transition.trigger"
+            ),
+            "Lean workflow artifacts must require command transitions to target command-owning slices"
+        );
+        assert!(
+            lean.contains(
+                "def workflowCommandTransitionsTargetOwnedCommands : Bool := workflowTransitions.all workflowCommandTransitionTargetsOwnedCommand"
+            ),
+            "Lean workflow artifacts must expose command transition ownership as a proof obligation"
+        );
+        assert!(
+            lean.contains(
+                "def workflowEventTransitionIsSharedByEndpoints (transition : WorkflowTransition) : Bool := transition.kind != \"event\" || (workflowOwnsDefinition transition.source \"event\" transition.trigger && workflowOwnsDefinition transition.target \"event\" transition.trigger)"
+            ),
+            "Lean workflow artifacts must require event transitions to be shared by source and target slices"
+        );
+        assert!(
+            lean.contains(
+                "def workflowEventTransitionsAreSharedByEndpointSlices : Bool := workflowTransitions.all workflowEventTransitionIsSharedByEndpoints"
+            ),
+            "Lean workflow artifacts must expose event transition sharing as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransition) : Bool := transition.kind != \"external_trigger\" || transition.payloadContract.isEmpty == false"
             ),
             "Lean workflow artifacts must require external-trigger transitions to declare payload contracts"
@@ -433,6 +463,18 @@ mod tests {
                 "theorem workflowNonEventDefinitionsAreUniquelyOwnedIsStable : workflowNonEventDefinitionsAreUniquelyOwned = true := rfl"
             ),
             "Lean workflow artifacts must prove non-event definitions are owned by exactly one slice"
+        );
+        assert!(
+            lean.contains(
+                "theorem workflowCommandTransitionsTargetOwnedCommandsIsStable : workflowCommandTransitionsTargetOwnedCommands = true := rfl"
+            ),
+            "Lean workflow artifacts must prove current command transitions target command-owning slices"
+        );
+        assert!(
+            lean.contains(
+                "theorem workflowEventTransitionsAreSharedByEndpointSlicesIsStable : workflowEventTransitionsAreSharedByEndpointSlices = true := rfl"
+            ),
+            "Lean workflow artifacts must prove current event transitions are shared by endpoint slices"
         );
         assert!(
             lean.contains(
