@@ -374,6 +374,55 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         [
             command,
             subject,
+            workflow_flag,
+            workflow,
+            source_slice_flag,
+            source_slice,
+            definition_kind_flag,
+            definition_kind,
+            definition_name_flag,
+            definition_name,
+            definition_stream_flag,
+            definition_stream,
+            source_provenance_flag,
+            source_provenance,
+        ] if command == "add"
+            && subject == "workflow-owned-definition"
+            && workflow_flag == "--workflow"
+            && source_slice_flag == "--source-slice"
+            && definition_kind_flag == "--definition-kind"
+            && definition_name_flag == "--definition-name"
+            && definition_stream_flag == "--definition-stream"
+            && source_provenance_flag == "--source-provenance" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_slice = WorkflowTransitionEndpoint::try_new(source_slice.to_owned())
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let definition_kind = parse_workflow_owned_definition_kind(definition_kind)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let definition_name = parse_workflow_owned_definition_name(definition_name)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let definition_stream = parse_stream_name(definition_stream)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_provenance = parse_model_description(source_provenance)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::AddWorkflowOwnedDefinition {
+                    workflow_slug,
+                    definition: WorkflowOwnedDefinitionRecord::new_with_event_identity(
+                        source_slice,
+                        definition_kind,
+                        definition_name,
+                        definition_stream,
+                        source_provenance,
+                    ),
+                },
+            })
+        }
+        [
+            command,
+            subject,
             slice_flag,
             slice,
             name_flag,
@@ -3003,7 +3052,7 @@ fn help_command() -> ClapCommand {
   emc add scenario --slice <slice> --kind contract --name <name> --given <text> --when <text> --then <text> --contract-kind command --covered-definition <command> --read-streams <stream[,stream]> --written-streams <stream[,stream]> --error-references <error[,error]>
   emc add workflow-outcome --workflow <workflow> --source-slice <slice> --label <label> --externally-relevant <true|false>
   emc add workflow-command-error --workflow <workflow> --source-slice <slice> --command <command> --error <error>
-  emc add workflow-owned-definition --workflow <workflow> --source-slice <slice> --definition-kind <kind> --definition-name <name>
+  emc add workflow-owned-definition --workflow <workflow> --source-slice <slice> --definition-kind <kind> --definition-name <name> [--definition-stream <stream> --source-provenance <text>]
   emc add workflow-transition-evidence --workflow <workflow> --from <step> --to <step> --via <kind> --name <trigger> --source-evidence <text> --target-evidence <text>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --singleton <true|false> --repeat-behavior <already_exists_error|idempotent>

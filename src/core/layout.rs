@@ -388,6 +388,12 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
+            artifact_marker("    \"workflowSharedEventDefinitionsHaveIdenticalIdentity\""),
+            artifact_marker("    \"workflowSharedEventDefinitionsHaveIdenticalIdentity\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
             artifact_marker("    \"workflowCommandTransitionsResolveControlsAndCommands\""),
             artifact_marker("    \"workflowCommandTransitionsResolveControlsAndCommands\","),
             quint_config_message.clone(),

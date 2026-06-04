@@ -133,9 +133,9 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure WorkflowOwnedDefinition where\n  sourceSlice : String\n  definitionKind : String\n  definitionName : String"
+                "structure WorkflowOwnedDefinition where\n  sourceSlice : String\n  definitionKind : String\n  definitionName : String\n  definitionStream : String\n  sourceProvenance : String"
             ),
-            "Lean workflow artifacts must represent cross-slice definition ownership"
+            "Lean workflow artifacts must represent cross-slice definition ownership with event identity fields"
         );
         assert!(
             lean.contains(
@@ -162,7 +162,7 @@ mod tests {
             "Lean workflow artifacts must carry command-local errors so outcome transitions cannot use them"
         );
         assert!(
-            lean.contains("def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"external_payload\", definitionName := \"CallbackReceivedPayload\" }]"),
+            lean.contains("def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"external_payload\", definitionName := \"CallbackReceivedPayload\", definitionStream := \"\", sourceProvenance := \"\" }]"),
             "Lean workflow artifacts must carry the authored cross-slice ownership inventory"
         );
         assert!(
@@ -403,6 +403,24 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def workflowEventDefinitionHasIdentity (definition : WorkflowOwnedDefinition) : Bool := definition.definitionKind != \"event\" || (definition.definitionStream.isEmpty == false && definition.sourceProvenance.isEmpty == false)"
+            ),
+            "Lean workflow artifacts must require shared event definitions to carry stream and provenance identity"
+        );
+        assert!(
+            lean.contains(
+                "def workflowSharedEventDefinitionMatches (left : WorkflowOwnedDefinition) (right : WorkflowOwnedDefinition) : Bool := left.definitionKind != \"event\" || right.definitionKind != \"event\" || left.definitionName != right.definitionName || (left.definitionStream == right.definitionStream && left.sourceProvenance == right.sourceProvenance)"
+            ),
+            "Lean workflow artifacts must compare duplicate shared events by stream and source provenance"
+        );
+        assert!(
+            lean.contains(
+                "def workflowSharedEventDefinitionsHaveIdenticalIdentity : Bool := workflowOwnedDefinitions.all workflowEventDefinitionHasIdentity && workflowOwnedDefinitions.all (fun definition => workflowOwnedDefinitions.all (workflowSharedEventDefinitionMatches definition))"
+            ),
+            "Lean workflow artifacts must expose shared event identity as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def workflowOwnsDefinition (sourceSlice : String) (definitionKind : String) (definitionName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == definitionKind && definition.definitionName == definitionName)"
             ),
             "Lean workflow artifacts must define workflow-scoped definition ownership lookup"
@@ -496,6 +514,12 @@ mod tests {
                 "theorem workflowNonEventDefinitionsAreUniquelyOwnedIsStable : workflowNonEventDefinitionsAreUniquelyOwned = true := rfl"
             ),
             "Lean workflow artifacts must prove non-event definitions are owned by exactly one slice"
+        );
+        assert!(
+            lean.contains(
+                "theorem workflowSharedEventDefinitionsHaveIdenticalIdentityIsStable : workflowSharedEventDefinitionsHaveIdenticalIdentity = true := rfl"
+            ),
+            "Lean workflow artifacts must prove current shared event definitions have identical stream and provenance identity"
         );
         assert!(
             lean.contains(

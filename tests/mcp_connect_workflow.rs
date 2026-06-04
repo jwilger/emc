@@ -565,16 +565,19 @@ mod tests {
             ))
             .stdout(predicate::str::contains(
                 "added workflow owned definition command CaptureTicket to workflow open-ticket",
+            ))
+            .stdout(predicate::str::contains(
+                "added workflow owned definition event TicketSubmitted to workflow open-ticket",
             ));
 
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
         assert!(lean.contains(
-            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"command\", definitionName := \"CaptureTicket\" }]"
+            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"command\", definitionName := \"CaptureTicket\", definitionStream := \"\", sourceProvenance := \"\" },{ sourceSlice := \"capture-ticket\", definitionKind := \"event\", definitionName := \"TicketSubmitted\", definitionStream := \"tickets\", sourceProvenance := \"CaptureTicket command input\" }]"
         ));
         assert!(quint.contains(
-            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"command\", definitionName: \"CaptureTicket\" }]"
+            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"command\", definitionName: \"CaptureTicket\", definitionStream: \"\", sourceProvenance: \"\" },{ sourceSlice: \"capture-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmitted\", definitionStream: \"tickets\", sourceProvenance: \"CaptureTicket command input\" }]"
         ));
 
         Ok(())
@@ -800,6 +803,7 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"command\",\"definition_name\":\"CaptureTicket\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"event\",\"definition_name\":\"TicketSubmitted\",\"definition_stream\":\"tickets\",\"source_provenance\":\"CaptureTicket command input\"}}}\n",
         )
     }
 

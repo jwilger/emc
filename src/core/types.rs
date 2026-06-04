@@ -579,6 +579,8 @@ pub struct WorkflowOwnedDefinitionRecord {
     source_slice: WorkflowTransitionEndpoint,
     definition_kind: WorkflowOwnedDefinitionKind,
     definition_name: WorkflowOwnedDefinitionName,
+    definition_stream: Option<StreamName>,
+    source_provenance: Option<ModelDescription>,
 }
 
 impl WorkflowOwnedDefinitionRecord {
@@ -591,6 +593,24 @@ impl WorkflowOwnedDefinitionRecord {
             source_slice,
             definition_kind,
             definition_name,
+            definition_stream: None,
+            source_provenance: None,
+        }
+    }
+
+    pub fn new_with_event_identity(
+        source_slice: WorkflowTransitionEndpoint,
+        definition_kind: WorkflowOwnedDefinitionKind,
+        definition_name: WorkflowOwnedDefinitionName,
+        definition_stream: StreamName,
+        source_provenance: ModelDescription,
+    ) -> Self {
+        Self {
+            source_slice,
+            definition_kind,
+            definition_name,
+            definition_stream: Some(definition_stream),
+            source_provenance: Some(source_provenance),
         }
     }
 
@@ -604,6 +624,14 @@ impl WorkflowOwnedDefinitionRecord {
 
     pub fn definition_name(&self) -> &WorkflowOwnedDefinitionName {
         &self.definition_name
+    }
+
+    pub fn definition_stream(&self) -> Option<&StreamName> {
+        self.definition_stream.as_ref()
+    }
+
+    pub fn source_provenance(&self) -> Option<&ModelDescription> {
+        self.source_provenance.as_ref()
     }
 }
 
