@@ -1914,6 +1914,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def controlInputHasDescription (input : ControlInputProvision) : Bool := input.sourceDescription.isEmpty == false"
+            ),
+            "Lean slice artifacts must name control-input descriptions as their own proof obligation"
+        );
+        assert!(
+            lean.contains(
+                "def viewControlInputsHaveDescriptions : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputHasDescription))"
+            ),
+            "Lean slice artifacts must prove every control input has a description"
+        );
+        assert!(
+            lean.contains(
                 "def viewControlSessionInputsHaveDescriptions : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputSessionInputHasDescription))"
             ),
             "Lean slice artifacts must expose hidden session control-input descriptions as a proof obligation"
@@ -2477,6 +2489,12 @@ mod tests {
                 "theorem viewControlInputsHaveProvenanceIsStable : viewControlInputsHaveProvenance = true := rfl"
             ),
             "Lean slice artifacts must prove current control inputs carry provenance"
+        );
+        assert!(
+            lean.contains(
+                "theorem viewControlInputsHaveDescriptionsIsStable : viewControlInputsHaveDescriptions = true := rfl"
+            ),
+            "Lean slice artifacts must prove current control inputs have descriptions"
         );
         assert!(
             lean.contains(
