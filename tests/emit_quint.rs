@@ -557,6 +557,15 @@ mod tests {
             "def commandInputSessionInputHasDescription(input) = input.sourceKind != \"session\" or input.sourceDescription != \"\""
         ));
         assert!(quint.contains(
+            "def commandHasIssuingControl(command) = sliceViewDefinitions.select(view => view.controls.select(control => control.commandName == command.name).length() > 0).length() > 0"
+        ));
+        assert!(quint.contains(
+            "def commandInputWithoutIssuingControlHasProvenance(command, input) = commandHasIssuingControl(command) or (input.name != \"\" and input.sourceKind != \"\" and input.sourceDescription != \"\" and input.provenanceChain.length() > 0)"
+        ));
+        assert!(quint.contains(
+            "val commandInputsWithoutIssuingControlsHaveProvenance = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputWithoutIssuingControlHasProvenance(command, input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
+        ));
+        assert!(quint.contains(
             "val commandSessionInputsHaveDescriptions = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputSessionInputHasDescription(input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(

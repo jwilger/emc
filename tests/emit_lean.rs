@@ -996,6 +996,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def commandHasIssuingControl (command : CommandDefinition) : Bool := sliceViewDefinitions.any (fun view => view.controls.any (fun control => control.commandName == command.name))"
+            ),
+            "Lean slice artifacts must identify commands issued by modeled controls"
+        );
+        assert!(
+            lean.contains(
+                "def commandInputWithoutIssuingControlHasProvenance (command : CommandDefinition) (input : CommandInput) : Bool := commandHasIssuingControl command || commandInputHasProvenance input"
+            ),
+            "Lean slice artifacts must require command-input provenance even when no control issues the command"
+        );
+        assert!(
+            lean.contains(
                 "def commandInputTracesToInvocationSource (input : CommandInput) : Bool := allowedCommandInputSourceKinds.contains input.sourceKind && input.provenanceChain.isEmpty == false"
             ),
             "Lean slice artifacts must require command inputs to trace to modeled invocation source categories"
@@ -1011,6 +1023,12 @@ mod tests {
                 "def commandInputsHaveProvenance : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputHasProvenance)"
             ),
             "Lean slice artifacts must prove command inputs have source provenance"
+        );
+        assert!(
+            lean.contains(
+                "def commandInputsWithoutIssuingControlsHaveProvenance : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all (commandInputWithoutIssuingControlHasProvenance command))"
+            ),
+            "Lean slice artifacts must expose standalone command input provenance as a proof obligation"
         );
         assert!(
             lean.contains(
@@ -2091,6 +2109,12 @@ mod tests {
                 "theorem commandInputsHaveProvenanceIsStable : commandInputsHaveProvenance = true := rfl"
             ),
             "Lean slice artifacts must prove command inputs carry reportable provenance"
+        );
+        assert!(
+            lean.contains(
+                "theorem commandInputsWithoutIssuingControlsHaveProvenanceIsStable : commandInputsWithoutIssuingControlsHaveProvenance = true := rfl"
+            ),
+            "Lean slice artifacts must prove current standalone command inputs carry provenance"
         );
         assert!(
             lean.contains(
