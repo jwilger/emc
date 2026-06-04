@@ -19,9 +19,10 @@ use crate::core::types::{
     ReadModelName, ReadModelTransitiveRule, ReviewTimestamp, ReviewerId, ScenarioName,
     ScenarioStepText, SingletonRepeatBehavior, SketchToken, SliceSlug, SourceChainHop, StreamName,
     TransformationSemantics, TransitionTriggerName, TranslationExternalEventName, TranslationName,
-    ViewFieldName, ViewFieldSourceKind, ViewName, WorkflowOwnedDefinitionKind,
-    WorkflowOwnedDefinitionName, WorkflowSlug, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceText, WorkflowTransitionKind,
+    ViewFieldName, ViewFieldSourceKind, ViewName, WorkflowEntryLifecycleEvidenceText,
+    WorkflowEntryLifecycleStateName, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
+    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceText,
+    WorkflowTransitionKind,
 };
 
 #[derive(Debug)]
@@ -496,6 +497,26 @@ pub fn parse_workflow_transition_evidence_text(
 ) -> Result<WorkflowTransitionEvidenceText, BoundaryParseError> {
     WorkflowTransitionEvidenceText::try_new(raw.to_owned()).map_err(|error| {
         BoundaryParseError::new(format!("invalid workflow transition evidence: {error}"))
+    })
+}
+
+pub fn parse_workflow_entry_lifecycle_state_name(
+    raw: &str,
+) -> Result<WorkflowEntryLifecycleStateName, BoundaryParseError> {
+    WorkflowEntryLifecycleStateName::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!(
+            "invalid workflow entry lifecycle state name: {error}"
+        ))
+    })
+}
+
+pub fn parse_workflow_entry_lifecycle_evidence_text(
+    raw: &str,
+) -> Result<WorkflowEntryLifecycleEvidenceText, BoundaryParseError> {
+    WorkflowEntryLifecycleEvidenceText::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!(
+            "invalid workflow entry lifecycle evidence text: {error}"
+        ))
     })
 }
 

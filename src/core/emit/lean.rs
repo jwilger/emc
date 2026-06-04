@@ -1,10 +1,11 @@
 use crate::core::effect::{ArtifactDigest, FileContents};
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, SliceKindName, SliceSlug,
-    WorkflowCommandErrorRecord, WorkflowCommandErrorRecords, WorkflowModuleData,
-    WorkflowOutcomeRecord, WorkflowOutcomeRecords, WorkflowOwnedDefinitionRecord,
-    WorkflowOwnedDefinitionRecords, WorkflowSliceDetail, WorkflowTransitionEvidenceRecord,
-    WorkflowTransitionEvidenceRecords, WorkflowTransitionRecord, WorkflowTransitionRecords,
+    WorkflowCommandErrorRecord, WorkflowCommandErrorRecords, WorkflowEntryLifecycleStateRecord,
+    WorkflowEntryLifecycleStateRecords, WorkflowModuleData, WorkflowOutcomeRecord,
+    WorkflowOutcomeRecords, WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords,
+    WorkflowSliceDetail, WorkflowTransitionEvidenceRecord, WorkflowTransitionEvidenceRecords,
+    WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 
 pub fn emit_workflow_module(
@@ -24,7 +25,11 @@ pub fn emit_workflow_module(
         workflow_owned_definition_list(workflow_module.workflow_owned_definitions());
     let workflow_transition_evidence_list =
         workflow_transition_evidence_list(workflow_module.workflow_transition_evidences());
+    let workflow_entry_lifecycle_state_list =
+        workflow_entry_lifecycle_state_list(workflow_module.workflow_entry_lifecycle_states());
     let transition_list = transition_list(workflow_module.workflow_transitions().clone());
+    let workflow_requires_entry_lifecycle_coverage =
+        workflow_module.workflow_requires_entry_lifecycle_coverage();
     file_contents(format!(
         r#"namespace {module_name}
 
@@ -71,6 +76,11 @@ structure WorkflowTransitionEvidence where
   sourceEvidence : String
   targetEvidence : String
 
+structure WorkflowEntryLifecycleState where
+  state : String
+  step : String
+  evidence : String
+
 def workflowTransitions : List WorkflowTransition := {transition_list}
 
 def workflowOutcomes : List WorkflowOutcome := {workflow_outcome_list}
@@ -81,7 +91,13 @@ def workflowOwnedDefinitions : List WorkflowOwnedDefinition := {workflow_owned_d
 
 def workflowTransitionEvidences : List WorkflowTransitionEvidence := {workflow_transition_evidence_list}
 
+def workflowRequiresEntryLifecycleCoverage : Bool := {workflow_requires_entry_lifecycle_coverage}
+
+def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := {workflow_entry_lifecycle_state_list}
+
 def workflowExitTargets : List String := {workflow_exit_target_list}
+
+def requiredEntryLifecycleStates : List String := ["fresh_uninitialized","initialized_unauthenticated","initialized_authenticated","partially_configured","fully_configured"]
 
 def allowedWorkflowStepRelationships : List String := ["entry","main","branch","alternate","async_lifecycle","supporting"]
 
@@ -147,6 +163,10 @@ def workflowTransitionHasRequiredEvidence (transition : WorkflowTransition) : Bo
 
 def workflowTransitionsHaveRequiredEvidence : Bool := workflowTransitions.all workflowTransitionHasRequiredEvidence
 
+def workflowEntryLifecycleStateCovered (state : String) : Bool := workflowEntryLifecycleStates.any (fun coverage => coverage.state == state && workflowSlices.contains coverage.step && coverage.evidence.isEmpty == false)
+
+def workflowEntryLifecycleStatesCoverRequiredStates : Bool := workflowRequiresEntryLifecycleCoverage == false || requiredEntryLifecycleStates.all workflowEntryLifecycleStateCovered
+
 theorem workflowIdentityIsStable : workflowName = {workflow_name_json} := rfl
 
 theorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl
@@ -185,6 +205,8 @@ theorem workflowExternalTriggersDeclarePayloadContractsIsStable : workflowExtern
 
 theorem workflowTransitionsHaveRequiredEvidenceIsStable : workflowTransitionsHaveRequiredEvidence = true := rfl
 
+theorem workflowEntryLifecycleStatesCoverRequiredStatesIsStable : workflowEntryLifecycleStatesCoverRequiredStates = true := rfl
+
 end {module_name}
 "#,
         module_name = module_name.as_ref(),
@@ -200,6 +222,8 @@ end {module_name}
         workflow_command_error_list = workflow_command_error_list,
         workflow_owned_definition_list = workflow_owned_definition_list,
         workflow_transition_evidence_list = workflow_transition_evidence_list,
+        workflow_requires_entry_lifecycle_coverage = workflow_requires_entry_lifecycle_coverage,
+        workflow_entry_lifecycle_state_list = workflow_entry_lifecycle_state_list,
         workflow_exit_target_list = workflow_exit_target_list,
     ))
 }
@@ -551,6 +575,29 @@ fn workflow_transition_evidence_record(evidence: &WorkflowTransitionEvidenceReco
         quoted(evidence.trigger().as_ref()),
         quoted(evidence.source_evidence().as_ref()),
         quoted(evidence.target_evidence().as_ref()),
+    )
+}
+
+fn workflow_entry_lifecycle_state_list(
+    workflow_entry_lifecycle_states: &WorkflowEntryLifecycleStateRecords,
+) -> String {
+    format!(
+        "[{}]",
+        workflow_entry_lifecycle_states
+            .as_slice()
+            .iter()
+            .map(workflow_entry_lifecycle_state_record)
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn workflow_entry_lifecycle_state_record(coverage: &WorkflowEntryLifecycleStateRecord) -> String {
+    format!(
+        "{{ state := {}, step := {}, evidence := {} }}",
+        quoted(coverage.state().as_ref()),
+        quoted(coverage.step().as_ref()),
+        quoted(coverage.evidence().as_ref()),
     )
 }
 

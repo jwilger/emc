@@ -1,7 +1,8 @@
 use crate::core::effect::ArtifactDigest;
 use crate::core::types::{
     ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowCommandErrorRecord,
-    WorkflowCommandErrorRecords, WorkflowOutcomeRecord, WorkflowOutcomeRecords,
+    WorkflowCommandErrorRecords, WorkflowEntryLifecycleStateRecord,
+    WorkflowEntryLifecycleStateRecords, WorkflowOutcomeRecord, WorkflowOutcomeRecords,
     WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
     WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionEvidenceRecord,
     WorkflowTransitionEvidenceRecords, WorkflowTransitionRecord, WorkflowTransitionRecords,
@@ -17,11 +18,13 @@ pub struct WorkflowArtifactDigestInput {
     pub workflow_command_errors: WorkflowCommandErrorRecords,
     pub workflow_owned_definitions: WorkflowOwnedDefinitionRecords,
     pub workflow_transition_evidences: WorkflowTransitionEvidenceRecords,
+    pub workflow_requires_entry_lifecycle_coverage: bool,
+    pub workflow_entry_lifecycle_states: WorkflowEntryLifecycleStateRecords,
 }
 
 pub fn artifact_digest(input: WorkflowArtifactDigestInput) -> ArtifactDigest {
     ArtifactDigest::try_new(format!(
-        "workflow:name={};slug={};description={};slices={};transitions={};outcomes={};command_errors={};owned_definitions={};transition_evidences={}",
+        "workflow:name={};slug={};description={};slices={};transitions={};outcomes={};command_errors={};owned_definitions={};transition_evidences={};entry_lifecycle_required={};entry_lifecycle_states={}",
         input.workflow_name,
         input.workflow_slug,
         input.workflow_description,
@@ -30,7 +33,9 @@ pub fn artifact_digest(input: WorkflowArtifactDigestInput) -> ArtifactDigest {
         outcomes_digest(input.workflow_outcomes.as_slice()),
         command_errors_digest(input.workflow_command_errors.as_slice()),
         owned_definitions_digest(input.workflow_owned_definitions.as_slice()),
-        transition_evidences_digest(input.workflow_transition_evidences.as_slice())
+        transition_evidences_digest(input.workflow_transition_evidences.as_slice()),
+        input.workflow_requires_entry_lifecycle_coverage,
+        entry_lifecycle_states_digest(input.workflow_entry_lifecycle_states.as_slice())
     ))
     .unwrap_or_else(|error| {
         unreachable!("EMC generated artifact digest must be valid: {error}");
@@ -151,6 +156,23 @@ fn transition_evidences_digest(
                 evidence.trigger().as_ref(),
                 evidence.source_evidence().as_ref(),
                 evidence.target_evidence().as_ref()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn entry_lifecycle_states_digest(
+    workflow_entry_lifecycle_states: &[WorkflowEntryLifecycleStateRecord],
+) -> String {
+    workflow_entry_lifecycle_states
+        .iter()
+        .map(|coverage| {
+            format!(
+                "{}:{}:{}",
+                coverage.state().as_ref(),
+                coverage.step().as_ref(),
+                coverage.evidence().as_ref()
             )
         })
         .collect::<Vec<_>>()

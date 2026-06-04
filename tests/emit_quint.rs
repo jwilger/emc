@@ -75,6 +75,8 @@ mod tests {
                     workflow_command_errors: workflow_command_errors.clone(),
                     workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
                     workflow_transition_evidences: Default::default(),
+                    workflow_requires_entry_lifecycle_coverage: false,
+                    workflow_entry_lifecycle_states: Default::default(),
                 }),
             )
             .with_slice_details(WorkflowSliceDetails::from_details(workflow_slice_details))
@@ -110,6 +112,9 @@ mod tests {
         assert!(quint.contains(
             "type WorkflowOwnedDefinition = { sourceSlice: str, definitionKind: str, definitionName: str }"
         ));
+        assert!(quint.contains(
+            "type WorkflowEntryLifecycleState = { state: str, step: str, evidence: str }"
+        ));
         assert!(
             quint
                 .contains("val workflowSlices: List[str] = [\"capture-ticket\",\"review-ticket\"]")
@@ -131,6 +136,12 @@ mod tests {
             "val workflowCommandErrors: List[WorkflowCommandError] = [{ sourceSlice: \"capture-ticket\", commandName: \"CaptureTicket\", errorName: \"DuplicateTicket\" }]"
         ));
         assert!(quint.contains("val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = []"));
+        assert!(quint.contains("val workflowRequiresEntryLifecycleCoverage = false"));
+        assert!(
+            quint.contains(
+                "val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = []"
+            )
+        );
         assert!(quint.contains("val workflowIdentityStable"));
         assert!(quint.contains("val workflowSlicesHaveDetails ="));
         assert!(quint.contains("val workflowSliceDetailsComplete = workflowSlicesHaveDetails"));
@@ -140,6 +151,10 @@ mod tests {
         assert!(
             quint.contains("val workflowExitTargets: List[str] = []"),
             "Quint workflow artifacts must explicitly model workflow-exit targets for transition target resolution"
+        );
+        assert!(
+            quint.contains("val requiredEntryLifecycleStates: List[str] = [\"fresh_uninitialized\",\"initialized_unauthenticated\",\"initialized_authenticated\",\"partially_configured\",\"fully_configured\"]"),
+            "Quint workflow artifacts must encode the required application-entry lifecycle states"
         );
         assert!(
             quint.contains("val allowedWorkflowStepRelationships: List[str] = [\"entry\",\"main\",\"branch\",\"alternate\",\"async_lifecycle\",\"supporting\"]"),
@@ -182,6 +197,10 @@ mod tests {
         assert!(
             quint.contains("val workflowBranchAndAlternateStepsHaveTriggerOrRationale = workflowStepRelationships.select(step => workflowBranchOrAlternateStepHasTriggerOrRationale(step)).length() == workflowStepRelationships.length()"),
             "Quint workflow artifacts must verify branch and alternate steps explain why they are reached"
+        );
+        assert!(
+            quint.contains("val workflowEntryLifecycleStatesCoverRequiredStates = not(workflowRequiresEntryLifecycleCoverage) or requiredEntryLifecycleStates.select(state => workflowEntryLifecycleStateCovered(state)).length() == requiredEntryLifecycleStates.length()"),
+            "Quint workflow artifacts must expose application-entry lifecycle coverage as an invariant"
         );
         assert!(
             quint.contains(

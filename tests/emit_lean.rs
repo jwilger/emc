@@ -75,6 +75,8 @@ mod tests {
                     workflow_command_errors: workflow_command_errors.clone(),
                     workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
                     workflow_transition_evidences: Default::default(),
+                    workflow_requires_entry_lifecycle_coverage: false,
+                    workflow_entry_lifecycle_states: Default::default(),
                 }),
             )
             .with_slice_details(WorkflowSliceDetails::from_details(workflow_slice_details))
@@ -128,6 +130,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "structure WorkflowEntryLifecycleState where\n  state : String\n  step : String\n  evidence : String"
+            ),
+            "Lean workflow artifacts must represent application-entry lifecycle coverage"
+        );
+        assert!(
+            lean.contains(
                 "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]"
             ),
             "Lean artifact must model transitions as named business records, not anonymous tuples"
@@ -149,8 +157,22 @@ mod tests {
             "Lean workflow artifacts must carry the authored cross-slice ownership inventory"
         );
         assert!(
+            lean.contains("def workflowRequiresEntryLifecycleCoverage : Bool := false"),
+            "Lean workflow artifacts must make application-entry lifecycle coverage an explicit formal flag"
+        );
+        assert!(
+            lean.contains(
+                "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := []"
+            ),
+            "Lean workflow artifacts must carry authored application-entry lifecycle coverage facts"
+        );
+        assert!(
             lean.contains("def workflowExitTargets : List String := []"),
             "Lean workflow artifacts must explicitly model workflow-exit targets for transition target resolution"
+        );
+        assert!(
+            lean.contains("def requiredEntryLifecycleStates : List String := [\"fresh_uninitialized\",\"initialized_unauthenticated\",\"initialized_authenticated\",\"partially_configured\",\"fully_configured\"]"),
+            "Lean workflow artifacts must encode the required application-entry lifecycle states"
         );
         assert!(
             lean.contains("def allowedWorkflowStepRelationships : List String := [\"entry\",\"main\",\"branch\",\"alternate\",\"async_lifecycle\",\"supporting\"]"),
@@ -200,7 +222,14 @@ mod tests {
             lean.contains("def workflowBranchAndAlternateStepsHaveTriggerOrRationale : Bool := workflowStepRelationships.all workflowBranchOrAlternateStepHasTriggerOrRationale"),
             "Lean workflow artifacts must expose branch and alternate trigger/rationale as a proof obligation"
         );
+        assert!(
+            lean.contains("def workflowEntryLifecycleStatesCoverRequiredStates : Bool := workflowRequiresEntryLifecycleCoverage == false || requiredEntryLifecycleStates.all workflowEntryLifecycleStateCovered"),
+            "Lean workflow artifacts must expose application-entry lifecycle coverage as a proof obligation"
+        );
         assert!(lean.contains("theorem workflowIdentityIsStable"));
+        assert!(lean.contains(
+            "theorem workflowEntryLifecycleStatesCoverRequiredStatesIsStable : workflowEntryLifecycleStatesCoverRequiredStates = true := rfl"
+        ));
         assert!(
             lean.contains(
                 "theorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl"
@@ -426,6 +455,8 @@ mod tests {
                     workflow_command_errors: WorkflowCommandErrorRecords::from_records([]),
                     workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
                     workflow_transition_evidences: Default::default(),
+                    workflow_requires_entry_lifecycle_coverage: false,
+                    workflow_entry_lifecycle_states: Default::default(),
                 }),
             )
             .with_slice_details(WorkflowSliceDetails::from_details([]))

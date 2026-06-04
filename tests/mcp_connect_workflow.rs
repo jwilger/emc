@@ -634,6 +634,84 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_stdio_authors_workflow_entry_lifecycle_coverage() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "application-entry",
+                "--name",
+                "Application entry",
+                "--description",
+                "Actor enters the application.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "application-entry",
+                "--slug",
+                "entry-state",
+                "--name",
+                "Entry state",
+                "--type",
+                "state_view",
+                "--description",
+                "Slice description.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(workflow_entry_lifecycle_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"require_workflow_entry_lifecycle_coverage\"",
+            ))
+            .stdout(predicate::str::contains(
+                "\"add_workflow_entry_lifecycle_state\"",
+            ))
+            .stdout(predicate::str::contains(
+                "marked workflow application-entry as requiring entry lifecycle coverage",
+            ))
+            .stdout(predicate::str::contains(
+                "added workflow entry lifecycle state fully_configured to workflow application-entry",
+            ));
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/ApplicationEntry.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/ApplicationEntry.qnt"))?;
+
+        assert!(lean.contains("def workflowRequiresEntryLifecycleCoverage : Bool := true"));
+        assert!(quint.contains("val workflowRequiresEntryLifecycleCoverage = true"));
+        assert!(lean.contains(
+            "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := [{ state := \"fresh_uninitialized\", step := \"entry-state\", evidence := \"entry-state view distinguishes first arrival before initialization\" },{ state := \"initialized_unauthenticated\", step := \"entry-state\", evidence := \"entry-state view distinguishes initialized unauthenticated sessions\" },{ state := \"initialized_authenticated\", step := \"entry-state\", evidence := \"entry-state view distinguishes initialized authenticated sessions\" },{ state := \"partially_configured\", step := \"entry-state\", evidence := \"entry-state view distinguishes partially configured accounts\" },{ state := \"fully_configured\", step := \"entry-state\", evidence := \"entry-state view distinguishes fully configured accounts\" }]"
+        ));
+        assert!(quint.contains(
+            "val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = [{ state: \"fresh_uninitialized\", step: \"entry-state\", evidence: \"entry-state view distinguishes first arrival before initialization\" },{ state: \"initialized_unauthenticated\", step: \"entry-state\", evidence: \"entry-state view distinguishes initialized unauthenticated sessions\" },{ state: \"initialized_authenticated\", step: \"entry-state\", evidence: \"entry-state view distinguishes initialized authenticated sessions\" },{ state: \"partially_configured\", step: \"entry-state\", evidence: \"entry-state view distinguishes partially configured accounts\" },{ state: \"fully_configured\", step: \"entry-state\", evidence: \"entry-state view distinguishes fully configured accounts\" }]"
+        ));
+
+        Ok(())
+    }
+
     fn add_slice(cwd: &Path, slug: &str, name: &str) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args([
@@ -731,6 +809,19 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_transition_evidence\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_evidence\":\"capture-ticket view owns the review-ticket-screen navigation control\",\"target_evidence\":\"review-ticket workflow step exposes review-ticket-screen as its entry view\"}}}\n",
+        )
+    }
+
+    fn workflow_entry_lifecycle_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"require_workflow_entry_lifecycle_coverage\",\"arguments\":{\"workflow\":\"application-entry\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"fresh_uninitialized\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes first arrival before initialization\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"initialized_unauthenticated\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes initialized unauthenticated sessions\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"initialized_authenticated\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes initialized authenticated sessions\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"partially_configured\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes partially configured accounts\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_entry_lifecycle_state\",\"arguments\":{\"workflow\":\"application-entry\",\"state\":\"fully_configured\",\"step\":\"entry-state\",\"evidence\":\"entry-state view distinguishes fully configured accounts\"}}}\n",
         )
     }
 }

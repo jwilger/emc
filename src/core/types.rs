@@ -343,6 +343,20 @@ pub struct WorkflowTransitionKind(String);
 )]
 pub struct WorkflowTransitionEvidenceText(String);
 
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct WorkflowEntryLifecycleStateName(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct WorkflowEntryLifecycleEvidenceText(String);
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct WorkflowTransitionRecord {
     source: WorkflowTransitionEndpoint,
@@ -690,6 +704,64 @@ impl Default for WorkflowTransitionEvidenceRecords {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowEntryLifecycleStateRecord {
+    state: WorkflowEntryLifecycleStateName,
+    step: WorkflowTransitionEndpoint,
+    evidence: WorkflowEntryLifecycleEvidenceText,
+}
+
+impl WorkflowEntryLifecycleStateRecord {
+    pub fn new(
+        state: WorkflowEntryLifecycleStateName,
+        step: WorkflowTransitionEndpoint,
+        evidence: WorkflowEntryLifecycleEvidenceText,
+    ) -> Self {
+        Self {
+            state,
+            step,
+            evidence,
+        }
+    }
+
+    pub fn state(&self) -> &WorkflowEntryLifecycleStateName {
+        &self.state
+    }
+
+    pub fn step(&self) -> &WorkflowTransitionEndpoint {
+        &self.step
+    }
+
+    pub fn evidence(&self) -> &WorkflowEntryLifecycleEvidenceText {
+        &self.evidence
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowEntryLifecycleStateRecords {
+    records: Vec<WorkflowEntryLifecycleStateRecord>,
+}
+
+impl WorkflowEntryLifecycleStateRecords {
+    pub fn from_records(
+        records: impl IntoIterator<Item = WorkflowEntryLifecycleStateRecord>,
+    ) -> Self {
+        Self {
+            records: records.into_iter().collect(),
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[WorkflowEntryLifecycleStateRecord] {
+        &self.records
+    }
+}
+
+impl Default for WorkflowEntryLifecycleStateRecords {
+    fn default() -> Self {
+        Self::from_records([])
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct WorkflowModuleData {
     workflow_name: ModelName,
     workflow_description: ModelDescription,
@@ -700,6 +772,8 @@ pub struct WorkflowModuleData {
     workflow_command_errors: WorkflowCommandErrorRecords,
     workflow_owned_definitions: WorkflowOwnedDefinitionRecords,
     workflow_transition_evidences: WorkflowTransitionEvidenceRecords,
+    workflow_requires_entry_lifecycle_coverage: bool,
+    workflow_entry_lifecycle_states: WorkflowEntryLifecycleStateRecords,
     digest: ArtifactDigest,
 }
 
@@ -720,6 +794,8 @@ impl WorkflowModuleData {
             workflow_command_errors: WorkflowCommandErrorRecords::from_records([]),
             workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
             workflow_transition_evidences: WorkflowTransitionEvidenceRecords::from_records([]),
+            workflow_requires_entry_lifecycle_coverage: false,
+            workflow_entry_lifecycle_states: WorkflowEntryLifecycleStateRecords::from_records([]),
             digest,
         }
     }
@@ -763,6 +839,23 @@ impl WorkflowModuleData {
         self
     }
 
+    pub fn with_entry_lifecycle_required(
+        mut self,
+        workflow_requires_entry_lifecycle_coverage: bool,
+    ) -> Self {
+        self.workflow_requires_entry_lifecycle_coverage =
+            workflow_requires_entry_lifecycle_coverage;
+        self
+    }
+
+    pub fn with_entry_lifecycle_states(
+        mut self,
+        workflow_entry_lifecycle_states: WorkflowEntryLifecycleStateRecords,
+    ) -> Self {
+        self.workflow_entry_lifecycle_states = workflow_entry_lifecycle_states;
+        self
+    }
+
     pub fn workflow_name(&self) -> &ModelName {
         &self.workflow_name
     }
@@ -797,6 +890,14 @@ impl WorkflowModuleData {
 
     pub(crate) fn workflow_transition_evidences(&self) -> &WorkflowTransitionEvidenceRecords {
         &self.workflow_transition_evidences
+    }
+
+    pub(crate) fn workflow_requires_entry_lifecycle_coverage(&self) -> bool {
+        self.workflow_requires_entry_lifecycle_coverage
+    }
+
+    pub(crate) fn workflow_entry_lifecycle_states(&self) -> &WorkflowEntryLifecycleStateRecords {
+        &self.workflow_entry_lifecycle_states
     }
 
     pub fn digest(&self) -> &ArtifactDigest {

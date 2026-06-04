@@ -452,6 +452,133 @@ mod tests {
     }
 
     #[test]
+    fn add_workflow_entry_lifecycle_coverage_updates_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "application-entry",
+                "--name",
+                "Application entry",
+                "--description",
+                "Actor enters the application.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "application-entry",
+                "--slug",
+                "entry-state",
+                "--name",
+                "Entry state",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor sees the correct entry state.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        add_complete_state_view_facts(temp_dir.path(), "entry-state")?;
+
+        let initial_digest = digest_marker(&read_to_string(
+            temp_dir.path().join("model/lean/ApplicationEntry.lean"),
+        )?)
+        .ok_or("Lean artifact is missing its initial digest")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "mark",
+                "workflow-entry-lifecycle-required",
+                "--workflow",
+                "application-entry",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "marked workflow application-entry as requiring entry lifecycle coverage",
+            ));
+
+        add_entry_lifecycle_state(
+            temp_dir.path(),
+            "fresh_uninitialized",
+            "entry-state",
+            "entry-state view distinguishes first arrival before initialization",
+        )?;
+        add_entry_lifecycle_state(
+            temp_dir.path(),
+            "initialized_unauthenticated",
+            "entry-state",
+            "entry-state view distinguishes initialized unauthenticated sessions",
+        )?;
+        add_entry_lifecycle_state(
+            temp_dir.path(),
+            "initialized_authenticated",
+            "entry-state",
+            "entry-state view distinguishes initialized authenticated sessions",
+        )?;
+        add_entry_lifecycle_state(
+            temp_dir.path(),
+            "partially_configured",
+            "entry-state",
+            "entry-state view distinguishes partially configured accounts",
+        )?;
+        add_entry_lifecycle_state(
+            temp_dir.path(),
+            "fully_configured",
+            "entry-state",
+            "entry-state view distinguishes fully configured accounts",
+        )?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/ApplicationEntry.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/ApplicationEntry.qnt"))?;
+        let updated_digest = digest_marker(&lean).ok_or("Lean artifact is missing digest")?;
+
+        assert!(lean.contains("def workflowRequiresEntryLifecycleCoverage : Bool := true"));
+        assert!(quint.contains("val workflowRequiresEntryLifecycleCoverage = true"));
+        assert!(lean.contains(
+            "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := [{ state := \"fresh_uninitialized\", step := \"entry-state\", evidence := \"entry-state view distinguishes first arrival before initialization\" },{ state := \"initialized_unauthenticated\", step := \"entry-state\", evidence := \"entry-state view distinguishes initialized unauthenticated sessions\" },{ state := \"initialized_authenticated\", step := \"entry-state\", evidence := \"entry-state view distinguishes initialized authenticated sessions\" },{ state := \"partially_configured\", step := \"entry-state\", evidence := \"entry-state view distinguishes partially configured accounts\" },{ state := \"fully_configured\", step := \"entry-state\", evidence := \"entry-state view distinguishes fully configured accounts\" }]"
+        ));
+        assert!(quint.contains(
+            "val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = [{ state: \"fresh_uninitialized\", step: \"entry-state\", evidence: \"entry-state view distinguishes first arrival before initialization\" },{ state: \"initialized_unauthenticated\", step: \"entry-state\", evidence: \"entry-state view distinguishes initialized unauthenticated sessions\" },{ state: \"initialized_authenticated\", step: \"entry-state\", evidence: \"entry-state view distinguishes initialized authenticated sessions\" },{ state: \"partially_configured\", step: \"entry-state\", evidence: \"entry-state view distinguishes partially configured accounts\" },{ state: \"fully_configured\", step: \"entry-state\", evidence: \"entry-state view distinguishes fully configured accounts\" }]"
+        ));
+        assert_ne!(
+            initial_digest, updated_digest,
+            "workflow digest must change when entry lifecycle coverage is authored"
+        );
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        Command::cargo_bin("emc")?
+            .args(["verify"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    #[test]
     fn check_accepts_synchronized_formal_workflow_outcome_and_error_facts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -2078,6 +2205,31 @@ mod tests {
                 target,
                 "--bit-encoding",
                 "UTF-8 string",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn add_entry_lifecycle_state(
+        cwd: &Path,
+        state: &str,
+        step: &str,
+        evidence: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-entry-lifecycle-state",
+                "--workflow",
+                "application-entry",
+                "--state",
+                state,
+                "--step",
+                step,
+                "--evidence",
+                evidence,
             ])
             .current_dir(cwd)
             .assert()

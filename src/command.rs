@@ -13,8 +13,8 @@ use crate::core::review_gate::review_gate;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceSlug,
-    WorkflowCommandErrorRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug,
-    WorkflowTransitionEvidenceRecord,
+    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
 
@@ -115,6 +115,22 @@ pub fn add_workflow_transition_evidence(
     EffectPlan::new(vec![Effect::AddWorkflowTransitionEvidenceFromWorkflow(
         workflow_slug,
         evidence,
+    )])
+}
+
+pub fn require_workflow_entry_lifecycle_coverage(workflow_slug: WorkflowSlug) -> EffectPlan {
+    EffectPlan::new(vec![
+        Effect::RequireWorkflowEntryLifecycleCoverageFromWorkflow(workflow_slug),
+    ])
+}
+
+pub fn add_workflow_entry_lifecycle_state(
+    workflow_slug: WorkflowSlug,
+    coverage: WorkflowEntryLifecycleStateRecord,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::AddWorkflowEntryLifecycleStateFromWorkflow(
+        workflow_slug,
+        coverage,
     )])
 }
 

@@ -13,10 +13,10 @@ use crate::core::emit::quint::{
 use crate::core::formal_graph::FormalWorkflowGraph;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceKindName, SliceSlug,
-    WorkflowCommandErrorRecords, WorkflowModuleData, WorkflowOutcomeRecords,
-    WorkflowOwnedDefinitionRecords, WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSlug,
-    WorkflowStepRelationshipName, WorkflowTransitionEvidenceRecords, WorkflowTransitionRecord,
-    WorkflowTransitionRecords,
+    WorkflowCommandErrorRecords, WorkflowEntryLifecycleStateRecords, WorkflowModuleData,
+    WorkflowOutcomeRecords, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
+    WorkflowSliceDetails, WorkflowSlug, WorkflowStepRelationshipName,
+    WorkflowTransitionEvidenceRecords, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -135,6 +135,8 @@ pub fn add_slice(
     let workflow_command_errors = workflow_graph.command_errors().clone();
     let workflow_owned_definitions = workflow_graph.owned_definitions().clone();
     let workflow_transition_evidences = workflow_graph.transition_evidences().clone();
+    let workflow_entry_lifecycle_required = workflow_graph.entry_lifecycle_required();
+    let workflow_entry_lifecycle_states = workflow_graph.entry_lifecycle_states().clone();
     let digest = artifact_digest(WorkflowArtifactDigestInput {
         workflow_name: workflow_name.clone(),
         workflow_slug: new_slice.workflow_slug.clone(),
@@ -145,6 +147,8 @@ pub fn add_slice(
         workflow_command_errors: workflow_command_errors.clone(),
         workflow_owned_definitions: workflow_owned_definitions.clone(),
         workflow_transition_evidences: workflow_transition_evidences.clone(),
+        workflow_requires_entry_lifecycle_coverage: workflow_entry_lifecycle_required,
+        workflow_entry_lifecycle_states: workflow_entry_lifecycle_states.clone(),
     });
     let slice_name = new_slice.name.as_ref();
     let slice_kind = slice_kind_name(new_slice.kind);
@@ -197,7 +201,9 @@ pub fn add_slice(
                 .with_outcomes(workflow_outcomes.clone())
                 .with_command_errors(workflow_command_errors.clone())
                 .with_owned_definitions(workflow_owned_definitions.clone())
-                .with_transition_evidences(workflow_transition_evidences.clone()),
+                .with_transition_evidences(workflow_transition_evidences.clone())
+                .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
+                .with_entry_lifecycle_states(workflow_entry_lifecycle_states.clone()),
             ),
         ),
         Effect::WriteFile(
@@ -217,7 +223,9 @@ pub fn add_slice(
                 .with_outcomes(workflow_outcomes)
                 .with_command_errors(workflow_command_errors)
                 .with_owned_definitions(workflow_owned_definitions)
-                .with_transition_evidences(workflow_transition_evidences),
+                .with_transition_evidences(workflow_transition_evidences)
+                .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
+                .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
             ),
         ),
         Effect::Report(report_line(format!("added slice {slice_name}"))),
@@ -278,6 +286,8 @@ pub fn update_slice_description(
             workflow_command_errors: workflow_graph.command_errors().clone(),
             workflow_owned_definitions: workflow_graph.owned_definitions().clone(),
             workflow_transition_evidences: workflow_graph.transition_evidences().clone(),
+            workflow_entry_lifecycle_required: workflow_graph.entry_lifecycle_required(),
+            workflow_entry_lifecycle_states: workflow_graph.entry_lifecycle_states().clone(),
         },
         slice_slug,
         updated_slice,
@@ -339,6 +349,8 @@ pub fn update_slice_kind(
             workflow_command_errors: workflow_graph.command_errors().clone(),
             workflow_owned_definitions: workflow_graph.owned_definitions().clone(),
             workflow_transition_evidences: workflow_graph.transition_evidences().clone(),
+            workflow_entry_lifecycle_required: workflow_graph.entry_lifecycle_required(),
+            workflow_entry_lifecycle_states: workflow_graph.entry_lifecycle_states().clone(),
         },
         slice_slug,
         updated_slice,
@@ -399,6 +411,8 @@ pub fn update_slice_name(
             workflow_command_errors: workflow_graph.command_errors().clone(),
             workflow_owned_definitions: workflow_graph.owned_definitions().clone(),
             workflow_transition_evidences: workflow_graph.transition_evidences().clone(),
+            workflow_entry_lifecycle_required: workflow_graph.entry_lifecycle_required(),
+            workflow_entry_lifecycle_states: workflow_graph.entry_lifecycle_states().clone(),
         },
         slice_slug,
         updated_slice,
@@ -454,6 +468,8 @@ pub fn remove_slice(
     let workflow_command_errors = workflow_graph.command_errors().clone();
     let workflow_owned_definitions = workflow_graph.owned_definitions().clone();
     let workflow_transition_evidences = workflow_graph.transition_evidences().clone();
+    let workflow_entry_lifecycle_required = workflow_graph.entry_lifecycle_required();
+    let workflow_entry_lifecycle_states = workflow_graph.entry_lifecycle_states().clone();
     let workflow_digest = artifact_digest(WorkflowArtifactDigestInput {
         workflow_name: workflow_name.clone(),
         workflow_slug: workflow_slug.clone(),
@@ -464,6 +480,8 @@ pub fn remove_slice(
         workflow_command_errors: workflow_command_errors.clone(),
         workflow_owned_definitions: workflow_owned_definitions.clone(),
         workflow_transition_evidences: workflow_transition_evidences.clone(),
+        workflow_requires_entry_lifecycle_coverage: workflow_entry_lifecycle_required,
+        workflow_entry_lifecycle_states: workflow_entry_lifecycle_states.clone(),
     });
     Ok(EffectPlan::new(
         [
@@ -493,7 +511,9 @@ pub fn remove_slice(
                         .with_outcomes(workflow_outcomes.clone())
                         .with_command_errors(workflow_command_errors.clone())
                         .with_owned_definitions(workflow_owned_definitions.clone())
-                        .with_transition_evidences(workflow_transition_evidences.clone()),
+                        .with_transition_evidences(workflow_transition_evidences.clone())
+                        .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
+                        .with_entry_lifecycle_states(workflow_entry_lifecycle_states.clone()),
                     ),
                 ),
                 Effect::WriteFile(
@@ -515,7 +535,9 @@ pub fn remove_slice(
                         .with_outcomes(workflow_outcomes)
                         .with_command_errors(workflow_command_errors)
                         .with_owned_definitions(workflow_owned_definitions)
-                        .with_transition_evidences(workflow_transition_evidences),
+                        .with_transition_evidences(workflow_transition_evidences)
+                        .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
+                        .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
                     ),
                 ),
             ],
@@ -538,6 +560,8 @@ struct UpdatedSliceWorkflow {
     workflow_command_errors: WorkflowCommandErrorRecords,
     workflow_owned_definitions: WorkflowOwnedDefinitionRecords,
     workflow_transition_evidences: WorkflowTransitionEvidenceRecords,
+    workflow_entry_lifecycle_required: bool,
+    workflow_entry_lifecycle_states: WorkflowEntryLifecycleStateRecords,
 }
 
 fn updated_slice_plan(
@@ -562,6 +586,8 @@ fn updated_slice_plan(
         workflow_command_errors: workflow.workflow_command_errors.clone(),
         workflow_owned_definitions: workflow.workflow_owned_definitions.clone(),
         workflow_transition_evidences: workflow.workflow_transition_evidences.clone(),
+        workflow_requires_entry_lifecycle_coverage: workflow.workflow_entry_lifecycle_required,
+        workflow_entry_lifecycle_states: workflow.workflow_entry_lifecycle_states.clone(),
     });
     let slice_digest = slice_artifact_digest(
         updated_slice.name().clone(),
@@ -631,7 +657,9 @@ fn updated_slice_plan(
                     .with_outcomes(workflow.workflow_outcomes.clone())
                     .with_command_errors(workflow.workflow_command_errors.clone())
                     .with_owned_definitions(workflow.workflow_owned_definitions.clone())
-                    .with_transition_evidences(workflow.workflow_transition_evidences.clone()),
+                    .with_transition_evidences(workflow.workflow_transition_evidences.clone())
+                    .with_entry_lifecycle_required(workflow.workflow_entry_lifecycle_required)
+                    .with_entry_lifecycle_states(workflow.workflow_entry_lifecycle_states.clone()),
                 ),
             ),
             Effect::WriteFile(
@@ -653,7 +681,9 @@ fn updated_slice_plan(
                     .with_outcomes(workflow.workflow_outcomes)
                     .with_command_errors(workflow.workflow_command_errors)
                     .with_owned_definitions(workflow.workflow_owned_definitions)
-                    .with_transition_evidences(workflow.workflow_transition_evidences),
+                    .with_transition_evidences(workflow.workflow_transition_evidences)
+                    .with_entry_lifecycle_required(workflow.workflow_entry_lifecycle_required)
+                    .with_entry_lifecycle_states(workflow.workflow_entry_lifecycle_states),
                 ),
             ),
             Effect::Report(report_line(format!(
