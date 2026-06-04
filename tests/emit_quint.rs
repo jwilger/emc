@@ -542,6 +542,12 @@ mod tests {
             "val commandInputsHaveProvenance = sliceCommandDefinitions.select(command => command.inputs.select(input => input.name != \"\" and input.sourceKind != \"\" and input.sourceDescription != \"\" and input.provenanceChain.length() > 0).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(
+            "def commandInputTracesToInvocationSource(input) = allowedCommandInputSourceKinds.select(sourceKind => sourceKind == input.sourceKind).length() > 0 and input.provenanceChain.length() > 0"
+        ));
+        assert!(quint.contains(
+            "val commandInputsTraceToInvocationSources = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputTracesToInvocationSource(input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
+        ));
+        assert!(quint.contains(
             "def commandInputEventStreamSourceResolves(command, input) = input.sourceKind != \"event_stream_state\" or (command.observedStreams.length() > 0 and command.observedStreams.select(streamName => scenarioStreamResolves(streamName)).length() == command.observedStreams.length())"
         ));
         assert!(quint.contains(

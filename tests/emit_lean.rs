@@ -948,6 +948,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def commandInputTracesToInvocationSource (input : CommandInput) : Bool := allowedCommandInputSourceKinds.contains input.sourceKind && input.provenanceChain.isEmpty == false"
+            ),
+            "Lean slice artifacts must require command inputs to trace to modeled invocation source categories"
+        );
+        assert!(
+            lean.contains(
                 "def commandInputsHaveAllowedSources : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputHasAllowedSource)"
             ),
             "Lean slice artifacts must prove command inputs come from modeled invocation, actor, session, generated, external, or stream-derived state"
@@ -957,6 +963,12 @@ mod tests {
                 "def commandInputsHaveProvenance : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputHasProvenance)"
             ),
             "Lean slice artifacts must prove command inputs have source provenance"
+        );
+        assert!(
+            lean.contains(
+                "def commandInputsTraceToInvocationSources : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputTracesToInvocationSource)"
+            ),
+            "Lean slice artifacts must prove every command input traces to a modeled invocation/source chain"
         );
         assert!(
             lean.contains(
@@ -1935,6 +1947,12 @@ mod tests {
                 "theorem commandInputsHaveProvenanceIsStable : commandInputsHaveProvenance = true := rfl"
             ),
             "Lean slice artifacts must prove command inputs carry reportable provenance"
+        );
+        assert!(
+            lean.contains(
+                "theorem commandInputsTraceToInvocationSourcesIsStable : commandInputsTraceToInvocationSources = true := rfl"
+            ),
+            "Lean slice artifacts must prove current command inputs trace to modeled invocation sources"
         );
         assert!(
             lean.contains(
