@@ -530,6 +530,15 @@ mod tests {
             "val commandErrorsHaveScenarioCoverage = sliceCommandDefinitions.select(command => command.errors.select(error => commandErrorHasScenarioCoverage(command, error)).length() == command.errors.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(
+            "def scenarioErrorReferenceIsDeclared(scenario, errorName) = scenario.contractKind != \"command\" or sliceCommandDefinitions.select(command => command.name == scenario.coveredDefinition and command.errors.select(error => error.name == errorName).length() > 0).length() > 0"
+        ));
+        assert!(quint.contains(
+            "def scenarioErrorReferencesAreDeclaredForScenario(scenario) = scenario.errorReferences.select(errorName => scenarioErrorReferenceIsDeclared(scenario, errorName)).length() == scenario.errorReferences.length()"
+        ));
+        assert!(quint.contains(
+            "val scenarioErrorReferencesAreDeclared = sliceContractScenarios.select(scenario => scenarioErrorReferencesAreDeclaredForScenario(scenario)).length() == sliceContractScenarios.length()"
+        ));
+        assert!(quint.contains(
             "def singletonCommandDeclaresRepeatBehavior(command) = not(command.singleton) or allowedSingletonRepeatBehaviors.select(repeatBehavior => repeatBehavior == command.repeatBehavior).length() > 0"
         ));
         assert!(quint.contains(
