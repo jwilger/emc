@@ -608,6 +608,12 @@ mod tests {
             "def eventReadModelBoardEdgeMatchesProjection(connection) = connection.sourceKind != \"event\" or connection.targetKind != \"read_model\" or sliceReadModelDefinitions.select(readModel => readModel.name == connection.target and readModel.fields.select(readModelField => readModelField.sourceEvent == connection.source).length() > 0).length() > 0"
         ));
         assert!(quint.contains(
+            "def externalEventDoesNotUpdateReadModel(connection) = connection.sourceKind != \"event\" or connection.targetKind != \"read_model\" or sliceEventDefinitions.select(event => event.name == connection.source and event.observed).length() == 0"
+        ));
+        assert!(quint.contains(
+            "val externalEventsDoNotUpdateReadModels = sliceBoardConnections.select(connection => externalEventDoesNotUpdateReadModel(connection)).length() == sliceBoardConnections.length()"
+        ));
+        assert!(quint.contains(
             "def viewCommandBoardEdgeMatchesControl(connection) = connection.sourceKind != \"view\" or connection.targetKind != \"command\" or sliceViewDefinitions.select(view => view.name == connection.source and view.controls.select(control => control.commandName == connection.target).length() > 0).length() > 0"
         ));
         assert!(quint.contains(
@@ -620,7 +626,7 @@ mod tests {
             "val boardElementsReferenceDeclarations = sliceBoardElements.select(element => boardElementReferencesDeclaration(element)).length() == sliceBoardElements.length()"
         ));
         assert!(quint.contains(
-            "val boardConnectionsHaveCausalSemantics = sliceBoardConnections.select(connection => boardConnectionHasAllowedShape(connection) and commandEventBoardEdgeMatchesEmission(connection) and eventReadModelBoardEdgeMatchesProjection(connection) and viewCommandBoardEdgeMatchesControl(connection)).length() == sliceBoardConnections.length()"
+            "val boardConnectionsHaveCausalSemantics = sliceBoardConnections.select(connection => boardConnectionHasAllowedShape(connection) and commandEventBoardEdgeMatchesEmission(connection) and eventReadModelBoardEdgeMatchesProjection(connection) and externalEventDoesNotUpdateReadModel(connection) and viewCommandBoardEdgeMatchesControl(connection)).length() == sliceBoardConnections.length()"
         ));
         assert!(quint.contains(
             "val readModelsDoNotFeedCommands = sliceBoardConnections.select(connection => connection.sourceKind != \"read_model\" or connection.targetKind != \"command\").length() == sliceBoardConnections.length()"
