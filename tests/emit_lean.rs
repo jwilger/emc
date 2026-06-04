@@ -1188,6 +1188,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def externalBoardElementIsObservedEvent (element : BoardElement) : Bool := element.kind != \"external_event\" || sliceEventDefinitions.any (fun event => event.name == element.declaredName && event.observed)"
+            ),
+            "Lean slice artifacts must require external-event board elements to resolve to observed events"
+        );
+        assert!(
+            lean.contains(
+                "def externalBoardElementsAreObservedEvents : Bool := sliceBoardElements.all externalBoardElementIsObservedEvent"
+            ),
+            "Lean slice artifacts must expose external-event board modeling as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def boardConnectionHasAllowedShape (connection : BoardConnection) : Bool := (connection.sourceKind == \"view\" && connection.targetKind == \"command\") || (connection.sourceKind == \"automation\" && connection.targetKind == \"command\") || (connection.sourceKind == \"external_event\" && connection.targetKind == \"command\") || (connection.sourceKind == \"workflow_trigger\" && connection.targetKind == \"command\") || (connection.sourceKind == \"command\" && connection.targetKind == \"event\") || (connection.sourceKind == \"event\" && connection.targetKind == \"read_model\") || (connection.sourceKind == \"read_model\" && connection.targetKind == \"view\")"
             ),
             "Lean slice artifacts must encode causal board connection shapes"
@@ -2081,6 +2093,10 @@ mod tests {
         assert!(
             lean.contains("theorem boardElementsReferenceDeclarationsIsStable : boardElementsReferenceDeclarations = true := rfl"),
             "Lean slice artifacts must prove current board elements reference declarations"
+        );
+        assert!(
+            lean.contains("theorem externalBoardElementsAreObservedEventsIsStable : externalBoardElementsAreObservedEvents = true := rfl"),
+            "Lean slice artifacts must prove current external-event board elements resolve to observed events"
         );
         assert!(
             lean.contains("theorem boardConnectionsHaveCausalSemanticsIsStable : boardConnectionsHaveCausalSemantics = true := rfl"),
