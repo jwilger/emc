@@ -119,6 +119,20 @@ def workflowMainStepHasIncomingTransition (step : String × String) : Bool := st
 
 def workflowMainStepsHaveIncomingReachability : Bool := workflowStepRelationships.all workflowMainStepHasIncomingTransition
 
+def workflowEntrySteps : List String := (workflowStepRelationships.filter (fun step => step.2 == "entry")).map (fun step => step.1)
+
+def workflowTargetsFromReachable (reachable : List String) : List String := (workflowTransitions.filter (fun transition => reachable.contains transition.source && workflowSlices.contains transition.target)).map (fun transition => transition.target)
+
+def workflowReachableStepsAfterFuel : Nat -> List String -> List String
+  | Nat.zero, reachable => reachable
+  | Nat.succ fuel, reachable => workflowReachableStepsAfterFuel fuel (reachable ++ workflowTargetsFromReachable reachable)
+
+def workflowReachableStepsFromEntry : List String := workflowReachableStepsAfterFuel workflowSlices.length workflowEntrySteps
+
+def workflowStepIsReachableFromEntry (step : String × String) : Bool := step.2 == "supporting" || workflowReachableStepsFromEntry.contains step.1
+
+def workflowNonSupportingStepsReachableFromEntry : Bool := workflowStepRelationships.all workflowStepIsReachableFromEntry
+
 def workflowBranchOrAlternateStepHasTriggerOrRationale (step : String × String) : Bool := (step.2 != "branch" && step.2 != "alternate") || workflowTransitions.any (fun transition => transition.target == step.1 && (transition.trigger.isEmpty == false || transition.rationale.isEmpty == false))
 
 def workflowBranchAndAlternateStepsHaveTriggerOrRationale : Bool := workflowStepRelationships.all workflowBranchOrAlternateStepHasTriggerOrRationale
@@ -184,6 +198,8 @@ theorem workflowStepSlugsAreUniqueIsStable : workflowStepSlugsAreUnique = true :
 theorem workflowHasExactlyOneEntryStepIsStable : workflowHasExactlyOneEntryStep = true := rfl
 
 theorem workflowMainStepsHaveIncomingReachabilityIsStable : workflowMainStepsHaveIncomingReachability = true := rfl
+
+theorem workflowNonSupportingStepsReachableFromEntryIsStable : workflowNonSupportingStepsReachableFromEntry = true := rfl
 
 theorem workflowBranchAndAlternateStepsHaveTriggerOrRationaleIsStable : workflowBranchAndAlternateStepsHaveTriggerOrRationale = true := rfl
 
