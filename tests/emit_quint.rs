@@ -934,6 +934,14 @@ mod tests {
         assert!(quint.contains(
             "val viewControlInputsHaveProvenance = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => input.name != \"\" and input.sourceKind != \"\" and input.sourceDescription != \"\").length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
+        assert!(
+            quint.contains(
+                "def controlInputHasDescription(input) = input.sourceDescription != \"\""
+            )
+        );
+        assert!(quint.contains(
+            "val viewControlInputsHaveDescriptions = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => controlInputHasDescription(input)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
+        ));
         assert!(quint.contains(
             "def controlInputSessionInputHasDescription(input) = input.sourceKind != \"session\" or input.sourceDescription != \"\""
         ));

@@ -494,7 +494,7 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
         )
         .replace(
             "def controlInputHasProvenance (input : ControlInputProvision) : Bool := input.name.isEmpty == false && input.sourceKind.isEmpty == false && input.sourceDescription.isEmpty == false\n\ndef controlInputVisibilityIsModeled",
-            "def controlInputHasProvenance (input : ControlInputProvision) : Bool := input.name.isEmpty == false && input.sourceKind.isEmpty == false && input.sourceDescription.isEmpty == false\n\ndef controlInputSessionInputHasDescription (input : ControlInputProvision) : Bool := input.sourceKind != \"session\" || input.sourceDescription.isEmpty == false\n\ndef controlInputVisibilityIsModeled",
+            "def controlInputHasProvenance (input : ControlInputProvision) : Bool := input.name.isEmpty == false && input.sourceKind.isEmpty == false && input.sourceDescription.isEmpty == false\n\ndef controlInputHasDescription (input : ControlInputProvision) : Bool := input.sourceDescription.isEmpty == false\n\ndef controlInputSessionInputHasDescription (input : ControlInputProvision) : Bool := input.sourceKind != \"session\" || input.sourceDescription.isEmpty == false\n\ndef controlInputVisibilityIsModeled",
         )
         .replace(
             "def controlInputDecisionFieldIsVisible (input : ControlInputProvision) : Bool := input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor\n\ndef controlHasSketchToken",
@@ -506,7 +506,7 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
         )
         .replace(
             "def viewControlInputsHaveProvenance : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputHasProvenance))\n\ndef viewControlInputVisibilityIsModeled",
-            "def viewControlInputsHaveProvenance : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputHasProvenance))\n\ndef viewControlSessionInputsHaveDescriptions : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputSessionInputHasDescription))\n\ndef viewControlInputVisibilityIsModeled",
+            "def viewControlInputsHaveProvenance : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputHasProvenance))\n\ndef viewControlInputsHaveDescriptions : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputHasDescription))\n\ndef viewControlSessionInputsHaveDescriptions : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputSessionInputHasDescription))\n\ndef viewControlInputVisibilityIsModeled",
         )
         .replace(
             "def viewControlDecisionFieldsAreVisible : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputDecisionFieldIsVisible))\n\ndef viewControlsHandleCommandErrors",
@@ -522,7 +522,7 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
     );
     let contents = contents.replace(
         "theorem viewControlInputsHaveProvenanceIsStable : viewControlInputsHaveProvenance = true := rfl\n\ntheorem viewControlInputVisibilityIsModeledIsStable",
-        "theorem viewControlInputsHaveProvenanceIsStable : viewControlInputsHaveProvenance = true := rfl\n\ntheorem viewControlSessionInputsHaveDescriptionsIsStable : viewControlSessionInputsHaveDescriptions = true := rfl\n\ntheorem viewControlInputVisibilityIsModeledIsStable",
+        "theorem viewControlInputsHaveProvenanceIsStable : viewControlInputsHaveProvenance = true := rfl\n\ntheorem viewControlInputsHaveDescriptionsIsStable : viewControlInputsHaveDescriptions = true := rfl\n\ntheorem viewControlSessionInputsHaveDescriptionsIsStable : viewControlSessionInputsHaveDescriptions = true := rfl\n\ntheorem viewControlInputVisibilityIsModeledIsStable",
     );
     file_contents(contents)
 }
