@@ -201,6 +201,7 @@ fn modeled_slice_artifact_paths(
 
 fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Effect> {
     let project_name_text = project_name.as_ref();
+    let model_version = "0.1.0";
     let manifest_path = project_path("emc.toml");
     let lean_path = project_path(format!("model/lean/{module_name}.lean"));
     let lakefile_path = project_path("model/lean/lakefile.lean");
@@ -222,6 +223,12 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
             manifest_path.clone(),
             artifact_marker("name ="),
             artifact_marker(format!("name = {}", json_string(project_name_text))),
+            manifest_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            manifest_path.clone(),
+            artifact_marker("version ="),
+            artifact_marker(format!("version = {}", json_string(model_version))),
             manifest_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -255,6 +262,24 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
             lean_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelVersion :="),
+            artifact_marker(format!(
+                "def modelVersion := {}",
+                json_string(model_version)
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelVersionIsStable"),
+            artifact_marker(format!(
+                "theorem modelVersionIsStable : modelVersion = {} := rfl",
+                json_string(model_version)
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
             lean_path,
             artifact_marker("end "),
             artifact_marker(format!("end {module_name}")),
@@ -264,6 +289,24 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
             quint_path.clone(),
             artifact_marker("module "),
             artifact_marker(format!("module {module_name} {{")),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelVersion ="),
+            artifact_marker(format!(
+                "  val modelVersion = {}",
+                json_string(model_version)
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelVersionStable ="),
+            artifact_marker(format!(
+                "  val modelVersionStable = modelVersion == {}",
+                json_string(model_version)
+            )),
             quint_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
