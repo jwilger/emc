@@ -456,7 +456,10 @@ mod tests {
         assert!(quint.contains("val sliceExternalPayloads: List[ExternalPayloadDefinition] = []"));
         assert!(quint.contains("val sliceEventDefinitions: List[EventDefinition] = []"));
         assert!(quint.contains(
-            "val allowedEventAttributeSourceKinds: List[str] = [\"command_input\",\"external_payload\",\"generated\",\"session\",\"constant\",\"derivation\"]"
+            "val storedEventFactSourceKinds: List[str] = [\"command_input\",\"external_payload\",\"generated\",\"session\",\"derivation\"]"
+        ));
+        assert!(quint.contains(
+            "val allowedEventAttributeSourceKinds: List[str] = storedEventFactSourceKinds"
         ));
         assert!(quint.contains("val sliceReadModels: List[str] = []"));
         assert!(quint.contains("val sliceReadModelDefinitions: List[ReadModelDefinition] = []"));
@@ -722,10 +725,16 @@ mod tests {
             "def externalPayloadFieldIsDeclared(attribute) = sliceExternalPayloads.select(payload => payload.name == attribute.sourceName and payload.fields.select(payloadField => payloadField.name == attribute.sourceField).length() > 0).length() > 0"
         ));
         assert!(quint.contains(
-            "def eventAttributeSourceIsComplete(event, attribute) = (attribute.sourceKind == \"command_input\" and attribute.sourceName != \"\" and attribute.sourceField != \"\" and sliceCommandDefinitions.select(command => commandInputReferencesAttributeSource(event, attribute, command)).length() > 0) or (attribute.sourceKind == \"external_payload\" and attribute.sourceName != \"\" and attribute.sourceField != \"\" and externalPayloadFieldIsDeclared(attribute)) or (attribute.sourceKind == \"generated\" and attribute.sourceName != \"\") or (attribute.sourceKind == \"session\" and attribute.sourceName != \"\") or (attribute.sourceKind == \"constant\" and attribute.sourceField != \"\") or (attribute.sourceKind == \"derivation\" and attribute.sourceName != \"\" and attribute.sourceField != \"\")"
+            "def eventAttributeSourceIsComplete(event, attribute) = (attribute.sourceKind == \"command_input\" and attribute.sourceName != \"\" and attribute.sourceField != \"\" and sliceCommandDefinitions.select(command => commandInputReferencesAttributeSource(event, attribute, command)).length() > 0) or (attribute.sourceKind == \"external_payload\" and attribute.sourceName != \"\" and attribute.sourceField != \"\" and externalPayloadFieldIsDeclared(attribute)) or (attribute.sourceKind == \"generated\" and attribute.sourceName != \"\") or (attribute.sourceKind == \"session\" and attribute.sourceName != \"\") or (attribute.sourceKind == \"derivation\" and attribute.sourceName != \"\" and attribute.sourceField != \"\")"
+        ));
+        assert!(quint.contains(
+            "def eventAttributeTracesToStoredFactSource(attribute) = storedEventFactSourceKinds.select(sourceKind => sourceKind == attribute.sourceKind).length() > 0"
         ));
         assert!(quint.contains(
             "val eventAttributeSourcesAreComplete = sliceEventDefinitions.select(event => event.attributes.select(attribute => eventAttributeSourceIsComplete(event, attribute)).length() == event.attributes.length()).length() == sliceEventDefinitions.length()"
+        ));
+        assert!(quint.contains(
+            "val storedEventFactsTraceToOriginalSources = sliceEventDefinitions.select(event => event.attributes.select(attribute => eventAttributeTracesToStoredFactSource(attribute)).length() == event.attributes.length()).length() == sliceEventDefinitions.length()"
         ));
         assert!(quint.contains(
             "def eventAttributeHasBitLevelFlow(event, attribute) = bitLevelFlowCoversTarget(event.name, attribute.name)"
