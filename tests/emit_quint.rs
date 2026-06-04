@@ -818,7 +818,16 @@ mod tests {
             "def viewFieldSourceReadModelFieldResolves(viewField) = viewField.sourceKind != \"read_model\" or readModelFieldIsDeclared(viewField.sourceReadModel, viewField.sourceField)"
         ));
         assert!(quint.contains(
+            "def readModelFieldHasOriginalProvenance(readModelField) = (readModelField.sourceKind == \"event_attribute\" and readModelFieldEventAttributeSourceResolves(readModelField)) or readModelField.sourceKind == \"derivation\" or readModelField.sourceKind == \"absence_default\""
+        ));
+        assert!(quint.contains(
+            "def viewFieldTracesToOriginalProvenance(viewField) = viewField.sourceKind == \"read_model\" and sliceReadModelDefinitions.select(readModel => readModel.name == viewField.sourceReadModel and readModel.fields.select(readModelField => readModelField.name == viewField.sourceField and readModelFieldHasOriginalProvenance(readModelField)).length() > 0).length() > 0"
+        ));
+        assert!(quint.contains(
             "val viewFieldReadModelFieldSourcesResolve = sliceViewDefinitions.select(view => view.fields.select(viewField => viewFieldSourceReadModelFieldResolves(viewField)).length() == view.fields.length()).length() == sliceViewDefinitions.length()"
+        ));
+        assert!(quint.contains(
+            "val displayedDataTraceToOriginalProvenance = sliceViewDefinitions.select(view => view.fields.select(viewField => viewFieldTracesToOriginalProvenance(viewField)).length() == view.fields.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
             "def viewFieldHasBitLevelFlow(view, viewField) = bitLevelFlowCoversTarget(view.name, viewField.name)"
