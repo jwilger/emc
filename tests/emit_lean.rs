@@ -1074,6 +1074,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def automationSlicesRepresentOneReaction : Bool := sliceKind != \"automation\" || sliceAutomations.length == 1"
+            ),
+            "Lean slice artifacts must require automation slices to represent one coherent reaction"
+        );
+        assert!(
+            lean.contains(
                 "def automationsIssueKnownCommands : Bool := sliceAutomations.all automationIssuesKnownCommand"
             ),
             "Lean slice artifacts must prove automations issue modeled commands"
@@ -1911,6 +1917,12 @@ mod tests {
                 "theorem automationSlicesDeclareTriggersIsStable : automationSlicesDeclareTriggers = true := rfl"
             ),
             "Lean slice artifacts must prove current automation slices declare triggers"
+        );
+        assert!(
+            lean.contains(
+                "theorem automationSlicesRepresentOneReactionIsStable : automationSlicesRepresentOneReaction = true := rfl"
+            ),
+            "Lean slice artifacts must prove current automation slices represent one coherent reaction"
         );
         assert!(
             lean.contains(
