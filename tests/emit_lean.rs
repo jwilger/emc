@@ -1518,6 +1518,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def readModelFieldHasOriginalProvenance (field : ReadModelField) : Bool := (field.sourceKind == \"event_attribute\" && readModelFieldEventAttributeSourceResolves field) || field.sourceKind == \"derivation\" || field.sourceKind == \"absence_default\""
+            ),
+            "Lean slice artifacts must classify read model fields by original modeled provenance"
+        );
+        assert!(
+            lean.contains(
+                "def viewFieldTracesToOriginalProvenance (field : ViewField) : Bool := field.sourceKind == \"read_model\" && sliceReadModelDefinitions.any (fun readModel => readModel.name == field.sourceReadModel && readModel.fields.any (fun readModelField => readModelField.name == field.sourceField && readModelFieldHasOriginalProvenance readModelField))"
+            ),
+            "Lean slice artifacts must trace displayed fields through read model fields to original provenance"
+        );
+        assert!(
+            lean.contains(
                 "def viewFieldsHaveAllowedSources : Bool := sliceViewDefinitions.all (fun view => view.fields.all viewFieldHasAllowedSource)"
             ),
             "Lean slice artifacts must prove displayed fields do not source directly from events"
@@ -1581,6 +1593,12 @@ mod tests {
                 "def viewFieldReadModelFieldSourcesResolve : Bool := sliceViewDefinitions.all (fun view => view.fields.all viewFieldSourceReadModelFieldResolves)"
             ),
             "Lean slice artifacts must prove displayed fields resolve to declared read model fields"
+        );
+        assert!(
+            lean.contains(
+                "def displayedDataTraceToOriginalProvenance : Bool := sliceViewDefinitions.all (fun view => view.fields.all viewFieldTracesToOriginalProvenance)"
+            ),
+            "Lean slice artifacts must prove displayed data traces transitively to original provenance"
         );
         assert!(
             lean.contains(
@@ -2175,6 +2193,12 @@ mod tests {
                 "theorem viewFieldReadModelFieldSourcesResolveIsStable : viewFieldReadModelFieldSourcesResolve = true := rfl"
             ),
             "Lean slice artifacts must prove current view fields resolve to declared read model fields"
+        );
+        assert!(
+            lean.contains(
+                "theorem displayedDataTraceToOriginalProvenanceIsStable : displayedDataTraceToOriginalProvenance = true := rfl"
+            ),
+            "Lean slice artifacts must prove current displayed data traces transitively to original provenance"
         );
         assert!(
             lean.contains(
