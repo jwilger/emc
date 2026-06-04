@@ -1764,6 +1764,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def controlInputDecisionFieldIsVisible (input : ControlInputProvision) : Bool := input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor"
+            ),
+            "Lean slice artifacts must name decision-field visibility as its own proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def controlHasSketchToken (control : ControlDefinition) : Bool := control.name.isEmpty == false && control.commandName.isEmpty == false && control.sketchToken.isEmpty == false"
             ),
             "Lean slice artifacts must require controls to appear in the information sketch"
@@ -1869,6 +1875,12 @@ mod tests {
                 "def viewControlInputVisibilityIsModeled : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputVisibilityIsModeled))"
             ),
             "Lean slice artifacts must prove actor-provided and decision inputs are visible"
+        );
+        assert!(
+            lean.contains(
+                "def viewControlDecisionFieldsAreVisible : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputDecisionFieldIsVisible))"
+            ),
+            "Lean slice artifacts must expose decision-field visibility as a proof obligation"
         );
         assert!(
             lean.contains(
@@ -2405,6 +2417,12 @@ mod tests {
                 "theorem viewControlInputVisibilityIsModeledIsStable : viewControlInputVisibilityIsModeled = true := rfl"
             ),
             "Lean slice artifacts must prove current actor and decision inputs are visible"
+        );
+        assert!(
+            lean.contains(
+                "theorem viewControlDecisionFieldsAreVisibleIsStable : viewControlDecisionFieldsAreVisible = true := rfl"
+            ),
+            "Lean slice artifacts must prove current decision fields are visible"
         );
         assert!(
             lean.contains(
