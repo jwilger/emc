@@ -1188,6 +1188,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def automationBoardElementIsDeclaredAutomation (element : BoardElement) : Bool := element.kind != \"automation\" || sliceAutomations.any (fun automation => automation.name == element.declaredName)"
+            ),
+            "Lean slice artifacts must require automation board elements to resolve to declared automations"
+        );
+        assert!(
+            lean.contains(
+                "def automationBoardElementsAreDeclaredAutomations : Bool := sliceBoardElements.all automationBoardElementIsDeclaredAutomation"
+            ),
+            "Lean slice artifacts must expose automation board modeling as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def externalBoardElementIsObservedEvent (element : BoardElement) : Bool := element.kind != \"external_event\" || sliceEventDefinitions.any (fun event => event.name == element.declaredName && event.observed)"
             ),
             "Lean slice artifacts must require external-event board elements to resolve to observed events"
@@ -2111,6 +2123,10 @@ mod tests {
         assert!(
             lean.contains("theorem boardElementsReferenceDeclarationsIsStable : boardElementsReferenceDeclarations = true := rfl"),
             "Lean slice artifacts must prove current board elements reference declarations"
+        );
+        assert!(
+            lean.contains("theorem automationBoardElementsAreDeclaredAutomationsIsStable : automationBoardElementsAreDeclaredAutomations = true := rfl"),
+            "Lean slice artifacts must prove current automation board elements resolve to declared automations"
         );
         assert!(
             lean.contains("theorem externalBoardElementsAreObservedEventsIsStable : externalBoardElementsAreObservedEvents = true := rfl"),
