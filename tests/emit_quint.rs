@@ -332,6 +332,12 @@ mod tests {
         assert!(quint.contains(
             "val workflowExternalTriggersDeclarePayloadContracts = workflowTransitions.select(transition => workflowExternalTriggerDeclaresPayloadContract(transition)).length() == workflowTransitions.length()"
         ));
+        assert!(quint.contains(
+            "def workflowExternalTriggerPayloadContractHasProvenance(transition) = transition.kind != \"external_trigger\" or workflowOwnedDefinitions.select(definition => definition.sourceSlice == transition.source and definition.definitionKind == \"external_payload\" and definition.definitionName == transition.payloadContract and definition.sourceProvenance != \"\").length() > 0"
+        ));
+        assert!(quint.contains(
+            "val workflowExternalTriggerPayloadContractsHaveProvenance = workflowTransitions.select(transition => workflowExternalTriggerPayloadContractHasProvenance(transition)).length() == workflowTransitions.length()"
+        ));
         assert!(
             !quint.contains("all { transition <- workflowTransitions }"),
             "Quint transition invariant must be a pure list expression, not an action all block"

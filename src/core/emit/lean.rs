@@ -195,6 +195,10 @@ def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransit
 
 def workflowExternalTriggersDeclarePayloadContracts : Bool := workflowTransitions.all workflowExternalTriggerDeclaresPayloadContract
 
+def workflowExternalTriggerPayloadContractHasProvenance (transition : WorkflowTransition) : Bool := transition.kind != "external_trigger" || workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == transition.source && definition.definitionKind == "external_payload" && definition.definitionName == transition.payloadContract && definition.sourceProvenance.isEmpty == false)
+
+def workflowExternalTriggerPayloadContractsHaveProvenance : Bool := workflowTransitions.all workflowExternalTriggerPayloadContractHasProvenance
+
 def workflowTransitionRequiresEvidence (transition : WorkflowTransition) : Bool := transition.kind == "event" || transition.kind == "command" || transition.kind == "navigation"
 
 def workflowTransitionEvidenceMatches (transition : WorkflowTransition) (evidence : WorkflowTransitionEvidence) : Bool := evidence.source == transition.source && evidence.target == transition.target && evidence.kind == transition.kind && evidence.trigger == transition.trigger && evidence.sourceEvidence.isEmpty == false && evidence.targetEvidence.isEmpty == false
@@ -252,6 +256,8 @@ theorem workflowEventTransitionsAreSharedByEndpointSlicesIsStable : workflowEven
 theorem workflowNavigationTransitionsResolveControlsAndViewsIsStable : workflowNavigationTransitionsResolveControlsAndViews = true := rfl
 
 theorem workflowExternalTriggersDeclarePayloadContractsIsStable : workflowExternalTriggersDeclarePayloadContracts = true := rfl
+
+theorem workflowExternalTriggerPayloadContractsHaveProvenanceIsStable : workflowExternalTriggerPayloadContractsHaveProvenance = true := rfl
 
 theorem workflowTransitionsHaveRequiredEvidenceIsStable : workflowTransitionsHaveRequiredEvidence = true := rfl
 
