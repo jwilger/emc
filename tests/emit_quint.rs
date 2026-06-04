@@ -737,7 +737,10 @@ mod tests {
             "val readModelFieldsHaveProvenance = sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => readModelField.name != \"\" and readModelField.sourceKind != \"\" and readModelField.provenanceDescription != \"\").length() == readModel.fields.length()).length() == sliceReadModelDefinitions.length()"
         ));
         assert!(quint.contains(
-            "val readModelFieldSourcesAreComplete = sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => (readModelField.sourceKind == \"event_attribute\" and readModelField.sourceEvent != \"\" and readModelField.sourceAttribute != \"\") or (readModelField.sourceKind == \"derivation\" and readModelField.derivationRule != \"\") or (readModelField.sourceKind == \"absence_default\" and readModelField.absenceEvent != \"\")).length() == readModel.fields.length()).length() == sliceReadModelDefinitions.length()"
+            "def readModelFieldSourceIsComplete(readModelField) = (readModelField.sourceKind == \"event_attribute\" and readModelField.sourceEvent != \"\" and readModelField.sourceAttribute != \"\") or (readModelField.sourceKind == \"derivation\" and readModelField.derivationRule != \"\") or (readModelField.sourceKind == \"absence_default\" and readModelField.absenceEvent != \"\")"
+        ));
+        assert!(quint.contains(
+            "val readModelFieldSourcesAreComplete = sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => readModelFieldSourceIsComplete(readModelField)).length() == readModel.fields.length()).length() == sliceReadModelDefinitions.length()"
         ));
         assert!(quint.contains(
             "def eventAttributeIsDeclared(eventName, attributeName) = sliceEventDefinitions.select(event => event.name == eventName and event.attributes.select(attribute => attribute.name == attributeName).length() > 0).length() > 0"
@@ -873,6 +876,12 @@ mod tests {
         ));
         assert!(quint.contains(
             "val stateViewSlicesOwnReadModels = sliceKind != \"state_view\" or (sliceReadModels.length() > 0 or sliceReadModelDefinitions.length() > 0)"
+        ));
+        assert!(quint.contains(
+            "def readModelOwnsProjectionPath(readModel) = readModel.fields.length() > 0 and readModel.fields.select(readModelField => readModelFieldSourceIsComplete(readModelField)).length() == readModel.fields.length()"
+        ));
+        assert!(quint.contains(
+            "val stateViewSlicesOwnProjectionPaths = sliceKind != \"state_view\" or sliceReadModelDefinitions.select(readModel => readModelOwnsProjectionPath(readModel)).length() == sliceReadModelDefinitions.length()"
         ));
         assert!(quint.contains(
             "val stateChangeSlicesOwnCommands = sliceKind != \"state_change\" or (sliceCommands.length() > 0 or sliceCommandDefinitions.length() > 0)"
