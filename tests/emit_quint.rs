@@ -647,6 +647,12 @@ mod tests {
             "def boardElementReferencesDeclaration(element) = (element.kind == \"view\" and (sliceViews.select(viewName => viewName == element.declaredName).length() > 0 or sliceViewDefinitions.select(view => view.name == element.declaredName).length() > 0)) or (element.kind == \"automation\" and sliceAutomations.select(automation => automation.name == element.declaredName).length() > 0) or (element.kind == \"external_event\" and sliceEventDefinitions.select(event => event.name == element.declaredName and event.observed).length() > 0) or (element.kind == \"command\" and (sliceCommands.select(command => command == element.declaredName).length() > 0 or sliceReferencedCommands.select(command => command == element.declaredName).length() > 0 or sliceCommandDefinitions.select(command => command.name == element.declaredName).length() > 0)) or (element.kind == \"read_model\" and (sliceReadModels.select(readModel => readModel == element.declaredName).length() > 0 or sliceReadModelDefinitions.select(readModel => readModel.name == element.declaredName).length() > 0)) or (element.kind == \"event\" and (sliceEvents.select(eventName => eventName == element.declaredName).length() > 0 or sliceEventDefinitions.select(event => event.name == element.declaredName and (event.observed or event.shared)).length() > 0))"
         ));
         assert!(quint.contains(
+            "def automationBoardElementIsDeclaredAutomation(element) = element.kind != \"automation\" or sliceAutomations.select(automation => automation.name == element.declaredName).length() > 0"
+        ));
+        assert!(quint.contains(
+            "val automationBoardElementsAreDeclaredAutomations = sliceBoardElements.select(element => automationBoardElementIsDeclaredAutomation(element)).length() == sliceBoardElements.length()"
+        ));
+        assert!(quint.contains(
             "def externalBoardElementIsObservedEvent(element) = element.kind != \"external_event\" or sliceEventDefinitions.select(event => event.name == element.declaredName and event.observed).length() > 0"
         ));
         assert!(quint.contains(
