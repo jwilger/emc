@@ -5,7 +5,7 @@ mod tests {
     use std::path::Path;
 
     use assert_cmd::Command;
-    use predicates::prelude::{PredicateBooleanExt, predicate};
+    use predicates::prelude::predicate;
     use tempfile::TempDir;
 
     #[test]
@@ -684,519 +684,6 @@ mod tests {
     }
 
     #[test]
-    fn check_reports_browser_workflow_drift() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
-                "open-ticket",
-                "--name",
-                "Open ticket",
-                "--description",
-                "Actor opens a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        write(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-            "{\n  \"name\": \"Changed\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Actor opens a repair ticket.\",\n  \"slice_files\": [],\n  \"steps\": []\n}\n",
-        )?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser workflow drift for workflow Open ticket",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_does_not_use_stale_browser_workflow_as_formal_source() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let workflow = read_to_string(&workflow_path)?.replace(
-            "\"name\": \"Open ticket\"",
-            "\"name\": \"Browser projection drift\"",
-        );
-        write(workflow_path, workflow)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(
-                predicate::str::contains("browser workflow drift for workflow Open ticket")
-                    .and(predicate::str::contains("Lean workflow").not())
-                    .and(predicate::str::contains("Quint workflow").not()),
-            );
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_browser_workflow_transition_projection_drift() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let workflow = read_to_string(&workflow_path)?.replace(
-            "\"via_navigation\": \"review-ticket-screen\"",
-            "\"via_navigation\": \"stale-screen\"",
-        );
-        write(workflow_path, workflow)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser workflow drift for workflow Open ticket",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_browser_workflow_extra_name_field_drift() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let workflow = read_to_string(&workflow_path)?.replace(
-            "  \"name\": \"Open ticket\",\n",
-            "  \"name\": \"Stale ticket\",\n  \"name\": \"Open ticket\",\n",
-        );
-        write(workflow_path, workflow)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser workflow drift for workflow Open ticket",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_browser_workflow_extra_description_field_drift() -> Result<(), Box<dyn Error>>
-    {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let workflow = read_to_string(&workflow_path)?.replace(
-            "  \"description\": \"Actor opens a repair ticket.\",\n",
-            "  \"description\": \"Stale description.\",\n  \"description\": \"Actor opens a repair ticket.\",\n",
-        );
-        write(workflow_path, workflow)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser workflow drift for workflow Open ticket",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_browser_workflow_duplicate_steps_field_drift() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let workflow = read_to_string(&workflow_path)?
-            .replace("  \"steps\": [\n", "  \"steps\": [],\n  \"steps\": [\n");
-        write(workflow_path, workflow)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser workflow drift for workflow Open ticket",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_browser_workflow_duplicate_numeric_field_drift() -> Result<(), Box<dyn Error>>
-    {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let workflow = read_to_string(&workflow_path)?.replace(
-            "  \"events\": [],\n",
-            "  \"rank\": 1,\n  \"rank\": 2,\n  \"events\": [],\n",
-        );
-        write(workflow_path, workflow)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser workflow drift for workflow Open ticket",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_browser_workflow_duplicate_escaped_field_drift() -> Result<(), Box<dyn Error>>
-    {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let workflow = read_to_string(&workflow_path)?.replace(
-            "  \"events\": [],\n",
-            "  \"escaped\\\"key\": \"first\",\n  \"escaped\\\"key\": \"second\",\n  \"events\": [],\n",
-        );
-        write(workflow_path, workflow)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser workflow drift for workflow Open ticket",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_browser_workflow_duplicate_after_escaped_string_value_drift()
-    -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let workflow = read_to_string(&workflow_path)?.replace(
-            "  \"events\": [],\n",
-            "  \"note\": \"contains an escaped \\\" quote\",\n  \"rank\": 1,\n  \"rank\": 2,\n  \"events\": [],\n",
-        );
-        write(workflow_path, workflow)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser workflow drift for workflow Open ticket",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_referenced_browser_slice_duplicate_field_drift() -> Result<(), Box<dyn Error>>
-    {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        let slice_path = temp_dir
-            .path()
-            .join("model/browser/data/slices/capture-ticket.eventmodel.json");
-        let slice = read_to_string(&slice_path)?.replace(
-            "  \"name\": \"Capture ticket\",\n",
-            "  \"name\": \"Stale capture ticket\",\n  \"name\": \"Capture ticket\",\n",
-        );
-        write(slice_path, slice)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser slice drift for workflow Open ticket",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_referenced_browser_slice_invalid_json_drift() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        write(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
-            "{ not-json",
-        )?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser slice drift for workflow Open ticket",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_unindexed_browser_workflow_files() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
-                "open-ticket",
-                "--name",
-                "Open ticket",
-                "--description",
-                "Actor opens a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        write(
-            temp_dir.path().join("model/browser/data/index.json"),
-            "{\n  \"generated_at\": \"1970-01-01T00:00:00.000Z\",\n  \"workflows\": []\n}\n",
-        )?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser workflow index drift for open-ticket.eventmodel.json",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_browser_index_duplicate_workflows_field_drift() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        let index_path = temp_dir.path().join("model/browser/data/index.json");
-        let index = read_to_string(&index_path)?.replace(
-            "  \"workflows\": [\n",
-            "  \"workflows\": [],\n  \"workflows\": [\n",
-        );
-        write(index_path, index)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains("browser index drift"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_browser_index_duplicate_workflow_path_drift() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        let index_path = temp_dir.path().join("model/browser/data/index.json");
-        let workflow_entry = concat!(
-            "    {\n",
-            "      \"name\": \"Open ticket\",\n",
-            "      \"path\": \"data/workflows/open-ticket.eventmodel.json\",\n",
-            "      \"description\": \"Actor opens a repair ticket.\"\n",
-            "    }"
-        );
-        let duplicate_workflows = concat!(
-            "    {\n",
-            "      \"name\": \"Open ticket\",\n",
-            "      \"path\": \"data/workflows/open-ticket.eventmodel.json\",\n",
-            "      \"description\": \"Actor opens a repair ticket.\"\n",
-            "    },\n",
-            "    {\n",
-            "      \"name\": \"Open ticket\",\n",
-            "      \"path\": \"data/workflows/open-ticket.eventmodel.json\",\n",
-            "      \"description\": \"Actor opens a repair ticket.\"\n",
-            "    }"
-        );
-        let index = read_to_string(&index_path)?.replace(workflow_entry, duplicate_workflows);
-        write(index_path, index)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser index workflow path is duplicated",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_browser_index_duplicate_workflow_name_drift() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let duplicate_workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/duplicate-ticket.eventmodel.json");
-        write(&duplicate_workflow_path, read_to_string(workflow_path)?)?;
-
-        let index_path = temp_dir.path().join("model/browser/data/index.json");
-        let workflow_entry = concat!(
-            "    {\n",
-            "      \"name\": \"Open ticket\",\n",
-            "      \"path\": \"data/workflows/open-ticket.eventmodel.json\",\n",
-            "      \"description\": \"Actor opens a repair ticket.\"\n",
-            "    }"
-        );
-        let duplicate_workflows = concat!(
-            "    {\n",
-            "      \"name\": \"Open ticket\",\n",
-            "      \"path\": \"data/workflows/open-ticket.eventmodel.json\",\n",
-            "      \"description\": \"Actor opens a repair ticket.\"\n",
-            "    },\n",
-            "    {\n",
-            "      \"name\": \"Open ticket\",\n",
-            "      \"path\": \"data/workflows/duplicate-ticket.eventmodel.json\",\n",
-            "      \"description\": \"Actor opens a repair ticket.\"\n",
-            "    }"
-        );
-        let index = read_to_string(&index_path)?.replace(workflow_entry, duplicate_workflows);
-        write(index_path, index)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser index workflow name is duplicated",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_browser_index_duplicate_workflow_slug_drift() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let duplicate_workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open_ticket.eventmodel.json");
-        let duplicate_workflow = read_to_string(workflow_path)?.replace(
-            "\"name\": \"Open ticket\"",
-            "\"name\": \"Open ticket duplicate\"",
-        );
-        write(&duplicate_workflow_path, duplicate_workflow)?;
-
-        let index_path = temp_dir.path().join("model/browser/data/index.json");
-        let workflow_entry = concat!(
-            "    {\n",
-            "      \"name\": \"Open ticket\",\n",
-            "      \"path\": \"data/workflows/open-ticket.eventmodel.json\",\n",
-            "      \"description\": \"Actor opens a repair ticket.\"\n",
-            "    }"
-        );
-        let duplicate_workflows = concat!(
-            "    {\n",
-            "      \"name\": \"Open ticket\",\n",
-            "      \"path\": \"data/workflows/open-ticket.eventmodel.json\",\n",
-            "      \"description\": \"Actor opens a repair ticket.\"\n",
-            "    },\n",
-            "    {\n",
-            "      \"name\": \"Open ticket duplicate\",\n",
-            "      \"path\": \"data/workflows/open_ticket.eventmodel.json\",\n",
-            "      \"description\": \"Actor opens a repair ticket.\"\n",
-            "    }"
-        );
-        let index = read_to_string(&index_path)?.replace(workflow_entry, duplicate_workflows);
-        write(index_path, index)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser index workflow slug is duplicated",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
     fn check_reports_lean_workflow_field_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -1289,10 +776,12 @@ mod tests {
 
         create_connected_workflow(&temp_dir)?;
 
-        write(
-            temp_dir.path().join("model/lean/OpenTicket.lean"),
-            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := [\"capture-ticket\",\"review-ticket\"]\n\ndef workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Slice description.\"),(\"review-ticket\", \"Review ticket\", \"state_view\", \"Slice description.\")]\n\ndef workflowTransitions : List WorkflowTransition := []\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
-        )?;
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let lean = read_to_string(&lean_path)?.replace(
+            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]",
+            "def workflowTransitions : List WorkflowTransition := []",
+        );
+        write(lean_path, lean)?;
 
         Command::cargo_bin("emc")?
             .arg("check")
@@ -1315,7 +804,7 @@ mod tests {
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let mut lean = read_to_string(&lean_path)?;
         lean.push_str(
-            "\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"stale-screen\", rationale := \"\" }]\n",
+            "\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"stale-screen\", rationale := \"\", payloadContract := \"\" }]\n",
         );
         write(lean_path, lean)?;
 
@@ -1337,10 +826,12 @@ mod tests {
 
         create_workflow_exit(&temp_dir)?;
 
-        write(
-            temp_dir.path().join("model/lean/OpenTicket.lean"),
-            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := [\"capture-ticket\"]\n\ndef workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Slice description.\")]\n\ndef workflowTransitions : List WorkflowTransition := []\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
-        )?;
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let lean = read_to_string(&lean_path)?.replace(
+            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := \"workflow_exit:outcome\", trigger := \"ticket_closed\", rationale := \"Closed tickets continue to completion.\", payloadContract := \"\" }]",
+            "def workflowTransitions : List WorkflowTransition := []",
+        );
+        write(lean_path, lean)?;
 
         Command::cargo_bin("emc")?
             .arg("check")
@@ -1394,7 +885,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/lean/OpenTicket.lean"),
-            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := []\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
+            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := []\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
         )?;
 
         Command::cargo_bin("emc")?
@@ -1437,10 +928,12 @@ mod tests {
 
         create_connected_workflow(&temp_dir)?;
 
-        write(
-            temp_dir.path().join("model/lean/OpenTicket.lean"),
-            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := [\"capture-ticket\",\"review-ticket\"]\n\ndef workflowSliceDetails : List (String × String × String × String) := []\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
-        )?;
+        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
+        let lean = read_to_string(&lean_path)?.replace(
+            "def workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Slice description.\"),(\"review-ticket\", \"Review ticket\", \"state_view\", \"Slice description.\")]",
+            "def workflowSliceDetails : List (String × String × String × String) := []",
+        );
+        write(lean_path, lean)?;
 
         Command::cargo_bin("emc")?
             .arg("check")
@@ -1557,10 +1050,12 @@ mod tests {
 
         create_connected_workflow(&temp_dir)?;
 
-        write(
-            temp_dir.path().join("model/quint/OpenTicket.qnt"),
-            "module OpenTicket {\n  // EMC-DIGEST: workflow:Open ticket\n  val workflowName = \"Open ticket\"\n  val workflowSlug = \"open-ticket\"\n  val workflowDescription = \"Actor opens a repair ticket.\"\n  val workflowSlices = [\"capture-ticket\",\"review-ticket\"]\n  val workflowSliceDetails = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Slice description.\" },{ slug: \"review-ticket\", name: \"Review ticket\", kind: \"state_view\", description: \"Slice description.\" }]\n  val workflowTransitions = []\n  val workflowIdentityStable = workflowName == \"Open ticket\"\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}\n",
-        )?;
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let quint = read_to_string(&quint_path)?.replace(
+            "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\", rationale: \"\", payloadContract: \"\" }]",
+            "val workflowTransitions: List[WorkflowTransition] = []",
+        );
+        write(quint_path, quint)?;
 
         Command::cargo_bin("emc")?
             .arg("check")
@@ -1583,7 +1078,7 @@ mod tests {
         let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
         let mut quint = read_to_string(&quint_path)?;
         quint.push_str(
-            "  val workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"stale-screen\", rationale: \"\" }]\n",
+            "  val workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"stale-screen\", rationale: \"\", payloadContract: \"\" }]\n",
         );
         write(quint_path, quint)?;
 
@@ -1605,10 +1100,12 @@ mod tests {
 
         create_connected_workflow(&temp_dir)?;
 
-        write(
-            temp_dir.path().join("model/quint/OpenTicket.qnt"),
-            "module OpenTicket {\n  // EMC-DIGEST: workflow:Open ticket\n  val workflowName = \"Open ticket\"\n  val workflowSlug = \"open-ticket\"\n  val workflowDescription = \"Actor opens a repair ticket.\"\n  val workflowSlices = [\"capture-ticket\",\"review-ticket\"]\n  val workflowSliceDetails = []\n  val workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\", rationale: \"\" }]\n  val workflowIdentityStable = workflowName == \"Open ticket\"\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}\n",
-        )?;
+        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
+        let quint = read_to_string(&quint_path)?.replace(
+            "val workflowSliceDetails: List[WorkflowSliceDetail] = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Slice description.\" },{ slug: \"review-ticket\", name: \"Review ticket\", kind: \"state_view\", description: \"Slice description.\" }]",
+            "val workflowSliceDetails: List[WorkflowSliceDetail] = []",
+        );
+        write(quint_path, quint)?;
 
         Command::cargo_bin("emc")?
             .arg("check")
@@ -1727,7 +1224,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/quint/OpenTicket.qnt"),
-            "module OpenTicket {\n\n// EMC-DIGEST: workflow:Open ticket\nval workflowName = \"Open ticket\"\n\nval workflowSlug = \"open-ticket\"\n\nval workflowDescription = \"Actor opens a repair ticket.\"\n\nval workflowSlices = []\n\nval workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\", rationale: \"\" }]\n}\n",
+            "module OpenTicket {\n\n// EMC-DIGEST: workflow:Open ticket\nval workflowName = \"Open ticket\"\n\nval workflowSlug = \"open-ticket\"\n\nval workflowDescription = \"Actor opens a repair ticket.\"\n\nval workflowSlices = []\n\nval workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\", rationale: \"\", payloadContract: \"\" }]\n}\n",
         )?;
 
         Command::cargo_bin("emc")?
@@ -1749,7 +1246,7 @@ mod tests {
         create_connected_workflow(&temp_dir)?;
         let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
         let mut quint = read_to_string(&quint_path)?;
-        quint.push_str("  val workflowSlices = [\"stale-slice\"]\n");
+        quint.push_str("  val workflowSlices: List[str] = [\"stale-slice\"]\n");
         write(quint_path, quint)?;
 
         Command::cargo_bin("emc")?
@@ -1759,29 +1256,6 @@ mod tests {
             .failure()
             .stderr(predicate::str::contains(
                 "Quint workflow slice drift for workflow Open ticket",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_missing_referenced_browser_slice_file() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        remove_file(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
-        )?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "workflow Open ticket references missing slice artifact",
             ));
 
         Ok(())
@@ -2030,62 +1504,6 @@ mod tests {
             .failure()
             .stderr(predicate::str::contains(
                 "Quint slice artifact drift for workflow Open ticket",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_unreferenced_browser_slice_files() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        write(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/orphan-slice.eventmodel.json"),
-            "{\"name\":\"Orphan slice\",\"version\":\"0.1.0\",\"board\":{},\"streams\":[],\"events\":[],\"commands\":[],\"read_models\":[],\"views\":[],\"slices\":[{\"name\":\"Orphan slice\",\"type\":\"state_view\",\"events\":[],\"views\":[],\"acceptance_scenarios\":[],\"contract_scenarios\":[]}]}",
-        )?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser slice reference drift for orphan-slice.eventmodel.json",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn check_reports_referenced_browser_slice_file_identity_drift() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        create_connected_workflow(&temp_dir)?;
-        let slices_path = temp_dir.path().join("model/browser/data/slices");
-        let canonical_slice_path = slices_path.join("capture-ticket.eventmodel.json");
-        let drifted_slice_path = slices_path.join("capture_ticket.eventmodel.json");
-        write(&drifted_slice_path, read_to_string(&canonical_slice_path)?)?;
-        remove_file(canonical_slice_path)?;
-
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let workflow = read_to_string(&workflow_path)?.replace(
-            "\"../slices/capture-ticket.eventmodel.json\"",
-            "\"../slices/capture_ticket.eventmodel.json\"",
-        );
-        write(workflow_path, workflow)?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "browser slice identity drift for capture_ticket.eventmodel.json",
             ));
 
         Ok(())

@@ -29,9 +29,6 @@ mod tests {
             "model/quint/quint.json",
             "model/quint/RepairDesk.qnt",
             "model/quint/slices/.gitkeep",
-            "model/browser/data/index.json",
-            "model/browser/data/workflows/.gitkeep",
-            "model/browser/data/slices/.gitkeep",
             "reviews/.gitkeep",
         ];
 
@@ -50,9 +47,8 @@ mod tests {
         );
         assert_eq!(
             fs::read_to_string(temp_dir.path().join("model/quint/quint.json"))?,
-            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowTransitionsStructured\"\n  ]\n}\n"
+            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowTransitionsStructured\",\n    \"workflowTransitionSourcesResolve\",\n    \"workflowTransitionTargetsResolve\",\n    \"workflowStepRelationshipsAreAllowed\",\n    \"workflowHasExactlyOneEntryStep\",\n    \"workflowMainStepsHaveIncomingReachability\",\n    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\",\n    \"workflowTransitionsHaveModeledKinds\",\n    \"workflowExitsNameTargetsAndRationale\",\n    \"workflowExternallyRelevantOutcomesHandled\",\n    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\",\n    \"workflowExternalTriggersDeclarePayloadContracts\",\n    \"workflowTransitionsHaveRequiredEvidence\"\n  ]\n}\n"
         );
-
         Ok(())
     }
 

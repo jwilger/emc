@@ -14,30 +14,11 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn gherkin_runner_lists_browser_feature_paths_without_execution() -> Result<(), Box<dyn Error>>
-    {
-        Command::cargo_bin("emc")?
-            .args(["gherkin", "list", "--suite", "browser"])
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "tests/features/event_model_browser/timeline_rendering.feature",
-            ))
-            .stdout(predicate::str::contains("Scenario:").not());
-
-        Ok(())
-    }
-
-    #[test]
     fn gherkin_runner_lists_all_event_model_feature_suites() -> Result<(), Box<dyn Error>> {
         let suites = [
             (
                 "meta",
                 "tests/features/event_model_cucumber_execution.feature",
-            ),
-            (
-                "validator",
-                "tests/features/event_model_validator/board_timeline_and_workflow.feature",
             ),
             (
                 "review-gate",
@@ -63,26 +44,23 @@ mod tests {
     }
 
     #[test]
-    fn gherkin_runner_run_executes_configured_browser_suite() -> Result<(), Box<dyn Error>> {
+    fn gherkin_runner_run_executes_configured_review_gate_suite() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let tool_dir = temp_dir.path().join("tools");
         let cargo_log = temp_dir.path().join("cargo.log");
         create_fake_cargo(&tool_dir, &cargo_log)?;
 
         Command::cargo_bin("emc")?
-            .args(["gherkin", "run", "--suite", "browser"])
+            .args(["gherkin", "run", "--suite", "review-gate"])
             .env("PATH", path_with_fake_tools(&tool_dir)?)
             .assert()
             .success()
             .stdout(predicate::str::contains(
-                "browser Gherkin suite passed; attempted 11 configured browser scenarios",
+                "review-gate Gherkin suite passed; attempted 9 configured review-gate scenarios",
             ))
             .stderr(predicate::str::is_empty());
 
-        assert_eq!(
-            read_to_string(cargo_log)?,
-            "test --test browser_composition\n"
-        );
+        assert_eq!(read_to_string(cargo_log)?, "test --test review_gate\n");
 
         Ok(())
     }
@@ -99,9 +77,7 @@ mod tests {
         assert_eq!(
             commands,
             vec![
-                "cargo test --test browser_composition",
                 "cargo test --test review_gate",
-                "cargo test --test validate_event_model",
                 "cargo test --test cucumber_runner_config",
             ]
         );

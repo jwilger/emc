@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-    use std::fs::{read_to_string, write};
+    use std::fs::read_to_string;
     use std::path::Path;
 
     use assert_cmd::Command;
@@ -57,16 +57,6 @@ mod tests {
             .success()
             .stdout(predicate::str::contains("added slice Capture ticket"));
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
-        let slice_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
-        )?;
         let slice_lean =
             read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let slice_quint =
@@ -74,30 +64,6 @@ mod tests {
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
-        assert!(
-            workflow_json.contains("\"../slices/capture-ticket.eventmodel.json\""),
-            "workflow must reference the new slice file"
-        );
-        assert!(
-            workflow_json.contains("\"slice\": \"capture-ticket\""),
-            "workflow must add a step for the new slice"
-        );
-        assert!(
-            workflow_json.contains("\"relationship\": \"entry\""),
-            "first slice must become the workflow entry"
-        );
-        assert!(
-            slice_json.contains("\"name\": \"Capture ticket\""),
-            "slice data must preserve the business slice name"
-        );
-        assert!(
-            slice_json.contains("\"type\": \"state_view\""),
-            "slice data must preserve the semantic slice type"
-        );
-        assert!(
-            slice_json.contains("\"description\": \"Actor enters repair ticket details.\""),
-            "slice data must preserve the slice description"
-        );
         assert!(
             slice_lean.contains("namespace CaptureTicket"),
             "Lean slice artifact must use the business slice module name"
@@ -161,12 +127,12 @@ mod tests {
             "Lean artifact must represent the workflow's business slice details"
         );
         assert!(
-            quint.contains("val workflowSlices = [\"capture-ticket\"]"),
+            quint.contains("val workflowSlices: List[str] = [\"capture-ticket\"]"),
             "Quint artifact must represent the workflow's business slices"
         );
         assert!(
             quint.contains(
-                "val workflowSliceDetails = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Actor enters repair ticket details.\" }]"
+                "val workflowSliceDetails: List[WorkflowSliceDetail] = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Actor enters repair ticket details.\" }]"
             ),
             "Quint artifact must represent the workflow's business slice details"
         );
@@ -292,199 +258,21 @@ mod tests {
                 "slice capture-ticket already exists",
             ));
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         assert_eq!(
-            workflow_json
-                .matches("\"slice\": \"capture-ticket\"")
-                .count(),
+            lean.matches(
+                "(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Slice description.\")"
+            )
+            .count(),
             1,
             "rejected duplicate slice slugs must not add another workflow step"
         );
 
-        let slice_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
-        )?;
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         assert!(
-            slice_json.contains("\"name\": \"Capture ticket\""),
-            "rejected duplicate slice slugs must not overwrite existing browser slice data"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn add_slice_uses_formal_workflow_when_browser_document_identity_is_stale()
-    -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
-                "open-ticket",
-                "--name",
-                "Open ticket",
-                "--description",
-                "Actor opens a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
-        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
-        let workflow_before = read_to_string(&workflow_path)?;
-        let lean_before = read_to_string(&lean_path)?;
-        let quint_before = read_to_string(&quint_path)?;
-        write(
-            &workflow_path,
-            workflow_before.replace("\"name\": \"Open ticket\"", "\"name\": \"Altered ticket\""),
-        )?;
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "slice",
-                "--workflow",
-                "open-ticket",
-                "--slug",
-                "capture-ticket",
-                "--name",
-                "Capture ticket",
-                "--type",
-                "state_view",
-                "--description",
-                "Actor enters repair ticket details.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains("added slice Capture ticket"));
-
-        let workflow_after = read_to_string(workflow_path)?;
-        assert!(
-            workflow_after.contains("\"name\": \"Open ticket\""),
-            "add slice must restore the workflow name from formal artifacts"
-        );
-        assert!(
-            workflow_after.contains("\"../slices/capture-ticket.eventmodel.json\""),
-            "add slice must write the requested slice to the browser projection"
-        );
-        assert_ne!(
-            lean_before,
-            read_to_string(lean_path)?,
-            "add slice must update Lean workflow data from the formal source state"
-        );
-        assert_ne!(
-            quint_before,
-            read_to_string(quint_path)?,
-            "add slice must update Quint workflow data from the formal source state"
-        );
-        assert!(
-            !temp_dir
-                .path()
-                .join("model/lean/AlteredTicket.lean")
-                .exists(),
-            "add slice must not create formal artifacts for the stale browser workflow name"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn add_slice_uses_formal_workflow_when_browser_document_description_is_stale()
-    -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
-                "open-ticket",
-                "--name",
-                "Open ticket",
-                "--description",
-                "Actor opens a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        let workflow_path = temp_dir
-            .path()
-            .join("model/browser/data/workflows/open-ticket.eventmodel.json");
-        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
-        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
-        let workflow_before = read_to_string(&workflow_path)?;
-        let lean_before = read_to_string(&lean_path)?;
-        let quint_before = read_to_string(&quint_path)?;
-        let drifted_workflow = workflow_before.replace(
-            "\"description\": \"Actor opens a repair ticket.\"",
-            "\"description\": \"Altered workflow description.\"",
-        );
-        write(&workflow_path, &drifted_workflow)?;
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "slice",
-                "--workflow",
-                "open-ticket",
-                "--slug",
-                "capture-ticket",
-                "--name",
-                "Capture ticket",
-                "--type",
-                "state_view",
-                "--description",
-                "Actor enters repair ticket details.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains("added slice Capture ticket"));
-
-        let workflow_after = read_to_string(workflow_path)?;
-        assert!(
-            workflow_after.contains("\"description\": \"Actor opens a repair ticket.\""),
-            "add slice must restore the workflow description from formal artifacts"
-        );
-        assert!(
-            workflow_after.contains("\"../slices/capture-ticket.eventmodel.json\""),
-            "add slice must write the requested slice to the browser projection"
-        );
-        assert_ne!(
-            lean_before,
-            read_to_string(lean_path)?,
-            "add slice must update Lean workflow data from the formal source state"
-        );
-        assert_ne!(
-            quint_before,
-            read_to_string(quint_path)?,
-            "add slice must update Quint workflow data from the formal source state"
+            slice_lean.contains("def sliceName := \"Capture ticket\""),
+            "rejected duplicate slice slugs must not overwrite existing formal slice data"
         );
 
         Ok(())
@@ -544,13 +332,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"submit-ticket\", kind := \"command\", trigger := \"SubmitTicketForReview\", rationale := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"submit-ticket\", kind := \"command\", trigger := \"SubmitTicketForReview\", rationale := \"\", payloadContract := \"\" }]"
             ),
             "Lean artifact must preserve existing command transitions when a later slice is added"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"submit-ticket\", kind: \"command\", trigger: \"SubmitTicketForReview\", rationale: \"\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"submit-ticket\", kind: \"command\", trigger: \"SubmitTicketForReview\", rationale: \"\", payloadContract: \"\" }]"
             ),
             "Quint artifact must preserve existing command transitions when a later slice is added"
         );
@@ -612,13 +400,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"record-callback\", kind := \"external_trigger\", trigger := \"callback_received\", rationale := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"record-callback\", kind := \"external_trigger\", trigger := \"callback_received\", rationale := \"\", payloadContract := \"\" }]"
             ),
             "Lean artifact must preserve existing external-trigger transitions when a later slice is added"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"record-callback\", kind: \"external_trigger\", trigger: \"callback_received\", rationale: \"\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"record-callback\", kind: \"external_trigger\", trigger: \"callback_received\", rationale: \"\", payloadContract: \"\" }]"
             ),
             "Quint artifact must preserve existing external-trigger transitions when a later slice is added"
         );
@@ -681,13 +469,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := \"workflow_exit:outcome\", trigger := \"ticket_closed\", rationale := \"Closed tickets continue to completion.\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := \"workflow_exit:outcome\", trigger := \"ticket_closed\", rationale := \"Closed tickets continue to completion.\", payloadContract := \"\" }]"
             ),
             "Lean artifact must preserve existing workflow exit transitions when a later slice is added"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"repair-complete\", kind: \"workflow_exit:outcome\", trigger: \"ticket_closed\", rationale: \"Closed tickets continue to completion.\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"repair-complete\", kind: \"workflow_exit:outcome\", trigger: \"ticket_closed\", rationale: \"Closed tickets continue to completion.\", payloadContract: \"\" }]"
             ),
             "Quint artifact must preserve existing workflow exit transitions when a later slice is added"
         );

@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-    use std::fs::write;
     use std::path::Path;
 
     use assert_cmd::Command;
@@ -38,53 +37,16 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success()
-            .stdout(predicate::str::contains("\"name\": \"Open ticket\""))
+            .stdout(predicate::str::contains("# model/lean/OpenTicket.lean"))
+            .stdout(predicate::str::contains("# model/quint/OpenTicket.qnt"))
             .stdout(predicate::str::contains(
-                "\"description\": \"Actor opens a repair ticket.\"",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn show_workflow_reports_formal_workflow_when_browser_index_is_stale()
-    -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
-                "open-ticket",
-                "--name",
-                "Open ticket",
-                "--description",
-                "Actor opens a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        write(
-            temp_dir.path().join("model/browser/data/index.json"),
-            "{\n  \"project\": \"Repair Desk\",\n  \"workflows\": []\n}\n",
-        )?;
-
-        Command::cargo_bin("emc")?
-            .args(["show", "workflow", "open-ticket"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains("\"name\": \"Open ticket\""))
+                "def workflowName := \"Open ticket\"",
+            ))
             .stdout(predicate::str::contains(
-                "\"description\": \"Actor opens a repair ticket.\"",
+                "val workflowName = \"Open ticket\"",
+            ))
+            .stdout(predicate::str::contains(
+                "def workflowDescription := \"Actor opens a repair ticket.\"",
             ));
 
         Ok(())
@@ -100,32 +62,11 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success()
-            .stdout(predicate::str::contains("\"name\": \"Open ticket\""));
-
-        Ok(())
-    }
-
-    #[test]
-    fn show_slice_reports_formal_slice_when_browser_slice_is_stale() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-        initialize_project_with_workflow(temp_dir.path())?;
-        add_slice(temp_dir.path())?;
-
-        write(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/capture-ticket.eventmodel.json"),
-            "{\n  \"name\": \"Stale slice\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Stale browser projection.\"\n}\n",
-        )?;
-
-        Command::cargo_bin("emc")?
-            .args(["show", "slice", "capture-ticket"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains("\"name\": \"Capture ticket\""))
             .stdout(predicate::str::contains(
-                "\"description\": \"Actor enters repair ticket details.\"",
+                "def workflowName := \"Open ticket\"",
+            ))
+            .stdout(predicate::str::contains(
+                "val workflowName = \"Open ticket\"",
             ));
 
         Ok(())
@@ -142,7 +83,12 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success()
-            .stdout(predicate::str::contains("\"name\": \"Capture ticket\""));
+            .stdout(predicate::str::contains(
+                "def sliceName := \"Capture ticket\"",
+            ))
+            .stdout(predicate::str::contains(
+                "val sliceName = \"Capture ticket\"",
+            ));
 
         Ok(())
     }
@@ -194,25 +140,29 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success()
-            .stdout(predicate::str::contains("\"name\": \"Capture ticket\""))
             .stdout(predicate::str::contains(
-                "\"description\": \"Actor enters repair ticket details.\"",
+                "# model/lean/slices/CaptureTicket.lean",
+            ))
+            .stdout(predicate::str::contains(
+                "# model/quint/slices/CaptureTicket.qnt",
+            ))
+            .stdout(predicate::str::contains(
+                "def sliceName := \"Capture ticket\"",
+            ))
+            .stdout(predicate::str::contains(
+                "val sliceName = \"Capture ticket\"",
+            ))
+            .stdout(predicate::str::contains(
+                "def sliceDescription := \"Actor enters repair ticket details.\"",
             ));
 
         Ok(())
     }
 
     #[test]
-    fn show_slice_rejects_unreferenced_slice_files() -> Result<(), Box<dyn Error>> {
+    fn show_slice_rejects_unknown_modeled_slices() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         initialize_project_with_workflow(temp_dir.path())?;
-
-        write(
-            temp_dir
-                .path()
-                .join("model/browser/data/slices/orphan-slice.eventmodel.json"),
-            "{\n  \"name\": \"Orphan slice\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Not composed by a workflow.\"\n}\n",
-        )?;
 
         Command::cargo_bin("emc")?
             .args(["show", "slice", "orphan-slice"])
@@ -220,7 +170,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "slice orphan-slice is not referenced by any indexed workflow",
+                "slice orphan-slice is not referenced by any modeled workflow",
             ));
 
         Ok(())

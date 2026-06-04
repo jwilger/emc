@@ -30,10 +30,6 @@ mod tests {
             "Nix package source filtering must preserve Cargo sources explicitly"
         );
         assert!(
-            flake.contains("/browser"),
-            "Nix package source filtering must preserve embedded browser assets"
-        );
-        assert!(
             flake.contains("/.github"),
             "Nix package source filtering must preserve CI metadata inspected by tests"
         );
@@ -92,33 +88,6 @@ mod tests {
         assert!(
             flake.contains("${package}/bin/emc review gate"),
             "package smoke checks must run packaged `emc review gate`"
-        );
-        assert!(
-            flake.contains("${package}/bin/emc generate site"),
-            "package smoke checks must run packaged `emc generate site`"
-        );
-        assert!(
-            flake.contains("pkgs.chromium"),
-            "package smoke checks must use a Nix-provided headless browser for rendered site verification"
-        );
-        assert!(
-            flake.contains("--headless")
-                && flake.contains("--dump-dom")
-                && flake.contains("--screenshot=rendered-site.png")
-                && flake.contains("--window-size=1440,1000")
-                && flake.contains("--virtual-time-budget=5000"),
-            "package smoke checks must execute the generated site in a real headless browser and capture a visual smoke screenshot"
-        );
-        assert!(
-            flake.contains("grep 'Package Smoke Event Model Browser' rendered-site.html")
-                && flake.contains("grep 'Package smoke' rendered-site.html")
-                && flake.contains("grep 'Capture smoke' rendered-site.html"),
-            "package smoke checks must assert rendered project and model content, not only static site files"
-        );
-        assert!(
-            flake.contains("browser screenshot is unexpectedly small")
-                && flake.contains("browser screenshot has unexpected dimensions"),
-            "package smoke checks must reject a missing or malformed browser screenshot"
         );
         assert!(
             flake.contains("${package}/bin/emc mcp stdio"),

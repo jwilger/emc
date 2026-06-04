@@ -4,10 +4,8 @@ use crate::core::effect::{
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum GherkinSuite {
-    Browser,
     Meta,
     ReviewGate,
-    Validator,
 }
 
 pub fn list_gherkin_features(suite: GherkinSuite) -> EffectPlan {
@@ -53,60 +51,38 @@ fn run_suite_effect(suite: GherkinSuite) -> Effect {
 
 impl GherkinSuite {
     fn all() -> Vec<Self> {
-        vec![Self::Browser, Self::ReviewGate, Self::Validator, Self::Meta]
+        vec![Self::ReviewGate, Self::Meta]
     }
 
     fn label(&self) -> &'static str {
         match self {
-            Self::Browser => "browser",
             Self::Meta => "meta",
             Self::ReviewGate => "review-gate",
-            Self::Validator => "validator",
         }
     }
 
     fn scenario_count(&self) -> usize {
         match self {
-            Self::Browser => 11,
-            Self::Meta => 6,
+            Self::Meta => 3,
             Self::ReviewGate => 9,
-            Self::Validator => 159,
         }
     }
 
     fn test_target(&self) -> &'static str {
         match self {
-            Self::Browser => "browser_composition",
             Self::Meta => "cucumber_runner_config",
             Self::ReviewGate => "review_gate",
-            Self::Validator => "validate_event_model",
         }
     }
 
     fn feature_paths(&self) -> Vec<ProjectPath> {
         match self {
-            Self::Browser => vec![project_path(
-                "tests/features/event_model_browser/timeline_rendering.feature",
-            )],
             Self::Meta => vec![project_path(
                 "tests/features/event_model_cucumber_execution.feature",
             )],
             Self::ReviewGate => vec![project_path(
                 "tests/features/event_model_review_gate/workflow_review_gate.feature",
             )],
-            Self::Validator => vec![
-                project_path(
-                    "tests/features/event_model_validator/board_timeline_and_workflow.feature",
-                ),
-                project_path(
-                    "tests/features/event_model_validator/outcomes_errors_and_review.feature",
-                ),
-                project_path("tests/features/event_model_validator/slice_architecture.feature"),
-                project_path("tests/features/event_model_validator/structure_and_sources.feature"),
-                project_path(
-                    "tests/features/event_model_validator/views_controls_and_information.feature",
-                ),
-            ],
         }
     }
 }

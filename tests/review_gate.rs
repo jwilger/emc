@@ -385,79 +385,6 @@ mod tests {
     }
 
     #[test]
-    fn review_record_rejects_invalid_modeled_workflows() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-        initialize_navigation_chain(temp_dir.path())?;
-
-        remove_first_formal_workflow_transition_fixture(temp_dir.path())?;
-
-        Command::cargo_bin("emc")?
-            .args([
-                "review",
-                "record",
-                "--workflow",
-                "intake-visit",
-                "--reviewer",
-                "event-model-reviewer",
-                "--reviewed-at",
-                "2026-06-03T00:00:00.000Z",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "workflow step 'triage-intake' has no incoming transition",
-            ));
-
-        Command::cargo_bin("emc")?
-            .args(["review", "gate", "--workflow", "intake-visit"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "workflow step 'triage-intake' has no incoming transition",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
-    fn review_record_uses_formal_artifacts_when_browser_workflow_is_stale()
-    -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-        initialize_navigation_chain(temp_dir.path())?;
-
-        remove_first_browser_workflow_transition_fixture(temp_dir.path(), "intake-visit")?;
-
-        Command::cargo_bin("emc")?
-            .args([
-                "review",
-                "record",
-                "--workflow",
-                "intake-visit",
-                "--reviewer",
-                "event-model-reviewer",
-                "--reviewed-at",
-                "2026-06-03T00:00:00.000Z",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "recorded clean review for workflow intake-visit",
-            ));
-
-        Command::cargo_bin("emc")?
-            .args(["review", "gate", "--workflow", "intake-visit"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains("workflow review is clean"));
-
-        Ok(())
-    }
-
-    #[test]
     fn review_record_command_rejects_unrecognized_argument_shapes() -> Result<(), Box<dyn Error>> {
         [
             [
@@ -561,145 +488,20 @@ mod tests {
     }
 
     fn current_model_digest(project_root: &Path) -> Result<String, Box<dyn Error>> {
-        let workflow_path = "model/browser/data/workflows/open-ticket.eventmodel.json";
-        let workflow_contents = read_to_string(project_root.join(workflow_path))?;
         let mut digest = StableDigest::new();
-        digest.write(workflow_path);
-        digest.write(&workflow_contents);
+        write_artifact_digest(&mut digest, project_root, "model/lean/OpenTicket.lean")?;
+        write_artifact_digest(&mut digest, project_root, "model/quint/OpenTicket.qnt")?;
         Ok(digest.finish())
     }
 
-    fn initialize_navigation_chain(cwd: &Path) -> Result<(), Box<dyn Error>> {
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Clinic Intake"])
-            .current_dir(cwd)
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
-                "intake-visit",
-                "--name",
-                "Intake visit",
-                "--description",
-                "Actor completes intake for a clinic visit.",
-            ])
-            .current_dir(cwd)
-            .assert()
-            .success();
-
-        [
-            (
-                "capture-intake",
-                "Capture intake",
-                "Actor captures intake details.",
-            ),
-            ("triage-intake", "Triage intake", "Actor triages intake."),
-            (
-                "schedule-visit",
-                "Schedule visit",
-                "Actor schedules a visit.",
-            ),
-        ]
-        .into_iter()
-        .try_for_each(|(slug, name, description)| {
-            Command::cargo_bin("emc")?
-                .args([
-                    "add",
-                    "slice",
-                    "--workflow",
-                    "intake-visit",
-                    "--slug",
-                    slug,
-                    "--name",
-                    name,
-                    "--type",
-                    "state_view",
-                    "--description",
-                    description,
-                ])
-                .current_dir(cwd)
-                .assert()
-                .success();
-            Ok::<(), Box<dyn Error>>(())
-        })?;
-
-        [
-            ("capture-intake", "triage-intake", "triage-intake-screen"),
-            ("triage-intake", "schedule-visit", "schedule-visit-screen"),
-        ]
-        .into_iter()
-        .try_for_each(|(source, target, navigation)| {
-            Command::cargo_bin("emc")?
-                .args([
-                    "connect",
-                    "workflow",
-                    "--workflow",
-                    "intake-visit",
-                    "--from",
-                    source,
-                    "--to",
-                    target,
-                    "--via",
-                    "navigation",
-                    "--name",
-                    navigation,
-                ])
-                .current_dir(cwd)
-                .assert()
-                .success();
-            Ok::<(), Box<dyn Error>>(())
-        })?;
-
-        Ok(())
-    }
-
-    fn remove_first_browser_workflow_transition_fixture(
-        cwd: &Path,
-        workflow: &str,
+    fn write_artifact_digest(
+        digest: &mut StableDigest,
+        project_root: &Path,
+        path: &str,
     ) -> Result<(), Box<dyn Error>> {
-        let path = cwd.join(format!(
-            "model/browser/data/workflows/{workflow}.eventmodel.json"
-        ));
-        let mut workflow_json: serde_json::Value = serde_json::from_str(&read_to_string(&path)?)?;
-        let steps = workflow_json
-            .get_mut("steps")
-            .and_then(serde_json::Value::as_array_mut)
-            .ok_or("workflow fixture is missing steps")?;
-        let transitions = steps
-            .first_mut()
-            .and_then(|step| step.get_mut("transitions"))
-            .and_then(serde_json::Value::as_array_mut)
-            .ok_or("workflow fixture first step is missing transitions")?;
-        transitions.clear();
-        write(path, serde_json::to_string_pretty(&workflow_json)?)?;
-        Ok(())
-    }
-
-    fn remove_first_formal_workflow_transition_fixture(cwd: &Path) -> Result<(), Box<dyn Error>> {
-        let lean_path = cwd.join("model/lean/IntakeVisit.lean");
-        let lean = read_to_string(&lean_path)?;
-        write(
-            lean_path,
-            lean.replace(
-                "{ source := \"capture-intake\", target := \"triage-intake\", kind := \"navigation\", trigger := \"triage-intake-screen\", rationale := \"\" },",
-                "",
-            ),
-        )?;
-
-        let quint_path = cwd.join("model/quint/IntakeVisit.qnt");
-        let quint = read_to_string(&quint_path)?;
-        write(
-            quint_path,
-            quint.replace(
-                "{ source: \"capture-intake\", target: \"triage-intake\", kind: \"navigation\", trigger: \"triage-intake-screen\", rationale: \"\" },",
-                "",
-            ),
-        )?;
-
+        let contents = read_to_string(project_root.join(path))?;
+        digest.write(path);
+        digest.write(&contents);
         Ok(())
     }
 

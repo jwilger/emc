@@ -162,12 +162,21 @@ mod tests {
     }
 
     fn current_model_digest(project_root: &Path) -> Result<String, Box<dyn Error>> {
-        let workflow_path = "model/browser/data/workflows/open-ticket.eventmodel.json";
-        let workflow_contents = read_to_string(project_root.join(workflow_path))?;
         let mut digest = StableDigest::new();
-        digest.write(workflow_path);
-        digest.write(&workflow_contents);
+        write_artifact_digest(&mut digest, project_root, "model/lean/OpenTicket.lean")?;
+        write_artifact_digest(&mut digest, project_root, "model/quint/OpenTicket.qnt")?;
         Ok(digest.finish())
+    }
+
+    fn write_artifact_digest(
+        digest: &mut StableDigest,
+        project_root: &Path,
+        artifact_path: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        let contents = read_to_string(project_root.join(artifact_path))?;
+        digest.write(artifact_path);
+        digest.write(&contents);
+        Ok(())
     }
 
     struct StableDigest {

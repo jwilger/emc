@@ -2,7 +2,7 @@
 mod tests {
     use std::error::Error;
 
-    use emc::core::digest::artifact_digest;
+    use emc::core::digest::{WorkflowArtifactDigestInput, artifact_digest};
     use emc::core::effect::{ArtifactDigest, FileContents};
     use emc::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
     use emc::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
@@ -10,9 +10,10 @@ mod tests {
         parse_lean_workflow_graph, parse_quint_workflow_graph, workflow_graph_from_document,
     };
     use emc::core::types::{
-        SliceKindName, TransitionTriggerName, WorkflowSliceDetail, WorkflowSliceDetails,
-        WorkflowTransitionEndpoint, WorkflowTransitionKind, WorkflowTransitionRecord,
-        WorkflowTransitionRecords,
+        SliceKindName, TransitionTriggerName, WorkflowCommandErrorRecords, WorkflowModuleData,
+        WorkflowOutcomeRecords, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
+        WorkflowSliceDetails, WorkflowStepRelationshipName, WorkflowTransitionEndpoint,
+        WorkflowTransitionKind, WorkflowTransitionRecord, WorkflowTransitionRecords,
     };
     use emc::io::dto::{
         parse_lean_module_name, parse_model_description, parse_model_name, parse_quint_module_name,
@@ -25,12 +26,7 @@ mod tests {
         let workflow_document = workflow_document()?;
         let artifact = emit_lean_workflow_module(
             parse_lean_module_name("OpenTicket")?,
-            parse_model_name("Open ticket")?,
-            parse_model_description("Actor opens a repair ticket.")?,
-            parse_workflow_slug("open-ticket")?,
-            WorkflowSliceDetails::from_details(workflow_slice_details()?),
-            WorkflowTransitionRecords::from_records(workflow_transitions()?),
-            workflow_digest()?,
+            workflow_module_data(workflow_slice_details()?, workflow_transitions()?)?,
         );
 
         assert_eq!(
@@ -47,12 +43,7 @@ mod tests {
         let workflow_document = workflow_document()?;
         let artifact = emit_quint_workflow_module(
             parse_quint_module_name("OpenTicket")?,
-            parse_model_name("Open ticket")?,
-            parse_model_description("Actor opens a repair ticket.")?,
-            parse_workflow_slug("open-ticket")?,
-            WorkflowSliceDetails::from_details(workflow_slice_details()?),
-            WorkflowTransitionRecords::from_records(workflow_transitions()?),
-            workflow_digest()?,
+            workflow_module_data(workflow_slice_details()?, workflow_transitions()?)?,
         );
 
         assert_eq!(
@@ -67,17 +58,15 @@ mod tests {
     fn parsed_formal_graph_exposes_transition_drift() -> Result<(), Box<dyn Error>> {
         let artifact = emit_lean_workflow_module(
             parse_lean_module_name("OpenTicket")?,
-            parse_model_name("Open ticket")?,
-            parse_model_description("Actor opens a repair ticket.")?,
-            parse_workflow_slug("open-ticket")?,
-            WorkflowSliceDetails::from_details(workflow_slice_details()?),
-            WorkflowTransitionRecords::from_records([WorkflowTransitionRecord::new(
-                WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
-                WorkflowTransitionEndpoint::try_new("review-ticket".to_owned())?,
-                WorkflowTransitionKind::try_new("navigation".to_owned())?,
-                TransitionTriggerName::try_new("stale-screen".to_owned())?,
-            )]),
-            workflow_digest()?,
+            workflow_module_data(
+                workflow_slice_details()?,
+                vec![WorkflowTransitionRecord::new(
+                    WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
+                    WorkflowTransitionEndpoint::try_new("review-ticket".to_owned())?,
+                    WorkflowTransitionKind::try_new("navigation".to_owned())?,
+                    TransitionTriggerName::try_new("stale-screen".to_owned())?,
+                )],
+            )?,
         );
 
         assert_ne!(
@@ -98,12 +87,16 @@ mod tests {
             workflow_graph_from_document(parse_workflow_slug("open-ticket")?, workflow_document)?;
         let artifact = emit_lean_workflow_module(
             parse_lean_module_name("OpenTicket")?,
-            parse_model_name("Open ticket")?,
-            parse_model_description("Actor opens a repair ticket.")?,
-            parse_workflow_slug("open-ticket")?,
-            graph.slice_details().clone(),
-            graph.transitions().clone(),
-            workflow_digest()?,
+            WorkflowModuleData::new(
+                graph.name().clone(),
+                graph.description().clone(),
+                graph.slug().clone(),
+                workflow_digest()?,
+            )
+            .with_slice_details(graph.slice_details().clone())
+            .with_transitions(graph.transitions().clone())
+            .with_outcomes(graph.outcomes().clone())
+            .with_command_errors(graph.command_errors().clone()),
         );
 
         assert_eq!(
@@ -119,15 +112,10 @@ mod tests {
     fn parsed_formal_graph_accepts_legacy_transition_records() -> Result<(), Box<dyn Error>> {
         let artifact = emit_lean_workflow_module(
             parse_lean_module_name("OpenTicket")?,
-            parse_model_name("Open ticket")?,
-            parse_model_description("Actor opens a repair ticket.")?,
-            parse_workflow_slug("open-ticket")?,
-            WorkflowSliceDetails::from_details(workflow_slice_details()?),
-            WorkflowTransitionRecords::from_records(workflow_transitions()?),
-            workflow_digest()?,
+            workflow_module_data(workflow_slice_details()?, workflow_transitions()?)?,
         );
         let legacy = artifact.as_ref().replace(
-            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\" }]",
+            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]",
             "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\" }]",
         );
 
@@ -148,15 +136,10 @@ mod tests {
     {
         let artifact = emit_lean_workflow_module(
             parse_lean_module_name("OpenTicket")?,
-            parse_model_name("Open ticket")?,
-            parse_model_description("Actor opens a repair ticket.")?,
-            parse_workflow_slug("open-ticket")?,
-            WorkflowSliceDetails::from_details(workflow_slice_details()?),
-            WorkflowTransitionRecords::from_records(workflow_transitions()?),
-            workflow_digest()?,
+            workflow_module_data(workflow_slice_details()?, workflow_transitions()?)?,
         );
         let malformed = artifact.as_ref().replace(
-            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\" }]",
+            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]",
             "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\" }]",
         );
 
@@ -169,28 +152,69 @@ mod tests {
     }
 
     fn workflow_digest() -> Result<ArtifactDigest, Box<dyn Error>> {
-        Ok(artifact_digest(
-            parse_model_name("Open ticket")?,
-            parse_workflow_slug("open-ticket")?,
-            parse_model_description("Actor opens a repair ticket.")?,
-            WorkflowSliceDetails::from_details(workflow_slice_details()?),
-            WorkflowTransitionRecords::from_records(workflow_transitions()?),
-        ))
+        Ok(artifact_digest(WorkflowArtifactDigestInput {
+            workflow_name: parse_model_name("Open ticket")?,
+            workflow_slug: parse_workflow_slug("open-ticket")?,
+            workflow_description: parse_model_description("Actor opens a repair ticket.")?,
+            workflow_slice_details: WorkflowSliceDetails::from_details(workflow_slice_details()?),
+            workflow_transitions: WorkflowTransitionRecords::from_records(workflow_transitions()?),
+            workflow_outcomes: WorkflowOutcomeRecords::from_records([]),
+            workflow_command_errors: WorkflowCommandErrorRecords::from_records([]),
+            workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
+            workflow_transition_evidences: Default::default(),
+        }))
+    }
+
+    fn workflow_module_data(
+        workflow_slice_details: Vec<WorkflowSliceDetail>,
+        workflow_transitions: Vec<WorkflowTransitionRecord>,
+    ) -> Result<WorkflowModuleData, Box<dyn Error>> {
+        let workflow_name = parse_model_name("Open ticket")?;
+        let workflow_slug = parse_workflow_slug("open-ticket")?;
+        let workflow_description = parse_model_description("Actor opens a repair ticket.")?;
+        let workflow_slice_details = WorkflowSliceDetails::from_details(workflow_slice_details);
+        let workflow_transitions = WorkflowTransitionRecords::from_records(workflow_transitions);
+        let workflow_outcomes = WorkflowOutcomeRecords::from_records([]);
+        let workflow_command_errors = WorkflowCommandErrorRecords::from_records([]);
+        let workflow_owned_definitions = WorkflowOwnedDefinitionRecords::from_records([]);
+        Ok(WorkflowModuleData::new(
+            workflow_name.clone(),
+            workflow_description.clone(),
+            workflow_slug.clone(),
+            artifact_digest(WorkflowArtifactDigestInput {
+                workflow_name,
+                workflow_slug,
+                workflow_description,
+                workflow_slice_details: workflow_slice_details.clone(),
+                workflow_transitions: workflow_transitions.clone(),
+                workflow_outcomes: workflow_outcomes.clone(),
+                workflow_command_errors: workflow_command_errors.clone(),
+                workflow_owned_definitions: workflow_owned_definitions.clone(),
+                workflow_transition_evidences: Default::default(),
+            }),
+        )
+        .with_slice_details(workflow_slice_details)
+        .with_transitions(workflow_transitions)
+        .with_outcomes(workflow_outcomes)
+        .with_command_errors(workflow_command_errors)
+        .with_owned_definitions(workflow_owned_definitions))
     }
 
     fn workflow_slice_details() -> Result<Vec<WorkflowSliceDetail>, Box<dyn Error>> {
         Ok(vec![
-            WorkflowSliceDetail::new(
+            WorkflowSliceDetail::new_with_relationship(
                 parse_slice_slug("capture-ticket")?,
                 parse_model_name("Capture ticket")?,
                 SliceKindName::try_new("state_view".to_owned())?,
                 parse_model_description("Actor enters repair ticket details.")?,
+                WorkflowStepRelationshipName::try_new("entry".to_owned())?,
             ),
-            WorkflowSliceDetail::new(
+            WorkflowSliceDetail::new_with_relationship(
                 parse_slice_slug("review-ticket")?,
                 parse_model_name("Review ticket")?,
                 SliceKindName::try_new("state_view".to_owned())?,
                 parse_model_description("Actor reviews the repair ticket.")?,
+                WorkflowStepRelationshipName::try_new("main".to_owned())?,
             ),
         ])
     }

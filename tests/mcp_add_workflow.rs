@@ -26,18 +26,9 @@ mod tests {
             .stdout(predicate::str::contains("\"add_workflow\""))
             .stdout(predicate::str::contains("added workflow Open ticket"));
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
-        assert!(
-            workflow_json.contains("\"name\": \"Open ticket\""),
-            "workflow browser data must represent the MCP-created workflow"
-        );
         assert!(
             lean.contains("def workflowName := \"Open ticket\""),
             "Lean artifact must represent the MCP-created workflow"

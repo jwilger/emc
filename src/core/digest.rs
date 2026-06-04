@@ -1,20 +1,36 @@
 use crate::core::effect::ArtifactDigest;
 use crate::core::types::{
-    ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSliceDetail,
-    WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionRecord, WorkflowTransitionRecords,
+    ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowCommandErrorRecord,
+    WorkflowCommandErrorRecords, WorkflowOutcomeRecord, WorkflowOutcomeRecords,
+    WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
+    WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionEvidenceRecords, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 
-pub fn artifact_digest(
-    workflow_name: ModelName,
-    workflow_slug: WorkflowSlug,
-    workflow_description: ModelDescription,
-    workflow_slice_details: WorkflowSliceDetails,
-    workflow_transitions: WorkflowTransitionRecords,
-) -> ArtifactDigest {
+pub struct WorkflowArtifactDigestInput {
+    pub workflow_name: ModelName,
+    pub workflow_slug: WorkflowSlug,
+    pub workflow_description: ModelDescription,
+    pub workflow_slice_details: WorkflowSliceDetails,
+    pub workflow_transitions: WorkflowTransitionRecords,
+    pub workflow_outcomes: WorkflowOutcomeRecords,
+    pub workflow_command_errors: WorkflowCommandErrorRecords,
+    pub workflow_owned_definitions: WorkflowOwnedDefinitionRecords,
+    pub workflow_transition_evidences: WorkflowTransitionEvidenceRecords,
+}
+
+pub fn artifact_digest(input: WorkflowArtifactDigestInput) -> ArtifactDigest {
     ArtifactDigest::try_new(format!(
-        "workflow:name={workflow_name};slug={workflow_slug};description={workflow_description};slices={};transitions={}",
-        slice_details_digest(workflow_slice_details.as_slice()),
-        transitions_digest(workflow_transitions.as_slice())
+        "workflow:name={};slug={};description={};slices={};transitions={};outcomes={};command_errors={};owned_definitions={};transition_evidences={}",
+        input.workflow_name,
+        input.workflow_slug,
+        input.workflow_description,
+        slice_details_digest(input.workflow_slice_details.as_slice()),
+        transitions_digest(input.workflow_transitions.as_slice()),
+        outcomes_digest(input.workflow_outcomes.as_slice()),
+        command_errors_digest(input.workflow_command_errors.as_slice()),
+        owned_definitions_digest(input.workflow_owned_definitions.as_slice()),
+        transition_evidences_digest(input.workflow_transition_evidences.as_slice())
     ))
     .unwrap_or_else(|error| {
         unreachable!("EMC generated artifact digest must be valid: {error}");
@@ -44,6 +60,7 @@ fn slice_details_digest(workflow_slice_details: &[WorkflowSliceDetail]) -> Strin
                 slice.name().as_ref(),
                 slice.kind().as_ref(),
                 slice.description().as_ref(),
+                slice.relationship().as_ref(),
             ]
             .join("|")
         })
@@ -56,14 +73,84 @@ fn transitions_digest(workflow_transitions: &[WorkflowTransitionRecord]) -> Stri
         .iter()
         .map(|transition| {
             format!(
-                "{}->{}:{}:{}:{}",
+                "{}->{}:{}:{}:{}:{}",
                 transition.source().as_ref(),
                 transition.target().as_ref(),
                 transition.kind().as_ref(),
                 transition.trigger().as_ref(),
                 transition
                     .rationale()
-                    .map_or("", |rationale| rationale.as_ref())
+                    .map_or("", |rationale| rationale.as_ref()),
+                transition
+                    .payload_contract()
+                    .map_or("", |payload_contract| payload_contract.as_ref())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn outcomes_digest(workflow_outcomes: &[WorkflowOutcomeRecord]) -> String {
+    workflow_outcomes
+        .iter()
+        .map(|outcome| {
+            format!(
+                "{}:{}:{}",
+                outcome.source_slice().as_ref(),
+                outcome.label().as_ref(),
+                outcome.externally_relevant()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn command_errors_digest(workflow_command_errors: &[WorkflowCommandErrorRecord]) -> String {
+    workflow_command_errors
+        .iter()
+        .map(|error| {
+            format!(
+                "{}:{}:{}",
+                error.source_slice().as_ref(),
+                error.command_name().as_ref(),
+                error.error_name().as_ref()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn owned_definitions_digest(
+    workflow_owned_definitions: &[WorkflowOwnedDefinitionRecord],
+) -> String {
+    workflow_owned_definitions
+        .iter()
+        .map(|definition| {
+            format!(
+                "{}:{}:{}",
+                definition.source_slice().as_ref(),
+                definition.definition_kind().as_ref(),
+                definition.definition_name().as_ref()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn transition_evidences_digest(
+    workflow_transition_evidences: &[WorkflowTransitionEvidenceRecord],
+) -> String {
+    workflow_transition_evidences
+        .iter()
+        .map(|evidence| {
+            format!(
+                "{}->{}:{}:{}:{}:{}",
+                evidence.source().as_ref(),
+                evidence.target().as_ref(),
+                evidence.kind().as_ref(),
+                evidence.trigger().as_ref(),
+                evidence.source_evidence().as_ref(),
+                evidence.target_evidence().as_ref()
             )
         })
         .collect::<Vec<_>>()

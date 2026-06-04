@@ -10,12 +10,45 @@ use serde_json::{Value, json};
 
 use crate::command;
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
+use crate::core::formal_slice_facts::{
+    CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, EmittedEventNames,
+    NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
+    NewCommandDefinition, NewCommandErrorDefinition, NewCommandInput, NewControlDefinition,
+    NewControlInputProvision, NewEventAttribute, NewEventDefinition, NewExternalPayloadDefinition,
+    NewNavigationTarget, NewOutcomeDefinition, NewReadModelDefinition, NewReadModelField,
+    NewSliceScenario, NewTranslationDefinition, NewViewDefinition, NewViewField, OutcomeEventNames,
+    ReadModelRelationshipFields, ScenarioKind, ScenarioStreamNames, ViewControls,
+};
 use crate::core::slice::NewSlice;
+use crate::core::types::{
+    SingletonRepeatBehavior, WorkflowCommandErrorRecord, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionRecord, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecord,
+};
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
-    parse_connection_kind, parse_model_description, parse_model_name, parse_project_name,
-    parse_project_path, parse_review_timestamp, parse_reviewer_id, parse_slice_kind,
-    parse_slice_slug, parse_transition_trigger_name, parse_workflow_slug,
+    parse_automation_name, parse_automation_reaction_description, parse_automation_trigger_name,
+    parse_bit_encoding_semantics, parse_board_connection_endpoint,
+    parse_board_connection_endpoint_kind, parse_board_element_declared_name,
+    parse_board_element_kind, parse_board_element_name, parse_board_lane_id,
+    parse_command_error_name, parse_command_error_names, parse_command_error_recovery_kind,
+    parse_command_input_source_description, parse_command_input_source_kind, parse_command_name,
+    parse_connection_kind, parse_contract_kind_name, parse_control_name,
+    parse_control_recovery_behavior, parse_covered_definition_name, parse_data_flow_source,
+    parse_data_flow_target, parse_datum_name, parse_datum_names, parse_event_attribute_name,
+    parse_event_attribute_source_field, parse_event_attribute_source_kind,
+    parse_event_attribute_source_name, parse_event_name, parse_event_names,
+    parse_model_description, parse_model_name, parse_navigation_target_name,
+    parse_navigation_target_type, parse_outcome_label_name, parse_payload_contract_name,
+    parse_project_name, parse_provenance_description, parse_read_model_derivation_rule,
+    parse_read_model_field_source_kind, parse_read_model_name, parse_read_model_transitive_rule,
+    parse_review_timestamp, parse_reviewer_id, parse_scenario_name, parse_scenario_step_text,
+    parse_singleton_repeat_behavior, parse_sketch_token, parse_slice_kind, parse_slice_slug,
+    parse_source_chain_hops, parse_stream_name, parse_stream_names, parse_transformation_semantics,
+    parse_transition_trigger_name, parse_translation_external_event_name, parse_translation_name,
+    parse_view_field_name, parse_view_field_source_kind, parse_view_name,
+    parse_workflow_owned_definition_kind, parse_workflow_owned_definition_name,
+    parse_workflow_slug, parse_workflow_transition_endpoint,
+    parse_workflow_transition_evidence_text, parse_workflow_transition_kind,
 };
 use crate::shell::{ShellError, interpret_collect_reports};
 
@@ -335,7 +368,7 @@ fn tools_list_result() -> Result<Value, ShellError> {
         ),
         Tool::new(
             "show_workflow",
-            "Show a modeled workflow document by workflow slug.",
+            "Show modeled Lean4 and Quint workflow artifacts by workflow slug.",
             schema_object(json!({
                     "type": "object",
                     "properties": {
@@ -349,7 +382,7 @@ fn tools_list_result() -> Result<Value, ShellError> {
         ),
         Tool::new(
             "show_slice",
-            "Show a modeled slice document by slice slug.",
+            "Show modeled Lean4 and Quint slice artifacts by slice slug.",
             schema_object(json!({
                     "type": "object",
                     "properties": {
@@ -358,20 +391,6 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         }
                     },
                     "required": ["slug"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "generate_site",
-            "Generate the human-browsable event model site.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "output": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["output"],
                     "additionalProperties": false
             })),
         ),
@@ -390,20 +409,6 @@ fn tools_list_result() -> Result<Value, ShellError> {
             schema_object(json!({
                     "type": "object",
                     "properties": {},
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "validate_event_model",
-            "Validate event model workflow or slice files.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "target": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["target"],
                     "additionalProperties": false
             })),
         ),
@@ -465,6 +470,107 @@ fn tools_list_result() -> Result<Value, ShellError> {
             })),
         ),
         Tool::new(
+            "add_workflow_outcome",
+            "Add a workflow composition outcome fact directly to Lean4 and Quint workflow artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "workflow": {
+                            "type": "string"
+                        },
+                        "source_slice": {
+                            "type": "string"
+                        },
+                        "label": {
+                            "type": "string"
+                        },
+                        "externally_relevant": {
+                            "type": "boolean"
+                        }
+                    },
+                    "required": ["workflow", "source_slice", "label", "externally_relevant"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_workflow_command_error",
+            "Add a workflow composition command-local error fact directly to Lean4 and Quint workflow artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "workflow": {
+                            "type": "string"
+                        },
+                        "source_slice": {
+                            "type": "string"
+                        },
+                        "command": {
+                            "type": "string"
+                        },
+                        "error": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["workflow", "source_slice", "command", "error"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_workflow_owned_definition",
+            "Add a workflow composition ownership fact directly to Lean4 and Quint workflow artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "workflow": {
+                            "type": "string"
+                        },
+                        "source_slice": {
+                            "type": "string"
+                        },
+                        "definition_kind": {
+                            "type": "string"
+                        },
+                        "definition_name": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["workflow", "source_slice", "definition_kind", "definition_name"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_workflow_transition_evidence",
+            "Add workflow transition legality evidence directly to Lean4 and Quint workflow artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "workflow": {
+                            "type": "string"
+                        },
+                        "from": {
+                            "type": "string"
+                        },
+                        "to": {
+                            "type": "string"
+                        },
+                        "via": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "source_evidence": {
+                            "type": "string"
+                        },
+                        "target_evidence": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["workflow", "from", "to", "via", "name", "source_evidence", "target_evidence"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
             "add_slice",
             "Add a business slice to a workflow composition.",
             schema_object(json!({
@@ -487,6 +593,460 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         }
                     },
                     "required": ["workflow", "slug", "name", "type", "description"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_slice_scenario",
+            "Add an acceptance or contract GWT scenario directly to Lean4 and Quint slice artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slice": {
+                            "type": "string"
+                        },
+                        "kind": {
+                            "type": "string",
+                            "enum": ["acceptance", "contract"]
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "given": {
+                            "type": "string"
+                        },
+                        "when": {
+                            "type": "string"
+                        },
+                        "then": {
+                            "type": "string"
+                        },
+                        "contract_kind": {
+                            "type": "string"
+                        },
+                        "covered_definition": {
+                            "type": "string"
+                        },
+                        "read_streams": {
+                            "type": "string"
+                        },
+                        "written_streams": {
+                            "type": "string"
+                        },
+                        "error_references": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slice", "kind", "name", "given", "when", "then"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_bit_level_data_flow",
+            "Add source, transformation, target, and bit-encoding semantics directly to Lean4 and Quint slice artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slice": {
+                            "type": "string"
+                        },
+                        "datum": {
+                            "type": "string"
+                        },
+                        "source": {
+                            "type": "string"
+                        },
+                        "transformation": {
+                            "type": "string"
+                        },
+                        "target": {
+                            "type": "string"
+                        },
+                        "bit_encoding": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slice", "datum", "source", "transformation", "target", "bit_encoding"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_board_element",
+            "Add a board element causal-shape fact directly to Lean4 and Quint slice artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slice": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "kind": {
+                            "type": "string"
+                        },
+                        "lane": {
+                            "type": "string"
+                        },
+                        "declared_name": {
+                            "type": "string"
+                        },
+                        "main_path": {
+                            "type": "boolean"
+                        }
+                    },
+                    "required": ["slice", "name", "kind", "lane", "declared_name", "main_path"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_board_connection",
+            "Add a board connection causal-shape fact directly to Lean4 and Quint slice artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slice": {
+                            "type": "string"
+                        },
+                        "source": {
+                            "type": "string"
+                        },
+                        "source_kind": {
+                            "type": "string"
+                        },
+                        "target": {
+                            "type": "string"
+                        },
+                        "target_kind": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slice", "source", "source_kind", "target", "target_kind"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_command_definition",
+            "Add a command, input provenance, and emitted events directly to Lean4 and Quint slice artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slice": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "input": {
+                            "type": "string"
+                        },
+                        "input_source": {
+                            "type": "string"
+                        },
+                        "input_description": {
+                            "type": "string"
+                        },
+                        "input_provenance": {
+                            "type": "string"
+                        },
+                        "emits": {
+                            "type": "string"
+                        },
+                        "singleton": {
+                            "type": "boolean"
+                        },
+                        "repeat_behavior": {
+                            "type": "string"
+                        },
+                        "error": {
+                            "type": "string"
+                        },
+                        "error_scenario": {
+                            "type": "string"
+                        },
+                        "error_recovery": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slice", "name", "input", "input_source", "input_description", "input_provenance", "emits"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_automation_definition",
+            "Add an automation trigger, issued command, handled errors, and reaction semantics directly to Lean4 and Quint slice artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slice": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "trigger": {
+                            "type": "string"
+                        },
+                        "command": {
+                            "type": "string"
+                        },
+                        "handled_errors": {
+                            "type": "string"
+                        },
+                        "reaction": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slice", "name", "trigger", "command", "handled_errors", "reaction"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_translation_definition",
+            "Add a translation external event, payload contract, and target command directly to Lean4 and Quint slice artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slice": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "external_event": {
+                            "type": "string"
+                        },
+                        "payload_contract": {
+                            "type": "string"
+                        },
+                        "command": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slice", "name", "external_event", "payload_contract", "command"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_external_payload_definition",
+            "Add an external payload field contract directly to Lean4 and Quint slice artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slice": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "field": {
+                            "type": "string"
+                        },
+                        "field_provenance": {
+                            "type": "string"
+                        },
+                        "bit_encoding": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slice", "name", "field", "field_provenance", "bit_encoding"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_event_definition",
+            "Add an event, stream, attribute source, and provenance directly to Lean4 and Quint slice artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slice": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "stream": {
+                            "type": "string"
+                        },
+                        "attribute": {
+                            "type": "string"
+                        },
+                        "attribute_source": {
+                            "type": "string"
+                        },
+                        "attribute_source_name": {
+                            "type": "string"
+                        },
+                        "attribute_source_field": {
+                            "type": "string"
+                        },
+                        "attribute_provenance": {
+                            "type": "string"
+                        },
+                        "observed": {
+                            "type": "boolean"
+                        }
+                    },
+                    "required": ["slice", "name", "stream", "attribute", "attribute_source", "attribute_source_name", "attribute_source_field", "attribute_provenance"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_outcome_definition",
+            "Add an outcome label and backing event set directly to Lean4 and Quint slice artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slice": {
+                            "type": "string"
+                        },
+                        "label": {
+                            "type": "string"
+                        },
+                        "events": {
+                            "type": "string"
+                        },
+                        "externally_relevant": {
+                            "type": "boolean"
+                        }
+                    },
+                    "required": ["slice", "label", "events", "externally_relevant"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_read_model_definition",
+            "Add a read model, field source, and field provenance directly to Lean4 and Quint slice artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slice": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "field": {
+                            "type": "string"
+                        },
+                        "field_source": {
+                            "type": "string"
+                        },
+                        "source_event": {
+                            "type": "string"
+                        },
+                        "source_attribute": {
+                            "type": "string"
+                        },
+                        "derivation_rule": {
+                            "type": "string"
+                        },
+                        "derivation_scenario": {
+                            "type": "string"
+                        },
+                        "absence_event": {
+                            "type": "string"
+                        },
+                        "absence_scenario": {
+                            "type": "string"
+                        },
+                        "field_provenance": {
+                            "type": "string"
+                        },
+                        "transitive": {
+                            "type": "boolean"
+                        },
+                        "relationship_fields": {
+                            "type": "string"
+                        },
+                        "transitive_rule": {
+                            "type": "string"
+                        },
+                        "example_scenario": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slice", "name", "field", "field_source", "field_provenance"],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "add_view_definition",
+            "Add a view field plus command control, input provenance, error handling, and navigation directly to Lean4 and Quint slice artifacts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "slice": {
+                            "type": "string"
+                        },
+                        "name": {
+                            "type": "string"
+                        },
+                        "read_model": {
+                            "type": "string"
+                        },
+                        "field": {
+                            "type": "string"
+                        },
+                        "source_field": {
+                            "type": "string"
+                        },
+                        "sketch_token": {
+                            "type": "string"
+                        },
+                        "field_provenance": {
+                            "type": "string"
+                        },
+                        "bit_encoding": {
+                            "type": "string"
+                        },
+                        "control": {
+                            "type": "string"
+                        },
+                        "control_command": {
+                            "type": "string"
+                        },
+                        "control_input": {
+                            "type": "string"
+                        },
+                        "control_input_source": {
+                            "type": "string"
+                        },
+                        "control_input_description": {
+                            "type": "string"
+                        },
+                        "control_input_sketch_token": {
+                            "type": "string"
+                        },
+                        "control_input_visible": {
+                            "type": "boolean"
+                        },
+                        "control_input_decision": {
+                            "type": "boolean"
+                        },
+                        "handled_errors": {
+                            "type": "string"
+                        },
+                        "recovery_behavior": {
+                            "type": "string"
+                        },
+                        "control_sketch_token": {
+                            "type": "string"
+                        },
+                        "navigation_type": {
+                            "type": "string"
+                        },
+                        "navigation_target": {
+                            "type": "string"
+                        },
+                        "external_system": {
+                            "type": "string"
+                        },
+                        "handoff_contract": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["slice", "name", "read_model", "field", "source_field", "sketch_token", "field_provenance", "bit_encoding", "control", "control_command", "control_input", "control_input_source", "control_input_description", "control_input_sketch_token", "control_input_visible", "control_input_decision", "handled_errors", "recovery_behavior", "control_sketch_token", "navigation_type", "navigation_target"],
                     "additionalProperties": false
             })),
         ),
@@ -631,6 +1191,9 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         },
                         "reason": {
                             "type": "string"
+                        },
+                        "payload_contract": {
+                            "type": "string"
                         }
                     },
                     "required": ["workflow", "from", "via", "name"],
@@ -713,10 +1276,6 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
             id,
             show_slice_tool_text(request),
         ))),
-        "generate_site" => Ok(Some(tool_call_result_response(
-            id,
-            generate_site_tool_text(request),
-        ))),
         "check_project" => Ok(Some(tool_call_result_response(
             id,
             check_project_tool_text(),
@@ -724,10 +1283,6 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "verify_project" => Ok(Some(tool_call_result_response(
             id,
             verify_project_tool_text(),
-        ))),
-        "validate_event_model" => Ok(Some(tool_call_result_response(
-            id,
-            validate_event_model_tool_text(request),
         ))),
         "review_gate" => Ok(Some(tool_call_result_response(
             id,
@@ -741,9 +1296,73 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
             id,
             add_workflow_tool_text(request),
         ))),
+        "add_workflow_outcome" => Ok(Some(tool_call_result_response(
+            id,
+            add_workflow_outcome_tool_text(request),
+        ))),
+        "add_workflow_command_error" => Ok(Some(tool_call_result_response(
+            id,
+            add_workflow_command_error_tool_text(request),
+        ))),
+        "add_workflow_owned_definition" => Ok(Some(tool_call_result_response(
+            id,
+            add_workflow_owned_definition_tool_text(request),
+        ))),
+        "add_workflow_transition_evidence" => Ok(Some(tool_call_result_response(
+            id,
+            add_workflow_transition_evidence_tool_text(request),
+        ))),
         "add_slice" => Ok(Some(tool_call_result_response(
             id,
             add_slice_tool_text(request),
+        ))),
+        "add_slice_scenario" => Ok(Some(tool_call_result_response(
+            id,
+            add_slice_scenario_tool_text(request),
+        ))),
+        "add_bit_level_data_flow" => Ok(Some(tool_call_result_response(
+            id,
+            add_bit_level_data_flow_tool_text(request),
+        ))),
+        "add_board_element" => Ok(Some(tool_call_result_response(
+            id,
+            add_board_element_tool_text(request),
+        ))),
+        "add_board_connection" => Ok(Some(tool_call_result_response(
+            id,
+            add_board_connection_tool_text(request),
+        ))),
+        "add_command_definition" => Ok(Some(tool_call_result_response(
+            id,
+            add_command_definition_tool_text(request),
+        ))),
+        "add_automation_definition" => Ok(Some(tool_call_result_response(
+            id,
+            add_automation_definition_tool_text(request),
+        ))),
+        "add_translation_definition" => Ok(Some(tool_call_result_response(
+            id,
+            add_translation_definition_tool_text(request),
+        ))),
+        "add_event_definition" => Ok(Some(tool_call_result_response(
+            id,
+            add_event_definition_tool_text(request),
+        ))),
+        "add_outcome_definition" => Ok(Some(tool_call_result_response(
+            id,
+            add_outcome_definition_tool_text(request),
+        ))),
+        "add_external_payload_definition" => Ok(Some(tool_call_result_response(
+            id,
+            add_external_payload_definition_tool_text(request),
+        ))),
+        "add_read_model_definition" => Ok(Some(tool_call_result_response(
+            id,
+            add_read_model_definition_tool_text(request),
+        ))),
+        "add_view_definition" => Ok(Some(tool_call_result_response(
+            id,
+            add_view_definition_tool_text(request),
         ))),
         "update_workflow" => Ok(Some(tool_call_result_response(
             id,
@@ -844,38 +1463,12 @@ fn show_slice_tool_text(request: &Value) -> Result<String, ShellError> {
     interpret_collect_reports(command::show_slice(slug)).map(|reports| reports.join("\n"))
 }
 
-fn generate_site_tool_text(request: &Value) -> Result<String, ShellError> {
-    let output = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .and_then(|arguments| arguments.get("output"))
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("generate_site requires output"))
-        .and_then(|output| {
-            parse_project_path(output).map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    interpret_collect_reports(command::generate_site(output)).map(|reports| reports.join("\n"))
-}
-
 fn check_project_tool_text() -> Result<String, ShellError> {
     interpret_collect_reports(command::check_project()).map(|reports| reports.join("\n"))
 }
 
 fn verify_project_tool_text() -> Result<String, ShellError> {
     interpret_collect_reports(command::verify()).map(|reports| reports.join("\n"))
-}
-
-fn validate_event_model_tool_text(request: &Value) -> Result<String, ShellError> {
-    let target = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .and_then(|arguments| arguments.get("target"))
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("validate_event_model requires target"))
-        .and_then(|target| {
-            parse_project_path(target).map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    interpret_collect_reports(command::validate(target)).map(|reports| reports.join("\n"))
 }
 
 fn review_gate_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -964,6 +1557,222 @@ fn add_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
     .map(|reports| reports.join("\n"))
 }
 
+fn add_workflow_outcome_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_workflow_outcome requires arguments"))?;
+    let workflow_slug = arguments
+        .get("workflow")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_outcome requires workflow"))
+        .and_then(|raw_workflow| {
+            parse_workflow_slug(raw_workflow)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let source_slice = arguments
+        .get("source_slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_outcome requires source_slice"))
+        .and_then(|raw_source_slice| {
+            WorkflowTransitionEndpoint::try_new(raw_source_slice.to_owned())
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let label = arguments
+        .get("label")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_outcome requires label"))
+        .and_then(|raw_label| {
+            parse_outcome_label_name(raw_label)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let externally_relevant = arguments
+        .get("externally_relevant")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| ShellError::message("add_workflow_outcome requires externally_relevant"))?;
+
+    interpret_collect_reports(command::add_workflow_outcome(
+        workflow_slug,
+        WorkflowOutcomeRecord::new(source_slice, label, externally_relevant),
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn add_workflow_command_error_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_workflow_command_error requires arguments"))?;
+    let workflow_slug = arguments
+        .get("workflow")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_command_error requires workflow"))
+        .and_then(|raw_workflow| {
+            parse_workflow_slug(raw_workflow)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let source_slice = arguments
+        .get("source_slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_command_error requires source_slice"))
+        .and_then(|raw_source_slice| {
+            WorkflowTransitionEndpoint::try_new(raw_source_slice.to_owned())
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let command_name = arguments
+        .get("command")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_command_error requires command"))
+        .and_then(|raw_command| {
+            parse_command_name(raw_command).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let error_name = arguments
+        .get("error")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_command_error requires error"))
+        .and_then(|raw_error| {
+            parse_command_error_name(raw_error)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(command::add_workflow_command_error(
+        workflow_slug,
+        WorkflowCommandErrorRecord::new(source_slice, command_name, error_name),
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn add_workflow_owned_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_workflow_owned_definition requires arguments"))?;
+    let workflow_slug = arguments
+        .get("workflow")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_owned_definition requires workflow"))
+        .and_then(|raw_workflow| {
+            parse_workflow_slug(raw_workflow)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let source_slice = arguments
+        .get("source_slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_owned_definition requires source_slice"))
+        .and_then(|raw_source_slice| {
+            WorkflowTransitionEndpoint::try_new(raw_source_slice.to_owned())
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let definition_kind = arguments
+        .get("definition_kind")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ShellError::message("add_workflow_owned_definition requires definition_kind")
+        })
+        .and_then(|raw_definition_kind| {
+            parse_workflow_owned_definition_kind(raw_definition_kind)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let definition_name = arguments
+        .get("definition_name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ShellError::message("add_workflow_owned_definition requires definition_name")
+        })
+        .and_then(|raw_definition_name| {
+            parse_workflow_owned_definition_name(raw_definition_name)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(command::add_workflow_owned_definition(
+        workflow_slug,
+        WorkflowOwnedDefinitionRecord::new(source_slice, definition_kind, definition_name),
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn add_workflow_transition_evidence_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| {
+            ShellError::message("add_workflow_transition_evidence requires arguments")
+        })?;
+    let workflow_slug = arguments
+        .get("workflow")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_transition_evidence requires workflow"))
+        .and_then(|raw_workflow| {
+            parse_workflow_slug(raw_workflow)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let source = arguments
+        .get("from")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_transition_evidence requires from"))
+        .and_then(|raw_source| {
+            parse_workflow_transition_endpoint(raw_source)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let target = arguments
+        .get("to")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_transition_evidence requires to"))
+        .and_then(|raw_target| {
+            parse_workflow_transition_endpoint(raw_target)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let kind = arguments
+        .get("via")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_transition_evidence requires via"))
+        .and_then(|raw_kind| {
+            parse_workflow_transition_kind(raw_kind)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let trigger = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_workflow_transition_evidence requires name"))
+        .and_then(|raw_trigger| {
+            parse_transition_trigger_name(raw_trigger)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let source_evidence = arguments
+        .get("source_evidence")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ShellError::message("add_workflow_transition_evidence requires source_evidence")
+        })
+        .and_then(|raw_source_evidence| {
+            parse_workflow_transition_evidence_text(raw_source_evidence)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let target_evidence = arguments
+        .get("target_evidence")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ShellError::message("add_workflow_transition_evidence requires target_evidence")
+        })
+        .and_then(|raw_target_evidence| {
+            parse_workflow_transition_evidence_text(raw_target_evidence)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(command::add_workflow_transition_evidence(
+        workflow_slug,
+        WorkflowTransitionEvidenceRecord::new(
+            source,
+            target,
+            kind,
+            trigger,
+            source_evidence,
+            target_evidence,
+        ),
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
 fn add_slice_tool_text(request: &Value) -> Result<String, ShellError> {
     let arguments = request
         .get("params")
@@ -1013,6 +1822,1143 @@ fn add_slice_tool_text(request: &Value) -> Result<String, ShellError> {
         slice_description,
         slice_kind,
     )))
+    .map(|reports| reports.join("\n"))
+}
+
+fn add_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_slice_scenario requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_slice_scenario requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let scenario_kind = arguments
+        .get("kind")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_slice_scenario requires kind"))?;
+    let name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_slice_scenario requires name"))
+        .and_then(|raw_name| {
+            parse_scenario_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let given = arguments
+        .get("given")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_slice_scenario requires given"))
+        .and_then(|raw_given| {
+            parse_scenario_step_text(raw_given)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let when = arguments
+        .get("when")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_slice_scenario requires when"))
+        .and_then(|raw_when| {
+            parse_scenario_step_text(raw_when)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let then = arguments
+        .get("then")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_slice_scenario requires then"))
+        .and_then(|raw_then| {
+            parse_scenario_step_text(raw_then)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    let scenario = match scenario_kind {
+        "acceptance" => NewSliceScenario::new(
+            slice_slug,
+            ScenarioKind::acceptance(),
+            name,
+            given,
+            when,
+            then,
+        ),
+        "contract" => {
+            let contract_kind = arguments
+                .get("contract_kind")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ShellError::message("add_slice_scenario requires contract_kind"))
+                .and_then(|raw_contract_kind| {
+                    parse_contract_kind_name(raw_contract_kind)
+                        .map_err(|error| ShellError::message(error.to_string()))
+                })?;
+            let covered_definition = arguments
+                .get("covered_definition")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    ShellError::message("add_slice_scenario requires covered_definition")
+                })
+                .and_then(|raw_covered_definition| {
+                    parse_covered_definition_name(raw_covered_definition)
+                        .map_err(|error| ShellError::message(error.to_string()))
+                })?;
+            NewSliceScenario::new_contract(
+                slice_slug,
+                name,
+                given,
+                when,
+                then,
+                contract_kind,
+                covered_definition,
+            )
+        }
+        _ => {
+            return Err(ShellError::message(format!(
+                "invalid scenario kind: {scenario_kind}"
+            )));
+        }
+    };
+    let scenario = apply_optional_scenario_streams(arguments, scenario)?;
+    let scenario = apply_optional_scenario_error_references(arguments, scenario)?;
+
+    interpret_collect_reports(command::add_slice_scenario(scenario))
+        .map(|reports| reports.join("\n"))
+}
+
+fn apply_optional_scenario_streams(
+    arguments: &Value,
+    scenario: NewSliceScenario,
+) -> Result<NewSliceScenario, ShellError> {
+    match (
+        arguments.get("read_streams").and_then(Value::as_str),
+        arguments.get("written_streams").and_then(Value::as_str),
+    ) {
+        (Some(raw_read_streams), Some(raw_written_streams)) => {
+            let read_streams = parse_stream_names(raw_read_streams)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let written_streams = parse_stream_names(raw_written_streams)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(scenario.with_streams(
+                ScenarioStreamNames::from_streams(read_streams),
+                ScenarioStreamNames::from_streams(written_streams),
+            ))
+        }
+        (None, None) => Ok(scenario),
+        _ => Err(ShellError::message(
+            "add_slice_scenario requires read_streams and written_streams together",
+        )),
+    }
+}
+
+fn apply_optional_scenario_error_references(
+    arguments: &Value,
+    scenario: NewSliceScenario,
+) -> Result<NewSliceScenario, ShellError> {
+    if let Some(raw_error_references) = arguments.get("error_references").and_then(Value::as_str) {
+        let error_references = parse_command_error_names(raw_error_references)
+            .map_err(|error| ShellError::message(error.to_string()))?;
+        Ok(scenario.with_error_references(CommandErrorNames::from_names(error_references)))
+    } else {
+        Ok(scenario)
+    }
+}
+
+fn add_bit_level_data_flow_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let datum = arguments
+        .get("datum")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires datum"))
+        .and_then(|raw_datum| {
+            parse_datum_name(raw_datum).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let source = arguments
+        .get("source")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires source"))
+        .and_then(|raw_source| {
+            parse_data_flow_source(raw_source)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let transformation = arguments
+        .get("transformation")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires transformation"))
+        .and_then(|raw_transformation| {
+            parse_transformation_semantics(raw_transformation)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let target = arguments
+        .get("target")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires target"))
+        .and_then(|raw_target| {
+            parse_data_flow_target(raw_target)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let bit_encoding = arguments
+        .get("bit_encoding")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires bit_encoding"))
+        .and_then(|raw_bit_encoding| {
+            parse_bit_encoding_semantics(raw_bit_encoding)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(command::add_bit_level_data_flow(NewBitLevelDataFlow::new(
+        slice_slug,
+        datum,
+        source,
+        transformation,
+        target,
+        bit_encoding,
+    )))
+    .map(|reports| reports.join("\n"))
+}
+
+fn add_board_element_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_board_element requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_board_element requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_board_element requires name"))
+        .and_then(|raw_name| {
+            parse_board_element_name(raw_name)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let kind = arguments
+        .get("kind")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_board_element requires kind"))
+        .and_then(|raw_kind| {
+            parse_board_element_kind(raw_kind)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let lane = arguments
+        .get("lane")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_board_element requires lane"))
+        .and_then(|raw_lane| {
+            parse_board_lane_id(raw_lane).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let declared_name = arguments
+        .get("declared_name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_board_element requires declared_name"))
+        .and_then(|raw_declared_name| {
+            parse_board_element_declared_name(raw_declared_name)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let main_path = arguments
+        .get("main_path")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| ShellError::message("add_board_element requires main_path"))?;
+
+    interpret_collect_reports(command::add_board_element(NewBoardElement::new(
+        slice_slug,
+        name,
+        kind,
+        lane,
+        declared_name,
+        main_path,
+    )))
+    .map(|reports| reports.join("\n"))
+}
+
+fn add_board_connection_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_board_connection requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_board_connection requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let source = arguments
+        .get("source")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_board_connection requires source"))
+        .and_then(|raw_source| {
+            parse_board_connection_endpoint(raw_source)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let source_kind = arguments
+        .get("source_kind")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_board_connection requires source_kind"))
+        .and_then(|raw_source_kind| {
+            parse_board_connection_endpoint_kind(raw_source_kind)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let target = arguments
+        .get("target")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_board_connection requires target"))
+        .and_then(|raw_target| {
+            parse_board_connection_endpoint(raw_target)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let target_kind = arguments
+        .get("target_kind")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_board_connection requires target_kind"))
+        .and_then(|raw_target_kind| {
+            parse_board_connection_endpoint_kind(raw_target_kind)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(command::add_board_connection(NewBoardConnection::new(
+        slice_slug,
+        source,
+        source_kind,
+        target,
+        target_kind,
+    )))
+    .map(|reports| reports.join("\n"))
+}
+
+fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_command_definition requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_command_definition requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let command_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_command_definition requires name"))
+        .and_then(|raw_name| {
+            parse_command_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let input_name = arguments
+        .get("input")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_command_definition requires input"))
+        .and_then(|raw_input| {
+            parse_datum_name(raw_input).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let input_source = arguments
+        .get("input_source")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_command_definition requires input_source"))
+        .and_then(|raw_source| {
+            parse_command_input_source_kind(raw_source)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let input_description = arguments
+        .get("input_description")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_command_definition requires input_description"))
+        .and_then(|raw_description| {
+            parse_command_input_source_description(raw_description)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let provenance_chain = arguments
+        .get("input_provenance")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_command_definition requires input_provenance"))
+        .and_then(|raw_provenance| {
+            parse_source_chain_hops(raw_provenance)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let emitted_events = arguments
+        .get("emits")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_command_definition requires emits"))
+        .and_then(|raw_emits| {
+            parse_event_names(raw_emits).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let command_errors = parse_optional_command_errors(arguments)?;
+
+    let singleton_repeat_behavior = parse_optional_singleton_repeat_behavior(arguments)?;
+    let command_definition = NewCommandDefinition::new(
+        slice_slug,
+        command_name,
+        NewCommandInput::new(
+            input_name,
+            input_source,
+            input_description,
+            CommandInputProvenanceChain::from_hops(provenance_chain),
+        ),
+        EmittedEventNames::from_events(emitted_events),
+    )
+    .with_errors(command_errors);
+    let command_definition = singleton_repeat_behavior
+        .map_or(command_definition.clone(), |behavior| {
+            command_definition.with_singleton_repeat_behavior(behavior)
+        });
+
+    interpret_collect_reports(command::add_command_definition(command_definition))
+        .map(|reports| reports.join("\n"))
+}
+
+fn parse_optional_singleton_repeat_behavior(
+    arguments: &Value,
+) -> Result<Option<SingletonRepeatBehavior>, ShellError> {
+    match (
+        arguments.get("singleton").and_then(Value::as_bool),
+        arguments.get("repeat_behavior").and_then(Value::as_str),
+    ) {
+        (Some(true), Some(repeat_behavior)) => parse_singleton_repeat_behavior(repeat_behavior)
+            .map(Some)
+            .map_err(|error| ShellError::message(error.to_string())),
+        (Some(false), _) | (None, None) => Ok(None),
+        (Some(true), None) => Err(ShellError::message(
+            "add_command_definition requires repeat_behavior when singleton is true",
+        )),
+        (None, Some(_)) => Err(ShellError::message(
+            "add_command_definition requires singleton when repeat_behavior is provided",
+        )),
+    }
+}
+
+fn parse_optional_command_errors(arguments: &Value) -> Result<CommandErrorDefinitions, ShellError> {
+    let maybe_error = arguments.get("error").and_then(Value::as_str);
+    let maybe_scenario = arguments.get("error_scenario").and_then(Value::as_str);
+    let maybe_recovery = arguments.get("error_recovery").and_then(Value::as_str);
+
+    match (maybe_error, maybe_scenario, maybe_recovery) {
+        (None, None, None) => Ok(CommandErrorDefinitions::empty()),
+        (Some(error), Some(scenario), Some(recovery)) => {
+            let command_error = parse_command_error_name(error)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let command_error_scenario = parse_scenario_name(scenario)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let command_error_recovery = parse_command_error_recovery_kind(recovery)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(CommandErrorDefinitions::from_errors([
+                NewCommandErrorDefinition::new(
+                    command_error,
+                    command_error_scenario,
+                    command_error_recovery,
+                ),
+            ]))
+        }
+        _ => Err(ShellError::message(
+            "add_command_definition requires error, error_scenario, and error_recovery together",
+        )),
+    }
+}
+
+fn add_automation_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_automation_definition requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_automation_definition requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let automation_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_automation_definition requires name"))
+        .and_then(|raw_name| {
+            parse_automation_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let trigger_name = arguments
+        .get("trigger")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_automation_definition requires trigger"))
+        .and_then(|raw_trigger| {
+            parse_automation_trigger_name(raw_trigger)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let command_name = arguments
+        .get("command")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_automation_definition requires command"))
+        .and_then(|raw_command| {
+            parse_command_name(raw_command).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let handled_errors = arguments
+        .get("handled_errors")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_automation_definition requires handled_errors"))
+        .and_then(|raw_errors| {
+            parse_command_error_names(raw_errors)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let reaction_description = arguments
+        .get("reaction")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_automation_definition requires reaction"))
+        .and_then(|raw_reaction| {
+            parse_automation_reaction_description(raw_reaction)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(command::add_automation_definition(
+        NewAutomationDefinition::new(
+            slice_slug,
+            automation_name,
+            trigger_name,
+            command_name,
+            CommandErrorNames::from_names(handled_errors),
+            reaction_description,
+        ),
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn add_translation_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_translation_definition requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_translation_definition requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let translation_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_translation_definition requires name"))
+        .and_then(|raw_name| {
+            parse_translation_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let external_event_name = arguments
+        .get("external_event")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_translation_definition requires external_event"))
+        .and_then(|raw_external_event| {
+            parse_translation_external_event_name(raw_external_event)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let payload_contract_name = arguments
+        .get("payload_contract")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_translation_definition requires payload_contract"))
+        .and_then(|raw_payload_contract| {
+            parse_payload_contract_name(raw_payload_contract)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let command_name = arguments
+        .get("command")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_translation_definition requires command"))
+        .and_then(|raw_command| {
+            parse_command_name(raw_command).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(command::add_translation_definition(
+        NewTranslationDefinition::new(
+            slice_slug,
+            translation_name,
+            external_event_name,
+            payload_contract_name,
+            command_name,
+        ),
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn add_external_payload_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_external_payload_definition requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_external_payload_definition requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let payload_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_external_payload_definition requires name"))
+        .and_then(|raw_name| {
+            parse_event_attribute_source_name(raw_name)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let payload_field = arguments
+        .get("field")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_external_payload_definition requires field"))
+        .and_then(|raw_field| {
+            parse_event_attribute_source_field(raw_field)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let field_provenance = arguments
+        .get("field_provenance")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ShellError::message("add_external_payload_definition requires field_provenance")
+        })
+        .and_then(|raw_field_provenance| {
+            parse_provenance_description(raw_field_provenance)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let bit_encoding = arguments
+        .get("bit_encoding")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_external_payload_definition requires bit_encoding"))
+        .and_then(|raw_bit_encoding| {
+            parse_bit_encoding_semantics(raw_bit_encoding)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(command::add_external_payload_definition(
+        NewExternalPayloadDefinition::new(
+            slice_slug,
+            payload_name,
+            payload_field,
+            field_provenance,
+            bit_encoding,
+        ),
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn add_outcome_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_outcome_definition requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_outcome_definition requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let label = arguments
+        .get("label")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_outcome_definition requires label"))
+        .and_then(|raw_label| {
+            parse_outcome_label_name(raw_label)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let events = arguments
+        .get("events")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_outcome_definition requires events"))
+        .and_then(|raw_events| {
+            parse_event_names(raw_events).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let externally_relevant = arguments
+        .get("externally_relevant")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| {
+            ShellError::message("add_outcome_definition requires externally_relevant")
+        })?;
+
+    interpret_collect_reports(command::add_outcome_definition(NewOutcomeDefinition::new(
+        slice_slug,
+        label,
+        OutcomeEventNames::from_events(events),
+        externally_relevant,
+    )))
+    .map(|reports| reports.join("\n"))
+}
+
+fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_event_definition requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_event_definition requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let event_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_event_definition requires name"))
+        .and_then(|raw_name| {
+            parse_event_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let stream_name = arguments
+        .get("stream")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_event_definition requires stream"))
+        .and_then(|raw_stream| {
+            parse_stream_name(raw_stream).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let attribute_name = arguments
+        .get("attribute")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_event_definition requires attribute"))
+        .and_then(|raw_attribute| {
+            parse_event_attribute_name(raw_attribute)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let attribute_source_kind = arguments
+        .get("attribute_source")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_event_definition requires attribute_source"))
+        .and_then(|raw_attribute_source| {
+            parse_event_attribute_source_kind(raw_attribute_source)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let attribute_source_name = arguments
+        .get("attribute_source_name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_event_definition requires attribute_source_name"))
+        .and_then(|raw_attribute_source_name| {
+            parse_event_attribute_source_name(raw_attribute_source_name)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let attribute_source_field = arguments
+        .get("attribute_source_field")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_event_definition requires attribute_source_field"))
+        .and_then(|raw_attribute_source_field| {
+            parse_event_attribute_source_field(raw_attribute_source_field)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let provenance_description = arguments
+        .get("attribute_provenance")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_event_definition requires attribute_provenance"))
+        .and_then(|raw_provenance| {
+            parse_provenance_description(raw_provenance)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    let attribute = NewEventAttribute::new(
+        attribute_name,
+        attribute_source_kind,
+        attribute_source_name,
+        attribute_source_field,
+        provenance_description,
+    );
+    let event = if arguments
+        .get("observed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        NewEventDefinition::new_observed(slice_slug, event_name, stream_name, attribute)
+    } else {
+        NewEventDefinition::new(slice_slug, event_name, stream_name, attribute)
+    };
+
+    interpret_collect_reports(command::add_event_definition(event))
+        .map(|reports| reports.join("\n"))
+}
+
+fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_read_model_definition requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_read_model_definition requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let read_model_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_read_model_definition requires name"))
+        .and_then(|raw_name| {
+            parse_read_model_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let field_name = arguments
+        .get("field")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_read_model_definition requires field"))
+        .and_then(|raw_field| {
+            parse_datum_name(raw_field).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let field_source_kind = arguments
+        .get("field_source")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_read_model_definition requires field_source"))
+        .and_then(|raw_field_source| {
+            parse_read_model_field_source_kind(raw_field_source)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let provenance_description = arguments
+        .get("field_provenance")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_read_model_definition requires field_provenance"))
+        .and_then(|raw_provenance| {
+            parse_provenance_description(raw_provenance)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let source_event = arguments.get("source_event").and_then(Value::as_str);
+    let source_attribute = arguments.get("source_attribute").and_then(Value::as_str);
+    let derivation_rule = arguments.get("derivation_rule").and_then(Value::as_str);
+    let derivation_scenario = arguments.get("derivation_scenario").and_then(Value::as_str);
+    let absence_event = arguments.get("absence_event").and_then(Value::as_str);
+    let absence_scenario = arguments.get("absence_scenario").and_then(Value::as_str);
+    let read_model_field = match (
+        source_event,
+        source_attribute,
+        derivation_rule,
+        derivation_scenario,
+        absence_event,
+        absence_scenario,
+    ) {
+        (Some(raw_source_event), Some(raw_source_attribute), None, None, None, None) => {
+            NewReadModelField::new(
+                field_name,
+                field_source_kind,
+                parse_event_name(raw_source_event)
+                    .map_err(|error| ShellError::message(error.to_string()))?,
+                parse_event_attribute_name(raw_source_attribute)
+                    .map_err(|error| ShellError::message(error.to_string()))?,
+                provenance_description,
+            )
+        }
+        (None, None, Some(raw_derivation_rule), Some(raw_derivation_scenario), None, None) => {
+            NewReadModelField::new_derivation(
+                field_name,
+                field_source_kind,
+                parse_read_model_derivation_rule(raw_derivation_rule)
+                    .map_err(|error| ShellError::message(error.to_string()))?,
+                parse_scenario_name(raw_derivation_scenario)
+                    .map_err(|error| ShellError::message(error.to_string()))?,
+                provenance_description,
+            )
+        }
+        (None, None, None, None, Some(raw_absence_event), Some(raw_absence_scenario)) => {
+            NewReadModelField::new_absence_default(
+                field_name,
+                field_source_kind,
+                parse_event_name(raw_absence_event)
+                    .map_err(|error| ShellError::message(error.to_string()))?,
+                parse_scenario_name(raw_absence_scenario)
+                    .map_err(|error| ShellError::message(error.to_string()))?,
+                provenance_description,
+            )
+        }
+        (Some(_), None, _, _, _, _) | (None, Some(_), _, _, _, _) => {
+            return Err(ShellError::message(
+                "add_read_model_definition requires source_event and source_attribute together",
+            ));
+        }
+        (_, _, Some(_), None, _, _) | (_, _, None, Some(_), _, _) => {
+            return Err(ShellError::message(
+                "add_read_model_definition requires derivation_rule and derivation_scenario together",
+            ));
+        }
+        (_, _, _, _, Some(_), None) | (_, _, _, _, None, Some(_)) => {
+            return Err(ShellError::message(
+                "add_read_model_definition requires absence_event and absence_scenario together",
+            ));
+        }
+        _ => {
+            return Err(ShellError::message(
+                "add_read_model_definition requires source_event/source_attribute, derivation_rule/derivation_scenario, or absence_event/absence_scenario",
+            ));
+        }
+    };
+
+    let read_model = NewReadModelDefinition::new(slice_slug, read_model_name, read_model_field);
+    let read_model = if arguments
+        .get("transitive")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        let relationship_fields = arguments
+            .get("relationship_fields")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                ShellError::message(
+                    "add_read_model_definition requires relationship_fields for transitive read models",
+                )
+            })
+            .and_then(|raw_relationship_fields| {
+                parse_datum_names(raw_relationship_fields)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+        let transitive_rule = arguments
+            .get("transitive_rule")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                ShellError::message(
+                    "add_read_model_definition requires transitive_rule for transitive read models",
+                )
+            })
+            .and_then(|raw_transitive_rule| {
+                parse_read_model_transitive_rule(raw_transitive_rule)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+        let example_scenario = arguments
+            .get("example_scenario")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                ShellError::message(
+                    "add_read_model_definition requires example_scenario for transitive read models",
+                )
+            })
+            .and_then(|raw_example_scenario| {
+                parse_scenario_name(raw_example_scenario)
+                    .map_err(|error| ShellError::message(error.to_string()))
+            })?;
+        read_model.with_transitive_semantics(
+            ReadModelRelationshipFields::from_fields(relationship_fields),
+            transitive_rule,
+            example_scenario,
+        )
+    } else {
+        read_model
+    };
+
+    interpret_collect_reports(command::add_read_model_definition(read_model))
+        .map(|reports| reports.join("\n"))
+}
+
+fn add_view_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("add_view_definition requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let view_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires name"))
+        .and_then(|raw_name| {
+            parse_view_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let read_model_name = arguments
+        .get("read_model")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires read_model"))
+        .and_then(|raw_read_model| {
+            parse_read_model_name(raw_read_model)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let field_name = arguments
+        .get("field")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires field"))
+        .and_then(|raw_field| {
+            parse_view_field_name(raw_field).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let source_field = arguments
+        .get("source_field")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires source_field"))
+        .and_then(|raw_source_field| {
+            parse_view_field_name(raw_source_field)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let sketch_token = arguments
+        .get("sketch_token")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires sketch_token"))
+        .and_then(|raw_sketch_token| {
+            parse_sketch_token(raw_sketch_token)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let provenance_description = arguments
+        .get("field_provenance")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires field_provenance"))
+        .and_then(|raw_provenance| {
+            parse_provenance_description(raw_provenance)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let bit_encoding = arguments
+        .get("bit_encoding")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires bit_encoding"))
+        .and_then(|raw_bit_encoding| {
+            parse_bit_encoding_semantics(raw_bit_encoding)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let control_name = arguments
+        .get("control")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires control"))
+        .and_then(|raw_control| {
+            parse_control_name(raw_control).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let control_command = arguments
+        .get("control_command")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires control_command"))
+        .and_then(|raw_command| {
+            parse_command_name(raw_command).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let control_input = arguments
+        .get("control_input")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires control_input"))
+        .and_then(|raw_input| {
+            parse_datum_name(raw_input).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let control_input_source = arguments
+        .get("control_input_source")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires control_input_source"))
+        .and_then(|raw_source| {
+            parse_command_input_source_kind(raw_source)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let control_input_description = arguments
+        .get("control_input_description")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ShellError::message("add_view_definition requires control_input_description")
+        })
+        .and_then(|raw_description| {
+            parse_command_input_source_description(raw_description)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let control_input_sketch_token = arguments
+        .get("control_input_sketch_token")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ShellError::message("add_view_definition requires control_input_sketch_token")
+        })
+        .and_then(|raw_sketch_token| {
+            parse_sketch_token(raw_sketch_token)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let control_input_visible = arguments
+        .get("control_input_visible")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| ShellError::message("add_view_definition requires control_input_visible"))?;
+    let control_input_decision = arguments
+        .get("control_input_decision")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| {
+            ShellError::message("add_view_definition requires control_input_decision")
+        })?;
+    let handled_errors = arguments
+        .get("handled_errors")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires handled_errors"))
+        .and_then(|raw_errors| {
+            parse_command_error_names(raw_errors)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let recovery_behavior = arguments
+        .get("recovery_behavior")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires recovery_behavior"))
+        .and_then(|raw_recovery| {
+            parse_control_recovery_behavior(raw_recovery)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let control_sketch_token = arguments
+        .get("control_sketch_token")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires control_sketch_token"))
+        .and_then(|raw_sketch_token| {
+            parse_sketch_token(raw_sketch_token)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let navigation_type = arguments
+        .get("navigation_type")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires navigation_type"))
+        .and_then(|raw_navigation_type| {
+            parse_navigation_target_type(raw_navigation_type)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let navigation_target = arguments
+        .get("navigation_target")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires navigation_target"))
+        .and_then(|raw_navigation_target| {
+            parse_navigation_target_name(raw_navigation_target)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let external_system = arguments.get("external_system").and_then(Value::as_str);
+    let handoff_contract = arguments.get("handoff_contract").and_then(Value::as_str);
+    let navigation = match (external_system, handoff_contract) {
+        (Some(raw_external_system), Some(raw_handoff_contract)) => {
+            let external_system = parse_navigation_target_name(raw_external_system)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let handoff_contract = parse_payload_contract_name(raw_handoff_contract)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            NewNavigationTarget::new(navigation_type, navigation_target)
+                .with_external_system(external_system, handoff_contract)
+        }
+        (None, None) => NewNavigationTarget::new(navigation_type, navigation_target),
+        _ => {
+            return Err(ShellError::message(
+                "add_view_definition requires external_system and handoff_contract together",
+            ));
+        }
+    };
+
+    interpret_collect_reports(command::add_view_definition(
+        NewViewDefinition::new(
+            slice_slug,
+            view_name,
+            NewViewField::new(
+                field_name,
+                parse_view_field_source_kind("read_model")
+                    .map_err(|error| ShellError::message(error.to_string()))?,
+                read_model_name,
+                source_field,
+                sketch_token,
+                provenance_description,
+                bit_encoding,
+            ),
+        )
+        .with_controls(ViewControls::from_controls([NewControlDefinition::new(
+            control_name,
+            control_command,
+            NewControlInputProvision::new(
+                control_input,
+                control_input_source,
+                control_input_description,
+                control_input_sketch_token,
+                control_input_visible,
+                control_input_decision,
+            ),
+            CommandErrorNames::from_names(handled_errors),
+            recovery_behavior,
+            control_sketch_token,
+            navigation,
+        )])),
+    ))
     .map(|reports| reports.join("\n"))
 }
 
@@ -1201,13 +3147,28 @@ fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
     let connection = if let Some(raw_target) = arguments.get("to").and_then(Value::as_str) {
         let target_slug =
             parse_slice_slug(raw_target).map_err(|error| ShellError::message(error.to_string()))?;
-        WorkflowConnection::new(
-            workflow_slug,
-            source_slug,
-            target_slug,
-            connection_kind,
-            trigger,
-        )
+        if let Some(raw_payload_contract) =
+            arguments.get("payload_contract").and_then(Value::as_str)
+        {
+            let payload_contract = parse_payload_contract_name(raw_payload_contract)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            WorkflowConnection::new_with_payload_contract(
+                workflow_slug,
+                source_slug,
+                target_slug,
+                connection_kind,
+                trigger,
+                payload_contract,
+            )
+        } else {
+            WorkflowConnection::new(
+                workflow_slug,
+                source_slug,
+                target_slug,
+                connection_kind,
+                trigger,
+            )
+        }
     } else {
         let target_workflow = arguments
             .get("to_workflow")

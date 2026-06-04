@@ -47,24 +47,9 @@ mod tests {
             .success()
             .stdout(predicate::str::contains("updated workflow Open ticket"));
 
-        let index_json = read_to_string(temp_dir.path().join("model/browser/data/index.json"))?;
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
-        assert!(
-            index_json.contains("\"description\": \"Actor opens a repair ticket with priority.\""),
-            "browser index must preserve the updated workflow description"
-        );
-        assert!(
-            workflow_json
-                .contains("\"description\": \"Actor opens a repair ticket with priority.\""),
-            "workflow browser data must preserve the updated workflow description"
-        );
         assert!(
             lean.contains(
                 "def workflowDescription := \"Actor opens a repair ticket with priority.\""
@@ -128,23 +113,9 @@ mod tests {
             .assert()
             .success();
 
-        let index_json = read_to_string(temp_dir.path().join("model/browser/data/index.json"))?;
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenRepairTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenRepairTicket.qnt"))?;
 
-        assert!(
-            index_json.contains("\"name\": \"Open repair ticket\""),
-            "browser index must preserve the updated workflow name"
-        );
-        assert!(
-            workflow_json.contains("\"name\": \"Open repair ticket\""),
-            "workflow browser data must preserve the updated workflow name"
-        );
         assert!(
             lean.contains("namespace OpenRepairTicket"),
             "Lean artifact must move to the updated workflow module"
@@ -229,20 +200,16 @@ mod tests {
                 "workflow module OpenTicket already exists",
             ));
 
-        let index_json = read_to_string(temp_dir.path().join("model/browser/data/index.json"))?;
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-bug.eventmodel.json"),
-        )?;
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenBug.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenBug.qnt"))?;
 
         assert!(
-            index_json.contains("\"name\": \"Open bug\""),
-            "rejected workflow rename must not mutate the browser index"
+            lean.contains("def workflowName := \"Open bug\""),
+            "rejected workflow rename must not mutate the Lean artifact"
         );
         assert!(
-            workflow_json.contains("\"name\": \"Open bug\""),
-            "rejected workflow rename must not mutate the workflow document"
+            quint.contains("val workflowName = \"Open bug\""),
+            "rejected workflow rename must not mutate the Quint artifact"
         );
 
         Ok(())
@@ -445,22 +412,9 @@ mod tests {
             .success()
             .stdout(predicate::str::contains("updated workflow Open ticket"));
 
-        let workflow_json = read_to_string(
-            temp_dir
-                .path()
-                .join("model/browser/data/workflows/open-ticket.eventmodel.json"),
-        )?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
-        assert!(
-            workflow_json.contains("\"../slices/capture-ticket.eventmodel.json\""),
-            "workflow update must preserve composed slice file references"
-        );
-        assert!(
-            workflow_json.contains("\"slice\": \"capture-ticket\""),
-            "workflow update must preserve composed workflow steps"
-        );
         assert!(
             lean.contains(
                 "def workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Actor enters repair ticket details.\")]"
@@ -469,7 +423,7 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val workflowSliceDetails = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Actor enters repair ticket details.\" }]"
+                "val workflowSliceDetails: List[WorkflowSliceDetail] = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Actor enters repair ticket details.\" }]"
             ),
             "Quint update must preserve composed slice details"
         );
@@ -543,13 +497,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"submit-ticket\", target := \"review-ticket\", kind := \"event\", trigger := \"TicketSubmittedForReview\", rationale := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"submit-ticket\", target := \"review-ticket\", kind := \"event\", trigger := \"TicketSubmittedForReview\", rationale := \"\", payloadContract := \"\" }]"
             ),
             "Lean update must preserve existing event transitions"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [{ source: \"submit-ticket\", target: \"review-ticket\", kind: \"event\", trigger: \"TicketSubmittedForReview\", rationale: \"\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"submit-ticket\", target: \"review-ticket\", kind: \"event\", trigger: \"TicketSubmittedForReview\", rationale: \"\", payloadContract: \"\" }]"
             ),
             "Quint update must preserve existing event transitions"
         );
@@ -624,13 +578,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := \"workflow_exit:outcome\", trigger := \"ticket_closed\", rationale := \"Closed tickets continue to completion.\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := \"workflow_exit:outcome\", trigger := \"ticket_closed\", rationale := \"Closed tickets continue to completion.\", payloadContract := \"\" }]"
             ),
             "Lean update must preserve existing workflow exit transitions"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions = [{ source: \"capture-ticket\", target: \"repair-complete\", kind: \"workflow_exit:outcome\", trigger: \"ticket_closed\", rationale: \"Closed tickets continue to completion.\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"repair-complete\", kind: \"workflow_exit:outcome\", trigger: \"ticket_closed\", rationale: \"Closed tickets continue to completion.\", payloadContract: \"\" }]"
             ),
             "Quint update must preserve existing workflow exit transitions"
         );
@@ -692,30 +646,13 @@ mod tests {
             .assert()
             .success();
 
-        let index_json = read_to_string(temp_dir.path().join("model/browser/data/index.json"))?;
         assert!(
-            !index_json.contains("open-ticket"),
-            "removed workflow must be removed from the browser index"
+            exists(temp_dir.path().join("model/lean/CloseTicket.lean"))?,
+            "unrelated workflow Lean module must remain modeled"
         );
         assert!(
-            index_json.contains("close-ticket"),
-            "unrelated workflow must remain indexed"
-        );
-        assert!(
-            !exists(
-                temp_dir
-                    .path()
-                    .join("model/browser/data/workflows/open-ticket.eventmodel.json")
-            )?,
-            "removed workflow browser JSON must be deleted"
-        );
-        assert!(
-            !exists(
-                temp_dir
-                    .path()
-                    .join("model/browser/data/slices/capture-request.eventmodel.json")
-            )?,
-            "owned slice browser JSON must be deleted"
+            exists(temp_dir.path().join("model/quint/CloseTicket.qnt"))?,
+            "unrelated workflow Quint module must remain modeled"
         );
         assert!(
             !exists(temp_dir.path().join("model/lean/OpenTicket.lean"))?,
@@ -801,12 +738,12 @@ mod tests {
             .success();
 
         assert!(
-            exists(
-                temp_dir
-                    .path()
-                    .join("model/browser/data/workflows/close-ticket.eventmodel.json")
-            )?,
-            "rejected workflow removal must leave workflow artifacts in place"
+            exists(temp_dir.path().join("model/lean/CloseTicket.lean"))?,
+            "rejected workflow removal must leave Lean artifacts in place"
+        );
+        assert!(
+            exists(temp_dir.path().join("model/quint/CloseTicket.qnt"))?,
+            "rejected workflow removal must leave Quint artifacts in place"
         );
 
         Ok(())
@@ -834,12 +771,12 @@ mod tests {
             ));
 
         assert!(
-            exists(
-                temp_dir
-                    .path()
-                    .join("model/browser/data/workflows/open-ticket.eventmodel.json")
-            )?,
-            "malformed workflow removal command must not delete workflow artifacts"
+            exists(temp_dir.path().join("model/lean/OpenTicket.lean"))?,
+            "malformed workflow removal command must not delete Lean artifacts"
+        );
+        assert!(
+            exists(temp_dir.path().join("model/quint/OpenTicket.qnt"))?,
+            "malformed workflow removal command must not delete Quint artifacts"
         );
 
         Ok(())
@@ -900,12 +837,12 @@ mod tests {
             .success();
 
         assert!(
-            exists(
-                temp_dir
-                    .path()
-                    .join("model/browser/data/workflows/close-ticket.eventmodel.json")
-            )?,
-            "unrelated workflow exit target must remain modeled"
+            exists(temp_dir.path().join("model/lean/CloseTicket.lean"))?,
+            "unrelated workflow exit target Lean module must remain modeled"
+        );
+        assert!(
+            exists(temp_dir.path().join("model/quint/CloseTicket.qnt"))?,
+            "unrelated workflow exit target Quint module must remain modeled"
         );
 
         Ok(())

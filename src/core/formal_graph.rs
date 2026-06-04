@@ -3,9 +3,15 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::FileContents;
 use crate::core::types::{
-    ModelDescription, ModelName, SliceKindName, SliceSlug, TransitionTriggerName,
-    WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionEndpoint,
-    WorkflowTransitionKind, WorkflowTransitionRecord, WorkflowTransitionRecords,
+    CommandErrorName, CommandName, ModelDescription, ModelName, OutcomeLabelName,
+    PayloadContractName, SliceKindName, SliceSlug, TransitionTriggerName,
+    WorkflowCommandErrorRecord, WorkflowCommandErrorRecords, WorkflowOutcomeRecord,
+    WorkflowOutcomeRecords, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
+    WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
+    WorkflowSliceDetails, WorkflowSlug, WorkflowStepRelationshipName, WorkflowTransitionEndpoint,
+    WorkflowTransitionEvidenceRecord, WorkflowTransitionEvidenceRecords,
+    WorkflowTransitionEvidenceText, WorkflowTransitionKind, WorkflowTransitionRecord,
+    WorkflowTransitionRecords,
 };
 use crate::core::workflow_document::WorkflowDocument;
 
@@ -16,6 +22,10 @@ pub struct FormalWorkflowGraph {
     description: ModelDescription,
     slice_details: WorkflowSliceDetails,
     transitions: WorkflowTransitionRecords,
+    outcomes: WorkflowOutcomeRecords,
+    command_errors: WorkflowCommandErrorRecords,
+    owned_definitions: WorkflowOwnedDefinitionRecords,
+    transition_evidences: WorkflowTransitionEvidenceRecords,
 }
 
 impl FormalWorkflowGraph {
@@ -37,6 +47,22 @@ impl FormalWorkflowGraph {
 
     pub fn transitions(&self) -> &WorkflowTransitionRecords {
         &self.transitions
+    }
+
+    pub fn outcomes(&self) -> &WorkflowOutcomeRecords {
+        &self.outcomes
+    }
+
+    pub fn command_errors(&self) -> &WorkflowCommandErrorRecords {
+        &self.command_errors
+    }
+
+    pub fn owned_definitions(&self) -> &WorkflowOwnedDefinitionRecords {
+        &self.owned_definitions
+    }
+
+    pub fn transition_evidences(&self) -> &WorkflowTransitionEvidenceRecords {
+        &self.transition_evidences
     }
 }
 
@@ -82,6 +108,10 @@ pub fn workflow_graph_from_document(
                 .transitions()
                 .map_err(|error| FormalGraphError::new(error.to_string()))?,
         ),
+        outcomes: WorkflowOutcomeRecords::from_records([]),
+        command_errors: WorkflowCommandErrorRecords::from_records([]),
+        owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
+        transition_evidences: WorkflowTransitionEvidenceRecords::from_records([]),
     })
 }
 
@@ -90,90 +120,282 @@ pub fn parse_lean_workflow_graph(
 ) -> Result<FormalWorkflowGraph, FormalGraphError> {
     parse_workflow_graph(
         artifact.as_ref(),
-        "def workflowName := ",
-        "def workflowSlug := ",
-        "def workflowDescription := ",
-        "def workflowSliceDetails : List (String × String × String × String) := ",
-        "def workflowTransitions : List WorkflowTransition := ",
+        WorkflowGraphPrefixes {
+            name: "def workflowName := ",
+            slug: "def workflowSlug := ",
+            description: "def workflowDescription := ",
+            slice_details: "def workflowSliceDetails : List (String × String × String × String) := ",
+            step_relationships: "def workflowStepRelationships : List (String × String) := ",
+            transitions: "def workflowTransitions : List WorkflowTransition := ",
+            outcomes: "def workflowOutcomes : List WorkflowOutcome := ",
+            command_errors: "def workflowCommandErrors : List WorkflowCommandError := ",
+            owned_definitions: "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := ",
+            transition_evidences: "def workflowTransitionEvidences : List WorkflowTransitionEvidence := ",
+        },
     )
 }
 
 pub fn parse_quint_workflow_graph(
     artifact: &FileContents,
 ) -> Result<FormalWorkflowGraph, FormalGraphError> {
-    parse_workflow_graph(
-        artifact.as_ref(),
-        "val workflowName = ",
-        "val workflowSlug = ",
-        "val workflowDescription = ",
-        "val workflowSliceDetails = ",
-        "val workflowTransitions = ",
-    )
+    let artifact = artifact.as_ref();
+    Ok(FormalWorkflowGraph {
+        name: model_name(json_line_value(artifact, "val workflowName = ")?)?,
+        slug: workflow_slug(json_line_value(artifact, "val workflowSlug = ")?)?,
+        description: model_description(json_line_value(artifact, "val workflowDescription = ")?)?,
+        slice_details: WorkflowSliceDetails::from_details(slice_details_with_relationships(
+            parse_slice_details(quint_val_value(artifact, "workflowSliceDetails")?)?,
+            quint_val_value_optional(artifact, "workflowStepRelationships")?
+                .map(parse_step_relationships)
+                .transpose()?
+                .unwrap_or_default(),
+        )),
+        transitions: WorkflowTransitionRecords::from_records(parse_transitions(quint_val_value(
+            artifact,
+            "workflowTransitions",
+        )?)?),
+        outcomes: WorkflowOutcomeRecords::from_records(parse_workflow_outcomes(quint_val_value(
+            artifact,
+            "workflowOutcomes",
+        )?)?),
+        command_errors: WorkflowCommandErrorRecords::from_records(parse_workflow_command_errors(
+            quint_val_value(artifact, "workflowCommandErrors")?,
+        )?),
+        owned_definitions: parse_optional_workflow_owned_definitions(quint_val_value_optional(
+            artifact,
+            "workflowOwnedDefinitions",
+        )?)?,
+        transition_evidences: parse_optional_workflow_transition_evidences(
+            quint_val_value_optional(artifact, "workflowTransitionEvidences")?,
+        )?,
+    })
+}
+
+fn parse_optional_workflow_owned_definitions(
+    value: Option<&str>,
+) -> Result<WorkflowOwnedDefinitionRecords, FormalGraphError> {
+    value
+        .map(parse_workflow_owned_definitions)
+        .transpose()
+        .map(|records| WorkflowOwnedDefinitionRecords::from_records(records.unwrap_or_default()))
+}
+
+fn parse_optional_workflow_transition_evidences(
+    value: Option<&str>,
+) -> Result<WorkflowTransitionEvidenceRecords, FormalGraphError> {
+    value
+        .map(parse_workflow_transition_evidences)
+        .transpose()
+        .map(|records| WorkflowTransitionEvidenceRecords::from_records(records.unwrap_or_default()))
+}
+
+struct WorkflowGraphPrefixes {
+    name: &'static str,
+    slug: &'static str,
+    description: &'static str,
+    slice_details: &'static str,
+    step_relationships: &'static str,
+    transitions: &'static str,
+    outcomes: &'static str,
+    command_errors: &'static str,
+    owned_definitions: &'static str,
+    transition_evidences: &'static str,
 }
 
 fn parse_workflow_graph(
     artifact: &str,
-    name_prefix: &str,
-    slug_prefix: &str,
-    description_prefix: &str,
-    slice_details_prefix: &str,
-    transitions_prefix: &str,
+    prefixes: WorkflowGraphPrefixes,
 ) -> Result<FormalWorkflowGraph, FormalGraphError> {
     Ok(FormalWorkflowGraph {
-        name: model_name(json_line_value(artifact, name_prefix)?)?,
-        slug: workflow_slug(json_line_value(artifact, slug_prefix)?)?,
-        description: model_description(json_line_value(artifact, description_prefix)?)?,
-        slice_details: WorkflowSliceDetails::from_details(parse_slice_details(line_value(
-            artifact,
-            slice_details_prefix,
-        )?)?),
+        name: model_name(json_line_value(artifact, prefixes.name)?)?,
+        slug: workflow_slug(json_line_value(artifact, prefixes.slug)?)?,
+        description: model_description(json_line_value(artifact, prefixes.description)?)?,
+        slice_details: WorkflowSliceDetails::from_details(slice_details_with_relationships(
+            parse_slice_details(line_value(artifact, prefixes.slice_details)?)?,
+            line_value_optional(artifact, prefixes.step_relationships)?
+                .map(parse_step_relationships)
+                .transpose()?
+                .unwrap_or_default(),
+        )),
         transitions: WorkflowTransitionRecords::from_records(parse_transitions(line_value(
             artifact,
-            transitions_prefix,
+            prefixes.transitions,
         )?)?),
+        outcomes: WorkflowOutcomeRecords::from_records(parse_workflow_outcomes(line_value(
+            artifact,
+            prefixes.outcomes,
+        )?)?),
+        command_errors: WorkflowCommandErrorRecords::from_records(parse_workflow_command_errors(
+            line_value(artifact, prefixes.command_errors)?,
+        )?),
+        owned_definitions: parse_optional_workflow_owned_definitions(line_value_optional(
+            artifact,
+            prefixes.owned_definitions,
+        )?)?,
+        transition_evidences: parse_optional_workflow_transition_evidences(line_value_optional(
+            artifact,
+            prefixes.transition_evidences,
+        )?)?,
     })
 }
 
 fn line_value<'a>(artifact: &'a str, prefix: &str) -> Result<&'a str, FormalGraphError> {
+    line_value_optional(artifact, prefix)?.ok_or_else(|| {
+        FormalGraphError::new(format!("formal artifact is missing declaration '{prefix}'"))
+    })
+}
+
+fn line_value_optional<'a>(
+    artifact: &'a str,
+    prefix: &str,
+) -> Result<Option<&'a str>, FormalGraphError> {
     let matching_lines = artifact
         .lines()
         .filter_map(|line| line.trim_start().strip_prefix(prefix))
         .collect::<Vec<_>>();
 
     match matching_lines.as_slice() {
-        [value] => Ok(value.trim()),
-        [] => Err(FormalGraphError::new(format!(
-            "formal artifact is missing declaration '{prefix}'"
-        ))),
+        [value] => Ok(Some(value.trim())),
+        [] => Ok(None),
         _ => Err(FormalGraphError::new(format!(
             "formal artifact has duplicate declaration '{prefix}'"
         ))),
     }
 }
-
 fn json_line_value(artifact: &str, prefix: &str) -> Result<String, FormalGraphError> {
     serde_json::from_str::<String>(line_value(artifact, prefix)?).map_err(|error| {
         FormalGraphError::new(format!("invalid formal string declaration: {error}"))
     })
 }
 
+fn quint_val_value<'a>(
+    artifact: &'a str,
+    declaration_name: &str,
+) -> Result<&'a str, FormalGraphError> {
+    quint_val_value_optional(artifact, declaration_name)?.ok_or_else(|| {
+        FormalGraphError::new(format!(
+            "formal artifact is missing declaration 'val {declaration_name}'"
+        ))
+    })
+}
+
+fn quint_val_value_optional<'a>(
+    artifact: &'a str,
+    declaration_name: &str,
+) -> Result<Option<&'a str>, FormalGraphError> {
+    let declaration_prefix = format!("val {declaration_name}");
+    let matching_lines = artifact
+        .lines()
+        .filter_map(|line| {
+            let remainder = line.trim_start().strip_prefix(&declaration_prefix)?;
+            let remainder = remainder.trim_start();
+            if let Some(value) = remainder.strip_prefix('=') {
+                return Some(value.trim());
+            }
+            remainder
+                .strip_prefix(':')
+                .and_then(|typed_remainder| typed_remainder.split_once(" = "))
+                .map(|(_, value)| value.trim())
+        })
+        .collect::<Vec<_>>();
+
+    match matching_lines.as_slice() {
+        [value] => Ok(Some(value)),
+        [] => Ok(None),
+        _ => Err(FormalGraphError::new(format!(
+            "formal artifact has duplicate declaration 'val {declaration_name}'"
+        ))),
+    }
+}
+
 fn parse_slice_details(value: &str) -> Result<Vec<WorkflowSliceDetail>, FormalGraphError> {
-    quoted_string_groups(value, 4)?
-        .chunks_exact(4)
+    let strings = parse_quoted_strings(value)?;
+    if strings.len() % 5 == 0 {
+        strings
+            .chunks_exact(5)
+            .map(|chunk| {
+                Ok(WorkflowSliceDetail::new_with_relationship(
+                    slice_slug(&chunk[0])?,
+                    model_name(chunk[1].clone())?,
+                    slice_kind_name(&chunk[2])?,
+                    model_description(chunk[3].clone())?,
+                    workflow_step_relationship_name(&chunk[4])?,
+                ))
+            })
+            .collect()
+    } else if strings.len() % 4 == 0 {
+        strings
+            .chunks_exact(4)
+            .map(|chunk| {
+                Ok(WorkflowSliceDetail::new(
+                    slice_slug(&chunk[0])?,
+                    model_name(chunk[1].clone())?,
+                    slice_kind_name(&chunk[2])?,
+                    model_description(chunk[3].clone())?,
+                ))
+            })
+            .collect()
+    } else {
+        Err(FormalGraphError::new(
+            "formal workflow slice detail declarations must contain groups of four or five strings",
+        ))
+    }
+}
+
+fn parse_step_relationships(
+    value: &str,
+) -> Result<Vec<(String, WorkflowStepRelationshipName)>, FormalGraphError> {
+    quoted_string_groups(value, 2)?
+        .chunks_exact(2)
         .map(|chunk| {
-            Ok(WorkflowSliceDetail::new(
-                slice_slug(&chunk[0])?,
-                model_name(chunk[1].clone())?,
-                slice_kind_name(&chunk[2])?,
-                model_description(chunk[3].clone())?,
+            Ok((
+                chunk[0].clone(),
+                workflow_step_relationship_name(&chunk[1])?,
             ))
+        })
+        .collect()
+}
+
+fn slice_details_with_relationships(
+    slice_details: Vec<WorkflowSliceDetail>,
+    step_relationships: Vec<(String, WorkflowStepRelationshipName)>,
+) -> Vec<WorkflowSliceDetail> {
+    slice_details
+        .into_iter()
+        .map(|slice| {
+            let relationship = step_relationships
+                .iter()
+                .find(|(step, _relationship)| step == slice.slug().as_ref())
+                .map(|(_step, relationship)| relationship.clone())
+                .unwrap_or_else(|| slice.relationship().clone());
+            WorkflowSliceDetail::new_with_relationship(
+                slice.slug().clone(),
+                slice.name().clone(),
+                slice.kind().clone(),
+                slice.description().clone(),
+                relationship,
+            )
         })
         .collect()
 }
 
 fn parse_transitions(value: &str) -> Result<Vec<WorkflowTransitionRecord>, FormalGraphError> {
     let strings = parse_quoted_strings(value)?;
-    if strings.len() % 5 == 0 {
+    if strings.len() % 6 == 0 {
+        strings
+            .chunks_exact(6)
+            .map(|chunk| {
+                transition_record_from_formal_fields(
+                    &chunk[0],
+                    &chunk[1],
+                    &chunk[2],
+                    &chunk[3],
+                    Some(&chunk[4]),
+                    Some(&chunk[5]),
+                )
+            })
+            .collect()
+    } else if strings.len() % 5 == 0 {
         strings
             .chunks_exact(5)
             .map(|chunk| {
@@ -183,6 +405,7 @@ fn parse_transitions(value: &str) -> Result<Vec<WorkflowTransitionRecord>, Forma
                     &chunk[2],
                     &chunk[3],
                     Some(&chunk[4]),
+                    None,
                 )
             })
             .collect()
@@ -191,15 +414,85 @@ fn parse_transitions(value: &str) -> Result<Vec<WorkflowTransitionRecord>, Forma
             .chunks_exact(4)
             .map(|chunk| {
                 transition_record_from_formal_fields(
-                    &chunk[0], &chunk[1], &chunk[2], &chunk[3], None,
+                    &chunk[0], &chunk[1], &chunk[2], &chunk[3], None, None,
                 )
             })
             .collect()
     } else {
         Err(FormalGraphError::new(
-            "formal workflow transition declarations must contain groups of four or five strings",
+            "formal workflow transition declarations must contain groups of four, five, or six strings",
         ))
     }
+}
+
+fn parse_workflow_outcomes(value: &str) -> Result<Vec<WorkflowOutcomeRecord>, FormalGraphError> {
+    let strings = quoted_string_groups(value, 2)?;
+    let externally_relevant_values = parse_bool_field_values(value, "externallyRelevant")?;
+    if externally_relevant_values.len() != strings.len() / 2 {
+        return Err(FormalGraphError::new(
+            "formal workflow outcome declarations must include externallyRelevant for every outcome",
+        ));
+    }
+
+    strings
+        .chunks_exact(2)
+        .zip(externally_relevant_values)
+        .map(|(chunk, externally_relevant)| {
+            Ok(WorkflowOutcomeRecord::new(
+                transition_endpoint(&chunk[0])?,
+                outcome_label_name(&chunk[1])?,
+                externally_relevant,
+            ))
+        })
+        .collect()
+}
+
+fn parse_workflow_command_errors(
+    value: &str,
+) -> Result<Vec<WorkflowCommandErrorRecord>, FormalGraphError> {
+    quoted_string_groups(value, 3)?
+        .chunks_exact(3)
+        .map(|chunk| {
+            Ok(WorkflowCommandErrorRecord::new(
+                transition_endpoint(&chunk[0])?,
+                command_name(&chunk[1])?,
+                command_error_name(&chunk[2])?,
+            ))
+        })
+        .collect()
+}
+
+fn parse_workflow_owned_definitions(
+    value: &str,
+) -> Result<Vec<WorkflowOwnedDefinitionRecord>, FormalGraphError> {
+    quoted_string_groups(value, 3)?
+        .chunks_exact(3)
+        .map(|chunk| {
+            Ok(WorkflowOwnedDefinitionRecord::new(
+                transition_endpoint(&chunk[0])?,
+                workflow_owned_definition_kind(&chunk[1])?,
+                workflow_owned_definition_name(&chunk[2])?,
+            ))
+        })
+        .collect()
+}
+
+fn parse_workflow_transition_evidences(
+    value: &str,
+) -> Result<Vec<WorkflowTransitionEvidenceRecord>, FormalGraphError> {
+    quoted_string_groups(value, 6)?
+        .chunks_exact(6)
+        .map(|chunk| {
+            Ok(WorkflowTransitionEvidenceRecord::new(
+                transition_endpoint(&chunk[0])?,
+                transition_endpoint(&chunk[1])?,
+                workflow_transition_kind(&chunk[2])?,
+                transition_trigger_name(&chunk[3])?,
+                workflow_transition_evidence_text(&chunk[4])?,
+                workflow_transition_evidence_text(&chunk[5])?,
+            ))
+        })
+        .collect()
 }
 
 fn transition_record_from_formal_fields(
@@ -208,20 +501,31 @@ fn transition_record_from_formal_fields(
     kind: &str,
     trigger: &str,
     rationale: Option<&str>,
+    payload_contract: Option<&str>,
 ) -> Result<WorkflowTransitionRecord, FormalGraphError> {
     let source = transition_endpoint(source)?;
     let target = transition_endpoint(target)?;
     let kind = workflow_transition_kind(kind)?;
     let trigger = transition_trigger_name(trigger)?;
-    match rationale.filter(|value| !value.is_empty()) {
-        Some(rationale) => Ok(WorkflowTransitionRecord::new_with_rationale(
+    match (
+        rationale.filter(|value| !value.is_empty()),
+        payload_contract.filter(|value| !value.is_empty()),
+    ) {
+        (None, Some(payload_contract)) => Ok(WorkflowTransitionRecord::new_with_payload_contract(
+            source,
+            target,
+            kind,
+            trigger,
+            payload_contract_name(payload_contract)?,
+        )),
+        (Some(rationale), _) => Ok(WorkflowTransitionRecord::new_with_rationale(
             source,
             target,
             kind,
             trigger,
             model_description(rationale.to_owned())?,
         )),
-        None => Ok(WorkflowTransitionRecord::new(source, target, kind, trigger)),
+        (None, None) => Ok(WorkflowTransitionRecord::new(source, target, kind, trigger)),
     }
 }
 
@@ -267,6 +571,34 @@ fn parse_quoted_strings(value: &str) -> Result<Vec<String>, FormalGraphError> {
         .collect::<Result<Vec<_>, _>>()
 }
 
+fn parse_bool_field_values(value: &str, field_name: &str) -> Result<Vec<bool>, FormalGraphError> {
+    value
+        .split(field_name)
+        .skip(1)
+        .map(|after_name| {
+            let after_separator = after_name
+                .trim_start()
+                .strip_prefix(":=")
+                .or_else(|| after_name.trim_start().strip_prefix(':'))
+                .ok_or_else(|| {
+                    FormalGraphError::new(format!(
+                        "formal bool field '{field_name}' is missing a value separator"
+                    ))
+                })?
+                .trim_start();
+            if after_separator.starts_with("true") {
+                Ok(true)
+            } else if after_separator.starts_with("false") {
+                Ok(false)
+            } else {
+                Err(FormalGraphError::new(format!(
+                    "formal bool field '{field_name}' must be true or false"
+                )))
+            }
+        })
+        .collect()
+}
+
 fn model_name(value: String) -> Result<ModelName, FormalGraphError> {
     ModelName::try_new(value).map_err(|error| FormalGraphError::new(error.to_string()))
 }
@@ -298,8 +630,55 @@ fn workflow_transition_kind(value: &str) -> Result<WorkflowTransitionKind, Forma
         .map_err(|error| FormalGraphError::new(error.to_string()))
 }
 
+fn workflow_step_relationship_name(
+    value: &str,
+) -> Result<WorkflowStepRelationshipName, FormalGraphError> {
+    WorkflowStepRelationshipName::try_new(value.to_owned())
+        .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
 fn transition_trigger_name(value: &str) -> Result<TransitionTriggerName, FormalGraphError> {
     TransitionTriggerName::try_new(value.to_owned())
+        .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn workflow_transition_evidence_text(
+    value: &str,
+) -> Result<WorkflowTransitionEvidenceText, FormalGraphError> {
+    WorkflowTransitionEvidenceText::try_new(value.to_owned())
+        .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn payload_contract_name(value: &str) -> Result<PayloadContractName, FormalGraphError> {
+    PayloadContractName::try_new(value.to_owned())
+        .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn outcome_label_name(value: &str) -> Result<OutcomeLabelName, FormalGraphError> {
+    OutcomeLabelName::try_new(value.to_owned())
+        .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn command_name(value: &str) -> Result<CommandName, FormalGraphError> {
+    CommandName::try_new(value.to_owned()).map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn command_error_name(value: &str) -> Result<CommandErrorName, FormalGraphError> {
+    CommandErrorName::try_new(value.to_owned())
+        .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn workflow_owned_definition_kind(
+    value: &str,
+) -> Result<WorkflowOwnedDefinitionKind, FormalGraphError> {
+    WorkflowOwnedDefinitionKind::try_new(value.to_owned())
+        .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn workflow_owned_definition_name(
+    value: &str,
+) -> Result<WorkflowOwnedDefinitionName, FormalGraphError> {
+    WorkflowOwnedDefinitionName::try_new(value.to_owned())
         .map_err(|error| FormalGraphError::new(error.to_string()))
 }
 

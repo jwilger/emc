@@ -74,8 +74,6 @@
             || pkgs.lib.hasSuffix "/justfile" pathText
             || pkgs.lib.hasSuffix "/.github" pathText
             || pkgs.lib.hasInfix "/.github/" pathText
-            || pkgs.lib.hasSuffix "/browser" pathText
-            || pkgs.lib.hasInfix "/browser/" pathText
             || pkgs.lib.hasSuffix "/docs" pathText
             || pkgs.lib.hasInfix "/docs/" pathText
             || pkgs.lib.hasSuffix "/tests" pathText
@@ -135,9 +133,7 @@
         packageSmoke = pkgs.runCommand "emc-package-smoke"
           {
             nativeBuildInputs = [
-              pkgs.chromium
               pkgs.netcat
-              pkgs.python3
             ];
           }
           ''
@@ -153,77 +149,6 @@
             ${package}/bin/emc verify
             ${package}/bin/emc review record --workflow package-smoke --reviewer package-smoke --reviewed-at 2026-06-03T00:00:00.000Z
             ${package}/bin/emc review gate --workflow package-smoke
-            ${package}/bin/emc generate site --output site
-
-            python3 -m http.server 7333 --bind 127.0.0.1 --directory site > site-http.log 2>&1 &
-            site_server_pid="$!"
-            trap 'kill "$site_server_pid" || true; wait "$site_server_pid" || true' EXIT
-            site_ready=0
-            for attempt in $(seq 1 50); do
-              if printf 'GET / HTTP/1.1\r\nHost: 127.0.0.1:7333\r\nConnection: close\r\n\r\n' \
-                | nc 127.0.0.1 7333 \
-                | grep 'Package Smoke Event Model Browser'; then
-                site_ready=1
-                break
-              fi
-              sleep 0.1
-            done
-            if [ "$site_ready" != 1 ]; then
-              cat site-http.log
-              exit 1
-            fi
-
-            export HOME="$workdir/chromium-home"
-            export XDG_CACHE_HOME="$workdir/chromium-cache"
-            export XDG_CONFIG_HOME="$workdir/chromium-config"
-            mkdir -p "$HOME" "$XDG_CACHE_HOME" "$XDG_CONFIG_HOME"
-            chromium \
-              --headless \
-              --disable-gpu \
-              --no-sandbox \
-              --disable-breakpad \
-              --disable-crash-reporter \
-              --disable-dev-shm-usage \
-              --disable-features=Crashpad \
-              --user-data-dir="$workdir/chromium-profile" \
-              --virtual-time-budget=5000 \
-              --dump-dom \
-              http://127.0.0.1:7333/ \
-              > rendered-site.html
-            grep 'Package Smoke Event Model Browser' rendered-site.html
-            grep 'Package smoke' rendered-site.html
-            grep 'Capture smoke' rendered-site.html
-            chromium \
-              --headless \
-              --disable-gpu \
-              --no-sandbox \
-              --disable-breakpad \
-              --disable-crash-reporter \
-              --disable-dev-shm-usage \
-              --disable-features=Crashpad \
-              --user-data-dir="$workdir/chromium-screenshot-profile" \
-              --virtual-time-budget=5000 \
-              --window-size=1440,1000 \
-              --screenshot=rendered-site.png \
-              http://127.0.0.1:7333/
-            python3 - <<'PY'
-from pathlib import Path
-import struct
-
-image = Path("rendered-site.png")
-data = image.read_bytes()
-if len(data) < 10000:
-    raise SystemExit("browser screenshot is unexpectedly small")
-if data[:8] != b"\x89PNG\r\n\x1a\n":
-    raise SystemExit("browser screenshot is not a PNG")
-width, height = struct.unpack(">II", data[16:24])
-if (width, height) != (1440, 1000):
-    raise SystemExit(f"browser screenshot has unexpected dimensions: {width}x{height}")
-PY
-
-            trap - EXIT
-            kill "$site_server_pid"
-            wait "$site_server_pid" || true
 
             printf '%s\n' \
               '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"package-smoke","version":"0.0.0"}}}' \
@@ -299,7 +224,7 @@ PY
             openssl
             pkg-config
             sqlite
-          ];
+          ] ++ runtimeTools;
 
           RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
           OPENSSL_NO_VENDOR = "1";
