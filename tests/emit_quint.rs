@@ -659,6 +659,9 @@ mod tests {
             "def commandEventBoardEdgeMatchesEmission(connection) = connection.sourceKind != \"command\" or connection.targetKind != \"event\" or sliceCommandDefinitions.select(command => command.name == connection.source and command.emittedEvents.select(eventName => eventName == connection.target).length() > 0).length() > 0"
         ));
         assert!(quint.contains(
+            "val commandEventBoardEdgesMatchEmissions = sliceBoardConnections.select(connection => commandEventBoardEdgeMatchesEmission(connection)).length() == sliceBoardConnections.length()"
+        ));
+        assert!(quint.contains(
             "def eventReadModelBoardEdgeMatchesProjection(connection) = connection.sourceKind != \"event\" or connection.targetKind != \"read_model\" or sliceReadModelDefinitions.select(readModel => readModel.name == connection.target and readModel.fields.select(readModelField => readModelField.sourceEvent == connection.source).length() > 0).length() > 0"
         ));
         assert!(quint.contains(
