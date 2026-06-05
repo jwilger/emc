@@ -187,11 +187,15 @@ pub fn emit_slice_module(
         )
         .replace(
             "type ReadModelField = { name: str, sourceKind: str, sourceEvent: str, sourceAttribute: str, derivationRule: str, absenceEvent: str, provenanceDescription: str }",
-            "type ReadModelField = { name: str, sourceKind: str, sourceEvent: str, sourceAttribute: str, derivationRule: str, absenceEvent: str, derivationScenarioName: str, absenceScenarioName: str, provenanceDescription: str }",
+            "type ReadModelField = { name: str, sourceKind: str, sourceEvent: str, sourceAttribute: str, derivationRule: str, derivationSourceFields: List[str], absenceEvent: str, derivationScenarioName: str, absenceScenarioName: str, provenanceDescription: str }",
         )
         .replace(
             "type ReadModelDefinition = { name: str, fields: List[ReadModelField] }",
             "type ReadModelDefinition = { name: str, fields: List[ReadModelField], transitive: bool, relationshipFields: List[str], transitiveRule: str, exampleScenarioName: str }",
+        )
+        .replace(
+            "def readModelFieldSourceIsComplete(readModelField) = (readModelField.sourceKind == \"event_attribute\" and readModelField.sourceEvent != \"\" and readModelField.sourceAttribute != \"\") or (readModelField.sourceKind == \"derivation\" and readModelField.derivationRule != \"\") or (readModelField.sourceKind == \"absence_default\" and readModelField.absenceEvent != \"\")",
+            "def readModelFieldSourceIsComplete(readModelField) = (readModelField.sourceKind == \"event_attribute\" and readModelField.sourceEvent != \"\" and readModelField.sourceAttribute != \"\") or (readModelField.sourceKind == \"derivation\" and readModelField.derivationRule != \"\" and readModelField.derivationSourceFields.length() > 0) or (readModelField.sourceKind == \"absence_default\" and readModelField.absenceEvent != \"\")",
         )
         .replace(
             "val sliceEventDefinitions: List[EventDefinition] = []",

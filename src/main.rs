@@ -11,8 +11,9 @@ use emc::core::formal_slice_facts::{
     NewCommandInput, NewControlDefinition, NewControlInputProvision, NewEventAttribute,
     NewEventDefinition, NewExternalPayloadDefinition, NewNavigationTarget, NewOutcomeDefinition,
     NewReadModelDefinition, NewReadModelField, NewSliceScenario, NewTranslationDefinition,
-    NewViewDefinition, NewViewField, OutcomeEventNames, ReadModelRelationshipFields, ScenarioKind,
-    ScenarioStreamNames, ViewControls, ViewFilters, ViewLocalStates,
+    NewViewDefinition, NewViewField, OutcomeEventNames, ReadModelDerivationSourceFields,
+    ReadModelRelationshipFields, ScenarioKind, ScenarioStreamNames, ViewControls, ViewFilters,
+    ViewLocalStates,
 };
 use emc::core::gherkin::GherkinSuite;
 use emc::core::project::ProjectName;
@@ -1134,6 +1135,8 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             field_source,
             derivation_rule_flag,
             derivation_rule,
+            source_fields_flag,
+            source_fields,
             derivation_scenario_flag,
             derivation_scenario,
             field_provenance_flag,
@@ -1145,6 +1148,7 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             && field_flag == "--field"
             && field_source_flag == "--field-source"
             && derivation_rule_flag == "--derivation-rule"
+            && source_fields_flag == "--source-fields"
             && derivation_scenario_flag == "--derivation-scenario"
             && field_provenance_flag == "--field-provenance" =>
         {
@@ -1157,6 +1161,8 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             let field_source_kind = parse_read_model_field_source_kind(field_source)
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let derivation_rule = parse_read_model_derivation_rule(derivation_rule)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_fields = parse_datum_names(source_fields)
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let derivation_scenario = parse_scenario_name(derivation_scenario)
                 .map_err(|error| ShellError::message(error.to_string()))?;
@@ -1171,6 +1177,7 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                             field_name,
                             field_source_kind,
                             derivation_rule,
+                            ReadModelDerivationSourceFields::from_fields(source_fields),
                             derivation_scenario,
                             provenance_description,
                         ),

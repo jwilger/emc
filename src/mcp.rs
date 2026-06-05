@@ -17,8 +17,9 @@ use crate::core::formal_slice_facts::{
     NewCommandInput, NewControlDefinition, NewControlInputProvision, NewEventAttribute,
     NewEventDefinition, NewExternalPayloadDefinition, NewNavigationTarget, NewOutcomeDefinition,
     NewReadModelDefinition, NewReadModelField, NewSliceScenario, NewTranslationDefinition,
-    NewViewDefinition, NewViewField, OutcomeEventNames, ReadModelRelationshipFields, ScenarioKind,
-    ScenarioStreamNames, ViewControls, ViewFilters, ViewLocalStates,
+    NewViewDefinition, NewViewField, OutcomeEventNames, ReadModelDerivationSourceFields,
+    ReadModelRelationshipFields, ScenarioKind, ScenarioStreamNames, ViewControls, ViewFilters,
+    ViewLocalStates,
 };
 use crate::core::slice::NewSlice;
 use crate::core::types::{
@@ -992,6 +993,9 @@ fn tools_list_result() -> Result<Value, ShellError> {
                             "type": "string"
                         },
                         "derivation_rule": {
+                            "type": "string"
+                        },
+                        "derivation_source_fields": {
                             "type": "string"
                         },
                         "derivation_scenario": {
@@ -2808,6 +2812,9 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
     let source_event = arguments.get("source_event").and_then(Value::as_str);
     let source_attribute = arguments.get("source_attribute").and_then(Value::as_str);
     let derivation_rule = arguments.get("derivation_rule").and_then(Value::as_str);
+    let derivation_source_fields = arguments
+        .get("derivation_source_fields")
+        .and_then(Value::as_str);
     let derivation_scenario = arguments.get("derivation_scenario").and_then(Value::as_str);
     let absence_event = arguments.get("absence_event").and_then(Value::as_str);
     let absence_scenario = arguments.get("absence_scenario").and_then(Value::as_str);
@@ -2815,11 +2822,12 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
         source_event,
         source_attribute,
         derivation_rule,
+        derivation_source_fields,
         derivation_scenario,
         absence_event,
         absence_scenario,
     ) {
-        (Some(raw_source_event), Some(raw_source_attribute), None, None, None, None) => {
+        (Some(raw_source_event), Some(raw_source_attribute), None, None, None, None, None) => {
             NewReadModelField::new(
                 field_name,
                 field_source_kind,
@@ -2830,18 +2838,28 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
                 provenance_description,
             )
         }
-        (None, None, Some(raw_derivation_rule), Some(raw_derivation_scenario), None, None) => {
-            NewReadModelField::new_derivation(
-                field_name,
-                field_source_kind,
-                parse_read_model_derivation_rule(raw_derivation_rule)
+        (
+            None,
+            None,
+            Some(raw_derivation_rule),
+            Some(raw_derivation_source_fields),
+            Some(raw_derivation_scenario),
+            None,
+            None,
+        ) => NewReadModelField::new_derivation(
+            field_name,
+            field_source_kind,
+            parse_read_model_derivation_rule(raw_derivation_rule)
+                .map_err(|error| ShellError::message(error.to_string()))?,
+            ReadModelDerivationSourceFields::from_fields(
+                parse_datum_names(raw_derivation_source_fields)
                     .map_err(|error| ShellError::message(error.to_string()))?,
-                parse_scenario_name(raw_derivation_scenario)
-                    .map_err(|error| ShellError::message(error.to_string()))?,
-                provenance_description,
-            )
-        }
-        (None, None, None, None, Some(raw_absence_event), Some(raw_absence_scenario)) => {
+            ),
+            parse_scenario_name(raw_derivation_scenario)
+                .map_err(|error| ShellError::message(error.to_string()))?,
+            provenance_description,
+        ),
+        (None, None, None, None, None, Some(raw_absence_event), Some(raw_absence_scenario)) => {
             NewReadModelField::new_absence_default(
                 field_name,
                 field_source_kind,
@@ -2852,24 +2870,27 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
                 provenance_description,
             )
         }
-        (Some(_), None, _, _, _, _) | (None, Some(_), _, _, _, _) => {
+        (Some(_), None, _, _, _, _, _) | (None, Some(_), _, _, _, _, _) => {
             return Err(ShellError::message(
                 "add_read_model_definition requires source_event and source_attribute together",
             ));
         }
-        (_, _, Some(_), None, _, _) | (_, _, None, Some(_), _, _) => {
+        (_, _, Some(_), None, _, _, _)
+        | (_, _, None, Some(_), _, _, _)
+        | (_, _, Some(_), _, None, _, _)
+        | (_, _, None, _, Some(_), _, _) => {
             return Err(ShellError::message(
-                "add_read_model_definition requires derivation_rule and derivation_scenario together",
+                "add_read_model_definition requires derivation_rule, derivation_source_fields, and derivation_scenario together",
             ));
         }
-        (_, _, _, _, Some(_), None) | (_, _, _, _, None, Some(_)) => {
+        (_, _, _, _, _, Some(_), None) | (_, _, _, _, _, None, Some(_)) => {
             return Err(ShellError::message(
                 "add_read_model_definition requires absence_event and absence_scenario together",
             ));
         }
         _ => {
             return Err(ShellError::message(
-                "add_read_model_definition requires source_event/source_attribute, derivation_rule/derivation_scenario, or absence_event/absence_scenario",
+                "add_read_model_definition requires source_event/source_attribute, derivation_rule/derivation_source_fields/derivation_scenario, or absence_event/absence_scenario",
             ));
         }
     };

@@ -344,11 +344,15 @@ def sliceStateChangeRequiresEvent : Prop := sliceKind = \"state_change\" -> slic
         )
         .replace(
             "structure ReadModelField where\n  name : String\n  sourceKind : String\n  sourceEvent : String\n  sourceAttribute : String\n  derivationRule : String\n  absenceEvent : String\n  provenanceDescription : String",
-            "structure ReadModelField where\n  name : String\n  sourceKind : String\n  sourceEvent : String\n  sourceAttribute : String\n  derivationRule : String\n  absenceEvent : String\n  derivationScenarioName : String\n  absenceScenarioName : String\n  provenanceDescription : String",
+            "structure ReadModelField where\n  name : String\n  sourceKind : String\n  sourceEvent : String\n  sourceAttribute : String\n  derivationRule : String\n  derivationSourceFields : List String\n  absenceEvent : String\n  derivationScenarioName : String\n  absenceScenarioName : String\n  provenanceDescription : String",
         )
         .replace(
             "structure ReadModelDefinition where\n  name : String\n  fields : List ReadModelField",
             "structure ReadModelDefinition where\n  name : String\n  fields : List ReadModelField\n  transitive : Bool\n  relationshipFields : List String\n  transitiveRule : String\n  exampleScenarioName : String",
+        )
+        .replace(
+            "def readModelFieldSourceIsComplete (field : ReadModelField) : Bool := (field.sourceKind == \"event_attribute\" && field.sourceEvent.isEmpty == false && field.sourceAttribute.isEmpty == false) || (field.sourceKind == \"derivation\" && field.derivationRule.isEmpty == false) || (field.sourceKind == \"absence_default\" && field.absenceEvent.isEmpty == false)",
+            "def readModelFieldSourceIsComplete (field : ReadModelField) : Bool := (field.sourceKind == \"event_attribute\" && field.sourceEvent.isEmpty == false && field.sourceAttribute.isEmpty == false) || (field.sourceKind == \"derivation\" && field.derivationRule.isEmpty == false && field.derivationSourceFields.isEmpty == false) || (field.sourceKind == \"absence_default\" && field.absenceEvent.isEmpty == false)",
         )
         .replace(
             "def sliceEventDefinitions : List EventDefinition := []",
