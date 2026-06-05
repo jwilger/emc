@@ -5,13 +5,14 @@ use clap::{Arg, Command as ClapCommand};
 use emc::command;
 use emc::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use emc::core::formal_slice_facts::{
-    CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, EmittedEventNames,
-    NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
-    NewCommandDefinition, NewCommandErrorDefinition, NewCommandInput, NewControlDefinition,
-    NewControlInputProvision, NewEventAttribute, NewEventDefinition, NewExternalPayloadDefinition,
-    NewNavigationTarget, NewOutcomeDefinition, NewReadModelDefinition, NewReadModelField,
-    NewSliceScenario, NewTranslationDefinition, NewViewDefinition, NewViewField, OutcomeEventNames,
-    ReadModelRelationshipFields, ScenarioKind, ScenarioStreamNames, ViewControls,
+    CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain,
+    CommandObservedStreams, EmittedEventNames, NewAutomationDefinition, NewBitLevelDataFlow,
+    NewBoardConnection, NewBoardElement, NewCommandDefinition, NewCommandErrorDefinition,
+    NewCommandInput, NewControlDefinition, NewControlInputProvision, NewEventAttribute,
+    NewEventDefinition, NewExternalPayloadDefinition, NewNavigationTarget, NewOutcomeDefinition,
+    NewReadModelDefinition, NewReadModelField, NewSliceScenario, NewTranslationDefinition,
+    NewViewDefinition, NewViewField, OutcomeEventNames, ReadModelRelationshipFields, ScenarioKind,
+    ScenarioStreamNames, ViewControls,
 };
 use emc::core::gherkin::GherkinSuite;
 use emc::core::project::ProjectName;
@@ -1957,6 +1958,69 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             input_provenance,
             emits_flag,
             emits,
+            observes_flag,
+            observes,
+        ] if command == "add"
+            && subject == "command"
+            && slice_flag == "--slice"
+            && name_flag == "--name"
+            && input_flag == "--input"
+            && input_source_flag == "--input-source"
+            && input_description_flag == "--input-description"
+            && input_provenance_flag == "--input-provenance"
+            && emits_flag == "--emits"
+            && observes_flag == "--observes" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+            let command_name =
+                parse_command_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+            let input_name =
+                parse_datum_name(input).map_err(|error| ShellError::message(error.to_string()))?;
+            let input_source = parse_command_input_source_kind(input_source)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let input_description = parse_command_input_source_description(input_description)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let provenance_chain = parse_source_chain_hops(input_provenance)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let emitted_events =
+                parse_event_names(emits).map_err(|error| ShellError::message(error.to_string()))?;
+            let observed_streams = parse_stream_names(observes)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::AddCommandDefinition {
+                    command: NewCommandDefinition::new(
+                        slice_slug,
+                        command_name,
+                        NewCommandInput::new(
+                            input_name,
+                            input_source,
+                            input_description,
+                            CommandInputProvenanceChain::from_hops(provenance_chain),
+                        ),
+                        EmittedEventNames::from_events(emitted_events),
+                    )
+                    .with_observed_streams(CommandObservedStreams::from_streams(observed_streams)),
+                },
+            })
+        }
+        [
+            command,
+            subject,
+            slice_flag,
+            slice,
+            name_flag,
+            name,
+            input_flag,
+            input,
+            input_source_flag,
+            input_source,
+            input_description_flag,
+            input_description,
+            input_provenance_flag,
+            input_provenance,
+            emits_flag,
+            emits,
         ] if command == "add"
             && subject == "command"
             && slice_flag == "--slice"
@@ -3055,6 +3119,7 @@ fn help_command() -> ClapCommand {
   emc add workflow-owned-definition --workflow <workflow> --source-slice <slice> --definition-kind <kind> --definition-name <name> [--definition-stream <stream> --source-provenance <text>]
   emc add workflow-transition-evidence --workflow <workflow> --from <step> --to <step> --via <kind> --name <trigger> --source-evidence <text> --target-evidence <text>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]>
+  emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --observes <stream[,stream]>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --singleton <true|false> --repeat-behavior <already_exists_error|idempotent>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --error <name> --error-scenario <scenario> --error-recovery <kind>
   emc add external-payload --slice <slice> --name <name> --field <field> --field-provenance <text> --bit-encoding <semantics>

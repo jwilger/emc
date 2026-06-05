@@ -298,11 +298,35 @@ impl CommandInputProvenanceChain {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CommandObservedStreams {
+    streams: Vec<StreamName>,
+}
+
+impl CommandObservedStreams {
+    pub fn empty() -> Self {
+        Self {
+            streams: Vec::new(),
+        }
+    }
+
+    pub fn from_streams(streams: impl IntoIterator<Item = StreamName>) -> Self {
+        Self {
+            streams: streams.into_iter().collect(),
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[StreamName] {
+        &self.streams
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NewCommandDefinition {
     slice_slug: SliceSlug,
     name: CommandName,
     input: NewCommandInput,
     emitted_events: EmittedEventNames,
+    observed_streams: CommandObservedStreams,
     errors: CommandErrorDefinitions,
     singleton_repeat_behavior: Option<SingletonRepeatBehavior>,
 }
@@ -319,9 +343,15 @@ impl NewCommandDefinition {
             name,
             input,
             emitted_events,
+            observed_streams: CommandObservedStreams::empty(),
             errors: CommandErrorDefinitions::empty(),
             singleton_repeat_behavior: None,
         }
+    }
+
+    pub fn with_observed_streams(mut self, observed_streams: CommandObservedStreams) -> Self {
+        self.observed_streams = observed_streams;
+        self
     }
 
     pub fn with_errors(mut self, errors: CommandErrorDefinitions) -> Self {
@@ -2023,10 +2053,11 @@ fn quint_scenario_record(scenario: &NewSliceScenario) -> String {
 
 fn lean_command_definition_record(command: &NewCommandDefinition) -> String {
     format!(
-        "{{ name := {}, inputs := [{}], emittedEvents := [{}], observedStreams := [], errors := [{}], singleton := {}, repeatBehavior := {} }}",
+        "{{ name := {}, inputs := [{}], emittedEvents := [{}], observedStreams := [{}], errors := [{}], singleton := {}, repeatBehavior := {} }}",
         quoted(command.name.as_ref()),
         lean_command_input_record(&command.input),
         lean_list(command.emitted_events.as_slice()),
+        lean_list(command.observed_streams.as_slice()),
         command
             .errors
             .as_slice()
@@ -2046,10 +2077,11 @@ fn lean_command_definition_record(command: &NewCommandDefinition) -> String {
 
 fn quint_command_definition_record(command: &NewCommandDefinition) -> String {
     format!(
-        "{{ name: {}, inputs: [{}], emittedEvents: [{}], observedStreams: [], errors: [{}], singleton: {}, repeatBehavior: {} }}",
+        "{{ name: {}, inputs: [{}], emittedEvents: [{}], observedStreams: [{}], errors: [{}], singleton: {}, repeatBehavior: {} }}",
         quoted(command.name.as_ref()),
         quint_command_input_record(&command.input),
         quint_list(command.emitted_events.as_slice()),
+        quint_list(command.observed_streams.as_slice()),
         command
             .errors
             .as_slice()

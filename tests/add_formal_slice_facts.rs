@@ -701,6 +701,58 @@ mod tests {
     }
 
     #[test]
+    fn add_command_definition_records_event_stream_input_source() -> Result<(), Box<dyn Error>> {
+        let temp_dir = initialized_project_with_slice()?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "command",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "CaptureTicket",
+                "--input",
+                "ticket_status",
+                "--input-source",
+                "event_stream_state",
+                "--input-description",
+                "current ticket status loaded from the ticket stream",
+                "--input-provenance",
+                "TicketCaptured.status -> ticket_status",
+                "--emits",
+                "TicketCaptured",
+                "--observes",
+                "tickets",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added command CaptureTicket to slice capture-ticket",
+            ));
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            lean.contains("observedStreams := [\"tickets\"]"),
+            "Lean slice artifact must carry event streams observed for command inputs"
+        );
+        assert!(
+            quint.contains("observedStreams: [\"tickets\"]"),
+            "Quint slice artifact must carry event streams observed for command inputs"
+        );
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    #[test]
     fn add_command_definition_with_error_updates_formal_slice_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
@@ -964,6 +1016,35 @@ mod tests {
         assert!(
             lean.contains("singleton := true, repeatBehavior := \"idempotent\""),
             "MCP-authored singleton repeat behavior must be represented in the Lean artifact"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_authors_event_stream_command_inputs() -> Result<(), Box<dyn Error>> {
+        let temp_dir = initialized_project_with_slice()?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(mcp_event_stream_command_input_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"add_command_definition\""))
+            .stdout(predicate::str::contains(
+                "added command CaptureTicket to slice capture-ticket",
+            ));
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            lean.contains("observedStreams := [\"tickets\"]"),
+            "MCP-authored event-stream command inputs must be represented in the Lean artifact"
+        );
+        assert!(
+            quint.contains("observedStreams: [\"tickets\"]"),
+            "MCP-authored event-stream command inputs must be represented in the Quint artifact"
         );
 
         Ok(())
@@ -4348,6 +4429,14 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_command_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"CaptureTicket\",\"input\":\"ticket_title\",\"input_source\":\"actor\",\"input_description\":\"title field on the intake form\",\"input_provenance\":\"actor keystrokes -> form field\",\"emits\":\"TicketCaptured\",\"singleton\":true,\"repeat_behavior\":\"idempotent\"}}}\n",
+        )
+    }
+
+    fn mcp_event_stream_command_input_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_command_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"CaptureTicket\",\"input\":\"ticket_status\",\"input_source\":\"event_stream_state\",\"input_description\":\"current ticket status loaded from the ticket stream\",\"input_provenance\":\"TicketCaptured.status -> ticket_status\",\"emits\":\"TicketCaptured\",\"observes\":\"tickets\"}}}\n",
         )
     }
 

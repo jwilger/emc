@@ -11,13 +11,14 @@ use serde_json::{Value, json};
 use crate::command;
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::formal_slice_facts::{
-    CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, EmittedEventNames,
-    NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
-    NewCommandDefinition, NewCommandErrorDefinition, NewCommandInput, NewControlDefinition,
-    NewControlInputProvision, NewEventAttribute, NewEventDefinition, NewExternalPayloadDefinition,
-    NewNavigationTarget, NewOutcomeDefinition, NewReadModelDefinition, NewReadModelField,
-    NewSliceScenario, NewTranslationDefinition, NewViewDefinition, NewViewField, OutcomeEventNames,
-    ReadModelRelationshipFields, ScenarioKind, ScenarioStreamNames, ViewControls,
+    CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain,
+    CommandObservedStreams, EmittedEventNames, NewAutomationDefinition, NewBitLevelDataFlow,
+    NewBoardConnection, NewBoardElement, NewCommandDefinition, NewCommandErrorDefinition,
+    NewCommandInput, NewControlDefinition, NewControlInputProvision, NewEventAttribute,
+    NewEventDefinition, NewExternalPayloadDefinition, NewNavigationTarget, NewOutcomeDefinition,
+    NewReadModelDefinition, NewReadModelField, NewSliceScenario, NewTranslationDefinition,
+    NewViewDefinition, NewViewField, OutcomeEventNames, ReadModelRelationshipFields, ScenarioKind,
+    ScenarioStreamNames, ViewControls,
 };
 use crate::core::slice::NewSlice;
 use crate::core::types::{
@@ -795,6 +796,9 @@ fn tools_list_result() -> Result<Value, ShellError> {
                             "type": "string"
                         },
                         "emits": {
+                            "type": "string"
+                        },
+                        "observes": {
                             "type": "string"
                         },
                         "singleton": {
@@ -2350,6 +2354,12 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         .and_then(|raw_emits| {
             parse_event_names(raw_emits).map_err(|error| ShellError::message(error.to_string()))
         })?;
+    let observed_streams = arguments
+        .get("observes")
+        .and_then(Value::as_str)
+        .map(parse_stream_names)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
     let command_errors = parse_optional_command_errors(arguments)?;
 
     let singleton_repeat_behavior = parse_optional_singleton_repeat_behavior(arguments)?;
@@ -2364,6 +2374,9 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         ),
         EmittedEventNames::from_events(emitted_events),
     )
+    .with_observed_streams(CommandObservedStreams::from_streams(
+        observed_streams.unwrap_or_default(),
+    ))
     .with_errors(command_errors);
     let command_definition = singleton_repeat_behavior
         .map_or(command_definition.clone(), |behavior| {
