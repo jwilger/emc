@@ -510,6 +510,26 @@ impl NewEventAttribute {
             provenance_description,
         }
     }
+
+    pub fn name(&self) -> &EventAttributeName {
+        &self.name
+    }
+
+    pub fn source_kind(&self) -> &EventAttributeSourceKind {
+        &self.source_kind
+    }
+
+    pub fn source_name(&self) -> &EventAttributeSourceName {
+        &self.source_name
+    }
+
+    pub fn source_field(&self) -> &EventAttributeSourceField {
+        &self.source_field
+    }
+
+    pub fn provenance_description(&self) -> &ProvenanceDescription {
+        &self.provenance_description
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -562,6 +582,10 @@ impl NewEventDefinition {
 
     pub fn name(&self) -> &EventName {
         &self.name
+    }
+
+    pub fn attribute(&self) -> &NewEventAttribute {
+        &self.attribute
     }
 }
 

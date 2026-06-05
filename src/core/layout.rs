@@ -8,8 +8,8 @@ use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
 use crate::core::formal_project_facts::{
     ProjectAutomation, ProjectCommand, ProjectCommandError, ProjectCommandInput, ProjectDataFlow,
-    ProjectEvent, ProjectExternalPayload, ProjectOutcome, ProjectReadModel, ProjectScenario,
-    ProjectStream, ProjectTranslation, ProjectView,
+    ProjectEvent, ProjectEventAttribute, ProjectExternalPayload, ProjectOutcome, ProjectReadModel,
+    ProjectScenario, ProjectStream, ProjectTranslation, ProjectView,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{
@@ -112,6 +112,7 @@ pub struct ModeledProjectRootInventories {
     external_payloads: Vec<ProjectExternalPayload>,
     streams: Vec<ProjectStream>,
     events: Vec<ProjectEvent>,
+    event_attributes: Vec<ProjectEventAttribute>,
 }
 
 pub(crate) struct ModeledProjectRootInventoryParts {
@@ -128,6 +129,7 @@ pub(crate) struct ModeledProjectRootInventoryParts {
     pub(crate) external_payloads: Vec<ProjectExternalPayload>,
     pub(crate) streams: Vec<ProjectStream>,
     pub(crate) events: Vec<ProjectEvent>,
+    pub(crate) event_attributes: Vec<ProjectEventAttribute>,
 }
 
 impl ModeledProjectRootInventories {
@@ -146,6 +148,7 @@ impl ModeledProjectRootInventories {
             external_payloads: parts.external_payloads,
             streams: parts.streams,
             events: parts.events,
+            event_attributes: parts.event_attributes,
         }
     }
 }
@@ -181,6 +184,7 @@ pub fn check_project(
             external_payloads: &project_inventories.external_payloads,
             streams: &project_inventories.streams,
             events: &project_inventories.events,
+            event_attributes: &project_inventories.event_attributes,
         },
     );
     let lean_artifact_paths = modeled_artifact_paths(
@@ -292,6 +296,7 @@ struct ProjectRootInventories<'a> {
     external_payloads: &'a [ProjectExternalPayload],
     streams: &'a [ProjectStream],
     events: &'a [ProjectEvent],
+    event_attributes: &'a [ProjectEventAttribute],
 }
 
 fn project_root_effects(
@@ -321,6 +326,8 @@ fn project_root_effects(
         lean_model_external_payload_list(inventories.external_payloads);
     let lean_model_stream_list = lean_model_stream_list(inventories.streams);
     let lean_model_event_list = lean_model_event_list(inventories.events);
+    let lean_model_event_attribute_list =
+        lean_model_event_attribute_list(inventories.event_attributes);
     let quint_model_slice_list = quint_model_slice_list(formal_workflows);
     let quint_model_slice_module_list = quint_model_slice_module_list(formal_workflows);
     let quint_model_scenario_list = quint_model_scenario_list(inventories.scenarios);
@@ -337,6 +344,8 @@ fn project_root_effects(
         quint_model_external_payload_list(inventories.external_payloads);
     let quint_model_stream_list = quint_model_stream_list(inventories.streams);
     let quint_model_event_list = quint_model_event_list(inventories.events);
+    let quint_model_event_attribute_list =
+        quint_model_event_attribute_list(inventories.event_attributes);
     let model_digest = model_digest(
         project_name,
         modeled_workflows,
@@ -360,6 +369,7 @@ fn project_root_effects(
     let translation_count = inventories.translations.len();
     let external_payload_count = inventories.external_payloads.len();
     let event_count = inventories.events.len();
+    let event_attribute_count = inventories.event_attributes.len();
     let manifest_path = project_path("emc.toml");
     let lean_path = project_path(format!("model/lean/{module_name}.lean"));
     let lakefile_path = project_path("model/lean/lakefile.lean");
@@ -573,6 +583,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelEventAttributes :"),
+            artifact_marker(format!(
+                "def modelEventAttributes : List (String × String × String × String × String × String × String × String) := {lean_model_event_attribute_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelIdentityIsStable"),
             artifact_marker(format!(
                 "theorem modelIdentityIsStable : modelName = {} := rfl",
@@ -727,6 +745,14 @@ fn project_root_effects(
             lean_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelEventAttributesAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelEventAttributesAreDeclared : modelEventAttributes.length = {event_attribute_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
             lean_path,
             artifact_marker("end "),
             artifact_marker(format!("end {module_name}")),
@@ -847,6 +873,14 @@ fn project_root_effects(
             artifact_marker("  type ModelEvent ="),
             artifact_marker(
                 "  type ModelEvent = { workflow: str, slice: str, event: str, stream: str }",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelEventAttribute ="),
+            artifact_marker(
+                "  type ModelEventAttribute = { workflow: str, slice: str, event: str, attribute: str, sourceKind: str, sourceName: str, sourceField: str, provenance: str }",
             ),
             quint_message.clone(),
         ),
@@ -1007,6 +1041,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelEventAttributes:"),
+            artifact_marker(format!(
+                "  val modelEventAttributes: List[ModelEventAttribute] = {quint_model_event_attribute_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelIdentityStable ="),
             artifact_marker(format!(
                 "  val modelIdentityStable = modelName == {}",
@@ -1157,6 +1199,14 @@ fn project_root_effects(
             artifact_marker("  val modelEventsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelEventsAreDeclared = modelEvents.length() == {event_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelEventAttributesAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelEventAttributesAreDeclared = modelEventAttributes.length() == {event_attribute_count}"
             )),
             quint_message.clone(),
         ),
@@ -2899,6 +2949,106 @@ fn quint_model_event_list(project_events: &[ProjectEvent]) -> String {
     )
 }
 
+fn lean_model_event_attribute_list(project_event_attributes: &[ProjectEventAttribute]) -> String {
+    let mut project_event_attributes = project_event_attributes
+        .iter()
+        .map(|attribute| {
+            (
+                attribute.workflow_slug(),
+                attribute.slice_slug(),
+                attribute.event(),
+                attribute.attribute(),
+                attribute.source_kind(),
+                attribute.source_name(),
+                attribute.source_field(),
+                attribute.provenance(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_event_attributes.sort_unstable();
+    format!(
+        "[{}]",
+        project_event_attributes
+            .into_iter()
+            .map(
+                |(
+                    workflow_slug,
+                    slice_slug,
+                    event,
+                    attribute,
+                    source_kind,
+                    source_name,
+                    source_field,
+                    provenance,
+                )| {
+                    format!(
+                        "({}, {}, {}, {}, {}, {}, {}, {})",
+                        json_string(workflow_slug),
+                        json_string(slice_slug),
+                        json_string(event),
+                        json_string(attribute),
+                        json_string(source_kind),
+                        json_string(source_name),
+                        json_string(source_field),
+                        json_string(provenance)
+                    )
+                },
+            )
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_event_attribute_list(project_event_attributes: &[ProjectEventAttribute]) -> String {
+    let mut project_event_attributes = project_event_attributes
+        .iter()
+        .map(|attribute| {
+            (
+                attribute.workflow_slug(),
+                attribute.slice_slug(),
+                attribute.event(),
+                attribute.attribute(),
+                attribute.source_kind(),
+                attribute.source_name(),
+                attribute.source_field(),
+                attribute.provenance(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_event_attributes.sort_unstable();
+    format!(
+        "[{}]",
+        project_event_attributes
+            .into_iter()
+            .map(
+                |(
+                    workflow_slug,
+                    slice_slug,
+                    event,
+                    attribute,
+                    source_kind,
+                    source_name,
+                    source_field,
+                    provenance,
+                )| {
+                    format!(
+                        "{{ workflow: {}, slice: {}, event: {}, attribute: {}, sourceKind: {}, sourceName: {}, sourceField: {}, provenance: {} }}",
+                        json_string(workflow_slug),
+                        json_string(slice_slug),
+                        json_string(event),
+                        json_string(attribute),
+                        json_string(source_kind),
+                        json_string(source_name),
+                        json_string(source_field),
+                        json_string(provenance)
+                    )
+                },
+            )
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn model_digest(
     project_name: &ProjectName,
     modeled_workflows: &[ModeledWorkflowLayout],
@@ -2906,7 +3056,7 @@ fn model_digest(
     inventories: &ProjectRootInventories<'_>,
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
+        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={};event-attributes={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
@@ -2922,7 +3072,8 @@ fn model_digest(
         digest_translations(inventories.translations),
         digest_external_payloads(inventories.external_payloads),
         digest_streams(inventories.streams),
-        digest_events(inventories.events)
+        digest_events(inventories.events),
+        digest_event_attributes(inventories.event_attributes)
     )
 }
 
@@ -3206,6 +3357,45 @@ fn digest_events(project_events: &[ProjectEvent]) -> String {
         .map(|(workflow_slug, slice_slug, event, stream)| {
             format!("{workflow_slug}/{slice_slug}/{event}@{stream}")
         })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_event_attributes(project_event_attributes: &[ProjectEventAttribute]) -> String {
+    let mut event_attributes = project_event_attributes
+        .iter()
+        .map(|attribute| {
+            (
+                attribute.workflow_slug(),
+                attribute.slice_slug(),
+                attribute.event(),
+                attribute.attribute(),
+                attribute.source_kind(),
+                attribute.source_name(),
+                attribute.source_field(),
+                attribute.provenance(),
+            )
+        })
+        .collect::<Vec<_>>();
+    event_attributes.sort_unstable();
+    event_attributes
+        .into_iter()
+        .map(
+            |(
+                workflow_slug,
+                slice_slug,
+                event,
+                attribute,
+                source_kind,
+                source_name,
+                source_field,
+                provenance,
+            )| {
+                format!(
+                    "{workflow_slug}/{slice_slug}/{event}/{attribute}@{source_kind}#{source_name}.{source_field}#{provenance}"
+                )
+            },
+        )
         .collect::<Vec<_>>()
         .join(",")
 }
