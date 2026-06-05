@@ -4,8 +4,10 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 use std::fs;
 use std::io;
+use std::net::TcpListener;
 use std::path::Path;
-use std::process::{self, Command};
+use std::path::PathBuf;
+use std::process::Command;
 
 use crate::core::connection::{connect_workflow, remove_transition};
 use crate::core::effect::{
@@ -1516,7 +1518,10 @@ fn remove_file_if_present(path: &str) -> Result<(), ShellError> {
 }
 
 fn run_process(invocation: &ProcessInvocation) -> Result<Vec<String>, ShellError> {
-    let arguments = process_arguments(invocation);
+    let ProcessCommand {
+        arguments,
+        _endpoint_guard,
+    } = process_arguments(invocation)?;
     let output = Command::new(invocation.program().as_ref())
         .args(arguments)
         .output()
@@ -1540,13 +1545,19 @@ fn run_process(invocation: &ProcessInvocation) -> Result<Vec<String>, ShellError
     }
 }
 
-fn process_arguments(invocation: &ProcessInvocation) -> Vec<String> {
+struct ProcessCommand {
+    arguments: Vec<String>,
+    _endpoint_guard: Option<ReservedQuintEndpoint>,
+}
+
+fn process_arguments(invocation: &ProcessInvocation) -> Result<ProcessCommand, ShellError> {
     let mut arguments = invocation
         .arguments()
         .iter()
         .map(|argument| argument.as_ref().to_owned())
         .collect::<Vec<_>>();
 
+    let mut endpoint_guard = None;
     if invocation.program().as_ref() == "quint"
         && arguments.first().map(String::as_str) == Some("verify")
         && !arguments
@@ -1554,18 +1565,78 @@ fn process_arguments(invocation: &ProcessInvocation) -> Vec<String> {
             .any(|argument| argument == "--server-endpoint")
     {
         let input_position = arguments.len().saturating_sub(1);
+        let endpoint = quint_server_endpoint()?;
         arguments.insert(input_position, "--server-endpoint".to_owned());
-        arguments.insert(input_position + 1, quint_server_endpoint());
+        arguments.insert(input_position + 1, endpoint.endpoint().to_owned());
+        endpoint_guard = Some(endpoint);
     }
 
-    arguments
+    Ok(ProcessCommand {
+        arguments,
+        _endpoint_guard: endpoint_guard,
+    })
 }
 
-fn quint_server_endpoint() -> String {
-    env::var("EMC_QUINT_SERVER_ENDPOINT").unwrap_or_else(|_| {
-        let port = 20_000 + (process::id() % 40_000);
-        format!("127.0.0.1:{port}")
-    })
+struct ReservedQuintEndpoint {
+    endpoint: String,
+    _lock: Option<QuintEndpointLock>,
+}
+
+impl ReservedQuintEndpoint {
+    fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
+}
+
+struct QuintEndpointLock {
+    path: PathBuf,
+    _file: fs::File,
+}
+
+impl Drop for QuintEndpointLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+fn quint_server_endpoint() -> Result<ReservedQuintEndpoint, ShellError> {
+    if let Ok(endpoint) = env::var("EMC_QUINT_SERVER_ENDPOINT") {
+        return Ok(ReservedQuintEndpoint {
+            endpoint,
+            _lock: None,
+        });
+    }
+
+    (0..128)
+        .find_map(|_| reserve_quint_endpoint().transpose())
+        .transpose()?
+        .ok_or_else(|| {
+            ShellError::message("could not reserve a unique local Quint Apalache server endpoint")
+        })
+}
+
+fn reserve_quint_endpoint() -> Result<Option<ReservedQuintEndpoint>, ShellError> {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(ShellError::io)?;
+    let port = listener.local_addr().map_err(ShellError::io)?.port();
+    let lock_path = env::temp_dir().join(format!("emc-quint-apalache-{port}.lock"));
+    let lock_file = match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&lock_path)
+    {
+        Ok(file) => file,
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => return Ok(None),
+        Err(error) => return Err(ShellError::io(error)),
+    };
+    drop(listener);
+
+    Ok(Some(ReservedQuintEndpoint {
+        endpoint: format!("127.0.0.1:{port}"),
+        _lock: Some(QuintEndpointLock {
+            path: lock_path,
+            _file: lock_file,
+        }),
+    }))
 }
 
 fn process_diagnostics(stdout: &[u8], stderr: &[u8]) -> String {
