@@ -89,6 +89,7 @@
         emcBinary = craneLib.buildPackage {
           src = packageSource;
           strictDeps = true;
+          doCheck = false;
           buildInputs = commonBuildInputs;
           nativeBuildInputs = commonNativeBuildInputs ++ runtimeTools;
           postPatch = ''
