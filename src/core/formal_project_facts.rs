@@ -392,8 +392,18 @@ impl NewProjectViewDefinition {
             view: project_view.view.clone(),
             read_models: vec![view.field().source_read_model().clone()],
             sketch_tokens: vec![view.field().sketch_token().clone()],
-            local_states: Vec::new(),
-            filters: Vec::new(),
+            local_states: view
+                .local_states()
+                .as_slice()
+                .iter()
+                .map(|target| target.as_ref().to_owned())
+                .collect(),
+            filters: view
+                .filters()
+                .as_slice()
+                .iter()
+                .map(|target| target.as_ref().to_owned())
+                .collect(),
         }
     }
 }

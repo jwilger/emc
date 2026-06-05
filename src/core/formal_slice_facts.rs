@@ -928,6 +928,8 @@ pub struct NewViewDefinition {
     name: ViewName,
     field: NewViewField,
     controls: ViewControls,
+    local_states: ViewLocalStates,
+    filters: ViewFilters,
 }
 
 impl NewViewDefinition {
@@ -937,11 +939,23 @@ impl NewViewDefinition {
             name,
             field,
             controls: ViewControls::empty(),
+            local_states: ViewLocalStates::empty(),
+            filters: ViewFilters::empty(),
         }
     }
 
     pub fn with_controls(mut self, controls: ViewControls) -> Self {
         self.controls = controls;
+        self
+    }
+
+    pub fn with_local_states(mut self, local_states: ViewLocalStates) -> Self {
+        self.local_states = local_states;
+        self
+    }
+
+    pub fn with_filters(mut self, filters: ViewFilters) -> Self {
+        self.filters = filters;
         self
     }
 
@@ -959,6 +973,60 @@ impl NewViewDefinition {
 
     pub fn controls(&self) -> &ViewControls {
         &self.controls
+    }
+
+    pub fn local_states(&self) -> &ViewLocalStates {
+        &self.local_states
+    }
+
+    pub fn filters(&self) -> &ViewFilters {
+        &self.filters
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ViewLocalStates {
+    targets: Vec<NavigationTargetName>,
+}
+
+impl ViewLocalStates {
+    pub fn empty() -> Self {
+        Self {
+            targets: Vec::new(),
+        }
+    }
+
+    pub fn from_targets(targets: impl IntoIterator<Item = NavigationTargetName>) -> Self {
+        Self {
+            targets: targets.into_iter().collect(),
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[NavigationTargetName] {
+        &self.targets
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ViewFilters {
+    targets: Vec<NavigationTargetName>,
+}
+
+impl ViewFilters {
+    pub fn empty() -> Self {
+        Self {
+            targets: Vec::new(),
+        }
+    }
+
+    pub fn from_targets(targets: impl IntoIterator<Item = NavigationTargetName>) -> Self {
+        Self {
+            targets: targets.into_iter().collect(),
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[NavigationTargetName] {
+        &self.targets
     }
 }
 
@@ -2409,7 +2477,7 @@ fn quint_read_model_field_record(field: &NewReadModelField) -> String {
 
 fn lean_view_definition_record(view: &NewViewDefinition) -> String {
     format!(
-        "{{ name := {}, readModels := [{}], fields := [{}], controls := [{}], sketchTokens := [{}], localStates := [], filters := [] }}",
+        "{{ name := {}, readModels := [{}], fields := [{}], controls := [{}], sketchTokens := [{}], localStates := [{}], filters := [{}] }}",
         quoted(view.name.as_ref()),
         quoted(view.field.source_read_model.as_ref()),
         lean_view_field_record(&view.field),
@@ -2420,12 +2488,14 @@ fn lean_view_definition_record(view: &NewViewDefinition) -> String {
             .collect::<Vec<_>>()
             .join(","),
         lean_list(&view_sketch_tokens(view)),
+        lean_list(view.local_states.as_slice()),
+        lean_list(view.filters.as_slice()),
     )
 }
 
 fn quint_view_definition_record(view: &NewViewDefinition) -> String {
     format!(
-        "{{ name: {}, readModels: [{}], fields: [{}], controls: [{}], sketchTokens: [{}], localStates: [], filters: [] }}",
+        "{{ name: {}, readModels: [{}], fields: [{}], controls: [{}], sketchTokens: [{}], localStates: [{}], filters: [{}] }}",
         quoted(view.name.as_ref()),
         quoted(view.field.source_read_model.as_ref()),
         quint_view_field_record(&view.field),
@@ -2436,6 +2506,8 @@ fn quint_view_definition_record(view: &NewViewDefinition) -> String {
             .collect::<Vec<_>>()
             .join(","),
         quint_list(&view_sketch_tokens(view)),
+        quint_list(view.local_states.as_slice()),
+        quint_list(view.filters.as_slice()),
     )
 }
 

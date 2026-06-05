@@ -18,7 +18,7 @@ use crate::core::formal_slice_facts::{
     NewEventDefinition, NewExternalPayloadDefinition, NewNavigationTarget, NewOutcomeDefinition,
     NewReadModelDefinition, NewReadModelField, NewSliceScenario, NewTranslationDefinition,
     NewViewDefinition, NewViewField, OutcomeEventNames, ReadModelRelationshipFields, ScenarioKind,
-    ScenarioStreamNames, ViewControls,
+    ScenarioStreamNames, ViewControls, ViewFilters, ViewLocalStates,
 };
 use crate::core::slice::NewSlice;
 use crate::core::types::{
@@ -40,12 +40,13 @@ use crate::io::dto::{
     parse_event_attribute_source_field, parse_event_attribute_source_kind,
     parse_event_attribute_source_name, parse_event_name, parse_event_names,
     parse_model_description, parse_model_name, parse_navigation_target_name,
-    parse_navigation_target_type, parse_outcome_label_name, parse_payload_contract_name,
-    parse_project_name, parse_provenance_description, parse_read_model_derivation_rule,
-    parse_read_model_field_source_kind, parse_read_model_name, parse_read_model_transitive_rule,
-    parse_review_timestamp, parse_reviewer_id, parse_scenario_name, parse_scenario_step_text,
-    parse_singleton_repeat_behavior, parse_sketch_token, parse_slice_kind, parse_slice_slug,
-    parse_source_chain_hops, parse_stream_name, parse_stream_names, parse_transformation_semantics,
+    parse_navigation_target_names, parse_navigation_target_type, parse_outcome_label_name,
+    parse_payload_contract_name, parse_project_name, parse_provenance_description,
+    parse_read_model_derivation_rule, parse_read_model_field_source_kind, parse_read_model_name,
+    parse_read_model_transitive_rule, parse_review_timestamp, parse_reviewer_id,
+    parse_scenario_name, parse_scenario_step_text, parse_singleton_repeat_behavior,
+    parse_sketch_token, parse_slice_kind, parse_slice_slug, parse_source_chain_hops,
+    parse_stream_name, parse_stream_names, parse_transformation_semantics,
     parse_transition_trigger_name, parse_translation_external_event_name, parse_translation_name,
     parse_view_field_name, parse_view_field_source_kind, parse_view_name,
     parse_workflow_entry_lifecycle_evidence_text, parse_workflow_entry_lifecycle_state_name,
@@ -1086,6 +1087,12 @@ fn tools_list_result() -> Result<Value, ShellError> {
                             "type": "string"
                         },
                         "navigation_target": {
+                            "type": "string"
+                        },
+                        "local_states": {
+                            "type": "string"
+                        },
+                        "filters": {
                             "type": "string"
                         },
                         "external_system": {
@@ -3093,6 +3100,18 @@ fn add_view_definition_tool_text(request: &Value) -> Result<String, ShellError> 
             ));
         }
     };
+    let local_states = arguments
+        .get("local_states")
+        .and_then(Value::as_str)
+        .map(parse_navigation_target_names)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let filters = arguments
+        .get("filters")
+        .and_then(Value::as_str)
+        .map(parse_navigation_target_names)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
 
     interpret_collect_reports(command::add_view_definition(
         NewViewDefinition::new(
@@ -3109,6 +3128,10 @@ fn add_view_definition_tool_text(request: &Value) -> Result<String, ShellError> 
                 bit_encoding,
             ),
         )
+        .with_local_states(ViewLocalStates::from_targets(
+            local_states.unwrap_or_default(),
+        ))
+        .with_filters(ViewFilters::from_targets(filters.unwrap_or_default()))
         .with_controls(ViewControls::from_controls([NewControlDefinition::new(
             control_name,
             control_command,
