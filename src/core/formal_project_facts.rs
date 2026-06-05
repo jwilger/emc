@@ -5,17 +5,17 @@ use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportL
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, NewBitLevelDataFlow, NewCommandDefinition, NewCommandErrorDefinition,
     NewCommandInput, NewEventAttribute, NewEventDefinition, NewExternalPayloadDefinition,
-    NewReadModelDefinition, NewReadModelField, NewSliceScenario, NewViewDefinition, NewViewField,
-    OutcomeEventNames, ScenarioKind,
+    NewReadModelDefinition, NewReadModelField, NewSliceScenario, NewTranslationDefinition,
+    NewViewDefinition, NewViewField, OutcomeEventNames, ScenarioKind,
 };
 use crate::core::types::{
     AutomationName, BitEncodingSemantics, CommandErrorName, CommandErrorRecoveryKind, CommandName,
     ContractKindName, CoveredDefinitionName, DataFlowSource, DataFlowTarget, DatumName,
     EventAttributeName, EventAttributeSourceField, EventAttributeSourceKind,
-    EventAttributeSourceName, EventName, OutcomeLabelName, ProvenanceDescription,
-    ReadModelFieldSourceKind, ReadModelName, ScenarioName, ScenarioStepText, SliceSlug, StreamName,
-    TransformationSemantics, TranslationName, ViewFieldName, ViewFieldSourceKind, ViewName,
-    WorkflowSlug,
+    EventAttributeSourceName, EventName, OutcomeLabelName, PayloadContractName,
+    ProvenanceDescription, ReadModelFieldSourceKind, ReadModelName, ScenarioName, ScenarioStepText,
+    SliceSlug, StreamName, TransformationSemantics, TranslationExternalEventName, TranslationName,
+    ViewFieldName, ViewFieldSourceKind, ViewName, WorkflowSlug,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -410,6 +410,7 @@ pub struct NewProjectTranslation {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     translation: TranslationName,
+    translation_definition: Option<NewProjectTranslationDefinition>,
 }
 
 impl NewProjectTranslation {
@@ -422,6 +423,48 @@ impl NewProjectTranslation {
             workflow_slug,
             slice_slug,
             translation,
+            translation_definition: None,
+        }
+    }
+
+    pub fn from_translation(
+        workflow_slug: WorkflowSlug,
+        translation: &NewTranslationDefinition,
+    ) -> Self {
+        let mut project_translation = Self::new(
+            workflow_slug,
+            translation.slice_slug().clone(),
+            translation.name().clone(),
+        );
+        project_translation.translation_definition = Some(
+            NewProjectTranslationDefinition::from_translation(&project_translation, translation),
+        );
+        project_translation
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct NewProjectTranslationDefinition {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    translation: TranslationName,
+    external_event: TranslationExternalEventName,
+    payload_contract: PayloadContractName,
+    command: CommandName,
+}
+
+impl NewProjectTranslationDefinition {
+    fn from_translation(
+        project_translation: &NewProjectTranslation,
+        translation: &NewTranslationDefinition,
+    ) -> Self {
+        Self {
+            workflow_slug: project_translation.workflow_slug.clone(),
+            slice_slug: project_translation.slice_slug.clone(),
+            translation: project_translation.translation.clone(),
+            external_event: translation.external_event_name().clone(),
+            payload_contract: translation.payload_contract_name().clone(),
+            command: translation.command_name().clone(),
         }
     }
 }
@@ -1050,6 +1093,42 @@ impl ProjectTranslation {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectTranslationDefinition {
+    workflow_slug: String,
+    slice_slug: String,
+    translation: String,
+    external_event: String,
+    payload_contract: String,
+    command: String,
+}
+
+impl ProjectTranslationDefinition {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn translation(&self) -> &str {
+        &self.translation
+    }
+
+    pub fn external_event(&self) -> &str {
+        &self.external_event
+    }
+
+    pub fn payload_contract(&self) -> &str {
+        &self.payload_contract
+    }
+
+    pub fn command(&self) -> &str {
+        &self.command
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ProjectExternalPayload {
     workflow_slug: String,
     slice_slug: String,
@@ -1581,6 +1660,24 @@ pub fn parse_quint_project_translations(
     )
 }
 
+pub fn parse_lean_project_translation_definitions(
+    contents: &FileContents,
+) -> Result<Vec<ProjectTranslationDefinition>, FormalProjectFactError> {
+    translation_definition_entries_from_list(
+        contents.as_ref(),
+        "def modelTranslationDefinitions : List (String × String × String × String × String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_translation_definitions(
+    contents: &FileContents,
+) -> Result<Vec<ProjectTranslationDefinition>, FormalProjectFactError> {
+    translation_definition_entries_from_list(
+        contents.as_ref(),
+        "val modelTranslationDefinitions: List[ModelTranslationDefinition] = ",
+    )
+}
+
 pub fn parse_lean_project_external_payloads(
     contents: &FileContents,
 ) -> Result<Vec<ProjectExternalPayload>, FormalProjectFactError> {
@@ -1742,6 +1839,8 @@ pub fn add_project_scenario(
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -1767,6 +1866,7 @@ pub fn add_project_scenario(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -1850,6 +1950,8 @@ pub fn add_project_scenario(
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -1875,6 +1977,7 @@ pub fn add_project_scenario(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -1949,6 +2052,8 @@ pub fn add_project_data_flow(
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -1973,6 +2078,7 @@ pub fn add_project_data_flow(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -2028,6 +2134,8 @@ pub fn add_project_data_flow(
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -2053,6 +2161,7 @@ pub fn add_project_data_flow(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -2130,6 +2239,8 @@ pub fn add_project_outcome(
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -2155,6 +2266,7 @@ pub fn add_project_outcome(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -2210,6 +2322,8 @@ pub fn add_project_outcome(
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -2235,6 +2349,7 @@ pub fn add_project_outcome(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -2345,6 +2460,8 @@ pub fn add_project_command(
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -2369,6 +2486,7 @@ pub fn add_project_command(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -2465,6 +2583,8 @@ pub fn add_project_command(
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -2490,6 +2610,7 @@ pub fn add_project_command(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -2621,6 +2742,8 @@ pub fn add_project_read_model(
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -2646,6 +2769,7 @@ pub fn add_project_read_model(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -2737,6 +2861,8 @@ pub fn add_project_read_model(
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -2762,6 +2888,7 @@ pub fn add_project_read_model(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -2859,6 +2986,8 @@ pub fn add_project_view(
             let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -2884,6 +3013,7 @@ pub fn add_project_view(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -2951,6 +3081,8 @@ pub fn add_project_view(
                 parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -2976,6 +3108,7 @@ pub fn add_project_view(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -3042,6 +3175,8 @@ pub fn add_project_automation(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -3067,6 +3202,7 @@ pub fn add_project_automation(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -3113,6 +3249,8 @@ pub fn add_project_automation(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -3138,6 +3276,7 @@ pub fn add_project_automation(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -3167,15 +3306,38 @@ pub fn add_project_translation(
 ) -> Result<EffectPlan, FormalProjectFactError> {
     let lean_record = lean_translation_record(&translation);
     let quint_record = quint_translation_record(&translation);
+    let lean_definition_record = translation
+        .translation_definition
+        .as_ref()
+        .map(lean_translation_definition_record);
+    let quint_definition_record = translation
+        .translation_definition
+        .as_ref()
+        .map(quint_translation_definition_record);
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
         "def modelTranslations : List (String × String × String) := ",
         &lean_record,
     )
     .and_then(|contents| {
+        if let Some(record) = lean_definition_record.as_deref() {
+            append_record_if_missing(
+                &contents,
+                "def modelTranslationDefinitions : List (String × String × String × String × String × String) := ",
+                record,
+            )
+        } else {
+            Ok(contents)
+        }
+    })
+    .and_then(|contents| {
         let translations = translation_entries_from_list(
             &contents,
             "def modelTranslations : List (String × String × String) := ",
+        )?;
+        let translation_definitions = translation_definition_entries_from_list(
+            &contents,
+            "def modelTranslationDefinitions : List (String × String × String × String × String × String) := ",
         )?;
         replace_declaration(
             &contents,
@@ -3185,6 +3347,26 @@ pub fn add_project_translation(
                 translations.len()
             ),
         )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "def modelTranslationDefinitions :",
+                &format!(
+                    "def modelTranslationDefinitions : List (String × String × String × String × String × String) := {}",
+                    lean_translation_definition_list(&translation_definitions)
+                ),
+            )
+        })
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "theorem modelTranslationDefinitionsAreDeclared :",
+                &format!(
+                    "theorem modelTranslationDefinitionsAreDeclared : modelTranslationDefinitions.length = {} := rfl",
+                    translation_definitions.len()
+                ),
+            )
+        })
         .and_then(|contents| {
             let scenarios = parse_lean_project_scenarios_from_contents_or_empty(&contents);
             let scenario_definitions =
@@ -3204,6 +3386,8 @@ pub fn add_project_translation(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -3229,6 +3413,7 @@ pub fn add_project_translation(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -3244,9 +3429,24 @@ pub fn add_project_translation(
         &quint_record,
     )
     .and_then(|contents| {
+        if let Some(record) = quint_definition_record.as_deref() {
+            append_record_if_missing(
+                &contents,
+                "val modelTranslationDefinitions: List[ModelTranslationDefinition] = ",
+                record,
+            )
+        } else {
+            Ok(contents)
+        }
+    })
+    .and_then(|contents| {
         let translations = translation_entries_from_list(
             &contents,
             "val modelTranslations: List[ModelTranslation] = ",
+        )?;
+        let translation_definitions = translation_definition_entries_from_list(
+            &contents,
+            "val modelTranslationDefinitions: List[ModelTranslationDefinition] = ",
         )?;
         replace_declaration(
             &contents,
@@ -3256,6 +3456,26 @@ pub fn add_project_translation(
                 translations.len()
             ),
         )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "val modelTranslationDefinitions:",
+                &format!(
+                    "val modelTranslationDefinitions: List[ModelTranslationDefinition] = {}",
+                    quint_translation_definition_list(&translation_definitions)
+                ),
+            )
+        })
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "val modelTranslationDefinitionsAreDeclared =",
+                &format!(
+                    "val modelTranslationDefinitionsAreDeclared = modelTranslationDefinitions.length() == {}",
+                    translation_definitions.len()
+                ),
+            )
+        })
         .and_then(|contents| {
             let scenarios = parse_quint_project_scenarios_from_contents_or_empty(&contents);
             let scenario_definitions =
@@ -3275,6 +3495,8 @@ pub fn add_project_translation(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -3300,6 +3522,7 @@ pub fn add_project_translation(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -3406,6 +3629,8 @@ pub fn add_project_external_payload(
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -3431,6 +3656,7 @@ pub fn add_project_external_payload(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -3509,6 +3735,8 @@ pub fn add_project_external_payload(
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -3534,6 +3762,7 @@ pub fn add_project_external_payload(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -3601,6 +3830,8 @@ pub fn add_project_stream(
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -3625,6 +3856,7 @@ pub fn add_project_stream(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -3670,6 +3902,8 @@ pub fn add_project_stream(
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let translation_definitions =
+                parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let external_payload_fields =
@@ -3694,6 +3928,7 @@ pub fn add_project_stream(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -3798,6 +4033,10 @@ pub fn add_project_event(
             &contents,
             "def modelTranslations : List (String × String × String) := ",
         )?;
+        let translation_definitions = translation_definition_entries_from_list(
+            &contents,
+            "def modelTranslationDefinitions : List (String × String × String × String × String × String) := ",
+        )?;
         let external_payloads = external_payload_entries_from_list(
             &contents,
             "def modelExternalPayloads : List (String × String × String) := ",
@@ -3854,6 +4093,7 @@ pub fn add_project_event(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -3919,6 +4159,10 @@ pub fn add_project_event(
             &contents,
             "val modelTranslations: List[ModelTranslation] = ",
         )?;
+        let translation_definitions = translation_definition_entries_from_list(
+            &contents,
+            "val modelTranslationDefinitions: List[ModelTranslationDefinition] = ",
+        )?;
         let external_payloads = external_payload_entries_from_list(
             &contents,
             "val modelExternalPayloads: List[ModelExternalPayload] = ",
@@ -3970,6 +4214,7 @@ pub fn add_project_event(
                     view_fields: &view_fields,
                     automations: &automations,
                     translations: &translations,
+                    translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
                     external_payload_fields: &external_payload_fields,
                     streams: &streams,
@@ -4345,6 +4590,26 @@ fn parse_quint_project_translations_from_contents_or_empty(
 ) -> Vec<ProjectTranslation> {
     translation_entries_from_list(contents, "val modelTranslations: List[ModelTranslation] = ")
         .unwrap_or_default()
+}
+
+fn parse_lean_project_translation_definitions_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectTranslationDefinition> {
+    translation_definition_entries_from_list(
+        contents,
+        "def modelTranslationDefinitions : List (String × String × String × String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_translation_definitions_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectTranslationDefinition> {
+    translation_definition_entries_from_list(
+        contents,
+        "val modelTranslationDefinitions: List[ModelTranslationDefinition] = ",
+    )
+    .unwrap_or_default()
 }
 
 fn parse_lean_project_external_payloads_from_contents_or_empty(
@@ -4832,6 +5097,36 @@ fn translation_entries_from_list(
     Ok(translations)
 }
 
+fn translation_definition_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectTranslationDefinition>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut definitions = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let strings = quoted_strings(&record)?;
+            if strings.len() != 6 {
+                Err(FormalProjectFactError::new(
+                    "formal project translation definition record is malformed",
+                ))
+            } else {
+                Ok(ProjectTranslationDefinition {
+                    workflow_slug: strings[0].clone(),
+                    slice_slug: strings[1].clone(),
+                    translation: strings[2].clone(),
+                    external_event: strings[3].clone(),
+                    payload_contract: strings[4].clone(),
+                    command: strings[5].clone(),
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    definitions.sort();
+    definitions.dedup();
+    Ok(definitions)
+}
+
 fn external_payload_entries_from_list(
     contents: &str,
     marker: &str,
@@ -5191,6 +5486,7 @@ struct ProjectDigestInventories<'a> {
     view_fields: &'a [ProjectViewField],
     automations: &'a [ProjectAutomation],
     translations: &'a [ProjectTranslation],
+    translation_definitions: &'a [ProjectTranslationDefinition],
     external_payloads: &'a [ProjectExternalPayload],
     external_payload_fields: &'a [ProjectExternalPayloadField],
     streams: &'a [ProjectStream],
@@ -5264,6 +5560,7 @@ fn digest_with_project_inventories(
         .or_else(|| current_digest.split_once(";view-fields="))
         .or_else(|| current_digest.split_once(";automations="))
         .or_else(|| current_digest.split_once(";translations="))
+        .or_else(|| current_digest.split_once(";translation-definitions="))
         .or_else(|| current_digest.split_once(";external-payloads="))
         .or_else(|| current_digest.split_once(";external-payload-fields="))
         .or_else(|| current_digest.split_once(";streams="))
@@ -5271,7 +5568,7 @@ fn digest_with_project_inventories(
         .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-fields={};automations={};translations={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
+        "{prefix};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-fields={};automations={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
         digest_scenarios(inventories.scenarios),
         digest_scenario_definitions(inventories.scenario_definitions),
         digest_data_flows(inventories.data_flows),
@@ -5286,6 +5583,7 @@ fn digest_with_project_inventories(
         digest_view_fields(inventories.view_fields),
         digest_automations(inventories.automations),
         digest_translations(inventories.translations),
+        digest_translation_definitions(inventories.translation_definitions),
         digest_external_payloads(inventories.external_payloads),
         digest_external_payload_fields(inventories.external_payload_fields),
         digest_streams(inventories.streams),
@@ -5525,6 +5823,24 @@ fn digest_translations(translations: &[ProjectTranslation]) -> String {
             format!(
                 "{}/{}/{}",
                 translation.workflow_slug, translation.slice_slug, translation.translation
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_translation_definitions(definitions: &[ProjectTranslationDefinition]) -> String {
+    definitions
+        .iter()
+        .map(|definition| {
+            format!(
+                "{}/{}/{}@{}#{}#{}",
+                definition.workflow_slug,
+                definition.slice_slug,
+                definition.translation,
+                definition.external_event,
+                definition.payload_contract,
+                definition.command
             )
         })
         .collect::<Vec<_>>()
@@ -6265,6 +6581,76 @@ fn quint_translation_record(translation: &NewProjectTranslation) -> String {
         quoted(translation.workflow_slug.as_ref()),
         quoted(translation.slice_slug.as_ref()),
         quoted(translation.translation.as_ref())
+    )
+}
+
+fn lean_translation_definition_record(definition: &NewProjectTranslationDefinition) -> String {
+    format!(
+        "({}, {}, {}, {}, {}, {})",
+        quoted(definition.workflow_slug.as_ref()),
+        quoted(definition.slice_slug.as_ref()),
+        quoted(definition.translation.as_ref()),
+        quoted(definition.external_event.as_ref()),
+        quoted(definition.payload_contract.as_ref()),
+        quoted(definition.command.as_ref())
+    )
+}
+
+fn quint_translation_definition_record(definition: &NewProjectTranslationDefinition) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, translation: {}, externalEvent: {}, payloadContract: {}, command: {} }}",
+        quoted(definition.workflow_slug.as_ref()),
+        quoted(definition.slice_slug.as_ref()),
+        quoted(definition.translation.as_ref()),
+        quoted(definition.external_event.as_ref()),
+        quoted(definition.payload_contract.as_ref()),
+        quoted(definition.command.as_ref())
+    )
+}
+
+fn lean_translation_definition_list(definitions: &[ProjectTranslationDefinition]) -> String {
+    let mut definitions = definitions.to_vec();
+    definitions.sort();
+    format!(
+        "[{}]",
+        definitions
+            .into_iter()
+            .map(|definition| {
+                format!(
+                    "({}, {}, {}, {}, {}, {})",
+                    quoted(&definition.workflow_slug),
+                    quoted(&definition.slice_slug),
+                    quoted(&definition.translation),
+                    quoted(&definition.external_event),
+                    quoted(&definition.payload_contract),
+                    quoted(&definition.command)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_translation_definition_list(definitions: &[ProjectTranslationDefinition]) -> String {
+    let mut definitions = definitions.to_vec();
+    definitions.sort();
+    format!(
+        "[{}]",
+        definitions
+            .into_iter()
+            .map(|definition| {
+                format!(
+                    "{{ workflow: {}, slice: {}, translation: {}, externalEvent: {}, payloadContract: {}, command: {} }}",
+                    quoted(&definition.workflow_slug),
+                    quoted(&definition.slice_slug),
+                    quoted(&definition.translation),
+                    quoted(&definition.external_event),
+                    quoted(&definition.payload_contract),
+                    quoted(&definition.command)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
     )
 }
 
