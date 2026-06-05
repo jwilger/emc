@@ -1,3 +1,5 @@
+<!-- Copyright 2026 John Wilger -->
+
 # EMC
 
 EMC is the Event Model Compiler. It helps local agents and developers author

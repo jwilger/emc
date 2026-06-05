@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 pub mod connection;
 pub mod digest;
 pub mod effect;

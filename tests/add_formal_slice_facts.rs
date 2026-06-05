@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 #[cfg(test)]
 mod tests {
     use std::error::Error;
@@ -996,6 +998,27 @@ mod tests {
                 "ticket_title",
                 "--field-provenance",
                 "intake_webhook.ticket_title supplied by the external ticket intake system",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "intake_webhook.ticket_title",
+                "--transformation",
+                "decoded from external payload field",
+                "--target",
+                "intake_webhook",
                 "--bit-encoding",
                 "UTF-8 string",
             ])
@@ -2147,6 +2170,27 @@ mod tests {
             ),
             "Quint project root digest must include authored external payload inventory"
         );
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "intake_webhook.ticket_title",
+                "--transformation",
+                "decoded from external payload field",
+                "--target",
+                "intake_webhook",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
 
         Command::cargo_bin("emc")?
             .args([
@@ -4915,6 +4959,27 @@ mod tests {
             ),
             "Quint project root digest must include authored translation inventory"
         );
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "intake_webhook.ticket_title",
+                "--transformation",
+                "decoded from external payload field",
+                "--target",
+                "intake_webhook",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
 
         Command::cargo_bin("emc")?
             .args(["check"])

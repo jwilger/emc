@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 use crate::core::effect::{
     Effect, EffectPlan, ProcessArgument, ProcessInvocation, ProgramName, ProjectPath, ReportLine,
 };

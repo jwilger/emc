@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 use crate::core::effect::{Effect, EffectPlan, ProjectPath, ReportLine};
 use crate::core::types::WorkflowSlug;
 

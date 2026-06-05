@@ -1,3 +1,5 @@
+<!-- Copyright 2026 John Wilger -->
+
 # EMC Completion Audit - 2026-06-03
 
 **Goal:** Identify what remains before EMC can be treated as meeting the full

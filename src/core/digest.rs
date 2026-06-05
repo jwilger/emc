@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 use crate::core::effect::ArtifactDigest;
 use crate::core::types::{
     ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowCommandErrorRecord,

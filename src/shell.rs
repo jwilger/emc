@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::error::Error;

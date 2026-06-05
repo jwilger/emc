@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::effect::{Effect, EffectPlan};
 use crate::core::formal_slice_facts::{

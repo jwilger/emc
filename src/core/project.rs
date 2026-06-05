@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 use nutype::nutype;
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};

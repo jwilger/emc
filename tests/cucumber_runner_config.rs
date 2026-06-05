@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 #[cfg(test)]
 mod tests {
     use std::env;

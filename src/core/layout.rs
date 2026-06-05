@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest};
 use crate::core::effect::{
     ArtifactFileExtension, ArtifactMarker, Effect, EffectPlan, FileContents, ProjectPath,
