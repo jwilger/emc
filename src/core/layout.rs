@@ -11,7 +11,8 @@ use crate::core::formal_project_facts::{
     ProjectCommandInput, ProjectDataFlow, ProjectEvent, ProjectEventAttribute,
     ProjectExternalPayload, ProjectExternalPayloadField, ProjectOutcome, ProjectReadModel,
     ProjectReadModelDefinition, ProjectReadModelField, ProjectScenario, ProjectScenarioDefinition,
-    ProjectStream, ProjectTranslation, ProjectTranslationDefinition, ProjectView, ProjectViewField,
+    ProjectStream, ProjectTranslation, ProjectTranslationDefinition, ProjectView,
+    ProjectViewDefinition, ProjectViewField,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{
@@ -112,6 +113,7 @@ pub struct ModeledProjectRootInventories {
     read_model_definitions: Vec<ProjectReadModelDefinition>,
     read_model_fields: Vec<ProjectReadModelField>,
     views: Vec<ProjectView>,
+    view_definitions: Vec<ProjectViewDefinition>,
     view_fields: Vec<ProjectViewField>,
     automations: Vec<ProjectAutomation>,
     automation_definitions: Vec<ProjectAutomationDefinition>,
@@ -136,6 +138,7 @@ pub(crate) struct ModeledProjectRootInventoryParts {
     pub(crate) read_model_definitions: Vec<ProjectReadModelDefinition>,
     pub(crate) read_model_fields: Vec<ProjectReadModelField>,
     pub(crate) views: Vec<ProjectView>,
+    pub(crate) view_definitions: Vec<ProjectViewDefinition>,
     pub(crate) view_fields: Vec<ProjectViewField>,
     pub(crate) automations: Vec<ProjectAutomation>,
     pub(crate) automation_definitions: Vec<ProjectAutomationDefinition>,
@@ -162,6 +165,7 @@ impl ModeledProjectRootInventories {
             read_model_definitions: parts.read_model_definitions,
             read_model_fields: parts.read_model_fields,
             views: parts.views,
+            view_definitions: parts.view_definitions,
             view_fields: parts.view_fields,
             automations: parts.automations,
             automation_definitions: parts.automation_definitions,
@@ -205,6 +209,7 @@ pub fn check_project(
             read_model_definitions: &project_inventories.read_model_definitions,
             read_model_fields: &project_inventories.read_model_fields,
             views: &project_inventories.views,
+            view_definitions: &project_inventories.view_definitions,
             view_fields: &project_inventories.view_fields,
             automations: &project_inventories.automations,
             automation_definitions: &project_inventories.automation_definitions,
@@ -324,6 +329,7 @@ struct ProjectRootInventories<'a> {
     read_model_definitions: &'a [ProjectReadModelDefinition],
     read_model_fields: &'a [ProjectReadModelField],
     views: &'a [ProjectView],
+    view_definitions: &'a [ProjectViewDefinition],
     view_fields: &'a [ProjectViewField],
     automations: &'a [ProjectAutomation],
     automation_definitions: &'a [ProjectAutomationDefinition],
@@ -363,6 +369,8 @@ fn project_root_effects(
     let lean_model_read_model_field_list =
         lean_model_read_model_field_list(inventories.read_model_fields);
     let lean_model_view_list = lean_model_view_list(inventories.views);
+    let lean_model_view_definition_list =
+        lean_model_view_definition_list(inventories.view_definitions);
     let lean_model_view_field_list = lean_model_view_field_list(inventories.view_fields);
     let lean_model_automation_list = lean_model_automation_list(inventories.automations);
     let lean_model_automation_definition_list =
@@ -394,6 +402,8 @@ fn project_root_effects(
     let quint_model_read_model_field_list =
         quint_model_read_model_field_list(inventories.read_model_fields);
     let quint_model_view_list = quint_model_view_list(inventories.views);
+    let quint_model_view_definition_list =
+        quint_model_view_definition_list(inventories.view_definitions);
     let quint_model_view_field_list = quint_model_view_field_list(inventories.view_fields);
     let quint_model_automation_list = quint_model_automation_list(inventories.automations);
     let quint_model_automation_definition_list =
@@ -431,6 +441,7 @@ fn project_root_effects(
     let read_model_definition_count = inventories.read_model_definitions.len();
     let read_model_field_count = inventories.read_model_fields.len();
     let view_count = inventories.views.len();
+    let view_definition_count = inventories.view_definitions.len();
     let view_field_count = inventories.view_fields.len();
     let automation_count = inventories.automations.len();
     let automation_definition_count = inventories.automation_definitions.len();
@@ -632,6 +643,14 @@ fn project_root_effects(
             artifact_marker("def modelViews :"),
             artifact_marker(format!(
                 "def modelViews : List (String × String × String) := {lean_model_view_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelViewDefinitions :"),
+            artifact_marker(format!(
+                "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := {lean_model_view_definition_list}"
             )),
             lean_message.clone(),
         ),
@@ -856,6 +875,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelViewDefinitionsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelViewDefinitionsAreDeclared : modelViewDefinitions.length = {view_definition_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelViewFieldsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelViewFieldsAreDeclared : modelViewFields.length = {view_field_count} := rfl"
@@ -1042,6 +1069,14 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  type ModelView ="),
             artifact_marker("  type ModelView = { workflow: str, slice: str, view: str }"),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelViewDefinition ="),
+            artifact_marker(
+                "  type ModelViewDefinition = { workflow: str, slice: str, view: str, readModels: List[str], sketchTokens: List[str], localStates: List[str], filters: List[str] }",
+            ),
             quint_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -1263,6 +1298,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelViewDefinitions:"),
+            artifact_marker(format!(
+                "  val modelViewDefinitions: List[ModelViewDefinition] = {quint_model_view_definition_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelViewFields:"),
             artifact_marker(format!(
                 "  val modelViewFields: List[ModelViewField] = {quint_model_view_field_list}"
@@ -1477,6 +1520,14 @@ fn project_root_effects(
             artifact_marker("  val modelViewsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelViewsAreDeclared = modelViews.length() == {view_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelViewDefinitionsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelViewDefinitionsAreDeclared = modelViewDefinitions.length() == {view_definition_count}"
             )),
             quint_message.clone(),
         ),
@@ -3345,6 +3396,54 @@ fn quint_model_view_list(project_views: &[ProjectView]) -> String {
     )
 }
 
+fn lean_model_view_definition_list(project_view_definitions: &[ProjectViewDefinition]) -> String {
+    let mut project_view_definitions = project_view_definitions.to_vec();
+    project_view_definitions.sort();
+    format!(
+        "[{}]",
+        project_view_definitions
+            .into_iter()
+            .map(|definition| {
+                format!(
+                    "({}, {}, {}, [{}], [{}], [{}], [{}])",
+                    json_string(definition.workflow_slug()),
+                    json_string(definition.slice_slug()),
+                    json_string(definition.view()),
+                    json_string_list(definition.read_models()),
+                    json_string_list(definition.sketch_tokens()),
+                    json_string_list(definition.local_states()),
+                    json_string_list(definition.filters())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_view_definition_list(project_view_definitions: &[ProjectViewDefinition]) -> String {
+    let mut project_view_definitions = project_view_definitions.to_vec();
+    project_view_definitions.sort();
+    format!(
+        "[{}]",
+        project_view_definitions
+            .into_iter()
+            .map(|definition| {
+                format!(
+                    "{{ workflow: {}, slice: {}, view: {}, readModels: [{}], sketchTokens: [{}], localStates: [{}], filters: [{}] }}",
+                    json_string(definition.workflow_slug()),
+                    json_string(definition.slice_slug()),
+                    json_string(definition.view()),
+                    json_string_list(definition.read_models()),
+                    json_string_list(definition.sketch_tokens()),
+                    json_string_list(definition.local_states()),
+                    json_string_list(definition.filters())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn lean_model_view_field_list(project_view_fields: &[ProjectViewField]) -> String {
     let mut project_view_fields = project_view_fields
         .iter()
@@ -3977,7 +4076,7 @@ fn model_digest(
     inventories: &ProjectRootInventories<'_>,
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-fields={};automations={};automation-definitions={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
+        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-definitions={};view-fields={};automations={};automation-definitions={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
@@ -3992,6 +4091,7 @@ fn model_digest(
         digest_read_model_definitions(inventories.read_model_definitions),
         digest_read_model_fields(inventories.read_model_fields),
         digest_views(inventories.views),
+        digest_view_definitions(inventories.view_definitions),
         digest_view_fields(inventories.view_fields),
         digest_automations(inventories.automations),
         digest_automation_definitions(inventories.automation_definitions),
@@ -4296,6 +4396,27 @@ fn digest_views(project_views: &[ProjectView]) -> String {
     views
         .into_iter()
         .map(|(workflow_slug, slice_slug, view)| format!("{workflow_slug}/{slice_slug}/{view}"))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_view_definitions(project_view_definitions: &[ProjectViewDefinition]) -> String {
+    let mut view_definitions = project_view_definitions.to_vec();
+    view_definitions.sort();
+    view_definitions
+        .into_iter()
+        .map(|definition| {
+            format!(
+                "{}/{}/{}@{}#{}#{}#{}",
+                definition.workflow_slug(),
+                definition.slice_slug(),
+                definition.view(),
+                definition.read_models().join("|"),
+                definition.sketch_tokens().join("|"),
+                definition.local_states().join("|"),
+                definition.filters().join("|")
+            )
+        })
         .collect::<Vec<_>>()
         .join(",")
 }

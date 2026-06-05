@@ -879,6 +879,10 @@ impl NewViewField {
         &self.source_field
     }
 
+    pub fn sketch_token(&self) -> &SketchToken {
+        &self.sketch_token
+    }
+
     pub fn provenance_description(&self) -> &ProvenanceDescription {
         &self.provenance_description
     }
