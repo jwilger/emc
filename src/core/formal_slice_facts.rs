@@ -264,6 +264,10 @@ impl NewCommandDefinition {
     pub fn slice_slug(&self) -> &SliceSlug {
         &self.slice_slug
     }
+
+    pub fn name(&self) -> &CommandName {
+        &self.name
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
