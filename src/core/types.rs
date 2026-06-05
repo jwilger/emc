@@ -153,13 +153,6 @@ pub struct WorkflowTransitionEndpoint(String);
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
-pub struct WorkflowSliceFileReference(String);
-
-#[nutype(
-    sanitize(trim),
-    validate(not_empty),
-    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
-)]
 pub struct WorkflowStepRelationshipName(String);
 
 fn workflow_step_relationship_name(value: &str) -> WorkflowStepRelationshipName {

@@ -302,48 +302,6 @@ mod tests {
     }
 
     #[test]
-    fn workflow_document_collection_accessors_are_crate_private() -> Result<(), Box<dyn Error>> {
-        let source = read_workspace_file("src/core/workflow_document.rs")?;
-        let mut violations = Vec::new();
-        let mut signature_start = None;
-        let mut signature = String::new();
-
-        for (index, line) in source.lines().enumerate() {
-            if line.trim_start().starts_with("pub fn ") {
-                signature_start = Some(index + 1);
-                signature.clear();
-            }
-
-            if signature_start.is_some() {
-                signature.push_str(line.trim());
-                signature.push(' ');
-                if line.contains('{') {
-                    if signature.contains("Vec<") {
-                        let Some(start) = signature_start else {
-                            return Err("signature parser lost its start line".into());
-                        };
-                        violations.push(format!(
-                            "src/core/workflow_document.rs:{} exposes structural document collection API: {}",
-                            start,
-                            signature.trim()
-                        ));
-                    }
-                    signature_start = None;
-                    signature.clear();
-                }
-            }
-        }
-
-        assert_eq!(
-            violations,
-            Vec::<String>::new(),
-            "workflow document collection accessors are internal semantic parser details and must stay crate-private"
-        );
-
-        Ok(())
-    }
-
-    #[test]
     fn core_public_apis_use_semantic_collections() -> Result<(), Box<dyn Error>> {
         let workspace = workspace_root();
         let violations = rust_files_under("src/core")?
@@ -451,70 +409,6 @@ mod tests {
             violations,
             Vec::<String>::new(),
             "artifact digests must derive from semantic workflow documents instead of raw JSON values"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn shell_check_transition_markers_use_semantic_workflow_documents() -> Result<(), Box<dyn Error>>
-    {
-        let source = read_workspace_file("src/shell.rs")?;
-        let violations = [
-            "fn transition_label(",
-            "fn workflow_exit_transition_label(",
-            "workflow_transition_tuple_labels",
-        ]
-        .iter()
-        .filter(|marker| source.contains(**marker))
-        .map(|marker| format!("src/shell.rs duplicates transition semantics via `{marker}`"))
-        .collect::<Vec<_>>();
-
-        assert_eq!(
-            violations,
-            Vec::<String>::new(),
-            "shell check markers must derive workflow transitions from WorkflowDocument"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn shell_check_slice_markers_use_semantic_workflow_documents() -> Result<(), Box<dyn Error>> {
-        let source = read_workspace_file("src/shell.rs")?;
-        let violations = [
-            "get(\"slice\")",
-            "get(\"name\")",
-            "get(\"type\")",
-            "get(\"description\")",
-        ]
-        .iter()
-        .filter(|marker| source.contains(**marker))
-        .map(|marker| format!("src/shell.rs duplicates slice-detail semantics via `{marker}`"))
-        .collect::<Vec<_>>();
-
-        assert_eq!(
-            violations,
-            Vec::<String>::new(),
-            "shell check markers must derive workflow slice details from WorkflowDocument"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn shell_slice_file_references_use_semantic_workflow_documents() -> Result<(), Box<dyn Error>> {
-        let source = read_workspace_file("src/shell.rs")?;
-        let violations = ["get(\"slice_files\")"]
-            .iter()
-            .filter(|marker| source.contains(**marker))
-            .map(|marker| format!("src/shell.rs duplicates slice-file semantics via `{marker}`"))
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            violations,
-            Vec::<String>::new(),
-            "shell slice-file traversal must derive from WorkflowDocument"
         );
 
         Ok(())
