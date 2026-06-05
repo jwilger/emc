@@ -26,9 +26,9 @@ use crate::core::formal_project_facts::{
     ProjectDataFlow, ProjectEvent, ProjectEventAttribute, ProjectExternalPayload,
     ProjectExternalPayloadField, ProjectOutcome, ProjectReadModel, ProjectReadModelDefinition,
     ProjectReadModelField, ProjectScenario, ProjectScenarioDefinition, ProjectStream,
-    ProjectTranslation, ProjectTranslationDefinition, ProjectView, ProjectViewField,
-    add_project_automation, add_project_command, add_project_data_flow, add_project_event,
-    add_project_external_payload, add_project_outcome, add_project_read_model,
+    ProjectTranslation, ProjectTranslationDefinition, ProjectView, ProjectViewDefinition,
+    ProjectViewField, add_project_automation, add_project_command, add_project_data_flow,
+    add_project_event, add_project_external_payload, add_project_outcome, add_project_read_model,
     add_project_scenario, add_project_stream, add_project_translation, add_project_view,
     parse_lean_project_automation_definitions, parse_lean_project_automations,
     parse_lean_project_command_errors, parse_lean_project_command_inputs,
@@ -39,7 +39,8 @@ use crate::core::formal_project_facts::{
     parse_lean_project_read_model_fields, parse_lean_project_read_models,
     parse_lean_project_scenario_definitions, parse_lean_project_scenarios,
     parse_lean_project_streams, parse_lean_project_translation_definitions,
-    parse_lean_project_translations, parse_lean_project_view_fields, parse_lean_project_views,
+    parse_lean_project_translations, parse_lean_project_view_definitions,
+    parse_lean_project_view_fields, parse_lean_project_views,
     parse_quint_project_automation_definitions, parse_quint_project_automations,
     parse_quint_project_command_errors, parse_quint_project_command_inputs,
     parse_quint_project_commands, parse_quint_project_data_flows,
@@ -49,7 +50,8 @@ use crate::core::formal_project_facts::{
     parse_quint_project_read_model_fields, parse_quint_project_read_models,
     parse_quint_project_scenario_definitions, parse_quint_project_scenarios,
     parse_quint_project_streams, parse_quint_project_translation_definitions,
-    parse_quint_project_translations, parse_quint_project_view_fields, parse_quint_project_views,
+    parse_quint_project_translations, parse_quint_project_view_definitions,
+    parse_quint_project_view_fields, parse_quint_project_views,
 };
 use crate::core::formal_slice_facts::{
     add_automation_definition, add_bit_level_data_flow, add_board_connection, add_board_element,
@@ -630,6 +632,8 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let project_read_model_fields =
                 read_synchronized_project_read_model_fields(&project_name)?;
             let project_views = read_synchronized_project_views(&project_name)?;
+            let project_view_definitions =
+                read_synchronized_project_view_definitions(&project_name)?;
             let project_view_fields = read_synchronized_project_view_fields(&project_name)?;
             let project_automations = read_synchronized_project_automations(&project_name)?;
             let project_automation_definitions =
@@ -660,6 +664,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                     read_model_definitions: project_read_model_definitions,
                     read_model_fields: project_read_model_fields,
                     views: project_views,
+                    view_definitions: project_view_definitions,
                     view_fields: project_view_fields,
                     automations: project_automations,
                     automation_definitions: project_automation_definitions,
@@ -1259,6 +1264,28 @@ fn read_synchronized_project_views(
             "Lean and Quint project root view inventories disagree",
         )),
         (_lean_views, _quint_views) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_view_definitions(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectViewDefinition>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_view_definitions(&artifacts.lean_contents),
+        parse_quint_project_view_definitions(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_view_definitions), Ok(quint_view_definitions))
+            if lean_view_definitions == quint_view_definitions =>
+        {
+            Ok(lean_view_definitions)
+        }
+        (Ok(_lean_view_definitions), Ok(_quint_view_definitions)) => Err(ShellError::message(
+            "Lean and Quint project root view definition inventories disagree",
+        )),
+        (_lean_view_definitions, _quint_view_definitions) => Ok(Vec::new()),
     }
 }
 
