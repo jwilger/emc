@@ -388,7 +388,7 @@ mod tests {
             "type BitLevelDataFlow = { datum: str, source: str, transformationSemantics: str, target: str, bitEncoding: str }"
         ));
         assert!(quint.contains(
-            "type CommandInput = { name: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str] }"
+            "type CommandInput = { name: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str }"
         ));
         assert!(quint.contains(
             "type CommandErrorDefinition = { name: str, scenarioName: str, recoveryKind: str }"
@@ -587,7 +587,7 @@ mod tests {
             "val commandInputsTraceToInvocationSources = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputTracesToInvocationSource(input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(
-            "def commandInputEventStreamSourceResolves(command, input) = input.sourceKind != \"event_stream_state\" or (command.observedStreams.length() > 0 and command.observedStreams.select(streamName => scenarioStreamResolves(streamName)).length() == command.observedStreams.length())"
+            "def commandInputEventStreamSourceResolves(command, input) = input.sourceKind != \"event_stream_state\" or (command.observedStreams.length() > 0 and command.observedStreams.select(streamName => scenarioStreamResolves(streamName)).length() == command.observedStreams.length() and input.eventStreamSourceEvent != \"\" and input.eventStreamSourceAttribute != \"\" and sliceEventDefinitions.select(event => event.name == input.eventStreamSourceEvent and event.attributes.select(attribute => attribute.name == input.eventStreamSourceAttribute).length() > 0).length() > 0)"
         ));
         assert!(quint.contains(
             "val commandInputsSourcedFromEventStreamsResolve = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputEventStreamSourceResolves(command, input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"

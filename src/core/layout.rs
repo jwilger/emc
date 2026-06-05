@@ -636,7 +636,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelCommandInputs :"),
             artifact_marker(format!(
-                "def modelCommandInputs : List (String × String × String × String × String × String × List String) := {lean_model_command_input_list}"
+                "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String) := {lean_model_command_input_list}"
             )),
             lean_message.clone(),
         ),
@@ -1111,7 +1111,7 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  type ModelCommandInput ="),
             artifact_marker(
-                "  type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str] }",
+                "  type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str }",
             ),
             quint_message.clone(),
         ),
@@ -3175,14 +3175,16 @@ fn lean_model_command_input_list(project_command_inputs: &[ProjectCommandInput])
             .into_iter()
             .map(|command_input| {
                 format!(
-                    "({}, {}, {}, {}, {}, {}, [{}])",
+                    "({}, {}, {}, {}, {}, {}, [{}], {}, {})",
                     json_string(command_input.workflow_slug()),
                     json_string(command_input.slice_slug()),
                     json_string(command_input.command()),
                     json_string(command_input.input()),
                     json_string(command_input.source_kind()),
                     json_string(command_input.source_description()),
-                    json_string_list(command_input.provenance_chain())
+                    json_string_list(command_input.provenance_chain()),
+                    json_string(command_input.event_stream_source_event()),
+                    json_string(command_input.event_stream_source_attribute())
                 )
             })
             .collect::<Vec<_>>()
@@ -3199,14 +3201,16 @@ fn quint_model_command_input_list(project_command_inputs: &[ProjectCommandInput]
             .into_iter()
             .map(|command_input| {
                 format!(
-                    "{{ workflow: {}, slice: {}, command: {}, input: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}] }}",
+                    "{{ workflow: {}, slice: {}, command: {}, input: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {} }}",
                     json_string(command_input.workflow_slug()),
                     json_string(command_input.slice_slug()),
                     json_string(command_input.command()),
                     json_string(command_input.input()),
                     json_string(command_input.source_kind()),
                     json_string(command_input.source_description()),
-                    json_string_list(command_input.provenance_chain())
+                    json_string_list(command_input.provenance_chain()),
+                    json_string(command_input.event_stream_source_event()),
+                    json_string(command_input.event_stream_source_attribute())
                 )
             })
             .collect::<Vec<_>>()
@@ -4619,14 +4623,16 @@ fn digest_command_inputs(project_command_inputs: &[ProjectCommandInput]) -> Stri
         .into_iter()
         .map(|command_input| {
             format!(
-                "{}/{}/{}/{}@{}#{}#{}",
+                "{}/{}/{}/{}@{}#{}#{}#{}#{}",
                 command_input.workflow_slug(),
                 command_input.slice_slug(),
                 command_input.command(),
                 command_input.input(),
                 command_input.source_kind(),
                 command_input.source_description(),
-                command_input.provenance_chain().join(" -> ")
+                command_input.provenance_chain().join(" -> "),
+                command_input.event_stream_source_event(),
+                command_input.event_stream_source_attribute()
             )
         })
         .collect::<Vec<_>>()

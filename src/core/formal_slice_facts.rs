@@ -246,6 +246,8 @@ pub struct NewCommandInput {
     source_kind: CommandInputSourceKind,
     source_description: CommandInputSourceDescription,
     provenance_chain: CommandInputProvenanceChain,
+    event_stream_source_event: Option<EventName>,
+    event_stream_source_attribute: Option<EventAttributeName>,
 }
 
 impl NewCommandInput {
@@ -260,7 +262,19 @@ impl NewCommandInput {
             source_kind,
             source_description,
             provenance_chain,
+            event_stream_source_event: None,
+            event_stream_source_attribute: None,
         }
+    }
+
+    pub fn with_event_stream_source(
+        mut self,
+        event: EventName,
+        attribute: EventAttributeName,
+    ) -> Self {
+        self.event_stream_source_event = Some(event);
+        self.event_stream_source_attribute = Some(attribute);
+        self
     }
 
     pub fn name(&self) -> &DatumName {
@@ -277,6 +291,14 @@ impl NewCommandInput {
 
     pub fn provenance_chain(&self) -> &CommandInputProvenanceChain {
         &self.provenance_chain
+    }
+
+    pub fn event_stream_source_event(&self) -> Option<&EventName> {
+        self.event_stream_source_event.as_ref()
+    }
+
+    pub fn event_stream_source_attribute(&self) -> Option<&EventAttributeName> {
+        self.event_stream_source_attribute.as_ref()
     }
 }
 
@@ -2711,21 +2733,45 @@ fn quint_view_field_record(field: &NewViewField) -> String {
 
 fn lean_command_input_record(input: &NewCommandInput) -> String {
     format!(
-        "{{ name := {}, sourceKind := {}, sourceDescription := {}, provenanceChain := [{}] }}",
+        "{{ name := {}, sourceKind := {}, sourceDescription := {}, provenanceChain := [{}], eventStreamSourceEvent := {}, eventStreamSourceAttribute := {} }}",
         quoted(input.name.as_ref()),
         quoted(input.source_kind.as_ref()),
         quoted(input.source_description.as_ref()),
         lean_list(input.provenance_chain.as_slice()),
+        quoted(
+            input
+                .event_stream_source_event
+                .as_ref()
+                .map_or("", EventName::as_ref),
+        ),
+        quoted(
+            input
+                .event_stream_source_attribute
+                .as_ref()
+                .map_or("", EventAttributeName::as_ref),
+        ),
     )
 }
 
 fn quint_command_input_record(input: &NewCommandInput) -> String {
     format!(
-        "{{ name: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}] }}",
+        "{{ name: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {} }}",
         quoted(input.name.as_ref()),
         quoted(input.source_kind.as_ref()),
         quoted(input.source_description.as_ref()),
         quint_list(input.provenance_chain.as_slice()),
+        quoted(
+            input
+                .event_stream_source_event
+                .as_ref()
+                .map_or("", EventName::as_ref),
+        ),
+        quoted(
+            input
+                .event_stream_source_attribute
+                .as_ref()
+                .map_or("", EventAttributeName::as_ref),
+        ),
     )
 }
 

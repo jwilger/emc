@@ -803,6 +803,12 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         "observes": {
                             "type": "string"
                         },
+                        "source_event": {
+                            "type": "string"
+                        },
+                        "source_attribute": {
+                            "type": "string"
+                        },
                         "singleton": {
                             "type": "boolean"
                         },
@@ -2377,18 +2383,45 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         .map(parse_stream_names)
         .transpose()
         .map_err(|error| ShellError::message(error.to_string()))?;
+    let source_event = arguments
+        .get("source_event")
+        .and_then(Value::as_str)
+        .map(parse_event_name)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let source_attribute = arguments
+        .get("source_attribute")
+        .and_then(Value::as_str)
+        .map(parse_event_attribute_name)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
     let command_errors = parse_optional_command_errors(arguments)?;
 
     let singleton_repeat_behavior = parse_optional_singleton_repeat_behavior(arguments)?;
+    let command_input = NewCommandInput::new(
+        input_name,
+        input_source,
+        input_description,
+        CommandInputProvenanceChain::from_hops(provenance_chain),
+    );
+    let command_input = match (source_event, source_attribute) {
+        (Some(event), Some(attribute)) => command_input.with_event_stream_source(event, attribute),
+        (None, None) => command_input,
+        (Some(_), None) => {
+            return Err(ShellError::message(
+                "add_command_definition requires source_attribute when source_event is provided",
+            ));
+        }
+        (None, Some(_)) => {
+            return Err(ShellError::message(
+                "add_command_definition requires source_event when source_attribute is provided",
+            ));
+        }
+    };
     let command_definition = NewCommandDefinition::new(
         slice_slug,
         command_name,
-        NewCommandInput::new(
-            input_name,
-            input_source,
-            input_description,
-            CommandInputProvenanceChain::from_hops(provenance_chain),
-        ),
+        command_input,
         EmittedEventNames::from_events(emitted_events),
     )
     .with_observed_streams(CommandObservedStreams::from_streams(
