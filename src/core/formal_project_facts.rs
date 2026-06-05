@@ -3,22 +3,24 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::formal_slice_facts::{
-    CommandErrorDefinitions, NewAutomationDefinition, NewBitLevelDataFlow, NewCommandDefinition,
-    NewCommandErrorDefinition, NewCommandInput, NewControlDefinition, NewEventAttribute,
-    NewEventDefinition, NewExternalPayloadDefinition, NewReadModelDefinition, NewReadModelField,
-    NewSliceScenario, NewTranslationDefinition, NewViewDefinition, NewViewField, OutcomeEventNames,
-    ScenarioKind,
+    CommandErrorDefinitions, NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection,
+    NewBoardElement, NewCommandDefinition, NewCommandErrorDefinition, NewCommandInput,
+    NewControlDefinition, NewEventAttribute, NewEventDefinition, NewExternalPayloadDefinition,
+    NewReadModelDefinition, NewReadModelField, NewSliceScenario, NewTranslationDefinition,
+    NewViewDefinition, NewViewField, OutcomeEventNames, ScenarioKind,
 };
 use crate::core::types::{
     AutomationName, AutomationReactionDescription, AutomationTriggerName, BitEncodingSemantics,
-    CommandErrorName, CommandErrorRecoveryKind, CommandInputSourceDescription,
-    CommandInputSourceKind, CommandName, ContractKindName, ControlName, ControlRecoveryBehavior,
-    CoveredDefinitionName, DataFlowSource, DataFlowTarget, DatumName, EventAttributeName,
-    EventAttributeSourceField, EventAttributeSourceKind, EventAttributeSourceName, EventName,
-    NavigationTargetName, NavigationTargetType, OutcomeLabelName, PayloadContractName,
-    ProvenanceDescription, ReadModelFieldSourceKind, ReadModelName, ScenarioName, ScenarioStepText,
-    SketchToken, SliceSlug, StreamName, TransformationSemantics, TranslationExternalEventName,
-    TranslationName, ViewFieldName, ViewFieldSourceKind, ViewName, WorkflowSlug,
+    BoardConnectionEndpoint, BoardConnectionEndpointKind, BoardElementDeclaredName,
+    BoardElementKind, BoardElementName, BoardLaneId, CommandErrorName, CommandErrorRecoveryKind,
+    CommandInputSourceDescription, CommandInputSourceKind, CommandName, ContractKindName,
+    ControlName, ControlRecoveryBehavior, CoveredDefinitionName, DataFlowSource, DataFlowTarget,
+    DatumName, EventAttributeName, EventAttributeSourceField, EventAttributeSourceKind,
+    EventAttributeSourceName, EventName, NavigationTargetName, NavigationTargetType,
+    OutcomeLabelName, PayloadContractName, ProvenanceDescription, ReadModelFieldSourceKind,
+    ReadModelName, ScenarioName, ScenarioStepText, SketchToken, SliceSlug, StreamName,
+    TransformationSemantics, TranslationExternalEventName, TranslationName, ViewFieldName,
+    ViewFieldSourceKind, ViewName, WorkflowSlug,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -452,6 +454,60 @@ impl NewProjectViewControl {
                 .handoff_contract()
                 .map_or("", PayloadContractName::as_ref)
                 .to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NewProjectBoardElement {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    element: BoardElementName,
+    kind: BoardElementKind,
+    lane: BoardLaneId,
+    declared_name: BoardElementDeclaredName,
+    main_path: bool,
+}
+
+impl NewProjectBoardElement {
+    pub fn from_slice_board_element(
+        workflow_slug: WorkflowSlug,
+        element: &NewBoardElement,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            slice_slug: element.slice_slug().clone(),
+            element: element.name().clone(),
+            kind: element.kind().clone(),
+            lane: element.lane().clone(),
+            declared_name: element.declared_name().clone(),
+            main_path: element.main_path(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NewProjectBoardConnection {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    source: BoardConnectionEndpoint,
+    source_kind: BoardConnectionEndpointKind,
+    target: BoardConnectionEndpoint,
+    target_kind: BoardConnectionEndpointKind,
+}
+
+impl NewProjectBoardConnection {
+    pub fn from_slice_board_connection(
+        workflow_slug: WorkflowSlug,
+        connection: &NewBoardConnection,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            slice_slug: connection.slice_slug().clone(),
+            source: connection.source().clone(),
+            source_kind: connection.source_kind().clone(),
+            target: connection.target().clone(),
+            target_kind: connection.target_kind().clone(),
         }
     }
 }
@@ -1288,6 +1344,83 @@ impl ProjectViewControl {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectBoardElement {
+    workflow_slug: String,
+    slice_slug: String,
+    element: String,
+    kind: String,
+    lane: String,
+    declared_name: String,
+    main_path: bool,
+}
+
+impl ProjectBoardElement {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn element(&self) -> &str {
+        &self.element
+    }
+
+    pub fn kind(&self) -> &str {
+        &self.kind
+    }
+
+    pub fn lane(&self) -> &str {
+        &self.lane
+    }
+
+    pub fn declared_name(&self) -> &str {
+        &self.declared_name
+    }
+
+    pub fn main_path(&self) -> bool {
+        self.main_path
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectBoardConnection {
+    workflow_slug: String,
+    slice_slug: String,
+    source: String,
+    source_kind: String,
+    target: String,
+    target_kind: String,
+}
+
+impl ProjectBoardConnection {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
+    pub fn source_kind(&self) -> &str {
+        &self.source_kind
+    }
+
+    pub fn target(&self) -> &str {
+        &self.target
+    }
+
+    pub fn target_kind(&self) -> &str {
+        &self.target_kind
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ProjectViewField {
     workflow_slug: String,
     slice_slug: String,
@@ -1971,6 +2104,42 @@ pub fn parse_quint_project_view_controls(
     )
 }
 
+pub fn parse_lean_project_board_elements(
+    contents: &FileContents,
+) -> Result<Vec<ProjectBoardElement>, FormalProjectFactError> {
+    board_element_entries_from_list(
+        contents.as_ref(),
+        "def modelBoardElements : List (String × String × String × String × String × String × Bool) := ",
+    )
+}
+
+pub fn parse_quint_project_board_elements(
+    contents: &FileContents,
+) -> Result<Vec<ProjectBoardElement>, FormalProjectFactError> {
+    board_element_entries_from_list(
+        contents.as_ref(),
+        "val modelBoardElements: List[ModelBoardElement] = ",
+    )
+}
+
+pub fn parse_lean_project_board_connections(
+    contents: &FileContents,
+) -> Result<Vec<ProjectBoardConnection>, FormalProjectFactError> {
+    board_connection_entries_from_list(
+        contents.as_ref(),
+        "def modelBoardConnections : List (String × String × String × String × String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_board_connections(
+    contents: &FileContents,
+) -> Result<Vec<ProjectBoardConnection>, FormalProjectFactError> {
+    board_connection_entries_from_list(
+        contents.as_ref(),
+        "val modelBoardConnections: List[ModelBoardConnection] = ",
+    )
+}
+
 pub fn parse_lean_project_view_fields(
     contents: &FileContents,
 ) -> Result<Vec<ProjectViewField>, FormalProjectFactError> {
@@ -2238,6 +2407,9 @@ pub fn add_project_scenario(
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             let event_attributes =
                 parse_lean_project_event_attributes_from_contents_or_empty(&contents);
+            let board_elements = parse_lean_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections =
+                parse_lean_project_board_connections_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -2254,6 +2426,8 @@ pub fn add_project_scenario(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2358,6 +2532,9 @@ pub fn add_project_scenario(
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             let event_attributes =
                 parse_quint_project_event_attributes_from_contents_or_empty(&contents);
+            let board_elements = parse_quint_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections =
+                parse_quint_project_board_connections_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -2374,6 +2551,8 @@ pub fn add_project_scenario(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2454,6 +2633,8 @@ pub fn add_project_data_flow(
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls =
                 parse_lean_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements = parse_lean_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections = parse_lean_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2484,6 +2665,8 @@ pub fn add_project_data_flow(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2544,6 +2727,10 @@ pub fn add_project_data_flow(
             let view_definitions =
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls = parse_quint_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements =
+                parse_quint_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections =
+                parse_quint_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2575,6 +2762,8 @@ pub fn add_project_data_flow(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2657,6 +2846,10 @@ pub fn add_project_outcome(
             let view_definitions =
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls = parse_lean_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements =
+                parse_lean_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections =
+                parse_lean_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2688,6 +2881,8 @@ pub fn add_project_outcome(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2748,6 +2943,10 @@ pub fn add_project_outcome(
             let view_definitions =
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls = parse_quint_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements =
+                parse_quint_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections =
+                parse_quint_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2779,6 +2978,8 @@ pub fn add_project_outcome(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2895,6 +3096,8 @@ pub fn add_project_command(
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls =
                 parse_lean_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements = parse_lean_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections = parse_lean_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2925,6 +3128,8 @@ pub fn add_project_command(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3026,6 +3231,10 @@ pub fn add_project_command(
             let view_definitions =
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls = parse_quint_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements =
+                parse_quint_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections =
+                parse_quint_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -3057,6 +3266,8 @@ pub fn add_project_command(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3194,6 +3405,8 @@ pub fn add_project_read_model(
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls =
                 parse_lean_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements = parse_lean_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections = parse_lean_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -3225,6 +3438,8 @@ pub fn add_project_read_model(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3322,6 +3537,8 @@ pub fn add_project_read_model(
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls =
                 parse_quint_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements = parse_quint_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections = parse_quint_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -3353,6 +3570,8 @@ pub fn add_project_read_model(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3521,6 +3740,9 @@ pub fn add_project_view(
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let read_model_definitions = parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
+            let board_elements = parse_lean_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections =
+                parse_lean_project_board_connections_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
                 parse_lean_project_automation_definitions_from_contents_or_empty(&contents);
@@ -3551,6 +3773,8 @@ pub fn add_project_view(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3671,6 +3895,10 @@ pub fn add_project_view(
                 parse_quint_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
+            let board_elements =
+                parse_quint_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections =
+                parse_quint_project_board_connections_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
                 parse_quint_project_automation_definitions_from_contents_or_empty(&contents);
@@ -3701,6 +3929,8 @@ pub fn add_project_view(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3722,6 +3952,171 @@ pub fn add_project_view(
         Effect::Report(report_line(format!(
             "added view {} to project root",
             view.view.as_ref()
+        ))?),
+    ]))
+}
+
+pub fn add_project_board_element(
+    lean_path: ProjectPath,
+    lean_contents: FileContents,
+    quint_path: ProjectPath,
+    quint_contents: FileContents,
+    element: NewProjectBoardElement,
+) -> Result<EffectPlan, FormalProjectFactError> {
+    let lean_record = lean_board_element_record(&element);
+    let quint_record = quint_board_element_record(&element);
+    let lean = append_record_if_missing(
+        lean_contents.as_ref(),
+        "def modelBoardElements : List (String × String × String × String × String × String × Bool) := ",
+        &lean_record,
+    )
+    .and_then(|contents| {
+        let board_elements = board_element_entries_from_list(
+            &contents,
+            "def modelBoardElements : List (String × String × String × String × String × String × Bool) := ",
+        )?;
+        replace_declaration(
+            &contents,
+            "def modelBoardElements :",
+            &format!(
+                "def modelBoardElements : List (String × String × String × String × String × String × Bool) := {}",
+                lean_project_board_element_list(&board_elements)
+            ),
+        )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "theorem modelBoardElementsAreDeclared :",
+                &format!(
+                    "theorem modelBoardElementsAreDeclared : modelBoardElements.length = {} := rfl",
+                    board_elements.len()
+                ),
+            )
+        })
+    })
+    .and_then(|contents| {
+        update_lean_digest_from_contents(&contents)
+    })?;
+    let quint = append_record_if_missing(
+        quint_contents.as_ref(),
+        "val modelBoardElements: List[ModelBoardElement] = ",
+        &quint_record,
+    )
+    .and_then(|contents| {
+        let board_elements = board_element_entries_from_list(
+            &contents,
+            "val modelBoardElements: List[ModelBoardElement] = ",
+        )?;
+        replace_declaration(
+            &contents,
+            "val modelBoardElements:",
+            &format!(
+                "val modelBoardElements: List[ModelBoardElement] = {}",
+                quint_project_board_element_list(&board_elements)
+            ),
+        )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "val modelBoardElementsAreDeclared =",
+                &format!(
+                    "val modelBoardElementsAreDeclared = modelBoardElements.length() == {}",
+                    board_elements.len()
+                ),
+            )
+        })
+    })
+    .and_then(|contents| update_quint_digest_from_contents(&contents))?;
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(lean_path, file_contents(lean)?),
+        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::Report(report_line(format!(
+            "added board element {} to project root",
+            element.element.as_ref()
+        ))?),
+    ]))
+}
+
+pub fn add_project_board_connection(
+    lean_path: ProjectPath,
+    lean_contents: FileContents,
+    quint_path: ProjectPath,
+    quint_contents: FileContents,
+    connection: NewProjectBoardConnection,
+) -> Result<EffectPlan, FormalProjectFactError> {
+    let lean_record = lean_board_connection_record(&connection);
+    let quint_record = quint_board_connection_record(&connection);
+    let lean = append_record_if_missing(
+        lean_contents.as_ref(),
+        "def modelBoardConnections : List (String × String × String × String × String × String) := ",
+        &lean_record,
+    )
+    .and_then(|contents| {
+        let board_connections = board_connection_entries_from_list(
+            &contents,
+            "def modelBoardConnections : List (String × String × String × String × String × String) := ",
+        )?;
+        replace_declaration(
+            &contents,
+            "def modelBoardConnections :",
+            &format!(
+                "def modelBoardConnections : List (String × String × String × String × String × String) := {}",
+                lean_project_board_connection_list(&board_connections)
+            ),
+        )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "theorem modelBoardConnectionsAreDeclared :",
+                &format!(
+                    "theorem modelBoardConnectionsAreDeclared : modelBoardConnections.length = {} := rfl",
+                    board_connections.len()
+                ),
+            )
+        })
+    })
+    .and_then(|contents| {
+        update_lean_digest_from_contents(&contents)
+    })?;
+    let quint = append_record_if_missing(
+        quint_contents.as_ref(),
+        "val modelBoardConnections: List[ModelBoardConnection] = ",
+        &quint_record,
+    )
+    .and_then(|contents| {
+        let board_connections = board_connection_entries_from_list(
+            &contents,
+            "val modelBoardConnections: List[ModelBoardConnection] = ",
+        )?;
+        replace_declaration(
+            &contents,
+            "val modelBoardConnections:",
+            &format!(
+                "val modelBoardConnections: List[ModelBoardConnection] = {}",
+                quint_project_board_connection_list(&board_connections)
+            ),
+        )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "val modelBoardConnectionsAreDeclared =",
+                &format!(
+                    "val modelBoardConnectionsAreDeclared = modelBoardConnections.length() == {}",
+                    board_connections.len()
+                ),
+            )
+        })
+    })
+    .and_then(|contents| update_quint_digest_from_contents(&contents))?;
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(lean_path, file_contents(lean)?),
+        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::Report(report_line(format!(
+            "added board connection {} -> {} to project root",
+            connection.source.as_ref(),
+            connection.target.as_ref()
         ))?),
     ]))
 }
@@ -3817,6 +4212,8 @@ pub fn add_project_automation(
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls =
                 parse_lean_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements = parse_lean_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections = parse_lean_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
@@ -3845,6 +4242,8 @@ pub fn add_project_automation(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3933,6 +4332,8 @@ pub fn add_project_automation(
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls =
                 parse_quint_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements = parse_quint_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections = parse_quint_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
@@ -3961,6 +4362,8 @@ pub fn add_project_automation(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4077,6 +4480,8 @@ pub fn add_project_translation(
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls =
                 parse_lean_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements = parse_lean_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections = parse_lean_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -4107,6 +4512,8 @@ pub fn add_project_translation(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4195,6 +4602,8 @@ pub fn add_project_translation(
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls =
                 parse_quint_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements = parse_quint_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections = parse_quint_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -4225,6 +4634,8 @@ pub fn add_project_translation(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4337,6 +4748,8 @@ pub fn add_project_external_payload(
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls =
                 parse_lean_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements = parse_lean_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections = parse_lean_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -4368,6 +4781,8 @@ pub fn add_project_external_payload(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4452,6 +4867,8 @@ pub fn add_project_external_payload(
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls =
                 parse_quint_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements = parse_quint_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections = parse_quint_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -4483,6 +4900,8 @@ pub fn add_project_external_payload(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4555,6 +4974,10 @@ pub fn add_project_stream(
             let view_definitions =
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls = parse_lean_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements =
+                parse_lean_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections =
+                parse_lean_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -4585,6 +5008,8 @@ pub fn add_project_stream(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4635,6 +5060,10 @@ pub fn add_project_stream(
             let view_definitions =
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
             let view_controls = parse_quint_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements =
+                parse_quint_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections =
+                parse_quint_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -4665,6 +5094,8 @@ pub fn add_project_stream(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4810,6 +5241,14 @@ pub fn add_project_event(
             &contents,
             "def modelEventAttributes : List (String × String × String × String × String × String × String × String) := ",
         )?;
+        let board_elements = board_element_entries_from_list(
+            &contents,
+            "def modelBoardElements : List (String × String × String × String × String × String × Bool) := ",
+        )?;
+        let board_connections = board_connection_entries_from_list(
+            &contents,
+            "def modelBoardConnections : List (String × String × String × String × String × String) := ",
+        )?;
         replace_declaration(
             &contents,
             "theorem modelEventsAreDeclared :",
@@ -4845,6 +5284,8 @@ pub fn add_project_event(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4946,6 +5387,14 @@ pub fn add_project_event(
             &contents,
             "val modelEventAttributes: List[ModelEventAttribute] = ",
         )?;
+        let board_elements = board_element_entries_from_list(
+            &contents,
+            "val modelBoardElements: List[ModelBoardElement] = ",
+        )?;
+        let board_connections = board_connection_entries_from_list(
+            &contents,
+            "val modelBoardConnections: List[ModelBoardConnection] = ",
+        )?;
         replace_declaration(
             &contents,
             "val modelEventsAreDeclared =",
@@ -4981,6 +5430,8 @@ pub fn add_project_event(
                     views: &views,
                     view_definitions: &view_definitions,
                     view_controls: &view_controls,
+                    board_elements: &board_elements,
+                    board_connections: &board_connections,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -5353,6 +5804,46 @@ fn parse_quint_project_view_controls_from_contents_or_empty(
 ) -> Vec<ProjectViewControl> {
     view_control_entries_from_list(contents, "val modelViewControls: List[ModelViewControl] = ")
         .unwrap_or_default()
+}
+
+fn parse_lean_project_board_elements_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectBoardElement> {
+    board_element_entries_from_list(
+        contents,
+        "def modelBoardElements : List (String × String × String × String × String × String × Bool) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_board_elements_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectBoardElement> {
+    board_element_entries_from_list(
+        contents,
+        "val modelBoardElements: List[ModelBoardElement] = ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_lean_project_board_connections_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectBoardConnection> {
+    board_connection_entries_from_list(
+        contents,
+        "def modelBoardConnections : List (String × String × String × String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_board_connections_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectBoardConnection> {
+    board_connection_entries_from_list(
+        contents,
+        "val modelBoardConnections: List[ModelBoardConnection] = ",
+    )
+    .unwrap_or_default()
 }
 
 fn parse_lean_project_view_fields_from_contents_or_empty(contents: &str) -> Vec<ProjectViewField> {
@@ -5916,6 +6407,65 @@ fn view_control_entries_from_list(
     Ok(controls)
 }
 
+fn board_element_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectBoardElement>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut elements = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let values = record_values(&record)?;
+            if values.len() != 7 {
+                return Err(FormalProjectFactError::new(
+                    "formal project board element record is malformed",
+                ));
+            }
+            Ok(ProjectBoardElement {
+                workflow_slug: single_quoted_string(&values[0])?,
+                slice_slug: single_quoted_string(&values[1])?,
+                element: single_quoted_string(&values[2])?,
+                kind: single_quoted_string(&values[3])?,
+                lane: single_quoted_string(&values[4])?,
+                declared_name: single_quoted_string(&values[5])?,
+                main_path: bool_value(&values[6])?,
+            })
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    elements.sort();
+    elements.dedup();
+    Ok(elements)
+}
+
+fn board_connection_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectBoardConnection>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut connections = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let values = record_values(&record)?;
+            if values.len() != 6 {
+                return Err(FormalProjectFactError::new(
+                    "formal project board connection record is malformed",
+                ));
+            }
+            Ok(ProjectBoardConnection {
+                workflow_slug: single_quoted_string(&values[0])?,
+                slice_slug: single_quoted_string(&values[1])?,
+                source: single_quoted_string(&values[2])?,
+                source_kind: single_quoted_string(&values[3])?,
+                target: single_quoted_string(&values[4])?,
+                target_kind: single_quoted_string(&values[5])?,
+            })
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    connections.sort();
+    connections.dedup();
+    Ok(connections)
+}
+
 fn view_field_entries_from_list(
     contents: &str,
     marker: &str,
@@ -6474,6 +7024,8 @@ struct ProjectDigestInventories<'a> {
     views: &'a [ProjectView],
     view_definitions: &'a [ProjectViewDefinition],
     view_controls: &'a [ProjectViewControl],
+    board_elements: &'a [ProjectBoardElement],
+    board_connections: &'a [ProjectBoardConnection],
     view_fields: &'a [ProjectViewField],
     automations: &'a [ProjectAutomation],
     automation_definitions: &'a [ProjectAutomationDefinition],
@@ -6533,6 +7085,132 @@ fn update_quint_digest(
     })
 }
 
+fn update_lean_digest_from_contents(contents: &str) -> Result<String, FormalProjectFactError> {
+    let scenarios = parse_lean_project_scenarios_from_contents_or_empty(contents);
+    let scenario_definitions =
+        parse_lean_project_scenario_definitions_from_contents_or_empty(contents);
+    let data_flows = parse_lean_project_data_flows_from_contents_or_empty(contents);
+    let outcomes = parse_lean_project_outcomes_from_contents_or_empty(contents);
+    let command_errors = parse_lean_project_command_errors_from_contents_or_empty(contents);
+    let commands = parse_lean_project_commands_from_contents_or_empty(contents);
+    let command_inputs = parse_lean_project_command_inputs_from_contents_or_empty(contents);
+    let read_models = parse_lean_project_read_models_from_contents_or_empty(contents);
+    let read_model_definitions =
+        parse_lean_project_read_model_definitions_from_contents_or_empty(contents);
+    let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(contents);
+    let views = parse_lean_project_views_from_contents_or_empty(contents);
+    let view_definitions = parse_lean_project_view_definitions_from_contents_or_empty(contents);
+    let view_controls = parse_lean_project_view_controls_from_contents_or_empty(contents);
+    let board_elements = parse_lean_project_board_elements_from_contents_or_empty(contents);
+    let board_connections = parse_lean_project_board_connections_from_contents_or_empty(contents);
+    let view_fields = parse_lean_project_view_fields_from_contents_or_empty(contents);
+    let automations = parse_lean_project_automations_from_contents_or_empty(contents);
+    let automation_definitions =
+        parse_lean_project_automation_definitions_from_contents_or_empty(contents);
+    let translations = parse_lean_project_translations_from_contents_or_empty(contents);
+    let translation_definitions =
+        parse_lean_project_translation_definitions_from_contents_or_empty(contents);
+    let external_payloads = parse_lean_project_external_payloads_from_contents_or_empty(contents);
+    let external_payload_fields =
+        parse_lean_project_external_payload_fields_from_contents_or_empty(contents);
+    let streams = parse_lean_project_streams_from_contents_or_empty(contents);
+    let events = parse_lean_project_events_from_contents_or_empty(contents);
+    let event_attributes = parse_lean_project_event_attributes_from_contents_or_empty(contents);
+    update_lean_digest(
+        contents,
+        ProjectDigestInventories {
+            scenarios: &scenarios,
+            scenario_definitions: &scenario_definitions,
+            data_flows: &data_flows,
+            outcomes: &outcomes,
+            command_errors: &command_errors,
+            commands: &commands,
+            command_inputs: &command_inputs,
+            read_models: &read_models,
+            read_model_definitions: &read_model_definitions,
+            read_model_fields: &read_model_fields,
+            views: &views,
+            view_definitions: &view_definitions,
+            view_controls: &view_controls,
+            board_elements: &board_elements,
+            board_connections: &board_connections,
+            view_fields: &view_fields,
+            automations: &automations,
+            automation_definitions: &automation_definitions,
+            translations: &translations,
+            translation_definitions: &translation_definitions,
+            external_payloads: &external_payloads,
+            external_payload_fields: &external_payload_fields,
+            streams: &streams,
+            events: &events,
+            event_attributes: &event_attributes,
+        },
+    )
+}
+
+fn update_quint_digest_from_contents(contents: &str) -> Result<String, FormalProjectFactError> {
+    let scenarios = parse_quint_project_scenarios_from_contents_or_empty(contents);
+    let scenario_definitions =
+        parse_quint_project_scenario_definitions_from_contents_or_empty(contents);
+    let data_flows = parse_quint_project_data_flows_from_contents_or_empty(contents);
+    let outcomes = parse_quint_project_outcomes_from_contents_or_empty(contents);
+    let command_errors = parse_quint_project_command_errors_from_contents_or_empty(contents);
+    let commands = parse_quint_project_commands_from_contents_or_empty(contents);
+    let command_inputs = parse_quint_project_command_inputs_from_contents_or_empty(contents);
+    let read_models = parse_quint_project_read_models_from_contents_or_empty(contents);
+    let read_model_definitions =
+        parse_quint_project_read_model_definitions_from_contents_or_empty(contents);
+    let read_model_fields = parse_quint_project_read_model_fields_from_contents_or_empty(contents);
+    let views = parse_quint_project_views_from_contents_or_empty(contents);
+    let view_definitions = parse_quint_project_view_definitions_from_contents_or_empty(contents);
+    let view_controls = parse_quint_project_view_controls_from_contents_or_empty(contents);
+    let board_elements = parse_quint_project_board_elements_from_contents_or_empty(contents);
+    let board_connections = parse_quint_project_board_connections_from_contents_or_empty(contents);
+    let view_fields = parse_quint_project_view_fields_from_contents_or_empty(contents);
+    let automations = parse_quint_project_automations_from_contents_or_empty(contents);
+    let automation_definitions =
+        parse_quint_project_automation_definitions_from_contents_or_empty(contents);
+    let translations = parse_quint_project_translations_from_contents_or_empty(contents);
+    let translation_definitions =
+        parse_quint_project_translation_definitions_from_contents_or_empty(contents);
+    let external_payloads = parse_quint_project_external_payloads_from_contents_or_empty(contents);
+    let external_payload_fields =
+        parse_quint_project_external_payload_fields_from_contents_or_empty(contents);
+    let streams = parse_quint_project_streams_from_contents_or_empty(contents);
+    let events = parse_quint_project_events_from_contents_or_empty(contents);
+    let event_attributes = parse_quint_project_event_attributes_from_contents_or_empty(contents);
+    update_quint_digest(
+        contents,
+        ProjectDigestInventories {
+            scenarios: &scenarios,
+            scenario_definitions: &scenario_definitions,
+            data_flows: &data_flows,
+            outcomes: &outcomes,
+            command_errors: &command_errors,
+            commands: &commands,
+            command_inputs: &command_inputs,
+            read_models: &read_models,
+            read_model_definitions: &read_model_definitions,
+            read_model_fields: &read_model_fields,
+            views: &views,
+            view_definitions: &view_definitions,
+            view_controls: &view_controls,
+            board_elements: &board_elements,
+            board_connections: &board_connections,
+            view_fields: &view_fields,
+            automations: &automations,
+            automation_definitions: &automation_definitions,
+            translations: &translations,
+            translation_definitions: &translation_definitions,
+            external_payloads: &external_payloads,
+            external_payload_fields: &external_payload_fields,
+            streams: &streams,
+            events: &events,
+            event_attributes: &event_attributes,
+        },
+    )
+}
+
 fn digest_with_project_inventories(
     current_digest: String,
     inventories: &ProjectDigestInventories<'_>,
@@ -6551,6 +7229,8 @@ fn digest_with_project_inventories(
         .or_else(|| current_digest.split_once(";views="))
         .or_else(|| current_digest.split_once(";view-definitions="))
         .or_else(|| current_digest.split_once(";view-controls="))
+        .or_else(|| current_digest.split_once(";board-elements="))
+        .or_else(|| current_digest.split_once(";board-connections="))
         .or_else(|| current_digest.split_once(";view-fields="))
         .or_else(|| current_digest.split_once(";automations="))
         .or_else(|| current_digest.split_once(";automation-definitions="))
@@ -6563,7 +7243,7 @@ fn digest_with_project_inventories(
         .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-definitions={};view-controls={};view-fields={};automations={};automation-definitions={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
+        "{prefix};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-definitions={};view-controls={};board-elements={};board-connections={};view-fields={};automations={};automation-definitions={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
         digest_scenarios(inventories.scenarios),
         digest_scenario_definitions(inventories.scenario_definitions),
         digest_data_flows(inventories.data_flows),
@@ -6577,6 +7257,8 @@ fn digest_with_project_inventories(
         digest_views(inventories.views),
         digest_view_definitions(inventories.view_definitions),
         digest_view_controls(inventories.view_controls),
+        digest_board_elements(inventories.board_elements),
+        digest_board_connections(inventories.board_connections),
         digest_view_fields(inventories.view_fields),
         digest_automations(inventories.automations),
         digest_automation_definitions(inventories.automation_definitions),
@@ -6824,6 +7506,43 @@ fn digest_view_controls(controls: &[ProjectViewControl]) -> String {
                 control.external_workflow,
                 control.external_system,
                 control.handoff_contract
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_board_elements(elements: &[ProjectBoardElement]) -> String {
+    elements
+        .iter()
+        .map(|element| {
+            format!(
+                "{}/{}/{}@{}:{}:{}:{}",
+                element.workflow_slug,
+                element.slice_slug,
+                element.element,
+                element.kind,
+                element.lane,
+                element.declared_name,
+                element.main_path
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_board_connections(connections: &[ProjectBoardConnection]) -> String {
+    connections
+        .iter()
+        .map(|connection| {
+            format!(
+                "{}/{}:{}:{}->{}:{}",
+                connection.workflow_slug,
+                connection.slice_slug,
+                connection.source,
+                connection.source_kind,
+                connection.target,
+                connection.target_kind
             )
         })
         .collect::<Vec<_>>()
@@ -7688,6 +8407,150 @@ fn quint_view_control_record(control: &NewProjectViewControl) -> String {
         quoted(&control.external_workflow),
         quoted(&control.external_system),
         quoted(&control.handoff_contract)
+    )
+}
+
+fn lean_board_element_record(element: &NewProjectBoardElement) -> String {
+    format!(
+        "({}, {}, {}, {}, {}, {}, {})",
+        quoted(element.workflow_slug.as_ref()),
+        quoted(element.slice_slug.as_ref()),
+        quoted(element.element.as_ref()),
+        quoted(element.kind.as_ref()),
+        quoted(element.lane.as_ref()),
+        quoted(element.declared_name.as_ref()),
+        element.main_path
+    )
+}
+
+fn quint_board_element_record(element: &NewProjectBoardElement) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, element: {}, kind: {}, lane: {}, declaredName: {}, mainPath: {} }}",
+        quoted(element.workflow_slug.as_ref()),
+        quoted(element.slice_slug.as_ref()),
+        quoted(element.element.as_ref()),
+        quoted(element.kind.as_ref()),
+        quoted(element.lane.as_ref()),
+        quoted(element.declared_name.as_ref()),
+        element.main_path
+    )
+}
+
+fn lean_board_connection_record(connection: &NewProjectBoardConnection) -> String {
+    format!(
+        "({}, {}, {}, {}, {}, {})",
+        quoted(connection.workflow_slug.as_ref()),
+        quoted(connection.slice_slug.as_ref()),
+        quoted(connection.source.as_ref()),
+        quoted(connection.source_kind.as_ref()),
+        quoted(connection.target.as_ref()),
+        quoted(connection.target_kind.as_ref())
+    )
+}
+
+fn quint_board_connection_record(connection: &NewProjectBoardConnection) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, source: {}, sourceKind: {}, target: {}, targetKind: {} }}",
+        quoted(connection.workflow_slug.as_ref()),
+        quoted(connection.slice_slug.as_ref()),
+        quoted(connection.source.as_ref()),
+        quoted(connection.source_kind.as_ref()),
+        quoted(connection.target.as_ref()),
+        quoted(connection.target_kind.as_ref())
+    )
+}
+
+fn lean_project_board_element_list(elements: &[ProjectBoardElement]) -> String {
+    let mut elements = elements.to_vec();
+    elements.sort();
+    format!(
+        "[{}]",
+        elements
+            .into_iter()
+            .map(|element| {
+                format!(
+                    "({}, {}, {}, {}, {}, {}, {})",
+                    quoted(&element.workflow_slug),
+                    quoted(&element.slice_slug),
+                    quoted(&element.element),
+                    quoted(&element.kind),
+                    quoted(&element.lane),
+                    quoted(&element.declared_name),
+                    element.main_path
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_project_board_element_list(elements: &[ProjectBoardElement]) -> String {
+    let mut elements = elements.to_vec();
+    elements.sort();
+    format!(
+        "[{}]",
+        elements
+            .into_iter()
+            .map(|element| {
+                format!(
+                    "{{ workflow: {}, slice: {}, element: {}, kind: {}, lane: {}, declaredName: {}, mainPath: {} }}",
+                    quoted(&element.workflow_slug),
+                    quoted(&element.slice_slug),
+                    quoted(&element.element),
+                    quoted(&element.kind),
+                    quoted(&element.lane),
+                    quoted(&element.declared_name),
+                    element.main_path
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn lean_project_board_connection_list(connections: &[ProjectBoardConnection]) -> String {
+    let mut connections = connections.to_vec();
+    connections.sort();
+    format!(
+        "[{}]",
+        connections
+            .into_iter()
+            .map(|connection| {
+                format!(
+                    "({}, {}, {}, {}, {}, {})",
+                    quoted(&connection.workflow_slug),
+                    quoted(&connection.slice_slug),
+                    quoted(&connection.source),
+                    quoted(&connection.source_kind),
+                    quoted(&connection.target),
+                    quoted(&connection.target_kind)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_project_board_connection_list(connections: &[ProjectBoardConnection]) -> String {
+    let mut connections = connections.to_vec();
+    connections.sort();
+    format!(
+        "[{}]",
+        connections
+            .into_iter()
+            .map(|connection| {
+                format!(
+                    "{{ workflow: {}, slice: {}, source: {}, sourceKind: {}, target: {}, targetKind: {} }}",
+                    quoted(&connection.workflow_slug),
+                    quoted(&connection.slice_slug),
+                    quoted(&connection.source),
+                    quoted(&connection.source_kind),
+                    quoted(&connection.target),
+                    quoted(&connection.target_kind)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
     )
 }
 
