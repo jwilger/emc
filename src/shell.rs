@@ -19,18 +19,21 @@ use crate::core::formal_graph::{
     parse_quint_workflow_graph,
 };
 use crate::core::formal_project_facts::{
-    NewProjectAutomation, NewProjectCommand, NewProjectDataFlow, NewProjectEvent,
-    NewProjectExternalPayload, NewProjectOutcome, NewProjectReadModel, NewProjectScenario,
-    NewProjectStream, NewProjectTranslation, NewProjectView, ProjectAutomation,
-    ProjectAutomationDefinition, ProjectCommand, ProjectCommandError, ProjectCommandInput,
-    ProjectDataFlow, ProjectEvent, ProjectEventAttribute, ProjectExternalPayload,
-    ProjectExternalPayloadField, ProjectOutcome, ProjectReadModel, ProjectReadModelDefinition,
-    ProjectReadModelField, ProjectScenario, ProjectScenarioDefinition, ProjectStream,
-    ProjectTranslation, ProjectTranslationDefinition, ProjectView, ProjectViewControl,
-    ProjectViewDefinition, ProjectViewField, add_project_automation, add_project_command,
-    add_project_data_flow, add_project_event, add_project_external_payload, add_project_outcome,
-    add_project_read_model, add_project_scenario, add_project_stream, add_project_translation,
-    add_project_view, parse_lean_project_automation_definitions, parse_lean_project_automations,
+    NewProjectAutomation, NewProjectBoardConnection, NewProjectBoardElement, NewProjectCommand,
+    NewProjectDataFlow, NewProjectEvent, NewProjectExternalPayload, NewProjectOutcome,
+    NewProjectReadModel, NewProjectScenario, NewProjectStream, NewProjectTranslation,
+    NewProjectView, ProjectAutomation, ProjectAutomationDefinition, ProjectBoardConnection,
+    ProjectBoardElement, ProjectCommand, ProjectCommandError, ProjectCommandInput, ProjectDataFlow,
+    ProjectEvent, ProjectEventAttribute, ProjectExternalPayload, ProjectExternalPayloadField,
+    ProjectOutcome, ProjectReadModel, ProjectReadModelDefinition, ProjectReadModelField,
+    ProjectScenario, ProjectScenarioDefinition, ProjectStream, ProjectTranslation,
+    ProjectTranslationDefinition, ProjectView, ProjectViewControl, ProjectViewDefinition,
+    ProjectViewField, add_project_automation, add_project_board_connection,
+    add_project_board_element, add_project_command, add_project_data_flow, add_project_event,
+    add_project_external_payload, add_project_outcome, add_project_read_model,
+    add_project_scenario, add_project_stream, add_project_translation, add_project_view,
+    parse_lean_project_automation_definitions, parse_lean_project_automations,
+    parse_lean_project_board_connections, parse_lean_project_board_elements,
     parse_lean_project_command_errors, parse_lean_project_command_inputs,
     parse_lean_project_commands, parse_lean_project_data_flows,
     parse_lean_project_event_attributes, parse_lean_project_events,
@@ -42,6 +45,7 @@ use crate::core::formal_project_facts::{
     parse_lean_project_translations, parse_lean_project_view_controls,
     parse_lean_project_view_definitions, parse_lean_project_view_fields, parse_lean_project_views,
     parse_quint_project_automation_definitions, parse_quint_project_automations,
+    parse_quint_project_board_connections, parse_quint_project_board_elements,
     parse_quint_project_command_errors, parse_quint_project_command_inputs,
     parse_quint_project_commands, parse_quint_project_data_flows,
     parse_quint_project_event_attributes, parse_quint_project_events,
@@ -225,7 +229,14 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::AddBoardConnectionFromSlice(connection) => {
             let slice_artifacts =
                 read_formal_slice_artifact_paths_and_contents(connection.slice_slug())?;
-            let plan = add_board_connection(
+            let project_name = read_project_manifest_name()?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let (workflow_layout, _workflow_graph) = find_formal_workflow_containing_slice_in(
+                &formal_workflows,
+                connection.slice_slug(),
+            )?;
+            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
+            let slice_plan = add_board_connection(
                 slice_artifacts.lean_path,
                 slice_artifacts.lean_contents,
                 slice_artifacts.quint_path,
@@ -233,12 +244,30 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 connection.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let project_board_plan = add_project_board_connection(
+                project_artifacts.lean_path,
+                project_artifacts.lean_contents,
+                project_artifacts.quint_path,
+                project_artifacts.quint_contents,
+                NewProjectBoardConnection::from_slice_board_connection(
+                    workflow_layout.slug().clone(),
+                    connection,
+                ),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            let mut reports = interpret_collect_reports(slice_plan)?;
+            reports.extend(interpret_collect_reports(project_board_plan)?);
+            Ok(reports)
         }
         Effect::AddBoardElementFromSlice(element) => {
             let slice_artifacts =
                 read_formal_slice_artifact_paths_and_contents(element.slice_slug())?;
-            let plan = add_board_element(
+            let project_name = read_project_manifest_name()?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let (workflow_layout, _workflow_graph) =
+                find_formal_workflow_containing_slice_in(&formal_workflows, element.slice_slug())?;
+            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
+            let slice_plan = add_board_element(
                 slice_artifacts.lean_path,
                 slice_artifacts.lean_contents,
                 slice_artifacts.quint_path,
@@ -246,7 +275,20 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 element.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let project_board_plan = add_project_board_element(
+                project_artifacts.lean_path,
+                project_artifacts.lean_contents,
+                project_artifacts.quint_path,
+                project_artifacts.quint_contents,
+                NewProjectBoardElement::from_slice_board_element(
+                    workflow_layout.slug().clone(),
+                    element,
+                ),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            let mut reports = interpret_collect_reports(slice_plan)?;
+            reports.extend(interpret_collect_reports(project_board_plan)?);
+            Ok(reports)
         }
         Effect::AddCommandDefinitionFromSlice(command) => {
             let slice_artifacts =
@@ -636,6 +678,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let project_view_definitions =
                 read_synchronized_project_view_definitions(&project_name)?;
             let project_view_controls = read_synchronized_project_view_controls(&project_name)?;
+            let project_board_elements = read_synchronized_project_board_elements(&project_name)?;
+            let project_board_connections =
+                read_synchronized_project_board_connections(&project_name)?;
             let project_view_fields = read_synchronized_project_view_fields(&project_name)?;
             let project_automations = read_synchronized_project_automations(&project_name)?;
             let project_automation_definitions =
@@ -668,6 +713,8 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                     views: project_views,
                     view_definitions: project_view_definitions,
                     view_controls: project_view_controls,
+                    board_elements: project_board_elements,
+                    board_connections: project_board_connections,
                     view_fields: project_view_fields,
                     automations: project_automations,
                     automation_definitions: project_automation_definitions,
@@ -1311,6 +1358,50 @@ fn read_synchronized_project_view_controls(
             "Lean and Quint project root view control inventories disagree",
         )),
         (_lean_view_controls, _quint_view_controls) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_board_elements(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectBoardElement>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_board_elements(&artifacts.lean_contents),
+        parse_quint_project_board_elements(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_board_elements), Ok(quint_board_elements))
+            if lean_board_elements == quint_board_elements =>
+        {
+            Ok(lean_board_elements)
+        }
+        (Ok(_lean_board_elements), Ok(_quint_board_elements)) => Err(ShellError::message(
+            "Lean and Quint project root board element inventories disagree",
+        )),
+        (_lean_board_elements, _quint_board_elements) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_board_connections(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectBoardConnection>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_board_connections(&artifacts.lean_contents),
+        parse_quint_project_board_connections(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_board_connections), Ok(quint_board_connections))
+            if lean_board_connections == quint_board_connections =>
+        {
+            Ok(lean_board_connections)
+        }
+        (Ok(_lean_board_connections), Ok(_quint_board_connections)) => Err(ShellError::message(
+            "Lean and Quint project root board connection inventories disagree",
+        )),
+        (_lean_board_connections, _quint_board_connections) => Ok(Vec::new()),
     }
 }
 

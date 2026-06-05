@@ -7,12 +7,12 @@ use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
 use crate::core::formal_project_facts::{
-    ProjectAutomation, ProjectAutomationDefinition, ProjectCommand, ProjectCommandError,
-    ProjectCommandInput, ProjectDataFlow, ProjectEvent, ProjectEventAttribute,
-    ProjectExternalPayload, ProjectExternalPayloadField, ProjectOutcome, ProjectReadModel,
-    ProjectReadModelDefinition, ProjectReadModelField, ProjectScenario, ProjectScenarioDefinition,
-    ProjectStream, ProjectTranslation, ProjectTranslationDefinition, ProjectView,
-    ProjectViewControl, ProjectViewDefinition, ProjectViewField,
+    ProjectAutomation, ProjectAutomationDefinition, ProjectBoardConnection, ProjectBoardElement,
+    ProjectCommand, ProjectCommandError, ProjectCommandInput, ProjectDataFlow, ProjectEvent,
+    ProjectEventAttribute, ProjectExternalPayload, ProjectExternalPayloadField, ProjectOutcome,
+    ProjectReadModel, ProjectReadModelDefinition, ProjectReadModelField, ProjectScenario,
+    ProjectScenarioDefinition, ProjectStream, ProjectTranslation, ProjectTranslationDefinition,
+    ProjectView, ProjectViewControl, ProjectViewDefinition, ProjectViewField,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{
@@ -115,6 +115,8 @@ pub struct ModeledProjectRootInventories {
     views: Vec<ProjectView>,
     view_definitions: Vec<ProjectViewDefinition>,
     view_controls: Vec<ProjectViewControl>,
+    board_elements: Vec<ProjectBoardElement>,
+    board_connections: Vec<ProjectBoardConnection>,
     view_fields: Vec<ProjectViewField>,
     automations: Vec<ProjectAutomation>,
     automation_definitions: Vec<ProjectAutomationDefinition>,
@@ -141,6 +143,8 @@ pub(crate) struct ModeledProjectRootInventoryParts {
     pub(crate) views: Vec<ProjectView>,
     pub(crate) view_definitions: Vec<ProjectViewDefinition>,
     pub(crate) view_controls: Vec<ProjectViewControl>,
+    pub(crate) board_elements: Vec<ProjectBoardElement>,
+    pub(crate) board_connections: Vec<ProjectBoardConnection>,
     pub(crate) view_fields: Vec<ProjectViewField>,
     pub(crate) automations: Vec<ProjectAutomation>,
     pub(crate) automation_definitions: Vec<ProjectAutomationDefinition>,
@@ -169,6 +173,8 @@ impl ModeledProjectRootInventories {
             views: parts.views,
             view_definitions: parts.view_definitions,
             view_controls: parts.view_controls,
+            board_elements: parts.board_elements,
+            board_connections: parts.board_connections,
             view_fields: parts.view_fields,
             automations: parts.automations,
             automation_definitions: parts.automation_definitions,
@@ -214,6 +220,8 @@ pub fn check_project(
             views: &project_inventories.views,
             view_definitions: &project_inventories.view_definitions,
             view_controls: &project_inventories.view_controls,
+            board_elements: &project_inventories.board_elements,
+            board_connections: &project_inventories.board_connections,
             view_fields: &project_inventories.view_fields,
             automations: &project_inventories.automations,
             automation_definitions: &project_inventories.automation_definitions,
@@ -335,6 +343,8 @@ struct ProjectRootInventories<'a> {
     views: &'a [ProjectView],
     view_definitions: &'a [ProjectViewDefinition],
     view_controls: &'a [ProjectViewControl],
+    board_elements: &'a [ProjectBoardElement],
+    board_connections: &'a [ProjectBoardConnection],
     view_fields: &'a [ProjectViewField],
     automations: &'a [ProjectAutomation],
     automation_definitions: &'a [ProjectAutomationDefinition],
@@ -377,6 +387,9 @@ fn project_root_effects(
     let lean_model_view_definition_list =
         lean_model_view_definition_list(inventories.view_definitions);
     let lean_model_view_control_list = lean_model_view_control_list(inventories.view_controls);
+    let lean_model_board_element_list = lean_model_board_element_list(inventories.board_elements);
+    let lean_model_board_connection_list =
+        lean_model_board_connection_list(inventories.board_connections);
     let lean_model_view_field_list = lean_model_view_field_list(inventories.view_fields);
     let lean_model_automation_list = lean_model_automation_list(inventories.automations);
     let lean_model_automation_definition_list =
@@ -411,6 +424,9 @@ fn project_root_effects(
     let quint_model_view_definition_list =
         quint_model_view_definition_list(inventories.view_definitions);
     let quint_model_view_control_list = quint_model_view_control_list(inventories.view_controls);
+    let quint_model_board_element_list = quint_model_board_element_list(inventories.board_elements);
+    let quint_model_board_connection_list =
+        quint_model_board_connection_list(inventories.board_connections);
     let quint_model_view_field_list = quint_model_view_field_list(inventories.view_fields);
     let quint_model_automation_list = quint_model_automation_list(inventories.automations);
     let quint_model_automation_definition_list =
@@ -450,6 +466,8 @@ fn project_root_effects(
     let view_count = inventories.views.len();
     let view_definition_count = inventories.view_definitions.len();
     let view_control_count = inventories.view_controls.len();
+    let board_element_count = inventories.board_elements.len();
+    let board_connection_count = inventories.board_connections.len();
     let view_field_count = inventories.view_fields.len();
     let automation_count = inventories.automations.len();
     let automation_definition_count = inventories.automation_definitions.len();
@@ -667,6 +685,22 @@ fn project_root_effects(
             artifact_marker("def modelViewControls :"),
             artifact_marker(format!(
                 "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := {lean_model_view_control_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelBoardElements :"),
+            artifact_marker(format!(
+                "def modelBoardElements : List (String × String × String × String × String × String × Bool) := {lean_model_board_element_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelBoardConnections :"),
+            artifact_marker(format!(
+                "def modelBoardConnections : List (String × String × String × String × String × String) := {lean_model_board_connection_list}"
             )),
             lean_message.clone(),
         ),
@@ -907,6 +941,22 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelBoardElementsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelBoardElementsAreDeclared : modelBoardElements.length = {board_element_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelBoardConnectionsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelBoardConnectionsAreDeclared : modelBoardConnections.length = {board_connection_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelViewFieldsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelViewFieldsAreDeclared : modelViewFields.length = {view_field_count} := rfl"
@@ -1108,6 +1158,22 @@ fn project_root_effects(
             artifact_marker("  type ModelViewControl ="),
             artifact_marker(
                 "  type ModelViewControl = { workflow: str, slice: str, view: str, control: str, command: str, input: str, inputSourceKind: str, inputSourceDescription: str, inputSketchToken: str, inputVisibleToActor: bool, inputDecisionField: bool, handledErrors: List[str], recoveryBehavior: str, controlSketchToken: str, navigationType: str, navigationTarget: str, externalWorkflow: str, externalSystem: str, handoffContract: str }",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelBoardElement ="),
+            artifact_marker(
+                "  type ModelBoardElement = { workflow: str, slice: str, element: str, kind: str, lane: str, declaredName: str, mainPath: bool }",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelBoardConnection ="),
+            artifact_marker(
+                "  type ModelBoardConnection = { workflow: str, slice: str, source: str, sourceKind: str, target: str, targetKind: str }",
             ),
             quint_message.clone(),
         ),
@@ -1346,6 +1412,22 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelBoardElements:"),
+            artifact_marker(format!(
+                "  val modelBoardElements: List[ModelBoardElement] = {quint_model_board_element_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelBoardConnections:"),
+            artifact_marker(format!(
+                "  val modelBoardConnections: List[ModelBoardConnection] = {quint_model_board_connection_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelViewFields:"),
             artifact_marker(format!(
                 "  val modelViewFields: List[ModelViewField] = {quint_model_view_field_list}"
@@ -1576,6 +1658,22 @@ fn project_root_effects(
             artifact_marker("  val modelViewControlsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelViewControlsAreDeclared = modelViewControls.length() == {view_control_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelBoardElementsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelBoardElementsAreDeclared = modelBoardElements.length() == {board_element_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelBoardConnectionsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelBoardConnectionsAreDeclared = modelBoardConnections.length() == {board_connection_count}"
             )),
             quint_message.clone(),
         ),
@@ -3564,6 +3662,104 @@ fn quint_model_view_control_list(project_view_controls: &[ProjectViewControl]) -
     )
 }
 
+fn lean_model_board_element_list(project_board_elements: &[ProjectBoardElement]) -> String {
+    let mut project_board_elements = project_board_elements.to_vec();
+    project_board_elements.sort();
+    format!(
+        "[{}]",
+        project_board_elements
+            .into_iter()
+            .map(|element| {
+                format!(
+                    "({}, {}, {}, {}, {}, {}, {})",
+                    json_string(element.workflow_slug()),
+                    json_string(element.slice_slug()),
+                    json_string(element.element()),
+                    json_string(element.kind()),
+                    json_string(element.lane()),
+                    json_string(element.declared_name()),
+                    element.main_path()
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_board_element_list(project_board_elements: &[ProjectBoardElement]) -> String {
+    let mut project_board_elements = project_board_elements.to_vec();
+    project_board_elements.sort();
+    format!(
+        "[{}]",
+        project_board_elements
+            .into_iter()
+            .map(|element| {
+                format!(
+                    "{{ workflow: {}, slice: {}, element: {}, kind: {}, lane: {}, declaredName: {}, mainPath: {} }}",
+                    json_string(element.workflow_slug()),
+                    json_string(element.slice_slug()),
+                    json_string(element.element()),
+                    json_string(element.kind()),
+                    json_string(element.lane()),
+                    json_string(element.declared_name()),
+                    element.main_path()
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn lean_model_board_connection_list(
+    project_board_connections: &[ProjectBoardConnection],
+) -> String {
+    let mut project_board_connections = project_board_connections.to_vec();
+    project_board_connections.sort();
+    format!(
+        "[{}]",
+        project_board_connections
+            .into_iter()
+            .map(|connection| {
+                format!(
+                    "({}, {}, {}, {}, {}, {})",
+                    json_string(connection.workflow_slug()),
+                    json_string(connection.slice_slug()),
+                    json_string(connection.source()),
+                    json_string(connection.source_kind()),
+                    json_string(connection.target()),
+                    json_string(connection.target_kind())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_board_connection_list(
+    project_board_connections: &[ProjectBoardConnection],
+) -> String {
+    let mut project_board_connections = project_board_connections.to_vec();
+    project_board_connections.sort();
+    format!(
+        "[{}]",
+        project_board_connections
+            .into_iter()
+            .map(|connection| {
+                format!(
+                    "{{ workflow: {}, slice: {}, source: {}, sourceKind: {}, target: {}, targetKind: {} }}",
+                    json_string(connection.workflow_slug()),
+                    json_string(connection.slice_slug()),
+                    json_string(connection.source()),
+                    json_string(connection.source_kind()),
+                    json_string(connection.target()),
+                    json_string(connection.target_kind())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn lean_model_view_field_list(project_view_fields: &[ProjectViewField]) -> String {
     let mut project_view_fields = project_view_fields
         .iter()
@@ -4196,7 +4392,7 @@ fn model_digest(
     inventories: &ProjectRootInventories<'_>,
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-definitions={};view-controls={};view-fields={};automations={};automation-definitions={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
+        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-definitions={};view-controls={};board-elements={};board-connections={};view-fields={};automations={};automation-definitions={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
@@ -4213,6 +4409,8 @@ fn model_digest(
         digest_views(inventories.views),
         digest_view_definitions(inventories.view_definitions),
         digest_view_controls(inventories.view_controls),
+        digest_board_elements(inventories.board_elements),
+        digest_board_connections(inventories.board_connections),
         digest_view_fields(inventories.view_fields),
         digest_automations(inventories.automations),
         digest_automation_definitions(inventories.automation_definitions),
@@ -4569,6 +4767,47 @@ fn digest_view_controls(project_view_controls: &[ProjectViewControl]) -> String 
                 control.external_workflow(),
                 control.external_system(),
                 control.handoff_contract()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_board_elements(project_board_elements: &[ProjectBoardElement]) -> String {
+    let mut board_elements = project_board_elements.to_vec();
+    board_elements.sort();
+    board_elements
+        .into_iter()
+        .map(|element| {
+            format!(
+                "{}/{}/{}@{}:{}:{}:{}",
+                element.workflow_slug(),
+                element.slice_slug(),
+                element.element(),
+                element.kind(),
+                element.lane(),
+                element.declared_name(),
+                element.main_path()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_board_connections(project_board_connections: &[ProjectBoardConnection]) -> String {
+    let mut board_connections = project_board_connections.to_vec();
+    board_connections.sort();
+    board_connections
+        .into_iter()
+        .map(|connection| {
+            format!(
+                "{}/{}:{}:{}->{}:{}",
+                connection.workflow_slug(),
+                connection.slice_slug(),
+                connection.source(),
+                connection.source_kind(),
+                connection.target(),
+                connection.target_kind()
             )
         })
         .collect::<Vec<_>>()

@@ -1175,6 +1175,26 @@ impl NewBoardElement {
     pub fn slice_slug(&self) -> &SliceSlug {
         &self.slice_slug
     }
+
+    pub fn name(&self) -> &BoardElementName {
+        &self.name
+    }
+
+    pub fn kind(&self) -> &BoardElementKind {
+        &self.kind
+    }
+
+    pub fn lane(&self) -> &BoardLaneId {
+        &self.lane
+    }
+
+    pub fn declared_name(&self) -> &BoardElementDeclaredName {
+        &self.declared_name
+    }
+
+    pub fn main_path(&self) -> bool {
+        self.main_path
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -1205,6 +1225,22 @@ impl NewBoardConnection {
 
     pub fn slice_slug(&self) -> &SliceSlug {
         &self.slice_slug
+    }
+
+    pub fn source(&self) -> &BoardConnectionEndpoint {
+        &self.source
+    }
+
+    pub fn source_kind(&self) -> &BoardConnectionEndpointKind {
+        &self.source_kind
+    }
+
+    pub fn target(&self) -> &BoardConnectionEndpoint {
+        &self.target
+    }
+
+    pub fn target_kind(&self) -> &BoardConnectionEndpointKind {
+        &self.target_kind
     }
 }
 
