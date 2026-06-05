@@ -66,7 +66,7 @@ A model is complete and valid only when all of these are true:
 - ✅ View fields declare source provenance.
 - ✅ Read model fields source from known event attributes.
 - ✅ Read model fields do not source directly from commands.
-- 🟡 Derived read model fields declare source fields and derivation rules.
+- ✅ Derived read model fields declare source fields and derivation rules.
 - ✅ Derived read model fields have derivation scenario coverage.
 - ✅ Transitive read models declare source relationship fields, transitive
   rules, and examples.
