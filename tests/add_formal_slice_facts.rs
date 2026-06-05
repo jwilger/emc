@@ -1430,6 +1430,42 @@ mod tests {
             quint_root.contains("val modelStreamsAreDeclared = modelStreams.length() == 1"),
             "Quint project root must verify authored stream inventory cardinality"
         );
+        assert!(
+            lean_root.contains(
+                "def modelEvents : List (String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"TicketCaptured\", \"tickets\")]"
+            ),
+            "Lean project root must carry the authored event inventory"
+        );
+        assert!(
+            lean_root.contains("theorem modelEventsAreDeclared : modelEvents.length = 1 := rfl"),
+            "Lean project root must prove authored event inventory cardinality"
+        );
+        assert!(
+            quint_root.contains(
+                "type ModelEvent = { workflow: str, slice: str, event: str, stream: str }"
+            ),
+            "Quint project root must type the authored event inventory"
+        );
+        assert!(
+            quint_root.contains("val modelEvents: List[ModelEvent] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", event: \"TicketCaptured\", stream: \"tickets\" }]"),
+            "Quint project root must carry the authored event inventory"
+        );
+        assert!(
+            quint_root.contains("val modelEventsAreDeclared = modelEvents.length() == 1"),
+            "Quint project root must verify authored event inventory cardinality"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+            ),
+            "Lean project root digest must include authored stream and event inventory"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+            ),
+            "Quint project root digest must include authored stream and event inventory"
+        );
 
         Command::cargo_bin("emc")?
             .args(["check"])

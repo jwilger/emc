@@ -386,8 +386,8 @@ mod tests {
         write(
             &lean_root_path,
             lean_root.replace(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=;streams=\"",
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=stale;slices=;streams=\"",
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=;streams=;events=\"",
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=stale;slices=;streams=;events=\"",
             ),
         )?;
 

@@ -475,6 +475,10 @@ impl NewEventDefinition {
     pub fn stream(&self) -> &StreamName {
         &self.stream
     }
+
+    pub fn name(&self) -> &EventName {
+        &self.name
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
