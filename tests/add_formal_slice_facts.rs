@@ -1479,13 +1479,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=open-ticket/capture-ticket/CaptureTicket;read-models=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=open-ticket/capture-ticket/CaptureTicket;read-models=;views=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
             ),
             "Lean project root digest must include authored command, stream, and event inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=open-ticket/capture-ticket/CaptureTicket;read-models=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=open-ticket/capture-ticket/CaptureTicket;read-models=;views=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
             ),
             "Quint project root digest must include authored command, stream, and event inventory"
         );
@@ -1732,13 +1732,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;views=open-ticket/capture-ticket/ticket_summary;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
             ),
             "Lean project root digest must include authored read model inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;views=open-ticket/capture-ticket/ticket_summary;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
             ),
             "Quint project root digest must include authored read model inventory"
         );
@@ -2237,6 +2237,9 @@ mod tests {
             .success()
             .stdout(predicate::str::contains(
                 "added view ticket_summary to slice capture-ticket",
+            ))
+            .stdout(predicate::str::contains(
+                "added view ticket_summary to project root",
             ));
 
         Command::cargo_bin("emc")?
@@ -2283,6 +2286,8 @@ mod tests {
 
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
         assert!(
             lean.contains("def sliceViews : List String := [\"ticket_summary\"]"),
@@ -2303,6 +2308,42 @@ mod tests {
                 "val sliceViewDefinitions: List[ViewDefinition] = [{ name: \"ticket_summary\", readModels: [\"ticket_state\"], fields: [{ name: \"ticket_title\", sourceKind: \"read_model\", sourceReadModel: \"ticket_state\", sourceField: \"ticket_title\", sketchToken: \"title-label\", provenanceDescription: \"ticket_state.ticket_title\", bitEncoding: \"UTF-8 string\" }], controls: [], sketchTokens: [\"title-label\"], localStates: [], filters: [] }]"
             ),
             "Quint slice artifact must carry the authored displayed datum source and sketch token"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelViews : List (String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"ticket_summary\")]"
+            ),
+            "Lean project root must carry the authored view inventory"
+        );
+        assert!(
+            lean_root.contains("theorem modelViewsAreDeclared : modelViews.length = 1 := rfl"),
+            "Lean project root must prove authored views are declared"
+        );
+        assert!(
+            quint_root.contains("type ModelView = { workflow: str, slice: str, view: str }"),
+            "Quint project root must type authored view inventory"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelViews: List[ModelView] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", view: \"ticket_summary\" }]"
+            ),
+            "Quint project root must carry the authored view inventory"
+        );
+        assert!(
+            quint_root.contains("val modelViewsAreDeclared = modelViews.length() == 1"),
+            "Quint project root must verify authored views are declared"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;views=open-ticket/capture-ticket/ticket_summary;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+            ),
+            "Lean project root digest must include authored view inventory"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;views=open-ticket/capture-ticket/ticket_summary;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+            ),
+            "Quint project root digest must include authored view inventory"
         );
 
         Command::cargo_bin("emc")?
