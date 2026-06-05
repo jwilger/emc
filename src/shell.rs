@@ -19,10 +19,12 @@ use crate::core::formal_graph::{
     parse_quint_workflow_graph,
 };
 use crate::core::formal_project_facts::{
-    NewProjectCommand, NewProjectEvent, NewProjectStream, ProjectCommand, ProjectEvent,
-    ProjectStream, add_project_command, add_project_event, add_project_stream,
-    parse_lean_project_commands, parse_lean_project_events, parse_lean_project_streams,
-    parse_quint_project_commands, parse_quint_project_events, parse_quint_project_streams,
+    NewProjectCommand, NewProjectEvent, NewProjectReadModel, NewProjectStream, ProjectCommand,
+    ProjectEvent, ProjectReadModel, ProjectStream, add_project_command, add_project_event,
+    add_project_read_model, add_project_stream, parse_lean_project_commands,
+    parse_lean_project_events, parse_lean_project_read_models, parse_lean_project_streams,
+    parse_quint_project_commands, parse_quint_project_events, parse_quint_project_read_models,
+    parse_quint_project_streams,
 };
 use crate::core::formal_slice_facts::{
     add_automation_definition, add_bit_level_data_flow, add_board_connection, add_board_element,
@@ -292,7 +294,14 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::AddReadModelDefinitionFromSlice(read_model) => {
             let slice_artifacts =
                 read_formal_slice_artifact_paths_and_contents(read_model.slice_slug())?;
-            let plan = add_read_model_definition(
+            let project_name = read_project_manifest_name()?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let (workflow_layout, _workflow_graph) = find_formal_workflow_containing_slice_in(
+                &formal_workflows,
+                read_model.slice_slug(),
+            )?;
+            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
+            let slice_plan = add_read_model_definition(
                 slice_artifacts.lean_path,
                 slice_artifacts.lean_contents,
                 slice_artifacts.quint_path,
@@ -300,7 +309,21 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 read_model.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let project_read_model_plan = add_project_read_model(
+                project_artifacts.lean_path,
+                project_artifacts.lean_contents,
+                project_artifacts.quint_path,
+                project_artifacts.quint_contents,
+                NewProjectReadModel::new(
+                    workflow_layout.slug().clone(),
+                    read_model.slice_slug().clone(),
+                    read_model.name().clone(),
+                ),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            let mut reports = interpret_collect_reports(slice_plan)?;
+            reports.extend(interpret_collect_reports(project_read_model_plan)?);
+            Ok(reports)
         }
         Effect::AddViewDefinitionFromSlice(view) => {
             let slice_artifacts = read_formal_slice_artifact_paths_and_contents(view.slice_slug())?;
@@ -457,12 +480,14 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?;
             let project_commands = read_synchronized_project_commands(&project_name)?;
+            let project_read_models = read_synchronized_project_read_models(&project_name)?;
             let project_streams = read_synchronized_project_streams(&project_name)?;
             let project_events = read_synchronized_project_events(&project_name)?;
             interpret_collect_reports(check_project(
                 project_name,
                 formal_workflows,
                 project_commands,
+                project_read_models,
                 project_streams,
                 project_events,
             ))
@@ -845,6 +870,26 @@ fn read_synchronized_project_commands(
             "Lean and Quint project root command inventories disagree",
         )),
         (_lean_commands, _quint_commands) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_read_models(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectReadModel>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_read_models(&artifacts.lean_contents),
+        parse_quint_project_read_models(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_read_models), Ok(quint_read_models)) if lean_read_models == quint_read_models => {
+            Ok(lean_read_models)
+        }
+        (Ok(_lean_read_models), Ok(_quint_read_models)) => Err(ShellError::message(
+            "Lean and Quint project root read model inventories disagree",
+        )),
+        (_lean_read_models, _quint_read_models) => Ok(Vec::new()),
     }
 }
 

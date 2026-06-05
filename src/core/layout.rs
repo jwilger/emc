@@ -6,7 +6,9 @@ use crate::core::effect::{
 use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
-use crate::core::formal_project_facts::{ProjectCommand, ProjectEvent, ProjectStream};
+use crate::core::formal_project_facts::{
+    ProjectCommand, ProjectEvent, ProjectReadModel, ProjectStream,
+};
 use crate::core::project::ProjectName;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowSliceDetail,
@@ -97,6 +99,7 @@ pub fn check_project(
     project_name: ProjectName,
     formal_workflows: FormalWorkflowGraphs,
     project_commands: Vec<ProjectCommand>,
+    project_read_models: Vec<ProjectReadModel>,
     project_streams: Vec<ProjectStream>,
     project_events: Vec<ProjectEvent>,
 ) -> EffectPlan {
@@ -112,9 +115,12 @@ pub fn check_project(
         &module_name,
         &modeled_workflows,
         &formal_workflows,
-        &project_commands,
-        &project_streams,
-        &project_events,
+        &ProjectRootInventories {
+            commands: &project_commands,
+            read_models: &project_read_models,
+            streams: &project_streams,
+            events: &project_events,
+        },
     );
     let lean_artifact_paths = modeled_artifact_paths(
         [
@@ -211,14 +217,19 @@ fn modeled_slice_artifact_paths(
         .collect()
 }
 
+struct ProjectRootInventories<'a> {
+    commands: &'a [ProjectCommand],
+    read_models: &'a [ProjectReadModel],
+    streams: &'a [ProjectStream],
+    events: &'a [ProjectEvent],
+}
+
 fn project_root_effects(
     project_name: &ProjectName,
     module_name: &str,
     modeled_workflows: &[ModeledWorkflowLayout],
     formal_workflows: &[FormalWorkflowGraph],
-    project_commands: &[ProjectCommand],
-    project_streams: &[ProjectStream],
-    project_events: &[ProjectEvent],
+    inventories: &ProjectRootInventories<'_>,
 ) -> Vec<Effect> {
     let project_name_text = project_name.as_ref();
     let model_version = "0.1.0";
@@ -226,29 +237,33 @@ fn project_root_effects(
     let workflow_count = modeled_workflows.len();
     let lean_model_slice_list = lean_model_slice_list(formal_workflows);
     let lean_model_slice_module_list = lean_model_slice_module_list(formal_workflows);
-    let lean_model_command_list = lean_model_command_list(project_commands);
-    let lean_model_stream_list = lean_model_stream_list(project_streams);
-    let lean_model_event_list = lean_model_event_list(project_events);
+    let lean_model_command_list = lean_model_command_list(inventories.commands);
+    let lean_model_read_model_list = lean_model_read_model_list(inventories.read_models);
+    let lean_model_stream_list = lean_model_stream_list(inventories.streams);
+    let lean_model_event_list = lean_model_event_list(inventories.events);
     let quint_model_slice_list = quint_model_slice_list(formal_workflows);
     let quint_model_slice_module_list = quint_model_slice_module_list(formal_workflows);
-    let quint_model_command_list = quint_model_command_list(project_commands);
-    let quint_model_stream_list = quint_model_stream_list(project_streams);
-    let quint_model_event_list = quint_model_event_list(project_events);
+    let quint_model_command_list = quint_model_command_list(inventories.commands);
+    let quint_model_read_model_list = quint_model_read_model_list(inventories.read_models);
+    let quint_model_stream_list = quint_model_stream_list(inventories.streams);
+    let quint_model_event_list = quint_model_event_list(inventories.events);
     let model_digest = model_digest(
         project_name,
         modeled_workflows,
         formal_workflows,
-        project_commands,
-        project_streams,
-        project_events,
+        inventories.commands,
+        inventories.read_models,
+        inventories.streams,
+        inventories.events,
     );
     let slice_count = formal_workflows
         .iter()
         .map(|workflow| workflow.slice_details().as_slice().len())
         .sum::<usize>();
-    let stream_count = project_streams.len();
-    let command_count = project_commands.len();
-    let event_count = project_events.len();
+    let stream_count = inventories.streams.len();
+    let command_count = inventories.commands.len();
+    let read_model_count = inventories.read_models.len();
+    let event_count = inventories.events.len();
     let manifest_path = project_path("emc.toml");
     let lean_path = project_path(format!("model/lean/{module_name}.lean"));
     let lakefile_path = project_path("model/lean/lakefile.lean");
@@ -366,6 +381,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelReadModels :"),
+            artifact_marker(format!(
+                "def modelReadModels : List (String × String × String) := {lean_model_read_model_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelStreams :"),
             artifact_marker(format!(
                 "def modelStreams : List (String × String × String) := {lean_model_stream_list}"
@@ -441,6 +464,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelReadModelsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelReadModelsAreDeclared : modelReadModels.length = {read_model_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelStreamsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelStreamsAreDeclared : modelStreams.length = {stream_count} := rfl"
@@ -485,6 +516,14 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  type ModelCommand ="),
             artifact_marker("  type ModelCommand = { workflow: str, slice: str, command: str }"),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelReadModel ="),
+            artifact_marker(
+                "  type ModelReadModel = { workflow: str, slice: str, readModel: str }",
+            ),
             quint_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -562,6 +601,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelReadModels:"),
+            artifact_marker(format!(
+                "  val modelReadModels: List[ModelReadModel] = {quint_model_read_model_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelStreams:"),
             artifact_marker(format!(
                 "  val modelStreams: List[ModelStream] = {quint_model_stream_list}"
@@ -632,6 +679,14 @@ fn project_root_effects(
             artifact_marker("  val modelCommandsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelCommandsAreDeclared = modelCommands.length() == {command_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelReadModelsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelReadModelsAreDeclared = modelReadModels.length() == {read_model_count}"
             )),
             quint_message.clone(),
         ),
@@ -1788,6 +1843,64 @@ fn quint_model_command_list(project_commands: &[ProjectCommand]) -> String {
     )
 }
 
+fn lean_model_read_model_list(project_read_models: &[ProjectReadModel]) -> String {
+    let mut project_read_models = project_read_models
+        .iter()
+        .map(|read_model| {
+            (
+                read_model.workflow_slug(),
+                read_model.slice_slug(),
+                read_model.read_model(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_read_models.sort_unstable();
+    format!(
+        "[{}]",
+        project_read_models
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, read_model)| {
+                format!(
+                    "({}, {}, {})",
+                    json_string(workflow_slug),
+                    json_string(slice_slug),
+                    json_string(read_model)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_read_model_list(project_read_models: &[ProjectReadModel]) -> String {
+    let mut project_read_models = project_read_models
+        .iter()
+        .map(|read_model| {
+            (
+                read_model.workflow_slug(),
+                read_model.slice_slug(),
+                read_model.read_model(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_read_models.sort_unstable();
+    format!(
+        "[{}]",
+        project_read_models
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, read_model)| {
+                format!(
+                    "{{ workflow: {}, slice: {}, readModel: {} }}",
+                    json_string(workflow_slug),
+                    json_string(slice_slug),
+                    json_string(read_model)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn lean_model_event_list(project_events: &[ProjectEvent]) -> String {
     let mut project_events = project_events
         .iter()
@@ -1855,15 +1968,17 @@ fn model_digest(
     modeled_workflows: &[ModeledWorkflowLayout],
     formal_workflows: &[FormalWorkflowGraph],
     project_commands: &[ProjectCommand],
+    project_read_models: &[ProjectReadModel],
     project_streams: &[ProjectStream],
     project_events: &[ProjectEvent],
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};commands={};streams={};events={}",
+        "project:name={};version=0.1.0;workflows={};slices={};commands={};read-models={};streams={};events={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
         digest_commands(project_commands),
+        digest_read_models(project_read_models),
         digest_streams(project_streams),
         digest_events(project_events)
     )
@@ -1930,6 +2045,27 @@ fn digest_commands(project_commands: &[ProjectCommand]) -> String {
         .into_iter()
         .map(|(workflow_slug, slice_slug, command)| {
             format!("{workflow_slug}/{slice_slug}/{command}")
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_read_models(project_read_models: &[ProjectReadModel]) -> String {
+    let mut read_models = project_read_models
+        .iter()
+        .map(|read_model| {
+            (
+                read_model.workflow_slug(),
+                read_model.slice_slug(),
+                read_model.read_model(),
+            )
+        })
+        .collect::<Vec<_>>();
+    read_models.sort_unstable();
+    read_models
+        .into_iter()
+        .map(|(workflow_slug, slice_slug, read_model)| {
+            format!("{workflow_slug}/{slice_slug}/{read_model}")
         })
         .collect::<Vec<_>>()
         .join(",")
