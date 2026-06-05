@@ -4,9 +4,6 @@ This document records the current event-modeling rule inventory for the EMC
 Lean4 and Quint direction.
 
 The source of truth for an event model is the Lean4 model and the Quint model.
-Browser bundles, static sites, and JSON projections are not correctness
-authorities. If a future human presentation layer exists, it is a projection of
-the formal artifacts.
 
 ## Validity Standard
 
@@ -26,8 +23,8 @@ A model is complete and valid only when all of these are true:
   boundary, and recovery path is modeled.
 - Lean verification passes for every Lean module with `lake env lean`.
 - Quint typechecking and invariant verification pass for every Quint module.
-- Rust, JavaScript, JSON, and browser code do not perform duplicate semantic
-  validation for correctness.
+- Non-formal implementation code does not perform duplicate semantic validation
+  for correctness.
 
 ## Model Structure
 
@@ -250,9 +247,5 @@ Quint should verify at least:
 
 ## Non-Goals
 
-- Do not use browser projection JSON as a correctness source.
-- Do not use a static HTML site as a correctness source.
 - Do not duplicate event-model semantic validation in Rust or JavaScript.
-- Do not accept a model because it renders.
-- Do not accept a model because generated JSON validates.
 - Do not treat read models as command input dependencies.
