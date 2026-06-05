@@ -3,8 +3,8 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::types::{
-    AutomationName, CommandName, EventName, ReadModelName, SliceSlug, StreamName, ViewName,
-    WorkflowSlug,
+    AutomationName, CommandName, EventName, ReadModelName, SliceSlug, StreamName, TranslationName,
+    ViewName, WorkflowSlug,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -96,6 +96,27 @@ impl NewProjectAutomation {
             workflow_slug,
             slice_slug,
             automation,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NewProjectTranslation {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    translation: TranslationName,
+}
+
+impl NewProjectTranslation {
+    pub fn new(
+        workflow_slug: WorkflowSlug,
+        slice_slug: SliceSlug,
+        translation: TranslationName,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            slice_slug,
+            translation,
         }
     }
 }
@@ -212,6 +233,27 @@ impl ProjectAutomation {
 
     pub fn automation(&self) -> &str {
         &self.automation
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectTranslation {
+    workflow_slug: String,
+    slice_slug: String,
+    translation: String,
+}
+
+impl ProjectTranslation {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn translation(&self) -> &str {
+        &self.translation
     }
 }
 
@@ -339,6 +381,24 @@ pub fn parse_quint_project_automations(
     )
 }
 
+pub fn parse_lean_project_translations(
+    contents: &FileContents,
+) -> Result<Vec<ProjectTranslation>, FormalProjectFactError> {
+    translation_entries_from_list(
+        contents.as_ref(),
+        "def modelTranslations : List (String × String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_translations(
+    contents: &FileContents,
+) -> Result<Vec<ProjectTranslation>, FormalProjectFactError> {
+    translation_entries_from_list(
+        contents.as_ref(),
+        "val modelTranslations: List[ModelTranslation] = ",
+    )
+}
+
 pub fn parse_lean_project_events(
     contents: &FileContents,
 ) -> Result<Vec<ProjectEvent>, FormalProjectFactError> {
@@ -385,16 +445,20 @@ pub fn add_project_command(
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
-                &commands,
-                &read_models,
-                &views,
-                &automations,
-                &streams,
-                &events,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
             )
         })
     })?;
@@ -418,16 +482,20 @@ pub fn add_project_command(
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
-                &commands,
-                &read_models,
-                &views,
-                &automations,
-                &streams,
-                &events,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
             )
         })
     })?;
@@ -473,16 +541,20 @@ pub fn add_project_read_model(
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
-                &commands,
-                &read_models,
-                &views,
-                &automations,
-                &streams,
-                &events,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
             )
         })
     })?;
@@ -508,16 +580,20 @@ pub fn add_project_read_model(
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
-                &commands,
-                &read_models,
-                &views,
-                &automations,
-                &streams,
-                &events,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
             )
         })
     })?;
@@ -563,16 +639,20 @@ pub fn add_project_view(
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
-                &commands,
-                &read_models,
-                &views,
-                &automations,
-                &streams,
-                &events,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
             )
         })
     })?;
@@ -595,16 +675,20 @@ pub fn add_project_view(
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
-                &commands,
-                &read_models,
-                &views,
-                &automations,
-                &streams,
-                &events,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
             )
         })
     })?;
@@ -650,16 +734,20 @@ pub fn add_project_automation(
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
+            let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
-                &commands,
-                &read_models,
-                &views,
-                &automations,
-                &streams,
-                &events,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
             )
         })
     })?;
@@ -685,16 +773,20 @@ pub fn add_project_automation(
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
+            let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
-                &commands,
-                &read_models,
-                &views,
-                &automations,
-                &streams,
-                &events,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
             )
         })
     })?;
@@ -705,6 +797,104 @@ pub fn add_project_automation(
         Effect::Report(report_line(format!(
             "added automation {} to project root",
             automation.automation.as_ref()
+        ))?),
+    ]))
+}
+
+pub fn add_project_translation(
+    lean_path: ProjectPath,
+    lean_contents: FileContents,
+    quint_path: ProjectPath,
+    quint_contents: FileContents,
+    translation: NewProjectTranslation,
+) -> Result<EffectPlan, FormalProjectFactError> {
+    let lean_record = lean_translation_record(&translation);
+    let quint_record = quint_translation_record(&translation);
+    let lean = append_record_if_missing(
+        lean_contents.as_ref(),
+        "def modelTranslations : List (String × String × String) := ",
+        &lean_record,
+    )
+    .and_then(|contents| {
+        let translations = translation_entries_from_list(
+            &contents,
+            "def modelTranslations : List (String × String × String) := ",
+        )?;
+        replace_declaration(
+            &contents,
+            "theorem modelTranslationsAreDeclared :",
+            &format!(
+                "theorem modelTranslationsAreDeclared : modelTranslations.length = {} := rfl",
+                translations.len()
+            ),
+        )
+        .and_then(|contents| {
+            let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let views = parse_lean_project_views_from_contents_or_empty(&contents);
+            let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
+            let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            update_lean_digest(
+                &contents,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
+            )
+        })
+    })?;
+    let quint = append_record_if_missing(
+        quint_contents.as_ref(),
+        "val modelTranslations: List[ModelTranslation] = ",
+        &quint_record,
+    )
+    .and_then(|contents| {
+        let translations = translation_entries_from_list(
+            &contents,
+            "val modelTranslations: List[ModelTranslation] = ",
+        )?;
+        replace_declaration(
+            &contents,
+            "val modelTranslationsAreDeclared =",
+            &format!(
+                "val modelTranslationsAreDeclared = modelTranslations.length() == {}",
+                translations.len()
+            ),
+        )
+        .and_then(|contents| {
+            let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let views = parse_quint_project_views_from_contents_or_empty(&contents);
+            let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
+            let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            update_quint_digest(
+                &contents,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
+            )
+        })
+    })?;
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(lean_path, file_contents(lean)?),
+        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::Report(report_line(format!(
+            "added translation {} to project root",
+            translation.translation.as_ref()
         ))?),
     ]))
 }
@@ -741,15 +931,19 @@ pub fn add_project_stream(
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
-                &commands,
-                &read_models,
-                &views,
-                &automations,
-                &streams,
-                &events,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
             )
         })
     })?;
@@ -774,15 +968,19 @@ pub fn add_project_stream(
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
-                &commands,
-                &read_models,
-                &views,
-                &automations,
-                &streams,
-                &events,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
             )
         })
     })?;
@@ -828,6 +1026,10 @@ pub fn add_project_event(
             &contents,
             "def modelAutomations : List (String × String × String) := ",
         )?;
+        let translations = translation_entries_from_list(
+            &contents,
+            "def modelTranslations : List (String × String × String) := ",
+        )?;
         let streams = stream_entries_from_list(
             &contents,
             "def modelStreams : List (String × String × String) := ",
@@ -847,12 +1049,15 @@ pub fn add_project_event(
         .and_then(|contents| {
             update_lean_digest(
                 &contents,
-                &commands,
-                &read_models,
-                &views,
-                &automations,
-                &streams,
-                &events,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
             )
         })
     })?;
@@ -873,6 +1078,10 @@ pub fn add_project_event(
             &contents,
             "val modelAutomations: List[ModelAutomation] = ",
         )?;
+        let translations = translation_entries_from_list(
+            &contents,
+            "val modelTranslations: List[ModelTranslation] = ",
+        )?;
         let streams =
             stream_entries_from_list(&contents, "val modelStreams: List[ModelStream] = ")?;
         let events = event_entries_from_list(&contents, "val modelEvents: List[ModelEvent] = ")?;
@@ -887,12 +1096,15 @@ pub fn add_project_event(
         .and_then(|contents| {
             update_quint_digest(
                 &contents,
-                &commands,
-                &read_models,
-                &views,
-                &automations,
-                &streams,
-                &events,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    streams: &streams,
+                    events: &events,
+                },
             )
         })
     })?;
@@ -1093,6 +1305,23 @@ fn parse_quint_project_automations_from_contents_or_empty(
         .unwrap_or_default()
 }
 
+fn parse_lean_project_translations_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectTranslation> {
+    translation_entries_from_list(
+        contents,
+        "def modelTranslations : List (String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_translations_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectTranslation> {
+    translation_entries_from_list(contents, "val modelTranslations: List[ModelTranslation] = ")
+        .unwrap_or_default()
+}
+
 fn parse_lean_project_streams_from_contents_or_empty(contents: &str) -> Vec<ProjectStream> {
     stream_entries_from_list(
         contents,
@@ -1211,6 +1440,33 @@ fn automation_entries_from_list(
     automations.sort();
     automations.dedup();
     Ok(automations)
+}
+
+fn translation_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectTranslation>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut translations = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let strings = quoted_strings(&record)?;
+            if strings.len() < 3 {
+                Err(FormalProjectFactError::new(
+                    "formal project translation record is malformed",
+                ))
+            } else {
+                Ok(ProjectTranslation {
+                    workflow_slug: strings[0].clone(),
+                    slice_slug: strings[1].clone(),
+                    translation: strings[2].clone(),
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    translations.sort();
+    translations.dedup();
+    Ok(translations)
 }
 
 fn parse_lean_project_events_from_contents_or_empty(contents: &str) -> Vec<ProjectEvent> {
@@ -1334,23 +1590,23 @@ fn quoted_strings(record: &str) -> Result<Vec<String>, FormalProjectFactError> {
     }
 }
 
+struct ProjectDigestInventories<'a> {
+    commands: &'a [ProjectCommand],
+    read_models: &'a [ProjectReadModel],
+    views: &'a [ProjectView],
+    automations: &'a [ProjectAutomation],
+    translations: &'a [ProjectTranslation],
+    streams: &'a [ProjectStream],
+    events: &'a [ProjectEvent],
+}
+
 fn update_lean_digest(
     contents: &str,
-    commands: &[ProjectCommand],
-    read_models: &[ProjectReadModel],
-    views: &[ProjectView],
-    automations: &[ProjectAutomation],
-    streams: &[ProjectStream],
-    events: &[ProjectEvent],
+    inventories: ProjectDigestInventories<'_>,
 ) -> Result<String, FormalProjectFactError> {
     let digest = digest_with_project_inventories(
         declaration_json_string(contents, "def modelDigest := ")?,
-        commands,
-        read_models,
-        views,
-        automations,
-        streams,
-        events,
+        &inventories,
     );
     replace_declaration(
         contents,
@@ -1371,21 +1627,11 @@ fn update_lean_digest(
 
 fn update_quint_digest(
     contents: &str,
-    commands: &[ProjectCommand],
-    read_models: &[ProjectReadModel],
-    views: &[ProjectView],
-    automations: &[ProjectAutomation],
-    streams: &[ProjectStream],
-    events: &[ProjectEvent],
+    inventories: ProjectDigestInventories<'_>,
 ) -> Result<String, FormalProjectFactError> {
     let digest = digest_with_project_inventories(
         declaration_json_string(contents, "val modelDigest = ")?,
-        commands,
-        read_models,
-        views,
-        automations,
-        streams,
-        events,
+        &inventories,
     );
     replace_declaration(
         contents,
@@ -1403,29 +1649,26 @@ fn update_quint_digest(
 
 fn digest_with_project_inventories(
     current_digest: String,
-    commands: &[ProjectCommand],
-    read_models: &[ProjectReadModel],
-    views: &[ProjectView],
-    automations: &[ProjectAutomation],
-    streams: &[ProjectStream],
-    events: &[ProjectEvent],
+    inventories: &ProjectDigestInventories<'_>,
 ) -> String {
     let prefix = current_digest
         .split_once(";commands=")
         .or_else(|| current_digest.split_once(";read-models="))
         .or_else(|| current_digest.split_once(";views="))
         .or_else(|| current_digest.split_once(";automations="))
+        .or_else(|| current_digest.split_once(";translations="))
         .or_else(|| current_digest.split_once(";streams="))
         .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};commands={};read-models={};views={};automations={};streams={};events={}",
-        digest_commands(commands),
-        digest_read_models(read_models),
-        digest_views(views),
-        digest_automations(automations),
-        digest_streams(streams),
-        digest_events(events)
+        "{prefix};commands={};read-models={};views={};automations={};translations={};streams={};events={}",
+        digest_commands(inventories.commands),
+        digest_read_models(inventories.read_models),
+        digest_views(inventories.views),
+        digest_automations(inventories.automations),
+        digest_translations(inventories.translations),
+        digest_streams(inventories.streams),
+        digest_events(inventories.events)
     )
 }
 
@@ -1470,6 +1713,19 @@ fn digest_automations(automations: &[ProjectAutomation]) -> String {
             format!(
                 "{}/{}/{}",
                 automation.workflow_slug, automation.slice_slug, automation.automation
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_translations(translations: &[ProjectTranslation]) -> String {
+    translations
+        .iter()
+        .map(|translation| {
+            format!(
+                "{}/{}/{}",
+                translation.workflow_slug, translation.slice_slug, translation.translation
             )
         })
         .collect::<Vec<_>>()
@@ -1601,6 +1857,24 @@ fn quint_automation_record(automation: &NewProjectAutomation) -> String {
         quoted(automation.workflow_slug.as_ref()),
         quoted(automation.slice_slug.as_ref()),
         quoted(automation.automation.as_ref())
+    )
+}
+
+fn lean_translation_record(translation: &NewProjectTranslation) -> String {
+    format!(
+        "({}, {}, {})",
+        quoted(translation.workflow_slug.as_ref()),
+        quoted(translation.slice_slug.as_ref()),
+        quoted(translation.translation.as_ref())
+    )
+}
+
+fn quint_translation_record(translation: &NewProjectTranslation) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, translation: {} }}",
+        quoted(translation.workflow_slug.as_ref()),
+        quoted(translation.slice_slug.as_ref()),
+        quoted(translation.translation.as_ref())
     )
 }
 
