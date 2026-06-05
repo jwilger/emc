@@ -660,7 +660,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelReadModelFields :"),
             artifact_marker(format!(
-                "def modelReadModelFields : List (String × String × String × String × String × String × String × String × String × String × String × String) := {lean_model_read_model_field_list}"
+                "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := {lean_model_read_model_field_list}"
             )),
             lean_message.clone(),
         ),
@@ -1135,7 +1135,7 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  type ModelReadModelField ="),
             artifact_marker(
-                "  type ModelReadModelField = { workflow: str, slice: str, readModel: str, field: str, sourceKind: str, sourceEvent: str, sourceAttribute: str, derivationRule: str, absenceEvent: str, derivationScenarioName: str, absenceScenarioName: str, provenance: str }",
+                "  type ModelReadModelField = { workflow: str, slice: str, readModel: str, field: str, sourceKind: str, sourceEvent: str, sourceAttribute: str, derivationRule: str, derivationSourceFields: List[str], absenceEvent: str, derivationScenarioName: str, absenceScenarioName: str, provenance: str }",
             ),
             quint_message.clone(),
         ),
@@ -3383,6 +3383,7 @@ fn lean_model_read_model_field_list(project_read_model_fields: &[ProjectReadMode
                 field.source_event(),
                 field.source_attribute(),
                 field.derivation_rule(),
+                field.derivation_source_fields(),
                 field.absence_event(),
                 field.derivation_scenario_name(),
                 field.absence_scenario_name(),
@@ -3390,7 +3391,13 @@ fn lean_model_read_model_field_list(project_read_model_fields: &[ProjectReadMode
             )
         })
         .collect::<Vec<_>>();
-    project_read_model_fields.sort_unstable();
+    project_read_model_fields.sort_unstable_by(|left, right| {
+        left.0
+            .cmp(right.0)
+            .then_with(|| left.1.cmp(right.1))
+            .then_with(|| left.2.cmp(right.2))
+            .then_with(|| left.3.cmp(right.3))
+    });
     format!(
         "[{}]",
         project_read_model_fields
@@ -3405,13 +3412,14 @@ fn lean_model_read_model_field_list(project_read_model_fields: &[ProjectReadMode
                     source_event,
                     source_attribute,
                     derivation_rule,
+                    derivation_source_fields,
                     absence_event,
                     derivation_scenario_name,
                     absence_scenario_name,
                     provenance,
                 )| {
                     format!(
-                        "({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+                        "({}, {}, {}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {})",
                         json_string(workflow_slug),
                         json_string(slice_slug),
                         json_string(read_model),
@@ -3420,6 +3428,7 @@ fn lean_model_read_model_field_list(project_read_model_fields: &[ProjectReadMode
                         json_string(source_event),
                         json_string(source_attribute),
                         json_string(derivation_rule),
+                        json_string_list(derivation_source_fields),
                         json_string(absence_event),
                         json_string(derivation_scenario_name),
                         json_string(absence_scenario_name),
@@ -3447,6 +3456,7 @@ fn quint_model_read_model_field_list(
                 field.source_event(),
                 field.source_attribute(),
                 field.derivation_rule(),
+                field.derivation_source_fields(),
                 field.absence_event(),
                 field.derivation_scenario_name(),
                 field.absence_scenario_name(),
@@ -3454,7 +3464,13 @@ fn quint_model_read_model_field_list(
             )
         })
         .collect::<Vec<_>>();
-    project_read_model_fields.sort_unstable();
+    project_read_model_fields.sort_unstable_by(|left, right| {
+        left.0
+            .cmp(right.0)
+            .then_with(|| left.1.cmp(right.1))
+            .then_with(|| left.2.cmp(right.2))
+            .then_with(|| left.3.cmp(right.3))
+    });
     format!(
         "[{}]",
         project_read_model_fields
@@ -3469,13 +3485,14 @@ fn quint_model_read_model_field_list(
                     source_event,
                     source_attribute,
                     derivation_rule,
+                    derivation_source_fields,
                     absence_event,
                     derivation_scenario_name,
                     absence_scenario_name,
                     provenance,
                 )| {
                     format!(
-                        "{{ workflow: {}, slice: {}, readModel: {}, field: {}, sourceKind: {}, sourceEvent: {}, sourceAttribute: {}, derivationRule: {}, absenceEvent: {}, derivationScenarioName: {}, absenceScenarioName: {}, provenance: {} }}",
+                        "{{ workflow: {}, slice: {}, readModel: {}, field: {}, sourceKind: {}, sourceEvent: {}, sourceAttribute: {}, derivationRule: {}, derivationSourceFields: [{}], absenceEvent: {}, derivationScenarioName: {}, absenceScenarioName: {}, provenance: {} }}",
                         json_string(workflow_slug),
                         json_string(slice_slug),
                         json_string(read_model),
@@ -3484,6 +3501,7 @@ fn quint_model_read_model_field_list(
                         json_string(source_event),
                         json_string(source_attribute),
                         json_string(derivation_rule),
+                        json_string_list(derivation_source_fields),
                         json_string(absence_event),
                         json_string(derivation_scenario_name),
                         json_string(absence_scenario_name),
@@ -4672,6 +4690,7 @@ fn digest_read_model_fields(project_read_model_fields: &[ProjectReadModelField])
                 field.source_event(),
                 field.source_attribute(),
                 field.derivation_rule(),
+                field.derivation_source_fields(),
                 field.absence_event(),
                 field.derivation_scenario_name(),
                 field.absence_scenario_name(),
@@ -4679,7 +4698,13 @@ fn digest_read_model_fields(project_read_model_fields: &[ProjectReadModelField])
             )
         })
         .collect::<Vec<_>>();
-    read_model_fields.sort_unstable();
+    read_model_fields.sort_unstable_by(|left, right| {
+        left.0
+            .cmp(right.0)
+            .then_with(|| left.1.cmp(right.1))
+            .then_with(|| left.2.cmp(right.2))
+            .then_with(|| left.3.cmp(right.3))
+    });
     read_model_fields
         .into_iter()
         .map(
@@ -4692,13 +4717,15 @@ fn digest_read_model_fields(project_read_model_fields: &[ProjectReadModelField])
                 source_event,
                 source_attribute,
                 derivation_rule,
+                derivation_source_fields,
                 absence_event,
                 derivation_scenario_name,
                 absence_scenario_name,
                 provenance,
             )| {
                 format!(
-                    "{workflow_slug}/{slice_slug}/{read_model}/{field}@{source_kind}#{source_event}.{source_attribute}#{derivation_rule}#{absence_event}#{derivation_scenario_name}#{absence_scenario_name}#{provenance}"
+                    "{workflow_slug}/{slice_slug}/{read_model}/{field}@{source_kind}#{source_event}.{source_attribute}#{derivation_rule}#{}#{absence_event}#{derivation_scenario_name}#{absence_scenario_name}#{provenance}",
+                    derivation_source_fields.join("|")
                 )
             },
         )

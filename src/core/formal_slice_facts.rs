@@ -689,6 +689,7 @@ pub struct NewReadModelField {
     source_event: Option<EventName>,
     source_attribute: Option<EventAttributeName>,
     derivation_rule: Option<ReadModelDerivationRule>,
+    derivation_source_fields: ReadModelDerivationSourceFields,
     absence_event: Option<EventName>,
     derivation_scenario_name: Option<ScenarioName>,
     absence_scenario_name: Option<ScenarioName>,
@@ -709,6 +710,7 @@ impl NewReadModelField {
             source_event: Some(source_event),
             source_attribute: Some(source_attribute),
             derivation_rule: None,
+            derivation_source_fields: ReadModelDerivationSourceFields::empty(),
             absence_event: None,
             derivation_scenario_name: None,
             absence_scenario_name: None,
@@ -720,6 +722,7 @@ impl NewReadModelField {
         name: DatumName,
         source_kind: ReadModelFieldSourceKind,
         derivation_rule: ReadModelDerivationRule,
+        derivation_source_fields: ReadModelDerivationSourceFields,
         derivation_scenario_name: ScenarioName,
         provenance_description: ProvenanceDescription,
     ) -> Self {
@@ -729,6 +732,7 @@ impl NewReadModelField {
             source_event: None,
             source_attribute: None,
             derivation_rule: Some(derivation_rule),
+            derivation_source_fields,
             absence_event: None,
             derivation_scenario_name: Some(derivation_scenario_name),
             absence_scenario_name: None,
@@ -749,6 +753,7 @@ impl NewReadModelField {
             source_event: None,
             source_attribute: None,
             derivation_rule: None,
+            derivation_source_fields: ReadModelDerivationSourceFields::empty(),
             absence_event: Some(absence_event),
             derivation_scenario_name: None,
             absence_scenario_name: Some(absence_scenario_name),
@@ -774,6 +779,10 @@ impl NewReadModelField {
 
     pub fn derivation_rule(&self) -> Option<&ReadModelDerivationRule> {
         self.derivation_rule.as_ref()
+    }
+
+    pub fn derivation_source_fields(&self) -> &ReadModelDerivationSourceFields {
+        &self.derivation_source_fields
     }
 
     pub fn absence_event(&self) -> Option<&EventName> {
@@ -865,6 +874,27 @@ pub struct ReadModelRelationshipFields {
 }
 
 impl ReadModelRelationshipFields {
+    pub fn empty() -> Self {
+        Self { fields: Vec::new() }
+    }
+
+    pub fn from_fields(fields: impl IntoIterator<Item = DatumName>) -> Self {
+        Self {
+            fields: fields.into_iter().collect(),
+        }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[DatumName] {
+        &self.fields
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ReadModelDerivationSourceFields {
+    fields: Vec<DatumName>,
+}
+
+impl ReadModelDerivationSourceFields {
     pub fn empty() -> Self {
         Self { fields: Vec::new() }
     }
@@ -2428,7 +2458,7 @@ fn quint_read_model_definition_record(read_model: &NewReadModelDefinition) -> St
 
 fn lean_read_model_field_record(field: &NewReadModelField) -> String {
     format!(
-        "{{ name := {}, sourceKind := {}, sourceEvent := {}, sourceAttribute := {}, derivationRule := {}, absenceEvent := {}, derivationScenarioName := {}, absenceScenarioName := {}, provenanceDescription := {} }}",
+        "{{ name := {}, sourceKind := {}, sourceEvent := {}, sourceAttribute := {}, derivationRule := {}, derivationSourceFields := [{}], absenceEvent := {}, derivationScenarioName := {}, absenceScenarioName := {}, provenanceDescription := {} }}",
         quoted(field.name.as_ref()),
         quoted(field.source_kind.as_ref()),
         quoted(field.source_event.as_ref().map_or("", EventName::as_ref)),
@@ -2444,6 +2474,7 @@ fn lean_read_model_field_record(field: &NewReadModelField) -> String {
                 .as_ref()
                 .map_or("", ReadModelDerivationRule::as_ref),
         ),
+        lean_list(field.derivation_source_fields.as_slice()),
         quoted(field.absence_event.as_ref().map_or("", EventName::as_ref)),
         quoted(
             field
@@ -2463,7 +2494,7 @@ fn lean_read_model_field_record(field: &NewReadModelField) -> String {
 
 fn quint_read_model_field_record(field: &NewReadModelField) -> String {
     format!(
-        "{{ name: {}, sourceKind: {}, sourceEvent: {}, sourceAttribute: {}, derivationRule: {}, absenceEvent: {}, derivationScenarioName: {}, absenceScenarioName: {}, provenanceDescription: {} }}",
+        "{{ name: {}, sourceKind: {}, sourceEvent: {}, sourceAttribute: {}, derivationRule: {}, derivationSourceFields: [{}], absenceEvent: {}, derivationScenarioName: {}, absenceScenarioName: {}, provenanceDescription: {} }}",
         quoted(field.name.as_ref()),
         quoted(field.source_kind.as_ref()),
         quoted(field.source_event.as_ref().map_or("", EventName::as_ref)),
@@ -2479,6 +2510,7 @@ fn quint_read_model_field_record(field: &NewReadModelField) -> String {
                 .as_ref()
                 .map_or("", ReadModelDerivationRule::as_ref),
         ),
+        quint_list(field.derivation_source_fields.as_slice()),
         quoted(field.absence_event.as_ref().map_or("", EventName::as_ref)),
         quoted(
             field

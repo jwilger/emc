@@ -284,6 +284,7 @@ pub struct NewProjectReadModelField {
     source_event: String,
     source_attribute: String,
     derivation_rule: String,
+    derivation_source_fields: Vec<String>,
     absence_event: String,
     derivation_scenario_name: String,
     absence_scenario_name: String,
@@ -310,6 +311,12 @@ impl NewProjectReadModelField {
                 .derivation_rule()
                 .map(|rule| rule.as_ref().to_owned())
                 .unwrap_or_default(),
+            derivation_source_fields: field
+                .derivation_source_fields()
+                .as_slice()
+                .iter()
+                .map(|field| field.as_ref().to_owned())
+                .collect(),
             absence_event: field
                 .absence_event()
                 .map(|event| event.as_ref().to_owned())
@@ -1134,6 +1141,7 @@ pub struct ProjectReadModelField {
     source_event: String,
     source_attribute: String,
     derivation_rule: String,
+    derivation_source_fields: Vec<String>,
     absence_event: String,
     derivation_scenario_name: String,
     absence_scenario_name: String,
@@ -1171,6 +1179,10 @@ impl ProjectReadModelField {
 
     pub fn derivation_rule(&self) -> &str {
         &self.derivation_rule
+    }
+
+    pub fn derivation_source_fields(&self) -> &[String] {
+        &self.derivation_source_fields
     }
 
     pub fn absence_event(&self) -> &str {
@@ -2050,7 +2062,7 @@ pub fn parse_lean_project_read_model_fields(
 ) -> Result<Vec<ProjectReadModelField>, FormalProjectFactError> {
     read_model_field_entries_from_list(
         contents.as_ref(),
-        "def modelReadModelFields : List (String × String × String × String × String × String × String × String × String × String × String × String) := ",
+        "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := ",
     )
 }
 
@@ -3354,7 +3366,7 @@ pub fn add_project_read_model(
             .try_fold(contents, |contents, record| {
                 append_record_if_missing(
                     &contents,
-                    "def modelReadModelFields : List (String × String × String × String × String × String × String × String × String × String × String × String) := ",
+                    "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := ",
                     record,
                 )
             })
@@ -3370,7 +3382,7 @@ pub fn add_project_read_model(
         )?;
         let read_model_fields = read_model_field_entries_from_list(
             &contents,
-            "def modelReadModelFields : List (String × String × String × String × String × String × String × String × String × String × String × String) := ",
+            "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := ",
         )?;
         replace_declaration(
             &contents,
@@ -5197,7 +5209,7 @@ pub fn add_project_event(
         )?;
         let read_model_fields = read_model_field_entries_from_list(
             &contents,
-            "def modelReadModelFields : List (String × String × String × String × String × String × String × String × String × String × String × String) := ",
+            "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := ",
         )?;
         let views = view_entries_from_list(
             &contents,
@@ -5752,7 +5764,7 @@ fn parse_lean_project_read_model_fields_from_contents_or_empty(
 ) -> Vec<ProjectReadModelField> {
     read_model_field_entries_from_list(
         contents,
-        "def modelReadModelFields : List (String × String × String × String × String × String × String × String × String × String × String × String) := ",
+        "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := ",
     )
     .unwrap_or_default()
 }
@@ -6284,25 +6296,26 @@ fn read_model_field_entries_from_list(
     let mut read_model_fields = split_top_level_records(list)?
         .into_iter()
         .map(|record| {
-            let strings = quoted_strings(&record)?;
-            if strings.len() < 12 {
+            let values = record_values(&record)?;
+            if values.len() < 13 {
                 Err(FormalProjectFactError::new(
                     "formal project read model field record is malformed",
                 ))
             } else {
                 Ok(ProjectReadModelField {
-                    workflow_slug: strings[0].clone(),
-                    slice_slug: strings[1].clone(),
-                    read_model: strings[2].clone(),
-                    field: strings[3].clone(),
-                    source_kind: strings[4].clone(),
-                    source_event: strings[5].clone(),
-                    source_attribute: strings[6].clone(),
-                    derivation_rule: strings[7].clone(),
-                    absence_event: strings[8].clone(),
-                    derivation_scenario_name: strings[9].clone(),
-                    absence_scenario_name: strings[10].clone(),
-                    provenance: strings[11].clone(),
+                    workflow_slug: single_quoted_string(&values[0])?,
+                    slice_slug: single_quoted_string(&values[1])?,
+                    read_model: single_quoted_string(&values[2])?,
+                    field: single_quoted_string(&values[3])?,
+                    source_kind: single_quoted_string(&values[4])?,
+                    source_event: single_quoted_string(&values[5])?,
+                    source_attribute: single_quoted_string(&values[6])?,
+                    derivation_rule: single_quoted_string(&values[7])?,
+                    derivation_source_fields: string_list_value(&values[8])?,
+                    absence_event: single_quoted_string(&values[9])?,
+                    derivation_scenario_name: single_quoted_string(&values[10])?,
+                    absence_scenario_name: single_quoted_string(&values[11])?,
+                    provenance: single_quoted_string(&values[12])?,
                 })
             }
         })
@@ -7445,7 +7458,7 @@ fn digest_read_model_fields(read_model_fields: &[ProjectReadModelField]) -> Stri
         .iter()
         .map(|field| {
             format!(
-                "{}/{}/{}/{}@{}#{}.{}#{}#{}#{}#{}#{}",
+                "{}/{}/{}/{}@{}#{}.{}#{}#{}#{}#{}#{}#{}",
                 field.workflow_slug,
                 field.slice_slug,
                 field.read_model,
@@ -7454,6 +7467,7 @@ fn digest_read_model_fields(read_model_fields: &[ProjectReadModelField]) -> Stri
                 field.source_event,
                 field.source_attribute,
                 field.derivation_rule,
+                field.derivation_source_fields.join("|"),
                 field.absence_event,
                 field.derivation_scenario_name,
                 field.absence_scenario_name,
@@ -8262,7 +8276,7 @@ fn quint_read_model_definition_record(definition: &NewProjectReadModelDefinition
 
 fn lean_read_model_field_record(field: &NewProjectReadModelField) -> String {
     format!(
-        "({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+        "({}, {}, {}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {})",
         quoted(field.workflow_slug.as_ref()),
         quoted(field.slice_slug.as_ref()),
         quoted(field.read_model.as_ref()),
@@ -8271,6 +8285,7 @@ fn lean_read_model_field_record(field: &NewProjectReadModelField) -> String {
         quoted(&field.source_event),
         quoted(&field.source_attribute),
         quoted(&field.derivation_rule),
+        quoted_string_list(&field.derivation_source_fields),
         quoted(&field.absence_event),
         quoted(&field.derivation_scenario_name),
         quoted(&field.absence_scenario_name),
@@ -8280,7 +8295,7 @@ fn lean_read_model_field_record(field: &NewProjectReadModelField) -> String {
 
 fn quint_read_model_field_record(field: &NewProjectReadModelField) -> String {
     format!(
-        "{{ workflow: {}, slice: {}, readModel: {}, field: {}, sourceKind: {}, sourceEvent: {}, sourceAttribute: {}, derivationRule: {}, absenceEvent: {}, derivationScenarioName: {}, absenceScenarioName: {}, provenance: {} }}",
+        "{{ workflow: {}, slice: {}, readModel: {}, field: {}, sourceKind: {}, sourceEvent: {}, sourceAttribute: {}, derivationRule: {}, derivationSourceFields: [{}], absenceEvent: {}, derivationScenarioName: {}, absenceScenarioName: {}, provenance: {} }}",
         quoted(field.workflow_slug.as_ref()),
         quoted(field.slice_slug.as_ref()),
         quoted(field.read_model.as_ref()),
@@ -8289,6 +8304,7 @@ fn quint_read_model_field_record(field: &NewProjectReadModelField) -> String {
         quoted(&field.source_event),
         quoted(&field.source_attribute),
         quoted(&field.derivation_rule),
+        quoted_string_list(&field.derivation_source_fields),
         quoted(&field.absence_event),
         quoted(&field.derivation_scenario_name),
         quoted(&field.absence_scenario_name),

@@ -410,7 +410,7 @@ mod tests {
             "type EventDefinition = { name: str, stream: str, attributes: List[EventAttribute], observed: bool, shared: bool }"
         ));
         assert!(quint.contains(
-            "type ReadModelField = { name: str, sourceKind: str, sourceEvent: str, sourceAttribute: str, derivationRule: str, absenceEvent: str, derivationScenarioName: str, absenceScenarioName: str, provenanceDescription: str }"
+            "type ReadModelField = { name: str, sourceKind: str, sourceEvent: str, sourceAttribute: str, derivationRule: str, derivationSourceFields: List[str], absenceEvent: str, derivationScenarioName: str, absenceScenarioName: str, provenanceDescription: str }"
         ));
         assert!(
             quint
@@ -815,7 +815,7 @@ mod tests {
             "val readModelFieldsHaveProvenance = sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => readModelField.name != \"\" and readModelField.sourceKind != \"\" and readModelField.provenanceDescription != \"\").length() == readModel.fields.length()).length() == sliceReadModelDefinitions.length()"
         ));
         assert!(quint.contains(
-            "def readModelFieldSourceIsComplete(readModelField) = (readModelField.sourceKind == \"event_attribute\" and readModelField.sourceEvent != \"\" and readModelField.sourceAttribute != \"\") or (readModelField.sourceKind == \"derivation\" and readModelField.derivationRule != \"\") or (readModelField.sourceKind == \"absence_default\" and readModelField.absenceEvent != \"\")"
+            "def readModelFieldSourceIsComplete(readModelField) = (readModelField.sourceKind == \"event_attribute\" and readModelField.sourceEvent != \"\" and readModelField.sourceAttribute != \"\") or (readModelField.sourceKind == \"derivation\" and readModelField.derivationRule != \"\" and readModelField.derivationSourceFields.length() > 0) or (readModelField.sourceKind == \"absence_default\" and readModelField.absenceEvent != \"\")"
         ));
         assert!(quint.contains(
             "val readModelFieldSourcesAreComplete = sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => readModelFieldSourceIsComplete(readModelField)).length() == readModel.fields.length()).length() == sliceReadModelDefinitions.length()"

@@ -740,7 +740,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure ReadModelField where\n  name : String\n  sourceKind : String\n  sourceEvent : String\n  sourceAttribute : String\n  derivationRule : String\n  absenceEvent : String\n  derivationScenarioName : String\n  absenceScenarioName : String\n  provenanceDescription : String"
+                "structure ReadModelField where\n  name : String\n  sourceKind : String\n  sourceEvent : String\n  sourceAttribute : String\n  derivationRule : String\n  derivationSourceFields : List String\n  absenceEvent : String\n  derivationScenarioName : String\n  absenceScenarioName : String\n  provenanceDescription : String"
             ),
             "Lean slice artifacts must represent read model field source, derivation, absence, scenario coverage, and provenance"
         );
@@ -1554,7 +1554,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def readModelFieldSourceIsComplete (field : ReadModelField) : Bool := (field.sourceKind == \"event_attribute\" && field.sourceEvent.isEmpty == false && field.sourceAttribute.isEmpty == false) || (field.sourceKind == \"derivation\" && field.derivationRule.isEmpty == false) || (field.sourceKind == \"absence_default\" && field.absenceEvent.isEmpty == false)"
+                "def readModelFieldSourceIsComplete (field : ReadModelField) : Bool := (field.sourceKind == \"event_attribute\" && field.sourceEvent.isEmpty == false && field.sourceAttribute.isEmpty == false) || (field.sourceKind == \"derivation\" && field.derivationRule.isEmpty == false && field.derivationSourceFields.isEmpty == false) || (field.sourceKind == \"absence_default\" && field.absenceEvent.isEmpty == false)"
             ),
             "Lean slice artifacts must require read model fields to trace to event facts, derivation, or modeled absence"
         );
