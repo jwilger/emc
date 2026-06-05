@@ -36,7 +36,6 @@ A model is complete and valid only when all of these are true:
 - Named definitions are unique where ownership requires uniqueness.
 - Each slice model unit represents exactly one coherent slice.
 - Slices have first-class `acceptance_scenarios` and `contract_scenarios`.
-- Legacy mixed `scenarios` fields are invalid.
 - Every scenario has Given, When, and Then.
 - Acceptance scenarios describe user-facing behavior only.
 - Contract scenarios cover projector, command, automation, translation, and
@@ -71,7 +70,6 @@ A model is complete and valid only when all of these are true:
 
 - Commands get inputs from invocation arguments and event streams.
 - Read models are not command inputs.
-- Legacy command read-model `reads` are invalid.
 - Command inputs have reportable source chains.
 - Control-provided command inputs declare source and description.
 - Actor-provided inputs are visible in the information sketch.
