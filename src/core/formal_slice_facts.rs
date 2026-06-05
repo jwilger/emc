@@ -230,6 +230,22 @@ impl NewCommandInput {
             provenance_chain,
         }
     }
+
+    pub fn name(&self) -> &DatumName {
+        &self.name
+    }
+
+    pub fn source_kind(&self) -> &CommandInputSourceKind {
+        &self.source_kind
+    }
+
+    pub fn source_description(&self) -> &CommandInputSourceDescription {
+        &self.source_description
+    }
+
+    pub fn provenance_chain(&self) -> &CommandInputProvenanceChain {
+        &self.provenance_chain
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -295,6 +311,10 @@ impl NewCommandDefinition {
 
     pub fn name(&self) -> &CommandName {
         &self.name
+    }
+
+    pub fn input(&self) -> &NewCommandInput {
+        &self.input
     }
 
     pub fn errors(&self) -> &CommandErrorDefinitions {
