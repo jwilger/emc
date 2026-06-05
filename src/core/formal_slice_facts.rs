@@ -250,6 +250,8 @@ pub struct NewCommandInput {
     event_stream_source_attribute: Option<EventAttributeName>,
     external_payload_source_name: Option<EventAttributeSourceName>,
     external_payload_source_field: Option<EventAttributeSourceField>,
+    generated_source_name: Option<EventAttributeSourceName>,
+    generated_source_field: Option<EventAttributeSourceField>,
 }
 
 impl NewCommandInput {
@@ -268,6 +270,8 @@ impl NewCommandInput {
             event_stream_source_attribute: None,
             external_payload_source_name: None,
             external_payload_source_field: None,
+            generated_source_name: None,
+            generated_source_field: None,
         }
     }
 
@@ -288,6 +292,16 @@ impl NewCommandInput {
     ) -> Self {
         self.external_payload_source_name = Some(payload);
         self.external_payload_source_field = Some(field);
+        self
+    }
+
+    pub fn with_generated_source(
+        mut self,
+        source: EventAttributeSourceName,
+        field: EventAttributeSourceField,
+    ) -> Self {
+        self.generated_source_name = Some(source);
+        self.generated_source_field = Some(field);
         self
     }
 
@@ -321,6 +335,14 @@ impl NewCommandInput {
 
     pub fn external_payload_source_field(&self) -> Option<&EventAttributeSourceField> {
         self.external_payload_source_field.as_ref()
+    }
+
+    pub fn generated_source_name(&self) -> Option<&EventAttributeSourceName> {
+        self.generated_source_name.as_ref()
+    }
+
+    pub fn generated_source_field(&self) -> Option<&EventAttributeSourceField> {
+        self.generated_source_field.as_ref()
     }
 }
 
@@ -2755,7 +2777,7 @@ fn quint_view_field_record(field: &NewViewField) -> String {
 
 fn lean_command_input_record(input: &NewCommandInput) -> String {
     format!(
-        "{{ name := {}, sourceKind := {}, sourceDescription := {}, provenanceChain := [{}], eventStreamSourceEvent := {}, eventStreamSourceAttribute := {}, externalPayloadSourceName := {}, externalPayloadSourceField := {} }}",
+        "{{ name := {}, sourceKind := {}, sourceDescription := {}, provenanceChain := [{}], eventStreamSourceEvent := {}, eventStreamSourceAttribute := {}, externalPayloadSourceName := {}, externalPayloadSourceField := {}, generatedSourceName := {}, generatedSourceField := {} }}",
         quoted(input.name.as_ref()),
         quoted(input.source_kind.as_ref()),
         quoted(input.source_description.as_ref()),
@@ -2784,12 +2806,24 @@ fn lean_command_input_record(input: &NewCommandInput) -> String {
                 .as_ref()
                 .map_or("", EventAttributeSourceField::as_ref),
         ),
+        quoted(
+            input
+                .generated_source_name
+                .as_ref()
+                .map_or("", EventAttributeSourceName::as_ref),
+        ),
+        quoted(
+            input
+                .generated_source_field
+                .as_ref()
+                .map_or("", EventAttributeSourceField::as_ref),
+        ),
     )
 }
 
 fn quint_command_input_record(input: &NewCommandInput) -> String {
     format!(
-        "{{ name: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {}, externalPayloadSourceName: {}, externalPayloadSourceField: {} }}",
+        "{{ name: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {}, externalPayloadSourceName: {}, externalPayloadSourceField: {}, generatedSourceName: {}, generatedSourceField: {} }}",
         quoted(input.name.as_ref()),
         quoted(input.source_kind.as_ref()),
         quoted(input.source_description.as_ref()),
@@ -2815,6 +2849,18 @@ fn quint_command_input_record(input: &NewCommandInput) -> String {
         quoted(
             input
                 .external_payload_source_field
+                .as_ref()
+                .map_or("", EventAttributeSourceField::as_ref),
+        ),
+        quoted(
+            input
+                .generated_source_name
+                .as_ref()
+                .map_or("", EventAttributeSourceName::as_ref),
+        ),
+        quoted(
+            input
+                .generated_source_field
                 .as_ref()
                 .map_or("", EventAttributeSourceField::as_ref),
         ),

@@ -636,7 +636,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelCommandInputs :"),
             artifact_marker(format!(
-                "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String × String × String) := {lean_model_command_input_list}"
+                "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String × String × String × String × String) := {lean_model_command_input_list}"
             )),
             lean_message.clone(),
         ),
@@ -1111,7 +1111,7 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  type ModelCommandInput ="),
             artifact_marker(
-                "  type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str }",
+                "  type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str }",
             ),
             quint_message.clone(),
         ),
@@ -3175,7 +3175,7 @@ fn lean_model_command_input_list(project_command_inputs: &[ProjectCommandInput])
             .into_iter()
             .map(|command_input| {
                 format!(
-                    "({}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {})",
+                    "({}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {}, {}, {})",
                     json_string(command_input.workflow_slug()),
                     json_string(command_input.slice_slug()),
                     json_string(command_input.command()),
@@ -3186,7 +3186,9 @@ fn lean_model_command_input_list(project_command_inputs: &[ProjectCommandInput])
                     json_string(command_input.event_stream_source_event()),
                     json_string(command_input.event_stream_source_attribute()),
                     json_string(command_input.external_payload_source_name()),
-                    json_string(command_input.external_payload_source_field())
+                    json_string(command_input.external_payload_source_field()),
+                    json_string(command_input.generated_source_name()),
+                    json_string(command_input.generated_source_field())
                 )
             })
             .collect::<Vec<_>>()
@@ -3203,7 +3205,7 @@ fn quint_model_command_input_list(project_command_inputs: &[ProjectCommandInput]
             .into_iter()
             .map(|command_input| {
                 format!(
-                    "{{ workflow: {}, slice: {}, command: {}, input: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {}, externalPayloadSourceName: {}, externalPayloadSourceField: {} }}",
+                    "{{ workflow: {}, slice: {}, command: {}, input: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {}, externalPayloadSourceName: {}, externalPayloadSourceField: {}, generatedSourceName: {}, generatedSourceField: {} }}",
                     json_string(command_input.workflow_slug()),
                     json_string(command_input.slice_slug()),
                     json_string(command_input.command()),
@@ -3214,7 +3216,9 @@ fn quint_model_command_input_list(project_command_inputs: &[ProjectCommandInput]
                     json_string(command_input.event_stream_source_event()),
                     json_string(command_input.event_stream_source_attribute()),
                     json_string(command_input.external_payload_source_name()),
-                    json_string(command_input.external_payload_source_field())
+                    json_string(command_input.external_payload_source_field()),
+                    json_string(command_input.generated_source_name()),
+                    json_string(command_input.generated_source_field())
                 )
             })
             .collect::<Vec<_>>()
@@ -4627,7 +4631,7 @@ fn digest_command_inputs(project_command_inputs: &[ProjectCommandInput]) -> Stri
         .into_iter()
         .map(|command_input| {
             format!(
-                "{}/{}/{}/{}@{}#{}#{}#{}#{}#{}#{}",
+                "{}/{}/{}/{}@{}#{}#{}#{}#{}#{}#{}#{}#{}",
                 command_input.workflow_slug(),
                 command_input.slice_slug(),
                 command_input.command(),
@@ -4638,7 +4642,9 @@ fn digest_command_inputs(project_command_inputs: &[ProjectCommandInput]) -> Stri
                 command_input.event_stream_source_event(),
                 command_input.event_stream_source_attribute(),
                 command_input.external_payload_source_name(),
-                command_input.external_payload_source_field()
+                command_input.external_payload_source_field(),
+                command_input.generated_source_name(),
+                command_input.generated_source_field()
             )
         })
         .collect::<Vec<_>>()

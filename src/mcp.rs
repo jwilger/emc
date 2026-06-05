@@ -812,6 +812,9 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         "source_payload": {
                             "type": "string"
                         },
+                        "source_name": {
+                            "type": "string"
+                        },
                         "source_field": {
                             "type": "string"
                         },
@@ -2407,6 +2410,12 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         .map(parse_event_attribute_source_name)
         .transpose()
         .map_err(|error| ShellError::message(error.to_string()))?;
+    let source_name = arguments
+        .get("source_name")
+        .and_then(Value::as_str)
+        .map(parse_event_attribute_source_name)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
     let source_field = arguments
         .get("source_field")
         .and_then(Value::as_str)
@@ -2422,32 +2431,46 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         input_description,
         CommandInputProvenanceChain::from_hops(provenance_chain),
     );
-    let command_input = match (source_event, source_attribute, source_payload, source_field) {
-        (Some(event), Some(attribute), None, None) => {
+    let command_input = match (
+        source_event,
+        source_attribute,
+        source_payload,
+        source_name,
+        source_field,
+    ) {
+        (Some(event), Some(attribute), None, None, None) => {
             command_input.with_event_stream_source(event, attribute)
         }
-        (None, None, Some(payload), Some(field)) => {
+        (None, None, Some(payload), None, Some(field)) => {
             command_input.with_external_payload_source(payload, field)
         }
-        (None, None, None, None) => command_input,
-        (Some(_), None, None, None) => {
+        (None, None, None, Some(source), Some(field)) => {
+            command_input.with_generated_source(source, field)
+        }
+        (None, None, None, None, None) => command_input,
+        (Some(_), None, None, None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_attribute when source_event is provided",
             ));
         }
-        (None, Some(_), None, None) => {
+        (None, Some(_), None, None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_event when source_attribute is provided",
             ));
         }
-        (None, None, Some(_), None) => {
+        (None, None, Some(_), None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_field when source_payload is provided",
             ));
         }
-        (None, None, None, Some(_)) => {
+        (None, None, None, Some(_), None) => {
             return Err(ShellError::message(
-                "add_command_definition requires source_payload when source_field is provided",
+                "add_command_definition requires source_field when source_name is provided",
+            ));
+        }
+        (None, None, None, None, Some(_)) => {
+            return Err(ShellError::message(
+                "add_command_definition requires source_payload or source_name when source_field is provided",
             ));
         }
         _ => {
