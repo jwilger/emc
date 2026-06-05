@@ -16,4 +16,3 @@ pub mod slice;
 pub mod types;
 pub mod verify;
 pub mod workflow;
-pub mod workflow_document;

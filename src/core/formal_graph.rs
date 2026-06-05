@@ -14,7 +14,6 @@ use crate::core::types::{
     WorkflowTransitionEvidenceRecords, WorkflowTransitionEvidenceText, WorkflowTransitionKind,
     WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
-use crate::core::workflow_document::WorkflowDocument;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FormalWorkflowGraph {
@@ -92,40 +91,6 @@ impl FormalWorkflowGraphs {
     pub(crate) fn into_inner(self) -> Vec<FormalWorkflowGraph> {
         self.graphs
     }
-}
-
-pub fn workflow_graph_from_document(
-    workflow_slug: WorkflowSlug,
-    workflow_document: FileContents,
-) -> Result<FormalWorkflowGraph, FormalGraphError> {
-    let workflow = WorkflowDocument::parse(&workflow_document)
-        .map_err(|error| FormalGraphError::new(error.to_string()))?;
-
-    Ok(FormalWorkflowGraph {
-        name: workflow
-            .name()
-            .map_err(|error| FormalGraphError::new(error.to_string()))?,
-        slug: workflow_slug,
-        description: workflow
-            .description()
-            .map_err(|error| FormalGraphError::new(error.to_string()))?,
-        slice_details: WorkflowSliceDetails::from_details(
-            workflow
-                .slice_details()
-                .map_err(|error| FormalGraphError::new(error.to_string()))?,
-        ),
-        transitions: WorkflowTransitionRecords::from_records(
-            workflow
-                .transitions()
-                .map_err(|error| FormalGraphError::new(error.to_string()))?,
-        ),
-        outcomes: WorkflowOutcomeRecords::from_records([]),
-        command_errors: WorkflowCommandErrorRecords::from_records([]),
-        owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
-        transition_evidences: WorkflowTransitionEvidenceRecords::from_records([]),
-        entry_lifecycle_required: false,
-        entry_lifecycle_states: WorkflowEntryLifecycleStateRecords::from_records([]),
-    })
 }
 
 pub fn parse_lean_workflow_graph(

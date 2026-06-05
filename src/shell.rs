@@ -3,17 +3,16 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use crate::core::connection::{connect_workflow, remove_transition};
-use crate::core::digest::slice_artifact_digest;
 use crate::core::effect::{
     ArtifactDigest, Effect, EffectPlan, FileContents, ProcessInvocation, ProjectPath,
 };
 use crate::core::formal_graph::{
     FormalGraphError, FormalWorkflowGraph, FormalWorkflowGraphs, parse_lean_workflow_graph,
-    parse_quint_workflow_graph, workflow_graph_from_document,
+    parse_quint_workflow_graph,
 };
 use crate::core::formal_slice_facts::{
     add_automation_definition, add_bit_level_data_flow, add_board_connection, add_board_element,
@@ -48,8 +47,7 @@ use crate::core::workflow::{
     IndexedWorkflowGraph, IndexedWorkflowGraphs, add_workflow, remove_workflow,
     update_workflow_description, update_workflow_name,
 };
-use crate::core::workflow_document::WorkflowDocument;
-use crate::io::dto::{parse_project_manifest_name, parse_slice_slug};
+use crate::io::dto::parse_project_manifest_name;
 
 const REQUIRED_REVIEW_CATEGORIES: &[&str] = &[
     "lifecycle-entry",
@@ -470,16 +468,6 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             )
             .map(|()| Vec::new())
         }
-        Effect::RequireLeanWorkflowGraph(workflow_path, artifact_path, workflow_slug, message) => {
-            require_formal_workflow_graph(
-                workflow_path.as_ref(),
-                artifact_path.as_ref(),
-                workflow_slug.clone(),
-                message.as_ref(),
-                parse_lean_workflow_graph,
-            )
-            .map(|()| Vec::new())
-        }
         Effect::RequireJsonObjectKeysUnique(path, message) => {
             require_json_object_keys_unique(path.as_ref(), message.as_ref()).map(|()| Vec::new())
         }
@@ -492,40 +480,6 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             )
             .map(|()| Vec::new())
         }
-        Effect::RequireOnlyModeledFormalSliceArtifacts(
-            workflows_path,
-            artifact_directory,
-            extension,
-            message,
-        ) => require_only_modeled_formal_slice_artifacts(
-            workflows_path.as_ref(),
-            artifact_directory.as_ref(),
-            extension.as_ref(),
-            message.as_ref(),
-        )
-        .map(|()| Vec::new()),
-        Effect::RequireQuintWorkflowGraph(workflow_path, artifact_path, workflow_slug, message) => {
-            require_formal_workflow_graph(
-                workflow_path.as_ref(),
-                artifact_path.as_ref(),
-                workflow_slug.clone(),
-                message.as_ref(),
-                parse_quint_workflow_graph,
-            )
-            .map(|()| Vec::new())
-        }
-        Effect::RequireReferencedSliceFiles(workflows_path, slices_path, message) => {
-            require_referenced_slice_files(
-                workflows_path.as_ref(),
-                slices_path.as_ref(),
-                message.as_ref(),
-            )
-            .map(|()| Vec::new())
-        }
-        Effect::RequireReferencedSliceFileIdentities(workflows_path, message) => {
-            require_referenced_slice_file_identities(workflows_path.as_ref(), message.as_ref())
-                .map(|()| Vec::new())
-        }
         Effect::RequireReviewRecord(path, workflow_slug, message) => {
             if Path::new(path.as_ref()).is_file() {
                 require_clean_review_record(path.as_ref(), workflow_slug, message.as_ref())
@@ -533,41 +487,6 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             } else {
                 Err(ShellError::message(message.as_ref().to_owned()))
             }
-        }
-        Effect::RequireWorkflowSliceJsonObjects(workflow_path, message) => {
-            require_workflow_slice_json_objects(workflow_path.as_ref(), message.as_ref())
-                .map(|()| Vec::new())
-        }
-        Effect::RequireWorkflowSliceJsonObjectKeysUnique(workflow_path, message) => {
-            require_workflow_slice_json_object_keys_unique(workflow_path.as_ref(), message.as_ref())
-                .map(|()| Vec::new())
-        }
-        Effect::RequireWorkflowSliceFiles(workflow_path, message) => {
-            let workflow_contents =
-                fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
-            let slice_files =
-                workflow_slice_file_paths(workflow_path.as_ref(), &workflow_contents)?;
-            if slice_files.iter().all(|slice_file| slice_file.is_file()) {
-                Ok(Vec::new())
-            } else {
-                Err(ShellError::message(message.as_ref().to_owned()))
-            }
-        }
-        Effect::RequireWorkflowFormalSliceArtifacts(
-            workflow_path,
-            artifact_directory,
-            extension,
-            message,
-        ) => {
-            let workflow_contents =
-                fs::read_to_string(Path::new(workflow_path.as_ref())).map_err(ShellError::io)?;
-            require_formal_slice_artifacts(
-                &workflow_contents,
-                artifact_directory.as_ref(),
-                extension.as_ref(),
-                message.as_ref(),
-            )
-            .map(|()| Vec::new())
         }
         Effect::RunProcess(invocation) => run_process(invocation),
         Effect::RecordCleanReviewFromWorkflow(slug, reviewer_id, reviewed_at) => {
@@ -1243,70 +1162,12 @@ fn authored_formal_fact_declaration(contents: &str, marker: &str) -> Option<Stri
     })
 }
 
-fn require_formal_workflow_graph(
-    workflow_path: &str,
-    artifact_path: &str,
-    workflow_slug: WorkflowSlug,
-    message: &str,
-    parse_artifact: fn(&FileContents) -> Result<FormalWorkflowGraph, FormalGraphError>,
-) -> Result<(), ShellError> {
-    let workflow_contents = FileContents::try_new(
-        fs::read_to_string(Path::new(workflow_path)).map_err(ShellError::io)?,
-    )
-    .map_err(|error| ShellError::message(error.to_string()))?;
-    let artifact_contents = FileContents::try_new(
-        fs::read_to_string(Path::new(artifact_path)).map_err(ShellError::io)?,
-    )
-    .map_err(|error| ShellError::message(error.to_string()))?;
-    let expected = workflow_graph_from_document(workflow_slug, workflow_contents)
-        .map_err(|error| ShellError::message(error.to_string()))?;
-    let actual = parse_artifact(&artifact_contents)
-        .map_err(|error| ShellError::message(error.to_string()))?;
-
-    if expected == actual {
-        Ok(())
-    } else {
-        Err(ShellError::message(message.to_owned()))
-    }
-}
-
 fn require_json_object_keys_unique(path: &str, message: &str) -> Result<(), ShellError> {
     let contents = fs::read_to_string(Path::new(path)).map_err(ShellError::io)?;
     let file_contents = FileContents::try_new(contents)
         .map_err(|_error| ShellError::message(message.to_owned()))?;
     JsonObjectDocument::reject_duplicate_keys(&file_contents)
         .map_err(|_error| ShellError::message(message.to_owned()))
-}
-
-fn require_workflow_slice_json_objects(
-    workflow_path: &str,
-    message: &str,
-) -> Result<(), ShellError> {
-    let workflow_contents = fs::read_to_string(Path::new(workflow_path)).map_err(ShellError::io)?;
-    workflow_slice_file_paths(workflow_path, &workflow_contents)?
-        .iter()
-        .try_for_each(|slice_file| require_json_object(&slice_file.to_string_lossy(), message))
-}
-
-fn require_json_object(path: &str, message: &str) -> Result<(), ShellError> {
-    let contents = fs::read_to_string(Path::new(path)).map_err(ShellError::io)?;
-    let file_contents = FileContents::try_new(contents)
-        .map_err(|_error| ShellError::message(message.to_owned()))?;
-    JsonObjectDocument::parse(&file_contents)
-        .map(|_document| ())
-        .map_err(|_error| ShellError::message(message.to_owned()))
-}
-
-fn require_workflow_slice_json_object_keys_unique(
-    workflow_path: &str,
-    message: &str,
-) -> Result<(), ShellError> {
-    let workflow_contents = fs::read_to_string(Path::new(workflow_path)).map_err(ShellError::io)?;
-    workflow_slice_file_paths(workflow_path, &workflow_contents)?
-        .iter()
-        .try_for_each(|slice_file| {
-            require_json_object_keys_unique(&slice_file.to_string_lossy(), message)
-        })
 }
 
 fn require_only_modeled_artifacts(
@@ -1338,63 +1199,6 @@ fn require_only_modeled_artifacts(
         })
 }
 
-fn require_only_modeled_formal_slice_artifacts(
-    workflows_path: &str,
-    artifact_directory: &str,
-    extension: &str,
-    message: &str,
-) -> Result<(), ShellError> {
-    if !Path::new(artifact_directory).exists() {
-        return Ok(());
-    }
-    let mut workflow_paths = fs::read_dir(Path::new(workflows_path))
-        .map_err(ShellError::io)?
-        .map(|entry| entry.map(|directory_entry| directory_entry.path()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(ShellError::io)?;
-    workflow_paths.sort();
-
-    let allowed_paths = workflow_paths
-        .into_iter()
-        .filter(|path| {
-            path.file_name()
-                .and_then(|file_name| file_name.to_str())
-                .is_some_and(|file_name| file_name.ends_with(".eventmodel.json"))
-        })
-        .map(|path| {
-            fs::read_to_string(path)
-                .map_err(ShellError::io)
-                .and_then(|contents| {
-                    formal_slice_artifact_paths(&contents, artifact_directory, extension)
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
-
-    require_only_modeled_artifacts(artifact_directory, extension, &allowed_paths, message)
-}
-
-fn formal_slice_artifact_paths(
-    workflow_contents: &str,
-    artifact_directory: &str,
-    extension: &str,
-) -> Result<Vec<ProjectPath>, ShellError> {
-    workflow_slice_details(workflow_contents)?
-        .into_iter()
-        .map(|slice| {
-            ProjectPath::try_new(format!(
-                "{}/{}{}",
-                artifact_directory,
-                module_name_from_raw(slice.name().as_ref()),
-                extension
-            ))
-            .map_err(ShellError::project_path)
-        })
-        .collect()
-}
-
 fn allowed_artifact_file_names(allowed_paths: &[ProjectPath]) -> BTreeSet<String> {
     allowed_paths
         .iter()
@@ -1405,98 +1209,6 @@ fn allowed_artifact_file_names(allowed_paths: &[ProjectPath]) -> BTreeSet<String
                 .map(str::to_owned)
         })
         .collect()
-}
-
-fn require_referenced_slice_files(
-    workflows_path: &str,
-    slices_path: &str,
-    message: &str,
-) -> Result<(), ShellError> {
-    let referenced_slice_files = referenced_slice_file_names(workflows_path)?;
-    let mut slice_files = fs::read_dir(Path::new(slices_path))
-        .map_err(ShellError::io)?
-        .map(|entry| entry.map(|directory_entry| directory_entry.path()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(ShellError::io)?;
-    slice_files.sort();
-
-    slice_files
-        .into_iter()
-        .filter_map(|path| {
-            path.file_name()
-                .and_then(|file_name| file_name.to_str())
-                .filter(|file_name| file_name.ends_with(".eventmodel.json"))
-                .map(str::to_owned)
-        })
-        .find(|file_name| !referenced_slice_files.contains(file_name))
-        .map_or(Ok(()), |file_name| {
-            Err(ShellError::message(format!("{message} for {file_name}")))
-        })
-}
-
-fn require_referenced_slice_file_identities(
-    workflows_path: &str,
-    message: &str,
-) -> Result<(), ShellError> {
-    referenced_slice_file_names(workflows_path)?
-        .into_iter()
-        .find_map(|file_name| {
-            canonical_slice_file_name(&file_name)
-                .is_some_and(|canonical_file_name| canonical_file_name != file_name)
-                .then_some(file_name)
-        })
-        .map_or(Ok(()), |file_name| {
-            Err(ShellError::message(format!("{message} for {file_name}")))
-        })
-}
-
-fn canonical_slice_file_name(file_name: &str) -> Option<String> {
-    file_name
-        .strip_suffix(".eventmodel.json")
-        .and_then(|stem| parse_slice_slug(stem).ok())
-        .map(|slug| format!("{}.eventmodel.json", slug.as_ref()))
-}
-
-fn referenced_slice_file_names(workflows_path: &str) -> Result<BTreeSet<String>, ShellError> {
-    let mut workflow_files = fs::read_dir(Path::new(workflows_path))
-        .map_err(ShellError::io)?
-        .map(|entry| entry.map(|directory_entry| directory_entry.path()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(ShellError::io)?;
-    workflow_files.sort();
-
-    workflow_files
-        .into_iter()
-        .filter(|path| {
-            path.file_name()
-                .and_then(|file_name| file_name.to_str())
-                .is_some_and(|file_name| file_name.ends_with(".eventmodel.json"))
-        })
-        .try_fold(BTreeSet::new(), |mut referenced_files, workflow_path| {
-            let workflow_contents = fs::read_to_string(&workflow_path).map_err(ShellError::io)?;
-            workflow_slice_file_names(&workflow_contents)?
-                .into_iter()
-                .for_each(|file_name| {
-                    referenced_files.insert(file_name);
-                });
-            Ok(referenced_files)
-        })
-}
-
-fn workflow_slice_file_names(workflow_contents: &str) -> Result<Vec<String>, ShellError> {
-    workflow_document(workflow_contents)
-        .and_then(|workflow| {
-            workflow
-                .slice_files()
-                .map_err(|error| ShellError::message(error.to_string()))
-        })
-        .map(|slice_files| {
-            slice_files
-                .into_iter()
-                .map(|slice_file| slice_file.as_ref().to_owned())
-                .filter_map(|slice_file| slice_file.rsplit('/').next().map(str::to_owned))
-                .collect()
-        })
 }
 
 fn require_clean_review_record(
@@ -1643,120 +1355,6 @@ impl StableDigest {
     }
 }
 
-fn workflow_slice_file_paths(
-    workflow_path: &str,
-    workflow_contents: &str,
-) -> Result<Vec<PathBuf>, ShellError> {
-    let base_path = Path::new(workflow_path)
-        .parent()
-        .unwrap_or_else(|| Path::new(""));
-    workflow_document(workflow_contents)
-        .and_then(|workflow| {
-            workflow
-                .slice_files()
-                .map_err(|error| ShellError::message(error.to_string()))
-        })
-        .map(|slice_files| {
-            slice_files
-                .into_iter()
-                .map(|slice_file| base_path.join(slice_file.as_ref()))
-                .collect()
-        })
-}
-
-fn require_formal_slice_artifacts(
-    workflow_contents: &str,
-    artifact_directory: &str,
-    extension: &str,
-    message: &str,
-) -> Result<(), ShellError> {
-    workflow_slice_details(workflow_contents)?
-        .into_iter()
-        .try_for_each(|slice| {
-            let module_name = module_name_from_raw(slice.name().as_ref());
-            let artifact_path =
-                Path::new(artifact_directory).join(format!("{module_name}{extension}"));
-            let artifact_contents = if artifact_path.is_file() {
-                fs::read_to_string(&artifact_path).map_err(ShellError::io)?
-            } else {
-                return Err(ShellError::message(message.to_owned()));
-            };
-            if formal_slice_artifact_is_canonical(
-                &slice,
-                &module_name,
-                &artifact_contents,
-                extension,
-            )? {
-                Ok(())
-            } else {
-                Err(ShellError::message(message.to_owned()))
-            }
-        })
-}
-
-fn formal_slice_artifact_is_canonical(
-    slice: &WorkflowSliceDetail,
-    module_name: &str,
-    artifact_contents: &str,
-    extension: &str,
-) -> Result<bool, ShellError> {
-    let digest = slice_artifact_digest(
-        slice.name().clone(),
-        slice.slug().clone(),
-        slice.kind().clone(),
-        slice.description().clone(),
-    );
-    let slice_name = json_string(slice.name().as_ref().to_owned())?;
-    let slice_slug = json_string(slice.slug().as_ref().to_owned())?;
-    let slice_kind = json_string(slice.kind().as_ref().to_owned())?;
-    let slice_description = json_string(slice.description().as_ref().to_owned())?;
-    let declarations = if extension == ".lean" {
-        vec![
-            ("namespace ", format!("namespace {module_name}")),
-            (
-                "-- EMC-DIGEST: ",
-                format!("-- EMC-DIGEST: {}", digest.as_ref()),
-            ),
-            ("def sliceName :=", format!("def sliceName := {slice_name}")),
-            ("def sliceSlug :=", format!("def sliceSlug := {slice_slug}")),
-            ("def sliceKind :=", format!("def sliceKind := {slice_kind}")),
-            (
-                "def sliceDescription :=",
-                format!("def sliceDescription := {slice_description}"),
-            ),
-            (
-                "theorem sliceIdentityIsStable :",
-                format!("theorem sliceIdentityIsStable : sliceName = {slice_name} := rfl"),
-            ),
-            ("end ", format!("end {module_name}")),
-        ]
-    } else {
-        vec![
-            ("module ", format!("module {module_name} {{")),
-            (
-                "// EMC-DIGEST: ",
-                format!("// EMC-DIGEST: {}", digest.as_ref()),
-            ),
-            ("val sliceName =", format!("val sliceName = {slice_name}")),
-            ("val sliceSlug =", format!("val sliceSlug = {slice_slug}")),
-            ("val sliceKind =", format!("val sliceKind = {slice_kind}")),
-            (
-                "val sliceDescription =",
-                format!("val sliceDescription = {slice_description}"),
-            ),
-            (
-                "val sliceIdentityStable =",
-                format!("val sliceIdentityStable = sliceName == {slice_name}"),
-            ),
-            ("}", "}".to_owned()),
-        ]
-    };
-
-    Ok(declarations.into_iter().all(|(prefix, marker)| {
-        artifact_contains_one_canonical_declaration(artifact_contents, prefix, &marker)
-    }))
-}
-
 fn artifact_contains_one_canonical_declaration(
     artifact_contents: &str,
     prefix: &str,
@@ -1799,23 +1397,6 @@ fn canonical_declaration_line<'a>(line: &'a str, prefix: &str) -> Option<&'a str
     }
 }
 
-fn workflow_slice_details(workflow_contents: &str) -> Result<Vec<WorkflowSliceDetail>, ShellError> {
-    workflow_document(workflow_contents).and_then(|workflow| {
-        workflow
-            .slice_details()
-            .map_err(|error| ShellError::message(error.to_string()))
-    })
-}
-
-fn workflow_document(workflow_contents: &str) -> Result<WorkflowDocument, ShellError> {
-    FileContents::try_new(workflow_contents.to_owned())
-        .map_err(|error| ShellError::message(error.to_string()))
-        .and_then(|contents| {
-            WorkflowDocument::parse(&contents)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })
-}
-
 fn module_name_from_raw(raw: &str) -> String {
     let mut capitalize_next = true;
     raw.chars()
@@ -1834,12 +1415,6 @@ fn module_name_from_raw(raw: &str) -> String {
             }
         })
         .collect()
-}
-
-fn json_string(value: String) -> Result<String, ShellError> {
-    serde_json::to_string(&value).map_err(|error| {
-        ShellError::message(format!("failed to encode workflow transition: {error}"))
-    })
 }
 
 fn write_file(path: &str, contents: &str) -> Result<(), ShellError> {
@@ -1945,51 +1520,5 @@ fn verification_label(invocation: &ProcessInvocation) -> &str {
         "Quint verification"
     } else {
         "verification command"
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::error::Error;
-    use std::fs;
-
-    use tempfile::TempDir;
-
-    use super::{parse_lean_workflow_graph, require_formal_workflow_graph};
-    use crate::io::dto::parse_workflow_slug;
-
-    #[test]
-    fn formal_workflow_graph_requirement_reports_stale_lean_transition()
-    -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-        let workflow_path = temp_dir.path().join("workflow.eventmodel.json");
-        let lean_path = temp_dir.path().join("OpenTicket.lean");
-        fs::write(&workflow_path, workflow_document())?;
-        fs::write(&lean_path, stale_lean_artifact())?;
-
-        let result = require_formal_workflow_graph(
-            workflow_path
-                .to_str()
-                .ok_or("workflow path must be UTF-8")?,
-            lean_path.to_str().ok_or("Lean path must be UTF-8")?,
-            parse_workflow_slug("open-ticket")?,
-            "Lean workflow graph drift",
-            parse_lean_workflow_graph,
-        );
-        let Err(error) = result else {
-            return Err("stale formal transition must be detected by graph comparison".into());
-        };
-
-        assert_eq!(error.to_string(), "Lean workflow graph drift");
-
-        Ok(())
-    }
-
-    fn workflow_document() -> &'static str {
-        "{\n  \"name\": \"Open ticket\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Actor opens a repair ticket.\",\n  \"board\": {},\n  \"slice_files\": [],\n  \"steps\": [\n    {\"slice\": \"capture-ticket\", \"name\": \"Capture ticket\", \"type\": \"state_view\", \"description\": \"Actor enters repair ticket details.\", \"relationship\": \"entry\", \"transitions\": [{\"to\": \"review-ticket\", \"via_navigation\": \"review-ticket-screen\"}]},\n    {\"slice\": \"review-ticket\", \"name\": \"Review ticket\", \"type\": \"state_view\", \"description\": \"Actor reviews the repair ticket.\", \"relationship\": \"main\"}\n  ]\n}\n"
-    }
-
-    fn stale_lean_artifact() -> &'static str {
-        "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:name=Open ticket;slug=open-ticket;description=Actor opens a repair ticket.;slices=capture-ticket|Capture ticket|state_view|Actor enters repair ticket details.,review-ticket|Review ticket|state_view|Actor reviews the repair ticket.;transitions=capture-ticket->review-ticket:navigation:review-ticket-screen\n-- EMC generated Lean4 business workflow model.\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := [\"capture-ticket\",\"review-ticket\"]\n\ndef workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Actor enters repair ticket details.\"),(\"review-ticket\", \"Review ticket\", \"state_view\", \"Actor reviews the repair ticket.\")]\n\nstructure WorkflowTransition where\n  source : String\n  target : String\n  kind : String\n  trigger : String\n  rationale : String\n  payloadContract : String\n\nstructure WorkflowOutcome where\n  sourceSlice : String\n  label : String\n  externallyRelevant : Bool\n\nstructure WorkflowCommandError where\n  sourceSlice : String\n  commandName : String\n  errorName : String\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"stale-screen\", rationale := \"\", payloadContract := \"\" }]\n\ndef workflowOutcomes : List WorkflowOutcome := []\n\ndef workflowCommandErrors : List WorkflowCommandError := []\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\ntheorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl\n\ntheorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl\n\nend OpenTicket\n"
     }
 }

@@ -17,7 +17,7 @@ A model is complete and valid only when all of these are true:
 - Every displayed datum traces to read model field, event attribute, and
   original provenance.
 - Every command input traces to actor input, session value, generated value,
-  external payload, read model source chain, or event-stream-derived state.
+  external payload, or event-stream-derived state.
 - Every state change is justified by emitted or observed events.
 - Every workflow branch, outcome, command error, navigation target, external
   boundary, and recovery path is modeled.
@@ -66,14 +66,12 @@ A model is complete and valid only when all of these are true:
 ## Commands And Inputs
 
 - Commands get inputs from invocation arguments and event streams.
-- Read models are not command inputs.
 - Command inputs have reportable source chains.
 - Control-provided command inputs declare source and description.
 - Actor-provided inputs are visible in the information sketch.
 - Hidden session inputs may be hidden but still require descriptions.
 - Decision fields are visible to the actor.
 - Command inputs with no issuing control still need modeled provenance.
-- Command inputs sourced from read models trace back to event provenance.
 
 ## Read Models And Views
 
@@ -156,7 +154,6 @@ A model is complete and valid only when all of these are true:
 - Event-to-read-model edges match projection sources.
 - View-to-command edges match owned controls.
 - Read models feeding views have incoming event updates.
-- Read models cannot feed commands.
 - Main-path boards cannot have disconnected unclassified islands.
 
 ## Navigation
@@ -173,7 +170,7 @@ A model is complete and valid only when all of these are true:
 ## Workflow Composition
 
 - Workflow compositions declare explicit steps.
-- Workflow steps reference composed slice files or formal slice modules.
+- Workflow steps reference composed formal slice modules.
 - Referenced non-supporting slices appear in workflow steps.
 - Workflow files compose whole slices without redefining internals.
 - A workflow has exactly one entry step.
@@ -248,4 +245,3 @@ Quint should verify at least:
 ## Non-Goals
 
 - Do not duplicate event-model semantic validation in Rust or JavaScript.
-- Do not treat read models as command input dependencies.
