@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::env;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 use std::fs;
 use std::io;
 use std::path::Path;
-use std::process::Command;
+use std::process::{self, Command};
 
 use crate::core::connection::{connect_workflow, remove_transition};
 use crate::core::effect::{
@@ -1470,13 +1471,9 @@ fn remove_file_if_present(path: &str) -> Result<(), ShellError> {
 }
 
 fn run_process(invocation: &ProcessInvocation) -> Result<Vec<String>, ShellError> {
+    let arguments = process_arguments(invocation);
     let output = Command::new(invocation.program().as_ref())
-        .args(
-            invocation
-                .arguments()
-                .iter()
-                .map(|argument| argument.as_ref()),
-        )
+        .args(arguments)
         .output()
         .map_err(|error| {
             ShellError::message(format!(
@@ -1496,6 +1493,34 @@ fn run_process(invocation: &ProcessInvocation) -> Result<Vec<String>, ShellError
             process_diagnostics(&output.stdout, &output.stderr)
         )))
     }
+}
+
+fn process_arguments(invocation: &ProcessInvocation) -> Vec<String> {
+    let mut arguments = invocation
+        .arguments()
+        .iter()
+        .map(|argument| argument.as_ref().to_owned())
+        .collect::<Vec<_>>();
+
+    if invocation.program().as_ref() == "quint"
+        && arguments.first().map(String::as_str) == Some("verify")
+        && !arguments
+            .iter()
+            .any(|argument| argument == "--server-endpoint")
+    {
+        let input_position = arguments.len().saturating_sub(1);
+        arguments.insert(input_position, "--server-endpoint".to_owned());
+        arguments.insert(input_position + 1, quint_server_endpoint());
+    }
+
+    arguments
+}
+
+fn quint_server_endpoint() -> String {
+    env::var("EMC_QUINT_SERVER_ENDPOINT").unwrap_or_else(|_| {
+        let port = 20_000 + (process::id() % 40_000);
+        format!("127.0.0.1:{port}")
+    })
 }
 
 fn process_diagnostics(stdout: &[u8], stderr: &[u8]) -> String {

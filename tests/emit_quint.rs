@@ -503,6 +503,18 @@ mod tests {
             "val sliceScenarioNamesAreUnique = sliceAcceptanceScenarios.select(scenario => sliceAcceptanceScenarios.select(other => other.name == scenario.name).length() + sliceContractScenarios.select(other => other.name == scenario.name).length() == 1).length() == sliceAcceptanceScenarios.length() and sliceContractScenarios.select(scenario => sliceAcceptanceScenarios.select(other => other.name == scenario.name).length() + sliceContractScenarios.select(other => other.name == scenario.name).length() == 1).length() == sliceContractScenarios.length()"
         ));
         assert!(quint.contains(
+            "def definitionNamesAreUnique(names) = names.select(name => names.select(other => other == name).length() == 1).length() == names.length()"
+        ));
+        assert!(quint.contains(
+            "val sliceOwnedCommandNames: List[str] = sliceCommandDefinitions.foldl([], (names, command) => names.append(command.name))"
+        ));
+        assert!(quint.contains(
+            "val sliceOwnedControlNames: List[str] = sliceViewDefinitions.foldl([], (names, view) => names.concat(view.controls.foldl([], (controlNames, control) => controlNames.append(control.name))))"
+        ));
+        assert!(quint.contains(
+            "val sliceNamedDefinitionsAreUniquelyOwned = definitionNamesAreUnique(sliceCommands) and definitionNamesAreUnique(sliceOwnedCommandNames) and definitionNamesAreUnique(sliceEvents) and definitionNamesAreUnique(sliceOwnedEventNames) and definitionNamesAreUnique(sliceOwnedStreamNames) and definitionNamesAreUnique(sliceOwnedExternalPayloadNames) and definitionNamesAreUnique(sliceReadModels) and definitionNamesAreUnique(sliceOwnedReadModelNames) and definitionNamesAreUnique(sliceViews) and definitionNamesAreUnique(sliceOwnedViewNames) and definitionNamesAreUnique(sliceOwnedAutomationNames) and definitionNamesAreUnique(sliceOwnedTranslationNames) and definitionNamesAreUnique(sliceOwnedControlNames)"
+        ));
+        assert!(quint.contains(
             "def scenarioStreamResolves(streamName) = sliceStreams.select(stream => stream.name == streamName).length() > 0"
         ));
         assert!(quint.contains(
