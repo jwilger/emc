@@ -7,8 +7,9 @@ use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
 use crate::core::formal_project_facts::{
-    ProjectAutomation, ProjectCommand, ProjectEvent, ProjectExternalPayload, ProjectOutcome,
-    ProjectReadModel, ProjectScenario, ProjectStream, ProjectTranslation, ProjectView,
+    ProjectAutomation, ProjectCommand, ProjectCommandError, ProjectEvent, ProjectExternalPayload,
+    ProjectOutcome, ProjectReadModel, ProjectScenario, ProjectStream, ProjectTranslation,
+    ProjectView,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{
@@ -100,6 +101,7 @@ impl ModeledWorkflowTransitions {
 pub struct ModeledProjectRootInventories {
     scenarios: Vec<ProjectScenario>,
     outcomes: Vec<ProjectOutcome>,
+    command_errors: Vec<ProjectCommandError>,
     commands: Vec<ProjectCommand>,
     read_models: Vec<ProjectReadModel>,
     views: Vec<ProjectView>,
@@ -113,6 +115,7 @@ pub struct ModeledProjectRootInventories {
 pub(crate) struct ModeledProjectRootInventoryParts {
     pub(crate) scenarios: Vec<ProjectScenario>,
     pub(crate) outcomes: Vec<ProjectOutcome>,
+    pub(crate) command_errors: Vec<ProjectCommandError>,
     pub(crate) commands: Vec<ProjectCommand>,
     pub(crate) read_models: Vec<ProjectReadModel>,
     pub(crate) views: Vec<ProjectView>,
@@ -128,6 +131,7 @@ impl ModeledProjectRootInventories {
         Self {
             scenarios: parts.scenarios,
             outcomes: parts.outcomes,
+            command_errors: parts.command_errors,
             commands: parts.commands,
             read_models: parts.read_models,
             views: parts.views,
@@ -160,6 +164,7 @@ pub fn check_project(
         &ProjectRootInventories {
             scenarios: &project_inventories.scenarios,
             outcomes: &project_inventories.outcomes,
+            command_errors: &project_inventories.command_errors,
             commands: &project_inventories.commands,
             read_models: &project_inventories.read_models,
             views: &project_inventories.views,
@@ -268,6 +273,7 @@ fn modeled_slice_artifact_paths(
 struct ProjectRootInventories<'a> {
     scenarios: &'a [ProjectScenario],
     outcomes: &'a [ProjectOutcome],
+    command_errors: &'a [ProjectCommandError],
     commands: &'a [ProjectCommand],
     read_models: &'a [ProjectReadModel],
     views: &'a [ProjectView],
@@ -293,6 +299,7 @@ fn project_root_effects(
     let lean_model_slice_module_list = lean_model_slice_module_list(formal_workflows);
     let lean_model_scenario_list = lean_model_scenario_list(inventories.scenarios);
     let lean_model_outcome_list = lean_model_outcome_list(inventories.outcomes);
+    let lean_model_command_error_list = lean_model_command_error_list(inventories.command_errors);
     let lean_model_command_list = lean_model_command_list(inventories.commands);
     let lean_model_read_model_list = lean_model_read_model_list(inventories.read_models);
     let lean_model_view_list = lean_model_view_list(inventories.views);
@@ -306,6 +313,7 @@ fn project_root_effects(
     let quint_model_slice_module_list = quint_model_slice_module_list(formal_workflows);
     let quint_model_scenario_list = quint_model_scenario_list(inventories.scenarios);
     let quint_model_outcome_list = quint_model_outcome_list(inventories.outcomes);
+    let quint_model_command_error_list = quint_model_command_error_list(inventories.command_errors);
     let quint_model_command_list = quint_model_command_list(inventories.commands);
     let quint_model_read_model_list = quint_model_read_model_list(inventories.read_models);
     let quint_model_view_list = quint_model_view_list(inventories.views);
@@ -327,6 +335,7 @@ fn project_root_effects(
         .sum::<usize>();
     let scenario_count = inventories.scenarios.len();
     let outcome_count = inventories.outcomes.len();
+    let command_error_count = inventories.command_errors.len();
     let stream_count = inventories.streams.len();
     let command_count = inventories.commands.len();
     let read_model_count = inventories.read_models.len();
@@ -455,6 +464,14 @@ fn project_root_effects(
             artifact_marker("def modelOutcomes :"),
             artifact_marker(format!(
                 "def modelOutcomes : List (String × String × String × List String × Bool) := {lean_model_outcome_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelCommandErrors :"),
+            artifact_marker(format!(
+                "def modelCommandErrors : List (String × String × String × String × String × String) := {lean_model_command_error_list}"
             )),
             lean_message.clone(),
         ),
@@ -591,6 +608,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelCommandErrorsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelCommandErrorsAreDeclared : modelCommandErrors.length = {command_error_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelCommandsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelCommandsAreDeclared : modelCommands.length = {command_count} := rfl"
@@ -692,6 +717,14 @@ fn project_root_effects(
             artifact_marker("  type ModelOutcome ="),
             artifact_marker(
                 "  type ModelOutcome = { workflow: str, slice: str, outcome: str, events: List[str], externallyRelevant: bool }",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelCommandError ="),
+            artifact_marker(
+                "  type ModelCommandError = { workflow: str, slice: str, command: str, error: str, scenario: str, recovery: str }",
             ),
             quint_message.clone(),
         ),
@@ -817,6 +850,14 @@ fn project_root_effects(
             artifact_marker("  val modelOutcomes:"),
             artifact_marker(format!(
                 "  val modelOutcomes: List[ModelOutcome] = {quint_model_outcome_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelCommandErrors:"),
+            artifact_marker(format!(
+                "  val modelCommandErrors: List[ModelCommandError] = {quint_model_command_error_list}"
             )),
             quint_message.clone(),
         ),
@@ -948,6 +989,14 @@ fn project_root_effects(
             artifact_marker("  val modelOutcomesAreDeclared ="),
             artifact_marker(format!(
                 "  val modelOutcomesAreDeclared = modelOutcomes.length() == {outcome_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelCommandErrorsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelCommandErrorsAreDeclared = modelCommandErrors.length() == {command_error_count}"
             )),
             quint_message.clone(),
         ),
@@ -2164,6 +2213,52 @@ fn quint_model_outcome_list(project_outcomes: &[ProjectOutcome]) -> String {
     )
 }
 
+fn lean_model_command_error_list(project_command_errors: &[ProjectCommandError]) -> String {
+    let mut project_command_errors = project_command_errors.iter().collect::<Vec<_>>();
+    project_command_errors.sort_unstable();
+    format!(
+        "[{}]",
+        project_command_errors
+            .into_iter()
+            .map(|command_error| {
+                format!(
+                    "({}, {}, {}, {}, {}, {})",
+                    json_string(command_error.workflow_slug()),
+                    json_string(command_error.slice_slug()),
+                    json_string(command_error.command()),
+                    json_string(command_error.error()),
+                    json_string(command_error.scenario()),
+                    json_string(command_error.recovery())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_command_error_list(project_command_errors: &[ProjectCommandError]) -> String {
+    let mut project_command_errors = project_command_errors.iter().collect::<Vec<_>>();
+    project_command_errors.sort_unstable();
+    format!(
+        "[{}]",
+        project_command_errors
+            .into_iter()
+            .map(|command_error| {
+                format!(
+                    "{{ workflow: {}, slice: {}, command: {}, error: {}, scenario: {}, recovery: {} }}",
+                    json_string(command_error.workflow_slug()),
+                    json_string(command_error.slice_slug()),
+                    json_string(command_error.command()),
+                    json_string(command_error.error()),
+                    json_string(command_error.scenario()),
+                    json_string(command_error.recovery())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn lean_model_stream_list(project_streams: &[ProjectStream]) -> String {
     let mut project_streams = project_streams
         .iter()
@@ -2619,12 +2714,13 @@ fn model_digest(
     inventories: &ProjectRootInventories<'_>,
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};outcomes={};commands={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
+        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};outcomes={};command-errors={};commands={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
         digest_scenarios(inventories.scenarios),
         digest_outcomes(inventories.outcomes),
+        digest_command_errors(inventories.command_errors),
         digest_commands(inventories.commands),
         digest_read_models(inventories.read_models),
         digest_views(inventories.views),
@@ -2704,6 +2800,24 @@ fn digest_scenarios(project_scenarios: &[ProjectScenario]) -> String {
         .into_iter()
         .map(|(workflow_slug, slice_slug, scenario_kind, scenario)| {
             format!("{workflow_slug}/{slice_slug}/{scenario_kind}/{scenario}")
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_command_errors(project_command_errors: &[ProjectCommandError]) -> String {
+    project_command_errors
+        .iter()
+        .map(|command_error| {
+            format!(
+                "{}/{}/{}/{}@{}#{}",
+                command_error.workflow_slug(),
+                command_error.slice_slug(),
+                command_error.command(),
+                command_error.error(),
+                command_error.scenario(),
+                command_error.recovery()
+            )
         })
         .collect::<Vec<_>>()
         .join(",")
