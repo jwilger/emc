@@ -215,7 +215,9 @@ fn project_root_effects(
     let workflow_slug_list = workflow_slug_list(modeled_workflows);
     let workflow_count = modeled_workflows.len();
     let lean_model_slice_list = lean_model_slice_list(formal_workflows);
+    let lean_model_slice_module_list = lean_model_slice_module_list(formal_workflows);
     let quint_model_slice_list = quint_model_slice_list(formal_workflows);
+    let quint_model_slice_module_list = quint_model_slice_module_list(formal_workflows);
     let model_digest = model_digest(project_name, modeled_workflows, formal_workflows);
     let slice_count = formal_workflows
         .iter()
@@ -322,6 +324,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelSliceModules :"),
+            artifact_marker(format!(
+                "def modelSliceModules : List (String × String × String) := {lean_model_slice_module_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelIdentityIsStable"),
             artifact_marker(format!(
                 "theorem modelIdentityIsStable : modelName = {} := rfl",
@@ -364,6 +374,14 @@ fn project_root_effects(
             lean_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelSliceModulesAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelSliceModulesAreDeclared : modelSliceModules.length = {slice_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
             lean_path,
             artifact_marker("end "),
             artifact_marker(format!("end {module_name}")),
@@ -379,6 +397,14 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  type ModelSlice ="),
             artifact_marker("  type ModelSlice = { workflow: str, slice: str }"),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelSliceModule ="),
+            artifact_marker(
+                "  type ModelSliceModule = { workflow: str, slice: str, formalModule: str }",
+            ),
             quint_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -426,6 +452,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelSliceModules:"),
+            artifact_marker(format!(
+                "  val modelSliceModules: List[ModelSliceModule] = {quint_model_slice_module_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelIdentityStable ="),
             artifact_marker(format!(
                 "  val modelIdentityStable = modelName == {}",
@@ -464,6 +498,14 @@ fn project_root_effects(
             artifact_marker("  val modelSlicesAreDeclared ="),
             artifact_marker(format!(
                 "  val modelSlicesAreDeclared = modelSlices.length() == {slice_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelSliceModulesAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelSliceModulesAreDeclared = modelSliceModules.length() == {slice_count}"
             )),
             quint_message.clone(),
         ),
@@ -1438,6 +1480,68 @@ fn quint_model_slice_list(formal_workflows: &[FormalWorkflowGraph]) -> String {
     )
 }
 
+fn lean_model_slice_module_list(formal_workflows: &[FormalWorkflowGraph]) -> String {
+    let mut memberships = formal_workflows
+        .iter()
+        .flat_map(|workflow| {
+            workflow.slice_details().as_slice().iter().map(|slice| {
+                (
+                    workflow.slug().as_ref(),
+                    slice.slug().as_ref(),
+                    module_name_from_model(slice.name().clone()),
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+    memberships.sort_unstable();
+    format!(
+        "[{}]",
+        memberships
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, slice_module)| {
+                format!(
+                    "({}, {}, {})",
+                    json_string(workflow_slug),
+                    json_string(slice_slug),
+                    json_string(&slice_module)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_slice_module_list(formal_workflows: &[FormalWorkflowGraph]) -> String {
+    let mut memberships = formal_workflows
+        .iter()
+        .flat_map(|workflow| {
+            workflow.slice_details().as_slice().iter().map(|slice| {
+                (
+                    workflow.slug().as_ref(),
+                    slice.slug().as_ref(),
+                    module_name_from_model(slice.name().clone()),
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+    memberships.sort_unstable();
+    format!(
+        "[{}]",
+        memberships
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, slice_module)| {
+                format!(
+                    "{{ workflow: {}, slice: {}, formalModule: {} }}",
+                    json_string(workflow_slug),
+                    json_string(slice_slug),
+                    json_string(&slice_module)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
 fn model_digest(
     project_name: &ProjectName,
     modeled_workflows: &[ModeledWorkflowLayout],
@@ -1464,17 +1568,21 @@ fn digest_slices(formal_workflows: &[FormalWorkflowGraph]) -> String {
     let mut memberships = formal_workflows
         .iter()
         .flat_map(|workflow| {
-            workflow
-                .slice_details()
-                .as_slice()
-                .iter()
-                .map(|slice| (workflow.slug().as_ref(), slice.slug().as_ref()))
+            workflow.slice_details().as_slice().iter().map(|slice| {
+                (
+                    workflow.slug().as_ref(),
+                    slice.slug().as_ref(),
+                    module_name_from_model(slice.name().clone()),
+                )
+            })
         })
         .collect::<Vec<_>>();
     memberships.sort_unstable();
     memberships
         .into_iter()
-        .map(|(workflow_slug, slice_slug)| format!("{workflow_slug}/{slice_slug}"))
+        .map(|(workflow_slug, slice_slug, slice_module)| {
+            format!("{workflow_slug}/{slice_slug}@{slice_module}")
+        })
         .collect::<Vec<_>>()
         .join(",")
 }
