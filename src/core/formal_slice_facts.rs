@@ -748,6 +748,22 @@ impl NewReadModelDefinition {
     pub fn field(&self) -> &NewReadModelField {
         &self.field
     }
+
+    pub fn transitive(&self) -> bool {
+        self.transitive
+    }
+
+    pub fn relationship_fields(&self) -> &ReadModelRelationshipFields {
+        &self.relationship_fields
+    }
+
+    pub fn transitive_rule(&self) -> Option<&ReadModelTransitiveRule> {
+        self.transitive_rule.as_ref()
+    }
+
+    pub fn example_scenario_name(&self) -> Option<&ScenarioName> {
+        self.example_scenario_name.as_ref()
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

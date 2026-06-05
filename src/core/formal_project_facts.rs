@@ -184,6 +184,7 @@ pub struct NewProjectReadModel {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     read_model: ReadModelName,
+    read_model_definitions: Vec<NewProjectReadModelDefinition>,
     read_model_fields: Vec<NewProjectReadModelField>,
 }
 
@@ -197,8 +198,16 @@ impl NewProjectReadModel {
             workflow_slug,
             slice_slug,
             read_model,
+            read_model_definitions: Vec::new(),
             read_model_fields: Vec::new(),
         }
+    }
+
+    pub fn with_definition(mut self, read_model: &NewReadModelDefinition) -> Self {
+        self.read_model_definitions = vec![NewProjectReadModelDefinition::from_read_model(
+            &self, read_model,
+        )];
+        self
     }
 
     pub fn with_field(mut self, field: &NewReadModelField) -> Self {
@@ -217,7 +226,44 @@ impl NewProjectReadModel {
             read_model.slice_slug().clone(),
             read_model.name().clone(),
         )
+        .with_definition(read_model)
         .with_field(read_model.field())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NewProjectReadModelDefinition {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    read_model: ReadModelName,
+    transitive: bool,
+    relationship_fields: Vec<String>,
+    transitive_rule: String,
+    example_scenario_name: String,
+}
+
+impl NewProjectReadModelDefinition {
+    fn from_read_model(parent: &NewProjectReadModel, read_model: &NewReadModelDefinition) -> Self {
+        Self {
+            workflow_slug: parent.workflow_slug.clone(),
+            slice_slug: parent.slice_slug.clone(),
+            read_model: parent.read_model.clone(),
+            transitive: read_model.transitive(),
+            relationship_fields: read_model
+                .relationship_fields()
+                .as_slice()
+                .iter()
+                .map(|field| field.as_ref().to_owned())
+                .collect(),
+            transitive_rule: read_model
+                .transitive_rule()
+                .map(|rule| rule.as_ref().to_owned())
+                .unwrap_or_default(),
+            example_scenario_name: read_model
+                .example_scenario_name()
+                .map(|scenario| scenario.as_ref().to_owned())
+                .unwrap_or_default(),
+        }
     }
 }
 
@@ -684,6 +730,47 @@ impl ProjectReadModel {
 
     pub fn read_model(&self) -> &str {
         &self.read_model
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectReadModelDefinition {
+    workflow_slug: String,
+    slice_slug: String,
+    read_model: String,
+    transitive: bool,
+    relationship_fields: Vec<String>,
+    transitive_rule: String,
+    example_scenario_name: String,
+}
+
+impl ProjectReadModelDefinition {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn read_model(&self) -> &str {
+        &self.read_model
+    }
+
+    pub fn transitive(&self) -> bool {
+        self.transitive
+    }
+
+    pub fn relationship_fields(&self) -> &[String] {
+        &self.relationship_fields
+    }
+
+    pub fn transitive_rule(&self) -> &str {
+        &self.transitive_rule
+    }
+
+    pub fn example_scenario_name(&self) -> &str {
+        &self.example_scenario_name
     }
 }
 
@@ -1172,6 +1259,24 @@ pub fn parse_quint_project_read_models(
     )
 }
 
+pub fn parse_lean_project_read_model_definitions(
+    contents: &FileContents,
+) -> Result<Vec<ProjectReadModelDefinition>, FormalProjectFactError> {
+    read_model_definition_entries_from_list(
+        contents.as_ref(),
+        "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_read_model_definitions(
+    contents: &FileContents,
+) -> Result<Vec<ProjectReadModelDefinition>, FormalProjectFactError> {
+    read_model_definition_entries_from_list(
+        contents.as_ref(),
+        "val modelReadModelDefinitions: List[ModelReadModelDefinition] = ",
+    )
+}
+
 pub fn parse_lean_project_read_model_fields(
     contents: &FileContents,
 ) -> Result<Vec<ProjectReadModelField>, FormalProjectFactError> {
@@ -1356,6 +1461,8 @@ pub fn add_project_scenario(
             let command_inputs =
                 parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
@@ -1378,6 +1485,7 @@ pub fn add_project_scenario(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -1426,6 +1534,8 @@ pub fn add_project_scenario(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_quint_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
@@ -1448,6 +1558,7 @@ pub fn add_project_scenario(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -1519,6 +1630,7 @@ pub fn add_project_data_flow(
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let command_inputs = parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions = parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
@@ -1539,6 +1651,7 @@ pub fn add_project_data_flow(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -1588,6 +1701,8 @@ pub fn add_project_data_flow(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_quint_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
@@ -1610,6 +1725,7 @@ pub fn add_project_data_flow(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -1681,6 +1797,8 @@ pub fn add_project_outcome(
             let command_inputs =
                 parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
@@ -1703,6 +1821,7 @@ pub fn add_project_outcome(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -1752,6 +1871,8 @@ pub fn add_project_outcome(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_quint_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
@@ -1774,6 +1895,7 @@ pub fn add_project_outcome(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -1881,6 +2003,7 @@ pub fn add_project_command(
             let command_errors = parse_lean_project_command_errors_from_contents_or_empty(&contents);
             let command_inputs = parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions = parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
@@ -1901,6 +2024,7 @@ pub fn add_project_command(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -1991,6 +2115,8 @@ pub fn add_project_command(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_quint_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
@@ -2013,6 +2139,7 @@ pub fn add_project_command(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -2046,10 +2173,20 @@ pub fn add_project_read_model(
 ) -> Result<EffectPlan, FormalProjectFactError> {
     let lean_record = lean_read_model_record(&read_model);
     let quint_record = quint_read_model_record(&read_model);
+    let lean_definition_records = read_model
+        .read_model_definitions
+        .iter()
+        .map(lean_read_model_definition_record)
+        .collect::<Vec<_>>();
     let lean_field_records = read_model
         .read_model_fields
         .iter()
         .map(lean_read_model_field_record)
+        .collect::<Vec<_>>();
+    let quint_definition_records = read_model
+        .read_model_definitions
+        .iter()
+        .map(quint_read_model_definition_record)
         .collect::<Vec<_>>();
     let quint_field_records = read_model
         .read_model_fields
@@ -2061,6 +2198,17 @@ pub fn add_project_read_model(
         "def modelReadModels : List (String × String × String) := ",
         &lean_record,
     )
+    .and_then(|contents| {
+        lean_definition_records
+            .iter()
+            .try_fold(contents, |contents, record| {
+                append_record_if_missing(
+                    &contents,
+                    "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := ",
+                    record,
+                )
+            })
+    })
     .and_then(|contents| {
         lean_field_records
             .iter()
@@ -2077,6 +2225,10 @@ pub fn add_project_read_model(
             &contents,
             "def modelReadModels : List (String × String × String) := ",
         )?;
+        let read_model_definitions = read_model_definition_entries_from_list(
+            &contents,
+            "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := ",
+        )?;
         let read_model_fields = read_model_field_entries_from_list(
             &contents,
             "def modelReadModelFields : List (String × String × String × String × String × String × String × String × String × String × String × String) := ",
@@ -2089,6 +2241,16 @@ pub fn add_project_read_model(
                 read_models.len()
             ),
         )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "theorem modelReadModelDefinitionsAreDeclared :",
+                &format!(
+                    "theorem modelReadModelDefinitionsAreDeclared : modelReadModelDefinitions.length = {} := rfl",
+                    read_model_definitions.len()
+                ),
+            )
+        })
         .and_then(|contents| {
             replace_declaration(
                 &contents,
@@ -2128,6 +2290,7 @@ pub fn add_project_read_model(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -2147,6 +2310,17 @@ pub fn add_project_read_model(
         &quint_record,
     )
     .and_then(|contents| {
+        quint_definition_records
+            .iter()
+            .try_fold(contents, |contents, record| {
+                append_record_if_missing(
+                    &contents,
+                    "val modelReadModelDefinitions: List[ModelReadModelDefinition] = ",
+                    record,
+                )
+            })
+    })
+    .and_then(|contents| {
         quint_field_records
             .iter()
             .try_fold(contents, |contents, record| {
@@ -2162,6 +2336,10 @@ pub fn add_project_read_model(
             &contents,
             "val modelReadModels: List[ModelReadModel] = ",
         )?;
+        let read_model_definitions = read_model_definition_entries_from_list(
+            &contents,
+            "val modelReadModelDefinitions: List[ModelReadModelDefinition] = ",
+        )?;
         let read_model_fields = read_model_field_entries_from_list(
             &contents,
             "val modelReadModelFields: List[ModelReadModelField] = ",
@@ -2174,6 +2352,16 @@ pub fn add_project_read_model(
                 read_models.len()
             ),
         )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "val modelReadModelDefinitionsAreDeclared =",
+                &format!(
+                    "val modelReadModelDefinitionsAreDeclared = modelReadModelDefinitions.length() == {}",
+                    read_model_definitions.len()
+                ),
+            )
+        })
         .and_then(|contents| {
             replace_declaration(
                 &contents,
@@ -2213,6 +2401,7 @@ pub fn add_project_read_model(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -2309,6 +2498,7 @@ pub fn add_project_view(
             let command_inputs =
                 parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions = parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
@@ -2328,6 +2518,7 @@ pub fn add_project_view(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -2391,6 +2582,8 @@ pub fn add_project_view(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_quint_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -2411,6 +2604,7 @@ pub fn add_project_view(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -2472,6 +2666,8 @@ pub fn add_project_automation(
             let command_inputs =
                 parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
@@ -2493,6 +2689,7 @@ pub fn add_project_automation(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -2534,6 +2731,8 @@ pub fn add_project_automation(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_quint_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
@@ -2555,6 +2754,7 @@ pub fn add_project_automation(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -2616,6 +2816,8 @@ pub fn add_project_translation(
             let command_inputs =
                 parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
@@ -2637,6 +2839,7 @@ pub fn add_project_translation(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -2678,6 +2881,8 @@ pub fn add_project_translation(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_quint_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
@@ -2699,6 +2904,7 @@ pub fn add_project_translation(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -2758,6 +2964,7 @@ pub fn add_project_external_payload(
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let command_inputs = parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions = parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
@@ -2777,6 +2984,7 @@ pub fn add_project_external_payload(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -2818,6 +3026,8 @@ pub fn add_project_external_payload(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_quint_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
@@ -2840,6 +3050,7 @@ pub fn add_project_external_payload(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -2901,6 +3112,8 @@ pub fn add_project_stream(
             let command_inputs =
                 parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
@@ -2922,6 +3135,7 @@ pub fn add_project_stream(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -2961,6 +3175,8 @@ pub fn add_project_stream(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_quint_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields =
                 parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
@@ -2982,6 +3198,7 @@ pub fn add_project_stream(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -3064,6 +3281,10 @@ pub fn add_project_event(
             &contents,
             "def modelReadModels : List (String × String × String) := ",
         )?;
+        let read_model_definitions = read_model_definition_entries_from_list(
+            &contents,
+            "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := ",
+        )?;
         let read_model_fields = read_model_field_entries_from_list(
             &contents,
             "def modelReadModelFields : List (String × String × String × String × String × String × String × String × String × String × String × String) := ",
@@ -3129,6 +3350,7 @@ pub fn add_project_event(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -3174,6 +3396,10 @@ pub fn add_project_event(
         let read_models = read_model_entries_from_list(
             &contents,
             "val modelReadModels: List[ModelReadModel] = ",
+        )?;
+        let read_model_definitions = read_model_definition_entries_from_list(
+            &contents,
+            "val modelReadModelDefinitions: List[ModelReadModelDefinition] = ",
         )?;
         let read_model_fields = read_model_field_entries_from_list(
             &contents,
@@ -3232,6 +3458,7 @@ pub fn add_project_event(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_definitions: &read_model_definitions,
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
@@ -3492,6 +3719,26 @@ fn parse_lean_project_read_models_from_contents_or_empty(contents: &str) -> Vec<
 fn parse_quint_project_read_models_from_contents_or_empty(contents: &str) -> Vec<ProjectReadModel> {
     read_model_entries_from_list(contents, "val modelReadModels: List[ModelReadModel] = ")
         .unwrap_or_default()
+}
+
+fn parse_lean_project_read_model_definitions_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectReadModelDefinition> {
+    read_model_definition_entries_from_list(
+        contents,
+        "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_read_model_definitions_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectReadModelDefinition> {
+    read_model_definition_entries_from_list(
+        contents,
+        "val modelReadModelDefinitions: List[ModelReadModelDefinition] = ",
+    )
+    .unwrap_or_default()
 }
 
 fn parse_lean_project_read_model_fields_from_contents_or_empty(
@@ -3804,6 +4051,51 @@ fn read_model_entries_from_list(
     read_models.sort();
     read_models.dedup();
     Ok(read_models)
+}
+
+fn read_model_definition_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectReadModelDefinition>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut read_model_definitions = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let strings = quoted_strings(&record)?;
+            if strings.len() < 5 {
+                Err(FormalProjectFactError::new(
+                    "formal project read model definition record is malformed",
+                ))
+            } else {
+                let transitive = record_read_model_definition_transitive(&record)?;
+                let relationship_end = strings.len() - 2;
+                Ok(ProjectReadModelDefinition {
+                    workflow_slug: strings[0].clone(),
+                    slice_slug: strings[1].clone(),
+                    read_model: strings[2].clone(),
+                    transitive,
+                    relationship_fields: strings[3..relationship_end].to_vec(),
+                    transitive_rule: strings[relationship_end].clone(),
+                    example_scenario_name: strings[relationship_end + 1].clone(),
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    read_model_definitions.sort();
+    read_model_definitions.dedup();
+    Ok(read_model_definitions)
+}
+
+fn record_read_model_definition_transitive(record: &str) -> Result<bool, FormalProjectFactError> {
+    if record.contains(", true,") || record.contains("transitive: true") {
+        Ok(true)
+    } else if record.contains(", false,") || record.contains("transitive: false") {
+        Ok(false)
+    } else {
+        Err(FormalProjectFactError::new(
+            "formal project read model definition transitive field is malformed",
+        ))
+    }
 }
 
 fn read_model_field_entries_from_list(
@@ -4181,6 +4473,7 @@ struct ProjectDigestInventories<'a> {
     commands: &'a [ProjectCommand],
     command_inputs: &'a [ProjectCommandInput],
     read_models: &'a [ProjectReadModel],
+    read_model_definitions: &'a [ProjectReadModelDefinition],
     read_model_fields: &'a [ProjectReadModelField],
     views: &'a [ProjectView],
     view_fields: &'a [ProjectViewField],
@@ -4251,6 +4544,7 @@ fn digest_with_project_inventories(
         .or_else(|| current_digest.split_once(";commands="))
         .or_else(|| current_digest.split_once(";command-inputs="))
         .or_else(|| current_digest.split_once(";read-models="))
+        .or_else(|| current_digest.split_once(";read-model-definitions="))
         .or_else(|| current_digest.split_once(";read-model-fields="))
         .or_else(|| current_digest.split_once(";views="))
         .or_else(|| current_digest.split_once(";view-fields="))
@@ -4262,7 +4556,7 @@ fn digest_with_project_inventories(
         .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};scenarios={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-fields={};views={};view-fields={};automations={};translations={};external-payloads={};streams={};events={};event-attributes={}",
+        "{prefix};scenarios={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-fields={};automations={};translations={};external-payloads={};streams={};events={};event-attributes={}",
         digest_scenarios(inventories.scenarios),
         digest_data_flows(inventories.data_flows),
         digest_outcomes(inventories.outcomes),
@@ -4270,6 +4564,7 @@ fn digest_with_project_inventories(
         digest_commands(inventories.commands),
         digest_command_inputs(inventories.command_inputs),
         digest_read_models(inventories.read_models),
+        digest_read_model_definitions(inventories.read_model_definitions),
         digest_read_model_fields(inventories.read_model_fields),
         digest_views(inventories.views),
         digest_view_fields(inventories.view_fields),
@@ -4391,6 +4686,25 @@ fn digest_read_models(read_models: &[ProjectReadModel]) -> String {
             format!(
                 "{}/{}/{}",
                 read_model.workflow_slug, read_model.slice_slug, read_model.read_model
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_read_model_definitions(read_model_definitions: &[ProjectReadModelDefinition]) -> String {
+    read_model_definitions
+        .iter()
+        .map(|definition| {
+            format!(
+                "{}/{}/{}@{}#{}#{}#{}",
+                definition.workflow_slug,
+                definition.slice_slug,
+                definition.read_model,
+                definition.transitive,
+                definition.relationship_fields.join("+"),
+                definition.transitive_rule,
+                definition.example_scenario_name
             )
         })
         .collect::<Vec<_>>()
@@ -4892,6 +5206,32 @@ fn quint_read_model_record(read_model: &NewProjectReadModel) -> String {
         quoted(read_model.workflow_slug.as_ref()),
         quoted(read_model.slice_slug.as_ref()),
         quoted(read_model.read_model.as_ref())
+    )
+}
+
+fn lean_read_model_definition_record(definition: &NewProjectReadModelDefinition) -> String {
+    format!(
+        "({}, {}, {}, {}, [{}], {}, {})",
+        quoted(definition.workflow_slug.as_ref()),
+        quoted(definition.slice_slug.as_ref()),
+        quoted(definition.read_model.as_ref()),
+        definition.transitive,
+        quoted_string_list(&definition.relationship_fields),
+        quoted(&definition.transitive_rule),
+        quoted(&definition.example_scenario_name)
+    )
+}
+
+fn quint_read_model_definition_record(definition: &NewProjectReadModelDefinition) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, readModel: {}, transitive: {}, relationshipFields: [{}], transitiveRule: {}, exampleScenarioName: {} }}",
+        quoted(definition.workflow_slug.as_ref()),
+        quoted(definition.slice_slug.as_ref()),
+        quoted(definition.read_model.as_ref()),
+        definition.transitive,
+        quoted_string_list(&definition.relationship_fields),
+        quoted(&definition.transitive_rule),
+        quoted(&definition.example_scenario_name)
     )
 }
 
