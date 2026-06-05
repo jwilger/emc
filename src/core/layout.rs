@@ -103,7 +103,12 @@ pub fn check_project(
         .iter()
         .map(modeled_workflow_layout)
         .collect::<Vec<_>>();
-    let root_effects = project_root_effects(&project_name, &module_name, &modeled_workflows);
+    let root_effects = project_root_effects(
+        &project_name,
+        &module_name,
+        &modeled_workflows,
+        &formal_workflows,
+    );
     let lean_artifact_paths = modeled_artifact_paths(
         [
             project_path("model/lean/lakefile.lean"),
@@ -203,11 +208,18 @@ fn project_root_effects(
     project_name: &ProjectName,
     module_name: &str,
     modeled_workflows: &[ModeledWorkflowLayout],
+    formal_workflows: &[FormalWorkflowGraph],
 ) -> Vec<Effect> {
     let project_name_text = project_name.as_ref();
     let model_version = "0.1.0";
     let workflow_slug_list = workflow_slug_list(modeled_workflows);
     let workflow_count = modeled_workflows.len();
+    let lean_model_slice_list = lean_model_slice_list(formal_workflows);
+    let quint_model_slice_list = quint_model_slice_list(formal_workflows);
+    let slice_count = formal_workflows
+        .iter()
+        .map(|workflow| workflow.slice_details().as_slice().len())
+        .sum::<usize>();
     let manifest_path = project_path("emc.toml");
     let lean_path = project_path(format!("model/lean/{module_name}.lean"));
     let lakefile_path = project_path("model/lean/lakefile.lean");
@@ -286,6 +298,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelSlices :"),
+            artifact_marker(format!(
+                "def modelSlices : List (String × String) := {lean_model_slice_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelVersionIsStable"),
             artifact_marker(format!(
                 "theorem modelVersionIsStable : modelVersion = {} := rfl",
@@ -302,6 +322,14 @@ fn project_root_effects(
             lean_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelSlicesAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelSlicesAreDeclared : modelSlices.length = {slice_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
             lean_path,
             artifact_marker("end "),
             artifact_marker(format!("end {module_name}")),
@@ -311,6 +339,12 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("module "),
             artifact_marker(format!("module {module_name} {{")),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelSlice ="),
+            artifact_marker("  type ModelSlice = { workflow: str, slice: str }"),
             quint_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -332,6 +366,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelSlices:"),
+            artifact_marker(format!(
+                "  val modelSlices: List[ModelSlice] = {quint_model_slice_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelVersionStable ="),
             artifact_marker(format!(
                 "  val modelVersionStable = modelVersion == {}",
@@ -344,6 +386,14 @@ fn project_root_effects(
             artifact_marker("  val modelWorkflowsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelWorkflowsAreDeclared = modelWorkflows.length() == {workflow_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelSlicesAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelSlicesAreDeclared = modelSlices.length() == {slice_count}"
             )),
             quint_message.clone(),
         ),
@@ -1163,6 +1213,62 @@ fn workflow_slug_list(modeled_workflows: &[ModeledWorkflowLayout]) -> String {
             .map(|workflow| json_string(workflow.slug().as_ref()))
             .collect::<Vec<_>>()
             .join(",")
+    )
+}
+
+fn lean_model_slice_list(formal_workflows: &[FormalWorkflowGraph]) -> String {
+    let mut memberships = formal_workflows
+        .iter()
+        .flat_map(|workflow| {
+            workflow
+                .slice_details()
+                .as_slice()
+                .iter()
+                .map(|slice| (workflow.slug().as_ref(), slice.slug().as_ref()))
+        })
+        .collect::<Vec<_>>();
+    memberships.sort_unstable();
+    format!(
+        "[{}]",
+        memberships
+            .into_iter()
+            .map(|(workflow_slug, slice_slug)| {
+                format!(
+                    "({}, {})",
+                    json_string(workflow_slug),
+                    json_string(slice_slug)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_slice_list(formal_workflows: &[FormalWorkflowGraph]) -> String {
+    let mut memberships = formal_workflows
+        .iter()
+        .flat_map(|workflow| {
+            workflow
+                .slice_details()
+                .as_slice()
+                .iter()
+                .map(|slice| (workflow.slug().as_ref(), slice.slug().as_ref()))
+        })
+        .collect::<Vec<_>>();
+    memberships.sort_unstable();
+    format!(
+        "[{}]",
+        memberships
+            .into_iter()
+            .map(|(workflow_slug, slice_slug)| {
+                format!(
+                    "{{ workflow: {}, slice: {} }}",
+                    json_string(workflow_slug),
+                    json_string(slice_slug)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
     )
 }
 

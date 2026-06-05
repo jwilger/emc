@@ -63,6 +63,8 @@ mod tests {
             read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
         assert!(
             slice_lean.contains("namespace CaptureTicket"),
@@ -135,6 +137,22 @@ mod tests {
                 "val workflowSliceDetails: List[WorkflowSliceDetail] = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Actor enters repair ticket details.\" }]"
             ),
             "Quint artifact must represent the workflow's business slice details"
+        );
+        assert!(
+            lean_root.contains("def modelSlices : List (String × String) := [(\"open-ticket\", \"capture-ticket\")]"),
+            "Lean project root must represent composed workflow-to-slice membership"
+        );
+        assert!(
+            lean_root.contains("theorem modelSlicesAreDeclared : modelSlices.length = 1 := rfl"),
+            "Lean project root must prove composed slice membership is declared"
+        );
+        assert!(
+            quint_root.contains("val modelSlices: List[ModelSlice] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\" }]"),
+            "Quint project root must represent composed workflow-to-slice membership"
+        );
+        assert!(
+            quint_root.contains("val modelSlicesAreDeclared = modelSlices.length() == 1"),
+            "Quint project root must verify composed slice membership is declared"
         );
         assert_ne!(
             initial_digest,
