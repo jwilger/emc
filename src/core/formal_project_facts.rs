@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::types::{
-    CommandName, EventName, ReadModelName, SliceSlug, StreamName, WorkflowSlug,
+    CommandName, EventName, ReadModelName, SliceSlug, StreamName, ViewName, WorkflowSlug,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -57,6 +57,23 @@ impl NewProjectReadModel {
             workflow_slug,
             slice_slug,
             read_model,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NewProjectView {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    view: ViewName,
+}
+
+impl NewProjectView {
+    pub fn new(workflow_slug: WorkflowSlug, slice_slug: SliceSlug, view: ViewName) -> Self {
+        Self {
+            workflow_slug,
+            slice_slug,
+            view,
         }
     }
 }
@@ -131,6 +148,27 @@ impl ProjectReadModel {
 
     pub fn read_model(&self) -> &str {
         &self.read_model
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectView {
+    workflow_slug: String,
+    slice_slug: String,
+    view: String,
+}
+
+impl ProjectView {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn view(&self) -> &str {
+        &self.view
     }
 }
 
@@ -225,6 +263,21 @@ pub fn parse_quint_project_read_models(
     )
 }
 
+pub fn parse_lean_project_views(
+    contents: &FileContents,
+) -> Result<Vec<ProjectView>, FormalProjectFactError> {
+    view_entries_from_list(
+        contents.as_ref(),
+        "def modelViews : List (String × String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_views(
+    contents: &FileContents,
+) -> Result<Vec<ProjectView>, FormalProjectFactError> {
+    view_entries_from_list(contents.as_ref(), "val modelViews: List[ModelView] = ")
+}
+
 pub fn parse_lean_project_events(
     contents: &FileContents,
 ) -> Result<Vec<ProjectEvent>, FormalProjectFactError> {
@@ -269,9 +322,17 @@ pub fn add_project_command(
         )
         .and_then(|contents| {
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
-            update_lean_digest(&contents, &commands, &read_models, &streams, &events)
+            update_lean_digest(
+                &contents,
+                &commands,
+                &read_models,
+                &views,
+                &streams,
+                &events,
+            )
         })
     })?;
     let quint = append_record_if_missing(
@@ -292,9 +353,17 @@ pub fn add_project_command(
         )
         .and_then(|contents| {
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
-            update_quint_digest(&contents, &commands, &read_models, &streams, &events)
+            update_quint_digest(
+                &contents,
+                &commands,
+                &read_models,
+                &views,
+                &streams,
+                &events,
+            )
         })
     })?;
 
@@ -337,9 +406,17 @@ pub fn add_project_read_model(
         )
         .and_then(|contents| {
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
-            update_lean_digest(&contents, &commands, &read_models, &streams, &events)
+            update_lean_digest(
+                &contents,
+                &commands,
+                &read_models,
+                &views,
+                &streams,
+                &events,
+            )
         })
     })?;
     let quint = append_record_if_missing(
@@ -362,9 +439,17 @@ pub fn add_project_read_model(
         )
         .and_then(|contents| {
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
-            update_quint_digest(&contents, &commands, &read_models, &streams, &events)
+            update_quint_digest(
+                &contents,
+                &commands,
+                &read_models,
+                &views,
+                &streams,
+                &events,
+            )
         })
     })?;
 
@@ -374,6 +459,89 @@ pub fn add_project_read_model(
         Effect::Report(report_line(format!(
             "added read model {} to project root",
             read_model.read_model.as_ref()
+        ))?),
+    ]))
+}
+
+pub fn add_project_view(
+    lean_path: ProjectPath,
+    lean_contents: FileContents,
+    quint_path: ProjectPath,
+    quint_contents: FileContents,
+    view: NewProjectView,
+) -> Result<EffectPlan, FormalProjectFactError> {
+    let lean_record = lean_view_record(&view);
+    let quint_record = quint_view_record(&view);
+    let lean = append_record_if_missing(
+        lean_contents.as_ref(),
+        "def modelViews : List (String × String × String) := ",
+        &lean_record,
+    )
+    .and_then(|contents| {
+        let views = view_entries_from_list(
+            &contents,
+            "def modelViews : List (String × String × String) := ",
+        )?;
+        replace_declaration(
+            &contents,
+            "theorem modelViewsAreDeclared :",
+            &format!(
+                "theorem modelViewsAreDeclared : modelViews.length = {} := rfl",
+                views.len()
+            ),
+        )
+        .and_then(|contents| {
+            let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
+            let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            update_lean_digest(
+                &contents,
+                &commands,
+                &read_models,
+                &views,
+                &streams,
+                &events,
+            )
+        })
+    })?;
+    let quint = append_record_if_missing(
+        quint_contents.as_ref(),
+        "val modelViews: List[ModelView] = ",
+        &quint_record,
+    )
+    .and_then(|contents| {
+        let views = view_entries_from_list(&contents, "val modelViews: List[ModelView] = ")?;
+        replace_declaration(
+            &contents,
+            "val modelViewsAreDeclared =",
+            &format!(
+                "val modelViewsAreDeclared = modelViews.length() == {}",
+                views.len()
+            ),
+        )
+        .and_then(|contents| {
+            let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
+            let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            update_quint_digest(
+                &contents,
+                &commands,
+                &read_models,
+                &views,
+                &streams,
+                &events,
+            )
+        })
+    })?;
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(lean_path, file_contents(lean)?),
+        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::Report(report_line(format!(
+            "added view {} to project root",
+            view.view.as_ref()
         ))?),
     ]))
 }
@@ -408,8 +576,16 @@ pub fn add_project_stream(
         .and_then(|contents| {
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
-            update_lean_digest(&contents, &commands, &read_models, &streams, &events)
+            update_lean_digest(
+                &contents,
+                &commands,
+                &read_models,
+                &views,
+                &streams,
+                &events,
+            )
         })
     })?;
     let quint = append_record_if_missing(
@@ -431,8 +607,16 @@ pub fn add_project_stream(
         .and_then(|contents| {
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
-            update_quint_digest(&contents, &commands, &read_models, &streams, &events)
+            update_quint_digest(
+                &contents,
+                &commands,
+                &read_models,
+                &views,
+                &streams,
+                &events,
+            )
         })
     })?;
 
@@ -469,6 +653,10 @@ pub fn add_project_event(
             &contents,
             "def modelReadModels : List (String × String × String) := ",
         )?;
+        let views = view_entries_from_list(
+            &contents,
+            "def modelViews : List (String × String × String) := ",
+        )?;
         let streams = stream_entries_from_list(
             &contents,
             "def modelStreams : List (String × String × String) := ",
@@ -486,7 +674,14 @@ pub fn add_project_event(
             ),
         )
         .and_then(|contents| {
-            update_lean_digest(&contents, &commands, &read_models, &streams, &events)
+            update_lean_digest(
+                &contents,
+                &commands,
+                &read_models,
+                &views,
+                &streams,
+                &events,
+            )
         })
     })?;
     let quint = append_record_if_missing(
@@ -501,6 +696,7 @@ pub fn add_project_event(
             &contents,
             "val modelReadModels: List[ModelReadModel] = ",
         )?;
+        let views = view_entries_from_list(&contents, "val modelViews: List[ModelView] = ")?;
         let streams =
             stream_entries_from_list(&contents, "val modelStreams: List[ModelStream] = ")?;
         let events = event_entries_from_list(&contents, "val modelEvents: List[ModelEvent] = ")?;
@@ -513,7 +709,14 @@ pub fn add_project_event(
             ),
         )
         .and_then(|contents| {
-            update_quint_digest(&contents, &commands, &read_models, &streams, &events)
+            update_quint_digest(
+                &contents,
+                &commands,
+                &read_models,
+                &views,
+                &streams,
+                &events,
+            )
         })
     })?;
 
@@ -686,6 +889,18 @@ fn parse_quint_project_read_models_from_contents_or_empty(contents: &str) -> Vec
         .unwrap_or_default()
 }
 
+fn parse_lean_project_views_from_contents_or_empty(contents: &str) -> Vec<ProjectView> {
+    view_entries_from_list(
+        contents,
+        "def modelViews : List (String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_views_from_contents_or_empty(contents: &str) -> Vec<ProjectView> {
+    view_entries_from_list(contents, "val modelViews: List[ModelView] = ").unwrap_or_default()
+}
+
 fn parse_lean_project_streams_from_contents_or_empty(contents: &str) -> Vec<ProjectStream> {
     stream_entries_from_list(
         contents,
@@ -750,6 +965,33 @@ fn read_model_entries_from_list(
     read_models.sort();
     read_models.dedup();
     Ok(read_models)
+}
+
+fn view_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectView>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut views = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let strings = quoted_strings(&record)?;
+            if strings.len() < 3 {
+                Err(FormalProjectFactError::new(
+                    "formal project view record is malformed",
+                ))
+            } else {
+                Ok(ProjectView {
+                    workflow_slug: strings[0].clone(),
+                    slice_slug: strings[1].clone(),
+                    view: strings[2].clone(),
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    views.sort();
+    views.dedup();
+    Ok(views)
 }
 
 fn parse_lean_project_events_from_contents_or_empty(contents: &str) -> Vec<ProjectEvent> {
@@ -877,6 +1119,7 @@ fn update_lean_digest(
     contents: &str,
     commands: &[ProjectCommand],
     read_models: &[ProjectReadModel],
+    views: &[ProjectView],
     streams: &[ProjectStream],
     events: &[ProjectEvent],
 ) -> Result<String, FormalProjectFactError> {
@@ -884,6 +1127,7 @@ fn update_lean_digest(
         declaration_json_string(contents, "def modelDigest := ")?,
         commands,
         read_models,
+        views,
         streams,
         events,
     );
@@ -908,6 +1152,7 @@ fn update_quint_digest(
     contents: &str,
     commands: &[ProjectCommand],
     read_models: &[ProjectReadModel],
+    views: &[ProjectView],
     streams: &[ProjectStream],
     events: &[ProjectEvent],
 ) -> Result<String, FormalProjectFactError> {
@@ -915,6 +1160,7 @@ fn update_quint_digest(
         declaration_json_string(contents, "val modelDigest = ")?,
         commands,
         read_models,
+        views,
         streams,
         events,
     );
@@ -936,19 +1182,22 @@ fn digest_with_project_inventories(
     current_digest: String,
     commands: &[ProjectCommand],
     read_models: &[ProjectReadModel],
+    views: &[ProjectView],
     streams: &[ProjectStream],
     events: &[ProjectEvent],
 ) -> String {
     let prefix = current_digest
         .split_once(";commands=")
         .or_else(|| current_digest.split_once(";read-models="))
+        .or_else(|| current_digest.split_once(";views="))
         .or_else(|| current_digest.split_once(";streams="))
         .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};commands={};read-models={};streams={};events={}",
+        "{prefix};commands={};read-models={};views={};streams={};events={}",
         digest_commands(commands),
         digest_read_models(read_models),
+        digest_views(views),
         digest_streams(streams),
         digest_events(events)
     )
@@ -976,6 +1225,14 @@ fn digest_read_models(read_models: &[ProjectReadModel]) -> String {
                 read_model.workflow_slug, read_model.slice_slug, read_model.read_model
             )
         })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_views(views: &[ProjectView]) -> String {
+    views
+        .iter()
+        .map(|view| format!("{}/{}/{}", view.workflow_slug, view.slice_slug, view.view))
         .collect::<Vec<_>>()
         .join(",")
 }
@@ -1069,6 +1326,24 @@ fn quint_read_model_record(read_model: &NewProjectReadModel) -> String {
         quoted(read_model.workflow_slug.as_ref()),
         quoted(read_model.slice_slug.as_ref()),
         quoted(read_model.read_model.as_ref())
+    )
+}
+
+fn lean_view_record(view: &NewProjectView) -> String {
+    format!(
+        "({}, {}, {})",
+        quoted(view.workflow_slug.as_ref()),
+        quoted(view.slice_slug.as_ref()),
+        quoted(view.view.as_ref())
+    )
+}
+
+fn quint_view_record(view: &NewProjectView) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, view: {} }}",
+        quoted(view.workflow_slug.as_ref()),
+        quoted(view.slice_slug.as_ref()),
+        quoted(view.view.as_ref())
     )
 }
 
