@@ -3,6 +3,7 @@ pub mod digest;
 pub mod effect;
 pub mod emit;
 pub mod formal_graph;
+pub mod formal_project_facts;
 pub mod formal_slice_facts;
 pub mod formal_workflow_facts;
 pub mod gherkin;

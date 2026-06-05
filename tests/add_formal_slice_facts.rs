@@ -1377,6 +1377,8 @@ mod tests {
 
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
         assert!(
             lean.contains("def sliceEvents : List String := [\"TicketCaptured\"]"),
@@ -1405,6 +1407,28 @@ mod tests {
                 "val sliceEventDefinitions: List[EventDefinition] = [{ name: \"TicketCaptured\", stream: \"tickets\", attributes: [{ name: \"ticket_title\", sourceKind: \"command_input\", sourceName: \"ticket_title\", sourceField: \"value\", provenanceDescription: \"CaptureTicket.ticket_title\" }], observed: false, shared: false }]"
             ),
             "Quint slice artifact must carry the authored event definition"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelStreams : List (String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"tickets\")]"
+            ),
+            "Lean project root must carry the authored stream inventory"
+        );
+        assert!(
+            lean_root.contains("theorem modelStreamsAreDeclared : modelStreams.length = 1 := rfl"),
+            "Lean project root must prove authored stream inventory cardinality"
+        );
+        assert!(
+            quint_root.contains("type ModelStream = { workflow: str, slice: str, stream: str }"),
+            "Quint project root must type the authored stream inventory"
+        );
+        assert!(
+            quint_root.contains("val modelStreams: List[ModelStream] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", stream: \"tickets\" }]"),
+            "Quint project root must carry the authored stream inventory"
+        );
+        assert!(
+            quint_root.contains("val modelStreamsAreDeclared = modelStreams.length() == 1"),
+            "Quint project root must verify authored stream inventory cardinality"
         );
 
         Command::cargo_bin("emc")?

@@ -132,7 +132,7 @@ fn emit_lean_project_root(
     let slice_count = slice_memberships.len();
     let model_digest = model_digest(project_name, workflow_slugs, slice_memberships);
     file_contents(format!(
-        "namespace {module_name}\n\n-- EMC generated Lean4 model root.\n\ndef modelName := {project_name:?}\n\ndef modelVersion := \"{FORMAL_MODEL_VERSION}\"\n\ndef modelDigest := {model_digest:?}\n\ndef modelWorkflows : List String := {workflow_list}\n\ndef modelSlices : List (String × String) := {slice_list}\n\ndef modelSliceModules : List (String × String × String) := {slice_module_list}\n\ntheorem modelIdentityIsStable : modelName = {project_name:?} := rfl\n\ntheorem modelVersionIsStable : modelVersion = \"{FORMAL_MODEL_VERSION}\" := rfl\n\ntheorem modelDigestIsStable : modelDigest = {model_digest:?} := rfl\n\ntheorem modelWorkflowsAreDeclared : modelWorkflows.length = {workflow_count} := rfl\n\ntheorem modelSlicesAreDeclared : modelSlices.length = {slice_count} := rfl\n\ntheorem modelSliceModulesAreDeclared : modelSliceModules.length = {slice_count} := rfl\n\nend {module_name}\n",
+        "namespace {module_name}\n\n-- EMC generated Lean4 model root.\n\ndef modelName := {project_name:?}\n\ndef modelVersion := \"{FORMAL_MODEL_VERSION}\"\n\ndef modelDigest := {model_digest:?}\n\ndef modelWorkflows : List String := {workflow_list}\n\ndef modelSlices : List (String × String) := {slice_list}\n\ndef modelSliceModules : List (String × String × String) := {slice_module_list}\n\ndef modelStreams : List (String × String × String) := []\n\ntheorem modelIdentityIsStable : modelName = {project_name:?} := rfl\n\ntheorem modelVersionIsStable : modelVersion = \"{FORMAL_MODEL_VERSION}\" := rfl\n\ntheorem modelDigestIsStable : modelDigest = {model_digest:?} := rfl\n\ntheorem modelWorkflowsAreDeclared : modelWorkflows.length = {workflow_count} := rfl\n\ntheorem modelSlicesAreDeclared : modelSlices.length = {slice_count} := rfl\n\ntheorem modelSliceModulesAreDeclared : modelSliceModules.length = {slice_count} := rfl\n\ntheorem modelStreamsAreDeclared : modelStreams.length = 0 := rfl\n\nend {module_name}\n",
         project_name = project_name.as_ref(),
     ))
 }
@@ -150,7 +150,7 @@ fn emit_quint_project_root(
     let slice_count = slice_memberships.len();
     let model_digest = model_digest(project_name, workflow_slugs, slice_memberships);
     file_contents(format!(
-        "module {module_name} {{\n  type ModelSlice = {{ workflow: str, slice: str }}\n  type ModelSliceModule = {{ workflow: str, slice: str, formalModule: str }}\n  val modelName = {project_name:?}\n  val modelVersion = \"{FORMAL_MODEL_VERSION}\"\n  val modelDigest = {model_digest:?}\n  val modelWorkflows: List[str] = {workflow_list}\n  val modelSlices: List[ModelSlice] = {slice_list}\n  val modelSliceModules: List[ModelSliceModule] = {slice_module_list}\n  val modelIdentityStable = modelName == {project_name:?}\n  val modelVersionStable = modelVersion == \"{FORMAL_MODEL_VERSION}\"\n  val modelDigestStable = modelDigest == {model_digest:?}\n  val modelWorkflowsAreDeclared = modelWorkflows.length() == {workflow_count}\n  val modelSlicesAreDeclared = modelSlices.length() == {slice_count}\n  val modelSliceModulesAreDeclared = modelSliceModules.length() == {slice_count}\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}}\n",
+        "module {module_name} {{\n  type ModelSlice = {{ workflow: str, slice: str }}\n  type ModelSliceModule = {{ workflow: str, slice: str, formalModule: str }}\n  type ModelStream = {{ workflow: str, slice: str, stream: str }}\n  val modelName = {project_name:?}\n  val modelVersion = \"{FORMAL_MODEL_VERSION}\"\n  val modelDigest = {model_digest:?}\n  val modelWorkflows: List[str] = {workflow_list}\n  val modelSlices: List[ModelSlice] = {slice_list}\n  val modelSliceModules: List[ModelSliceModule] = {slice_module_list}\n  val modelStreams: List[ModelStream] = []\n  val modelIdentityStable = modelName == {project_name:?}\n  val modelVersionStable = modelVersion == \"{FORMAL_MODEL_VERSION}\"\n  val modelDigestStable = modelDigest == {model_digest:?}\n  val modelWorkflowsAreDeclared = modelWorkflows.length() == {workflow_count}\n  val modelSlicesAreDeclared = modelSlices.length() == {slice_count}\n  val modelSliceModulesAreDeclared = modelSliceModules.length() == {slice_count}\n  val modelStreamsAreDeclared = modelStreams.length() == 0\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}}\n",
         project_name = project_name.as_ref(),
     ))
 }
@@ -287,7 +287,7 @@ fn model_digest(
     slice_memberships: &[ProjectSliceMembership],
 ) -> String {
     format!(
-        "project:name={};version={FORMAL_MODEL_VERSION};workflows={};slices={}",
+        "project:name={};version={FORMAL_MODEL_VERSION};workflows={};slices={};streams=",
         project_name.as_ref(),
         digest_workflows(workflow_slugs),
         digest_slices(slice_memberships)
