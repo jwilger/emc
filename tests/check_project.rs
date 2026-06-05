@@ -386,8 +386,8 @@ mod tests {
         write(
             &lean_root_path,
             lean_root.replace(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\"",
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=stale;slices=;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\"",
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-fields=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\"",
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=stale;slices=;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-fields=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\"",
             ),
         )?;
 

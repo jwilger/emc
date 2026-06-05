@@ -4,16 +4,16 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, NewBitLevelDataFlow, NewCommandDefinition, NewCommandErrorDefinition,
-    NewCommandInput, NewEventAttribute, NewEventDefinition, NewViewDefinition, NewViewField,
-    OutcomeEventNames, ScenarioKind,
+    NewCommandInput, NewEventAttribute, NewEventDefinition, NewReadModelDefinition,
+    NewReadModelField, NewViewDefinition, NewViewField, OutcomeEventNames, ScenarioKind,
 };
 use crate::core::types::{
     AutomationName, BitEncodingSemantics, CommandErrorName, CommandErrorRecoveryKind, CommandName,
     DataFlowSource, DataFlowTarget, DatumName, EventAttributeName, EventAttributeSourceField,
     EventAttributeSourceKind, EventAttributeSourceName, EventName, OutcomeLabelName,
-    ProvenanceDescription, ReadModelName, ScenarioName, SliceSlug, StreamName,
-    TransformationSemantics, TranslationName, ViewFieldName, ViewFieldSourceKind, ViewName,
-    WorkflowSlug,
+    ProvenanceDescription, ReadModelFieldSourceKind, ReadModelName, ScenarioName, SliceSlug,
+    StreamName, TransformationSemantics, TranslationName, ViewFieldName, ViewFieldSourceKind,
+    ViewName, WorkflowSlug,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -184,6 +184,7 @@ pub struct NewProjectReadModel {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     read_model: ReadModelName,
+    read_model_fields: Vec<NewProjectReadModelField>,
 }
 
 impl NewProjectReadModel {
@@ -196,6 +197,79 @@ impl NewProjectReadModel {
             workflow_slug,
             slice_slug,
             read_model,
+            read_model_fields: Vec::new(),
+        }
+    }
+
+    pub fn with_field(mut self, field: &NewReadModelField) -> Self {
+        self.read_model_fields = vec![NewProjectReadModelField::from_read_model_field(
+            &self, field,
+        )];
+        self
+    }
+
+    pub fn from_read_model(
+        workflow_slug: WorkflowSlug,
+        read_model: &NewReadModelDefinition,
+    ) -> Self {
+        Self::new(
+            workflow_slug,
+            read_model.slice_slug().clone(),
+            read_model.name().clone(),
+        )
+        .with_field(read_model.field())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NewProjectReadModelField {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    read_model: ReadModelName,
+    field: DatumName,
+    source_kind: ReadModelFieldSourceKind,
+    source_event: String,
+    source_attribute: String,
+    derivation_rule: String,
+    absence_event: String,
+    derivation_scenario_name: String,
+    absence_scenario_name: String,
+    provenance: ProvenanceDescription,
+}
+
+impl NewProjectReadModelField {
+    fn from_read_model_field(read_model: &NewProjectReadModel, field: &NewReadModelField) -> Self {
+        Self {
+            workflow_slug: read_model.workflow_slug.clone(),
+            slice_slug: read_model.slice_slug.clone(),
+            read_model: read_model.read_model.clone(),
+            field: field.name().clone(),
+            source_kind: field.source_kind().clone(),
+            source_event: field
+                .source_event()
+                .map(|event| event.as_ref().to_owned())
+                .unwrap_or_default(),
+            source_attribute: field
+                .source_attribute()
+                .map(|attribute| attribute.as_ref().to_owned())
+                .unwrap_or_default(),
+            derivation_rule: field
+                .derivation_rule()
+                .map(|rule| rule.as_ref().to_owned())
+                .unwrap_or_default(),
+            absence_event: field
+                .absence_event()
+                .map(|event| event.as_ref().to_owned())
+                .unwrap_or_default(),
+            derivation_scenario_name: field
+                .derivation_scenario_name()
+                .map(|scenario| scenario.as_ref().to_owned())
+                .unwrap_or_default(),
+            absence_scenario_name: field
+                .absence_scenario_name()
+                .map(|scenario| scenario.as_ref().to_owned())
+                .unwrap_or_default(),
+            provenance: field.provenance_description().clone(),
         }
     }
 }
@@ -610,6 +684,72 @@ impl ProjectReadModel {
 
     pub fn read_model(&self) -> &str {
         &self.read_model
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectReadModelField {
+    workflow_slug: String,
+    slice_slug: String,
+    read_model: String,
+    field: String,
+    source_kind: String,
+    source_event: String,
+    source_attribute: String,
+    derivation_rule: String,
+    absence_event: String,
+    derivation_scenario_name: String,
+    absence_scenario_name: String,
+    provenance: String,
+}
+
+impl ProjectReadModelField {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn read_model(&self) -> &str {
+        &self.read_model
+    }
+
+    pub fn field(&self) -> &str {
+        &self.field
+    }
+
+    pub fn source_kind(&self) -> &str {
+        &self.source_kind
+    }
+
+    pub fn source_event(&self) -> &str {
+        &self.source_event
+    }
+
+    pub fn source_attribute(&self) -> &str {
+        &self.source_attribute
+    }
+
+    pub fn derivation_rule(&self) -> &str {
+        &self.derivation_rule
+    }
+
+    pub fn absence_event(&self) -> &str {
+        &self.absence_event
+    }
+
+    pub fn derivation_scenario_name(&self) -> &str {
+        &self.derivation_scenario_name
+    }
+
+    pub fn absence_scenario_name(&self) -> &str {
+        &self.absence_scenario_name
+    }
+
+    pub fn provenance(&self) -> &str {
+        &self.provenance
     }
 }
 
@@ -1032,6 +1172,24 @@ pub fn parse_quint_project_read_models(
     )
 }
 
+pub fn parse_lean_project_read_model_fields(
+    contents: &FileContents,
+) -> Result<Vec<ProjectReadModelField>, FormalProjectFactError> {
+    read_model_field_entries_from_list(
+        contents.as_ref(),
+        "def modelReadModelFields : List (String × String × String × String × String × String × String × String × String × String × String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_read_model_fields(
+    contents: &FileContents,
+) -> Result<Vec<ProjectReadModelField>, FormalProjectFactError> {
+    read_model_field_entries_from_list(
+        contents.as_ref(),
+        "val modelReadModelFields: List[ModelReadModelField] = ",
+    )
+}
+
 pub fn parse_lean_project_views(
     contents: &FileContents,
 ) -> Result<Vec<ProjectView>, FormalProjectFactError> {
@@ -1198,6 +1356,8 @@ pub fn add_project_scenario(
             let command_inputs =
                 parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -1218,6 +1378,7 @@ pub fn add_project_scenario(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -1265,6 +1426,8 @@ pub fn add_project_scenario(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -1285,6 +1448,7 @@ pub fn add_project_scenario(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -1355,6 +1519,7 @@ pub fn add_project_data_flow(
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let command_inputs = parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -1374,6 +1539,7 @@ pub fn add_project_data_flow(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -1422,6 +1588,8 @@ pub fn add_project_data_flow(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -1442,6 +1610,7 @@ pub fn add_project_data_flow(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -1512,6 +1681,8 @@ pub fn add_project_outcome(
             let command_inputs =
                 parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -1532,6 +1703,7 @@ pub fn add_project_outcome(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -1580,6 +1752,8 @@ pub fn add_project_outcome(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -1600,6 +1774,7 @@ pub fn add_project_outcome(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -1706,6 +1881,7 @@ pub fn add_project_command(
             let command_errors = parse_lean_project_command_errors_from_contents_or_empty(&contents);
             let command_inputs = parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -1725,6 +1901,7 @@ pub fn add_project_command(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -1814,6 +1991,8 @@ pub fn add_project_command(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -1834,6 +2013,7 @@ pub fn add_project_command(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -1866,15 +2046,40 @@ pub fn add_project_read_model(
 ) -> Result<EffectPlan, FormalProjectFactError> {
     let lean_record = lean_read_model_record(&read_model);
     let quint_record = quint_read_model_record(&read_model);
+    let lean_field_records = read_model
+        .read_model_fields
+        .iter()
+        .map(lean_read_model_field_record)
+        .collect::<Vec<_>>();
+    let quint_field_records = read_model
+        .read_model_fields
+        .iter()
+        .map(quint_read_model_field_record)
+        .collect::<Vec<_>>();
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
         "def modelReadModels : List (String × String × String) := ",
         &lean_record,
     )
     .and_then(|contents| {
+        lean_field_records
+            .iter()
+            .try_fold(contents, |contents, record| {
+                append_record_if_missing(
+                    &contents,
+                    "def modelReadModelFields : List (String × String × String × String × String × String × String × String × String × String × String × String) := ",
+                    record,
+                )
+            })
+    })
+    .and_then(|contents| {
         let read_models = read_model_entries_from_list(
             &contents,
             "def modelReadModels : List (String × String × String) := ",
+        )?;
+        let read_model_fields = read_model_field_entries_from_list(
+            &contents,
+            "def modelReadModelFields : List (String × String × String × String × String × String × String × String × String × String × String × String) := ",
         )?;
         replace_declaration(
             &contents,
@@ -1884,6 +2089,16 @@ pub fn add_project_read_model(
                 read_models.len()
             ),
         )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "theorem modelReadModelFieldsAreDeclared :",
+                &format!(
+                    "theorem modelReadModelFieldsAreDeclared : modelReadModelFields.length = {} := rfl",
+                    read_model_fields.len()
+                ),
+            )
+        })
         .and_then(|contents| {
             let scenarios = parse_lean_project_scenarios_from_contents_or_empty(&contents);
             let data_flows = parse_lean_project_data_flows_from_contents_or_empty(&contents);
@@ -1913,6 +2128,7 @@ pub fn add_project_read_model(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -1931,9 +2147,24 @@ pub fn add_project_read_model(
         &quint_record,
     )
     .and_then(|contents| {
+        quint_field_records
+            .iter()
+            .try_fold(contents, |contents, record| {
+                append_record_if_missing(
+                    &contents,
+                    "val modelReadModelFields: List[ModelReadModelField] = ",
+                    record,
+                )
+            })
+    })
+    .and_then(|contents| {
         let read_models = read_model_entries_from_list(
             &contents,
             "val modelReadModels: List[ModelReadModel] = ",
+        )?;
+        let read_model_fields = read_model_field_entries_from_list(
+            &contents,
+            "val modelReadModelFields: List[ModelReadModelField] = ",
         )?;
         replace_declaration(
             &contents,
@@ -1943,6 +2174,16 @@ pub fn add_project_read_model(
                 read_models.len()
             ),
         )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "val modelReadModelFieldsAreDeclared =",
+                &format!(
+                    "val modelReadModelFieldsAreDeclared = modelReadModelFields.length() == {}",
+                    read_model_fields.len()
+                ),
+            )
+        })
         .and_then(|contents| {
             let scenarios = parse_quint_project_scenarios_from_contents_or_empty(&contents);
             let data_flows = parse_quint_project_data_flows_from_contents_or_empty(&contents);
@@ -1972,6 +2213,7 @@ pub fn add_project_read_model(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -2067,6 +2309,7 @@ pub fn add_project_view(
             let command_inputs =
                 parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let external_payloads =
@@ -2085,6 +2328,7 @@ pub fn add_project_view(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -2147,6 +2391,8 @@ pub fn add_project_view(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let external_payloads =
@@ -2165,6 +2411,7 @@ pub fn add_project_view(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -2225,6 +2472,8 @@ pub fn add_project_automation(
             let command_inputs =
                 parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
@@ -2244,6 +2493,7 @@ pub fn add_project_automation(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -2284,6 +2534,8 @@ pub fn add_project_automation(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
@@ -2303,6 +2555,7 @@ pub fn add_project_automation(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -2363,6 +2616,8 @@ pub fn add_project_translation(
             let command_inputs =
                 parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -2382,6 +2637,7 @@ pub fn add_project_translation(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -2422,6 +2678,8 @@ pub fn add_project_translation(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -2441,6 +2699,7 @@ pub fn add_project_translation(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -2499,6 +2758,7 @@ pub fn add_project_external_payload(
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let command_inputs = parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -2517,6 +2777,7 @@ pub fn add_project_external_payload(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -2557,6 +2818,8 @@ pub fn add_project_external_payload(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -2577,6 +2840,7 @@ pub fn add_project_external_payload(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -2637,6 +2901,8 @@ pub fn add_project_stream(
             let command_inputs =
                 parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -2656,6 +2922,7 @@ pub fn add_project_stream(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -2694,6 +2961,8 @@ pub fn add_project_stream(
             let command_inputs =
                 parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -2713,6 +2982,7 @@ pub fn add_project_stream(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -2794,6 +3064,10 @@ pub fn add_project_event(
             &contents,
             "def modelReadModels : List (String × String × String) := ",
         )?;
+        let read_model_fields = read_model_field_entries_from_list(
+            &contents,
+            "def modelReadModelFields : List (String × String × String × String × String × String × String × String × String × String × String × String) := ",
+        )?;
         let views = view_entries_from_list(
             &contents,
             "def modelViews : List (String × String × String) := ",
@@ -2855,6 +3129,7 @@ pub fn add_project_event(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -2899,6 +3174,10 @@ pub fn add_project_event(
         let read_models = read_model_entries_from_list(
             &contents,
             "val modelReadModels: List[ModelReadModel] = ",
+        )?;
+        let read_model_fields = read_model_field_entries_from_list(
+            &contents,
+            "val modelReadModelFields: List[ModelReadModelField] = ",
         )?;
         let views = view_entries_from_list(&contents, "val modelViews: List[ModelView] = ")?;
         let view_fields = view_field_entries_from_list(
@@ -2953,6 +3232,7 @@ pub fn add_project_event(
                     commands: &commands,
                     command_inputs: &command_inputs,
                     read_models: &read_models,
+                    read_model_fields: &read_model_fields,
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
@@ -3212,6 +3492,26 @@ fn parse_lean_project_read_models_from_contents_or_empty(contents: &str) -> Vec<
 fn parse_quint_project_read_models_from_contents_or_empty(contents: &str) -> Vec<ProjectReadModel> {
     read_model_entries_from_list(contents, "val modelReadModels: List[ModelReadModel] = ")
         .unwrap_or_default()
+}
+
+fn parse_lean_project_read_model_fields_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectReadModelField> {
+    read_model_field_entries_from_list(
+        contents,
+        "def modelReadModelFields : List (String × String × String × String × String × String × String × String × String × String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_read_model_fields_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectReadModelField> {
+    read_model_field_entries_from_list(
+        contents,
+        "val modelReadModelFields: List[ModelReadModelField] = ",
+    )
+    .unwrap_or_default()
 }
 
 fn parse_lean_project_views_from_contents_or_empty(contents: &str) -> Vec<ProjectView> {
@@ -3504,6 +3804,42 @@ fn read_model_entries_from_list(
     read_models.sort();
     read_models.dedup();
     Ok(read_models)
+}
+
+fn read_model_field_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectReadModelField>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut read_model_fields = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let strings = quoted_strings(&record)?;
+            if strings.len() < 12 {
+                Err(FormalProjectFactError::new(
+                    "formal project read model field record is malformed",
+                ))
+            } else {
+                Ok(ProjectReadModelField {
+                    workflow_slug: strings[0].clone(),
+                    slice_slug: strings[1].clone(),
+                    read_model: strings[2].clone(),
+                    field: strings[3].clone(),
+                    source_kind: strings[4].clone(),
+                    source_event: strings[5].clone(),
+                    source_attribute: strings[6].clone(),
+                    derivation_rule: strings[7].clone(),
+                    absence_event: strings[8].clone(),
+                    derivation_scenario_name: strings[9].clone(),
+                    absence_scenario_name: strings[10].clone(),
+                    provenance: strings[11].clone(),
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    read_model_fields.sort();
+    read_model_fields.dedup();
+    Ok(read_model_fields)
 }
 
 fn view_entries_from_list(
@@ -3845,6 +4181,7 @@ struct ProjectDigestInventories<'a> {
     commands: &'a [ProjectCommand],
     command_inputs: &'a [ProjectCommandInput],
     read_models: &'a [ProjectReadModel],
+    read_model_fields: &'a [ProjectReadModelField],
     views: &'a [ProjectView],
     view_fields: &'a [ProjectViewField],
     automations: &'a [ProjectAutomation],
@@ -3914,6 +4251,7 @@ fn digest_with_project_inventories(
         .or_else(|| current_digest.split_once(";commands="))
         .or_else(|| current_digest.split_once(";command-inputs="))
         .or_else(|| current_digest.split_once(";read-models="))
+        .or_else(|| current_digest.split_once(";read-model-fields="))
         .or_else(|| current_digest.split_once(";views="))
         .or_else(|| current_digest.split_once(";view-fields="))
         .or_else(|| current_digest.split_once(";automations="))
@@ -3924,7 +4262,7 @@ fn digest_with_project_inventories(
         .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};scenarios={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};views={};view-fields={};automations={};translations={};external-payloads={};streams={};events={};event-attributes={}",
+        "{prefix};scenarios={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-fields={};views={};view-fields={};automations={};translations={};external-payloads={};streams={};events={};event-attributes={}",
         digest_scenarios(inventories.scenarios),
         digest_data_flows(inventories.data_flows),
         digest_outcomes(inventories.outcomes),
@@ -3932,6 +4270,7 @@ fn digest_with_project_inventories(
         digest_commands(inventories.commands),
         digest_command_inputs(inventories.command_inputs),
         digest_read_models(inventories.read_models),
+        digest_read_model_fields(inventories.read_model_fields),
         digest_views(inventories.views),
         digest_view_fields(inventories.view_fields),
         digest_automations(inventories.automations),
@@ -4052,6 +4391,30 @@ fn digest_read_models(read_models: &[ProjectReadModel]) -> String {
             format!(
                 "{}/{}/{}",
                 read_model.workflow_slug, read_model.slice_slug, read_model.read_model
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_read_model_fields(read_model_fields: &[ProjectReadModelField]) -> String {
+    read_model_fields
+        .iter()
+        .map(|field| {
+            format!(
+                "{}/{}/{}/{}@{}#{}.{}#{}#{}#{}#{}#{}",
+                field.workflow_slug,
+                field.slice_slug,
+                field.read_model,
+                field.field,
+                field.source_kind,
+                field.source_event,
+                field.source_attribute,
+                field.derivation_rule,
+                field.absence_event,
+                field.derivation_scenario_name,
+                field.absence_scenario_name,
+                field.provenance
             )
         })
         .collect::<Vec<_>>()
@@ -4529,6 +4892,42 @@ fn quint_read_model_record(read_model: &NewProjectReadModel) -> String {
         quoted(read_model.workflow_slug.as_ref()),
         quoted(read_model.slice_slug.as_ref()),
         quoted(read_model.read_model.as_ref())
+    )
+}
+
+fn lean_read_model_field_record(field: &NewProjectReadModelField) -> String {
+    format!(
+        "({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+        quoted(field.workflow_slug.as_ref()),
+        quoted(field.slice_slug.as_ref()),
+        quoted(field.read_model.as_ref()),
+        quoted(field.field.as_ref()),
+        quoted(field.source_kind.as_ref()),
+        quoted(&field.source_event),
+        quoted(&field.source_attribute),
+        quoted(&field.derivation_rule),
+        quoted(&field.absence_event),
+        quoted(&field.derivation_scenario_name),
+        quoted(&field.absence_scenario_name),
+        quoted(field.provenance.as_ref())
+    )
+}
+
+fn quint_read_model_field_record(field: &NewProjectReadModelField) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, readModel: {}, field: {}, sourceKind: {}, sourceEvent: {}, sourceAttribute: {}, derivationRule: {}, absenceEvent: {}, derivationScenarioName: {}, absenceScenarioName: {}, provenance: {} }}",
+        quoted(field.workflow_slug.as_ref()),
+        quoted(field.slice_slug.as_ref()),
+        quoted(field.read_model.as_ref()),
+        quoted(field.field.as_ref()),
+        quoted(field.source_kind.as_ref()),
+        quoted(&field.source_event),
+        quoted(&field.source_attribute),
+        quoted(&field.derivation_rule),
+        quoted(&field.absence_event),
+        quoted(&field.derivation_scenario_name),
+        quoted(&field.absence_scenario_name),
+        quoted(field.provenance.as_ref())
     )
 }
 
