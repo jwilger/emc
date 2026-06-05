@@ -178,13 +178,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;views=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\""
             ),
             "Lean project root digest must include composed workflow, slice, and module membership"
         );
         assert!(
             lean_root.contains(
-                "theorem modelDigestIsStable : modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;views=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\" := rfl"
+                "theorem modelDigestIsStable : modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\" := rfl"
             ),
             "Lean project root must prove composed model digest stability"
         );
@@ -214,13 +214,13 @@ mod tests {
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;views=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\""
             ),
             "Quint project root digest must include composed workflow, slice, and module membership"
         );
         assert!(
             quint_root.contains(
-                "val modelDigestStable = modelDigest == \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;views=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\""
+                "val modelDigestStable = modelDigest == \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\""
             ),
             "Quint project root must verify composed model digest stability"
         );

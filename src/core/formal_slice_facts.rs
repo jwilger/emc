@@ -762,6 +762,30 @@ impl NewViewField {
             bit_encoding,
         }
     }
+
+    pub fn name(&self) -> &ViewFieldName {
+        &self.name
+    }
+
+    pub fn source_kind(&self) -> &ViewFieldSourceKind {
+        &self.source_kind
+    }
+
+    pub fn source_read_model(&self) -> &ReadModelName {
+        &self.source_read_model
+    }
+
+    pub fn source_field(&self) -> &ViewFieldName {
+        &self.source_field
+    }
+
+    pub fn provenance_description(&self) -> &ProvenanceDescription {
+        &self.provenance_description
+    }
+
+    pub fn bit_encoding(&self) -> &BitEncodingSemantics {
+        &self.bit_encoding
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -793,6 +817,10 @@ impl NewViewDefinition {
 
     pub fn name(&self) -> &ViewName {
         &self.name
+    }
+
+    pub fn field(&self) -> &NewViewField {
+        &self.field
     }
 }
 
