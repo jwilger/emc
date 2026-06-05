@@ -52,7 +52,7 @@ fn verify_project_root(project_name: ProjectName) -> Vec<Effect> {
                 process_argument("verify"),
                 process_argument("--invariant"),
                 process_argument(
-                    "modelIdentityStable,modelVersionStable,modelDigestStable,modelWorkflowsAreDeclared,modelSlicesAreDeclared,modelSliceModulesAreDeclared,modelCommandsAreDeclared,modelReadModelsAreDeclared,modelViewsAreDeclared,modelAutomationsAreDeclared,modelStreamsAreDeclared,modelEventsAreDeclared",
+                    "modelIdentityStable,modelVersionStable,modelDigestStable,modelWorkflowsAreDeclared,modelSlicesAreDeclared,modelSliceModulesAreDeclared,modelCommandsAreDeclared,modelReadModelsAreDeclared,modelViewsAreDeclared,modelAutomationsAreDeclared,modelTranslationsAreDeclared,modelStreamsAreDeclared,modelEventsAreDeclared",
                 ),
                 process_argument(format!("model/quint/{module_name}.qnt")),
             ],

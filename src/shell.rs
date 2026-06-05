@@ -20,13 +20,15 @@ use crate::core::formal_graph::{
 };
 use crate::core::formal_project_facts::{
     NewProjectAutomation, NewProjectCommand, NewProjectEvent, NewProjectReadModel,
-    NewProjectStream, NewProjectView, ProjectAutomation, ProjectCommand, ProjectEvent,
-    ProjectReadModel, ProjectStream, ProjectView, add_project_automation, add_project_command,
-    add_project_event, add_project_read_model, add_project_stream, add_project_view,
-    parse_lean_project_automations, parse_lean_project_commands, parse_lean_project_events,
-    parse_lean_project_read_models, parse_lean_project_streams, parse_lean_project_views,
+    NewProjectStream, NewProjectTranslation, NewProjectView, ProjectAutomation, ProjectCommand,
+    ProjectEvent, ProjectReadModel, ProjectStream, ProjectTranslation, ProjectView,
+    add_project_automation, add_project_command, add_project_event, add_project_read_model,
+    add_project_stream, add_project_translation, add_project_view, parse_lean_project_automations,
+    parse_lean_project_commands, parse_lean_project_events, parse_lean_project_read_models,
+    parse_lean_project_streams, parse_lean_project_translations, parse_lean_project_views,
     parse_quint_project_automations, parse_quint_project_commands, parse_quint_project_events,
-    parse_quint_project_read_models, parse_quint_project_streams, parse_quint_project_views,
+    parse_quint_project_read_models, parse_quint_project_streams, parse_quint_project_translations,
+    parse_quint_project_views,
 };
 use crate::core::formal_slice_facts::{
     add_automation_definition, add_bit_level_data_flow, add_board_connection, add_board_element,
@@ -411,7 +413,14 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::AddTranslationDefinitionFromSlice(translation) => {
             let slice_artifacts =
                 read_formal_slice_artifact_paths_and_contents(translation.slice_slug())?;
-            let plan = add_translation_definition(
+            let project_name = read_project_manifest_name()?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let (workflow_layout, _workflow_graph) = find_formal_workflow_containing_slice_in(
+                &formal_workflows,
+                translation.slice_slug(),
+            )?;
+            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
+            let slice_plan = add_translation_definition(
                 slice_artifacts.lean_path,
                 slice_artifacts.lean_contents,
                 slice_artifacts.quint_path,
@@ -419,7 +428,21 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 translation.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let project_translation_plan = add_project_translation(
+                project_artifacts.lean_path,
+                project_artifacts.lean_contents,
+                project_artifacts.quint_path,
+                project_artifacts.quint_contents,
+                NewProjectTranslation::new(
+                    workflow_layout.slug().clone(),
+                    translation.slice_slug().clone(),
+                    translation.name().clone(),
+                ),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            let mut reports = interpret_collect_reports(slice_plan)?;
+            reports.extend(interpret_collect_reports(project_translation_plan)?);
+            Ok(reports)
         }
         Effect::AddWorkflowFromIndex(workflow) => {
             let project_name = read_project_manifest_name()?;
@@ -525,6 +548,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let project_read_models = read_synchronized_project_read_models(&project_name)?;
             let project_views = read_synchronized_project_views(&project_name)?;
             let project_automations = read_synchronized_project_automations(&project_name)?;
+            let project_translations = read_synchronized_project_translations(&project_name)?;
             let project_streams = read_synchronized_project_streams(&project_name)?;
             let project_events = read_synchronized_project_events(&project_name)?;
             interpret_collect_reports(check_project(
@@ -535,6 +559,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                     project_read_models,
                     project_views,
                     project_automations,
+                    project_translations,
                     project_streams,
                     project_events,
                 ),
@@ -976,6 +1001,28 @@ fn read_synchronized_project_automations(
             "Lean and Quint project root automation inventories disagree",
         )),
         (_lean_automations, _quint_automations) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_translations(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectTranslation>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_translations(&artifacts.lean_contents),
+        parse_quint_project_translations(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_translations), Ok(quint_translations))
+            if lean_translations == quint_translations =>
+        {
+            Ok(lean_translations)
+        }
+        (Ok(_lean_translations), Ok(_quint_translations)) => Err(ShellError::message(
+            "Lean and Quint project root translation inventories disagree",
+        )),
+        (_lean_translations, _quint_translations) => Ok(Vec::new()),
     }
 }
 

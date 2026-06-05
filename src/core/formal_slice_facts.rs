@@ -825,6 +825,10 @@ impl NewTranslationDefinition {
     pub fn slice_slug(&self) -> &SliceSlug {
         &self.slice_slug
     }
+
+    pub fn name(&self) -> &TranslationName {
+        &self.name
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
