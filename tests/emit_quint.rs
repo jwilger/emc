@@ -388,7 +388,7 @@ mod tests {
             "type BitLevelDataFlow = { datum: str, source: str, transformationSemantics: str, target: str, bitEncoding: str }"
         ));
         assert!(quint.contains(
-            "type CommandInput = { name: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str }"
+            "type CommandInput = { name: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str }"
         ));
         assert!(quint.contains(
             "type CommandErrorDefinition = { name: str, scenarioName: str, recoveryKind: str }"
