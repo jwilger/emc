@@ -11,6 +11,7 @@ use crate::core::emit::quint::{
     emit_workflow_module as emit_quint_workflow_module,
 };
 use crate::core::formal_graph::FormalWorkflowGraph;
+use crate::core::project::{ProjectName, ProjectSliceMembership, project_root_effects};
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, SliceKindName, SliceSlug,
     WorkflowCommandErrorRecords, WorkflowEntryLifecycleStateRecords, WorkflowModuleData,
@@ -86,6 +87,8 @@ impl NewSlice {
 }
 
 pub fn add_slice(
+    project_name: ProjectName,
+    formal_workflows: &[FormalWorkflowGraph],
     indexed_workflow_name: ModelName,
     indexed_workflow_description: ModelDescription,
     workflow_graph: FormalWorkflowGraph,
@@ -158,78 +161,123 @@ pub fn add_slice(
         slice_kind.clone(),
         new_slice.description.clone(),
     );
+    let workflow_slugs = formal_workflows
+        .iter()
+        .map(|workflow| workflow.slug().clone())
+        .collect::<Vec<_>>();
+    let slice_memberships = project_slice_memberships(
+        formal_workflows,
+        &new_slice.workflow_slug,
+        &workflow_slice_details,
+    );
 
-    Ok(EffectPlan::new(vec![
-        Effect::WriteFile(
-            project_path(format!("model/lean/slices/{slice_module_name}.lean")),
-            emit_lean_slice_module(
-                lean_module_name(slice_module_name.clone()),
-                new_slice.name.clone(),
-                new_slice.description.clone(),
-                new_slice.slug.clone(),
-                slice_kind.clone(),
-                slice_digest.clone(),
-            ),
-        ),
-        Effect::WriteFile(
-            project_path(format!("model/quint/slices/{slice_module_name}.qnt")),
-            emit_quint_slice_module(
-                quint_module_name(slice_module_name),
-                new_slice.name.clone(),
-                new_slice.description.clone(),
-                new_slice.slug.clone(),
-                slice_kind,
-                slice_digest,
-            ),
-        ),
-        Effect::WriteFile(
-            project_path(format!("model/lean/{workflow_module_name}.lean")),
-            emit_lean_workflow_module(
-                lean_module_name(workflow_module_name.clone()),
-                WorkflowModuleData::new(
-                    workflow_name.clone(),
-                    workflow_description.clone(),
-                    new_slice.workflow_slug.clone(),
-                    digest.clone(),
-                )
-                .with_slice_details(WorkflowSliceDetails::from_details(
-                    workflow_slice_details.clone(),
-                ))
-                .with_transitions(WorkflowTransitionRecords::from_records(
-                    workflow_transitions.clone(),
-                ))
-                .with_outcomes(workflow_outcomes.clone())
-                .with_command_errors(workflow_command_errors.clone())
-                .with_owned_definitions(workflow_owned_definitions.clone())
-                .with_transition_evidences(workflow_transition_evidences.clone())
-                .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
-                .with_entry_lifecycle_states(workflow_entry_lifecycle_states.clone()),
-            ),
-        ),
-        Effect::WriteFile(
-            project_path(format!("model/quint/{workflow_module_name}.qnt")),
-            emit_quint_workflow_module(
-                quint_module_name(workflow_module_name),
-                WorkflowModuleData::new(
-                    workflow_name,
-                    workflow_description,
-                    new_slice.workflow_slug.clone(),
-                    digest,
-                )
-                .with_slice_details(WorkflowSliceDetails::from_details(workflow_slice_details))
-                .with_transitions(WorkflowTransitionRecords::from_records(
-                    workflow_transitions,
-                ))
-                .with_outcomes(workflow_outcomes)
-                .with_command_errors(workflow_command_errors)
-                .with_owned_definitions(workflow_owned_definitions)
-                .with_transition_evidences(workflow_transition_evidences)
-                .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
-                .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
-            ),
-        ),
-        Effect::Report(report_line(format!("added slice {slice_name}"))),
-    ]))
+    Ok(EffectPlan::new(
+        project_root_effects(project_name, &workflow_slugs, &slice_memberships)
+            .into_iter()
+            .chain([
+                Effect::WriteFile(
+                    project_path(format!("model/lean/slices/{slice_module_name}.lean")),
+                    emit_lean_slice_module(
+                        lean_module_name(slice_module_name.clone()),
+                        new_slice.name.clone(),
+                        new_slice.description.clone(),
+                        new_slice.slug.clone(),
+                        slice_kind.clone(),
+                        slice_digest.clone(),
+                    ),
+                ),
+                Effect::WriteFile(
+                    project_path(format!("model/quint/slices/{slice_module_name}.qnt")),
+                    emit_quint_slice_module(
+                        quint_module_name(slice_module_name),
+                        new_slice.name.clone(),
+                        new_slice.description.clone(),
+                        new_slice.slug.clone(),
+                        slice_kind,
+                        slice_digest,
+                    ),
+                ),
+                Effect::WriteFile(
+                    project_path(format!("model/lean/{workflow_module_name}.lean")),
+                    emit_lean_workflow_module(
+                        lean_module_name(workflow_module_name.clone()),
+                        WorkflowModuleData::new(
+                            workflow_name.clone(),
+                            workflow_description.clone(),
+                            new_slice.workflow_slug.clone(),
+                            digest.clone(),
+                        )
+                        .with_slice_details(WorkflowSliceDetails::from_details(
+                            workflow_slice_details.clone(),
+                        ))
+                        .with_transitions(WorkflowTransitionRecords::from_records(
+                            workflow_transitions.clone(),
+                        ))
+                        .with_outcomes(workflow_outcomes.clone())
+                        .with_command_errors(workflow_command_errors.clone())
+                        .with_owned_definitions(workflow_owned_definitions.clone())
+                        .with_transition_evidences(workflow_transition_evidences.clone())
+                        .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
+                        .with_entry_lifecycle_states(workflow_entry_lifecycle_states.clone()),
+                    ),
+                ),
+                Effect::WriteFile(
+                    project_path(format!("model/quint/{workflow_module_name}.qnt")),
+                    emit_quint_workflow_module(
+                        quint_module_name(workflow_module_name),
+                        WorkflowModuleData::new(
+                            workflow_name,
+                            workflow_description,
+                            new_slice.workflow_slug.clone(),
+                            digest,
+                        )
+                        .with_slice_details(WorkflowSliceDetails::from_details(
+                            workflow_slice_details,
+                        ))
+                        .with_transitions(WorkflowTransitionRecords::from_records(
+                            workflow_transitions,
+                        ))
+                        .with_outcomes(workflow_outcomes)
+                        .with_command_errors(workflow_command_errors)
+                        .with_owned_definitions(workflow_owned_definitions)
+                        .with_transition_evidences(workflow_transition_evidences)
+                        .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
+                        .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
+                    ),
+                ),
+                Effect::Report(report_line(format!("added slice {slice_name}"))),
+            ])
+            .collect(),
+    ))
+}
+
+fn project_slice_memberships(
+    formal_workflows: &[FormalWorkflowGraph],
+    updated_workflow_slug: &WorkflowSlug,
+    updated_slice_details: &[WorkflowSliceDetail],
+) -> Vec<ProjectSliceMembership> {
+    formal_workflows
+        .iter()
+        .flat_map(|workflow| {
+            if workflow.slug() == updated_workflow_slug {
+                updated_slice_details
+                    .iter()
+                    .map(|slice| {
+                        ProjectSliceMembership::new(workflow.slug().clone(), slice.slug().clone())
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                workflow
+                    .slice_details()
+                    .as_slice()
+                    .iter()
+                    .map(|slice| {
+                        ProjectSliceMembership::new(workflow.slug().clone(), slice.slug().clone())
+                    })
+                    .collect::<Vec<_>>()
+            }
+        })
+        .collect()
 }
 
 pub fn update_slice_description(
@@ -421,6 +469,8 @@ pub fn update_slice_name(
 }
 
 pub fn remove_slice(
+    project_name: ProjectName,
+    formal_workflows: &[FormalWorkflowGraph],
     indexed_workflow_name: ModelName,
     indexed_workflow_description: ModelDescription,
     workflow_slug: WorkflowSlug,
@@ -483,8 +533,15 @@ pub fn remove_slice(
         workflow_requires_entry_lifecycle_coverage: workflow_entry_lifecycle_required,
         workflow_entry_lifecycle_states: workflow_entry_lifecycle_states.clone(),
     });
+    let workflow_slugs = formal_workflows
+        .iter()
+        .map(|workflow| workflow.slug().clone())
+        .collect::<Vec<_>>();
+    let slice_memberships =
+        project_slice_memberships(formal_workflows, &workflow_slug, &workflow_slice_details);
     Ok(EffectPlan::new(
         [
+            project_root_effects(project_name, &workflow_slugs, &slice_memberships).to_vec(),
             vec![
                 Effect::RemoveFile(project_path(format!(
                     "model/lean/slices/{removed_slice_module_name}.lean"

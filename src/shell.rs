@@ -32,7 +32,7 @@ use crate::core::layout::{
     ModeledWorkflowTransitions, check_project, list_slices, list_transitions, list_workflows,
     show_document, show_workflow,
 };
-use crate::core::project::ProjectName;
+use crate::core::project::{ProjectName, ProjectSliceMembership, ProjectSliceMemberships};
 use crate::core::review_record::{
     RequiredReviewCategories, ReviewCategoryFinding, ReviewRecordDocument, record_clean_review,
 };
@@ -252,9 +252,13 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::AddSliceFromWorkflow(slice) => {
+            let project_name = read_project_manifest_name()?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
             let (workflow_layout, workflow_graph) =
-                read_formal_workflow_layout_and_graph(slice.workflow_slug())?;
+                formal_workflow_layout_and_graph(&formal_workflows, slice.workflow_slug())?;
             let plan = add_slice(
+                project_name,
+                &formal_workflows,
                 workflow_layout.name().clone(),
                 workflow_layout.description().clone(),
                 workflow_graph,
@@ -291,11 +295,13 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         }
         Effect::AddWorkflowFromIndex(workflow) => {
             let project_name = read_project_manifest_name()?;
-            let existing_workflows =
-                formal_workflow_layouts(read_synchronized_formal_workflow_graphs()?);
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?;
+            let existing_slice_memberships = formal_project_slice_memberships(&formal_workflows);
+            let existing_workflows = formal_workflow_layouts(formal_workflows);
             let plan = add_workflow(
                 project_name,
                 ModeledWorkflowLayouts::new(existing_workflows),
+                existing_slice_memberships,
                 workflow.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
@@ -510,8 +516,13 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         }
         Effect::RemoveFile(path) => remove_file_if_present(path.as_ref()).map(|()| Vec::new()),
         Effect::RemoveSliceFromWorkflow(slug) => {
-            let (workflow_layout, workflow_graph) = find_formal_workflow_containing_slice(slug)?;
+            let project_name = read_project_manifest_name()?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let (workflow_layout, workflow_graph) =
+                find_formal_workflow_containing_slice_in(&formal_workflows, slug)?;
             let plan = remove_slice(
+                project_name,
+                &formal_workflows,
                 workflow_layout.name().clone(),
                 workflow_layout.description().clone(),
                 workflow_layout.slug().clone(),
@@ -795,12 +806,34 @@ fn formal_workflow_layouts(graphs: FormalWorkflowGraphs) -> Vec<ModeledWorkflowL
         .collect()
 }
 
+fn formal_project_slice_memberships(graphs: &FormalWorkflowGraphs) -> ProjectSliceMemberships {
+    ProjectSliceMemberships::from_memberships(graphs.as_slice().iter().flat_map(|workflow| {
+        workflow
+            .slice_details()
+            .as_slice()
+            .iter()
+            .map(|slice| ProjectSliceMembership::new(workflow.slug().clone(), slice.slug().clone()))
+    }))
+}
+
 fn formal_workflow_layout(graph: &FormalWorkflowGraph) -> ModeledWorkflowLayout {
     ModeledWorkflowLayout::new(
         graph.name().clone(),
         graph.description().clone(),
         graph.slug().clone(),
     )
+}
+
+fn formal_workflow_layout_and_graph(
+    graphs: &[FormalWorkflowGraph],
+    slug: &WorkflowSlug,
+) -> Result<(ModeledWorkflowLayout, FormalWorkflowGraph), ShellError> {
+    graphs
+        .iter()
+        .find(|graph| graph.slug() == slug)
+        .cloned()
+        .map(|graph| (formal_workflow_layout(&graph), graph))
+        .ok_or_else(|| ShellError::message(format!("unknown workflow {}", slug.as_ref())))
 }
 
 fn formal_workflow_slice_details(graphs: FormalWorkflowGraphs) -> Vec<WorkflowSliceDetail> {
@@ -967,9 +1000,16 @@ fn indexed_formal_workflow_graphs(graphs: &[FormalWorkflowGraph]) -> Vec<Indexed
 fn find_formal_workflow_containing_slice(
     slug: &SliceSlug,
 ) -> Result<(ModeledWorkflowLayout, FormalWorkflowGraph), ShellError> {
-    read_synchronized_formal_workflow_graphs()?
-        .into_inner()
-        .into_iter()
+    let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+    find_formal_workflow_containing_slice_in(&formal_workflows, slug)
+}
+
+fn find_formal_workflow_containing_slice_in(
+    formal_workflows: &[FormalWorkflowGraph],
+    slug: &SliceSlug,
+) -> Result<(ModeledWorkflowLayout, FormalWorkflowGraph), ShellError> {
+    formal_workflows
+        .iter()
         .find(|graph| {
             graph
                 .slice_details()
@@ -977,6 +1017,7 @@ fn find_formal_workflow_containing_slice(
                 .iter()
                 .any(|slice| slice.slug() == slug)
         })
+        .cloned()
         .map(|graph| (formal_workflow_layout(&graph), graph))
         .ok_or_else(|| {
             ShellError::message(format!(

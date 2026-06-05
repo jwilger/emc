@@ -7,7 +7,9 @@ use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
 use crate::core::formal_graph::FormalWorkflowGraph;
 use crate::core::layout::{ModeledWorkflowLayout, ModeledWorkflowLayouts};
-use crate::core::project::{ProjectName, project_root_effects};
+use crate::core::project::{
+    ProjectName, ProjectSliceMembership, ProjectSliceMemberships, project_root_effects,
+};
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowCommandErrorRecord,
     WorkflowCommandErrorRecords, WorkflowEntryLifecycleStateRecord,
@@ -72,6 +74,7 @@ impl IndexedWorkflowGraphs {
 pub fn add_workflow(
     project_name: ProjectName,
     existing_workflows: ModeledWorkflowLayouts,
+    existing_slice_memberships: ProjectSliceMemberships,
     workflow: NewWorkflow,
 ) -> Result<EffectPlan, WorkflowMutationError> {
     reject_workflow_slug_collision(existing_workflows.as_slice(), &workflow)?;
@@ -79,6 +82,7 @@ pub fn add_workflow(
     Ok(workflow_effect_plan(
         project_name,
         existing_workflows.into_inner(),
+        existing_slice_memberships,
         workflow,
     ))
 }
@@ -233,25 +237,45 @@ pub fn remove_workflow(
         .filter(|existing| existing.slug() != &slug)
         .map(|existing| existing.slug().clone())
         .collect::<Vec<_>>();
+    let remaining_slice_memberships = ProjectSliceMemberships::from_memberships(
+        workflow_graphs
+            .as_slice()
+            .iter()
+            .filter(|graph| graph.slug() != &slug)
+            .flat_map(|graph| {
+                graph
+                    .graph()
+                    .slice_details()
+                    .as_slice()
+                    .iter()
+                    .map(|slice| {
+                        ProjectSliceMembership::new(graph.slug().clone(), slice.slug().clone())
+                    })
+            }),
+    );
 
     let remove_slice_effects = removed_slice_details
         .into_iter()
         .flat_map(remove_slice_artifact_effects);
-    let effects = project_root_effects(project_name, &remaining_workflow_slugs)
-        .into_iter()
-        .chain([
-            Effect::RemoveFile(project_path(format!(
-                "model/lean/{workflow_module_name}.lean"
-            ))),
-            Effect::RemoveFile(project_path(format!(
-                "model/quint/{workflow_module_name}.qnt"
-            ))),
-        ])
-        .chain(remove_slice_effects)
-        .chain([Effect::Report(report_line(format!(
-            "removed workflow {workflow_name}"
-        )))])
-        .collect::<Vec<_>>();
+    let effects = project_root_effects(
+        project_name,
+        &remaining_workflow_slugs,
+        remaining_slice_memberships.as_slice(),
+    )
+    .into_iter()
+    .chain([
+        Effect::RemoveFile(project_path(format!(
+            "model/lean/{workflow_module_name}.lean"
+        ))),
+        Effect::RemoveFile(project_path(format!(
+            "model/quint/{workflow_module_name}.qnt"
+        ))),
+    ])
+    .chain(remove_slice_effects)
+    .chain([Effect::Report(report_line(format!(
+        "removed workflow {workflow_name}"
+    )))])
+    .collect::<Vec<_>>();
 
     Ok(EffectPlan::new(effects))
 }
@@ -280,6 +304,7 @@ impl Error for WorkflowMutationError {}
 fn workflow_effect_plan(
     project_name: ProjectName,
     existing_workflows: Vec<ModeledWorkflowLayout>,
+    existing_slice_memberships: ProjectSliceMemberships,
     workflow: NewWorkflow,
 ) -> EffectPlan {
     let workflow_name = workflow.name.as_ref();
@@ -305,36 +330,40 @@ fn workflow_effect_plan(
         .chain([workflow.slug.clone()])
         .collect::<Vec<_>>();
     EffectPlan::new(
-        project_root_effects(project_name, &workflow_slugs)
-            .into_iter()
-            .chain([
-                Effect::WriteFile(
-                    project_path(format!("model/lean/{module_name}.lean")),
-                    emit_lean_workflow_module(
-                        lean_module_name,
-                        WorkflowModuleData::new(
-                            workflow.name.clone(),
-                            workflow.description.clone(),
-                            workflow.slug.clone(),
-                            digest.clone(),
-                        ),
+        project_root_effects(
+            project_name,
+            &workflow_slugs,
+            existing_slice_memberships.as_slice(),
+        )
+        .into_iter()
+        .chain([
+            Effect::WriteFile(
+                project_path(format!("model/lean/{module_name}.lean")),
+                emit_lean_workflow_module(
+                    lean_module_name,
+                    WorkflowModuleData::new(
+                        workflow.name.clone(),
+                        workflow.description.clone(),
+                        workflow.slug.clone(),
+                        digest.clone(),
                     ),
                 ),
-                Effect::WriteFile(
-                    project_path(format!("model/quint/{module_name}.qnt")),
-                    emit_quint_workflow_module(
-                        quint_module_name,
-                        WorkflowModuleData::new(
-                            workflow.name.clone(),
-                            workflow.description.clone(),
-                            workflow.slug.clone(),
-                            digest,
-                        ),
+            ),
+            Effect::WriteFile(
+                project_path(format!("model/quint/{module_name}.qnt")),
+                emit_quint_workflow_module(
+                    quint_module_name,
+                    WorkflowModuleData::new(
+                        workflow.name.clone(),
+                        workflow.description.clone(),
+                        workflow.slug.clone(),
+                        digest,
                     ),
                 ),
-                Effect::Report(report_line(format!("added workflow {workflow_name}"))),
-            ])
-            .collect(),
+            ),
+            Effect::Report(report_line(format!("added workflow {workflow_name}"))),
+        ])
+        .collect(),
     )
 }
 

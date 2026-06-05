@@ -88,6 +88,10 @@ impl FormalWorkflowGraphs {
         }
     }
 
+    pub(crate) fn as_slice(&self) -> &[FormalWorkflowGraph] {
+        &self.graphs
+    }
+
     pub(crate) fn into_inner(self) -> Vec<FormalWorkflowGraph> {
         self.graphs
     }
