@@ -8,7 +8,7 @@ use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
 use crate::core::formal_project_facts::{
     ProjectAutomation, ProjectCommand, ProjectEvent, ProjectExternalPayload, ProjectReadModel,
-    ProjectStream, ProjectTranslation, ProjectView,
+    ProjectScenario, ProjectStream, ProjectTranslation, ProjectView,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{
@@ -98,6 +98,7 @@ impl ModeledWorkflowTransitions {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ModeledProjectRootInventories {
+    scenarios: Vec<ProjectScenario>,
     commands: Vec<ProjectCommand>,
     read_models: Vec<ProjectReadModel>,
     views: Vec<ProjectView>,
@@ -109,6 +110,7 @@ pub struct ModeledProjectRootInventories {
 }
 
 pub(crate) struct ModeledProjectRootInventoryParts {
+    pub(crate) scenarios: Vec<ProjectScenario>,
     pub(crate) commands: Vec<ProjectCommand>,
     pub(crate) read_models: Vec<ProjectReadModel>,
     pub(crate) views: Vec<ProjectView>,
@@ -122,6 +124,7 @@ pub(crate) struct ModeledProjectRootInventoryParts {
 impl ModeledProjectRootInventories {
     pub(crate) fn from_parts(parts: ModeledProjectRootInventoryParts) -> Self {
         Self {
+            scenarios: parts.scenarios,
             commands: parts.commands,
             read_models: parts.read_models,
             views: parts.views,
@@ -152,6 +155,7 @@ pub fn check_project(
         &modeled_workflows,
         &formal_workflows,
         &ProjectRootInventories {
+            scenarios: &project_inventories.scenarios,
             commands: &project_inventories.commands,
             read_models: &project_inventories.read_models,
             views: &project_inventories.views,
@@ -258,6 +262,7 @@ fn modeled_slice_artifact_paths(
 }
 
 struct ProjectRootInventories<'a> {
+    scenarios: &'a [ProjectScenario],
     commands: &'a [ProjectCommand],
     read_models: &'a [ProjectReadModel],
     views: &'a [ProjectView],
@@ -281,6 +286,7 @@ fn project_root_effects(
     let workflow_count = modeled_workflows.len();
     let lean_model_slice_list = lean_model_slice_list(formal_workflows);
     let lean_model_slice_module_list = lean_model_slice_module_list(formal_workflows);
+    let lean_model_scenario_list = lean_model_scenario_list(inventories.scenarios);
     let lean_model_command_list = lean_model_command_list(inventories.commands);
     let lean_model_read_model_list = lean_model_read_model_list(inventories.read_models);
     let lean_model_view_list = lean_model_view_list(inventories.views);
@@ -292,6 +298,7 @@ fn project_root_effects(
     let lean_model_event_list = lean_model_event_list(inventories.events);
     let quint_model_slice_list = quint_model_slice_list(formal_workflows);
     let quint_model_slice_module_list = quint_model_slice_module_list(formal_workflows);
+    let quint_model_scenario_list = quint_model_scenario_list(inventories.scenarios);
     let quint_model_command_list = quint_model_command_list(inventories.commands);
     let quint_model_read_model_list = quint_model_read_model_list(inventories.read_models);
     let quint_model_view_list = quint_model_view_list(inventories.views);
@@ -311,6 +318,7 @@ fn project_root_effects(
         .iter()
         .map(|workflow| workflow.slice_details().as_slice().len())
         .sum::<usize>();
+    let scenario_count = inventories.scenarios.len();
     let stream_count = inventories.streams.len();
     let command_count = inventories.commands.len();
     let read_model_count = inventories.read_models.len();
@@ -423,6 +431,14 @@ fn project_root_effects(
             artifact_marker("def modelSliceModules :"),
             artifact_marker(format!(
                 "def modelSliceModules : List (String × String × String) := {lean_model_slice_module_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelScenarios :"),
+            artifact_marker(format!(
+                "def modelScenarios : List (String × String × String × String) := {lean_model_scenario_list}"
             )),
             lean_message.clone(),
         ),
@@ -543,6 +559,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelScenariosAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelScenariosAreDeclared : modelScenarios.length = {scenario_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelCommandsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelCommandsAreDeclared : modelCommands.length = {command_count} := rfl"
@@ -628,6 +652,14 @@ fn project_root_effects(
             artifact_marker("  type ModelSliceModule ="),
             artifact_marker(
                 "  type ModelSliceModule = { workflow: str, slice: str, formalModule: str }",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelScenario ="),
+            artifact_marker(
+                "  type ModelScenario = { workflow: str, slice: str, scenarioKind: str, scenario: str }",
             ),
             quint_message.clone(),
         ),
@@ -737,6 +769,14 @@ fn project_root_effects(
             artifact_marker("  val modelSliceModules:"),
             artifact_marker(format!(
                 "  val modelSliceModules: List[ModelSliceModule] = {quint_model_slice_module_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelScenarios:"),
+            artifact_marker(format!(
+                "  val modelScenarios: List[ModelScenario] = {quint_model_scenario_list}"
             )),
             quint_message.clone(),
         ),
@@ -852,6 +892,14 @@ fn project_root_effects(
             artifact_marker("  val modelSliceModulesAreDeclared ="),
             artifact_marker(format!(
                 "  val modelSliceModulesAreDeclared = modelSliceModules.length() == {slice_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelScenariosAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelScenariosAreDeclared = modelScenarios.length() == {scenario_count}"
             )),
             quint_message.clone(),
         ),
@@ -1952,6 +2000,68 @@ fn quint_model_slice_module_list(formal_workflows: &[FormalWorkflowGraph]) -> St
     )
 }
 
+fn lean_model_scenario_list(project_scenarios: &[ProjectScenario]) -> String {
+    let mut project_scenarios = project_scenarios
+        .iter()
+        .map(|scenario| {
+            (
+                scenario.workflow_slug(),
+                scenario.slice_slug(),
+                scenario.scenario_kind(),
+                scenario.scenario(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_scenarios.sort_unstable();
+    format!(
+        "[{}]",
+        project_scenarios
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, scenario_kind, scenario)| {
+                format!(
+                    "({}, {}, {}, {})",
+                    json_string(workflow_slug),
+                    json_string(slice_slug),
+                    json_string(scenario_kind),
+                    json_string(scenario)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_scenario_list(project_scenarios: &[ProjectScenario]) -> String {
+    let mut project_scenarios = project_scenarios
+        .iter()
+        .map(|scenario| {
+            (
+                scenario.workflow_slug(),
+                scenario.slice_slug(),
+                scenario.scenario_kind(),
+                scenario.scenario(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_scenarios.sort_unstable();
+    format!(
+        "[{}]",
+        project_scenarios
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, scenario_kind, scenario)| {
+                format!(
+                    "{{ workflow: {}, slice: {}, scenarioKind: {}, scenario: {} }}",
+                    json_string(workflow_slug),
+                    json_string(slice_slug),
+                    json_string(scenario_kind),
+                    json_string(scenario)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn lean_model_stream_list(project_streams: &[ProjectStream]) -> String {
     let mut project_streams = project_streams
         .iter()
@@ -2407,10 +2517,11 @@ fn model_digest(
     inventories: &ProjectRootInventories<'_>,
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};commands={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
+        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};commands={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
+        digest_scenarios(inventories.scenarios),
         digest_commands(inventories.commands),
         digest_read_models(inventories.read_models),
         digest_views(inventories.views),
@@ -2449,6 +2560,28 @@ fn digest_slices(formal_workflows: &[FormalWorkflowGraph]) -> String {
         .into_iter()
         .map(|(workflow_slug, slice_slug, slice_module)| {
             format!("{workflow_slug}/{slice_slug}@{slice_module}")
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_scenarios(project_scenarios: &[ProjectScenario]) -> String {
+    let mut scenarios = project_scenarios
+        .iter()
+        .map(|scenario| {
+            (
+                scenario.workflow_slug(),
+                scenario.slice_slug(),
+                scenario.scenario_kind(),
+                scenario.scenario(),
+            )
+        })
+        .collect::<Vec<_>>();
+    scenarios.sort_unstable();
+    scenarios
+        .into_iter()
+        .map(|(workflow_slug, slice_slug, scenario_kind, scenario)| {
+            format!("{workflow_slug}/{slice_slug}/{scenario_kind}/{scenario}")
         })
         .collect::<Vec<_>>()
         .join(",")

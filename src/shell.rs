@@ -20,16 +20,18 @@ use crate::core::formal_graph::{
 };
 use crate::core::formal_project_facts::{
     NewProjectAutomation, NewProjectCommand, NewProjectEvent, NewProjectExternalPayload,
-    NewProjectReadModel, NewProjectStream, NewProjectTranslation, NewProjectView,
-    ProjectAutomation, ProjectCommand, ProjectEvent, ProjectExternalPayload, ProjectReadModel,
-    ProjectStream, ProjectTranslation, ProjectView, add_project_automation, add_project_command,
-    add_project_event, add_project_external_payload, add_project_read_model, add_project_stream,
-    add_project_translation, add_project_view, parse_lean_project_automations,
-    parse_lean_project_commands, parse_lean_project_events, parse_lean_project_external_payloads,
-    parse_lean_project_read_models, parse_lean_project_streams, parse_lean_project_translations,
-    parse_lean_project_views, parse_quint_project_automations, parse_quint_project_commands,
-    parse_quint_project_events, parse_quint_project_external_payloads,
-    parse_quint_project_read_models, parse_quint_project_streams, parse_quint_project_translations,
+    NewProjectReadModel, NewProjectScenario, NewProjectStream, NewProjectTranslation,
+    NewProjectView, ProjectAutomation, ProjectCommand, ProjectEvent, ProjectExternalPayload,
+    ProjectReadModel, ProjectScenario, ProjectStream, ProjectTranslation, ProjectView,
+    add_project_automation, add_project_command, add_project_event, add_project_external_payload,
+    add_project_read_model, add_project_scenario, add_project_stream, add_project_translation,
+    add_project_view, parse_lean_project_automations, parse_lean_project_commands,
+    parse_lean_project_events, parse_lean_project_external_payloads,
+    parse_lean_project_read_models, parse_lean_project_scenarios, parse_lean_project_streams,
+    parse_lean_project_translations, parse_lean_project_views, parse_quint_project_automations,
+    parse_quint_project_commands, parse_quint_project_events,
+    parse_quint_project_external_payloads, parse_quint_project_read_models,
+    parse_quint_project_scenarios, parse_quint_project_streams, parse_quint_project_translations,
     parse_quint_project_views,
 };
 use crate::core::formal_slice_facts::{
@@ -423,7 +425,12 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::AddSliceScenarioFromSlice(scenario) => {
             let slice_artifacts =
                 read_formal_slice_artifact_paths_and_contents(scenario.slice_slug())?;
-            let plan = add_slice_scenario(
+            let project_name = read_project_manifest_name()?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let (workflow_layout, _workflow_graph) =
+                find_formal_workflow_containing_slice_in(&formal_workflows, scenario.slice_slug())?;
+            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
+            let slice_plan = add_slice_scenario(
                 slice_artifacts.lean_path,
                 slice_artifacts.lean_contents,
                 slice_artifacts.quint_path,
@@ -431,7 +438,22 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 scenario.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let project_scenario_plan = add_project_scenario(
+                project_artifacts.lean_path,
+                project_artifacts.lean_contents,
+                project_artifacts.quint_path,
+                project_artifacts.quint_contents,
+                NewProjectScenario::new(
+                    workflow_layout.slug().clone(),
+                    scenario.slice_slug().clone(),
+                    scenario.kind(),
+                    scenario.name().clone(),
+                ),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            let mut reports = interpret_collect_reports(slice_plan)?;
+            reports.extend(interpret_collect_reports(project_scenario_plan)?);
+            Ok(reports)
         }
         Effect::AddTranslationDefinitionFromSlice(translation) => {
             let slice_artifacts =
@@ -567,6 +589,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::CheckCurrentProject => {
             let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?;
+            let project_scenarios = read_synchronized_project_scenarios(&project_name)?;
             let project_commands = read_synchronized_project_commands(&project_name)?;
             let project_read_models = read_synchronized_project_read_models(&project_name)?;
             let project_views = read_synchronized_project_views(&project_name)?;
@@ -580,6 +603,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 project_name,
                 formal_workflows,
                 ModeledProjectRootInventories::from_parts(ModeledProjectRootInventoryParts {
+                    scenarios: project_scenarios,
                     commands: project_commands,
                     read_models: project_read_models,
                     views: project_views,
@@ -969,6 +993,26 @@ fn read_synchronized_project_commands(
             "Lean and Quint project root command inventories disagree",
         )),
         (_lean_commands, _quint_commands) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_scenarios(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectScenario>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_scenarios(&artifacts.lean_contents),
+        parse_quint_project_scenarios(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_scenarios), Ok(quint_scenarios)) if lean_scenarios == quint_scenarios => {
+            Ok(lean_scenarios)
+        }
+        (Ok(_lean_scenarios), Ok(_quint_scenarios)) => Err(ShellError::message(
+            "Lean and Quint project root scenario inventories disagree",
+        )),
+        (_lean_scenarios, _quint_scenarios) => Ok(Vec::new()),
     }
 }
 

@@ -121,6 +121,14 @@ impl NewSliceScenario {
     pub fn slice_slug(&self) -> &SliceSlug {
         &self.slice_slug
     }
+
+    pub fn kind(&self) -> ScenarioKind {
+        self.kind
+    }
+
+    pub fn name(&self) -> &ScenarioName {
+        &self.name
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
