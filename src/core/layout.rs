@@ -788,6 +788,22 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelScenarioDefinitionHasGwt"),
+            artifact_marker(
+                "def modelScenarioDefinitionHasGwt (scenario : String × String × String × String × String × String × String × List String × List String × String × String × List String) : Bool := scenario.2.2.2.2.1.isEmpty == false && scenario.2.2.2.2.2.1.isEmpty == false && scenario.2.2.2.2.2.2.1.isEmpty == false",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelScenarioKindIsFirstClass"),
+            artifact_marker(
+                "def modelScenarioKindIsFirstClass (scenario : String × String × String × String × String × String × String × List String × List String × String × String × List String) : Bool := scenario.2.2.1 == \"acceptance\" || scenario.2.2.1 == \"contract\"",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelControlProvidesCommandInput"),
             artifact_marker(
                 "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String) : Bool := control.1 == input.1 && control.2.2.2.2.1 == input.2.2.1 && control.2.2.2.2.2.1 == input.2.2.2.1",
@@ -867,6 +883,22 @@ fn project_root_effects(
             artifact_marker(format!(
                 "theorem modelScenarioDefinitionsAreDeclared : modelScenarioDefinitions.length = {scenario_definition_count} := rfl"
             )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelScenarioDefinitionsHaveGwt"),
+            artifact_marker(
+                "theorem modelScenarioDefinitionsHaveGwt : modelScenarioDefinitions.all modelScenarioDefinitionHasGwt = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelScenarioKindsAreFirstClass"),
+            artifact_marker(
+                "theorem modelScenarioKindsAreFirstClass : modelScenarioDefinitions.all modelScenarioKindIsFirstClass = true := rfl",
+            ),
             lean_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -1601,6 +1633,38 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  def modelScenarioDefinitionHasGwt"),
+            artifact_marker(
+                "  def modelScenarioDefinitionHasGwt(scenario) = scenario.given != \"\" and scenario.when != \"\" and scenario.then != \"\"",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelScenarioKindIsFirstClass"),
+            artifact_marker(
+                "  def modelScenarioKindIsFirstClass(scenario) = scenario.scenarioKind == \"acceptance\" or scenario.scenarioKind == \"contract\"",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelScenarioDefinitionsHaveGwt ="),
+            artifact_marker(
+                "  val modelScenarioDefinitionsHaveGwt = modelScenarioDefinitions.select(scenario => modelScenarioDefinitionHasGwt(scenario)).length() == modelScenarioDefinitions.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelScenarioKindsAreFirstClass ="),
+            artifact_marker(
+                "  val modelScenarioKindsAreFirstClass = modelScenarioDefinitions.select(scenario => modelScenarioKindIsFirstClass(scenario)).length() == modelScenarioDefinitions.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelDataFlowsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelDataFlowsAreDeclared = modelDataFlows.length() == {data_flow_count}"
@@ -1979,6 +2043,18 @@ fn project_root_effects(
             quint_config_path.clone(),
             artifact_marker("    \"workflowEntryLifecycleStatesCoverRequiredStates\""),
             artifact_marker("    \"workflowEntryLifecycleStatesCoverRequiredStates\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelScenarioDefinitionsHaveGwt\""),
+            artifact_marker("    \"modelScenarioDefinitionsHaveGwt\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelScenarioKindsAreFirstClass\""),
+            artifact_marker("    \"modelScenarioKindsAreFirstClass\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
