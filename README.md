@@ -24,6 +24,13 @@ The intended MCP workflow is that an LLM authors and updates the model directly
 through EMC operations that emit Lean4 and Quint. A model is acceptable only when
 `emc check` and `emc verify` pass.
 
+## Current status
+
+EMC has a Rust CLI, MCP stdio and HTTP entrypoints, review-gate checks, Lean4
+and Quint artifact emission, strict lint guardrails, and package smoke tests.
+The formal metamodel is still being expanded toward the rule inventory in
+[docs/event-model/formal-modeling-rules.md](docs/event-model/formal-modeling-rules.md).
+
 ## Why Lean4 And Quint
 
 Rust is useful for construction discipline in EMC itself: parsing CLI and MCP
@@ -332,10 +339,3 @@ The Nix gate is:
 ```sh
 nix flake check
 ```
-
-## Current status
-
-EMC has a Rust CLI, MCP stdio and HTTP entrypoints, review-gate checks, Lean4
-and Quint artifact emission, strict lint guardrails, and package smoke tests.
-The formal metamodel is still being expanded toward the rule inventory in
-`docs/event-model/formal-modeling-rules.md`.
