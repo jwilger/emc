@@ -13,28 +13,10 @@ permissions:
   contents: read
 
 jobs:
-  prepare-nix:
-    name: Prepare Nix cache
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Install or reuse Nix
-        run: ./.forgejo/scripts/install-nix.sh
-
-      - name: Show Nix version
-        run: |
-          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
-          nix --version
-
   copyright-headers:
     name: Copyright headers
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: [prepare-nix]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,7 +34,6 @@ jobs:
     name: Format check
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: [prepare-nix]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,7 +51,6 @@ jobs:
     name: Clippy
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    needs: [prepare-nix]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,7 +68,6 @@ jobs:
     name: Test
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    needs: [prepare-nix]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,7 +85,6 @@ jobs:
     name: Build
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    needs: [prepare-nix]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -124,7 +102,6 @@ jobs:
     name: Nix flake check
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    needs: [prepare-nix]
     steps:
       - uses: actions/checkout@v4
         with:

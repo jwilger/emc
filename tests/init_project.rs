@@ -98,6 +98,18 @@ mod tests {
             "Lean project root must expose cross-slice control input completeness as a theorem"
         );
         assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelScenarioDefinitionHasGwt (scenario : String × String × String × String × String × String × String × List String × List String × String × String × List String) : Bool := scenario.2.2.2.2.1.isEmpty == false && scenario.2.2.2.2.2.1.isEmpty == false && scenario.2.2.2.2.2.2.1.isEmpty == false"
+            ),
+            "Lean project root must prove first-class scenario definitions include Given/When/Then"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "theorem modelScenarioKindsAreFirstClass : modelScenarioDefinitions.all modelScenarioKindIsFirstClass = true := rfl"
+            ),
+            "Lean project root must prove scenario definitions stay in the first-class scenario sets"
+        );
+        assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?
                 .contains("val modelVersion = \"0.1.0\""),
             "Quint project root must carry the formal model version"
@@ -148,12 +160,24 @@ mod tests {
             "Quint project root must expose cross-slice control input completeness as an invariant"
         );
         assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "val modelScenarioDefinitionsHaveGwt = modelScenarioDefinitions.select(scenario => modelScenarioDefinitionHasGwt(scenario)).length() == modelScenarioDefinitions.length()"
+            ),
+            "Quint project root must expose first-class scenario GWT completeness as an invariant"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "val modelScenarioKindsAreFirstClass = modelScenarioDefinitions.select(scenario => modelScenarioKindIsFirstClass(scenario)).length() == modelScenarioDefinitions.length()"
+            ),
+            "Quint project root must expose first-class scenario kind membership as an invariant"
+        );
+        assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/lakefile.lean"))?
                 .contains("package EMCModel")
         );
         assert_eq!(
             fs::read_to_string(temp_dir.path().join("model/quint/quint.json"))?,
-            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowSliceModulesComplete\",\n    \"workflowTransitionsStructured\",\n    \"workflowTransitionSourcesResolve\",\n    \"workflowTransitionTargetsResolve\",\n    \"workflowStepRelationshipsAreAllowed\",\n    \"workflowStepSlugsAreUnique\",\n    \"workflowHasExactlyOneEntryStep\",\n    \"workflowMainStepsHaveIncomingReachability\",\n    \"workflowNonSupportingStepsReachableFromEntry\",\n    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\",\n    \"workflowTransitionsHaveModeledKinds\",\n    \"workflowExitsNameTargetsAndRationale\",\n    \"workflowExternallyRelevantOutcomesHandled\",\n    \"workflowOutcomesSourceResolve\",\n    \"workflowCommandErrorsSourceResolve\",\n    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\",\n    \"workflowNonEventDefinitionsAreUniquelyOwned\",\n    \"workflowSharedEventDefinitionsHaveIdenticalIdentity\",\n    \"workflowCommandTransitionsResolveControlsAndCommands\",\n    \"workflowEventTransitionsAreSharedByEndpointSlices\",\n    \"workflowNavigationTransitionsResolveControlsAndViews\",\n    \"workflowExternalTriggersDeclarePayloadContracts\",\n    \"workflowExternalTriggerPayloadContractsHaveProvenance\",\n    \"workflowTransitionsHaveRequiredEvidence\",\n    \"workflowEntryLifecycleStatesCoverRequiredStates\",\n    \"modelDataFlowsAreBitComplete\",\n    \"modelViewControlsProvideCommandInputs\"\n  ]\n}\n"
+            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowSliceModulesComplete\",\n    \"workflowTransitionsStructured\",\n    \"workflowTransitionSourcesResolve\",\n    \"workflowTransitionTargetsResolve\",\n    \"workflowStepRelationshipsAreAllowed\",\n    \"workflowStepSlugsAreUnique\",\n    \"workflowHasExactlyOneEntryStep\",\n    \"workflowMainStepsHaveIncomingReachability\",\n    \"workflowNonSupportingStepsReachableFromEntry\",\n    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\",\n    \"workflowTransitionsHaveModeledKinds\",\n    \"workflowExitsNameTargetsAndRationale\",\n    \"workflowExternallyRelevantOutcomesHandled\",\n    \"workflowOutcomesSourceResolve\",\n    \"workflowCommandErrorsSourceResolve\",\n    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\",\n    \"workflowNonEventDefinitionsAreUniquelyOwned\",\n    \"workflowSharedEventDefinitionsHaveIdenticalIdentity\",\n    \"workflowCommandTransitionsResolveControlsAndCommands\",\n    \"workflowEventTransitionsAreSharedByEndpointSlices\",\n    \"workflowNavigationTransitionsResolveControlsAndViews\",\n    \"workflowExternalTriggersDeclarePayloadContracts\",\n    \"workflowExternalTriggerPayloadContractsHaveProvenance\",\n    \"workflowTransitionsHaveRequiredEvidence\",\n    \"workflowEntryLifecycleStatesCoverRequiredStates\",\n    \"modelScenarioDefinitionsHaveGwt\",\n    \"modelScenarioKindsAreFirstClass\",\n    \"modelDataFlowsAreBitComplete\",\n    \"modelViewControlsProvideCommandInputs\"\n  ]\n}\n"
         );
         Ok(())
     }
