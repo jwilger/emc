@@ -403,7 +403,7 @@ mod tests {
         ));
         assert!(quint.contains("type StreamDefinition = { name: str }"));
         assert!(quint.contains(
-            "type EventAttribute = { name: str, sourceKind: str, sourceName: str, sourceField: str, provenanceDescription: str }"
+            "type EventAttribute = { name: str, sourceKind: str, sourceName: str, sourceField: str, generatedSourceKind: str, provenanceDescription: str }"
         ));
         assert!(
             quint.contains("type ExternalPayloadField = { name: str, provenanceDescription: str, bitEncoding: str }\n  type ExternalPayloadDefinition = { name: str, fields: List[ExternalPayloadField] }")
@@ -811,7 +811,7 @@ mod tests {
             "def externalPayloadFieldIsDeclared(attribute) = sliceExternalPayloads.select(payload => payload.name == attribute.sourceName and payload.fields.select(payloadField => payloadField.name == attribute.sourceField).length() > 0).length() > 0"
         ));
         assert!(quint.contains(
-            "def eventAttributeSourceIsComplete(event, attribute) = (attribute.sourceKind == \"command_input\" and attribute.sourceName != \"\" and attribute.sourceField != \"\" and sliceCommandDefinitions.select(command => commandInputReferencesAttributeSource(event, attribute, command)).length() > 0) or (attribute.sourceKind == \"external_payload\" and attribute.sourceName != \"\" and attribute.sourceField != \"\" and externalPayloadFieldIsDeclared(attribute)) or (attribute.sourceKind == \"generated\" and attribute.sourceName != \"\") or (attribute.sourceKind == \"session\" and attribute.sourceName != \"\") or (attribute.sourceKind == \"derivation\" and attribute.sourceName != \"\" and attribute.sourceField != \"\")"
+            "def eventAttributeSourceIsComplete(event, attribute) = (attribute.sourceKind == \"command_input\" and attribute.sourceName != \"\" and attribute.sourceField != \"\" and sliceCommandDefinitions.select(command => commandInputReferencesAttributeSource(event, attribute, command)).length() > 0) or (attribute.sourceKind == \"external_payload\" and attribute.sourceName != \"\" and attribute.sourceField != \"\" and externalPayloadFieldIsDeclared(attribute)) or (attribute.sourceKind == \"generated\" and attribute.sourceName != \"\" and attribute.generatedSourceKind != \"\") or (attribute.sourceKind == \"session\" and attribute.sourceName != \"\") or (attribute.sourceKind == \"derivation\" and attribute.sourceName != \"\" and attribute.sourceField != \"\")"
         ));
         assert!(quint.contains(
             "def eventAttributeTracesToStoredFactSource(attribute) = storedEventFactSourceKinds.select(sourceKind => sourceKind == attribute.sourceKind).length() > 0"

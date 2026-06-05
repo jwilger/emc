@@ -782,7 +782,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelEventAttributes :"),
             artifact_marker(format!(
-                "def modelEventAttributes : List (String × String × String × String × String × String × String × String) := {lean_model_event_attribute_list}"
+                "def modelEventAttributes : List (String × String × String × String × String × String × String × String × String) := {lean_model_event_attribute_list}"
             )),
             lean_message.clone(),
         ),
@@ -1357,7 +1357,7 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  type ModelEventAttribute ="),
             artifact_marker(
-                "  type ModelEventAttribute = { workflow: str, slice: str, event: str, attribute: str, sourceKind: str, sourceName: str, sourceField: str, provenance: str }",
+                "  type ModelEventAttribute = { workflow: str, slice: str, event: str, attribute: str, sourceKind: str, sourceName: str, sourceField: str, generatedSourceKind: str, provenance: str }",
             ),
             quint_message.clone(),
         ),
@@ -4577,6 +4577,7 @@ fn lean_model_event_attribute_list(project_event_attributes: &[ProjectEventAttri
                 attribute.source_kind(),
                 attribute.source_name(),
                 attribute.source_field(),
+                attribute.generated_source_kind(),
                 attribute.provenance(),
             )
         })
@@ -4595,10 +4596,11 @@ fn lean_model_event_attribute_list(project_event_attributes: &[ProjectEventAttri
                     source_kind,
                     source_name,
                     source_field,
+                    generated_source_kind,
                     provenance,
                 )| {
                     format!(
-                        "({}, {}, {}, {}, {}, {}, {}, {})",
+                        "({}, {}, {}, {}, {}, {}, {}, {}, {})",
                         json_string(workflow_slug),
                         json_string(slice_slug),
                         json_string(event),
@@ -4606,6 +4608,7 @@ fn lean_model_event_attribute_list(project_event_attributes: &[ProjectEventAttri
                         json_string(source_kind),
                         json_string(source_name),
                         json_string(source_field),
+                        json_string(generated_source_kind),
                         json_string(provenance)
                     )
                 },
@@ -4627,6 +4630,7 @@ fn quint_model_event_attribute_list(project_event_attributes: &[ProjectEventAttr
                 attribute.source_kind(),
                 attribute.source_name(),
                 attribute.source_field(),
+                attribute.generated_source_kind(),
                 attribute.provenance(),
             )
         })
@@ -4645,10 +4649,11 @@ fn quint_model_event_attribute_list(project_event_attributes: &[ProjectEventAttr
                     source_kind,
                     source_name,
                     source_field,
+                    generated_source_kind,
                     provenance,
                 )| {
                     format!(
-                        "{{ workflow: {}, slice: {}, event: {}, attribute: {}, sourceKind: {}, sourceName: {}, sourceField: {}, provenance: {} }}",
+                        "{{ workflow: {}, slice: {}, event: {}, attribute: {}, sourceKind: {}, sourceName: {}, sourceField: {}, generatedSourceKind: {}, provenance: {} }}",
                         json_string(workflow_slug),
                         json_string(slice_slug),
                         json_string(event),
@@ -4656,6 +4661,7 @@ fn quint_model_event_attribute_list(project_event_attributes: &[ProjectEventAttr
                         json_string(source_kind),
                         json_string(source_name),
                         json_string(source_field),
+                        json_string(generated_source_kind),
                         json_string(provenance)
                     )
                 },
@@ -5302,6 +5308,7 @@ fn digest_event_attributes(project_event_attributes: &[ProjectEventAttribute]) -
                 attribute.source_kind(),
                 attribute.source_name(),
                 attribute.source_field(),
+                attribute.generated_source_kind(),
                 attribute.provenance(),
             )
         })
@@ -5318,10 +5325,11 @@ fn digest_event_attributes(project_event_attributes: &[ProjectEventAttribute]) -
                 source_kind,
                 source_name,
                 source_field,
+                generated_source_kind,
                 provenance,
             )| {
                 format!(
-                    "{workflow_slug}/{slice_slug}/{event}/{attribute}@{source_kind}#{source_name}.{source_field}#{provenance}"
+                    "{workflow_slug}/{slice_slug}/{event}/{attribute}@{source_kind}#{source_name}.{source_field}#{generated_source_kind}#{provenance}"
                 )
             },
         )

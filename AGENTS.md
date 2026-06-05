@@ -25,11 +25,17 @@ The repository requires pull requests; do not push directly to `main`. Push a
 feature branch, open a PR, and use conventional commits format for the PR title
 and description just as for commit messages.
 
+Do not start Forgejo PR bodies by repeating the conventional commit title. PR
+bodies should start with useful sections such as Summary, Rationale, and
+Verification.
+
 After opening a PR, monitor CI and review feedback. If CI fails, inspect the
 failing job logs, make the smallest appropriate fix, rerun relevant local
 verification, commit, and push back to the same branch. Address all review
-feedback from auto_review in the same way. Do not merge until CI is green and
-`@auto-review` has approved the PR.
+feedback from auto_review in the same way. All review comments must be handled
+before merging, including non-blocking warnings on approved reviews. Do not
+merge until CI is green, every review comment has been addressed or explicitly
+resolved, and `@auto-review` has approved the PR.
 
 Once approval is in place, merge the PR before starting any new task. After the
 merge, clean up the merged local and remote feature branch, switch back to

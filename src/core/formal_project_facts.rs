@@ -947,6 +947,7 @@ pub struct NewProjectEventAttribute {
     source_kind: EventAttributeSourceKind,
     source_name: EventAttributeSourceName,
     source_field: EventAttributeSourceField,
+    generated_source_kind: Option<EventAttributeSourceKind>,
     provenance: ProvenanceDescription,
 }
 
@@ -960,6 +961,7 @@ impl NewProjectEventAttribute {
             source_kind: attribute.source_kind().clone(),
             source_name: attribute.source_name().clone(),
             source_field: attribute.source_field().clone(),
+            generated_source_kind: attribute.generated_source_kind().cloned(),
             provenance: attribute.provenance_description().clone(),
         }
     }
@@ -1909,6 +1911,7 @@ pub struct ProjectEventAttribute {
     source_kind: String,
     source_name: String,
     source_field: String,
+    generated_source_kind: String,
     provenance: String,
 }
 
@@ -1939,6 +1942,10 @@ impl ProjectEventAttribute {
 
     pub fn source_field(&self) -> &str {
         &self.source_field
+    }
+
+    pub fn generated_source_kind(&self) -> &str {
+        &self.generated_source_kind
     }
 
     pub fn provenance(&self) -> &str {
@@ -2390,7 +2397,7 @@ pub fn parse_lean_project_event_attributes(
 ) -> Result<Vec<ProjectEventAttribute>, FormalProjectFactError> {
     event_attribute_entries_from_list(
         contents.as_ref(),
-        "def modelEventAttributes : List (String × String × String × String × String × String × String × String) := ",
+        "def modelEventAttributes : List (String × String × String × String × String × String × String × String × String) := ",
     )
 }
 
@@ -5255,7 +5262,7 @@ pub fn add_project_event(
             .try_fold(contents, |contents, record| {
                 append_record_if_missing(
                     &contents,
-                    "def modelEventAttributes : List (String × String × String × String × String × String × String × String) := ",
+                    "def modelEventAttributes : List (String × String × String × String × String × String × String × String × String) := ",
                     record,
                 )
             })
@@ -5343,7 +5350,7 @@ pub fn add_project_event(
         )?;
         let event_attributes = event_attribute_entries_from_list(
             &contents,
-            "def modelEventAttributes : List (String × String × String × String × String × String × String × String) := ",
+            "def modelEventAttributes : List (String × String × String × String × String × String × String × String × String) := ",
         )?;
         let board_elements = board_element_entries_from_list(
             &contents,
@@ -6893,7 +6900,7 @@ fn parse_lean_project_event_attributes_from_contents_or_empty(
 ) -> Vec<ProjectEventAttribute> {
     event_attribute_entries_from_list(
         contents,
-        "def modelEventAttributes : List (String × String × String × String × String × String × String × String) := ",
+        "def modelEventAttributes : List (String × String × String × String × String × String × String × String × String) := ",
     )
     .unwrap_or_default()
 }
@@ -6945,7 +6952,7 @@ fn event_attribute_entries_from_list(
         .into_iter()
         .map(|record| {
             let strings = quoted_strings(&record)?;
-            if strings.len() < 8 {
+            if strings.len() < 9 {
                 Err(FormalProjectFactError::new(
                     "formal project event attribute record is malformed",
                 ))
@@ -6958,7 +6965,8 @@ fn event_attribute_entries_from_list(
                     source_kind: strings[4].clone(),
                     source_name: strings[5].clone(),
                     source_field: strings[6].clone(),
-                    provenance: strings[7].clone(),
+                    generated_source_kind: strings[7].clone(),
+                    provenance: strings[8].clone(),
                 })
             }
         })
@@ -7892,7 +7900,7 @@ fn digest_event_attributes(event_attributes: &[ProjectEventAttribute]) -> String
         .iter()
         .map(|attribute| {
             format!(
-                "{}/{}/{}/{}@{}#{}.{}#{}",
+                "{}/{}/{}/{}@{}#{}.{}#{}#{}",
                 attribute.workflow_slug,
                 attribute.slice_slug,
                 attribute.event,
@@ -7900,6 +7908,7 @@ fn digest_event_attributes(event_attributes: &[ProjectEventAttribute]) -> String
                 attribute.source_kind,
                 attribute.source_name,
                 attribute.source_field,
+                attribute.generated_source_kind,
                 attribute.provenance
             )
         })
@@ -9114,7 +9123,7 @@ fn lean_event_record(event: &NewProjectEvent) -> String {
 
 fn lean_event_attribute_record(attribute: &NewProjectEventAttribute) -> String {
     format!(
-        "({}, {}, {}, {}, {}, {}, {}, {})",
+        "({}, {}, {}, {}, {}, {}, {}, {}, {})",
         quoted(attribute.workflow_slug.as_ref()),
         quoted(attribute.slice_slug.as_ref()),
         quoted(attribute.event.as_ref()),
@@ -9122,6 +9131,12 @@ fn lean_event_attribute_record(attribute: &NewProjectEventAttribute) -> String {
         quoted(attribute.source_kind.as_ref()),
         quoted(attribute.source_name.as_ref()),
         quoted(attribute.source_field.as_ref()),
+        quoted(
+            attribute
+                .generated_source_kind
+                .as_ref()
+                .map_or("", EventAttributeSourceKind::as_ref),
+        ),
         quoted(attribute.provenance.as_ref())
     )
 }
@@ -9138,7 +9153,7 @@ fn quint_event_record(event: &NewProjectEvent) -> String {
 
 fn quint_event_attribute_record(attribute: &NewProjectEventAttribute) -> String {
     format!(
-        "{{ workflow: {}, slice: {}, event: {}, attribute: {}, sourceKind: {}, sourceName: {}, sourceField: {}, provenance: {} }}",
+        "{{ workflow: {}, slice: {}, event: {}, attribute: {}, sourceKind: {}, sourceName: {}, sourceField: {}, generatedSourceKind: {}, provenance: {} }}",
         quoted(attribute.workflow_slug.as_ref()),
         quoted(attribute.slice_slug.as_ref()),
         quoted(attribute.event.as_ref()),
@@ -9146,6 +9161,12 @@ fn quint_event_attribute_record(attribute: &NewProjectEventAttribute) -> String 
         quoted(attribute.source_kind.as_ref()),
         quoted(attribute.source_name.as_ref()),
         quoted(attribute.source_field.as_ref()),
+        quoted(
+            attribute
+                .generated_source_kind
+                .as_ref()
+                .map_or("", EventAttributeSourceKind::as_ref),
+        ),
         quoted(attribute.provenance.as_ref())
     )
 }

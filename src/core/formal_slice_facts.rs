@@ -655,6 +655,7 @@ pub struct NewEventAttribute {
     source_kind: EventAttributeSourceKind,
     source_name: EventAttributeSourceName,
     source_field: EventAttributeSourceField,
+    generated_source_kind: Option<EventAttributeSourceKind>,
     provenance_description: ProvenanceDescription,
 }
 
@@ -671,6 +672,25 @@ impl NewEventAttribute {
             source_kind,
             source_name,
             source_field,
+            generated_source_kind: None,
+            provenance_description,
+        }
+    }
+
+    pub fn new_with_generated_source_kind(
+        name: EventAttributeName,
+        source_kind: EventAttributeSourceKind,
+        source_name: EventAttributeSourceName,
+        source_field: EventAttributeSourceField,
+        generated_source_kind: EventAttributeSourceKind,
+        provenance_description: ProvenanceDescription,
+    ) -> Self {
+        Self {
+            name,
+            source_kind,
+            source_name,
+            source_field,
+            generated_source_kind: Some(generated_source_kind),
             provenance_description,
         }
     }
@@ -689,6 +709,10 @@ impl NewEventAttribute {
 
     pub fn source_field(&self) -> &EventAttributeSourceField {
         &self.source_field
+    }
+
+    pub fn generated_source_kind(&self) -> Option<&EventAttributeSourceKind> {
+        self.generated_source_kind.as_ref()
     }
 
     pub fn provenance_description(&self) -> &ProvenanceDescription {
@@ -2482,22 +2506,34 @@ fn quint_event_definition_record(event: &NewEventDefinition) -> String {
 
 fn lean_event_attribute_record(attribute: &NewEventAttribute) -> String {
     format!(
-        "{{ name := {}, sourceKind := {}, sourceName := {}, sourceField := {}, provenanceDescription := {} }}",
+        "{{ name := {}, sourceKind := {}, sourceName := {}, sourceField := {}, generatedSourceKind := {}, provenanceDescription := {} }}",
         quoted(attribute.name.as_ref()),
         quoted(attribute.source_kind.as_ref()),
         quoted(attribute.source_name.as_ref()),
         quoted(attribute.source_field.as_ref()),
+        quoted(
+            attribute
+                .generated_source_kind
+                .as_ref()
+                .map_or("", EventAttributeSourceKind::as_ref),
+        ),
         quoted(attribute.provenance_description.as_ref()),
     )
 }
 
 fn quint_event_attribute_record(attribute: &NewEventAttribute) -> String {
     format!(
-        "{{ name: {}, sourceKind: {}, sourceName: {}, sourceField: {}, provenanceDescription: {} }}",
+        "{{ name: {}, sourceKind: {}, sourceName: {}, sourceField: {}, generatedSourceKind: {}, provenanceDescription: {} }}",
         quoted(attribute.name.as_ref()),
         quoted(attribute.source_kind.as_ref()),
         quoted(attribute.source_name.as_ref()),
         quoted(attribute.source_field.as_ref()),
+        quoted(
+            attribute
+                .generated_source_kind
+                .as_ref()
+                .map_or("", EventAttributeSourceKind::as_ref),
+        ),
         quoted(attribute.provenance_description.as_ref()),
     )
 }
