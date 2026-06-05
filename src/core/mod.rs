@@ -9,7 +9,6 @@ pub mod formal_workflow_facts;
 pub mod gherkin;
 pub mod json_object_document;
 pub mod layout;
-pub mod navigation_control;
 pub mod project;
 pub mod review_gate;
 pub mod review_record;
