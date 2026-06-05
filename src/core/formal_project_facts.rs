@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
-use crate::core::types::{EventName, SliceSlug, StreamName, WorkflowSlug};
+use crate::core::types::{CommandName, EventName, SliceSlug, StreamName, WorkflowSlug};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NewProjectStream {
@@ -17,6 +17,23 @@ impl NewProjectStream {
             workflow_slug,
             slice_slug,
             stream,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NewProjectCommand {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    command: CommandName,
+}
+
+impl NewProjectCommand {
+    pub fn new(workflow_slug: WorkflowSlug, slice_slug: SliceSlug, command: CommandName) -> Self {
+        Self {
+            workflow_slug,
+            slice_slug,
+            command,
         }
     }
 }
@@ -50,6 +67,27 @@ pub struct ProjectStream {
     workflow_slug: String,
     slice_slug: String,
     stream: String,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectCommand {
+    workflow_slug: String,
+    slice_slug: String,
+    command: String,
+}
+
+impl ProjectCommand {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn command(&self) -> &str {
+        &self.command
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -107,6 +145,24 @@ pub fn parse_quint_project_streams(
     stream_entries_from_list(contents.as_ref(), "val modelStreams: List[ModelStream] = ")
 }
 
+pub fn parse_lean_project_commands(
+    contents: &FileContents,
+) -> Result<Vec<ProjectCommand>, FormalProjectFactError> {
+    command_entries_from_list(
+        contents.as_ref(),
+        "def modelCommands : List (String × String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_commands(
+    contents: &FileContents,
+) -> Result<Vec<ProjectCommand>, FormalProjectFactError> {
+    command_entries_from_list(
+        contents.as_ref(),
+        "val modelCommands: List[ModelCommand] = ",
+    )
+}
+
 pub fn parse_lean_project_events(
     contents: &FileContents,
 ) -> Result<Vec<ProjectEvent>, FormalProjectFactError> {
@@ -120,6 +176,72 @@ pub fn parse_quint_project_events(
     contents: &FileContents,
 ) -> Result<Vec<ProjectEvent>, FormalProjectFactError> {
     event_entries_from_list(contents.as_ref(), "val modelEvents: List[ModelEvent] = ")
+}
+
+pub fn add_project_command(
+    lean_path: ProjectPath,
+    lean_contents: FileContents,
+    quint_path: ProjectPath,
+    quint_contents: FileContents,
+    command: NewProjectCommand,
+) -> Result<EffectPlan, FormalProjectFactError> {
+    let lean_record = lean_command_record(&command);
+    let quint_record = quint_command_record(&command);
+    let lean = append_record_if_missing(
+        lean_contents.as_ref(),
+        "def modelCommands : List (String × String × String) := ",
+        &lean_record,
+    )
+    .and_then(|contents| {
+        let commands = command_entries_from_list(
+            &contents,
+            "def modelCommands : List (String × String × String) := ",
+        )?;
+        replace_declaration(
+            &contents,
+            "theorem modelCommandsAreDeclared :",
+            &format!(
+                "theorem modelCommandsAreDeclared : modelCommands.length = {} := rfl",
+                commands.len()
+            ),
+        )
+        .and_then(|contents| {
+            let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
+            let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            update_lean_digest(&contents, &commands, &streams, &events)
+        })
+    })?;
+    let quint = append_record_if_missing(
+        quint_contents.as_ref(),
+        "val modelCommands: List[ModelCommand] = ",
+        &quint_record,
+    )
+    .and_then(|contents| {
+        let commands =
+            command_entries_from_list(&contents, "val modelCommands: List[ModelCommand] = ")?;
+        replace_declaration(
+            &contents,
+            "val modelCommandsAreDeclared =",
+            &format!(
+                "val modelCommandsAreDeclared = modelCommands.length() == {}",
+                commands.len()
+            ),
+        )
+        .and_then(|contents| {
+            let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
+            let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            update_quint_digest(&contents, &commands, &streams, &events)
+        })
+    })?;
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(lean_path, file_contents(lean)?),
+        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::Report(report_line(format!(
+            "added command {} to project root",
+            command.command.as_ref()
+        ))?),
+    ]))
 }
 
 pub fn add_project_stream(
@@ -150,8 +272,9 @@ pub fn add_project_stream(
             ),
         )
         .and_then(|contents| {
+            let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
-            update_lean_digest(&contents, &streams, &events)
+            update_lean_digest(&contents, &commands, &streams, &events)
         })
     })?;
     let quint = append_record_if_missing(
@@ -171,8 +294,9 @@ pub fn add_project_stream(
             ),
         )
         .and_then(|contents| {
+            let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
-            update_quint_digest(&contents, &streams, &events)
+            update_quint_digest(&contents, &commands, &streams, &events)
         })
     })?;
 
@@ -201,6 +325,10 @@ pub fn add_project_event(
         &lean_record,
     )
     .and_then(|contents| {
+        let commands = command_entries_from_list(
+            &contents,
+            "def modelCommands : List (String × String × String) := ",
+        )?;
         let streams = stream_entries_from_list(
             &contents,
             "def modelStreams : List (String × String × String) := ",
@@ -217,7 +345,7 @@ pub fn add_project_event(
                 events.len()
             ),
         )
-        .and_then(|contents| update_lean_digest(&contents, &streams, &events))
+        .and_then(|contents| update_lean_digest(&contents, &commands, &streams, &events))
     })?;
     let quint = append_record_if_missing(
         quint_contents.as_ref(),
@@ -225,6 +353,8 @@ pub fn add_project_event(
         &quint_record,
     )
     .and_then(|contents| {
+        let commands =
+            command_entries_from_list(&contents, "val modelCommands: List[ModelCommand] = ")?;
         let streams =
             stream_entries_from_list(&contents, "val modelStreams: List[ModelStream] = ")?;
         let events = event_entries_from_list(&contents, "val modelEvents: List[ModelEvent] = ")?;
@@ -236,7 +366,7 @@ pub fn add_project_event(
                 events.len()
             ),
         )
-        .and_then(|contents| update_quint_digest(&contents, &streams, &events))
+        .and_then(|contents| update_quint_digest(&contents, &commands, &streams, &events))
     })?;
 
     Ok(EffectPlan::new(vec![
@@ -382,6 +512,58 @@ fn stream_entries_from_list(
     Ok(streams)
 }
 
+fn parse_lean_project_commands_from_contents_or_empty(contents: &str) -> Vec<ProjectCommand> {
+    command_entries_from_list(
+        contents,
+        "def modelCommands : List (String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_commands_from_contents_or_empty(contents: &str) -> Vec<ProjectCommand> {
+    command_entries_from_list(contents, "val modelCommands: List[ModelCommand] = ")
+        .unwrap_or_default()
+}
+
+fn parse_lean_project_streams_from_contents_or_empty(contents: &str) -> Vec<ProjectStream> {
+    stream_entries_from_list(
+        contents,
+        "def modelStreams : List (String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_streams_from_contents_or_empty(contents: &str) -> Vec<ProjectStream> {
+    stream_entries_from_list(contents, "val modelStreams: List[ModelStream] = ").unwrap_or_default()
+}
+
+fn command_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectCommand>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut commands = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let strings = quoted_strings(&record)?;
+            if strings.len() < 3 {
+                Err(FormalProjectFactError::new(
+                    "formal project command record is malformed",
+                ))
+            } else {
+                Ok(ProjectCommand {
+                    workflow_slug: strings[0].clone(),
+                    slice_slug: strings[1].clone(),
+                    command: strings[2].clone(),
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    commands.sort();
+    commands.dedup();
+    Ok(commands)
+}
+
 fn parse_lean_project_events_from_contents_or_empty(contents: &str) -> Vec<ProjectEvent> {
     event_entries_from_list(
         contents,
@@ -505,11 +687,13 @@ fn quoted_strings(record: &str) -> Result<Vec<String>, FormalProjectFactError> {
 
 fn update_lean_digest(
     contents: &str,
+    commands: &[ProjectCommand],
     streams: &[ProjectStream],
     events: &[ProjectEvent],
 ) -> Result<String, FormalProjectFactError> {
     let digest = digest_with_streams(
         declaration_json_string(contents, "def modelDigest := ")?,
+        commands,
         streams,
         events,
     );
@@ -532,11 +716,13 @@ fn update_lean_digest(
 
 fn update_quint_digest(
     contents: &str,
+    commands: &[ProjectCommand],
     streams: &[ProjectStream],
     events: &[ProjectEvent],
 ) -> Result<String, FormalProjectFactError> {
     let digest = digest_with_streams(
         declaration_json_string(contents, "val modelDigest = ")?,
+        commands,
         streams,
         events,
     );
@@ -556,18 +742,34 @@ fn update_quint_digest(
 
 fn digest_with_streams(
     current_digest: String,
+    commands: &[ProjectCommand],
     streams: &[ProjectStream],
     events: &[ProjectEvent],
 ) -> String {
     let prefix = current_digest
-        .split_once(";streams=")
-        .map(|(prefix, _streams)| prefix.to_owned())
+        .split_once(";commands=")
+        .or_else(|| current_digest.split_once(";streams="))
+        .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};streams={};events={}",
+        "{prefix};commands={};streams={};events={}",
+        digest_commands(commands),
         digest_streams(streams),
         digest_events(events)
     )
+}
+
+fn digest_commands(commands: &[ProjectCommand]) -> String {
+    commands
+        .iter()
+        .map(|command| {
+            format!(
+                "{}/{}/{}",
+                command.workflow_slug, command.slice_slug, command.command
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn digest_streams(streams: &[ProjectStream]) -> String {
@@ -632,6 +834,24 @@ fn lean_stream_record(stream: &NewProjectStream) -> String {
         quoted(stream.workflow_slug.as_ref()),
         quoted(stream.slice_slug.as_ref()),
         quoted(stream.stream.as_ref())
+    )
+}
+
+fn lean_command_record(command: &NewProjectCommand) -> String {
+    format!(
+        "({}, {}, {})",
+        quoted(command.workflow_slug.as_ref()),
+        quoted(command.slice_slug.as_ref()),
+        quoted(command.command.as_ref())
+    )
+}
+
+fn quint_command_record(command: &NewProjectCommand) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, command: {} }}",
+        quoted(command.workflow_slug.as_ref()),
+        quoted(command.slice_slug.as_ref()),
+        quoted(command.command.as_ref())
     )
 }
 

@@ -19,9 +19,10 @@ use crate::core::formal_graph::{
     parse_quint_workflow_graph,
 };
 use crate::core::formal_project_facts::{
-    NewProjectEvent, NewProjectStream, ProjectEvent, ProjectStream, add_project_event,
-    add_project_stream, parse_lean_project_events, parse_lean_project_streams,
-    parse_quint_project_events, parse_quint_project_streams,
+    NewProjectCommand, NewProjectEvent, NewProjectStream, ProjectCommand, ProjectEvent,
+    ProjectStream, add_project_command, add_project_event, add_project_stream,
+    parse_lean_project_commands, parse_lean_project_events, parse_lean_project_streams,
+    parse_quint_project_commands, parse_quint_project_events, parse_quint_project_streams,
 };
 use crate::core::formal_slice_facts::{
     add_automation_definition, add_bit_level_data_flow, add_board_connection, add_board_element,
@@ -186,7 +187,12 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::AddCommandDefinitionFromSlice(command) => {
             let slice_artifacts =
                 read_formal_slice_artifact_paths_and_contents(command.slice_slug())?;
-            let plan = add_command_definition(
+            let project_name = read_project_manifest_name()?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let (workflow_layout, _workflow_graph) =
+                find_formal_workflow_containing_slice_in(&formal_workflows, command.slice_slug())?;
+            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
+            let slice_plan = add_command_definition(
                 slice_artifacts.lean_path,
                 slice_artifacts.lean_contents,
                 slice_artifacts.quint_path,
@@ -194,7 +200,21 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 command.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let project_command_plan = add_project_command(
+                project_artifacts.lean_path,
+                project_artifacts.lean_contents,
+                project_artifacts.quint_path,
+                project_artifacts.quint_contents,
+                NewProjectCommand::new(
+                    workflow_layout.slug().clone(),
+                    command.slice_slug().clone(),
+                    command.name().clone(),
+                ),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            let mut reports = interpret_collect_reports(slice_plan)?;
+            reports.extend(interpret_collect_reports(project_command_plan)?);
+            Ok(reports)
         }
         Effect::AddEventDefinitionFromSlice(event) => {
             let slice_artifacts =
@@ -436,11 +456,13 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::CheckCurrentProject => {
             let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?;
+            let project_commands = read_synchronized_project_commands(&project_name)?;
             let project_streams = read_synchronized_project_streams(&project_name)?;
             let project_events = read_synchronized_project_events(&project_name)?;
             interpret_collect_reports(check_project(
                 project_name,
                 formal_workflows,
+                project_commands,
                 project_streams,
                 project_events,
             ))
@@ -803,6 +825,26 @@ fn read_synchronized_project_streams(
             "Lean and Quint project root stream inventories disagree",
         )),
         (_lean_streams, _quint_streams) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_commands(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectCommand>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_commands(&artifacts.lean_contents),
+        parse_quint_project_commands(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_commands), Ok(quint_commands)) if lean_commands == quint_commands => {
+            Ok(lean_commands)
+        }
+        (Ok(_lean_commands), Ok(_quint_commands)) => Err(ShellError::message(
+            "Lean and Quint project root command inventories disagree",
+        )),
+        (_lean_commands, _quint_commands) => Ok(Vec::new()),
     }
 }
 

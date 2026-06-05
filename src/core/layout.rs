@@ -6,7 +6,7 @@ use crate::core::effect::{
 use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
-use crate::core::formal_project_facts::{ProjectEvent, ProjectStream};
+use crate::core::formal_project_facts::{ProjectCommand, ProjectEvent, ProjectStream};
 use crate::core::project::ProjectName;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowSliceDetail,
@@ -96,6 +96,7 @@ impl ModeledWorkflowTransitions {
 pub fn check_project(
     project_name: ProjectName,
     formal_workflows: FormalWorkflowGraphs,
+    project_commands: Vec<ProjectCommand>,
     project_streams: Vec<ProjectStream>,
     project_events: Vec<ProjectEvent>,
 ) -> EffectPlan {
@@ -111,6 +112,7 @@ pub fn check_project(
         &module_name,
         &modeled_workflows,
         &formal_workflows,
+        &project_commands,
         &project_streams,
         &project_events,
     );
@@ -214,6 +216,7 @@ fn project_root_effects(
     module_name: &str,
     modeled_workflows: &[ModeledWorkflowLayout],
     formal_workflows: &[FormalWorkflowGraph],
+    project_commands: &[ProjectCommand],
     project_streams: &[ProjectStream],
     project_events: &[ProjectEvent],
 ) -> Vec<Effect> {
@@ -223,16 +226,19 @@ fn project_root_effects(
     let workflow_count = modeled_workflows.len();
     let lean_model_slice_list = lean_model_slice_list(formal_workflows);
     let lean_model_slice_module_list = lean_model_slice_module_list(formal_workflows);
+    let lean_model_command_list = lean_model_command_list(project_commands);
     let lean_model_stream_list = lean_model_stream_list(project_streams);
     let lean_model_event_list = lean_model_event_list(project_events);
     let quint_model_slice_list = quint_model_slice_list(formal_workflows);
     let quint_model_slice_module_list = quint_model_slice_module_list(formal_workflows);
+    let quint_model_command_list = quint_model_command_list(project_commands);
     let quint_model_stream_list = quint_model_stream_list(project_streams);
     let quint_model_event_list = quint_model_event_list(project_events);
     let model_digest = model_digest(
         project_name,
         modeled_workflows,
         formal_workflows,
+        project_commands,
         project_streams,
         project_events,
     );
@@ -241,6 +247,7 @@ fn project_root_effects(
         .map(|workflow| workflow.slice_details().as_slice().len())
         .sum::<usize>();
     let stream_count = project_streams.len();
+    let command_count = project_commands.len();
     let event_count = project_events.len();
     let manifest_path = project_path("emc.toml");
     let lean_path = project_path(format!("model/lean/{module_name}.lean"));
@@ -351,6 +358,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelCommands :"),
+            artifact_marker(format!(
+                "def modelCommands : List (String × String × String) := {lean_model_command_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelStreams :"),
             artifact_marker(format!(
                 "def modelStreams : List (String × String × String) := {lean_model_stream_list}"
@@ -418,6 +433,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelCommandsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelCommandsAreDeclared : modelCommands.length = {command_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelStreamsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelStreamsAreDeclared : modelStreams.length = {stream_count} := rfl"
@@ -456,6 +479,12 @@ fn project_root_effects(
             artifact_marker(
                 "  type ModelSliceModule = { workflow: str, slice: str, formalModule: str }",
             ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelCommand ="),
+            artifact_marker("  type ModelCommand = { workflow: str, slice: str, command: str }"),
             quint_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -525,6 +554,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelCommands:"),
+            artifact_marker(format!(
+                "  val modelCommands: List[ModelCommand] = {quint_model_command_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelStreams:"),
             artifact_marker(format!(
                 "  val modelStreams: List[ModelStream] = {quint_model_stream_list}"
@@ -587,6 +624,14 @@ fn project_root_effects(
             artifact_marker("  val modelSliceModulesAreDeclared ="),
             artifact_marker(format!(
                 "  val modelSliceModulesAreDeclared = modelSliceModules.length() == {slice_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelCommandsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelCommandsAreDeclared = modelCommands.length() == {command_count}"
             )),
             quint_message.clone(),
         ),
@@ -1685,6 +1730,64 @@ fn quint_model_stream_list(project_streams: &[ProjectStream]) -> String {
     )
 }
 
+fn lean_model_command_list(project_commands: &[ProjectCommand]) -> String {
+    let mut project_commands = project_commands
+        .iter()
+        .map(|command| {
+            (
+                command.workflow_slug(),
+                command.slice_slug(),
+                command.command(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_commands.sort_unstable();
+    format!(
+        "[{}]",
+        project_commands
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, command)| {
+                format!(
+                    "({}, {}, {})",
+                    json_string(workflow_slug),
+                    json_string(slice_slug),
+                    json_string(command)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_command_list(project_commands: &[ProjectCommand]) -> String {
+    let mut project_commands = project_commands
+        .iter()
+        .map(|command| {
+            (
+                command.workflow_slug(),
+                command.slice_slug(),
+                command.command(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_commands.sort_unstable();
+    format!(
+        "[{}]",
+        project_commands
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, command)| {
+                format!(
+                    "{{ workflow: {}, slice: {}, command: {} }}",
+                    json_string(workflow_slug),
+                    json_string(slice_slug),
+                    json_string(command)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn lean_model_event_list(project_events: &[ProjectEvent]) -> String {
     let mut project_events = project_events
         .iter()
@@ -1751,14 +1854,16 @@ fn model_digest(
     project_name: &ProjectName,
     modeled_workflows: &[ModeledWorkflowLayout],
     formal_workflows: &[FormalWorkflowGraph],
+    project_commands: &[ProjectCommand],
     project_streams: &[ProjectStream],
     project_events: &[ProjectEvent],
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};streams={};events={}",
+        "project:name={};version=0.1.0;workflows={};slices={};commands={};streams={};events={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
+        digest_commands(project_commands),
         digest_streams(project_streams),
         digest_events(project_events)
     )
@@ -1805,6 +1910,27 @@ fn digest_streams(project_streams: &[ProjectStream]) -> String {
     streams
         .into_iter()
         .map(|(workflow_slug, slice_slug, stream)| format!("{workflow_slug}/{slice_slug}/{stream}"))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_commands(project_commands: &[ProjectCommand]) -> String {
+    let mut commands = project_commands
+        .iter()
+        .map(|command| {
+            (
+                command.workflow_slug(),
+                command.slice_slug(),
+                command.command(),
+            )
+        })
+        .collect::<Vec<_>>();
+    commands.sort_unstable();
+    commands
+        .into_iter()
+        .map(|(workflow_slug, slice_slug, command)| {
+            format!("{workflow_slug}/{slice_slug}/{command}")
+        })
         .collect::<Vec<_>>()
         .join(",")
 }
