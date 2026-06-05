@@ -43,7 +43,7 @@ pub fn emit_workflow_module(
   type WorkflowTransition = {{ source: str, target: str, kind: str, trigger: str, rationale: str, payloadContract: str }}
   type WorkflowOutcome = {{ sourceSlice: str, label: str, externallyRelevant: bool }}
   type WorkflowCommandError = {{ sourceSlice: str, commandName: str, errorName: str }}
-  type WorkflowOwnedDefinition = {{ sourceSlice: str, definitionKind: str, definitionName: str, definitionStream: str, sourceProvenance: str }}
+  type WorkflowOwnedDefinition = {{ sourceSlice: str, definitionKind: str, definitionName: str, definitionStream: str, sourceProvenance: str, eventParticipation: str }}
   type WorkflowTransitionEvidence = {{ source: str, target: str, kind: str, trigger: str, sourceEvidence: str, targetEvidence: str }}
   type WorkflowEntryLifecycleState = {{ state: str, step: str, evidence: str }}
   val workflowName = {workflow_name_json}
@@ -101,6 +101,8 @@ pub fn emit_workflow_module(
   def workflowSharedEventDefinitionMatches(left, right) = left.definitionKind != "event" or right.definitionKind != "event" or left.definitionName != right.definitionName or (left.definitionStream == right.definitionStream and left.sourceProvenance == right.sourceProvenance)
   val workflowSharedEventDefinitionsHaveIdenticalIdentity = workflowOwnedDefinitions.select(definition => workflowEventDefinitionHasIdentity(definition)).length() == workflowOwnedDefinitions.length() and workflowOwnedDefinitions.select(definition => workflowOwnedDefinitions.select(other => workflowSharedEventDefinitionMatches(definition, other)).length() == workflowOwnedDefinitions.length()).length() == workflowOwnedDefinitions.length()
   def workflowOwnsDefinition(sourceSlice, definitionKind, definitionName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == definitionKind and definition.definitionName == definitionName).length() > 0
+  def workflowEventParticipationIsModeled(definition) = definition.eventParticipation == "emitted" or definition.eventParticipation == "observed"
+  def workflowEventDefinitionParticipates(sourceSlice, eventName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == "event" and definition.definitionName == eventName and workflowEventParticipationIsModeled(definition)).length() > 0
   def workflowCommandTransitionTargetsOwnedCommand(transition) = transition.kind != "command" or workflowOwnsDefinition(transition.target, "command", transition.trigger)
   val workflowCommandTransitionsTargetOwnedCommands = workflowTransitions.select(transition => workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()
   def workflowCommandTransitionSourceOwnsControl(transition) = transition.kind != "command" or workflowOwnsDefinition(transition.source, "control", transition.trigger)
@@ -108,6 +110,9 @@ pub fn emit_workflow_module(
   val workflowCommandTransitionsResolveControlsAndCommands = workflowTransitions.select(transition => workflowCommandTransitionSourceOwnsControl(transition) and workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()
   def workflowEventTransitionIsSharedByEndpoints(transition) = transition.kind != "event" or (workflowOwnsDefinition(transition.source, "event", transition.trigger) and workflowOwnsDefinition(transition.target, "event", transition.trigger))
   val workflowEventTransitionsAreSharedByEndpointSlices = workflowTransitions.select(transition => workflowEventTransitionIsSharedByEndpoints(transition)).length() == workflowTransitions.length()
+  def workflowEventTransitionSourceParticipates(transition) = transition.kind != "event" or workflowEventDefinitionParticipates(transition.source, transition.trigger)
+  def workflowEventTransitionTargetParticipates(transition) = transition.kind != "event" or workflowEventDefinitionParticipates(transition.target, transition.trigger)
+  val workflowEventTransitionsHaveParticipatingEndpointEvents = workflowTransitions.select(transition => workflowEventTransitionSourceParticipates(transition) and workflowEventTransitionTargetParticipates(transition)).length() == workflowTransitions.length()
   def workflowNavigationTransitionSourceOwnsControl(transition) = transition.kind != "navigation" or workflowOwnsDefinition(transition.source, "control", transition.trigger)
   def workflowNavigationTransitionTargetsOwnedView(transition) = transition.kind != "navigation" or workflowOwnsDefinition(transition.target, "view", transition.trigger)
   val workflowNavigationTransitionsResolveControlsAndViews = workflowTransitions.select(transition => workflowNavigationTransitionSourceOwnsControl(transition) and workflowNavigationTransitionTargetsOwnedView(transition)).length() == workflowTransitions.length()
@@ -451,7 +456,7 @@ fn workflow_owned_definition_list(
 
 fn workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) -> String {
     format!(
-        "{{ sourceSlice: {}, definitionKind: {}, definitionName: {}, definitionStream: {}, sourceProvenance: {} }}",
+        "{{ sourceSlice: {}, definitionKind: {}, definitionName: {}, definitionStream: {}, sourceProvenance: {}, eventParticipation: {} }}",
         quoted(definition.source_slice().as_ref()),
         quoted(definition.definition_kind().as_ref()),
         quoted(definition.definition_name().as_ref()),
@@ -464,6 +469,11 @@ fn workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) 
             definition
                 .source_provenance()
                 .map_or("", |source_provenance| source_provenance.as_ref()),
+        ),
+        quoted(
+            definition
+                .event_participation()
+                .map_or("", |event_participation| event_participation.as_ref()),
         ),
     )
 }

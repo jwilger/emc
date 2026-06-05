@@ -74,6 +74,7 @@ structure WorkflowOwnedDefinition where
   definitionName : String
   definitionStream : String
   sourceProvenance : String
+  eventParticipation : String
 
 structure WorkflowTransitionEvidence where
   source : String
@@ -180,6 +181,10 @@ def workflowSharedEventDefinitionsHaveIdenticalIdentity : Bool := workflowOwnedD
 
 def workflowOwnsDefinition (sourceSlice : String) (definitionKind : String) (definitionName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == definitionKind && definition.definitionName == definitionName)
 
+def workflowEventParticipationIsModeled (definition : WorkflowOwnedDefinition) : Bool := definition.eventParticipation == "emitted" || definition.eventParticipation == "observed"
+
+def workflowEventDefinitionParticipates (sourceSlice : String) (eventName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == "event" && definition.definitionName == eventName && workflowEventParticipationIsModeled definition)
+
 def workflowCommandTransitionTargetsOwnedCommand (transition : WorkflowTransition) : Bool := transition.kind != "command" || workflowOwnsDefinition transition.target "command" transition.trigger
 
 def workflowCommandTransitionsTargetOwnedCommands : Bool := workflowTransitions.all workflowCommandTransitionTargetsOwnedCommand
@@ -193,6 +198,12 @@ def workflowCommandTransitionsResolveControlsAndCommands : Bool := workflowTrans
 def workflowEventTransitionIsSharedByEndpoints (transition : WorkflowTransition) : Bool := transition.kind != "event" || (workflowOwnsDefinition transition.source "event" transition.trigger && workflowOwnsDefinition transition.target "event" transition.trigger)
 
 def workflowEventTransitionsAreSharedByEndpointSlices : Bool := workflowTransitions.all workflowEventTransitionIsSharedByEndpoints
+
+def workflowEventTransitionSourceParticipates (transition : WorkflowTransition) : Bool := transition.kind != "event" || workflowEventDefinitionParticipates transition.source transition.trigger
+
+def workflowEventTransitionTargetParticipates (transition : WorkflowTransition) : Bool := transition.kind != "event" || workflowEventDefinitionParticipates transition.target transition.trigger
+
+def workflowEventTransitionsHaveParticipatingEndpointEvents : Bool := workflowTransitions.all (fun transition => workflowEventTransitionSourceParticipates transition && workflowEventTransitionTargetParticipates transition)
 
 def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != "navigation" || workflowOwnsDefinition transition.source "control" transition.trigger
 
@@ -267,6 +278,8 @@ theorem workflowCommandTransitionsSourceOwnedControlsIsStable : workflowCommandT
 theorem workflowCommandTransitionsResolveControlsAndCommandsIsStable : workflowCommandTransitionsResolveControlsAndCommands = true := rfl
 
 theorem workflowEventTransitionsAreSharedByEndpointSlicesIsStable : workflowEventTransitionsAreSharedByEndpointSlices = true := rfl
+
+theorem workflowEventTransitionsHaveParticipatingEndpointEventsIsStable : workflowEventTransitionsHaveParticipatingEndpointEvents = true := rfl
 
 theorem workflowNavigationTransitionsResolveControlsAndViewsIsStable : workflowNavigationTransitionsResolveControlsAndViews = true := rfl
 
@@ -721,7 +734,7 @@ fn workflow_owned_definition_list(
 
 fn workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) -> String {
     format!(
-        "{{ sourceSlice := {}, definitionKind := {}, definitionName := {}, definitionStream := {}, sourceProvenance := {} }}",
+        "{{ sourceSlice := {}, definitionKind := {}, definitionName := {}, definitionStream := {}, sourceProvenance := {}, eventParticipation := {} }}",
         quoted(definition.source_slice().as_ref()),
         quoted(definition.definition_kind().as_ref()),
         quoted(definition.definition_name().as_ref()),
@@ -734,6 +747,11 @@ fn workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) 
             definition
                 .source_provenance()
                 .map_or("", |source_provenance| source_provenance.as_ref()),
+        ),
+        quoted(
+            definition
+                .event_participation()
+                .map_or("", |event_participation| event_participation.as_ref()),
         ),
     )
 }

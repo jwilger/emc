@@ -22,9 +22,9 @@ use crate::core::types::{
     ScenarioStepText, SingletonRepeatBehavior, SketchToken, SliceSlug, SourceChainHop, StreamName,
     TransformationSemantics, TransitionTriggerName, TranslationExternalEventName, TranslationName,
     ViewFieldName, ViewFieldSourceKind, ViewName, WorkflowEntryLifecycleEvidenceText,
-    WorkflowEntryLifecycleStateName, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
-    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceText,
-    WorkflowTransitionKind,
+    WorkflowEntryLifecycleStateName, WorkflowEventParticipation, WorkflowOwnedDefinitionKind,
+    WorkflowOwnedDefinitionName, WorkflowSlug, WorkflowTransitionEndpoint,
+    WorkflowTransitionEvidenceText, WorkflowTransitionKind,
 };
 
 #[derive(Debug)]
@@ -548,6 +548,14 @@ pub fn parse_workflow_owned_definition_name(
 ) -> Result<WorkflowOwnedDefinitionName, BoundaryParseError> {
     WorkflowOwnedDefinitionName::try_new(raw.to_owned()).map_err(|error| {
         BoundaryParseError::new(format!("invalid workflow owned definition name: {error}"))
+    })
+}
+
+pub fn parse_workflow_event_participation(
+    raw: &str,
+) -> Result<WorkflowEventParticipation, BoundaryParseError> {
+    WorkflowEventParticipation::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!("invalid workflow event participation: {error}"))
     })
 }
 

@@ -9,12 +9,13 @@ use crate::core::types::{
     PayloadContractName, SliceKindName, SliceSlug, StreamName, TransitionTriggerName,
     WorkflowCommandErrorRecord, WorkflowCommandErrorRecords, WorkflowEntryLifecycleEvidenceText,
     WorkflowEntryLifecycleStateName, WorkflowEntryLifecycleStateRecord,
-    WorkflowEntryLifecycleStateRecords, WorkflowOutcomeRecord, WorkflowOutcomeRecords,
-    WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
-    WorkflowOwnedDefinitionRecords, WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSlug,
-    WorkflowStepRelationshipName, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecord,
-    WorkflowTransitionEvidenceRecords, WorkflowTransitionEvidenceText, WorkflowTransitionKind,
-    WorkflowTransitionRecord, WorkflowTransitionRecords,
+    WorkflowEntryLifecycleStateRecords, WorkflowEventParticipation, WorkflowOutcomeRecord,
+    WorkflowOutcomeRecords, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
+    WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
+    WorkflowSliceDetails, WorkflowSlug, WorkflowStepRelationshipName, WorkflowTransitionEndpoint,
+    WorkflowTransitionEvidenceRecord, WorkflowTransitionEvidenceRecords,
+    WorkflowTransitionEvidenceText, WorkflowTransitionKind, WorkflowTransitionRecord,
+    WorkflowTransitionRecords,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -452,48 +453,45 @@ fn parse_workflow_owned_definitions(
     value: &str,
 ) -> Result<Vec<WorkflowOwnedDefinitionRecord>, FormalGraphError> {
     let strings = parse_quoted_strings(value)?;
-    if value.contains("definitionStream") || value.contains("sourceProvenance") {
-        if strings.len() % 5 != 0 {
-            return Err(FormalGraphError::new(
-                "workflow owned definition declarations must contain groups of 5 strings",
-            ));
-        }
-        strings
-            .chunks_exact(5)
-            .map(|chunk| {
-                if chunk[3].is_empty() && chunk[4].is_empty() {
-                    Ok(WorkflowOwnedDefinitionRecord::new(
-                        transition_endpoint(&chunk[0])?,
-                        workflow_owned_definition_kind(&chunk[1])?,
-                        workflow_owned_definition_name(&chunk[2])?,
-                    ))
-                } else {
-                    Ok(WorkflowOwnedDefinitionRecord::new_with_event_identity(
-                        transition_endpoint(&chunk[0])?,
-                        workflow_owned_definition_kind(&chunk[1])?,
-                        workflow_owned_definition_name(&chunk[2])?,
-                        stream_name(&chunk[3])?,
-                        model_description(chunk[4].clone())?,
-                    ))
-                }
-            })
-            .collect()
-    } else if strings.len() % 3 == 0 {
-        strings
-            .chunks_exact(3)
-            .map(|chunk| {
+    if strings.is_empty() {
+        return Ok(Vec::new());
+    }
+    if strings.len() % 6 != 0 {
+        return Err(FormalGraphError::new(
+            "workflow owned definition declarations must contain groups of 6 strings",
+        ));
+    }
+    strings
+        .chunks_exact(6)
+        .map(|chunk| {
+            if chunk[3].is_empty() && chunk[4].is_empty() && chunk[5].is_empty() {
                 Ok(WorkflowOwnedDefinitionRecord::new(
                     transition_endpoint(&chunk[0])?,
                     workflow_owned_definition_kind(&chunk[1])?,
                     workflow_owned_definition_name(&chunk[2])?,
                 ))
-            })
-            .collect()
-    } else {
-        Err(FormalGraphError::new(
-            "workflow owned definition declarations must contain groups of 3 or 5 strings",
-        ))
-    }
+            } else if chunk[5].is_empty() {
+                Ok(WorkflowOwnedDefinitionRecord::new_with_event_identity(
+                    transition_endpoint(&chunk[0])?,
+                    workflow_owned_definition_kind(&chunk[1])?,
+                    workflow_owned_definition_name(&chunk[2])?,
+                    stream_name(&chunk[3])?,
+                    model_description(chunk[4].clone())?,
+                ))
+            } else {
+                Ok(
+                    WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
+                        transition_endpoint(&chunk[0])?,
+                        workflow_owned_definition_kind(&chunk[1])?,
+                        workflow_owned_definition_name(&chunk[2])?,
+                        stream_name(&chunk[3])?,
+                        model_description(chunk[4].clone())?,
+                        workflow_event_participation(&chunk[5])?,
+                    ),
+                )
+            }
+        })
+        .collect()
 }
 
 fn parse_workflow_transition_evidences(
@@ -741,6 +739,13 @@ fn workflow_owned_definition_name(
     value: &str,
 ) -> Result<WorkflowOwnedDefinitionName, FormalGraphError> {
     WorkflowOwnedDefinitionName::try_new(value.to_owned())
+        .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn workflow_event_participation(
+    value: &str,
+) -> Result<WorkflowEventParticipation, FormalGraphError> {
+    WorkflowEventParticipation::try_new(value.to_owned())
         .map_err(|error| FormalGraphError::new(error.to_string()))
 }
 

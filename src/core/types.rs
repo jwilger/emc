@@ -569,6 +569,13 @@ pub struct WorkflowOwnedDefinitionKind(String);
 )]
 pub struct WorkflowOwnedDefinitionName(String);
 
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct WorkflowEventParticipation(String);
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct WorkflowOwnedDefinitionRecord {
     source_slice: WorkflowTransitionEndpoint,
@@ -576,6 +583,7 @@ pub struct WorkflowOwnedDefinitionRecord {
     definition_name: WorkflowOwnedDefinitionName,
     definition_stream: Option<StreamName>,
     source_provenance: Option<ModelDescription>,
+    event_participation: Option<WorkflowEventParticipation>,
 }
 
 impl WorkflowOwnedDefinitionRecord {
@@ -590,6 +598,7 @@ impl WorkflowOwnedDefinitionRecord {
             definition_name,
             definition_stream: None,
             source_provenance: None,
+            event_participation: None,
         }
     }
 
@@ -606,6 +615,25 @@ impl WorkflowOwnedDefinitionRecord {
             definition_name,
             definition_stream: Some(definition_stream),
             source_provenance: Some(source_provenance),
+            event_participation: None,
+        }
+    }
+
+    pub fn new_with_event_identity_and_participation(
+        source_slice: WorkflowTransitionEndpoint,
+        definition_kind: WorkflowOwnedDefinitionKind,
+        definition_name: WorkflowOwnedDefinitionName,
+        definition_stream: StreamName,
+        source_provenance: ModelDescription,
+        event_participation: WorkflowEventParticipation,
+    ) -> Self {
+        Self {
+            source_slice,
+            definition_kind,
+            definition_name,
+            definition_stream: Some(definition_stream),
+            source_provenance: Some(source_provenance),
+            event_participation: Some(event_participation),
         }
     }
 
@@ -627,6 +655,10 @@ impl WorkflowOwnedDefinitionRecord {
 
     pub fn source_provenance(&self) -> Option<&ModelDescription> {
         self.source_provenance.as_ref()
+    }
+
+    pub fn event_participation(&self) -> Option<&WorkflowEventParticipation> {
+        self.event_participation.as_ref()
     }
 }
 
