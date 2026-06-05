@@ -295,11 +295,8 @@ guardrails, not an independent semantic validator for event-model correctness.
 ## Formal Modeling Rules
 
 The acceptance checklist for the formal metamodel and MCP authoring workflow is
-documented in:
-
-```text
-docs/event-model/formal-modeling-rules.md
-```
+documented in
+[docs/event-model/formal-modeling-rules.md](docs/event-model/formal-modeling-rules.md).
 
 Information completeness means every datum that flows through the modeled system
 is represented down to source, transformation or projection, target, and
