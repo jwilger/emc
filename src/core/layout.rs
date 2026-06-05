@@ -7,11 +7,11 @@ use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
 use crate::core::formal_project_facts::{
-    ProjectAutomation, ProjectCommand, ProjectCommandError, ProjectCommandInput, ProjectDataFlow,
-    ProjectEvent, ProjectEventAttribute, ProjectExternalPayload, ProjectExternalPayloadField,
-    ProjectOutcome, ProjectReadModel, ProjectReadModelDefinition, ProjectReadModelField,
-    ProjectScenario, ProjectScenarioDefinition, ProjectStream, ProjectTranslation,
-    ProjectTranslationDefinition, ProjectView, ProjectViewField,
+    ProjectAutomation, ProjectAutomationDefinition, ProjectCommand, ProjectCommandError,
+    ProjectCommandInput, ProjectDataFlow, ProjectEvent, ProjectEventAttribute,
+    ProjectExternalPayload, ProjectExternalPayloadField, ProjectOutcome, ProjectReadModel,
+    ProjectReadModelDefinition, ProjectReadModelField, ProjectScenario, ProjectScenarioDefinition,
+    ProjectStream, ProjectTranslation, ProjectTranslationDefinition, ProjectView, ProjectViewField,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{
@@ -114,6 +114,7 @@ pub struct ModeledProjectRootInventories {
     views: Vec<ProjectView>,
     view_fields: Vec<ProjectViewField>,
     automations: Vec<ProjectAutomation>,
+    automation_definitions: Vec<ProjectAutomationDefinition>,
     translations: Vec<ProjectTranslation>,
     translation_definitions: Vec<ProjectTranslationDefinition>,
     external_payloads: Vec<ProjectExternalPayload>,
@@ -137,6 +138,7 @@ pub(crate) struct ModeledProjectRootInventoryParts {
     pub(crate) views: Vec<ProjectView>,
     pub(crate) view_fields: Vec<ProjectViewField>,
     pub(crate) automations: Vec<ProjectAutomation>,
+    pub(crate) automation_definitions: Vec<ProjectAutomationDefinition>,
     pub(crate) translations: Vec<ProjectTranslation>,
     pub(crate) translation_definitions: Vec<ProjectTranslationDefinition>,
     pub(crate) external_payloads: Vec<ProjectExternalPayload>,
@@ -162,6 +164,7 @@ impl ModeledProjectRootInventories {
             views: parts.views,
             view_fields: parts.view_fields,
             automations: parts.automations,
+            automation_definitions: parts.automation_definitions,
             translations: parts.translations,
             translation_definitions: parts.translation_definitions,
             external_payloads: parts.external_payloads,
@@ -204,6 +207,7 @@ pub fn check_project(
             views: &project_inventories.views,
             view_fields: &project_inventories.view_fields,
             automations: &project_inventories.automations,
+            automation_definitions: &project_inventories.automation_definitions,
             translations: &project_inventories.translations,
             translation_definitions: &project_inventories.translation_definitions,
             external_payloads: &project_inventories.external_payloads,
@@ -322,6 +326,7 @@ struct ProjectRootInventories<'a> {
     views: &'a [ProjectView],
     view_fields: &'a [ProjectViewField],
     automations: &'a [ProjectAutomation],
+    automation_definitions: &'a [ProjectAutomationDefinition],
     translations: &'a [ProjectTranslation],
     translation_definitions: &'a [ProjectTranslationDefinition],
     external_payloads: &'a [ProjectExternalPayload],
@@ -360,6 +365,8 @@ fn project_root_effects(
     let lean_model_view_list = lean_model_view_list(inventories.views);
     let lean_model_view_field_list = lean_model_view_field_list(inventories.view_fields);
     let lean_model_automation_list = lean_model_automation_list(inventories.automations);
+    let lean_model_automation_definition_list =
+        lean_model_automation_definition_list(inventories.automation_definitions);
     let lean_model_translation_list = lean_model_translation_list(inventories.translations);
     let lean_model_translation_definition_list =
         lean_model_translation_definition_list(inventories.translation_definitions);
@@ -389,6 +396,8 @@ fn project_root_effects(
     let quint_model_view_list = quint_model_view_list(inventories.views);
     let quint_model_view_field_list = quint_model_view_field_list(inventories.view_fields);
     let quint_model_automation_list = quint_model_automation_list(inventories.automations);
+    let quint_model_automation_definition_list =
+        quint_model_automation_definition_list(inventories.automation_definitions);
     let quint_model_translation_list = quint_model_translation_list(inventories.translations);
     let quint_model_translation_definition_list =
         quint_model_translation_definition_list(inventories.translation_definitions);
@@ -424,6 +433,7 @@ fn project_root_effects(
     let view_count = inventories.views.len();
     let view_field_count = inventories.view_fields.len();
     let automation_count = inventories.automations.len();
+    let automation_definition_count = inventories.automation_definitions.len();
     let translation_count = inventories.translations.len();
     let translation_definition_count = inventories.translation_definitions.len();
     let external_payload_count = inventories.external_payloads.len();
@@ -643,6 +653,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelAutomationDefinitions :"),
+            artifact_marker(format!(
+                "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := {lean_model_automation_definition_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelTranslations :"),
             artifact_marker(format!(
                 "def modelTranslations : List (String × String × String) := {lean_model_translation_list}"
@@ -854,6 +872,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelAutomationDefinitionsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelAutomationDefinitionsAreDeclared : modelAutomationDefinitions.length = {automation_definition_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelTranslationsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelTranslationsAreDeclared : modelTranslations.length = {translation_count} := rfl"
@@ -1031,6 +1057,14 @@ fn project_root_effects(
             artifact_marker("  type ModelAutomation ="),
             artifact_marker(
                 "  type ModelAutomation = { workflow: str, slice: str, automation: str }",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelAutomationDefinition ="),
+            artifact_marker(
+                "  type ModelAutomationDefinition = { workflow: str, slice: str, automation: str, trigger: str, command: str, handledErrors: List[str], reaction: str }",
             ),
             quint_message.clone(),
         ),
@@ -1245,6 +1279,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelAutomationDefinitions:"),
+            artifact_marker(format!(
+                "  val modelAutomationDefinitions: List[ModelAutomationDefinition] = {quint_model_automation_definition_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelTranslations:"),
             artifact_marker(format!(
                 "  val modelTranslations: List[ModelTranslation] = {quint_model_translation_list}"
@@ -1451,6 +1493,14 @@ fn project_root_effects(
             artifact_marker("  val modelAutomationsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelAutomationsAreDeclared = modelAutomations.length() == {automation_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelAutomationDefinitionsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelAutomationDefinitionsAreDeclared = modelAutomationDefinitions.length() == {automation_definition_count}"
             )),
             quint_message.clone(),
         ),
@@ -3459,6 +3509,54 @@ fn quint_model_automation_list(project_automations: &[ProjectAutomation]) -> Str
     )
 }
 
+fn lean_model_automation_definition_list(definitions: &[ProjectAutomationDefinition]) -> String {
+    let mut definitions = definitions.iter().collect::<Vec<_>>();
+    definitions.sort_unstable();
+    format!(
+        "[{}]",
+        definitions
+            .into_iter()
+            .map(|definition| {
+                format!(
+                    "({}, {}, {}, {}, {}, [{}], {})",
+                    json_string(definition.workflow_slug()),
+                    json_string(definition.slice_slug()),
+                    json_string(definition.automation()),
+                    json_string(definition.trigger()),
+                    json_string(definition.command()),
+                    json_string_list(definition.handled_errors()),
+                    json_string(definition.reaction())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_automation_definition_list(definitions: &[ProjectAutomationDefinition]) -> String {
+    let mut definitions = definitions.iter().collect::<Vec<_>>();
+    definitions.sort_unstable();
+    format!(
+        "[{}]",
+        definitions
+            .into_iter()
+            .map(|definition| {
+                format!(
+                    "{{ workflow: {}, slice: {}, automation: {}, trigger: {}, command: {}, handledErrors: [{}], reaction: {} }}",
+                    json_string(definition.workflow_slug()),
+                    json_string(definition.slice_slug()),
+                    json_string(definition.automation()),
+                    json_string(definition.trigger()),
+                    json_string(definition.command()),
+                    json_string_list(definition.handled_errors()),
+                    json_string(definition.reaction())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn lean_model_translation_list(project_translations: &[ProjectTranslation]) -> String {
     let mut project_translations = project_translations
         .iter()
@@ -3879,7 +3977,7 @@ fn model_digest(
     inventories: &ProjectRootInventories<'_>,
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-fields={};automations={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
+        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-fields={};automations={};automation-definitions={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
@@ -3896,6 +3994,7 @@ fn model_digest(
         digest_views(inventories.views),
         digest_view_fields(inventories.view_fields),
         digest_automations(inventories.automations),
+        digest_automation_definitions(inventories.automation_definitions),
         digest_translations(inventories.translations),
         digest_translation_definitions(inventories.translation_definitions),
         digest_external_payloads(inventories.external_payloads),
@@ -4240,6 +4339,27 @@ fn digest_automations(project_automations: &[ProjectAutomation]) -> String {
         .into_iter()
         .map(|(workflow_slug, slice_slug, automation)| {
             format!("{workflow_slug}/{slice_slug}/{automation}")
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_automation_definitions(definitions: &[ProjectAutomationDefinition]) -> String {
+    let mut definitions = definitions.iter().collect::<Vec<_>>();
+    definitions.sort_unstable();
+    definitions
+        .into_iter()
+        .map(|definition| {
+            format!(
+                "{}/{}/{}@{}#{}#{}#{}",
+                definition.workflow_slug(),
+                definition.slice_slug(),
+                definition.automation(),
+                definition.trigger(),
+                definition.command(),
+                definition.handled_errors().join("|"),
+                definition.reaction()
+            )
         })
         .collect::<Vec<_>>()
         .join(",")

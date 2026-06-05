@@ -1026,6 +1026,22 @@ impl NewAutomationDefinition {
     pub fn name(&self) -> &AutomationName {
         &self.name
     }
+
+    pub fn trigger_name(&self) -> &AutomationTriggerName {
+        &self.trigger_name
+    }
+
+    pub fn command_name(&self) -> &CommandName {
+        &self.command_name
+    }
+
+    pub fn handled_errors(&self) -> &CommandErrorNames {
+        &self.handled_errors
+    }
+
+    pub fn reaction_description(&self) -> &AutomationReactionDescription {
+        &self.reaction_description
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
