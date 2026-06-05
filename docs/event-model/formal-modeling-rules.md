@@ -245,11 +245,3 @@ Quint should verify at least:
 ## Non-Goals
 
 - Do not duplicate event-model semantic validation in Rust or JavaScript.
-
-## Development Testing Rules
-
-- Tests must exercise observable behavior, generated formal artifacts, CLI/MCP
-  output, and mechanical verification results.
-- Do not add tautological tests that inspect implementation source text, build
-  recipes, or documentation wording to prove a feature is absent or a project
-  rule exists.
