@@ -186,6 +186,26 @@ impl NewBitLevelDataFlow {
     pub fn slice_slug(&self) -> &SliceSlug {
         &self.slice_slug
     }
+
+    pub fn datum(&self) -> &DatumName {
+        &self.datum
+    }
+
+    pub fn source(&self) -> &DataFlowSource {
+        &self.source
+    }
+
+    pub fn transformation(&self) -> &TransformationSemantics {
+        &self.transformation
+    }
+
+    pub fn target(&self) -> &DataFlowTarget {
+        &self.target
+    }
+
+    pub fn bit_encoding(&self) -> &BitEncodingSemantics {
+        &self.bit_encoding
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
