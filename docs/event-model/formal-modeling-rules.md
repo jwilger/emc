@@ -199,9 +199,9 @@ A model is complete and valid only when all of these are true:
   configured states.
 - ✅ Transitions target known workflow steps or explicit workflow exits.
 - ✅ Event transitions are shared by source and target slices.
-- 🟡 Event transitions require the source slice to emit or observe the
+- ✅ Event transitions require the source slice to emit or observe the
   transition event.
-- 🟡 Event transitions require the target slice to observe or emit the
+- ✅ Event transitions require the target slice to observe or emit the
   transition event.
 - ✅ Command transitions come from controls owned by source views.
 - ✅ Command transitions target the slice that owns the command.

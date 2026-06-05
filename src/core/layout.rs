@@ -2113,6 +2113,12 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
+            artifact_marker("    \"workflowEventTransitionsHaveParticipatingEndpointEvents\""),
+            artifact_marker("    \"workflowEventTransitionsHaveParticipatingEndpointEvents\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
             artifact_marker("    \"workflowNavigationTransitionsResolveControlsAndViews\""),
             artifact_marker("    \"workflowNavigationTransitionsResolveControlsAndViews\","),
             quint_config_message.clone(),

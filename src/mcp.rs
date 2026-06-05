@@ -53,8 +53,8 @@ use crate::io::dto::{
     parse_transition_trigger_name, parse_translation_external_event_name, parse_translation_name,
     parse_view_field_name, parse_view_field_source_kind, parse_view_name,
     parse_workflow_entry_lifecycle_evidence_text, parse_workflow_entry_lifecycle_state_name,
-    parse_workflow_owned_definition_kind, parse_workflow_owned_definition_name,
-    parse_workflow_slug, parse_workflow_transition_endpoint,
+    parse_workflow_event_participation, parse_workflow_owned_definition_kind,
+    parse_workflow_owned_definition_name, parse_workflow_slug, parse_workflow_transition_endpoint,
     parse_workflow_transition_evidence_text, parse_workflow_transition_kind,
 };
 use crate::shell::{ShellError, interpret_collect_reports};
@@ -544,6 +544,9 @@ fn tools_list_result() -> Result<Value, ShellError> {
                             "type": "string"
                         },
                         "source_provenance": {
+                            "type": "string"
+                        },
+                        "event_participation": {
                             "type": "string"
                         }
                     },
@@ -1796,8 +1799,26 @@ fn add_workflow_owned_definition_tool_text(request: &Value) -> Result<String, Sh
                 .map_err(|error| ShellError::message(error.to_string()))
         })
         .transpose()?;
-    let definition = match (definition_stream, source_provenance) {
-        (Some(definition_stream), Some(source_provenance)) => {
+    let event_participation = arguments
+        .get("event_participation")
+        .and_then(Value::as_str)
+        .map(|raw_event_participation| {
+            parse_workflow_event_participation(raw_event_participation)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .transpose()?;
+    let definition = match (definition_stream, source_provenance, event_participation) {
+        (Some(definition_stream), Some(source_provenance), Some(event_participation)) => {
+            WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
+                source_slice,
+                definition_kind,
+                definition_name,
+                definition_stream,
+                source_provenance,
+                event_participation,
+            )
+        }
+        (Some(definition_stream), Some(source_provenance), None) => {
             WorkflowOwnedDefinitionRecord::new_with_event_identity(
                 source_slice,
                 definition_kind,
@@ -1806,7 +1827,19 @@ fn add_workflow_owned_definition_tool_text(request: &Value) -> Result<String, Sh
                 source_provenance,
             )
         }
-        _ => WorkflowOwnedDefinitionRecord::new(source_slice, definition_kind, definition_name),
+        (None, None, None) => {
+            WorkflowOwnedDefinitionRecord::new(source_slice, definition_kind, definition_name)
+        }
+        (_, _, Some(_)) => {
+            return Err(ShellError::message(
+                "event_participation requires definition_stream and source_provenance",
+            ));
+        }
+        _ => {
+            return Err(ShellError::message(
+                "definition_stream and source_provenance must be provided together",
+            ));
+        }
     };
 
     interpret_collect_reports(command::add_workflow_owned_definition(

@@ -320,10 +320,10 @@ mod tests {
         let updated_digest = digest_marker(&lean).ok_or("Lean artifact is missing digest")?;
 
         assert!(lean.contains(
-            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"command\", definitionName := \"CaptureTicket\", definitionStream := \"\", sourceProvenance := \"\" }]"
+            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"command\", definitionName := \"CaptureTicket\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\" }]"
         ));
         assert!(quint.contains(
-            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"command\", definitionName: \"CaptureTicket\", definitionStream: \"\", sourceProvenance: \"\" }]"
+            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"command\", definitionName: \"CaptureTicket\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\" }]"
         ));
         assert_ne!(
             initial_digest, updated_digest,
@@ -450,10 +450,10 @@ mod tests {
             "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
         ));
         assert!(lean.contains(
-            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"control\", definitionName := \"review-ticket-screen\", definitionStream := \"\", sourceProvenance := \"\" },{ sourceSlice := \"review-ticket\", definitionKind := \"view\", definitionName := \"review-ticket-screen\", definitionStream := \"\", sourceProvenance := \"\" }]"
+            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"control\", definitionName := \"review-ticket-screen\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\" },{ sourceSlice := \"review-ticket\", definitionKind := \"view\", definitionName := \"review-ticket-screen\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\" }]"
         ));
         assert!(quint.contains(
-            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"control\", definitionName: \"review-ticket-screen\", definitionStream: \"\", sourceProvenance: \"\" },{ sourceSlice: \"review-ticket\", definitionKind: \"view\", definitionName: \"review-ticket-screen\", definitionStream: \"\", sourceProvenance: \"\" }]"
+            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"control\", definitionName: \"review-ticket-screen\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\" },{ sourceSlice: \"review-ticket\", definitionKind: \"view\", definitionName: \"review-ticket-screen\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\" }]"
         ));
         assert_ne!(
             initial_digest, updated_digest,
@@ -967,6 +967,7 @@ mod tests {
             "TicketSubmittedForReview",
             "tickets",
             "SubmitTicketForReview command output",
+            "emitted",
         )?;
         add_workflow_owned_event_definition(
             temp_dir.path(),
@@ -975,6 +976,7 @@ mod tests {
             "TicketSubmittedForReview",
             "tickets",
             "SubmitTicketForReview command output",
+            "observed",
         )?;
 
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
@@ -993,10 +995,10 @@ mod tests {
             "Quint artifact must represent command and event workflow transitions"
         );
         assert!(lean.contains(
-            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"control\", definitionName := \"SubmitTicketForReview\", definitionStream := \"\", sourceProvenance := \"\" },{ sourceSlice := \"submit-ticket\", definitionKind := \"command\", definitionName := \"SubmitTicketForReview\", definitionStream := \"\", sourceProvenance := \"\" },{ sourceSlice := \"submit-ticket\", definitionKind := \"event\", definitionName := \"TicketSubmittedForReview\", definitionStream := \"tickets\", sourceProvenance := \"SubmitTicketForReview command output\" },{ sourceSlice := \"review-ticket\", definitionKind := \"event\", definitionName := \"TicketSubmittedForReview\", definitionStream := \"tickets\", sourceProvenance := \"SubmitTicketForReview command output\" }]"
+            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"control\", definitionName := \"SubmitTicketForReview\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\" },{ sourceSlice := \"submit-ticket\", definitionKind := \"command\", definitionName := \"SubmitTicketForReview\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\" },{ sourceSlice := \"submit-ticket\", definitionKind := \"event\", definitionName := \"TicketSubmittedForReview\", definitionStream := \"tickets\", sourceProvenance := \"SubmitTicketForReview command output\", eventParticipation := \"emitted\" },{ sourceSlice := \"review-ticket\", definitionKind := \"event\", definitionName := \"TicketSubmittedForReview\", definitionStream := \"tickets\", sourceProvenance := \"SubmitTicketForReview command output\", eventParticipation := \"observed\" }]"
         ));
         assert!(quint.contains(
-            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"control\", definitionName: \"SubmitTicketForReview\", definitionStream: \"\", sourceProvenance: \"\" },{ sourceSlice: \"submit-ticket\", definitionKind: \"command\", definitionName: \"SubmitTicketForReview\", definitionStream: \"\", sourceProvenance: \"\" },{ sourceSlice: \"submit-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmittedForReview\", definitionStream: \"tickets\", sourceProvenance: \"SubmitTicketForReview command output\" },{ sourceSlice: \"review-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmittedForReview\", definitionStream: \"tickets\", sourceProvenance: \"SubmitTicketForReview command output\" }]"
+            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"control\", definitionName: \"SubmitTicketForReview\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\" },{ sourceSlice: \"submit-ticket\", definitionKind: \"command\", definitionName: \"SubmitTicketForReview\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\" },{ sourceSlice: \"submit-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmittedForReview\", definitionStream: \"tickets\", sourceProvenance: \"SubmitTicketForReview command output\", eventParticipation: \"emitted\" },{ sourceSlice: \"review-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmittedForReview\", definitionStream: \"tickets\", sourceProvenance: \"SubmitTicketForReview command output\", eventParticipation: \"observed\" }]"
         ));
 
         Command::cargo_bin("emc")?
@@ -2370,6 +2372,7 @@ mod tests {
         definition_name: &str,
         definition_stream: &str,
         source_provenance: &str,
+        event_participation: &str,
     ) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args([
@@ -2387,6 +2390,8 @@ mod tests {
                 definition_stream,
                 "--source-provenance",
                 source_provenance,
+                "--event-participation",
+                event_participation,
             ])
             .current_dir(cwd)
             .assert()

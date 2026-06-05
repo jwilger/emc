@@ -135,7 +135,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure WorkflowOwnedDefinition where\n  sourceSlice : String\n  definitionKind : String\n  definitionName : String\n  definitionStream : String\n  sourceProvenance : String"
+                "structure WorkflowOwnedDefinition where\n  sourceSlice : String\n  definitionKind : String\n  definitionName : String\n  definitionStream : String\n  sourceProvenance : String\n  eventParticipation : String"
             ),
             "Lean workflow artifacts must represent cross-slice definition ownership with event identity fields"
         );
@@ -164,7 +164,7 @@ mod tests {
             "Lean workflow artifacts must carry command-local errors so outcome transitions cannot use them"
         );
         assert!(
-            lean.contains("def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"external_payload\", definitionName := \"CallbackReceivedPayload\", definitionStream := \"\", sourceProvenance := \"\" }]"),
+            lean.contains("def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"external_payload\", definitionName := \"CallbackReceivedPayload\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\" }]"),
             "Lean workflow artifacts must carry the authored cross-slice ownership inventory"
         );
         assert!(
@@ -471,6 +471,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def workflowEventDefinitionParticipates (sourceSlice : String) (eventName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == \"event\" && definition.definitionName == eventName && workflowEventParticipationIsModeled definition)"
+            ),
+            "Lean workflow artifacts must resolve event transition endpoint event participation"
+        );
+        assert!(
+            lean.contains(
+                "def workflowEventTransitionsHaveParticipatingEndpointEvents : Bool := workflowTransitions.all (fun transition => workflowEventTransitionSourceParticipates transition && workflowEventTransitionTargetParticipates transition)"
+            ),
+            "Lean workflow artifacts must expose event transition endpoint participation as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != \"navigation\" || workflowOwnsDefinition transition.source \"control\" transition.trigger"
             ),
             "Lean workflow artifacts must require navigation transitions to come from source-owned controls"
@@ -570,6 +582,12 @@ mod tests {
                 "theorem workflowEventTransitionsAreSharedByEndpointSlicesIsStable : workflowEventTransitionsAreSharedByEndpointSlices = true := rfl"
             ),
             "Lean workflow artifacts must prove current event transitions are shared by endpoint slices"
+        );
+        assert!(
+            lean.contains(
+                "theorem workflowEventTransitionsHaveParticipatingEndpointEventsIsStable : workflowEventTransitionsHaveParticipatingEndpointEvents = true := rfl"
+            ),
+            "Lean workflow artifacts must prove current event transitions have participating endpoint events"
         );
         assert!(
             lean.contains(

@@ -576,11 +576,53 @@ mod tests {
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
         assert!(lean.contains(
-            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"command\", definitionName := \"CaptureTicket\", definitionStream := \"\", sourceProvenance := \"\" },{ sourceSlice := \"capture-ticket\", definitionKind := \"event\", definitionName := \"TicketSubmitted\", definitionStream := \"tickets\", sourceProvenance := \"CaptureTicket command input\" }]"
+            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"command\", definitionName := \"CaptureTicket\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\" },{ sourceSlice := \"capture-ticket\", definitionKind := \"event\", definitionName := \"TicketSubmitted\", definitionStream := \"tickets\", sourceProvenance := \"CaptureTicket command input\", eventParticipation := \"emitted\" }]"
         ));
         assert!(quint.contains(
-            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"command\", definitionName: \"CaptureTicket\", definitionStream: \"\", sourceProvenance: \"\" },{ sourceSlice: \"capture-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmitted\", definitionStream: \"tickets\", sourceProvenance: \"CaptureTicket command input\" }]"
+            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"command\", definitionName: \"CaptureTicket\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\" },{ sourceSlice: \"capture-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmitted\", definitionStream: \"tickets\", sourceProvenance: \"CaptureTicket command input\", eventParticipation: \"emitted\" }]"
         ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_rejects_event_participation_without_event_identity() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(temp_dir.path(), "capture-ticket", "Capture ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(incomplete_event_participation_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"error\""))
+            .stdout(predicate::str::contains(
+                "event_participation requires definition_stream and source_provenance",
+            ));
 
         Ok(())
     }
@@ -805,7 +847,14 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"command\",\"definition_name\":\"CaptureTicket\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"event\",\"definition_name\":\"TicketSubmitted\",\"definition_stream\":\"tickets\",\"source_provenance\":\"CaptureTicket command input\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"event\",\"definition_name\":\"TicketSubmitted\",\"definition_stream\":\"tickets\",\"source_provenance\":\"CaptureTicket command input\",\"event_participation\":\"emitted\"}}}\n",
+        )
+    }
+
+    fn incomplete_event_participation_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_owned_definition\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"definition_kind\":\"event\",\"definition_name\":\"TicketSubmitted\",\"event_participation\":\"emitted\"}}}\n",
         )
     }
 

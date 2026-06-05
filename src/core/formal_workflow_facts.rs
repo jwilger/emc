@@ -264,7 +264,7 @@ fn quint_workflow_command_error_record(error: &WorkflowCommandErrorRecord) -> St
 
 fn lean_workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) -> String {
     format!(
-        "{{ sourceSlice := {}, definitionKind := {}, definitionName := {}, definitionStream := {}, sourceProvenance := {} }}",
+        "{{ sourceSlice := {}, definitionKind := {}, definitionName := {}, definitionStream := {}, sourceProvenance := {}, eventParticipation := {} }}",
         quoted(definition.source_slice().as_ref()),
         quoted(definition.definition_kind().as_ref()),
         quoted(definition.definition_name().as_ref()),
@@ -277,13 +277,18 @@ fn lean_workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRec
             definition
                 .source_provenance()
                 .map_or("", |source_provenance| source_provenance.as_ref()),
+        ),
+        quoted(
+            definition
+                .event_participation()
+                .map_or("", |event_participation| event_participation.as_ref()),
         ),
     )
 }
 
 fn quint_workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) -> String {
     format!(
-        "{{ sourceSlice: {}, definitionKind: {}, definitionName: {}, definitionStream: {}, sourceProvenance: {} }}",
+        "{{ sourceSlice: {}, definitionKind: {}, definitionName: {}, definitionStream: {}, sourceProvenance: {}, eventParticipation: {} }}",
         quoted(definition.source_slice().as_ref()),
         quoted(definition.definition_kind().as_ref()),
         quoted(definition.definition_name().as_ref()),
@@ -296,6 +301,11 @@ fn quint_workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRe
             definition
                 .source_provenance()
                 .map_or("", |source_provenance| source_provenance.as_ref()),
+        ),
+        quoted(
+            definition
+                .event_participation()
+                .map_or("", |event_participation| event_participation.as_ref()),
         ),
     )
 }
