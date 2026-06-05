@@ -788,6 +788,22 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelControlProvidesCommandInput"),
+            artifact_marker(
+                "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String) : Bool := control.1 == input.1 && control.2.2.2.2.1 == input.2.2.1 && control.2.2.2.2.2.1 == input.2.2.2.1",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelViewControlProvidesEveryCommandInput"),
+            artifact_marker(
+                "def modelViewControlProvidesEveryCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) : Bool := modelCommandInputs.all (fun input => input.1 != control.1 || input.2.2.1 != control.2.2.2.2.1 || modelViewControls.any (fun providedInput => providedInput.1 == control.1 && providedInput.2.1 == control.2.1 && providedInput.2.2.1 == control.2.2.1 && providedInput.2.2.2.1 == control.2.2.2.1 && providedInput.2.2.2.2.1 == control.2.2.2.2.1 && modelControlProvidesCommandInput providedInput input))",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelIdentityIsStable"),
             artifact_marker(format!(
                 "theorem modelIdentityIsStable : modelName = {} := rfl",
@@ -939,6 +955,14 @@ fn project_root_effects(
             artifact_marker(format!(
                 "theorem modelViewControlsAreDeclared : modelViewControls.length = {view_control_count} := rfl"
             )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelViewControlsProvideCommandInputs"),
+            artifact_marker(
+                "theorem modelViewControlsProvideCommandInputs : modelViewControls.all modelViewControlProvidesEveryCommandInput = true := rfl",
+            ),
             lean_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -1665,6 +1689,30 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  def modelControlProvidesCommandInput"),
+            artifact_marker(
+                "  def modelControlProvidesCommandInput(control, input) = control.workflow == input.workflow and control.command == input.command and control.input == input.input",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelViewControlProvidesEveryCommandInput"),
+            artifact_marker(
+                "  def modelViewControlProvidesEveryCommandInput(control) = modelCommandInputs.select(input => input.workflow != control.workflow or input.command != control.command or modelViewControls.select(providedInput => providedInput.workflow == control.workflow and providedInput.slice == control.slice and providedInput.view == control.view and providedInput.control == control.control and providedInput.command == control.command and modelControlProvidesCommandInput(providedInput, input)).length() > 0).length() == modelCommandInputs.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelViewControlsProvideCommandInputs ="),
+            artifact_marker(
+                "  val modelViewControlsProvideCommandInputs = modelViewControls.select(control => modelViewControlProvidesEveryCommandInput(control)).length() == modelViewControls.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelBoardElementsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelBoardElementsAreDeclared = modelBoardElements.length() == {board_element_count}"
@@ -1928,9 +1976,15 @@ fn project_root_effects(
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"workflowEntryLifecycleStatesCoverRequiredStates\""),
+            artifact_marker("    \"workflowEntryLifecycleStatesCoverRequiredStates\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
             quint_config_path,
-            artifact_marker("    \"workflowEntryLifecycleStatesCoverRequiredStates\""),
-            artifact_marker("    \"workflowEntryLifecycleStatesCoverRequiredStates\""),
+            artifact_marker("    \"modelViewControlsProvideCommandInputs\""),
+            artifact_marker("    \"modelViewControlsProvideCommandInputs\""),
             quint_config_message,
         ),
     ]
