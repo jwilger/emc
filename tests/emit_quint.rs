@@ -1030,7 +1030,10 @@ mod tests {
             "def navigationExternalWorkflowTargetsNamed(target) = target.targetType != \"external_workflow\" or target.externalWorkflowName != \"\""
         ));
         assert!(quint.contains(
-            "def navigationTargetIsComplete(view, target) = (target.targetType == \"\" and target.targetName == \"\" and target.externalWorkflowName == \"\" and target.externalSystemName == \"\" and target.handoffContract == \"\") or (target.targetType == \"modeled_view\" and target.targetName != \"\" and sliceViews.select(viewName => viewName == target.targetName).length() > 0) or (target.targetType == \"local_view_state\" and localViewStateNavigationTargetResolves(view, target)) or (target.targetType == \"external_workflow\" and navigationExternalWorkflowTargetsNamed(target)) or (target.targetType == \"external_system\" and target.externalSystemName != \"\" and target.handoffContract != \"\")"
+            "def navigationExternalSystemTargetsHaveContracts(target) = target.targetType != \"external_system\" or (target.externalSystemName != \"\" and target.handoffContract != \"\")"
+        ));
+        assert!(quint.contains(
+            "def navigationTargetIsComplete(view, target) = (target.targetType == \"\" and target.targetName == \"\" and target.externalWorkflowName == \"\" and target.externalSystemName == \"\" and target.handoffContract == \"\") or (target.targetType == \"modeled_view\" and target.targetName != \"\" and sliceViews.select(viewName => viewName == target.targetName).length() > 0) or (target.targetType == \"local_view_state\" and localViewStateNavigationTargetResolves(view, target)) or (target.targetType == \"external_workflow\" and navigationExternalWorkflowTargetsNamed(target)) or (target.targetType == \"external_system\" and navigationExternalSystemTargetsHaveContracts(target))"
         ));
         assert!(quint.contains(
             "val viewControlNavigationTypesAreModeled = sliceViewDefinitions.select(view => view.controls.select(control => navigationTargetTypeIsModeled(control.navigation)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
@@ -1043,6 +1046,9 @@ mod tests {
         ));
         assert!(quint.contains(
             "val viewControlExternalWorkflowNavigationTargetsNamed = sliceViewDefinitions.select(view => view.controls.select(control => navigationExternalWorkflowTargetsNamed(control.navigation)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
+        ));
+        assert!(quint.contains(
+            "val viewControlExternalSystemNavigationTargetsHaveContracts = sliceViewDefinitions.select(view => view.controls.select(control => navigationExternalSystemTargetsHaveContracts(control.navigation)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
             "val viewControlNavigationTargetsAreComplete = sliceViewDefinitions.select(view => view.controls.select(control => navigationTargetIsComplete(view, control.navigation)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
