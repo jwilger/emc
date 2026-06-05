@@ -625,6 +625,159 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             navigation_type,
             navigation_target_flag,
             navigation_target,
+            external_workflow_flag,
+            external_workflow,
+        ] if command == "add"
+            && subject == "view"
+            && slice_flag == "--slice"
+            && name_flag == "--name"
+            && read_model_flag == "--read-model"
+            && field_flag == "--field"
+            && source_field_flag == "--source-field"
+            && sketch_token_flag == "--sketch-token"
+            && field_provenance_flag == "--field-provenance"
+            && bit_encoding_flag == "--bit-encoding"
+            && control_flag == "--control"
+            && control_command_flag == "--control-command"
+            && control_input_flag == "--control-input"
+            && control_input_source_flag == "--control-input-source"
+            && control_input_description_flag == "--control-input-description"
+            && control_input_sketch_token_flag == "--control-input-sketch-token"
+            && control_input_visible_flag == "--control-input-visible"
+            && control_input_decision_flag == "--control-input-decision"
+            && handled_errors_flag == "--handled-errors"
+            && recovery_behavior_flag == "--recovery-behavior"
+            && control_sketch_token_flag == "--control-sketch-token"
+            && navigation_type_flag == "--navigation-type"
+            && navigation_target_flag == "--navigation-target"
+            && external_workflow_flag == "--external-workflow" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+            let view_name =
+                parse_view_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+            let read_model_name = parse_read_model_name(read_model)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let field_name = parse_view_field_name(field)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_field = parse_view_field_name(source_field)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let sketch_token = parse_sketch_token(sketch_token)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let provenance_description = parse_provenance_description(field_provenance)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let bit_encoding = parse_bit_encoding_semantics(bit_encoding)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let control_name = parse_control_name(control)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let control_command = parse_command_name(control_command)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let control_input = parse_datum_name(control_input)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let control_input_source = parse_command_input_source_kind(control_input_source)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let control_input_description =
+                parse_command_input_source_description(control_input_description)
+                    .map_err(|error| ShellError::message(error.to_string()))?;
+            let control_input_sketch_token = parse_sketch_token(control_input_sketch_token)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let control_input_visible = parse_bool_flag(control_input_visible)?;
+            let control_input_decision = parse_bool_flag(control_input_decision)?;
+            let handled_errors = parse_command_error_names(handled_errors)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let recovery_behavior = parse_control_recovery_behavior(recovery_behavior)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let control_sketch_token = parse_sketch_token(control_sketch_token)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let navigation_type = parse_navigation_target_type(navigation_type)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let navigation_target = parse_navigation_target_name(navigation_target)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let external_workflow = parse_navigation_target_name(external_workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::AddViewDefinition {
+                    view: NewViewDefinition::new(
+                        slice_slug,
+                        view_name,
+                        NewViewField::new(
+                            field_name,
+                            parse_view_field_source_kind("read_model")
+                                .map_err(|error| ShellError::message(error.to_string()))?,
+                            read_model_name,
+                            source_field,
+                            sketch_token,
+                            provenance_description,
+                            bit_encoding,
+                        ),
+                    )
+                    .with_controls(ViewControls::from_controls([
+                        NewControlDefinition::new(
+                            control_name,
+                            control_command,
+                            NewControlInputProvision::new(
+                                control_input,
+                                control_input_source,
+                                control_input_description,
+                                control_input_sketch_token,
+                                control_input_visible,
+                                control_input_decision,
+                            ),
+                            CommandErrorNames::from_names(handled_errors),
+                            recovery_behavior,
+                            control_sketch_token,
+                            NewNavigationTarget::new(navigation_type, navigation_target)
+                                .with_external_workflow(external_workflow),
+                        ),
+                    ])),
+                },
+            })
+        }
+        [
+            command,
+            subject,
+            slice_flag,
+            slice,
+            name_flag,
+            name,
+            read_model_flag,
+            read_model,
+            field_flag,
+            field,
+            source_field_flag,
+            source_field,
+            sketch_token_flag,
+            sketch_token,
+            field_provenance_flag,
+            field_provenance,
+            bit_encoding_flag,
+            bit_encoding,
+            control_flag,
+            control,
+            control_command_flag,
+            control_command,
+            control_input_flag,
+            control_input,
+            control_input_source_flag,
+            control_input_source,
+            control_input_description_flag,
+            control_input_description,
+            control_input_sketch_token_flag,
+            control_input_sketch_token,
+            control_input_visible_flag,
+            control_input_visible,
+            control_input_decision_flag,
+            control_input_decision,
+            handled_errors_flag,
+            handled_errors,
+            recovery_behavior_flag,
+            recovery_behavior,
+            control_sketch_token_flag,
+            control_sketch_token,
+            navigation_type_flag,
+            navigation_type,
+            navigation_target_flag,
+            navigation_target,
             local_states_flag,
             local_states,
             filters_flag,
@@ -3290,6 +3443,7 @@ fn help_command() -> ClapCommand {
   emc add view --slice <slice> --name <view> --read-model <read-model> --field <name> --source-field <field> --sketch-token <token> --field-provenance <text> --bit-encoding <semantics>
   emc add view --slice <slice> --name <view> --read-model <read-model> --field <name> --source-field <field> --sketch-token <token> --field-provenance <text> --bit-encoding <semantics> --control <control> --control-command <command> --control-input <datum> --control-input-source <kind> --control-input-description <text> --control-input-sketch-token <token> --control-input-visible <true|false> --control-input-decision <true|false> --handled-errors <error[,error]> --recovery-behavior <kind> --control-sketch-token <token> --navigation-type <type> --navigation-target <target>
   emc add view --slice <slice> --name <view> --read-model <read-model> --field <name> --source-field <field> --sketch-token <token> --field-provenance <text> --bit-encoding <semantics> --control <control> --control-command <command> --control-input <datum> --control-input-source <kind> --control-input-description <text> --control-input-sketch-token <token> --control-input-visible <true|false> --control-input-decision <true|false> --handled-errors <error[,error]> --recovery-behavior <kind> --control-sketch-token <token> --navigation-type local_view_state --navigation-target <target> --local-states <state[,state]> --filters <filter[,filter]>
+  emc add view --slice <slice> --name <view> --read-model <read-model> --field <name> --source-field <field> --sketch-token <token> --field-provenance <text> --bit-encoding <semantics> --control <control> --control-command <command> --control-input <datum> --control-input-source <kind> --control-input-description <text> --control-input-sketch-token <token> --control-input-visible <true|false> --control-input-decision <true|false> --handled-errors <error[,error]> --recovery-behavior <kind> --control-sketch-token <token> --navigation-type external_workflow --navigation-target <target> --external-workflow <workflow>
   emc add view --slice <slice> --name <view> --read-model <read-model> --field <name> --source-field <field> --sketch-token <token> --field-provenance <text> --bit-encoding <semantics> --control <control> --control-command <command> --control-input <datum> --control-input-source <kind> --control-input-description <text> --control-input-sketch-token <token> --control-input-visible <true|false> --control-input-decision <true|false> --handled-errors <error[,error]> --recovery-behavior <kind> --control-sketch-token <token> --navigation-type external_system --navigation-target <target> --external-system <name> --handoff-contract <contract>
   emc add automation --slice <slice> --name <name> --trigger <event-or-signal> --command <command> --handled-errors <error[,error]> --reaction <semantics>
   emc add translation --slice <slice> --name <name> --external-event <event-or-signal> --payload-contract <payload> --command <command>
