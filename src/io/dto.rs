@@ -334,6 +334,19 @@ pub fn parse_navigation_target_name(raw: &str) -> Result<NavigationTargetName, B
     })
 }
 
+pub fn parse_navigation_target_names(
+    raw: &str,
+) -> Result<Vec<NavigationTargetName>, BoundaryParseError> {
+    parse_comma_separated(raw, "navigation target names")?
+        .into_iter()
+        .map(|name| {
+            NavigationTargetName::try_new(name).map_err(|error| {
+                BoundaryParseError::new(format!("invalid navigation target name: {error}"))
+            })
+        })
+        .collect()
+}
+
 pub fn parse_command_input_source_kind(
     raw: &str,
 ) -> Result<CommandInputSourceKind, BoundaryParseError> {

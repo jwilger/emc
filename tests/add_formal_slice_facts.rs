@@ -3054,6 +3054,137 @@ mod tests {
     }
 
     #[test]
+    fn add_view_definition_records_local_state_navigation_targets() -> Result<(), Box<dyn Error>> {
+        let temp_dir = initialized_project_with_slice()?;
+        author_projected_ticket_title(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "view",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "ticket_summary",
+                "--read-model",
+                "ticket_state",
+                "--field",
+                "ticket_title",
+                "--source-field",
+                "ticket_title",
+                "--sketch-token",
+                "title-label",
+                "--field-provenance",
+                "ticket_state.ticket_title",
+                "--bit-encoding",
+                "UTF-8 string",
+                "--control",
+                "expand-details",
+                "--control-command",
+                "CaptureTicket",
+                "--control-input",
+                "ticket_title",
+                "--control-input-source",
+                "actor",
+                "--control-input-description",
+                "title field on the intake form",
+                "--control-input-sketch-token",
+                "title-input",
+                "--control-input-visible",
+                "true",
+                "--control-input-decision",
+                "true",
+                "--handled-errors",
+                "DuplicateTicket",
+                "--recovery-behavior",
+                "retry",
+                "--control-sketch-token",
+                "expand-button",
+                "--navigation-type",
+                "local_view_state",
+                "--navigation-target",
+                "details-expanded",
+                "--local-states",
+                "details-expanded",
+                "--filters",
+                "open-only",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "ticket_state.ticket_title",
+                "--transformation",
+                "displayed without transformation",
+                "--target",
+                "ticket_summary",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+        assert!(
+            lean.contains("localStates := [\"details-expanded\"], filters := [\"open-only\"]"),
+            "Lean slice artifact must carry authored local view state and filter declarations"
+        );
+        assert!(
+            lean.contains("navigation := { targetType := \"local_view_state\", targetName := \"details-expanded\""),
+            "Lean slice artifact must carry local-view-state navigation targets"
+        );
+        assert!(
+            quint.contains("localStates: [\"details-expanded\"], filters: [\"open-only\"]"),
+            "Quint slice artifact must carry authored local view state and filter declarations"
+        );
+        assert!(
+            quint.contains(
+                "navigation: { targetType: \"local_view_state\", targetName: \"details-expanded\""
+            ),
+            "Quint slice artifact must carry local-view-state navigation targets"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := [(\"open-ticket\", \"capture-ticket\", \"ticket_summary\", [\"ticket_state\"], [\"title-label\"], [\"details-expanded\"], [\"open-only\"])]"
+            ),
+            "Lean project root must inventory authored local view state and filter declarations"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelViewDefinitions: List[ModelViewDefinition] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", view: \"ticket_summary\", readModels: [\"ticket_state\"], sketchTokens: [\"title-label\"], localStates: [\"details-expanded\"], filters: [\"open-only\"] }]"
+            ),
+            "Quint project root must inventory authored local view state and filter declarations"
+        );
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["verify"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    #[test]
     fn add_view_definition_records_external_system_navigation_contract()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
@@ -3189,6 +3320,44 @@ mod tests {
         assert!(
             lean.contains("externalSystemName := \"Vendor Portal\", handoffContract := \"ticket_export_payload\""),
             "MCP-authored external-system navigation metadata must be represented in the Lean artifact"
+        );
+
+        Command::cargo_bin("emc")?
+            .args(["verify"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_authors_local_state_navigation_targets() -> Result<(), Box<dyn Error>> {
+        let temp_dir = initialized_project_with_slice()?;
+        author_projected_ticket_title(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(mcp_local_state_view_control_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"add_view_definition\""))
+            .stdout(predicate::str::contains(
+                "added view ticket_summary to slice capture-ticket",
+            ));
+
+        complete_ticket_summary_display_flow(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            lean.contains("localStates := [\"details-expanded\"], filters := [\"open-only\"]"),
+            "MCP-authored local view states and filters must be represented in the Lean artifact"
+        );
+        assert!(
+            quint.contains("localStates: [\"details-expanded\"], filters: [\"open-only\"]"),
+            "MCP-authored local view states and filters must be represented in the Quint artifact"
         );
 
         Command::cargo_bin("emc")?
@@ -4486,6 +4655,14 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_view_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"ticket_summary\",\"read_model\":\"ticket_state\",\"field\":\"ticket_title\",\"source_field\":\"ticket_title\",\"sketch_token\":\"title-label\",\"field_provenance\":\"ticket_state.ticket_title\",\"bit_encoding\":\"UTF-8 string\",\"control\":\"open-vendor-portal\",\"control_command\":\"CaptureTicket\",\"control_input\":\"ticket_title\",\"control_input_source\":\"actor\",\"control_input_description\":\"title field on the intake form\",\"control_input_sketch_token\":\"title-input\",\"control_input_visible\":true,\"control_input_decision\":true,\"handled_errors\":\"DuplicateTicket\",\"recovery_behavior\":\"explicit_recovery_action\",\"control_sketch_token\":\"vendor-link\",\"navigation_type\":\"external_system\",\"navigation_target\":\"vendor_portal\",\"external_system\":\"Vendor Portal\",\"handoff_contract\":\"ticket_export_payload\"}}}\n",
+        )
+    }
+
+    fn mcp_local_state_view_control_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_view_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"ticket_summary\",\"read_model\":\"ticket_state\",\"field\":\"ticket_title\",\"source_field\":\"ticket_title\",\"sketch_token\":\"title-label\",\"field_provenance\":\"ticket_state.ticket_title\",\"bit_encoding\":\"UTF-8 string\",\"control\":\"expand-details\",\"control_command\":\"CaptureTicket\",\"control_input\":\"ticket_title\",\"control_input_source\":\"actor\",\"control_input_description\":\"title field on the intake form\",\"control_input_sketch_token\":\"title-input\",\"control_input_visible\":true,\"control_input_decision\":true,\"handled_errors\":\"DuplicateTicket\",\"recovery_behavior\":\"retry\",\"control_sketch_token\":\"expand-button\",\"navigation_type\":\"local_view_state\",\"navigation_target\":\"details-expanded\",\"local_states\":\"details-expanded\",\"filters\":\"open-only\"}}}\n",
         )
     }
 
