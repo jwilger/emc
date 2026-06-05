@@ -2200,6 +2200,8 @@ mod tests {
                 "upstream_event_store",
                 "--attribute-source-field",
                 "ticket_title",
+                "--generated-source-kind",
+                "event_store_observation",
                 "--attribute-provenance",
                 "TicketCaptured.ticket_title",
                 "--observed",

@@ -951,6 +951,9 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         "attribute_source_field": {
                             "type": "string"
                         },
+                        "generated_source_kind": {
+                            "type": "string"
+                        },
                         "attribute_provenance": {
                             "type": "string"
                         },
@@ -2845,6 +2848,12 @@ fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError>
             parse_event_attribute_source_field(raw_attribute_source_field)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
+    let generated_source_kind = arguments
+        .get("generated_source_kind")
+        .and_then(Value::as_str)
+        .map(parse_event_attribute_source_kind)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
     let provenance_description = arguments
         .get("attribute_provenance")
         .and_then(Value::as_str)
@@ -2854,13 +2863,23 @@ fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError>
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
 
-    let attribute = NewEventAttribute::new(
-        attribute_name,
-        attribute_source_kind,
-        attribute_source_name,
-        attribute_source_field,
-        provenance_description,
-    );
+    let attribute = match generated_source_kind {
+        Some(generated_source_kind) => NewEventAttribute::new_with_generated_source_kind(
+            attribute_name,
+            attribute_source_kind,
+            attribute_source_name,
+            attribute_source_field,
+            generated_source_kind,
+            provenance_description,
+        ),
+        None => NewEventAttribute::new(
+            attribute_name,
+            attribute_source_kind,
+            attribute_source_name,
+            attribute_source_field,
+            provenance_description,
+        ),
+    };
     let observed = arguments
         .get("observed")
         .and_then(Value::as_bool)

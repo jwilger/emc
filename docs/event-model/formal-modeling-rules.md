@@ -60,7 +60,7 @@ A model is complete and valid only when all of these are true:
 - ✅ External-sourced event attributes reference declared external payloads and
   payload fields.
 - ✅ Event attributes cannot source from read models.
-- 🟡 Generated event attributes name a non-empty generated source kind.
+- ✅ Generated event attributes name a non-empty generated source kind.
 - ✅ Event attributes declare source provenance.
 - ✅ Read model fields declare source provenance.
 - ✅ View fields declare source provenance.
