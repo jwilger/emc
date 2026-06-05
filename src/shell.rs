@@ -23,22 +23,24 @@ use crate::core::formal_project_facts::{
     NewProjectExternalPayload, NewProjectOutcome, NewProjectReadModel, NewProjectScenario,
     NewProjectStream, NewProjectTranslation, NewProjectView, ProjectAutomation, ProjectCommand,
     ProjectCommandError, ProjectCommandInput, ProjectDataFlow, ProjectEvent, ProjectEventAttribute,
-    ProjectExternalPayload, ProjectOutcome, ProjectReadModel, ProjectReadModelDefinition,
-    ProjectReadModelField, ProjectScenario, ProjectScenarioDefinition, ProjectStream,
-    ProjectTranslation, ProjectView, ProjectViewField, add_project_automation, add_project_command,
-    add_project_data_flow, add_project_event, add_project_external_payload, add_project_outcome,
-    add_project_read_model, add_project_scenario, add_project_stream, add_project_translation,
-    add_project_view, parse_lean_project_automations, parse_lean_project_command_errors,
-    parse_lean_project_command_inputs, parse_lean_project_commands, parse_lean_project_data_flows,
+    ProjectExternalPayload, ProjectExternalPayloadField, ProjectOutcome, ProjectReadModel,
+    ProjectReadModelDefinition, ProjectReadModelField, ProjectScenario, ProjectScenarioDefinition,
+    ProjectStream, ProjectTranslation, ProjectView, ProjectViewField, add_project_automation,
+    add_project_command, add_project_data_flow, add_project_event, add_project_external_payload,
+    add_project_outcome, add_project_read_model, add_project_scenario, add_project_stream,
+    add_project_translation, add_project_view, parse_lean_project_automations,
+    parse_lean_project_command_errors, parse_lean_project_command_inputs,
+    parse_lean_project_commands, parse_lean_project_data_flows,
     parse_lean_project_event_attributes, parse_lean_project_events,
-    parse_lean_project_external_payloads, parse_lean_project_outcomes,
-    parse_lean_project_read_model_definitions, parse_lean_project_read_model_fields,
-    parse_lean_project_read_models, parse_lean_project_scenario_definitions,
-    parse_lean_project_scenarios, parse_lean_project_streams, parse_lean_project_translations,
-    parse_lean_project_view_fields, parse_lean_project_views, parse_quint_project_automations,
-    parse_quint_project_command_errors, parse_quint_project_command_inputs,
-    parse_quint_project_commands, parse_quint_project_data_flows,
-    parse_quint_project_event_attributes, parse_quint_project_events,
+    parse_lean_project_external_payload_fields, parse_lean_project_external_payloads,
+    parse_lean_project_outcomes, parse_lean_project_read_model_definitions,
+    parse_lean_project_read_model_fields, parse_lean_project_read_models,
+    parse_lean_project_scenario_definitions, parse_lean_project_scenarios,
+    parse_lean_project_streams, parse_lean_project_translations, parse_lean_project_view_fields,
+    parse_lean_project_views, parse_quint_project_automations, parse_quint_project_command_errors,
+    parse_quint_project_command_inputs, parse_quint_project_commands,
+    parse_quint_project_data_flows, parse_quint_project_event_attributes,
+    parse_quint_project_events, parse_quint_project_external_payload_fields,
     parse_quint_project_external_payloads, parse_quint_project_outcomes,
     parse_quint_project_read_model_definitions, parse_quint_project_read_model_fields,
     parse_quint_project_read_models, parse_quint_project_scenario_definitions,
@@ -336,10 +338,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 project_artifacts.lean_contents,
                 project_artifacts.quint_path,
                 project_artifacts.quint_contents,
-                NewProjectExternalPayload::new(
+                NewProjectExternalPayload::from_external_payload(
                     workflow_layout.slug().clone(),
-                    external_payload.slice_slug().clone(),
-                    external_payload.name().clone(),
+                    external_payload,
                 ),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
@@ -635,6 +636,8 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let project_translations = read_synchronized_project_translations(&project_name)?;
             let project_external_payloads =
                 read_synchronized_project_external_payloads(&project_name)?;
+            let project_external_payload_fields =
+                read_synchronized_project_external_payload_fields(&project_name)?;
             let project_streams = read_synchronized_project_streams(&project_name)?;
             let project_events = read_synchronized_project_events(&project_name)?;
             let project_event_attributes =
@@ -658,6 +661,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                     automations: project_automations,
                     translations: project_translations,
                     external_payloads: project_external_payloads,
+                    external_payload_fields: project_external_payload_fields,
                     streams: project_streams,
                     events: project_events,
                     event_attributes: project_event_attributes,
@@ -1334,6 +1338,24 @@ fn read_synchronized_project_external_payloads(
             "Lean and Quint project root external payload inventories disagree",
         )),
         (_lean_external_payloads, _quint_external_payloads) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_external_payload_fields(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectExternalPayloadField>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_external_payload_fields(&artifacts.lean_contents),
+        parse_quint_project_external_payload_fields(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_fields), Ok(quint_fields)) if lean_fields == quint_fields => Ok(lean_fields),
+        (Ok(_lean_fields), Ok(_quint_fields)) => Err(ShellError::message(
+            "Lean and Quint project root external payload field inventories disagree",
+        )),
+        (_lean_fields, _quint_fields) => Ok(Vec::new()),
     }
 }
 
