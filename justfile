@@ -13,7 +13,7 @@ clippy:
 	RUSTFLAGS='-Dwarnings' cargo clippy --all-targets --all-features -- -D warnings
 
 test:
-	RUSTFLAGS='-Dwarnings' cargo test
+	RUSTFLAGS='-Dwarnings' cargo nextest run --no-tests=pass
 
 build:
 	RUSTFLAGS='-Dwarnings' cargo build

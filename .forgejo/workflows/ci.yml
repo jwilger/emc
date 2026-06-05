@@ -13,10 +13,10 @@ permissions:
   contents: read
 
 jobs:
-  copyright-headers:
-    name: Copyright headers
+  rust-ci:
+    name: Rust CI
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,78 +25,13 @@ jobs:
       - name: Install or reuse Nix
         run: ./.forgejo/scripts/install-nix.sh
 
-      - name: Run copyright header check
+      - name: Run Rust checks and tests
         run: |
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
           nix develop --command just copyright-headers
-
-  fmt:
-    name: Format check
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Install or reuse Nix
-        run: ./.forgejo/scripts/install-nix.sh
-
-      - name: Run format check
-        run: |
-          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
           nix develop --command just fmt
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Install or reuse Nix
-        run: ./.forgejo/scripts/install-nix.sh
-
-      - name: Run clippy
-        run: |
-          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
           nix develop --command just clippy
-
-  test:
-    name: Test
-    runs-on: ubuntu-24.04
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Install or reuse Nix
-        run: ./.forgejo/scripts/install-nix.sh
-
-      - name: Run tests
-        run: |
-          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
           nix develop --command just test
-
-  build:
-    name: Build
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Install or reuse Nix
-        run: ./.forgejo/scripts/install-nix.sh
-
-      - name: Run build
-        run: |
-          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
-          nix develop --command just build
 
   flake-check:
     name: Nix flake check

@@ -804,6 +804,22 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelCommandInputHasProvenance"),
+            artifact_marker(
+                "def modelCommandInputHasProvenance (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String) : Bool := input.2.2.2.2.2.1.isEmpty == false && input.2.2.2.2.2.2.1.isEmpty == false",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelCommandInputTracesToInvocationSource"),
+            artifact_marker(
+                "def modelCommandInputTracesToInvocationSource (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String) : Bool := input.2.2.2.2.1 == \"actor\" || (input.2.2.2.2.1 == \"event_stream_state\" && input.2.2.2.2.2.2.2.1.isEmpty == false && input.2.2.2.2.2.2.2.2.1.isEmpty == false) || (input.2.2.2.2.1 == \"external_payload\" && input.2.2.2.2.2.2.2.2.2.1.isEmpty == false && input.2.2.2.2.2.2.2.2.2.2.1.isEmpty == false) || (input.2.2.2.2.1 == \"generated\" && input.2.2.2.2.2.2.2.2.2.2.2.1.isEmpty == false && input.2.2.2.2.2.2.2.2.2.2.2.2.1.isEmpty == false) || (input.2.2.2.2.1 == \"session\" && input.2.2.2.2.2.2.2.2.2.2.2.2.2.1.isEmpty == false && input.2.2.2.2.2.2.2.2.2.2.2.2.2.2.isEmpty == false)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelControlProvidesCommandInput"),
             artifact_marker(
                 "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String) : Bool := control.1 == input.1 && control.2.2.2.2.1 == input.2.2.1 && control.2.2.2.2.2.1 == input.2.2.2.1",
@@ -939,6 +955,22 @@ fn project_root_effects(
             artifact_marker(format!(
                 "theorem modelCommandInputsAreDeclared : modelCommandInputs.length = {command_input_count} := rfl"
             )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelCommandInputsHaveProvenance"),
+            artifact_marker(
+                "theorem modelCommandInputsHaveProvenance : modelCommandInputs.all modelCommandInputHasProvenance = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelCommandInputsTraceToInvocationSources"),
+            artifact_marker(
+                "theorem modelCommandInputsTraceToInvocationSources : modelCommandInputs.all modelCommandInputTracesToInvocationSource = true := rfl",
+            ),
             lean_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -1705,6 +1737,38 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  def modelCommandInputHasProvenance"),
+            artifact_marker(
+                "  def modelCommandInputHasProvenance(input) = input.sourceDescription != \"\" and input.provenanceChain.length() > 0",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelCommandInputTracesToInvocationSource"),
+            artifact_marker(
+                "  def modelCommandInputTracesToInvocationSource(input) = input.sourceKind == \"actor\" or (input.sourceKind == \"event_stream_state\" and input.eventStreamSourceEvent != \"\" and input.eventStreamSourceAttribute != \"\") or (input.sourceKind == \"external_payload\" and input.externalPayloadSourceName != \"\" and input.externalPayloadSourceField != \"\") or (input.sourceKind == \"generated\" and input.generatedSourceName != \"\" and input.generatedSourceField != \"\") or (input.sourceKind == \"session\" and input.sessionSourceName != \"\" and input.sessionSourceField != \"\")",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelCommandInputsHaveProvenance ="),
+            artifact_marker(
+                "  val modelCommandInputsHaveProvenance = modelCommandInputs.select(input => modelCommandInputHasProvenance(input)).length() == modelCommandInputs.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelCommandInputsTraceToInvocationSources ="),
+            artifact_marker(
+                "  val modelCommandInputsTraceToInvocationSources = modelCommandInputs.select(input => modelCommandInputTracesToInvocationSource(input)).length() == modelCommandInputs.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelReadModelsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelReadModelsAreDeclared = modelReadModels.length() == {read_model_count}"
@@ -2055,6 +2119,18 @@ fn project_root_effects(
             quint_config_path.clone(),
             artifact_marker("    \"modelScenarioKindsAreFirstClass\""),
             artifact_marker("    \"modelScenarioKindsAreFirstClass\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelCommandInputsHaveProvenance\""),
+            artifact_marker("    \"modelCommandInputsHaveProvenance\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelCommandInputsTraceToInvocationSources\""),
+            artifact_marker("    \"modelCommandInputsTraceToInvocationSources\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
