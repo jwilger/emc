@@ -926,6 +926,10 @@ impl NewViewDefinition {
     pub fn field(&self) -> &NewViewField {
         &self.field
     }
+
+    pub fn controls(&self) -> &ViewControls {
+        &self.controls
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -955,6 +959,30 @@ impl NewControlInputProvision {
             visible_to_actor,
             decision_field,
         }
+    }
+
+    pub fn name(&self) -> &DatumName {
+        &self.name
+    }
+
+    pub fn source_kind(&self) -> &CommandInputSourceKind {
+        &self.source_kind
+    }
+
+    pub fn source_description(&self) -> &CommandInputSourceDescription {
+        &self.source_description
+    }
+
+    pub fn sketch_token(&self) -> &SketchToken {
+        &self.sketch_token
+    }
+
+    pub fn visible_to_actor(&self) -> bool {
+        self.visible_to_actor
+    }
+
+    pub fn decision_field(&self) -> bool {
+        self.decision_field
     }
 }
 
@@ -991,6 +1019,26 @@ impl NewNavigationTarget {
     pub fn with_external_workflow(mut self, external_workflow_name: NavigationTargetName) -> Self {
         self.external_workflow_name = Some(external_workflow_name);
         self
+    }
+
+    pub fn target_type(&self) -> &NavigationTargetType {
+        &self.target_type
+    }
+
+    pub fn target_name(&self) -> &NavigationTargetName {
+        &self.target_name
+    }
+
+    pub fn external_workflow_name(&self) -> Option<&NavigationTargetName> {
+        self.external_workflow_name.as_ref()
+    }
+
+    pub fn external_system_name(&self) -> Option<&NavigationTargetName> {
+        self.external_system_name.as_ref()
+    }
+
+    pub fn handoff_contract(&self) -> Option<&PayloadContractName> {
+        self.handoff_contract.as_ref()
     }
 }
 
@@ -1191,6 +1239,34 @@ impl NewControlDefinition {
             navigation,
         }
     }
+
+    pub fn name(&self) -> &ControlName {
+        &self.name
+    }
+
+    pub fn command_name(&self) -> &CommandName {
+        &self.command_name
+    }
+
+    pub fn input(&self) -> &NewControlInputProvision {
+        &self.input
+    }
+
+    pub fn handled_errors(&self) -> &CommandErrorNames {
+        &self.handled_errors
+    }
+
+    pub fn recovery_behavior(&self) -> &ControlRecoveryBehavior {
+        &self.recovery_behavior
+    }
+
+    pub fn sketch_token(&self) -> &SketchToken {
+        &self.sketch_token
+    }
+
+    pub fn navigation(&self) -> &NewNavigationTarget {
+        &self.navigation
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -1232,7 +1308,7 @@ impl ViewControls {
         }
     }
 
-    pub(crate) fn as_slice(&self) -> &[NewControlDefinition] {
+    pub fn as_slice(&self) -> &[NewControlDefinition] {
         &self.controls
     }
 }
