@@ -429,7 +429,7 @@ mod tests {
             "type ControlDefinition = { name: str, commandName: str, inputs: List[ControlInputProvision], handledErrors: List[str], recoveryBehavior: str, sketchToken: str, navigation: NavigationTarget }"
         ));
         assert!(quint.contains(
-            "type ViewDefinition = { name: str, readModels: List[str], fields: List[ViewField], controls: List[ControlDefinition], sketchTokens: List[str], localStates: List[str] }"
+            "type ViewDefinition = { name: str, readModels: List[str], fields: List[ViewField], controls: List[ControlDefinition], sketchTokens: List[str], localStates: List[str], filters: List[str] }"
         ));
         assert!(quint.contains(
             "type AutomationDefinition = { name: str, triggerName: str, commandName: str, handledErrors: List[str], reactionDescription: str }"
@@ -1024,7 +1024,10 @@ mod tests {
             "def navigationModeledViewTargetsExistingView(target) = target.targetType != \"modeled_view\" or (target.targetName != \"\" and sliceViews.select(viewName => viewName == target.targetName).length() > 0)"
         ));
         assert!(quint.contains(
-            "def navigationTargetIsComplete(view, target) = (target.targetType == \"\" and target.targetName == \"\" and target.externalWorkflowName == \"\" and target.externalSystemName == \"\" and target.handoffContract == \"\") or (target.targetType == \"modeled_view\" and target.targetName != \"\" and sliceViews.select(viewName => viewName == target.targetName).length() > 0) or (target.targetType == \"local_view_state\" and target.targetName != \"\" and view.localStates.select(localState => localState == target.targetName).length() > 0) or (target.targetType == \"external_workflow\" and target.externalWorkflowName != \"\") or (target.targetType == \"external_system\" and target.externalSystemName != \"\" and target.handoffContract != \"\")"
+            "def localViewStateNavigationTargetResolves(view, target) = target.targetType != \"local_view_state\" or (target.targetName != \"\" and (view.localStates.select(localState => localState == target.targetName).length() > 0 or view.filters.select(viewFilter => viewFilter == target.targetName).length() > 0))"
+        ));
+        assert!(quint.contains(
+            "def navigationTargetIsComplete(view, target) = (target.targetType == \"\" and target.targetName == \"\" and target.externalWorkflowName == \"\" and target.externalSystemName == \"\" and target.handoffContract == \"\") or (target.targetType == \"modeled_view\" and target.targetName != \"\" and sliceViews.select(viewName => viewName == target.targetName).length() > 0) or (target.targetType == \"local_view_state\" and localViewStateNavigationTargetResolves(view, target)) or (target.targetType == \"external_workflow\" and target.externalWorkflowName != \"\") or (target.targetType == \"external_system\" and target.externalSystemName != \"\" and target.handoffContract != \"\")"
         ));
         assert!(quint.contains(
             "val viewControlNavigationTypesAreModeled = sliceViewDefinitions.select(view => view.controls.select(control => navigationTargetTypeIsModeled(control.navigation)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"

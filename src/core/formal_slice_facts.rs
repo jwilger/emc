@@ -1915,7 +1915,7 @@ fn quint_read_model_field_record(field: &NewReadModelField) -> String {
 
 fn lean_view_definition_record(view: &NewViewDefinition) -> String {
     format!(
-        "{{ name := {}, readModels := [{}], fields := [{}], controls := [{}], sketchTokens := [{}], localStates := [] }}",
+        "{{ name := {}, readModels := [{}], fields := [{}], controls := [{}], sketchTokens := [{}], localStates := [], filters := [] }}",
         quoted(view.name.as_ref()),
         quoted(view.field.source_read_model.as_ref()),
         lean_view_field_record(&view.field),
@@ -1931,7 +1931,7 @@ fn lean_view_definition_record(view: &NewViewDefinition) -> String {
 
 fn quint_view_definition_record(view: &NewViewDefinition) -> String {
     format!(
-        "{{ name: {}, readModels: [{}], fields: [{}], controls: [{}], sketchTokens: [{}], localStates: [] }}",
+        "{{ name: {}, readModels: [{}], fields: [{}], controls: [{}], sketchTokens: [{}], localStates: [], filters: [] }}",
         quoted(view.name.as_ref()),
         quoted(view.field.source_read_model.as_ref()),
         quint_view_field_record(&view.field),

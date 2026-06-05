@@ -2164,7 +2164,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def sliceViewDefinitions : List ViewDefinition := [{ name := \"ticket_summary\", readModels := [\"ticket_state\"], fields := [{ name := \"ticket_title\", sourceKind := \"read_model\", sourceReadModel := \"ticket_state\", sourceField := \"ticket_title\", sketchToken := \"title-label\", provenanceDescription := \"ticket_state.ticket_title\", bitEncoding := \"UTF-8 string\" }], controls := [], sketchTokens := [\"title-label\"], localStates := [] }]"
+                "def sliceViewDefinitions : List ViewDefinition := [{ name := \"ticket_summary\", readModels := [\"ticket_state\"], fields := [{ name := \"ticket_title\", sourceKind := \"read_model\", sourceReadModel := \"ticket_state\", sourceField := \"ticket_title\", sketchToken := \"title-label\", provenanceDescription := \"ticket_state.ticket_title\", bitEncoding := \"UTF-8 string\" }], controls := [], sketchTokens := [\"title-label\"], localStates := [], filters := [] }]"
             ),
             "Lean slice artifact must carry the authored displayed datum source and sketch token"
         );
@@ -2174,7 +2174,7 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val sliceViewDefinitions: List[ViewDefinition] = [{ name: \"ticket_summary\", readModels: [\"ticket_state\"], fields: [{ name: \"ticket_title\", sourceKind: \"read_model\", sourceReadModel: \"ticket_state\", sourceField: \"ticket_title\", sketchToken: \"title-label\", provenanceDescription: \"ticket_state.ticket_title\", bitEncoding: \"UTF-8 string\" }], controls: [], sketchTokens: [\"title-label\"], localStates: [] }]"
+                "val sliceViewDefinitions: List[ViewDefinition] = [{ name: \"ticket_summary\", readModels: [\"ticket_state\"], fields: [{ name: \"ticket_title\", sourceKind: \"read_model\", sourceReadModel: \"ticket_state\", sourceField: \"ticket_title\", sketchToken: \"title-label\", provenanceDescription: \"ticket_state.ticket_title\", bitEncoding: \"UTF-8 string\" }], controls: [], sketchTokens: [\"title-label\"], localStates: [], filters: [] }]"
             ),
             "Quint slice artifact must carry the authored displayed datum source and sketch token"
         );
