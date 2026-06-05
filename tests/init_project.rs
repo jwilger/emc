@@ -57,7 +57,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\""
             ),
             "Lean project root must carry a deterministic project model digest"
         );
@@ -73,7 +73,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "theorem modelDigestIsStable : modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\" := rfl"
+                "theorem modelDigestIsStable : modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\" := rfl"
             ),
             "Lean project root must prove project model digest stability"
         );
@@ -89,7 +89,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\""
             ),
             "Quint project root must carry a deterministic project model digest"
         );
@@ -105,7 +105,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
-                "val modelDigestStable = modelDigest == \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;scenarios=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\""
+                "val modelDigestStable = modelDigest == \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-fields=;automations=;translations=;external-payloads=;streams=;events=;event-attributes=\""
             ),
             "Quint project root must expose the project model digest invariant"
         );
