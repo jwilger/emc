@@ -2125,6 +2125,12 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
+            artifact_marker("    \"workflowNavigationTransitionsResolveToEntryViews\""),
+            artifact_marker("    \"workflowNavigationTransitionsResolveToEntryViews\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
             artifact_marker("    \"workflowExternalTriggersDeclarePayloadContracts\""),
             artifact_marker("    \"workflowExternalTriggersDeclarePayloadContracts\","),
             quint_config_message.clone(),

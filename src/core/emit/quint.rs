@@ -43,7 +43,7 @@ pub fn emit_workflow_module(
   type WorkflowTransition = {{ source: str, target: str, kind: str, trigger: str, rationale: str, payloadContract: str }}
   type WorkflowOutcome = {{ sourceSlice: str, label: str, externallyRelevant: bool }}
   type WorkflowCommandError = {{ sourceSlice: str, commandName: str, errorName: str }}
-  type WorkflowOwnedDefinition = {{ sourceSlice: str, definitionKind: str, definitionName: str, definitionStream: str, sourceProvenance: str, eventParticipation: str }}
+  type WorkflowOwnedDefinition = {{ sourceSlice: str, definitionKind: str, definitionName: str, definitionStream: str, sourceProvenance: str, eventParticipation: str, viewRole: str }}
   type WorkflowTransitionEvidence = {{ source: str, target: str, kind: str, trigger: str, sourceEvidence: str, targetEvidence: str }}
   type WorkflowEntryLifecycleState = {{ state: str, step: str, evidence: str }}
   val workflowName = {workflow_name_json}
@@ -103,6 +103,8 @@ pub fn emit_workflow_module(
   def workflowOwnsDefinition(sourceSlice, definitionKind, definitionName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == definitionKind and definition.definitionName == definitionName).length() > 0
   def workflowEventParticipationIsModeled(definition) = definition.eventParticipation == "emitted" or definition.eventParticipation == "observed"
   def workflowEventDefinitionParticipates(sourceSlice, eventName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == "event" and definition.definitionName == eventName and workflowEventParticipationIsModeled(definition)).length() > 0
+  def workflowViewRoleIsEntry(definition) = definition.viewRole == "entry"
+  def workflowOwnsEntryView(sourceSlice, viewName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == "view" and definition.definitionName == viewName and workflowViewRoleIsEntry(definition)).length() > 0
   def workflowCommandTransitionTargetsOwnedCommand(transition) = transition.kind != "command" or workflowOwnsDefinition(transition.target, "command", transition.trigger)
   val workflowCommandTransitionsTargetOwnedCommands = workflowTransitions.select(transition => workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()
   def workflowCommandTransitionSourceOwnsControl(transition) = transition.kind != "command" or workflowOwnsDefinition(transition.source, "control", transition.trigger)
@@ -115,7 +117,9 @@ pub fn emit_workflow_module(
   val workflowEventTransitionsHaveParticipatingEndpointEvents = workflowTransitions.select(transition => workflowEventTransitionSourceParticipates(transition) and workflowEventTransitionTargetParticipates(transition)).length() == workflowTransitions.length()
   def workflowNavigationTransitionSourceOwnsControl(transition) = transition.kind != "navigation" or workflowOwnsDefinition(transition.source, "control", transition.trigger)
   def workflowNavigationTransitionTargetsOwnedView(transition) = transition.kind != "navigation" or workflowOwnsDefinition(transition.target, "view", transition.trigger)
+  def workflowNavigationTransitionTargetsEntryView(transition) = transition.kind != "navigation" or workflowOwnsEntryView(transition.target, transition.trigger)
   val workflowNavigationTransitionsResolveControlsAndViews = workflowTransitions.select(transition => workflowNavigationTransitionSourceOwnsControl(transition) and workflowNavigationTransitionTargetsOwnedView(transition)).length() == workflowTransitions.length()
+  val workflowNavigationTransitionsResolveToEntryViews = workflowTransitions.select(transition => workflowNavigationTransitionTargetsEntryView(transition)).length() == workflowTransitions.length()
   def workflowExternalTriggerDeclaresPayloadContract(transition) = transition.kind != "external_trigger" or (transition.payloadContract != "" and workflowOwnsDefinition(transition.source, "external_payload", transition.payloadContract))
   val workflowExternalTriggersDeclarePayloadContracts = workflowTransitions.select(transition => workflowExternalTriggerDeclaresPayloadContract(transition)).length() == workflowTransitions.length()
   def workflowExternalTriggerPayloadContractHasProvenance(transition) = transition.kind != "external_trigger" or workflowOwnedDefinitions.select(definition => definition.sourceSlice == transition.source and definition.definitionKind == "external_payload" and definition.definitionName == transition.payloadContract and definition.sourceProvenance != "").length() > 0
@@ -456,7 +460,7 @@ fn workflow_owned_definition_list(
 
 fn workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) -> String {
     format!(
-        "{{ sourceSlice: {}, definitionKind: {}, definitionName: {}, definitionStream: {}, sourceProvenance: {}, eventParticipation: {} }}",
+        "{{ sourceSlice: {}, definitionKind: {}, definitionName: {}, definitionStream: {}, sourceProvenance: {}, eventParticipation: {}, viewRole: {} }}",
         quoted(definition.source_slice().as_ref()),
         quoted(definition.definition_kind().as_ref()),
         quoted(definition.definition_name().as_ref()),
@@ -474,6 +478,11 @@ fn workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) 
             definition
                 .event_participation()
                 .map_or("", |event_participation| event_participation.as_ref()),
+        ),
+        quoted(
+            definition
+                .view_role()
+                .map_or("", |view_role| view_role.as_ref())
         ),
     )
 }

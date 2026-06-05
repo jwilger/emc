@@ -576,6 +576,13 @@ pub struct WorkflowOwnedDefinitionName(String);
 )]
 pub struct WorkflowEventParticipation(String);
 
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
+pub struct WorkflowViewRole(String);
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct WorkflowOwnedDefinitionRecord {
     source_slice: WorkflowTransitionEndpoint,
@@ -584,6 +591,7 @@ pub struct WorkflowOwnedDefinitionRecord {
     definition_stream: Option<StreamName>,
     source_provenance: Option<ModelDescription>,
     event_participation: Option<WorkflowEventParticipation>,
+    view_role: Option<WorkflowViewRole>,
 }
 
 impl WorkflowOwnedDefinitionRecord {
@@ -599,7 +607,28 @@ impl WorkflowOwnedDefinitionRecord {
             definition_stream: None,
             source_provenance: None,
             event_participation: None,
+            view_role: None,
         }
+    }
+
+    pub fn new_with_view_role(
+        source_slice: WorkflowTransitionEndpoint,
+        definition_kind: WorkflowOwnedDefinitionKind,
+        definition_name: WorkflowOwnedDefinitionName,
+        view_role: WorkflowViewRole,
+    ) -> Option<Self> {
+        if definition_kind.as_ref() != "view" {
+            return None;
+        }
+        Some(Self {
+            source_slice,
+            definition_kind,
+            definition_name,
+            definition_stream: None,
+            source_provenance: None,
+            event_participation: None,
+            view_role: Some(view_role),
+        })
     }
 
     pub fn new_with_event_identity(
@@ -616,6 +645,7 @@ impl WorkflowOwnedDefinitionRecord {
             definition_stream: Some(definition_stream),
             source_provenance: Some(source_provenance),
             event_participation: None,
+            view_role: None,
         }
     }
 
@@ -634,6 +664,7 @@ impl WorkflowOwnedDefinitionRecord {
             definition_stream: Some(definition_stream),
             source_provenance: Some(source_provenance),
             event_participation: Some(event_participation),
+            view_role: None,
         }
     }
 
@@ -659,6 +690,10 @@ impl WorkflowOwnedDefinitionRecord {
 
     pub fn event_participation(&self) -> Option<&WorkflowEventParticipation> {
         self.event_participation.as_ref()
+    }
+
+    pub fn view_role(&self) -> Option<&WorkflowViewRole> {
+        self.view_role.as_ref()
     }
 }
 

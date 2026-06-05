@@ -53,6 +53,7 @@ use emc::io::dto::{
     parse_workflow_event_participation, parse_workflow_owned_definition_kind,
     parse_workflow_owned_definition_name, parse_workflow_slug, parse_workflow_transition_endpoint,
     parse_workflow_transition_evidence_text, parse_workflow_transition_kind,
+    parse_workflow_view_role,
 };
 use emc::mcp::{serve_http, serve_stdio};
 use emc::shell::{ShellError, interpret};
@@ -429,6 +430,52 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                             source_provenance,
                             event_participation,
                         ),
+                },
+            })
+        }
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            source_slice_flag,
+            source_slice,
+            definition_kind_flag,
+            definition_kind,
+            definition_name_flag,
+            definition_name,
+            view_role_flag,
+            view_role,
+        ] if command == "add"
+            && subject == "workflow-owned-definition"
+            && workflow_flag == "--workflow"
+            && source_slice_flag == "--source-slice"
+            && definition_kind_flag == "--definition-kind"
+            && definition_name_flag == "--definition-name"
+            && view_role_flag == "--view-role" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_slice = WorkflowTransitionEndpoint::try_new(source_slice.to_owned())
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let definition_kind = parse_workflow_owned_definition_kind(definition_kind)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let definition_name = parse_workflow_owned_definition_name(definition_name)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let view_role = parse_workflow_view_role(view_role)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::AddWorkflowOwnedDefinition {
+                    workflow_slug,
+                    definition: WorkflowOwnedDefinitionRecord::new_with_view_role(
+                        source_slice,
+                        definition_kind,
+                        definition_name,
+                        view_role,
+                    )
+                    .ok_or_else(|| {
+                        ShellError::message("view_role requires definition_kind view")
+                    })?,
                 },
             })
         }
@@ -4054,6 +4101,7 @@ fn help_command() -> ClapCommand {
   emc add workflow-outcome --workflow <workflow> --source-slice <slice> --label <label> --externally-relevant <true|false>
   emc add workflow-command-error --workflow <workflow> --source-slice <slice> --command <command> --error <error>
   emc add workflow-owned-definition --workflow <workflow> --source-slice <slice> --definition-kind <kind> --definition-name <name> [--definition-stream <stream> --source-provenance <text> [--event-participation <role>]]
+  emc add workflow-owned-definition --workflow <workflow> --source-slice <slice> --definition-kind view --definition-name <name> --view-role <role>
   emc add workflow-transition-evidence --workflow <workflow> --from <step> --to <step> --via <kind> --name <trigger> --source-evidence <text> --target-evidence <text>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --observes <stream[,stream]>

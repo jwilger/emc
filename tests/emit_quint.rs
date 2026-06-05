@@ -121,7 +121,7 @@ mod tests {
             "type WorkflowCommandError = { sourceSlice: str, commandName: str, errorName: str }"
         ));
         assert!(quint.contains(
-            "type WorkflowOwnedDefinition = { sourceSlice: str, definitionKind: str, definitionName: str, definitionStream: str, sourceProvenance: str, eventParticipation: str }"
+            "type WorkflowOwnedDefinition = { sourceSlice: str, definitionKind: str, definitionName: str, definitionStream: str, sourceProvenance: str, eventParticipation: str, viewRole: str }"
         ));
         assert!(quint.contains(
             "type WorkflowEntryLifecycleState = { state: str, step: str, evidence: str }"
@@ -146,7 +146,7 @@ mod tests {
         assert!(quint.contains(
             "val workflowCommandErrors: List[WorkflowCommandError] = [{ sourceSlice: \"capture-ticket\", commandName: \"CaptureTicket\", errorName: \"DuplicateTicket\" }]"
         ));
-        assert!(quint.contains("val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"external_payload\", definitionName: \"CallbackReceivedPayload\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\" }]"));
+        assert!(quint.contains("val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"external_payload\", definitionName: \"CallbackReceivedPayload\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"\" }]"));
         assert!(quint.contains("val workflowRequiresEntryLifecycleCoverage = false"));
         assert!(
             quint.contains(
@@ -339,6 +339,15 @@ mod tests {
         ));
         assert!(quint.contains(
             "val workflowNavigationTransitionsResolveControlsAndViews = workflowTransitions.select(transition => workflowNavigationTransitionSourceOwnsControl(transition) and workflowNavigationTransitionTargetsOwnedView(transition)).length() == workflowTransitions.length()"
+        ));
+        assert!(quint.contains(
+            "def workflowOwnsEntryView(sourceSlice, viewName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == \"view\" and definition.definitionName == viewName and workflowViewRoleIsEntry(definition)).length() > 0"
+        ));
+        assert!(quint.contains(
+            "def workflowNavigationTransitionTargetsEntryView(transition) = transition.kind != \"navigation\" or workflowOwnsEntryView(transition.target, transition.trigger)"
+        ));
+        assert!(quint.contains(
+            "val workflowNavigationTransitionsResolveToEntryViews = workflowTransitions.select(transition => workflowNavigationTransitionTargetsEntryView(transition)).length() == workflowTransitions.length()"
         ));
         assert!(quint.contains(
             "def workflowExternalTriggerDeclaresPayloadContract(transition) = transition.kind != \"external_trigger\" or (transition.payloadContract != \"\" and workflowOwnsDefinition(transition.source, \"external_payload\", transition.payloadContract))"

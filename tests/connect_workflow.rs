@@ -320,15 +320,73 @@ mod tests {
         let updated_digest = digest_marker(&lean).ok_or("Lean artifact is missing digest")?;
 
         assert!(lean.contains(
-            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"command\", definitionName := \"CaptureTicket\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\" }]"
+            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"command\", definitionName := \"CaptureTicket\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"\" }]"
         ));
         assert!(quint.contains(
-            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"command\", definitionName: \"CaptureTicket\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\" }]"
+            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"command\", definitionName: \"CaptureTicket\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"\" }]"
         ));
         assert_ne!(
             initial_digest, updated_digest,
             "workflow digest must change when an owned definition fact is authored"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn add_workflow_owned_definition_rejects_view_role_for_non_view_definitions()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_slice(
+            temp_dir.path(),
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-owned-definition",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--definition-kind",
+                "command",
+                "--definition-name",
+                "CaptureTicket",
+                "--view-role",
+                "entry",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "view_role requires definition_kind view",
+            ));
 
         Ok(())
     }
@@ -431,11 +489,10 @@ mod tests {
             "control",
             "review-ticket-screen",
         )?;
-        add_workflow_owned_definition(
+        add_workflow_owned_entry_view_definition(
             temp_dir.path(),
             "open-ticket",
             "review-ticket",
-            "view",
             "review-ticket-screen",
         )?;
 
@@ -450,10 +507,19 @@ mod tests {
             "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: \"navigation\", trigger: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
         ));
         assert!(lean.contains(
-            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"control\", definitionName := \"review-ticket-screen\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\" },{ sourceSlice := \"review-ticket\", definitionKind := \"view\", definitionName := \"review-ticket-screen\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\" }]"
+            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"control\", definitionName := \"review-ticket-screen\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"\" },{ sourceSlice := \"review-ticket\", definitionKind := \"view\", definitionName := \"review-ticket-screen\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"entry\" }]"
         ));
         assert!(quint.contains(
-            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"control\", definitionName: \"review-ticket-screen\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\" },{ sourceSlice: \"review-ticket\", definitionKind: \"view\", definitionName: \"review-ticket-screen\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\" }]"
+            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"control\", definitionName: \"review-ticket-screen\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"\" },{ sourceSlice: \"review-ticket\", definitionKind: \"view\", definitionName: \"review-ticket-screen\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"entry\" }]"
+        ));
+        assert!(lean.contains(
+            "def workflowNavigationTransitionTargetsEntryView (transition : WorkflowTransition) : Bool := transition.kind != \"navigation\" || workflowOwnsEntryView transition.target transition.trigger"
+        ));
+        assert!(lean.contains(
+            "theorem workflowNavigationTransitionsResolveToEntryViewsIsStable : workflowNavigationTransitionsResolveToEntryViews = true := rfl"
+        ));
+        assert!(quint.contains(
+            "val workflowNavigationTransitionsResolveToEntryViews = workflowTransitions.select(transition => workflowNavigationTransitionTargetsEntryView(transition)).length() == workflowTransitions.length()"
         ));
         assert_ne!(
             initial_digest, updated_digest,
@@ -995,10 +1061,10 @@ mod tests {
             "Quint artifact must represent command and event workflow transitions"
         );
         assert!(lean.contains(
-            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"control\", definitionName := \"SubmitTicketForReview\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\" },{ sourceSlice := \"submit-ticket\", definitionKind := \"command\", definitionName := \"SubmitTicketForReview\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\" },{ sourceSlice := \"submit-ticket\", definitionKind := \"event\", definitionName := \"TicketSubmittedForReview\", definitionStream := \"tickets\", sourceProvenance := \"SubmitTicketForReview command output\", eventParticipation := \"emitted\" },{ sourceSlice := \"review-ticket\", definitionKind := \"event\", definitionName := \"TicketSubmittedForReview\", definitionStream := \"tickets\", sourceProvenance := \"SubmitTicketForReview command output\", eventParticipation := \"observed\" }]"
+            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"control\", definitionName := \"SubmitTicketForReview\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"\" },{ sourceSlice := \"submit-ticket\", definitionKind := \"command\", definitionName := \"SubmitTicketForReview\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"\" },{ sourceSlice := \"submit-ticket\", definitionKind := \"event\", definitionName := \"TicketSubmittedForReview\", definitionStream := \"tickets\", sourceProvenance := \"SubmitTicketForReview command output\", eventParticipation := \"emitted\", viewRole := \"\" },{ sourceSlice := \"review-ticket\", definitionKind := \"event\", definitionName := \"TicketSubmittedForReview\", definitionStream := \"tickets\", sourceProvenance := \"SubmitTicketForReview command output\", eventParticipation := \"observed\", viewRole := \"\" }]"
         ));
         assert!(quint.contains(
-            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"control\", definitionName: \"SubmitTicketForReview\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\" },{ sourceSlice: \"submit-ticket\", definitionKind: \"command\", definitionName: \"SubmitTicketForReview\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\" },{ sourceSlice: \"submit-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmittedForReview\", definitionStream: \"tickets\", sourceProvenance: \"SubmitTicketForReview command output\", eventParticipation: \"emitted\" },{ sourceSlice: \"review-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmittedForReview\", definitionStream: \"tickets\", sourceProvenance: \"SubmitTicketForReview command output\", eventParticipation: \"observed\" }]"
+            "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"control\", definitionName: \"SubmitTicketForReview\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"\" },{ sourceSlice: \"submit-ticket\", definitionKind: \"command\", definitionName: \"SubmitTicketForReview\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"\" },{ sourceSlice: \"submit-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmittedForReview\", definitionStream: \"tickets\", sourceProvenance: \"SubmitTicketForReview command output\", eventParticipation: \"emitted\", viewRole: \"\" },{ sourceSlice: \"review-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmittedForReview\", definitionStream: \"tickets\", sourceProvenance: \"SubmitTicketForReview command output\", eventParticipation: \"observed\", viewRole: \"\" }]"
         ));
 
         Command::cargo_bin("emc")?
@@ -2358,6 +2424,33 @@ mod tests {
                 definition_kind,
                 "--definition-name",
                 definition_name,
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn add_workflow_owned_entry_view_definition(
+        cwd: &Path,
+        workflow: &str,
+        source_slice: &str,
+        definition_name: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-owned-definition",
+                "--workflow",
+                workflow,
+                "--source-slice",
+                source_slice,
+                "--definition-kind",
+                "view",
+                "--definition-name",
+                definition_name,
+                "--view-role",
+                "entry",
             ])
             .current_dir(cwd)
             .assert()

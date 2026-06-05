@@ -24,7 +24,7 @@ use crate::core::types::{
     ViewFieldName, ViewFieldSourceKind, ViewName, WorkflowEntryLifecycleEvidenceText,
     WorkflowEntryLifecycleStateName, WorkflowEventParticipation, WorkflowOwnedDefinitionKind,
     WorkflowOwnedDefinitionName, WorkflowSlug, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceText, WorkflowTransitionKind,
+    WorkflowTransitionEvidenceText, WorkflowTransitionKind, WorkflowViewRole,
 };
 
 #[derive(Debug)]
@@ -557,6 +557,11 @@ pub fn parse_workflow_event_participation(
     WorkflowEventParticipation::try_new(raw.to_owned()).map_err(|error| {
         BoundaryParseError::new(format!("invalid workflow event participation: {error}"))
     })
+}
+
+pub fn parse_workflow_view_role(raw: &str) -> Result<WorkflowViewRole, BoundaryParseError> {
+    WorkflowViewRole::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid workflow view role: {error}")))
 }
 
 pub fn parse_lean_module_name(raw: &str) -> Result<LeanModuleName, BoundaryParseError> {

@@ -264,7 +264,7 @@ fn quint_workflow_command_error_record(error: &WorkflowCommandErrorRecord) -> St
 
 fn lean_workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) -> String {
     format!(
-        "{{ sourceSlice := {}, definitionKind := {}, definitionName := {}, definitionStream := {}, sourceProvenance := {}, eventParticipation := {} }}",
+        "{{ sourceSlice := {}, definitionKind := {}, definitionName := {}, definitionStream := {}, sourceProvenance := {}, eventParticipation := {}, viewRole := {} }}",
         quoted(definition.source_slice().as_ref()),
         quoted(definition.definition_kind().as_ref()),
         quoted(definition.definition_name().as_ref()),
@@ -282,13 +282,18 @@ fn lean_workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRec
             definition
                 .event_participation()
                 .map_or("", |event_participation| event_participation.as_ref()),
+        ),
+        quoted(
+            definition
+                .view_role()
+                .map_or("", |view_role| view_role.as_ref())
         ),
     )
 }
 
 fn quint_workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) -> String {
     format!(
-        "{{ sourceSlice: {}, definitionKind: {}, definitionName: {}, definitionStream: {}, sourceProvenance: {}, eventParticipation: {} }}",
+        "{{ sourceSlice: {}, definitionKind: {}, definitionName: {}, definitionStream: {}, sourceProvenance: {}, eventParticipation: {}, viewRole: {} }}",
         quoted(definition.source_slice().as_ref()),
         quoted(definition.definition_kind().as_ref()),
         quoted(definition.definition_name().as_ref()),
@@ -306,6 +311,11 @@ fn quint_workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRe
             definition
                 .event_participation()
                 .map_or("", |event_participation| event_participation.as_ref()),
+        ),
+        quoted(
+            definition
+                .view_role()
+                .map_or("", |view_role| view_role.as_ref())
         ),
     )
 }

@@ -56,6 +56,7 @@ use crate::io::dto::{
     parse_workflow_event_participation, parse_workflow_owned_definition_kind,
     parse_workflow_owned_definition_name, parse_workflow_slug, parse_workflow_transition_endpoint,
     parse_workflow_transition_evidence_text, parse_workflow_transition_kind,
+    parse_workflow_view_role,
 };
 use crate::shell::{ShellError, interpret_collect_reports};
 
@@ -547,6 +548,9 @@ fn tools_list_result() -> Result<Value, ShellError> {
                             "type": "string"
                         },
                         "event_participation": {
+                            "type": "string"
+                        },
+                        "view_role": {
                             "type": "string"
                         }
                     },
@@ -1807,8 +1811,28 @@ fn add_workflow_owned_definition_tool_text(request: &Value) -> Result<String, Sh
                 .map_err(|error| ShellError::message(error.to_string()))
         })
         .transpose()?;
-    let definition = match (definition_stream, source_provenance, event_participation) {
-        (Some(definition_stream), Some(source_provenance), Some(event_participation)) => {
+    let view_role = arguments
+        .get("view_role")
+        .and_then(Value::as_str)
+        .map(|raw_view_role| {
+            parse_workflow_view_role(raw_view_role)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .transpose()?;
+    let definition = match (
+        definition_stream,
+        source_provenance,
+        event_participation,
+        view_role,
+    ) {
+        (None, None, None, Some(view_role)) => WorkflowOwnedDefinitionRecord::new_with_view_role(
+            source_slice,
+            definition_kind,
+            definition_name,
+            view_role,
+        )
+        .ok_or_else(|| ShellError::message("view_role requires definition_kind view"))?,
+        (Some(definition_stream), Some(source_provenance), Some(event_participation), None) => {
             WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
                 source_slice,
                 definition_kind,
@@ -1818,7 +1842,7 @@ fn add_workflow_owned_definition_tool_text(request: &Value) -> Result<String, Sh
                 event_participation,
             )
         }
-        (Some(definition_stream), Some(source_provenance), None) => {
+        (Some(definition_stream), Some(source_provenance), None, None) => {
             WorkflowOwnedDefinitionRecord::new_with_event_identity(
                 source_slice,
                 definition_kind,
@@ -1827,12 +1851,17 @@ fn add_workflow_owned_definition_tool_text(request: &Value) -> Result<String, Sh
                 source_provenance,
             )
         }
-        (None, None, None) => {
+        (None, None, None, None) => {
             WorkflowOwnedDefinitionRecord::new(source_slice, definition_kind, definition_name)
         }
-        (_, _, Some(_)) => {
+        (_, _, Some(_), _) => {
             return Err(ShellError::message(
                 "event_participation requires definition_stream and source_provenance",
+            ));
+        }
+        (_, _, _, Some(_)) => {
+            return Err(ShellError::message(
+                "view_role cannot be combined with event identity fields",
             ));
         }
         _ => {

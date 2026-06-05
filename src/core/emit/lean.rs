@@ -75,6 +75,7 @@ structure WorkflowOwnedDefinition where
   definitionStream : String
   sourceProvenance : String
   eventParticipation : String
+  viewRole : String
 
 structure WorkflowTransitionEvidence where
   source : String
@@ -185,6 +186,10 @@ def workflowEventParticipationIsModeled (definition : WorkflowOwnedDefinition) :
 
 def workflowEventDefinitionParticipates (sourceSlice : String) (eventName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == "event" && definition.definitionName == eventName && workflowEventParticipationIsModeled definition)
 
+def workflowViewRoleIsEntry (definition : WorkflowOwnedDefinition) : Bool := definition.viewRole == "entry"
+
+def workflowOwnsEntryView (sourceSlice : String) (viewName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == "view" && definition.definitionName == viewName && workflowViewRoleIsEntry definition)
+
 def workflowCommandTransitionTargetsOwnedCommand (transition : WorkflowTransition) : Bool := transition.kind != "command" || workflowOwnsDefinition transition.target "command" transition.trigger
 
 def workflowCommandTransitionsTargetOwnedCommands : Bool := workflowTransitions.all workflowCommandTransitionTargetsOwnedCommand
@@ -209,7 +214,11 @@ def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransiti
 
 def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransition) : Bool := transition.kind != "navigation" || workflowOwnsDefinition transition.target "view" transition.trigger
 
+def workflowNavigationTransitionTargetsEntryView (transition : WorkflowTransition) : Bool := transition.kind != "navigation" || workflowOwnsEntryView transition.target transition.trigger
+
 def workflowNavigationTransitionsResolveControlsAndViews : Bool := workflowTransitions.all (fun transition => workflowNavigationTransitionSourceOwnsControl transition && workflowNavigationTransitionTargetsOwnedView transition)
+
+def workflowNavigationTransitionsResolveToEntryViews : Bool := workflowTransitions.all workflowNavigationTransitionTargetsEntryView
 
 def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransition) : Bool := transition.kind != "external_trigger" || (transition.payloadContract.isEmpty == false && workflowOwnsDefinition transition.source "external_payload" transition.payloadContract)
 
@@ -282,6 +291,8 @@ theorem workflowEventTransitionsAreSharedByEndpointSlicesIsStable : workflowEven
 theorem workflowEventTransitionsHaveParticipatingEndpointEventsIsStable : workflowEventTransitionsHaveParticipatingEndpointEvents = true := rfl
 
 theorem workflowNavigationTransitionsResolveControlsAndViewsIsStable : workflowNavigationTransitionsResolveControlsAndViews = true := rfl
+
+theorem workflowNavigationTransitionsResolveToEntryViewsIsStable : workflowNavigationTransitionsResolveToEntryViews = true := rfl
 
 theorem workflowExternalTriggersDeclarePayloadContractsIsStable : workflowExternalTriggersDeclarePayloadContracts = true := rfl
 
@@ -734,7 +745,7 @@ fn workflow_owned_definition_list(
 
 fn workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) -> String {
     format!(
-        "{{ sourceSlice := {}, definitionKind := {}, definitionName := {}, definitionStream := {}, sourceProvenance := {}, eventParticipation := {} }}",
+        "{{ sourceSlice := {}, definitionKind := {}, definitionName := {}, definitionStream := {}, sourceProvenance := {}, eventParticipation := {}, viewRole := {} }}",
         quoted(definition.source_slice().as_ref()),
         quoted(definition.definition_kind().as_ref()),
         quoted(definition.definition_name().as_ref()),
@@ -752,6 +763,11 @@ fn workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRecord) 
             definition
                 .event_participation()
                 .map_or("", |event_participation| event_participation.as_ref()),
+        ),
+        quoted(
+            definition
+                .view_role()
+                .map_or("", |view_role| view_role.as_ref())
         ),
     )
 }
