@@ -694,7 +694,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure CommandInput where\n  name : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String"
+                "structure CommandInput where\n  name : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String"
             ),
             "Lean slice artifacts must represent command input source-chain provenance"
         );
@@ -1089,6 +1089,18 @@ mod tests {
                 "def commandInputsSourcedFromExternalPayloadsResolve : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputExternalPayloadSourceResolves)"
             ),
             "Lean slice artifacts must prove external-payload command input sources resolve"
+        );
+        assert!(
+            lean.contains(
+                "def commandInputGeneratedSourceHasCoordinates (input : CommandInput) : Bool := input.sourceKind != \"generated\" || (input.generatedSourceName.isEmpty == false && input.generatedSourceField.isEmpty == false)"
+            ),
+            "Lean slice artifacts must require generated command inputs to name generated source coordinates"
+        );
+        assert!(
+            lean.contains(
+                "def commandInputsSourcedFromGeneratedValuesHaveCoordinates : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputGeneratedSourceHasCoordinates)"
+            ),
+            "Lean slice artifacts must prove generated command inputs have source coordinates"
         );
         assert!(
             lean.contains(
