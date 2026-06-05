@@ -7,8 +7,8 @@ use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
 use crate::core::formal_project_facts::{
-    ProjectAutomation, ProjectCommand, ProjectEvent, ProjectReadModel, ProjectStream,
-    ProjectTranslation, ProjectView,
+    ProjectAutomation, ProjectCommand, ProjectEvent, ProjectExternalPayload, ProjectReadModel,
+    ProjectStream, ProjectTranslation, ProjectView,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{
@@ -103,28 +103,33 @@ pub struct ModeledProjectRootInventories {
     views: Vec<ProjectView>,
     automations: Vec<ProjectAutomation>,
     translations: Vec<ProjectTranslation>,
+    external_payloads: Vec<ProjectExternalPayload>,
     streams: Vec<ProjectStream>,
     events: Vec<ProjectEvent>,
 }
 
+pub(crate) struct ModeledProjectRootInventoryParts {
+    pub(crate) commands: Vec<ProjectCommand>,
+    pub(crate) read_models: Vec<ProjectReadModel>,
+    pub(crate) views: Vec<ProjectView>,
+    pub(crate) automations: Vec<ProjectAutomation>,
+    pub(crate) translations: Vec<ProjectTranslation>,
+    pub(crate) external_payloads: Vec<ProjectExternalPayload>,
+    pub(crate) streams: Vec<ProjectStream>,
+    pub(crate) events: Vec<ProjectEvent>,
+}
+
 impl ModeledProjectRootInventories {
-    pub(crate) fn new(
-        commands: Vec<ProjectCommand>,
-        read_models: Vec<ProjectReadModel>,
-        views: Vec<ProjectView>,
-        automations: Vec<ProjectAutomation>,
-        translations: Vec<ProjectTranslation>,
-        streams: Vec<ProjectStream>,
-        events: Vec<ProjectEvent>,
-    ) -> Self {
+    pub(crate) fn from_parts(parts: ModeledProjectRootInventoryParts) -> Self {
         Self {
-            commands,
-            read_models,
-            views,
-            automations,
-            translations,
-            streams,
-            events,
+            commands: parts.commands,
+            read_models: parts.read_models,
+            views: parts.views,
+            automations: parts.automations,
+            translations: parts.translations,
+            external_payloads: parts.external_payloads,
+            streams: parts.streams,
+            events: parts.events,
         }
     }
 }
@@ -152,6 +157,7 @@ pub fn check_project(
             views: &project_inventories.views,
             automations: &project_inventories.automations,
             translations: &project_inventories.translations,
+            external_payloads: &project_inventories.external_payloads,
             streams: &project_inventories.streams,
             events: &project_inventories.events,
         },
@@ -257,6 +263,7 @@ struct ProjectRootInventories<'a> {
     views: &'a [ProjectView],
     automations: &'a [ProjectAutomation],
     translations: &'a [ProjectTranslation],
+    external_payloads: &'a [ProjectExternalPayload],
     streams: &'a [ProjectStream],
     events: &'a [ProjectEvent],
 }
@@ -279,6 +286,8 @@ fn project_root_effects(
     let lean_model_view_list = lean_model_view_list(inventories.views);
     let lean_model_automation_list = lean_model_automation_list(inventories.automations);
     let lean_model_translation_list = lean_model_translation_list(inventories.translations);
+    let lean_model_external_payload_list =
+        lean_model_external_payload_list(inventories.external_payloads);
     let lean_model_stream_list = lean_model_stream_list(inventories.streams);
     let lean_model_event_list = lean_model_event_list(inventories.events);
     let quint_model_slice_list = quint_model_slice_list(formal_workflows);
@@ -288,6 +297,8 @@ fn project_root_effects(
     let quint_model_view_list = quint_model_view_list(inventories.views);
     let quint_model_automation_list = quint_model_automation_list(inventories.automations);
     let quint_model_translation_list = quint_model_translation_list(inventories.translations);
+    let quint_model_external_payload_list =
+        quint_model_external_payload_list(inventories.external_payloads);
     let quint_model_stream_list = quint_model_stream_list(inventories.streams);
     let quint_model_event_list = quint_model_event_list(inventories.events);
     let model_digest = model_digest(
@@ -306,6 +317,7 @@ fn project_root_effects(
     let view_count = inventories.views.len();
     let automation_count = inventories.automations.len();
     let translation_count = inventories.translations.len();
+    let external_payload_count = inventories.external_payloads.len();
     let event_count = inventories.events.len();
     let manifest_path = project_path("emc.toml");
     let lean_path = project_path(format!("model/lean/{module_name}.lean"));
@@ -456,6 +468,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelExternalPayloads :"),
+            artifact_marker(format!(
+                "def modelExternalPayloads : List (String × String × String) := {lean_model_external_payload_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelStreams :"),
             artifact_marker(format!(
                 "def modelStreams : List (String × String × String) := {lean_model_stream_list}"
@@ -563,6 +583,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelExternalPayloadsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelExternalPayloadsAreDeclared : modelExternalPayloads.length = {external_payload_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelStreamsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelStreamsAreDeclared : modelStreams.length = {stream_count} := rfl"
@@ -636,6 +664,14 @@ fn project_root_effects(
             artifact_marker("  type ModelTranslation ="),
             artifact_marker(
                 "  type ModelTranslation = { workflow: str, slice: str, translation: str }",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelExternalPayload ="),
+            artifact_marker(
+                "  type ModelExternalPayload = { workflow: str, slice: str, externalPayload: str }",
             ),
             quint_message.clone(),
         ),
@@ -746,6 +782,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelExternalPayloads:"),
+            artifact_marker(format!(
+                "  val modelExternalPayloads: List[ModelExternalPayload] = {quint_model_external_payload_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelStreams:"),
             artifact_marker(format!(
                 "  val modelStreams: List[ModelStream] = {quint_model_stream_list}"
@@ -848,6 +892,14 @@ fn project_root_effects(
             artifact_marker("  val modelTranslationsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelTranslationsAreDeclared = modelTranslations.length() == {translation_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelExternalPayloadsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelExternalPayloadsAreDeclared = modelExternalPayloads.length() == {external_payload_count}"
             )),
             quint_message.clone(),
         ),
@@ -2224,6 +2276,68 @@ fn quint_model_translation_list(project_translations: &[ProjectTranslation]) -> 
     )
 }
 
+fn lean_model_external_payload_list(
+    project_external_payloads: &[ProjectExternalPayload],
+) -> String {
+    let mut project_external_payloads = project_external_payloads
+        .iter()
+        .map(|external_payload| {
+            (
+                external_payload.workflow_slug(),
+                external_payload.slice_slug(),
+                external_payload.external_payload(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_external_payloads.sort_unstable();
+    format!(
+        "[{}]",
+        project_external_payloads
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, external_payload)| {
+                format!(
+                    "({}, {}, {})",
+                    json_string(workflow_slug),
+                    json_string(slice_slug),
+                    json_string(external_payload)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_external_payload_list(
+    project_external_payloads: &[ProjectExternalPayload],
+) -> String {
+    let mut project_external_payloads = project_external_payloads
+        .iter()
+        .map(|external_payload| {
+            (
+                external_payload.workflow_slug(),
+                external_payload.slice_slug(),
+                external_payload.external_payload(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_external_payloads.sort_unstable();
+    format!(
+        "[{}]",
+        project_external_payloads
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, external_payload)| {
+                format!(
+                    "{{ workflow: {}, slice: {}, externalPayload: {} }}",
+                    json_string(workflow_slug),
+                    json_string(slice_slug),
+                    json_string(external_payload)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn lean_model_event_list(project_events: &[ProjectEvent]) -> String {
     let mut project_events = project_events
         .iter()
@@ -2293,7 +2407,7 @@ fn model_digest(
     inventories: &ProjectRootInventories<'_>,
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};commands={};read-models={};views={};automations={};translations={};streams={};events={}",
+        "project:name={};version=0.1.0;workflows={};slices={};commands={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
@@ -2302,6 +2416,7 @@ fn model_digest(
         digest_views(inventories.views),
         digest_automations(inventories.automations),
         digest_translations(inventories.translations),
+        digest_external_payloads(inventories.external_payloads),
         digest_streams(inventories.streams),
         digest_events(inventories.events)
     )
@@ -2444,6 +2559,27 @@ fn digest_translations(project_translations: &[ProjectTranslation]) -> String {
         .into_iter()
         .map(|(workflow_slug, slice_slug, translation)| {
             format!("{workflow_slug}/{slice_slug}/{translation}")
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_external_payloads(project_external_payloads: &[ProjectExternalPayload]) -> String {
+    let mut external_payloads = project_external_payloads
+        .iter()
+        .map(|external_payload| {
+            (
+                external_payload.workflow_slug(),
+                external_payload.slice_slug(),
+                external_payload.external_payload(),
+            )
+        })
+        .collect::<Vec<_>>();
+    external_payloads.sort_unstable();
+    external_payloads
+        .into_iter()
+        .map(|(workflow_slug, slice_slug, external_payload)| {
+            format!("{workflow_slug}/{slice_slug}/{external_payload}")
         })
         .collect::<Vec<_>>()
         .join(",")

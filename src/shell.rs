@@ -19,14 +19,16 @@ use crate::core::formal_graph::{
     parse_quint_workflow_graph,
 };
 use crate::core::formal_project_facts::{
-    NewProjectAutomation, NewProjectCommand, NewProjectEvent, NewProjectReadModel,
-    NewProjectStream, NewProjectTranslation, NewProjectView, ProjectAutomation, ProjectCommand,
-    ProjectEvent, ProjectReadModel, ProjectStream, ProjectTranslation, ProjectView,
-    add_project_automation, add_project_command, add_project_event, add_project_read_model,
-    add_project_stream, add_project_translation, add_project_view, parse_lean_project_automations,
-    parse_lean_project_commands, parse_lean_project_events, parse_lean_project_read_models,
-    parse_lean_project_streams, parse_lean_project_translations, parse_lean_project_views,
-    parse_quint_project_automations, parse_quint_project_commands, parse_quint_project_events,
+    NewProjectAutomation, NewProjectCommand, NewProjectEvent, NewProjectExternalPayload,
+    NewProjectReadModel, NewProjectStream, NewProjectTranslation, NewProjectView,
+    ProjectAutomation, ProjectCommand, ProjectEvent, ProjectExternalPayload, ProjectReadModel,
+    ProjectStream, ProjectTranslation, ProjectView, add_project_automation, add_project_command,
+    add_project_event, add_project_external_payload, add_project_read_model, add_project_stream,
+    add_project_translation, add_project_view, parse_lean_project_automations,
+    parse_lean_project_commands, parse_lean_project_events, parse_lean_project_external_payloads,
+    parse_lean_project_read_models, parse_lean_project_streams, parse_lean_project_translations,
+    parse_lean_project_views, parse_quint_project_automations, parse_quint_project_commands,
+    parse_quint_project_events, parse_quint_project_external_payloads,
     parse_quint_project_read_models, parse_quint_project_streams, parse_quint_project_translations,
     parse_quint_project_views,
 };
@@ -43,9 +45,9 @@ use crate::core::formal_workflow_facts::{
 };
 use crate::core::json_object_document::JsonObjectDocument;
 use crate::core::layout::{
-    ModeledProjectRootInventories, ModeledWorkflowLayout, ModeledWorkflowLayouts,
-    ModeledWorkflowSliceDetails, ModeledWorkflowTransitions, check_project, list_slices,
-    list_transitions, list_workflows, show_document, show_workflow,
+    ModeledProjectRootInventories, ModeledProjectRootInventoryParts, ModeledWorkflowLayout,
+    ModeledWorkflowLayouts, ModeledWorkflowSliceDetails, ModeledWorkflowTransitions, check_project,
+    list_slices, list_transitions, list_workflows, show_document, show_workflow,
 };
 use crate::core::project::{ProjectName, ProjectSliceMembership, ProjectSliceMemberships};
 use crate::core::review_record::{
@@ -293,7 +295,14 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::AddExternalPayloadDefinitionFromSlice(external_payload) => {
             let slice_artifacts =
                 read_formal_slice_artifact_paths_and_contents(external_payload.slice_slug())?;
-            let plan = add_external_payload_definition(
+            let project_name = read_project_manifest_name()?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let (workflow_layout, _workflow_graph) = find_formal_workflow_containing_slice_in(
+                &formal_workflows,
+                external_payload.slice_slug(),
+            )?;
+            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
+            let slice_plan = add_external_payload_definition(
                 slice_artifacts.lean_path,
                 slice_artifacts.lean_contents,
                 slice_artifacts.quint_path,
@@ -301,7 +310,21 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 external_payload.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let project_external_payload_plan = add_project_external_payload(
+                project_artifacts.lean_path,
+                project_artifacts.lean_contents,
+                project_artifacts.quint_path,
+                project_artifacts.quint_contents,
+                NewProjectExternalPayload::new(
+                    workflow_layout.slug().clone(),
+                    external_payload.slice_slug().clone(),
+                    external_payload.name().clone(),
+                ),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            let mut reports = interpret_collect_reports(slice_plan)?;
+            reports.extend(interpret_collect_reports(project_external_payload_plan)?);
+            Ok(reports)
         }
         Effect::AddOutcomeDefinitionFromSlice(outcome) => {
             let slice_artifacts =
@@ -549,20 +572,23 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let project_views = read_synchronized_project_views(&project_name)?;
             let project_automations = read_synchronized_project_automations(&project_name)?;
             let project_translations = read_synchronized_project_translations(&project_name)?;
+            let project_external_payloads =
+                read_synchronized_project_external_payloads(&project_name)?;
             let project_streams = read_synchronized_project_streams(&project_name)?;
             let project_events = read_synchronized_project_events(&project_name)?;
             interpret_collect_reports(check_project(
                 project_name,
                 formal_workflows,
-                ModeledProjectRootInventories::new(
-                    project_commands,
-                    project_read_models,
-                    project_views,
-                    project_automations,
-                    project_translations,
-                    project_streams,
-                    project_events,
-                ),
+                ModeledProjectRootInventories::from_parts(ModeledProjectRootInventoryParts {
+                    commands: project_commands,
+                    read_models: project_read_models,
+                    views: project_views,
+                    automations: project_automations,
+                    translations: project_translations,
+                    external_payloads: project_external_payloads,
+                    streams: project_streams,
+                    events: project_events,
+                }),
             ))
         }
         Effect::ConnectWorkflowFromWorkflow(connection) => {
@@ -1023,6 +1049,28 @@ fn read_synchronized_project_translations(
             "Lean and Quint project root translation inventories disagree",
         )),
         (_lean_translations, _quint_translations) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_external_payloads(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectExternalPayload>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_external_payloads(&artifacts.lean_contents),
+        parse_quint_project_external_payloads(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_external_payloads), Ok(quint_external_payloads))
+            if lean_external_payloads == quint_external_payloads =>
+        {
+            Ok(lean_external_payloads)
+        }
+        (Ok(_lean_external_payloads), Ok(_quint_external_payloads)) => Err(ShellError::message(
+            "Lean and Quint project root external payload inventories disagree",
+        )),
+        (_lean_external_payloads, _quint_external_payloads) => Ok(Vec::new()),
     }
 }
 

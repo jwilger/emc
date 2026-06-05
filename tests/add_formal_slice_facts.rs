@@ -862,10 +862,15 @@ mod tests {
             .success()
             .stdout(predicate::str::contains(
                 "added external payload intake_webhook to slice capture-ticket",
+            ))
+            .stdout(predicate::str::contains(
+                "added external payload intake_webhook to project root",
             ));
 
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
         assert!(
             lean.contains(
@@ -878,6 +883,48 @@ mod tests {
                 "val sliceExternalPayloads: List[ExternalPayloadDefinition] = [{ name: \"intake_webhook\", fields: [{ name: \"ticket_title\", provenanceDescription: \"intake_webhook.ticket_title supplied by the external ticket intake system\", bitEncoding: \"UTF-8 string\" }] }]"
             ),
             "Quint slice artifact must carry authored external payload field provenance and bit encoding"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelExternalPayloads : List (String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"intake_webhook\")]"
+            ),
+            "Lean project root must inventory authored external payload contracts"
+        );
+        assert!(
+            lean_root.contains(
+                "theorem modelExternalPayloadsAreDeclared : modelExternalPayloads.length = 1 := rfl"
+            ),
+            "Lean project root must prove authored external payload inventory completeness"
+        );
+        assert!(
+            quint_root.contains(
+                "type ModelExternalPayload = { workflow: str, slice: str, externalPayload: str }"
+            ),
+            "Quint project root must type authored external payload inventory entries"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelExternalPayloads: List[ModelExternalPayload] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", externalPayload: \"intake_webhook\" }]"
+            ),
+            "Quint project root must inventory authored external payload contracts"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelExternalPayloadsAreDeclared = modelExternalPayloads.length() == 1"
+            ),
+            "Quint project root must verify authored external payload inventory completeness"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=open-ticket/capture-ticket/CaptureTicket;read-models=;views=;automations=;translations=;external-payloads=open-ticket/capture-ticket/intake_webhook;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+            ),
+            "Lean project root digest must include authored external payload inventory"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=open-ticket/capture-ticket/CaptureTicket;read-models=;views=;automations=;translations=;external-payloads=open-ticket/capture-ticket/intake_webhook;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+            ),
+            "Quint project root digest must include authored external payload inventory"
         );
 
         Command::cargo_bin("emc")?
@@ -1479,13 +1526,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=open-ticket/capture-ticket/CaptureTicket;read-models=;views=;automations=;translations=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=open-ticket/capture-ticket/CaptureTicket;read-models=;views=;automations=;translations=;external-payloads=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
             ),
             "Lean project root digest must include authored command, stream, and event inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=open-ticket/capture-ticket/CaptureTicket;read-models=;views=;automations=;translations=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=open-ticket/capture-ticket/CaptureTicket;read-models=;views=;automations=;translations=;external-payloads=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
             ),
             "Quint project root digest must include authored command, stream, and event inventory"
         );
@@ -1732,13 +1779,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;views=open-ticket/capture-ticket/ticket_summary;automations=;translations=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;views=open-ticket/capture-ticket/ticket_summary;automations=;translations=;external-payloads=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
             ),
             "Lean project root digest must include authored read model inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;views=open-ticket/capture-ticket/ticket_summary;automations=;translations=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;views=open-ticket/capture-ticket/ticket_summary;automations=;translations=;external-payloads=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
             ),
             "Quint project root digest must include authored read model inventory"
         );
@@ -2335,13 +2382,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;views=open-ticket/capture-ticket/ticket_summary;automations=;translations=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;views=open-ticket/capture-ticket/ticket_summary;automations=;translations=;external-payloads=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
             ),
             "Lean project root digest must include authored view inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;views=open-ticket/capture-ticket/ticket_summary;automations=;translations=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=open-ticket/capture-ticket/ticket_state;views=open-ticket/capture-ticket/ticket_summary;automations=;translations=;external-payloads=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets\""
             ),
             "Quint project root digest must include authored view inventory"
         );
@@ -2730,13 +2777,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=;views=;automations=open-ticket/capture-ticket/title-deduplicator;translations=;streams=;events=\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=;views=;automations=open-ticket/capture-ticket/title-deduplicator;translations=;external-payloads=;streams=;events=\""
             ),
             "Lean project root digest must include authored automation inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=;views=;automations=open-ticket/capture-ticket/title-deduplicator;translations=;streams=;events=\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=;views=;automations=open-ticket/capture-ticket/title-deduplicator;translations=;external-payloads=;streams=;events=\""
             ),
             "Quint project root digest must include authored automation inventory"
         );
@@ -2959,13 +3006,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=;views=;automations=;translations=open-ticket/capture-ticket/intake-webhook-translator;streams=open-ticket/capture-ticket/intake-webhooks;events=open-ticket/capture-ticket/intake_webhook_received@intake-webhooks\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=;views=;automations=;translations=open-ticket/capture-ticket/intake-webhook-translator;external-payloads=open-ticket/capture-ticket/intake_webhook;streams=open-ticket/capture-ticket/intake-webhooks;events=open-ticket/capture-ticket/intake_webhook_received@intake-webhooks\""
             ),
             "Lean project root digest must include authored translation inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=;views=;automations=;translations=open-ticket/capture-ticket/intake-webhook-translator;streams=open-ticket/capture-ticket/intake-webhooks;events=open-ticket/capture-ticket/intake_webhook_received@intake-webhooks\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;commands=;read-models=;views=;automations=;translations=open-ticket/capture-ticket/intake-webhook-translator;external-payloads=open-ticket/capture-ticket/intake_webhook;streams=open-ticket/capture-ticket/intake-webhooks;events=open-ticket/capture-ticket/intake_webhook_received@intake-webhooks\""
             ),
             "Quint project root digest must include authored translation inventory"
         );
