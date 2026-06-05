@@ -493,6 +493,12 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
+            artifact_marker("    \"workflowSliceModulesComplete\""),
+            artifact_marker("    \"workflowSliceModulesComplete\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
             artifact_marker("    \"workflowTransitionsStructured\""),
             artifact_marker("    \"workflowTransitionsStructured\","),
             quint_config_message.clone(),
@@ -723,20 +729,25 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let quint_description_prefix = artifact_marker("val workflowDescription =");
     let lean_slice_marker = lean_workflow_slice_marker(workflow);
     let lean_slice_detail_marker = lean_workflow_slice_detail_marker(workflow);
+    let lean_slice_module_marker = lean_workflow_slice_module_marker(workflow);
     let lean_transition_marker = lean_workflow_transition_marker(workflow);
     let lean_exit_target_marker = lean_workflow_exit_target_marker(workflow);
     let quint_slice_marker = quint_workflow_slice_marker(workflow);
     let quint_slice_detail_marker = quint_workflow_slice_detail_marker(workflow);
+    let quint_slice_module_marker = quint_workflow_slice_module_marker(workflow);
     let quint_transition_marker = quint_workflow_transition_marker(workflow);
     let quint_exit_target_marker = quint_workflow_exit_target_marker(workflow);
     let lean_slice_prefix = artifact_marker("def workflowSlices : List String :=");
     let lean_slice_detail_prefix =
         artifact_marker("def workflowSliceDetails : List (String × String × String × String) :=");
+    let lean_slice_module_prefix =
+        artifact_marker("def workflowSliceModules : List (String × String) :=");
     let lean_transition_prefix =
         artifact_marker("def workflowTransitions : List WorkflowTransition :=");
     let lean_exit_target_prefix = artifact_marker("def workflowExitTargets : List String :=");
     let quint_slice_prefix = artifact_marker("val workflowSlices:");
     let quint_slice_detail_prefix = artifact_marker("val workflowSliceDetails:");
+    let quint_slice_module_prefix = artifact_marker("val workflowSliceModules:");
     let quint_transition_prefix = artifact_marker("val workflowTransitions:");
     let quint_exit_target_prefix = artifact_marker("val workflowExitTargets:");
     let lean_identity_invariant_marker = artifact_marker(format!(
@@ -748,6 +759,11 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
         "theorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl",
     );
     let lean_slice_detail_invariant_prefix = artifact_marker("theorem workflowSlicesHaveDetails :");
+    let lean_slice_module_invariant_marker = artifact_marker(
+        "theorem workflowSlicesHaveModuleReferences : workflowSlices.length = workflowSliceModules.length := rfl",
+    );
+    let lean_slice_module_invariant_prefix =
+        artifact_marker("theorem workflowSlicesHaveModuleReferences :");
     let lean_transition_invariant_marker = artifact_marker(
         "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl",
     );
@@ -775,6 +791,10 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let quint_slice_detail_complete_marker =
         artifact_marker("val workflowSliceDetailsComplete = workflowSlicesHaveDetails");
     let quint_slice_detail_complete_prefix = artifact_marker("val workflowSliceDetailsComplete =");
+    let quint_slice_module_complete_marker = artifact_marker(
+        "val workflowSliceModulesComplete = workflowSlices.length() == workflowSliceModules.length()",
+    );
+    let quint_slice_module_complete_prefix = artifact_marker("val workflowSliceModulesComplete =");
     let quint_transition_invariant_marker = artifact_marker(
         "val workflowTransitionsStructured = workflowTransitions.select(transition => transition.source != \"\" and transition.target != \"\" and transition.kind != \"\" and transition.trigger != \"\").length() == workflowTransitions.length()",
     );
@@ -913,6 +933,14 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
             )),
         ),
         Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_slice_module_prefix,
+            lean_slice_module_marker,
+            report_line(format!(
+                "Lean workflow slice module drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
             quint_slice_prefix,
             quint_slice_marker,
@@ -926,6 +954,14 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
             quint_slice_detail_marker,
             report_line(format!(
                 "Quint workflow slice detail drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_slice_module_prefix,
+            quint_slice_module_marker,
+            report_line(format!(
+                "Quint workflow slice module drift for workflow {workflow_name}"
             )),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -985,6 +1021,14 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
             )),
         ),
         Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            lean_slice_module_invariant_prefix,
+            lean_slice_module_invariant_marker,
+            report_line(format!(
+                "Lean workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
             quint_slice_detail_invariant_prefix,
             quint_slice_detail_invariant_marker,
@@ -996,6 +1040,14 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
             quint_path.clone(),
             quint_slice_detail_complete_prefix,
             quint_slice_detail_complete_marker,
+            report_line(format!(
+                "Quint workflow invariant drift for workflow {workflow_name}"
+            )),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            quint_slice_module_complete_prefix,
+            quint_slice_module_complete_marker,
             report_line(format!(
                 "Quint workflow invariant drift for workflow {workflow_name}"
             )),
@@ -1155,6 +1207,25 @@ fn lean_workflow_slice_detail_marker(workflow: &FormalWorkflowGraph) -> Artifact
     ))
 }
 
+fn lean_workflow_slice_module_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
+    artifact_marker(format!(
+        "def workflowSliceModules : List (String × String) := [{}]",
+        workflow
+            .slice_details()
+            .as_slice()
+            .iter()
+            .map(|slice| {
+                format!(
+                    "({}, {})",
+                    json_string(slice.slug().as_ref()),
+                    json_string(&module_name_from_model(slice.name().clone()))
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    ))
+}
+
 fn lean_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
     artifact_marker(format!(
         "def workflowTransitions : List WorkflowTransition := [{}]",
@@ -1220,6 +1291,25 @@ fn quint_workflow_slice_detail_marker(workflow: &FormalWorkflowGraph) -> Artifac
                     json_string(slice.name().as_ref()),
                     json_string(slice.kind().as_ref()),
                     json_string(slice.description().as_ref())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    ))
+}
+
+fn quint_workflow_slice_module_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
+    artifact_marker(format!(
+        "val workflowSliceModules: List[WorkflowSliceModule] = [{}]",
+        workflow
+            .slice_details()
+            .as_slice()
+            .iter()
+            .map(|slice| {
+                format!(
+                    "{{ slice: {}, formalModule: {} }}",
+                    json_string(slice.slug().as_ref()),
+                    json_string(&module_name_from_model(slice.name().clone()))
                 )
             })
             .collect::<Vec<_>>()

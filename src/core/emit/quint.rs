@@ -14,6 +14,7 @@ pub fn emit_workflow_module(
 ) -> FileContents {
     let slice_list = slice_list(workflow_module.workflow_slice_details().as_slice());
     let slice_detail_list = slice_detail_list(workflow_module.workflow_slice_details().as_slice());
+    let slice_module_list = slice_module_list(workflow_module.workflow_slice_details().as_slice());
     let workflow_slice_count = workflow_module.workflow_slice_details().as_slice().len();
     let workflow_step_relationship_list =
         workflow_step_relationship_list(workflow_module.workflow_slice_details().as_slice());
@@ -35,6 +36,7 @@ pub fn emit_workflow_module(
         r#"module {module_name} {{
   // EMC-DIGEST: {digest}
   type WorkflowSliceDetail = {{ slug: str, name: str, kind: str, description: str }}
+  type WorkflowSliceModule = {{ slice: str, formalModule: str }}
   type WorkflowStepRelationship = {{ step: str, relationship: str }}
   type WorkflowTransition = {{ source: str, target: str, kind: str, trigger: str, rationale: str, payloadContract: str }}
   type WorkflowOutcome = {{ sourceSlice: str, label: str, externallyRelevant: bool }}
@@ -47,6 +49,7 @@ pub fn emit_workflow_module(
   val workflowDescription = {workflow_description_json}
   val workflowSlices: List[str] = {slice_list}
   val workflowSliceDetails: List[WorkflowSliceDetail] = {slice_detail_list}
+  val workflowSliceModules: List[WorkflowSliceModule] = {slice_module_list}
   val allowedWorkflowStepRelationships: List[str] = ["entry","main","branch","alternate","async_lifecycle","supporting"]
   val workflowStepRelationships: List[WorkflowStepRelationship] = {workflow_step_relationship_list}
   val workflowTransitions: List[WorkflowTransition] = {transition_list}
@@ -61,6 +64,7 @@ pub fn emit_workflow_module(
   val workflowIdentityStable = workflowName == {workflow_name_json}
   val workflowSlicesHaveDetails = length(workflowSlices) == length(workflowSliceDetails)
   val workflowSliceDetailsComplete = workflowSlicesHaveDetails
+  val workflowSliceModulesComplete = workflowSlices.length() == workflowSliceModules.length()
   val workflowTransitionsStructured = workflowTransitions.select(transition => transition.source != "" and transition.target != "" and transition.kind != "" and transition.trigger != "").length() == workflowTransitions.length()
   val workflowTransitionSourcesResolve = workflowTransitions.select(transition => workflowSlices.select(step => step == transition.source).length() > 0).length() == workflowTransitions.length()
   val workflowTransitionTargetsResolve = workflowTransitions.select(transition => workflowSlices.select(step => step == transition.target).length() > 0 or workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() > 0).length() == workflowTransitions.length()
@@ -127,6 +131,7 @@ pub fn emit_workflow_module(
         workflow_description_json = quoted(workflow_module.workflow_description().as_ref()),
         slice_list = slice_list,
         slice_detail_list = slice_detail_list,
+        slice_module_list = slice_module_list,
         workflow_slice_count = workflow_slice_count,
         workflow_step_relationship_list = workflow_step_relationship_list,
         transition_list = transition_list,
@@ -304,6 +309,23 @@ fn slice_detail_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
     )
 }
 
+fn slice_module_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
+    format!(
+        "[{}]",
+        workflow_slice_details
+            .iter()
+            .map(|slice| {
+                format!(
+                    "{{ slice: {}, formalModule: {} }}",
+                    quoted(slice.slug().as_ref()),
+                    quoted(&module_name_from_raw(slice.name().as_ref()))
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn workflow_step_relationship_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
     format!(
         "[{}]",
@@ -319,6 +341,26 @@ fn workflow_step_relationship_list(workflow_slice_details: &[WorkflowSliceDetail
             .collect::<Vec<_>>()
             .join(",")
     )
+}
+
+fn module_name_from_raw(raw: &str) -> String {
+    let mut capitalize_next = true;
+    raw.chars()
+        .filter_map(|character| {
+            if character.is_ascii_alphanumeric() {
+                let next = if capitalize_next {
+                    character.to_ascii_uppercase()
+                } else {
+                    character
+                };
+                capitalize_next = false;
+                Some(next)
+            } else {
+                capitalize_next = true;
+                None
+            }
+        })
+        .collect()
 }
 
 fn transition_list(workflow_transitions: WorkflowTransitionRecords) -> String {

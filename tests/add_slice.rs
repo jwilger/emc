@@ -129,6 +129,18 @@ mod tests {
             "Lean artifact must represent the workflow's business slice details"
         );
         assert!(
+            lean.contains(
+                "def workflowSliceModules : List (String × String) := [(\"capture-ticket\", \"CaptureTicket\")]"
+            ),
+            "Lean artifact must represent the formal module composed for each workflow slice"
+        );
+        assert!(
+            lean.contains(
+                "theorem workflowSlicesHaveModuleReferences : workflowSlices.length = workflowSliceModules.length := rfl"
+            ),
+            "Lean artifact must prove every workflow slice has a composed formal module reference"
+        );
+        assert!(
             quint.contains("val workflowSlices: List[str] = [\"capture-ticket\"]"),
             "Quint artifact must represent the workflow's business slices"
         );
@@ -137,6 +149,22 @@ mod tests {
                 "val workflowSliceDetails: List[WorkflowSliceDetail] = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Actor enters repair ticket details.\" }]"
             ),
             "Quint artifact must represent the workflow's business slice details"
+        );
+        assert!(
+            quint.contains("type WorkflowSliceModule = { slice: str, formalModule: str }"),
+            "Quint artifact must type the formal module composed for each workflow slice"
+        );
+        assert!(
+            quint.contains(
+                "val workflowSliceModules: List[WorkflowSliceModule] = [{ slice: \"capture-ticket\", formalModule: \"CaptureTicket\" }]"
+            ),
+            "Quint artifact must represent the formal module composed for each workflow slice"
+        );
+        assert!(
+            quint.contains(
+                "val workflowSliceModulesComplete = workflowSlices.length() == workflowSliceModules.length()"
+            ),
+            "Quint artifact must verify every workflow slice has a composed formal module reference"
         );
         assert!(
             lean_root.contains("def modelSlices : List (String × String) := [(\"open-ticket\", \"capture-ticket\")]"),

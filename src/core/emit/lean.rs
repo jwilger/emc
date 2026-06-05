@@ -14,6 +14,7 @@ pub fn emit_workflow_module(
 ) -> FileContents {
     let slice_list = slice_list(workflow_module.workflow_slice_details().as_slice());
     let slice_detail_list = slice_detail_list(workflow_module.workflow_slice_details().as_slice());
+    let slice_module_list = slice_module_list(workflow_module.workflow_slice_details().as_slice());
     let workflow_step_relationship_list =
         workflow_step_relationship_list(workflow_module.workflow_slice_details().as_slice());
     let workflow_exit_target_list =
@@ -44,6 +45,8 @@ def workflowDescription := {workflow_description_json}
 def workflowSlices : List String := {slice_list}
 
 def workflowSliceDetails : List (String × String × String × String) := {slice_detail_list}
+
+def workflowSliceModules : List (String × String) := {slice_module_list}
 
 structure WorkflowTransition where
   source : String
@@ -219,6 +222,8 @@ theorem workflowIdentityIsStable : workflowName = {workflow_name_json} := rfl
 
 theorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl
 
+theorem workflowSlicesHaveModuleReferences : workflowSlices.length = workflowSliceModules.length := rfl
+
 theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl
 
 theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSlices.contains transition.source) = true := rfl
@@ -280,6 +285,7 @@ end {module_name}
         workflow_description_json = quoted(workflow_module.workflow_description().as_ref()),
         slice_list = slice_list,
         slice_detail_list = slice_detail_list,
+        slice_module_list = slice_module_list,
         workflow_step_relationship_list = workflow_step_relationship_list,
         transition_list = transition_list,
         workflow_outcome_list = workflow_outcome_list,
@@ -569,6 +575,23 @@ fn slice_detail_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
     )
 }
 
+fn slice_module_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
+    format!(
+        "[{}]",
+        workflow_slice_details
+            .iter()
+            .map(|slice| {
+                format!(
+                    "({}, {})",
+                    quoted(slice.slug().as_ref()),
+                    quoted(&module_name_from_raw(slice.name().as_ref()))
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn workflow_step_relationship_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
     format!(
         "[{}]",
@@ -584,6 +607,26 @@ fn workflow_step_relationship_list(workflow_slice_details: &[WorkflowSliceDetail
             .collect::<Vec<_>>()
             .join(",")
     )
+}
+
+fn module_name_from_raw(raw: &str) -> String {
+    let mut capitalize_next = true;
+    raw.chars()
+        .filter_map(|character| {
+            if character.is_ascii_alphanumeric() {
+                let next = if capitalize_next {
+                    character.to_ascii_uppercase()
+                } else {
+                    character
+                };
+                capitalize_next = false;
+                Some(next)
+            } else {
+                capitalize_next = true;
+                None
+            }
+        })
+        .collect()
 }
 
 fn transition_list(workflow_transitions: WorkflowTransitionRecords) -> String {
