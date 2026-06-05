@@ -776,7 +776,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure ViewDefinition where\n  name : String\n  readModels : List String\n  fields : List ViewField\n  controls : List ControlDefinition\n  sketchTokens : List String\n  localStates : List String"
+                "structure ViewDefinition where\n  name : String\n  readModels : List String\n  fields : List ViewField\n  controls : List ControlDefinition\n  sketchTokens : List String\n  localStates : List String\n  filters : List String"
             ),
             "Lean slice artifacts must represent view definitions as first-class formal data"
         );
@@ -1860,7 +1860,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def navigationTargetIsComplete (view : ViewDefinition) (target : NavigationTarget) : Bool := (target.targetType.isEmpty && target.targetName.isEmpty && target.externalWorkflowName.isEmpty && target.externalSystemName.isEmpty && target.handoffContract.isEmpty) || (target.targetType == \"modeled_view\" && target.targetName.isEmpty == false && sliceViews.contains target.targetName) || (target.targetType == \"local_view_state\" && target.targetName.isEmpty == false && view.localStates.contains target.targetName) || (target.targetType == \"external_workflow\" && target.externalWorkflowName.isEmpty == false) || (target.targetType == \"external_system\" && target.externalSystemName.isEmpty == false && target.handoffContract.isEmpty == false)"
+                "def localViewStateNavigationTargetResolves (view : ViewDefinition) (target : NavigationTarget) : Bool := target.targetType != \"local_view_state\" || (target.targetName.isEmpty == false && (view.localStates.contains target.targetName || view.filters.contains target.targetName))"
+            ),
+            "Lean slice artifacts must require local-view-state navigation to target declared local state or filters"
+        );
+        assert!(
+            lean.contains(
+                "def navigationTargetIsComplete (view : ViewDefinition) (target : NavigationTarget) : Bool := (target.targetType.isEmpty && target.targetName.isEmpty && target.externalWorkflowName.isEmpty && target.externalSystemName.isEmpty && target.handoffContract.isEmpty) || (target.targetType == \"modeled_view\" && target.targetName.isEmpty == false && sliceViews.contains target.targetName) || (target.targetType == \"local_view_state\" && localViewStateNavigationTargetResolves view target) || (target.targetType == \"external_workflow\" && target.externalWorkflowName.isEmpty == false) || (target.targetType == \"external_system\" && target.externalSystemName.isEmpty == false && target.handoffContract.isEmpty == false)"
             ),
             "Lean slice artifacts must require navigation targets to be complete for their target type"
         );
