@@ -471,6 +471,10 @@ impl NewEventDefinition {
     pub fn slice_slug(&self) -> &SliceSlug {
         &self.slice_slug
     }
+
+    pub fn stream(&self) -> &StreamName {
+        &self.stream
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

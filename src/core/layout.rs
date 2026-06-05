@@ -6,6 +6,7 @@ use crate::core::effect::{
 use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
+use crate::core::formal_project_facts::ProjectStream;
 use crate::core::project::ProjectName;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowSliceDetail,
@@ -95,6 +96,7 @@ impl ModeledWorkflowTransitions {
 pub fn check_project(
     project_name: ProjectName,
     formal_workflows: FormalWorkflowGraphs,
+    project_streams: Vec<ProjectStream>,
 ) -> EffectPlan {
     let module_name = module_name(&project_name);
     let mut formal_workflows = formal_workflows.into_inner();
@@ -108,6 +110,7 @@ pub fn check_project(
         &module_name,
         &modeled_workflows,
         &formal_workflows,
+        &project_streams,
     );
     let lean_artifact_paths = modeled_artifact_paths(
         [
@@ -209,6 +212,7 @@ fn project_root_effects(
     module_name: &str,
     modeled_workflows: &[ModeledWorkflowLayout],
     formal_workflows: &[FormalWorkflowGraph],
+    project_streams: &[ProjectStream],
 ) -> Vec<Effect> {
     let project_name_text = project_name.as_ref();
     let model_version = "0.1.0";
@@ -216,13 +220,21 @@ fn project_root_effects(
     let workflow_count = modeled_workflows.len();
     let lean_model_slice_list = lean_model_slice_list(formal_workflows);
     let lean_model_slice_module_list = lean_model_slice_module_list(formal_workflows);
+    let lean_model_stream_list = lean_model_stream_list(project_streams);
     let quint_model_slice_list = quint_model_slice_list(formal_workflows);
     let quint_model_slice_module_list = quint_model_slice_module_list(formal_workflows);
-    let model_digest = model_digest(project_name, modeled_workflows, formal_workflows);
+    let quint_model_stream_list = quint_model_stream_list(project_streams);
+    let model_digest = model_digest(
+        project_name,
+        modeled_workflows,
+        formal_workflows,
+        project_streams,
+    );
     let slice_count = formal_workflows
         .iter()
         .map(|workflow| workflow.slice_details().as_slice().len())
         .sum::<usize>();
+    let stream_count = project_streams.len();
     let manifest_path = project_path("emc.toml");
     let lean_path = project_path(format!("model/lean/{module_name}.lean"));
     let lakefile_path = project_path("model/lean/lakefile.lean");
@@ -332,6 +344,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelStreams :"),
+            artifact_marker(format!(
+                "def modelStreams : List (String × String × String) := {lean_model_stream_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelIdentityIsStable"),
             artifact_marker(format!(
                 "theorem modelIdentityIsStable : modelName = {} := rfl",
@@ -382,6 +402,14 @@ fn project_root_effects(
             lean_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelStreamsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelStreamsAreDeclared : modelStreams.length = {stream_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
             lean_path,
             artifact_marker("end "),
             artifact_marker(format!("end {module_name}")),
@@ -405,6 +433,12 @@ fn project_root_effects(
             artifact_marker(
                 "  type ModelSliceModule = { workflow: str, slice: str, formalModule: str }",
             ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelStream ="),
+            artifact_marker("  type ModelStream = { workflow: str, slice: str, stream: str }"),
             quint_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -460,6 +494,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelStreams:"),
+            artifact_marker(format!(
+                "  val modelStreams: List[ModelStream] = {quint_model_stream_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelIdentityStable ="),
             artifact_marker(format!(
                 "  val modelIdentityStable = modelName == {}",
@@ -506,6 +548,14 @@ fn project_root_effects(
             artifact_marker("  val modelSliceModulesAreDeclared ="),
             artifact_marker(format!(
                 "  val modelSliceModulesAreDeclared = modelSliceModules.length() == {slice_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelStreamsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelStreamsAreDeclared = modelStreams.length() == {stream_count}"
             )),
             quint_message.clone(),
         ),
@@ -1542,16 +1592,64 @@ fn quint_model_slice_module_list(formal_workflows: &[FormalWorkflowGraph]) -> St
     )
 }
 
+fn lean_model_stream_list(project_streams: &[ProjectStream]) -> String {
+    let mut project_streams = project_streams
+        .iter()
+        .map(|stream| (stream.workflow_slug(), stream.slice_slug(), stream.stream()))
+        .collect::<Vec<_>>();
+    project_streams.sort_unstable();
+    format!(
+        "[{}]",
+        project_streams
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, stream)| {
+                format!(
+                    "({}, {}, {})",
+                    json_string(workflow_slug),
+                    json_string(slice_slug),
+                    json_string(stream)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_stream_list(project_streams: &[ProjectStream]) -> String {
+    let mut project_streams = project_streams
+        .iter()
+        .map(|stream| (stream.workflow_slug(), stream.slice_slug(), stream.stream()))
+        .collect::<Vec<_>>();
+    project_streams.sort_unstable();
+    format!(
+        "[{}]",
+        project_streams
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, stream)| {
+                format!(
+                    "{{ workflow: {}, slice: {}, stream: {} }}",
+                    json_string(workflow_slug),
+                    json_string(slice_slug),
+                    json_string(stream)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
 fn model_digest(
     project_name: &ProjectName,
     modeled_workflows: &[ModeledWorkflowLayout],
     formal_workflows: &[FormalWorkflowGraph],
+    project_streams: &[ProjectStream],
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={}",
+        "project:name={};version=0.1.0;workflows={};slices={};streams={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
-        digest_slices(formal_workflows)
+        digest_slices(formal_workflows),
+        digest_streams(project_streams)
     )
 }
 
@@ -1583,6 +1681,19 @@ fn digest_slices(formal_workflows: &[FormalWorkflowGraph]) -> String {
         .map(|(workflow_slug, slice_slug, slice_module)| {
             format!("{workflow_slug}/{slice_slug}@{slice_module}")
         })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_streams(project_streams: &[ProjectStream]) -> String {
+    let mut streams = project_streams
+        .iter()
+        .map(|stream| (stream.workflow_slug(), stream.slice_slug(), stream.stream()))
+        .collect::<Vec<_>>();
+    streams.sort_unstable();
+    streams
+        .into_iter()
+        .map(|(workflow_slug, slice_slug, stream)| format!("{workflow_slug}/{slice_slug}/{stream}"))
         .collect::<Vec<_>>()
         .join(",")
 }

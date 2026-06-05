@@ -17,6 +17,10 @@ use crate::core::formal_graph::{
     FormalGraphError, FormalWorkflowGraph, FormalWorkflowGraphs, parse_lean_workflow_graph,
     parse_quint_workflow_graph,
 };
+use crate::core::formal_project_facts::{
+    NewProjectStream, ProjectStream, add_project_stream, parse_lean_project_streams,
+    parse_quint_project_streams,
+};
 use crate::core::formal_slice_facts::{
     add_automation_definition, add_bit_level_data_flow, add_board_connection, add_board_element,
     add_command_definition, add_event_definition, add_external_payload_definition,
@@ -193,7 +197,12 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::AddEventDefinitionFromSlice(event) => {
             let slice_artifacts =
                 read_formal_slice_artifact_paths_and_contents(event.slice_slug())?;
-            let plan = add_event_definition(
+            let project_name = read_project_manifest_name()?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let (workflow_layout, _workflow_graph) =
+                find_formal_workflow_containing_slice_in(&formal_workflows, event.slice_slug())?;
+            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
+            let slice_plan = add_event_definition(
                 slice_artifacts.lean_path,
                 slice_artifacts.lean_contents,
                 slice_artifacts.quint_path,
@@ -201,7 +210,21 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 event.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let project_plan = add_project_stream(
+                project_artifacts.lean_path,
+                project_artifacts.lean_contents,
+                project_artifacts.quint_path,
+                project_artifacts.quint_contents,
+                NewProjectStream::new(
+                    workflow_layout.slug().clone(),
+                    event.slice_slug().clone(),
+                    event.stream().clone(),
+                ),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            let mut reports = interpret_collect_reports(slice_plan)?;
+            reports.extend(interpret_collect_reports(project_plan)?);
+            Ok(reports)
         }
         Effect::AddExternalPayloadDefinitionFromSlice(external_payload) => {
             let slice_artifacts =
@@ -396,7 +419,12 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::CheckCurrentProject => {
             let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?;
-            interpret_collect_reports(check_project(project_name, formal_workflows))
+            let project_streams = read_synchronized_project_streams(&project_name)?;
+            interpret_collect_reports(check_project(
+                project_name,
+                formal_workflows,
+                project_streams,
+            ))
         }
         Effect::ConnectWorkflowFromWorkflow(connection) => {
             let (workflow_layout, workflow_graph) =
@@ -741,6 +769,24 @@ fn read_synchronized_formal_workflow_graphs() -> Result<FormalWorkflowGraphs, Sh
     }
 }
 
+fn read_synchronized_project_streams(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectStream>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_streams(&artifacts.lean_contents),
+        parse_quint_project_streams(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_streams), Ok(quint_streams)) if lean_streams == quint_streams => Ok(lean_streams),
+        (Ok(_lean_streams), Ok(_quint_streams)) => Err(ShellError::message(
+            "Lean and Quint project root stream inventories disagree",
+        )),
+        (_lean_streams, _quint_streams) => Ok(Vec::new()),
+    }
+}
+
 fn read_formal_workflow_graphs(
     directory: &Path,
     extension: &str,
@@ -917,6 +963,27 @@ struct FormalWorkflowArtifactDocuments {
     lean_contents: FileContents,
     quint_path: ProjectPath,
     quint_contents: FileContents,
+}
+
+struct FormalProjectRootArtifactDocuments {
+    lean_path: ProjectPath,
+    lean_contents: FileContents,
+    quint_path: ProjectPath,
+    quint_contents: FileContents,
+}
+
+fn read_project_root_artifact_paths_and_contents(
+    project_name: &ProjectName,
+) -> Result<FormalProjectRootArtifactDocuments, ShellError> {
+    let module_name = module_name_from_raw(project_name.as_ref());
+    let lean_path = format!("model/lean/{module_name}.lean");
+    let quint_path = format!("model/quint/{module_name}.qnt");
+    Ok(FormalProjectRootArtifactDocuments {
+        lean_path: project_path(lean_path.clone())?,
+        lean_contents: read_file_contents(&lean_path)?,
+        quint_path: project_path(quint_path.clone())?,
+        quint_contents: read_file_contents(&quint_path)?,
+    })
 }
 
 fn read_formal_workflow_artifact_paths_and_contents(
