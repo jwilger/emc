@@ -9,8 +9,8 @@ use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
 use crate::core::formal_project_facts::{
     ProjectAutomation, ProjectCommand, ProjectCommandError, ProjectCommandInput, ProjectDataFlow,
     ProjectEvent, ProjectEventAttribute, ProjectExternalPayload, ProjectOutcome, ProjectReadModel,
-    ProjectReadModelDefinition, ProjectReadModelField, ProjectScenario, ProjectStream,
-    ProjectTranslation, ProjectView, ProjectViewField,
+    ProjectReadModelDefinition, ProjectReadModelField, ProjectScenario, ProjectScenarioDefinition,
+    ProjectStream, ProjectTranslation, ProjectView, ProjectViewField,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{
@@ -101,6 +101,7 @@ impl ModeledWorkflowTransitions {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ModeledProjectRootInventories {
     scenarios: Vec<ProjectScenario>,
+    scenario_definitions: Vec<ProjectScenarioDefinition>,
     data_flows: Vec<ProjectDataFlow>,
     outcomes: Vec<ProjectOutcome>,
     command_errors: Vec<ProjectCommandError>,
@@ -121,6 +122,7 @@ pub struct ModeledProjectRootInventories {
 
 pub(crate) struct ModeledProjectRootInventoryParts {
     pub(crate) scenarios: Vec<ProjectScenario>,
+    pub(crate) scenario_definitions: Vec<ProjectScenarioDefinition>,
     pub(crate) data_flows: Vec<ProjectDataFlow>,
     pub(crate) outcomes: Vec<ProjectOutcome>,
     pub(crate) command_errors: Vec<ProjectCommandError>,
@@ -143,6 +145,7 @@ impl ModeledProjectRootInventories {
     pub(crate) fn from_parts(parts: ModeledProjectRootInventoryParts) -> Self {
         Self {
             scenarios: parts.scenarios,
+            scenario_definitions: parts.scenario_definitions,
             data_flows: parts.data_flows,
             outcomes: parts.outcomes,
             command_errors: parts.command_errors,
@@ -182,6 +185,7 @@ pub fn check_project(
         &formal_workflows,
         &ProjectRootInventories {
             scenarios: &project_inventories.scenarios,
+            scenario_definitions: &project_inventories.scenario_definitions,
             data_flows: &project_inventories.data_flows,
             outcomes: &project_inventories.outcomes,
             command_errors: &project_inventories.command_errors,
@@ -297,6 +301,7 @@ fn modeled_slice_artifact_paths(
 
 struct ProjectRootInventories<'a> {
     scenarios: &'a [ProjectScenario],
+    scenario_definitions: &'a [ProjectScenarioDefinition],
     data_flows: &'a [ProjectDataFlow],
     outcomes: &'a [ProjectOutcome],
     command_errors: &'a [ProjectCommandError],
@@ -329,6 +334,8 @@ fn project_root_effects(
     let lean_model_slice_list = lean_model_slice_list(formal_workflows);
     let lean_model_slice_module_list = lean_model_slice_module_list(formal_workflows);
     let lean_model_scenario_list = lean_model_scenario_list(inventories.scenarios);
+    let lean_model_scenario_definition_list =
+        lean_model_scenario_definition_list(inventories.scenario_definitions);
     let lean_model_data_flow_list = lean_model_data_flow_list(inventories.data_flows);
     let lean_model_outcome_list = lean_model_outcome_list(inventories.outcomes);
     let lean_model_command_error_list = lean_model_command_error_list(inventories.command_errors);
@@ -352,6 +359,8 @@ fn project_root_effects(
     let quint_model_slice_list = quint_model_slice_list(formal_workflows);
     let quint_model_slice_module_list = quint_model_slice_module_list(formal_workflows);
     let quint_model_scenario_list = quint_model_scenario_list(inventories.scenarios);
+    let quint_model_scenario_definition_list =
+        quint_model_scenario_definition_list(inventories.scenario_definitions);
     let quint_model_data_flow_list = quint_model_data_flow_list(inventories.data_flows);
     let quint_model_outcome_list = quint_model_outcome_list(inventories.outcomes);
     let quint_model_command_error_list = quint_model_command_error_list(inventories.command_errors);
@@ -383,6 +392,7 @@ fn project_root_effects(
         .map(|workflow| workflow.slice_details().as_slice().len())
         .sum::<usize>();
     let scenario_count = inventories.scenarios.len();
+    let scenario_definition_count = inventories.scenario_definitions.len();
     let data_flow_count = inventories.data_flows.len();
     let outcome_count = inventories.outcomes.len();
     let command_error_count = inventories.command_errors.len();
@@ -511,6 +521,14 @@ fn project_root_effects(
             artifact_marker("def modelScenarios :"),
             artifact_marker(format!(
                 "def modelScenarios : List (String × String × String × String) := {lean_model_scenario_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelScenarioDefinitions :"),
+            artifact_marker(format!(
+                "def modelScenarioDefinitions : List (String × String × String × String × String × String × String × List String × List String × String × String × List String) := {lean_model_scenario_definition_list}"
             )),
             lean_message.clone(),
         ),
@@ -703,6 +721,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelScenarioDefinitionsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelScenarioDefinitionsAreDeclared : modelScenarioDefinitions.length = {scenario_definition_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelDataFlowsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelDataFlowsAreDeclared : modelDataFlows.length = {data_flow_count} := rfl"
@@ -860,6 +886,14 @@ fn project_root_effects(
             artifact_marker("  type ModelScenario ="),
             artifact_marker(
                 "  type ModelScenario = { workflow: str, slice: str, scenarioKind: str, scenario: str }",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelScenarioDefinition ="),
+            artifact_marker(
+                "  type ModelScenarioDefinition = { workflow: str, slice: str, scenarioKind: str, scenario: str, given: str, when: str, then: str, readStreams: List[str], writtenStreams: List[str], contractKind: str, coveredDefinition: str, errorReferences: List[str] }",
             ),
             quint_message.clone(),
         ),
@@ -1041,6 +1075,14 @@ fn project_root_effects(
             artifact_marker("  val modelScenarios:"),
             artifact_marker(format!(
                 "  val modelScenarios: List[ModelScenario] = {quint_model_scenario_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelScenarioDefinitions:"),
+            artifact_marker(format!(
+                "  val modelScenarioDefinitions: List[ModelScenarioDefinition] = {quint_model_scenario_definition_list}"
             )),
             quint_message.clone(),
         ),
@@ -1228,6 +1270,14 @@ fn project_root_effects(
             artifact_marker("  val modelScenariosAreDeclared ="),
             artifact_marker(format!(
                 "  val modelScenariosAreDeclared = modelScenarios.length() == {scenario_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelScenarioDefinitionsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelScenarioDefinitionsAreDeclared = modelScenarioDefinitions.length() == {scenario_definition_count}"
             )),
             quint_message.clone(),
         ),
@@ -2454,6 +2504,68 @@ fn quint_model_scenario_list(project_scenarios: &[ProjectScenario]) -> String {
     )
 }
 
+fn lean_model_scenario_definition_list(
+    scenario_definitions: &[ProjectScenarioDefinition],
+) -> String {
+    let mut scenario_definitions = scenario_definitions.to_vec();
+    scenario_definitions.sort();
+    format!(
+        "[{}]",
+        scenario_definitions
+            .into_iter()
+            .map(|scenario| {
+                format!(
+                    "({}, {}, {}, {}, {}, {}, {}, [{}], [{}], {}, {}, [{}])",
+                    json_string(scenario.workflow_slug()),
+                    json_string(scenario.slice_slug()),
+                    json_string(scenario.scenario_kind()),
+                    json_string(scenario.scenario()),
+                    json_string(scenario.given()),
+                    json_string(scenario.when()),
+                    json_string(scenario.then()),
+                    json_string_list(scenario.read_streams()),
+                    json_string_list(scenario.written_streams()),
+                    json_string(scenario.contract_kind()),
+                    json_string(scenario.covered_definition()),
+                    json_string_list(scenario.error_references())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_scenario_definition_list(
+    scenario_definitions: &[ProjectScenarioDefinition],
+) -> String {
+    let mut scenario_definitions = scenario_definitions.to_vec();
+    scenario_definitions.sort();
+    format!(
+        "[{}]",
+        scenario_definitions
+            .into_iter()
+            .map(|scenario| {
+                format!(
+                    "{{ workflow: {}, slice: {}, scenarioKind: {}, scenario: {}, given: {}, when: {}, then: {}, readStreams: [{}], writtenStreams: [{}], contractKind: {}, coveredDefinition: {}, errorReferences: [{}] }}",
+                    json_string(scenario.workflow_slug()),
+                    json_string(scenario.slice_slug()),
+                    json_string(scenario.scenario_kind()),
+                    json_string(scenario.scenario()),
+                    json_string(scenario.given()),
+                    json_string(scenario.when()),
+                    json_string(scenario.then()),
+                    json_string_list(scenario.read_streams()),
+                    json_string_list(scenario.written_streams()),
+                    json_string(scenario.contract_kind()),
+                    json_string(scenario.covered_definition()),
+                    json_string_list(scenario.error_references())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn lean_model_data_flow_list(project_data_flows: &[ProjectDataFlow]) -> String {
     let mut project_data_flows = project_data_flows.iter().collect::<Vec<_>>();
     project_data_flows.sort_unstable();
@@ -3535,11 +3647,12 @@ fn model_digest(
     inventories: &ProjectRootInventories<'_>,
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-fields={};automations={};translations={};external-payloads={};streams={};events={};event-attributes={}",
+        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-fields={};automations={};translations={};external-payloads={};streams={};events={};event-attributes={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
         digest_scenarios(inventories.scenarios),
+        digest_scenario_definitions(inventories.scenario_definitions),
         digest_data_flows(inventories.data_flows),
         digest_outcomes(inventories.outcomes),
         digest_command_errors(inventories.command_errors),
@@ -3627,6 +3740,32 @@ fn digest_scenarios(project_scenarios: &[ProjectScenario]) -> String {
         .into_iter()
         .map(|(workflow_slug, slice_slug, scenario_kind, scenario)| {
             format!("{workflow_slug}/{slice_slug}/{scenario_kind}/{scenario}")
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_scenario_definitions(scenario_definitions: &[ProjectScenarioDefinition]) -> String {
+    let mut scenario_definitions = scenario_definitions.iter().collect::<Vec<_>>();
+    scenario_definitions.sort_unstable();
+    scenario_definitions
+        .into_iter()
+        .map(|scenario| {
+            format!(
+                "{}/{}/{}/{}@{}~{}~{}#{}#{}#{}#{}#{}",
+                scenario.workflow_slug(),
+                scenario.slice_slug(),
+                scenario.scenario_kind(),
+                scenario.scenario(),
+                scenario.given(),
+                scenario.when(),
+                scenario.then(),
+                scenario.read_streams().join("+"),
+                scenario.written_streams().join("+"),
+                scenario.contract_kind(),
+                scenario.covered_definition(),
+                scenario.error_references().join("+")
+            )
         })
         .collect::<Vec<_>>()
         .join(",")

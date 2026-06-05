@@ -129,6 +129,38 @@ impl NewSliceScenario {
     pub fn name(&self) -> &ScenarioName {
         &self.name
     }
+
+    pub fn given(&self) -> &ScenarioStepText {
+        &self.given
+    }
+
+    pub fn when(&self) -> &ScenarioStepText {
+        &self.when
+    }
+
+    pub fn then(&self) -> &ScenarioStepText {
+        &self.then
+    }
+
+    pub fn read_streams(&self) -> &ScenarioStreamNames {
+        &self.read_streams
+    }
+
+    pub fn written_streams(&self) -> &ScenarioStreamNames {
+        &self.written_streams
+    }
+
+    pub fn contract_kind(&self) -> Option<&ContractKindName> {
+        self.contract_kind.as_ref()
+    }
+
+    pub fn covered_definition(&self) -> Option<&CoveredDefinitionName> {
+        self.covered_definition.as_ref()
+    }
+
+    pub fn error_references(&self) -> &CommandErrorNames {
+        &self.error_references
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
