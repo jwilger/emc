@@ -1095,6 +1095,9 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         "filters": {
                             "type": "string"
                         },
+                        "external_workflow": {
+                            "type": "string"
+                        },
                         "external_system": {
                             "type": "string"
                         },
@@ -3082,10 +3085,17 @@ fn add_view_definition_tool_text(request: &Value) -> Result<String, ShellError> 
             parse_navigation_target_name(raw_navigation_target)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
+    let external_workflow = arguments.get("external_workflow").and_then(Value::as_str);
     let external_system = arguments.get("external_system").and_then(Value::as_str);
     let handoff_contract = arguments.get("handoff_contract").and_then(Value::as_str);
-    let navigation = match (external_system, handoff_contract) {
-        (Some(raw_external_system), Some(raw_handoff_contract)) => {
+    let navigation = match (external_workflow, external_system, handoff_contract) {
+        (Some(raw_external_workflow), None, None) => {
+            let external_workflow = parse_navigation_target_name(raw_external_workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            NewNavigationTarget::new(navigation_type, navigation_target)
+                .with_external_workflow(external_workflow)
+        }
+        (None, Some(raw_external_system), Some(raw_handoff_contract)) => {
             let external_system = parse_navigation_target_name(raw_external_system)
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let handoff_contract = parse_payload_contract_name(raw_handoff_contract)
@@ -3093,10 +3103,10 @@ fn add_view_definition_tool_text(request: &Value) -> Result<String, ShellError> 
             NewNavigationTarget::new(navigation_type, navigation_target)
                 .with_external_system(external_system, handoff_contract)
         }
-        (None, None) => NewNavigationTarget::new(navigation_type, navigation_target),
+        (None, None, None) => NewNavigationTarget::new(navigation_type, navigation_target),
         _ => {
             return Err(ShellError::message(
-                "add_view_definition requires external_system and handoff_contract together",
+                "add_view_definition requires either external_workflow alone or external_system and handoff_contract together",
             ));
         }
     };
