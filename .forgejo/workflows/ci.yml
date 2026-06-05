@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  copyright-headers:
-    name: Copyright headers
+  prepare-nix:
+    name: Prepare Nix cache
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -23,31 +23,25 @@ jobs:
           persist-credentials: false
 
       - name: Install or reuse Nix
+        run: ./.forgejo/scripts/install-nix.sh
+
+      - name: Show Nix version
         run: |
-          set -euo pipefail
-          NIX_BIN_DIR="/nix/var/nix/profiles/default/bin"
-          if [ -x "$NIX_BIN_DIR/nix" ]; then
-            echo "Nix already present at $NIX_BIN_DIR (volume cache hit)"
-          else
-            echo "Installing Nix (cold start or fresh volume)"
-            curl --proto '=https' --tlsv1.2 -sSf -L \
-              https://install.determinate.systems/nix \
-              | sh -s -- install linux \
-                --init none \
-                --no-confirm \
-                --extra-conf "experimental-features = nix-command flakes" \
-                --extra-conf "accept-flake-config = true"
-          fi
-          if ! getent group nixbld > /dev/null; then
-            groupadd -r nixbld
-          fi
-          for i in $(seq 1 32); do
-            if ! id -u "nixbld$i" > /dev/null 2>&1; then
-              useradd -r -g nixbld -G nixbld -d /var/empty \
-                -s /usr/sbin/nologin -c "Nix build user $i" "nixbld$i"
-            fi
-          done
-          echo "$NIX_BIN_DIR" >> "$GITHUB_PATH"
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          nix --version
+
+  copyright-headers:
+    name: Copyright headers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: [prepare-nix]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install or reuse Nix
+        run: ./.forgejo/scripts/install-nix.sh
 
       - name: Run copyright header check
         run: |
@@ -58,37 +52,14 @@ jobs:
     name: Format check
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    needs: [prepare-nix]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       - name: Install or reuse Nix
-        run: |
-          set -euo pipefail
-          NIX_BIN_DIR="/nix/var/nix/profiles/default/bin"
-          if [ -x "$NIX_BIN_DIR/nix" ]; then
-            echo "Nix already present at $NIX_BIN_DIR (volume cache hit)"
-          else
-            echo "Installing Nix (cold start or fresh volume)"
-            curl --proto '=https' --tlsv1.2 -sSf -L \
-              https://install.determinate.systems/nix \
-              | sh -s -- install linux \
-                --init none \
-                --no-confirm \
-                --extra-conf "experimental-features = nix-command flakes" \
-                --extra-conf "accept-flake-config = true"
-          fi
-          if ! getent group nixbld > /dev/null; then
-            groupadd -r nixbld
-          fi
-          for i in $(seq 1 32); do
-            if ! id -u "nixbld$i" > /dev/null 2>&1; then
-              useradd -r -g nixbld -G nixbld -d /var/empty \
-                -s /usr/sbin/nologin -c "Nix build user $i" "nixbld$i"
-            fi
-          done
-          echo "$NIX_BIN_DIR" >> "$GITHUB_PATH"
+        run: ./.forgejo/scripts/install-nix.sh
 
       - name: Run format check
         run: |
@@ -99,37 +70,14 @@ jobs:
     name: Clippy
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    needs: [prepare-nix]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       - name: Install or reuse Nix
-        run: |
-          set -euo pipefail
-          NIX_BIN_DIR="/nix/var/nix/profiles/default/bin"
-          if [ -x "$NIX_BIN_DIR/nix" ]; then
-            echo "Nix already present at $NIX_BIN_DIR (volume cache hit)"
-          else
-            echo "Installing Nix (cold start or fresh volume)"
-            curl --proto '=https' --tlsv1.2 -sSf -L \
-              https://install.determinate.systems/nix \
-              | sh -s -- install linux \
-                --init none \
-                --no-confirm \
-                --extra-conf "experimental-features = nix-command flakes" \
-                --extra-conf "accept-flake-config = true"
-          fi
-          if ! getent group nixbld > /dev/null; then
-            groupadd -r nixbld
-          fi
-          for i in $(seq 1 32); do
-            if ! id -u "nixbld$i" > /dev/null 2>&1; then
-              useradd -r -g nixbld -G nixbld -d /var/empty \
-                -s /usr/sbin/nologin -c "Nix build user $i" "nixbld$i"
-            fi
-          done
-          echo "$NIX_BIN_DIR" >> "$GITHUB_PATH"
+        run: ./.forgejo/scripts/install-nix.sh
 
       - name: Run clippy
         run: |
@@ -140,37 +88,14 @@ jobs:
     name: Test
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    needs: [prepare-nix]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       - name: Install or reuse Nix
-        run: |
-          set -euo pipefail
-          NIX_BIN_DIR="/nix/var/nix/profiles/default/bin"
-          if [ -x "$NIX_BIN_DIR/nix" ]; then
-            echo "Nix already present at $NIX_BIN_DIR (volume cache hit)"
-          else
-            echo "Installing Nix (cold start or fresh volume)"
-            curl --proto '=https' --tlsv1.2 -sSf -L \
-              https://install.determinate.systems/nix \
-              | sh -s -- install linux \
-                --init none \
-                --no-confirm \
-                --extra-conf "experimental-features = nix-command flakes" \
-                --extra-conf "accept-flake-config = true"
-          fi
-          if ! getent group nixbld > /dev/null; then
-            groupadd -r nixbld
-          fi
-          for i in $(seq 1 32); do
-            if ! id -u "nixbld$i" > /dev/null 2>&1; then
-              useradd -r -g nixbld -G nixbld -d /var/empty \
-                -s /usr/sbin/nologin -c "Nix build user $i" "nixbld$i"
-            fi
-          done
-          echo "$NIX_BIN_DIR" >> "$GITHUB_PATH"
+        run: ./.forgejo/scripts/install-nix.sh
 
       - name: Run tests
         run: |
@@ -181,37 +106,14 @@ jobs:
     name: Build
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    needs: [prepare-nix]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       - name: Install or reuse Nix
-        run: |
-          set -euo pipefail
-          NIX_BIN_DIR="/nix/var/nix/profiles/default/bin"
-          if [ -x "$NIX_BIN_DIR/nix" ]; then
-            echo "Nix already present at $NIX_BIN_DIR (volume cache hit)"
-          else
-            echo "Installing Nix (cold start or fresh volume)"
-            curl --proto '=https' --tlsv1.2 -sSf -L \
-              https://install.determinate.systems/nix \
-              | sh -s -- install linux \
-                --init none \
-                --no-confirm \
-                --extra-conf "experimental-features = nix-command flakes" \
-                --extra-conf "accept-flake-config = true"
-          fi
-          if ! getent group nixbld > /dev/null; then
-            groupadd -r nixbld
-          fi
-          for i in $(seq 1 32); do
-            if ! id -u "nixbld$i" > /dev/null 2>&1; then
-              useradd -r -g nixbld -G nixbld -d /var/empty \
-                -s /usr/sbin/nologin -c "Nix build user $i" "nixbld$i"
-            fi
-          done
-          echo "$NIX_BIN_DIR" >> "$GITHUB_PATH"
+        run: ./.forgejo/scripts/install-nix.sh
 
       - name: Run build
         run: |
@@ -222,37 +124,14 @@ jobs:
     name: Nix flake check
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    needs: [prepare-nix]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       - name: Install or reuse Nix
-        run: |
-          set -euo pipefail
-          NIX_BIN_DIR="/nix/var/nix/profiles/default/bin"
-          if [ -x "$NIX_BIN_DIR/nix" ]; then
-            echo "Nix already present at $NIX_BIN_DIR (volume cache hit)"
-          else
-            echo "Installing Nix (cold start or fresh volume)"
-            curl --proto '=https' --tlsv1.2 -sSf -L \
-              https://install.determinate.systems/nix \
-              | sh -s -- install linux \
-                --init none \
-                --no-confirm \
-                --extra-conf "experimental-features = nix-command flakes" \
-                --extra-conf "accept-flake-config = true"
-          fi
-          if ! getent group nixbld > /dev/null; then
-            groupadd -r nixbld
-          fi
-          for i in $(seq 1 32); do
-            if ! id -u "nixbld$i" > /dev/null 2>&1; then
-              useradd -r -g nixbld -G nixbld -d /var/empty \
-                -s /usr/sbin/nologin -c "Nix build user $i" "nixbld$i"
-            fi
-          done
-          echo "$NIX_BIN_DIR" >> "$GITHUB_PATH"
+        run: ./.forgejo/scripts/install-nix.sh
 
       - name: Run flake check
         run: |
