@@ -109,29 +109,6 @@ mod tests {
     }
 
     #[test]
-    fn parsed_formal_graph_accepts_legacy_transition_records() -> Result<(), Box<dyn Error>> {
-        let artifact = emit_lean_workflow_module(
-            parse_lean_module_name("OpenTicket")?,
-            workflow_module_data(workflow_slice_details()?, workflow_transitions()?)?,
-        );
-        let legacy = artifact.as_ref().replace(
-            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]",
-            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\" }]",
-        );
-
-        assert_eq!(
-            parse_lean_workflow_graph(&FileContents::try_new(legacy)?)?,
-            workflow_graph_from_document(
-                parse_workflow_slug("open-ticket")?,
-                workflow_document()?
-            )?,
-            "formal parser must retain backward compatibility with four-field transition records"
-        );
-
-        Ok(())
-    }
-
-    #[test]
     fn parsed_formal_graph_rejects_malformed_transition_field_groups() -> Result<(), Box<dyn Error>>
     {
         let artifact = emit_lean_workflow_module(
@@ -145,7 +122,7 @@ mod tests {
 
         assert!(
             parse_lean_workflow_graph(&FileContents::try_new(malformed)?).is_err(),
-            "formal parser must reject transition declarations that are neither four-field legacy records nor five-field current records"
+            "formal parser must reject transition declarations that do not match the current six-field transition record shape"
         );
 
         Ok(())

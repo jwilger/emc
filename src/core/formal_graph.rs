@@ -425,49 +425,19 @@ fn slice_details_with_relationships(
 }
 
 fn parse_transitions(value: &str) -> Result<Vec<WorkflowTransitionRecord>, FormalGraphError> {
-    let strings = parse_quoted_strings(value)?;
-    if strings.len() % 6 == 0 {
-        strings
-            .chunks_exact(6)
-            .map(|chunk| {
-                transition_record_from_formal_fields(
-                    &chunk[0],
-                    &chunk[1],
-                    &chunk[2],
-                    &chunk[3],
-                    Some(&chunk[4]),
-                    Some(&chunk[5]),
-                )
-            })
-            .collect()
-    } else if strings.len() % 5 == 0 {
-        strings
-            .chunks_exact(5)
-            .map(|chunk| {
-                transition_record_from_formal_fields(
-                    &chunk[0],
-                    &chunk[1],
-                    &chunk[2],
-                    &chunk[3],
-                    Some(&chunk[4]),
-                    None,
-                )
-            })
-            .collect()
-    } else if strings.len() % 4 == 0 {
-        strings
-            .chunks_exact(4)
-            .map(|chunk| {
-                transition_record_from_formal_fields(
-                    &chunk[0], &chunk[1], &chunk[2], &chunk[3], None, None,
-                )
-            })
-            .collect()
-    } else {
-        Err(FormalGraphError::new(
-            "formal workflow transition declarations must contain groups of four, five, or six strings",
-        ))
-    }
+    quoted_string_groups(value, 6)?
+        .chunks_exact(6)
+        .map(|chunk| {
+            transition_record_from_formal_fields(
+                &chunk[0],
+                &chunk[1],
+                &chunk[2],
+                &chunk[3],
+                Some(&chunk[4]),
+                Some(&chunk[5]),
+            )
+        })
+        .collect()
 }
 
 fn parse_workflow_outcomes(value: &str) -> Result<Vec<WorkflowOutcomeRecord>, FormalGraphError> {
