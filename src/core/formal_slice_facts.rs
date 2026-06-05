@@ -276,6 +276,10 @@ impl NewCommandDefinition {
     pub fn name(&self) -> &CommandName {
         &self.name
     }
+
+    pub fn errors(&self) -> &CommandErrorDefinitions {
+        &self.errors
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -296,6 +300,18 @@ impl NewCommandErrorDefinition {
             scenario_name,
             recovery_kind,
         }
+    }
+
+    pub fn name(&self) -> &CommandErrorName {
+        &self.name
+    }
+
+    pub fn scenario_name(&self) -> &ScenarioName {
+        &self.scenario_name
+    }
+
+    pub fn recovery_kind(&self) -> &CommandErrorRecoveryKind {
+        &self.recovery_kind
     }
 }
 
