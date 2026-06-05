@@ -8,6 +8,7 @@ use std::net::TcpListener;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
 
 use crate::core::connection::{connect_workflow, remove_transition};
 use crate::core::effect::{
@@ -18,8 +19,9 @@ use crate::core::formal_graph::{
     parse_quint_workflow_graph,
 };
 use crate::core::formal_project_facts::{
-    NewProjectStream, ProjectStream, add_project_stream, parse_lean_project_streams,
-    parse_quint_project_streams,
+    NewProjectEvent, NewProjectStream, ProjectEvent, ProjectStream, add_project_event,
+    add_project_stream, parse_lean_project_events, parse_lean_project_streams,
+    parse_quint_project_events, parse_quint_project_streams,
 };
 use crate::core::formal_slice_facts::{
     add_automation_definition, add_bit_level_data_flow, add_board_connection, add_board_element,
@@ -210,7 +212,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 event.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_plan = add_project_stream(
+            let project_stream_plan = add_project_stream(
                 project_artifacts.lean_path,
                 project_artifacts.lean_contents,
                 project_artifacts.quint_path,
@@ -223,7 +225,22 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
-            reports.extend(interpret_collect_reports(project_plan)?);
+            reports.extend(interpret_collect_reports(project_stream_plan)?);
+            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
+            let project_event_plan = add_project_event(
+                project_artifacts.lean_path,
+                project_artifacts.lean_contents,
+                project_artifacts.quint_path,
+                project_artifacts.quint_contents,
+                NewProjectEvent::new(
+                    workflow_layout.slug().clone(),
+                    event.slice_slug().clone(),
+                    event.name().clone(),
+                    event.stream().clone(),
+                ),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            reports.extend(interpret_collect_reports(project_event_plan)?);
             Ok(reports)
         }
         Effect::AddExternalPayloadDefinitionFromSlice(external_payload) => {
@@ -420,10 +437,12 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?;
             let project_streams = read_synchronized_project_streams(&project_name)?;
+            let project_events = read_synchronized_project_events(&project_name)?;
             interpret_collect_reports(check_project(
                 project_name,
                 formal_workflows,
                 project_streams,
+                project_events,
             ))
         }
         Effect::ConnectWorkflowFromWorkflow(connection) => {
@@ -784,6 +803,24 @@ fn read_synchronized_project_streams(
             "Lean and Quint project root stream inventories disagree",
         )),
         (_lean_streams, _quint_streams) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_events(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectEvent>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_events(&artifacts.lean_contents),
+        parse_quint_project_events(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_events), Ok(quint_events)) if lean_events == quint_events => Ok(lean_events),
+        (Ok(_lean_events), Ok(_quint_events)) => Err(ShellError::message(
+            "Lean and Quint project root event inventories disagree",
+        )),
+        (_lean_events, _quint_events) => Ok(Vec::new()),
     }
 }
 
@@ -1699,6 +1736,9 @@ fn quint_server_endpoint() -> Result<ReservedQuintEndpoint, ShellError> {
 fn reserve_quint_endpoint() -> Result<Option<ReservedQuintEndpoint>, ShellError> {
     let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(ShellError::io)?;
     let port = listener.local_addr().map_err(ShellError::io)?.port();
+    if quint_endpoint_port_was_used(port)? {
+        return Ok(None);
+    }
     let lock_path = env::temp_dir().join(format!("emc-quint-apalache-{port}.lock"));
     let lock_file = match fs::OpenOptions::new()
         .write(true)
@@ -1710,6 +1750,7 @@ fn reserve_quint_endpoint() -> Result<Option<ReservedQuintEndpoint>, ShellError>
         Err(error) => return Err(ShellError::io(error)),
     };
     drop(listener);
+    remember_quint_endpoint_port(port)?;
 
     Ok(Some(ReservedQuintEndpoint {
         endpoint: format!("127.0.0.1:{port}"),
@@ -1718,6 +1759,26 @@ fn reserve_quint_endpoint() -> Result<Option<ReservedQuintEndpoint>, ShellError>
             _file: lock_file,
         }),
     }))
+}
+
+fn quint_endpoint_port_was_used(port: u16) -> Result<bool, ShellError> {
+    let used_ports = used_quint_endpoint_ports()
+        .lock()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(used_ports.contains(&port))
+}
+
+fn remember_quint_endpoint_port(port: u16) -> Result<(), ShellError> {
+    let mut used_ports = used_quint_endpoint_ports()
+        .lock()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    used_ports.insert(port);
+    Ok(())
+}
+
+fn used_quint_endpoint_ports() -> &'static Mutex<BTreeSet<u16>> {
+    static USED_PORTS: OnceLock<Mutex<BTreeSet<u16>>> = OnceLock::new();
+    USED_PORTS.get_or_init(|| Mutex::new(BTreeSet::new()))
 }
 
 fn process_diagnostics(stdout: &[u8], stderr: &[u8]) -> String {

@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
-use crate::core::types::{SliceSlug, StreamName, WorkflowSlug};
+use crate::core::types::{EventName, SliceSlug, StreamName, WorkflowSlug};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NewProjectStream {
@@ -21,11 +21,61 @@ impl NewProjectStream {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NewProjectEvent {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    event: EventName,
+    stream: StreamName,
+}
+
+impl NewProjectEvent {
+    pub fn new(
+        workflow_slug: WorkflowSlug,
+        slice_slug: SliceSlug,
+        event: EventName,
+        stream: StreamName,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            slice_slug,
+            event,
+            stream,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ProjectStream {
     workflow_slug: String,
     slice_slug: String,
     stream: String,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectEvent {
+    workflow_slug: String,
+    slice_slug: String,
+    event: String,
+    stream: String,
+}
+
+impl ProjectEvent {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn event(&self) -> &str {
+        &self.event
+    }
+
+    pub fn stream(&self) -> &str {
+        &self.stream
+    }
 }
 
 impl ProjectStream {
@@ -57,6 +107,21 @@ pub fn parse_quint_project_streams(
     stream_entries_from_list(contents.as_ref(), "val modelStreams: List[ModelStream] = ")
 }
 
+pub fn parse_lean_project_events(
+    contents: &FileContents,
+) -> Result<Vec<ProjectEvent>, FormalProjectFactError> {
+    event_entries_from_list(
+        contents.as_ref(),
+        "def modelEvents : List (String × String × String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_events(
+    contents: &FileContents,
+) -> Result<Vec<ProjectEvent>, FormalProjectFactError> {
+    event_entries_from_list(contents.as_ref(), "val modelEvents: List[ModelEvent] = ")
+}
+
 pub fn add_project_stream(
     lean_path: ProjectPath,
     lean_contents: FileContents,
@@ -84,7 +149,10 @@ pub fn add_project_stream(
                 streams.len()
             ),
         )
-        .and_then(|contents| update_lean_digest(&contents, &streams))
+        .and_then(|contents| {
+            let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            update_lean_digest(&contents, &streams, &events)
+        })
     })?;
     let quint = append_record_if_missing(
         quint_contents.as_ref(),
@@ -102,7 +170,10 @@ pub fn add_project_stream(
                 streams.len()
             ),
         )
-        .and_then(|contents| update_quint_digest(&contents, &streams))
+        .and_then(|contents| {
+            let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            update_quint_digest(&contents, &streams, &events)
+        })
     })?;
 
     Ok(EffectPlan::new(vec![
@@ -111,6 +182,69 @@ pub fn add_project_stream(
         Effect::Report(report_line(format!(
             "added stream {} to project root",
             stream.stream.as_ref()
+        ))?),
+    ]))
+}
+
+pub fn add_project_event(
+    lean_path: ProjectPath,
+    lean_contents: FileContents,
+    quint_path: ProjectPath,
+    quint_contents: FileContents,
+    event: NewProjectEvent,
+) -> Result<EffectPlan, FormalProjectFactError> {
+    let lean_record = lean_event_record(&event);
+    let quint_record = quint_event_record(&event);
+    let lean = append_record_if_missing(
+        lean_contents.as_ref(),
+        "def modelEvents : List (String × String × String × String) := ",
+        &lean_record,
+    )
+    .and_then(|contents| {
+        let streams = stream_entries_from_list(
+            &contents,
+            "def modelStreams : List (String × String × String) := ",
+        )?;
+        let events = event_entries_from_list(
+            &contents,
+            "def modelEvents : List (String × String × String × String) := ",
+        )?;
+        replace_declaration(
+            &contents,
+            "theorem modelEventsAreDeclared :",
+            &format!(
+                "theorem modelEventsAreDeclared : modelEvents.length = {} := rfl",
+                events.len()
+            ),
+        )
+        .and_then(|contents| update_lean_digest(&contents, &streams, &events))
+    })?;
+    let quint = append_record_if_missing(
+        quint_contents.as_ref(),
+        "val modelEvents: List[ModelEvent] = ",
+        &quint_record,
+    )
+    .and_then(|contents| {
+        let streams =
+            stream_entries_from_list(&contents, "val modelStreams: List[ModelStream] = ")?;
+        let events = event_entries_from_list(&contents, "val modelEvents: List[ModelEvent] = ")?;
+        replace_declaration(
+            &contents,
+            "val modelEventsAreDeclared =",
+            &format!(
+                "val modelEventsAreDeclared = modelEvents.length() == {}",
+                events.len()
+            ),
+        )
+        .and_then(|contents| update_quint_digest(&contents, &streams, &events))
+    })?;
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(lean_path, file_contents(lean)?),
+        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::Report(report_line(format!(
+            "added event {} to project root",
+            event.event.as_ref()
         ))?),
     ]))
 }
@@ -248,6 +382,46 @@ fn stream_entries_from_list(
     Ok(streams)
 }
 
+fn parse_lean_project_events_from_contents_or_empty(contents: &str) -> Vec<ProjectEvent> {
+    event_entries_from_list(
+        contents,
+        "def modelEvents : List (String × String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_events_from_contents_or_empty(contents: &str) -> Vec<ProjectEvent> {
+    event_entries_from_list(contents, "val modelEvents: List[ModelEvent] = ").unwrap_or_default()
+}
+
+fn event_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectEvent>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut events = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let strings = quoted_strings(&record)?;
+            if strings.len() < 4 {
+                Err(FormalProjectFactError::new(
+                    "formal project event record is malformed",
+                ))
+            } else {
+                Ok(ProjectEvent {
+                    workflow_slug: strings[0].clone(),
+                    slice_slug: strings[1].clone(),
+                    event: strings[2].clone(),
+                    stream: strings[3].clone(),
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    events.sort();
+    events.dedup();
+    Ok(events)
+}
+
 fn split_top_level_records(list: &str) -> Result<Vec<String>, FormalProjectFactError> {
     let trimmed = list.trim();
     let inner = trimmed
@@ -332,10 +506,12 @@ fn quoted_strings(record: &str) -> Result<Vec<String>, FormalProjectFactError> {
 fn update_lean_digest(
     contents: &str,
     streams: &[ProjectStream],
+    events: &[ProjectEvent],
 ) -> Result<String, FormalProjectFactError> {
     let digest = digest_with_streams(
         declaration_json_string(contents, "def modelDigest := ")?,
         streams,
+        events,
     );
     replace_declaration(
         contents,
@@ -357,10 +533,12 @@ fn update_lean_digest(
 fn update_quint_digest(
     contents: &str,
     streams: &[ProjectStream],
+    events: &[ProjectEvent],
 ) -> Result<String, FormalProjectFactError> {
     let digest = digest_with_streams(
         declaration_json_string(contents, "val modelDigest = ")?,
         streams,
+        events,
     );
     replace_declaration(
         contents,
@@ -376,12 +554,20 @@ fn update_quint_digest(
     })
 }
 
-fn digest_with_streams(current_digest: String, streams: &[ProjectStream]) -> String {
+fn digest_with_streams(
+    current_digest: String,
+    streams: &[ProjectStream],
+    events: &[ProjectEvent],
+) -> String {
     let prefix = current_digest
         .split_once(";streams=")
         .map(|(prefix, _streams)| prefix.to_owned())
         .unwrap_or(current_digest);
-    format!("{prefix};streams={}", digest_streams(streams))
+    format!(
+        "{prefix};streams={};events={}",
+        digest_streams(streams),
+        digest_events(events)
+    )
 }
 
 fn digest_streams(streams: &[ProjectStream]) -> String {
@@ -391,6 +577,19 @@ fn digest_streams(streams: &[ProjectStream]) -> String {
             format!(
                 "{}/{}/{}",
                 stream.workflow_slug, stream.slice_slug, stream.stream
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_events(events: &[ProjectEvent]) -> String {
+    events
+        .iter()
+        .map(|event| {
+            format!(
+                "{}/{}/{}@{}",
+                event.workflow_slug, event.slice_slug, event.event, event.stream
             )
         })
         .collect::<Vec<_>>()
@@ -442,6 +641,26 @@ fn quint_stream_record(stream: &NewProjectStream) -> String {
         quoted(stream.workflow_slug.as_ref()),
         quoted(stream.slice_slug.as_ref()),
         quoted(stream.stream.as_ref())
+    )
+}
+
+fn lean_event_record(event: &NewProjectEvent) -> String {
+    format!(
+        "({}, {}, {}, {})",
+        quoted(event.workflow_slug.as_ref()),
+        quoted(event.slice_slug.as_ref()),
+        quoted(event.event.as_ref()),
+        quoted(event.stream.as_ref())
+    )
+}
+
+fn quint_event_record(event: &NewProjectEvent) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, event: {}, stream: {} }}",
+        quoted(event.workflow_slug.as_ref()),
+        quoted(event.slice_slug.as_ref()),
+        quoted(event.event.as_ref()),
+        quoted(event.stream.as_ref())
     )
 }
 
