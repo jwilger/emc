@@ -3,19 +3,20 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::formal_slice_facts::{
-    CommandErrorDefinitions, NewBitLevelDataFlow, NewCommandDefinition, NewCommandErrorDefinition,
-    NewCommandInput, NewEventAttribute, NewEventDefinition, NewExternalPayloadDefinition,
-    NewReadModelDefinition, NewReadModelField, NewSliceScenario, NewTranslationDefinition,
-    NewViewDefinition, NewViewField, OutcomeEventNames, ScenarioKind,
+    CommandErrorDefinitions, NewAutomationDefinition, NewBitLevelDataFlow, NewCommandDefinition,
+    NewCommandErrorDefinition, NewCommandInput, NewEventAttribute, NewEventDefinition,
+    NewExternalPayloadDefinition, NewReadModelDefinition, NewReadModelField, NewSliceScenario,
+    NewTranslationDefinition, NewViewDefinition, NewViewField, OutcomeEventNames, ScenarioKind,
 };
 use crate::core::types::{
-    AutomationName, BitEncodingSemantics, CommandErrorName, CommandErrorRecoveryKind, CommandName,
-    ContractKindName, CoveredDefinitionName, DataFlowSource, DataFlowTarget, DatumName,
-    EventAttributeName, EventAttributeSourceField, EventAttributeSourceKind,
-    EventAttributeSourceName, EventName, OutcomeLabelName, PayloadContractName,
-    ProvenanceDescription, ReadModelFieldSourceKind, ReadModelName, ScenarioName, ScenarioStepText,
-    SliceSlug, StreamName, TransformationSemantics, TranslationExternalEventName, TranslationName,
-    ViewFieldName, ViewFieldSourceKind, ViewName, WorkflowSlug,
+    AutomationName, AutomationReactionDescription, AutomationTriggerName, BitEncodingSemantics,
+    CommandErrorName, CommandErrorRecoveryKind, CommandName, ContractKindName,
+    CoveredDefinitionName, DataFlowSource, DataFlowTarget, DatumName, EventAttributeName,
+    EventAttributeSourceField, EventAttributeSourceKind, EventAttributeSourceName, EventName,
+    OutcomeLabelName, PayloadContractName, ProvenanceDescription, ReadModelFieldSourceKind,
+    ReadModelName, ScenarioName, ScenarioStepText, SliceSlug, StreamName, TransformationSemantics,
+    TranslationExternalEventName, TranslationName, ViewFieldName, ViewFieldSourceKind, ViewName,
+    WorkflowSlug,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -389,6 +390,7 @@ pub struct NewProjectAutomation {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     automation: AutomationName,
+    automation_definition: Option<NewProjectAutomationDefinition>,
 }
 
 impl NewProjectAutomation {
@@ -401,6 +403,50 @@ impl NewProjectAutomation {
             workflow_slug,
             slice_slug,
             automation,
+            automation_definition: None,
+        }
+    }
+
+    pub fn from_automation(
+        workflow_slug: WorkflowSlug,
+        automation: &NewAutomationDefinition,
+    ) -> Self {
+        let mut project_automation = Self::new(
+            workflow_slug,
+            automation.slice_slug().clone(),
+            automation.name().clone(),
+        );
+        project_automation.automation_definition = Some(
+            NewProjectAutomationDefinition::from_automation(&project_automation, automation),
+        );
+        project_automation
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct NewProjectAutomationDefinition {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    automation: AutomationName,
+    trigger: AutomationTriggerName,
+    command: CommandName,
+    handled_errors: Vec<CommandErrorName>,
+    reaction: AutomationReactionDescription,
+}
+
+impl NewProjectAutomationDefinition {
+    fn from_automation(
+        project_automation: &NewProjectAutomation,
+        automation: &NewAutomationDefinition,
+    ) -> Self {
+        Self {
+            workflow_slug: project_automation.workflow_slug.clone(),
+            slice_slug: project_automation.slice_slug.clone(),
+            automation: project_automation.automation.clone(),
+            trigger: automation.trigger_name().clone(),
+            command: automation.command_name().clone(),
+            handled_errors: automation.handled_errors().as_slice().to_vec(),
+            reaction: automation.reaction_description().clone(),
         }
     }
 }
@@ -1072,6 +1118,47 @@ impl ProjectAutomation {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectAutomationDefinition {
+    workflow_slug: String,
+    slice_slug: String,
+    automation: String,
+    trigger: String,
+    command: String,
+    handled_errors: Vec<String>,
+    reaction: String,
+}
+
+impl ProjectAutomationDefinition {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn automation(&self) -> &str {
+        &self.automation
+    }
+
+    pub fn trigger(&self) -> &str {
+        &self.trigger
+    }
+
+    pub fn command(&self) -> &str {
+        &self.command
+    }
+
+    pub fn handled_errors(&self) -> &[String] {
+        &self.handled_errors
+    }
+
+    pub fn reaction(&self) -> &str {
+        &self.reaction
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ProjectTranslation {
     workflow_slug: String,
     slice_slug: String,
@@ -1642,6 +1729,24 @@ pub fn parse_quint_project_automations(
     )
 }
 
+pub fn parse_lean_project_automation_definitions(
+    contents: &FileContents,
+) -> Result<Vec<ProjectAutomationDefinition>, FormalProjectFactError> {
+    automation_definition_entries_from_list(
+        contents.as_ref(),
+        "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_automation_definitions(
+    contents: &FileContents,
+) -> Result<Vec<ProjectAutomationDefinition>, FormalProjectFactError> {
+    automation_definition_entries_from_list(
+        contents.as_ref(),
+        "val modelAutomationDefinitions: List[ModelAutomationDefinition] = ",
+    )
+}
+
 pub fn parse_lean_project_translations(
     contents: &FileContents,
 ) -> Result<Vec<ProjectTranslation>, FormalProjectFactError> {
@@ -1838,6 +1943,8 @@ pub fn add_project_scenario(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_lean_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
@@ -1865,6 +1972,7 @@ pub fn add_project_scenario(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -1949,6 +2057,8 @@ pub fn add_project_scenario(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_quint_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
@@ -1976,6 +2086,7 @@ pub fn add_project_scenario(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -2051,6 +2162,8 @@ pub fn add_project_data_flow(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_lean_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
@@ -2077,6 +2190,7 @@ pub fn add_project_data_flow(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -2133,6 +2247,8 @@ pub fn add_project_data_flow(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_quint_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
@@ -2160,6 +2276,7 @@ pub fn add_project_data_flow(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -2238,6 +2355,8 @@ pub fn add_project_outcome(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_lean_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
@@ -2265,6 +2384,7 @@ pub fn add_project_outcome(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -2321,6 +2441,8 @@ pub fn add_project_outcome(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_quint_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
@@ -2348,6 +2470,7 @@ pub fn add_project_outcome(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -2459,6 +2582,8 @@ pub fn add_project_command(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_lean_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
@@ -2485,6 +2610,7 @@ pub fn add_project_command(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -2582,6 +2708,8 @@ pub fn add_project_command(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_quint_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
@@ -2609,6 +2737,7 @@ pub fn add_project_command(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -2741,6 +2870,8 @@ pub fn add_project_read_model(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_lean_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
@@ -2768,6 +2899,7 @@ pub fn add_project_read_model(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -2860,6 +2992,8 @@ pub fn add_project_read_model(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_quint_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
@@ -2887,6 +3021,7 @@ pub fn add_project_read_model(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -2985,6 +3120,8 @@ pub fn add_project_view(
             let read_model_definitions = parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
             let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_lean_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
@@ -3012,6 +3149,7 @@ pub fn add_project_view(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -3080,6 +3218,8 @@ pub fn add_project_view(
             let read_model_fields =
                 parse_quint_project_read_model_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_quint_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
@@ -3107,6 +3247,7 @@ pub fn add_project_view(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -3138,15 +3279,38 @@ pub fn add_project_automation(
 ) -> Result<EffectPlan, FormalProjectFactError> {
     let lean_record = lean_automation_record(&automation);
     let quint_record = quint_automation_record(&automation);
+    let lean_definition_record = automation
+        .automation_definition
+        .as_ref()
+        .map(lean_automation_definition_record);
+    let quint_definition_record = automation
+        .automation_definition
+        .as_ref()
+        .map(quint_automation_definition_record);
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
         "def modelAutomations : List (String × String × String) := ",
         &lean_record,
     )
     .and_then(|contents| {
+        if let Some(record) = lean_definition_record.as_deref() {
+            append_record_if_missing(
+                &contents,
+                "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := ",
+                record,
+            )
+        } else {
+            Ok(contents)
+        }
+    })
+    .and_then(|contents| {
         let automations = automation_entries_from_list(
             &contents,
             "def modelAutomations : List (String × String × String) := ",
+        )?;
+        let automation_definitions = automation_definition_entries_from_list(
+            &contents,
+            "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := ",
         )?;
         replace_declaration(
             &contents,
@@ -3156,6 +3320,26 @@ pub fn add_project_automation(
                 automations.len()
             ),
         )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "def modelAutomationDefinitions :",
+                &format!(
+                    "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := {}",
+                    lean_automation_definition_list(&automation_definitions)
+                ),
+            )
+        })
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "theorem modelAutomationDefinitionsAreDeclared :",
+                &format!(
+                    "theorem modelAutomationDefinitionsAreDeclared : modelAutomationDefinitions.length = {} := rfl",
+                    automation_definitions.len()
+                ),
+            )
+        })
         .and_then(|contents| {
             let scenarios = parse_lean_project_scenarios_from_contents_or_empty(&contents);
             let scenario_definitions =
@@ -3201,6 +3385,7 @@ pub fn add_project_automation(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -3218,9 +3403,24 @@ pub fn add_project_automation(
         &quint_record,
     )
     .and_then(|contents| {
+        if let Some(record) = quint_definition_record.as_deref() {
+            append_record_if_missing(
+                &contents,
+                "val modelAutomationDefinitions: List[ModelAutomationDefinition] = ",
+                record,
+            )
+        } else {
+            Ok(contents)
+        }
+    })
+    .and_then(|contents| {
         let automations = automation_entries_from_list(
             &contents,
             "val modelAutomations: List[ModelAutomation] = ",
+        )?;
+        let automation_definitions = automation_definition_entries_from_list(
+            &contents,
+            "val modelAutomationDefinitions: List[ModelAutomationDefinition] = ",
         )?;
         replace_declaration(
             &contents,
@@ -3230,6 +3430,26 @@ pub fn add_project_automation(
                 automations.len()
             ),
         )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "val modelAutomationDefinitions:",
+                &format!(
+                    "val modelAutomationDefinitions: List[ModelAutomationDefinition] = {}",
+                    quint_automation_definition_list(&automation_definitions)
+                ),
+            )
+        })
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "val modelAutomationDefinitionsAreDeclared =",
+                &format!(
+                    "val modelAutomationDefinitionsAreDeclared = modelAutomationDefinitions.length() == {}",
+                    automation_definitions.len()
+                ),
+            )
+        })
         .and_then(|contents| {
             let scenarios = parse_quint_project_scenarios_from_contents_or_empty(&contents);
             let scenario_definitions =
@@ -3275,6 +3495,7 @@ pub fn add_project_automation(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -3386,6 +3607,8 @@ pub fn add_project_translation(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_lean_project_automation_definitions_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
@@ -3412,6 +3635,7 @@ pub fn add_project_translation(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -3495,6 +3719,8 @@ pub fn add_project_translation(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_quint_project_automation_definitions_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
             let external_payloads =
@@ -3521,6 +3747,7 @@ pub fn add_project_translation(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -3628,6 +3855,8 @@ pub fn add_project_external_payload(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_lean_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
@@ -3655,6 +3884,7 @@ pub fn add_project_external_payload(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -3734,6 +3964,8 @@ pub fn add_project_external_payload(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_quint_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
@@ -3761,6 +3993,7 @@ pub fn add_project_external_payload(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -3829,6 +4062,8 @@ pub fn add_project_stream(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_lean_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_lean_project_translation_definitions_from_contents_or_empty(&contents);
@@ -3855,6 +4090,7 @@ pub fn add_project_stream(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -3901,6 +4137,8 @@ pub fn add_project_stream(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let automation_definitions =
+                parse_quint_project_automation_definitions_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
                 parse_quint_project_translation_definitions_from_contents_or_empty(&contents);
@@ -3927,6 +4165,7 @@ pub fn add_project_stream(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -4029,6 +4268,10 @@ pub fn add_project_event(
             &contents,
             "def modelAutomations : List (String × String × String) := ",
         )?;
+        let automation_definitions = automation_definition_entries_from_list(
+            &contents,
+            "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := ",
+        )?;
         let translations = translation_entries_from_list(
             &contents,
             "def modelTranslations : List (String × String × String) := ",
@@ -4092,6 +4335,7 @@ pub fn add_project_event(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -4155,6 +4399,10 @@ pub fn add_project_event(
             &contents,
             "val modelAutomations: List[ModelAutomation] = ",
         )?;
+        let automation_definitions = automation_definition_entries_from_list(
+            &contents,
+            "val modelAutomationDefinitions: List[ModelAutomationDefinition] = ",
+        )?;
         let translations = translation_entries_from_list(
             &contents,
             "val modelTranslations: List[ModelTranslation] = ",
@@ -4213,6 +4461,7 @@ pub fn add_project_event(
                     views: &views,
                     view_fields: &view_fields,
                     automations: &automations,
+                    automation_definitions: &automation_definitions,
                     translations: &translations,
                     translation_definitions: &translation_definitions,
                     external_payloads: &external_payloads,
@@ -4573,6 +4822,26 @@ fn parse_quint_project_automations_from_contents_or_empty(
 ) -> Vec<ProjectAutomation> {
     automation_entries_from_list(contents, "val modelAutomations: List[ModelAutomation] = ")
         .unwrap_or_default()
+}
+
+fn parse_lean_project_automation_definitions_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectAutomationDefinition> {
+    automation_definition_entries_from_list(
+        contents,
+        "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_automation_definitions_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectAutomationDefinition> {
+    automation_definition_entries_from_list(
+        contents,
+        "val modelAutomationDefinitions: List[ModelAutomationDefinition] = ",
+    )
+    .unwrap_or_default()
 }
 
 fn parse_lean_project_translations_from_contents_or_empty(
@@ -5070,6 +5339,38 @@ fn automation_entries_from_list(
     Ok(automations)
 }
 
+fn automation_definition_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectAutomationDefinition>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut definitions = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let strings = quoted_strings(&record)?;
+            if strings.len() < 6 {
+                Err(FormalProjectFactError::new(
+                    "formal project automation definition record is malformed",
+                ))
+            } else {
+                let reaction_index = strings.len() - 1;
+                Ok(ProjectAutomationDefinition {
+                    workflow_slug: strings[0].clone(),
+                    slice_slug: strings[1].clone(),
+                    automation: strings[2].clone(),
+                    trigger: strings[3].clone(),
+                    command: strings[4].clone(),
+                    handled_errors: strings[5..reaction_index].to_vec(),
+                    reaction: strings[reaction_index].clone(),
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    definitions.sort();
+    definitions.dedup();
+    Ok(definitions)
+}
+
 fn translation_entries_from_list(
     contents: &str,
     marker: &str,
@@ -5485,6 +5786,7 @@ struct ProjectDigestInventories<'a> {
     views: &'a [ProjectView],
     view_fields: &'a [ProjectViewField],
     automations: &'a [ProjectAutomation],
+    automation_definitions: &'a [ProjectAutomationDefinition],
     translations: &'a [ProjectTranslation],
     translation_definitions: &'a [ProjectTranslationDefinition],
     external_payloads: &'a [ProjectExternalPayload],
@@ -5559,6 +5861,7 @@ fn digest_with_project_inventories(
         .or_else(|| current_digest.split_once(";views="))
         .or_else(|| current_digest.split_once(";view-fields="))
         .or_else(|| current_digest.split_once(";automations="))
+        .or_else(|| current_digest.split_once(";automation-definitions="))
         .or_else(|| current_digest.split_once(";translations="))
         .or_else(|| current_digest.split_once(";translation-definitions="))
         .or_else(|| current_digest.split_once(";external-payloads="))
@@ -5568,7 +5871,7 @@ fn digest_with_project_inventories(
         .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-fields={};automations={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
+        "{prefix};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-fields={};automations={};automation-definitions={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
         digest_scenarios(inventories.scenarios),
         digest_scenario_definitions(inventories.scenario_definitions),
         digest_data_flows(inventories.data_flows),
@@ -5582,6 +5885,7 @@ fn digest_with_project_inventories(
         digest_views(inventories.views),
         digest_view_fields(inventories.view_fields),
         digest_automations(inventories.automations),
+        digest_automation_definitions(inventories.automation_definitions),
         digest_translations(inventories.translations),
         digest_translation_definitions(inventories.translation_definitions),
         digest_external_payloads(inventories.external_payloads),
@@ -5810,6 +6114,25 @@ fn digest_automations(automations: &[ProjectAutomation]) -> String {
             format!(
                 "{}/{}/{}",
                 automation.workflow_slug, automation.slice_slug, automation.automation
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_automation_definitions(definitions: &[ProjectAutomationDefinition]) -> String {
+    definitions
+        .iter()
+        .map(|definition| {
+            format!(
+                "{}/{}/{}@{}#{}#{}#{}",
+                definition.workflow_slug,
+                definition.slice_slug,
+                definition.automation,
+                definition.trigger,
+                definition.command,
+                definition.handled_errors.join("|"),
+                definition.reaction
             )
         })
         .collect::<Vec<_>>()
@@ -6563,6 +6886,89 @@ fn quint_automation_record(automation: &NewProjectAutomation) -> String {
         quoted(automation.workflow_slug.as_ref()),
         quoted(automation.slice_slug.as_ref()),
         quoted(automation.automation.as_ref())
+    )
+}
+
+fn lean_automation_definition_record(definition: &NewProjectAutomationDefinition) -> String {
+    let handled_errors = command_error_name_strings(definition.handled_errors.as_slice());
+    format!(
+        "({}, {}, {}, {}, {}, [{}], {})",
+        quoted(definition.workflow_slug.as_ref()),
+        quoted(definition.slice_slug.as_ref()),
+        quoted(definition.automation.as_ref()),
+        quoted(definition.trigger.as_ref()),
+        quoted(definition.command.as_ref()),
+        lean_string_list(&handled_errors),
+        quoted(definition.reaction.as_ref())
+    )
+}
+
+fn quint_automation_definition_record(definition: &NewProjectAutomationDefinition) -> String {
+    let handled_errors = command_error_name_strings(definition.handled_errors.as_slice());
+    format!(
+        "{{ workflow: {}, slice: {}, automation: {}, trigger: {}, command: {}, handledErrors: [{}], reaction: {} }}",
+        quoted(definition.workflow_slug.as_ref()),
+        quoted(definition.slice_slug.as_ref()),
+        quoted(definition.automation.as_ref()),
+        quoted(definition.trigger.as_ref()),
+        quoted(definition.command.as_ref()),
+        quint_string_list(&handled_errors),
+        quoted(definition.reaction.as_ref())
+    )
+}
+
+fn command_error_name_strings(errors: &[CommandErrorName]) -> Vec<String> {
+    errors
+        .iter()
+        .map(|error| error.as_ref().to_owned())
+        .collect()
+}
+
+fn lean_automation_definition_list(definitions: &[ProjectAutomationDefinition]) -> String {
+    let mut definitions = definitions.to_vec();
+    definitions.sort();
+    format!(
+        "[{}]",
+        definitions
+            .into_iter()
+            .map(|definition| {
+                format!(
+                    "({}, {}, {}, {}, {}, [{}], {})",
+                    quoted(&definition.workflow_slug),
+                    quoted(&definition.slice_slug),
+                    quoted(&definition.automation),
+                    quoted(&definition.trigger),
+                    quoted(&definition.command),
+                    quoted_string_list(definition.handled_errors.as_slice()),
+                    quoted(&definition.reaction)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_automation_definition_list(definitions: &[ProjectAutomationDefinition]) -> String {
+    let mut definitions = definitions.to_vec();
+    definitions.sort();
+    format!(
+        "[{}]",
+        definitions
+            .into_iter()
+            .map(|definition| {
+                format!(
+                    "{{ workflow: {}, slice: {}, automation: {}, trigger: {}, command: {}, handledErrors: [{}], reaction: {} }}",
+                    quoted(&definition.workflow_slug),
+                    quoted(&definition.slice_slug),
+                    quoted(&definition.automation),
+                    quoted(&definition.trigger),
+                    quoted(&definition.command),
+                    quoted_string_list(definition.handled_errors.as_slice()),
+                    quoted(&definition.reaction)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
     )
 }
 
