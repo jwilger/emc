@@ -1021,6 +1021,9 @@ mod tests {
             "def navigationControlDeclaresType(target) = not(navigationTargetHasPayload(target)) or target.targetType != \"\""
         ));
         assert!(quint.contains(
+            "def navigationModeledViewTargetsExistingView(target) = target.targetType != \"modeled_view\" or (target.targetName != \"\" and sliceViews.select(viewName => viewName == target.targetName).length() > 0)"
+        ));
+        assert!(quint.contains(
             "def navigationTargetIsComplete(view, target) = (target.targetType == \"\" and target.targetName == \"\" and target.externalWorkflowName == \"\" and target.externalSystemName == \"\" and target.handoffContract == \"\") or (target.targetType == \"modeled_view\" and target.targetName != \"\" and sliceViews.select(viewName => viewName == target.targetName).length() > 0) or (target.targetType == \"local_view_state\" and target.targetName != \"\" and view.localStates.select(localState => localState == target.targetName).length() > 0) or (target.targetType == \"external_workflow\" and target.externalWorkflowName != \"\") or (target.targetType == \"external_system\" and target.externalSystemName != \"\" and target.handoffContract != \"\")"
         ));
         assert!(quint.contains(
@@ -1028,6 +1031,9 @@ mod tests {
         ));
         assert!(quint.contains(
             "val viewControlNavigationTypesAreDeclared = sliceViewDefinitions.select(view => view.controls.select(control => navigationControlDeclaresType(control.navigation)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
+        ));
+        assert!(quint.contains(
+            "val viewControlModeledViewNavigationTargetsResolve = sliceViewDefinitions.select(view => view.controls.select(control => navigationModeledViewTargetsExistingView(control.navigation)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
             "val viewControlNavigationTargetsAreComplete = sliceViewDefinitions.select(view => view.controls.select(control => navigationTargetIsComplete(view, control.navigation)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
