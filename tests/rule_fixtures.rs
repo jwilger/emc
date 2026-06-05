@@ -31,7 +31,7 @@ mod tests {
 
         assert_eq!(
             count_scenarios(&source),
-            3,
+            2,
             "EMC must check in the runner/meta Gherkin as execution parity fixtures"
         );
 

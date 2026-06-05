@@ -20,10 +20,3 @@ Feature: Event model Gherkin suites are executable by dedicated Cucumber runners
     Then the runner discovers every "*.feature" file under "tests/features/event_model_review_gate"
     And the runner attempts every discovered scenario under "tests/features/event_model_review_gate"
     And the runner reports undefined, pending, or skipped steps as failures
-
-  Scenario: Legacy TUI acceptance runner does not own event-model feature suites
-    Given the legacy TUI acceptance runner reads "tests/features/first_launch_setup.feature"
-    When I list the event-model feature suites
-    Then the legacy Rust-native acceptance runner is absent from event-model feature suite configuration
-    And the event-model review-gate features run through the Rust EMC Gherkin suite command
-    And the event-model Cucumber meta-check feature runs through the Rust EMC Gherkin suite command
