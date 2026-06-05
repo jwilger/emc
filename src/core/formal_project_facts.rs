@@ -2,9 +2,10 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
+use crate::core::formal_slice_facts::ScenarioKind;
 use crate::core::types::{
-    AutomationName, CommandName, EventAttributeSourceName, EventName, ReadModelName, SliceSlug,
-    StreamName, TranslationName, ViewName, WorkflowSlug,
+    AutomationName, CommandName, EventAttributeSourceName, EventName, ReadModelName, ScenarioName,
+    SliceSlug, StreamName, TranslationName, ViewName, WorkflowSlug,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -138,6 +139,30 @@ impl NewProjectExternalPayload {
             workflow_slug,
             slice_slug,
             external_payload,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NewProjectScenario {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    scenario_kind: ScenarioKind,
+    scenario: ScenarioName,
+}
+
+impl NewProjectScenario {
+    pub fn new(
+        workflow_slug: WorkflowSlug,
+        slice_slug: SliceSlug,
+        scenario_kind: ScenarioKind,
+        scenario: ScenarioName,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            slice_slug,
+            scenario_kind,
+            scenario,
         }
     }
 }
@@ -300,6 +325,32 @@ impl ProjectExternalPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectScenario {
+    workflow_slug: String,
+    slice_slug: String,
+    scenario_kind: String,
+    scenario: String,
+}
+
+impl ProjectScenario {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn scenario_kind(&self) -> &str {
+        &self.scenario_kind
+    }
+
+    pub fn scenario(&self) -> &str {
+        &self.scenario
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ProjectEvent {
     workflow_slug: String,
     slice_slug: String,
@@ -352,6 +403,24 @@ pub fn parse_quint_project_streams(
     contents: &FileContents,
 ) -> Result<Vec<ProjectStream>, FormalProjectFactError> {
     stream_entries_from_list(contents.as_ref(), "val modelStreams: List[ModelStream] = ")
+}
+
+pub fn parse_lean_project_scenarios(
+    contents: &FileContents,
+) -> Result<Vec<ProjectScenario>, FormalProjectFactError> {
+    scenario_entries_from_list(
+        contents.as_ref(),
+        "def modelScenarios : List (String × String × String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_scenarios(
+    contents: &FileContents,
+) -> Result<Vec<ProjectScenario>, FormalProjectFactError> {
+    scenario_entries_from_list(
+        contents.as_ref(),
+        "val modelScenarios: List[ModelScenario] = ",
+    )
 }
 
 pub fn parse_lean_project_commands(
@@ -474,6 +543,133 @@ pub fn parse_quint_project_events(
     event_entries_from_list(contents.as_ref(), "val modelEvents: List[ModelEvent] = ")
 }
 
+pub fn add_project_scenario(
+    lean_path: ProjectPath,
+    lean_contents: FileContents,
+    quint_path: ProjectPath,
+    quint_contents: FileContents,
+    scenario: NewProjectScenario,
+) -> Result<EffectPlan, FormalProjectFactError> {
+    let lean_record = lean_scenario_record(&scenario);
+    let quint_record = quint_scenario_record(&scenario);
+    let lean = append_record_if_missing(
+        lean_contents.as_ref(),
+        "def modelScenarios : List (String × String × String × String) := ",
+        &lean_record,
+    )
+    .and_then(|contents| {
+        let scenarios = scenario_entries_from_list(
+            &contents,
+            "def modelScenarios : List (String × String × String × String) := ",
+        )?;
+        replace_declaration(
+            &contents,
+            "def modelScenarios :",
+            &format!(
+                "def modelScenarios : List (String × String × String × String) := {}",
+                lean_project_scenario_list(&scenarios)
+            ),
+        )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "theorem modelScenariosAreDeclared :",
+                &format!(
+                    "theorem modelScenariosAreDeclared : modelScenarios.length = {} := rfl",
+                    scenarios.len()
+                ),
+            )
+        })
+        .and_then(|contents| {
+            let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let views = parse_lean_project_views_from_contents_or_empty(&contents);
+            let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_lean_project_external_payloads_from_contents_or_empty(&contents);
+            let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
+            let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            update_lean_digest(
+                &contents,
+                ProjectDigestInventories {
+                    scenarios: &scenarios,
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    external_payloads: &external_payloads,
+                    streams: &streams,
+                    events: &events,
+                },
+            )
+        })
+    })?;
+    let quint = append_record_if_missing(
+        quint_contents.as_ref(),
+        "val modelScenarios: List[ModelScenario] = ",
+        &quint_record,
+    )
+    .and_then(|contents| {
+        let scenarios =
+            scenario_entries_from_list(&contents, "val modelScenarios: List[ModelScenario] = ")?;
+        replace_declaration(
+            &contents,
+            "val modelScenarios:",
+            &format!(
+                "val modelScenarios: List[ModelScenario] = {}",
+                quint_project_scenario_list(&scenarios)
+            ),
+        )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "val modelScenariosAreDeclared =",
+                &format!(
+                    "val modelScenariosAreDeclared = modelScenarios.length() == {}",
+                    scenarios.len()
+                ),
+            )
+        })
+        .and_then(|contents| {
+            let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let views = parse_quint_project_views_from_contents_or_empty(&contents);
+            let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_quint_project_external_payloads_from_contents_or_empty(&contents);
+            let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
+            let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            update_quint_digest(
+                &contents,
+                ProjectDigestInventories {
+                    scenarios: &scenarios,
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    external_payloads: &external_payloads,
+                    streams: &streams,
+                    events: &events,
+                },
+            )
+        })
+    })?;
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(lean_path, file_contents(lean)?),
+        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::Report(report_line(format!(
+            "added {} scenario {} to project root",
+            scenario.scenario_kind.as_str(),
+            scenario.scenario.as_ref()
+        ))?),
+    ]))
+}
+
 pub fn add_project_command(
     lean_path: ProjectPath,
     lean_contents: FileContents,
@@ -502,6 +698,7 @@ pub fn add_project_command(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_lean_project_scenarios_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -513,6 +710,7 @@ pub fn add_project_command(
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -542,6 +740,7 @@ pub fn add_project_command(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_quint_project_scenarios_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -553,6 +752,7 @@ pub fn add_project_command(
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -604,6 +804,7 @@ pub fn add_project_read_model(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_lean_project_scenarios_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -615,6 +816,7 @@ pub fn add_project_read_model(
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -646,6 +848,7 @@ pub fn add_project_read_model(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_quint_project_scenarios_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -657,6 +860,7 @@ pub fn add_project_read_model(
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -708,6 +912,7 @@ pub fn add_project_view(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_lean_project_scenarios_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -719,6 +924,7 @@ pub fn add_project_view(
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -747,6 +953,7 @@ pub fn add_project_view(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_quint_project_scenarios_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -758,6 +965,7 @@ pub fn add_project_view(
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -809,6 +1017,7 @@ pub fn add_project_automation(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_lean_project_scenarios_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
@@ -820,6 +1029,7 @@ pub fn add_project_automation(
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -851,6 +1061,7 @@ pub fn add_project_automation(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_quint_project_scenarios_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
@@ -862,6 +1073,7 @@ pub fn add_project_automation(
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -913,6 +1125,7 @@ pub fn add_project_translation(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_lean_project_scenarios_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
@@ -924,6 +1137,7 @@ pub fn add_project_translation(
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -955,6 +1169,7 @@ pub fn add_project_translation(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_quint_project_scenarios_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
@@ -966,6 +1181,7 @@ pub fn add_project_translation(
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -1017,6 +1233,7 @@ pub fn add_project_external_payload(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_lean_project_scenarios_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
@@ -1028,6 +1245,7 @@ pub fn add_project_external_payload(
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -1059,6 +1277,7 @@ pub fn add_project_external_payload(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_quint_project_scenarios_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
@@ -1071,6 +1290,7 @@ pub fn add_project_external_payload(
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -1122,6 +1342,7 @@ pub fn add_project_stream(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_lean_project_scenarios_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
@@ -1133,6 +1354,7 @@ pub fn add_project_stream(
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -1162,6 +1384,7 @@ pub fn add_project_stream(
             ),
         )
         .and_then(|contents| {
+            let scenarios = parse_quint_project_scenarios_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
@@ -1173,6 +1396,7 @@ pub fn add_project_stream(
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -1211,6 +1435,10 @@ pub fn add_project_event(
         &lean_record,
     )
     .and_then(|contents| {
+        let scenarios = scenario_entries_from_list(
+            &contents,
+            "def modelScenarios : List (String × String × String × String) := ",
+        )?;
         let commands = command_entries_from_list(
             &contents,
             "def modelCommands : List (String × String × String) := ",
@@ -1255,6 +1483,7 @@ pub fn add_project_event(
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -1273,6 +1502,8 @@ pub fn add_project_event(
         &quint_record,
     )
     .and_then(|contents| {
+        let scenarios =
+            scenario_entries_from_list(&contents, "val modelScenarios: List[ModelScenario] = ")?;
         let commands =
             command_entries_from_list(&contents, "val modelCommands: List[ModelCommand] = ")?;
         let read_models = read_model_entries_from_list(
@@ -1307,6 +1538,7 @@ pub fn add_project_event(
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
+                    scenarios: &scenarios,
                     commands: &commands,
                     read_models: &read_models,
                     views: &views,
@@ -1471,6 +1703,19 @@ fn parse_lean_project_commands_from_contents_or_empty(contents: &str) -> Vec<Pro
     .unwrap_or_default()
 }
 
+fn parse_lean_project_scenarios_from_contents_or_empty(contents: &str) -> Vec<ProjectScenario> {
+    scenario_entries_from_list(
+        contents,
+        "def modelScenarios : List (String × String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_scenarios_from_contents_or_empty(contents: &str) -> Vec<ProjectScenario> {
+    scenario_entries_from_list(contents, "val modelScenarios: List[ModelScenario] = ")
+        .unwrap_or_default()
+}
+
 fn parse_quint_project_commands_from_contents_or_empty(contents: &str) -> Vec<ProjectCommand> {
     command_entries_from_list(contents, "val modelCommands: List[ModelCommand] = ")
         .unwrap_or_default()
@@ -1590,6 +1835,34 @@ fn command_entries_from_list(
     commands.sort();
     commands.dedup();
     Ok(commands)
+}
+
+fn scenario_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectScenario>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut scenarios = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let strings = quoted_strings(&record)?;
+            if strings.len() < 4 {
+                Err(FormalProjectFactError::new(
+                    "formal project scenario record is malformed",
+                ))
+            } else {
+                Ok(ProjectScenario {
+                    workflow_slug: strings[0].clone(),
+                    slice_slug: strings[1].clone(),
+                    scenario_kind: strings[2].clone(),
+                    scenario: strings[3].clone(),
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    scenarios.sort();
+    scenarios.dedup();
+    Ok(scenarios)
 }
 
 fn read_model_entries_from_list(
@@ -1849,6 +2122,7 @@ fn quoted_strings(record: &str) -> Result<Vec<String>, FormalProjectFactError> {
 }
 
 struct ProjectDigestInventories<'a> {
+    scenarios: &'a [ProjectScenario],
     commands: &'a [ProjectCommand],
     read_models: &'a [ProjectReadModel],
     views: &'a [ProjectView],
@@ -1911,7 +2185,8 @@ fn digest_with_project_inventories(
     inventories: &ProjectDigestInventories<'_>,
 ) -> String {
     let prefix = current_digest
-        .split_once(";commands=")
+        .split_once(";scenarios=")
+        .or_else(|| current_digest.split_once(";commands="))
         .or_else(|| current_digest.split_once(";read-models="))
         .or_else(|| current_digest.split_once(";views="))
         .or_else(|| current_digest.split_once(";automations="))
@@ -1921,7 +2196,8 @@ fn digest_with_project_inventories(
         .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};commands={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
+        "{prefix};scenarios={};commands={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
+        digest_scenarios(inventories.scenarios),
         digest_commands(inventories.commands),
         digest_read_models(inventories.read_models),
         digest_views(inventories.views),
@@ -1931,6 +2207,22 @@ fn digest_with_project_inventories(
         digest_streams(inventories.streams),
         digest_events(inventories.events)
     )
+}
+
+fn digest_scenarios(scenarios: &[ProjectScenario]) -> String {
+    scenarios
+        .iter()
+        .map(|scenario| {
+            format!(
+                "{}/{}/{}/{}",
+                scenario.workflow_slug,
+                scenario.slice_slug,
+                scenario.scenario_kind,
+                scenario.scenario
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn digest_commands(commands: &[ProjectCommand]) -> String {
@@ -2079,6 +2371,88 @@ fn lean_command_record(command: &NewProjectCommand) -> String {
         quoted(command.workflow_slug.as_ref()),
         quoted(command.slice_slug.as_ref()),
         quoted(command.command.as_ref())
+    )
+}
+
+fn lean_scenario_record(scenario: &NewProjectScenario) -> String {
+    format!(
+        "({}, {}, {}, {})",
+        quoted(scenario.workflow_slug.as_ref()),
+        quoted(scenario.slice_slug.as_ref()),
+        quoted(scenario.scenario_kind.as_str()),
+        quoted(scenario.scenario.as_ref())
+    )
+}
+
+fn quint_scenario_record(scenario: &NewProjectScenario) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, scenarioKind: {}, scenario: {} }}",
+        quoted(scenario.workflow_slug.as_ref()),
+        quoted(scenario.slice_slug.as_ref()),
+        quoted(scenario.scenario_kind.as_str()),
+        quoted(scenario.scenario.as_ref())
+    )
+}
+
+fn lean_project_scenario_list(project_scenarios: &[ProjectScenario]) -> String {
+    let mut project_scenarios = project_scenarios
+        .iter()
+        .map(|scenario| {
+            (
+                scenario.workflow_slug(),
+                scenario.slice_slug(),
+                scenario.scenario_kind(),
+                scenario.scenario(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_scenarios.sort_unstable();
+    format!(
+        "[{}]",
+        project_scenarios
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, scenario_kind, scenario)| {
+                format!(
+                    "({}, {}, {}, {})",
+                    quoted(workflow_slug),
+                    quoted(slice_slug),
+                    quoted(scenario_kind),
+                    quoted(scenario)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_project_scenario_list(project_scenarios: &[ProjectScenario]) -> String {
+    let mut project_scenarios = project_scenarios
+        .iter()
+        .map(|scenario| {
+            (
+                scenario.workflow_slug(),
+                scenario.slice_slug(),
+                scenario.scenario_kind(),
+                scenario.scenario(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_scenarios.sort_unstable();
+    format!(
+        "[{}]",
+        project_scenarios
+            .into_iter()
+            .map(|(workflow_slug, slice_slug, scenario_kind, scenario)| {
+                format!(
+                    "{{ workflow: {}, slice: {}, scenarioKind: {}, scenario: {} }}",
+                    quoted(workflow_slug),
+                    quoted(slice_slug),
+                    quoted(scenario_kind),
+                    quoted(scenario)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
     )
 }
 
