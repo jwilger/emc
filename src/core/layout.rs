@@ -10,8 +10,8 @@ use crate::core::formal_project_facts::{
     ProjectAutomation, ProjectCommand, ProjectCommandError, ProjectCommandInput, ProjectDataFlow,
     ProjectEvent, ProjectEventAttribute, ProjectExternalPayload, ProjectExternalPayloadField,
     ProjectOutcome, ProjectReadModel, ProjectReadModelDefinition, ProjectReadModelField,
-    ProjectScenario, ProjectScenarioDefinition, ProjectStream, ProjectTranslation, ProjectView,
-    ProjectViewField,
+    ProjectScenario, ProjectScenarioDefinition, ProjectStream, ProjectTranslation,
+    ProjectTranslationDefinition, ProjectView, ProjectViewField,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{
@@ -115,6 +115,7 @@ pub struct ModeledProjectRootInventories {
     view_fields: Vec<ProjectViewField>,
     automations: Vec<ProjectAutomation>,
     translations: Vec<ProjectTranslation>,
+    translation_definitions: Vec<ProjectTranslationDefinition>,
     external_payloads: Vec<ProjectExternalPayload>,
     external_payload_fields: Vec<ProjectExternalPayloadField>,
     streams: Vec<ProjectStream>,
@@ -137,6 +138,7 @@ pub(crate) struct ModeledProjectRootInventoryParts {
     pub(crate) view_fields: Vec<ProjectViewField>,
     pub(crate) automations: Vec<ProjectAutomation>,
     pub(crate) translations: Vec<ProjectTranslation>,
+    pub(crate) translation_definitions: Vec<ProjectTranslationDefinition>,
     pub(crate) external_payloads: Vec<ProjectExternalPayload>,
     pub(crate) external_payload_fields: Vec<ProjectExternalPayloadField>,
     pub(crate) streams: Vec<ProjectStream>,
@@ -161,6 +163,7 @@ impl ModeledProjectRootInventories {
             view_fields: parts.view_fields,
             automations: parts.automations,
             translations: parts.translations,
+            translation_definitions: parts.translation_definitions,
             external_payloads: parts.external_payloads,
             external_payload_fields: parts.external_payload_fields,
             streams: parts.streams,
@@ -202,6 +205,7 @@ pub fn check_project(
             view_fields: &project_inventories.view_fields,
             automations: &project_inventories.automations,
             translations: &project_inventories.translations,
+            translation_definitions: &project_inventories.translation_definitions,
             external_payloads: &project_inventories.external_payloads,
             external_payload_fields: &project_inventories.external_payload_fields,
             streams: &project_inventories.streams,
@@ -319,6 +323,7 @@ struct ProjectRootInventories<'a> {
     view_fields: &'a [ProjectViewField],
     automations: &'a [ProjectAutomation],
     translations: &'a [ProjectTranslation],
+    translation_definitions: &'a [ProjectTranslationDefinition],
     external_payloads: &'a [ProjectExternalPayload],
     external_payload_fields: &'a [ProjectExternalPayloadField],
     streams: &'a [ProjectStream],
@@ -356,6 +361,8 @@ fn project_root_effects(
     let lean_model_view_field_list = lean_model_view_field_list(inventories.view_fields);
     let lean_model_automation_list = lean_model_automation_list(inventories.automations);
     let lean_model_translation_list = lean_model_translation_list(inventories.translations);
+    let lean_model_translation_definition_list =
+        lean_model_translation_definition_list(inventories.translation_definitions);
     let lean_model_external_payload_list =
         lean_model_external_payload_list(inventories.external_payloads);
     let lean_model_external_payload_field_list =
@@ -383,6 +390,8 @@ fn project_root_effects(
     let quint_model_view_field_list = quint_model_view_field_list(inventories.view_fields);
     let quint_model_automation_list = quint_model_automation_list(inventories.automations);
     let quint_model_translation_list = quint_model_translation_list(inventories.translations);
+    let quint_model_translation_definition_list =
+        quint_model_translation_definition_list(inventories.translation_definitions);
     let quint_model_external_payload_list =
         quint_model_external_payload_list(inventories.external_payloads);
     let quint_model_external_payload_field_list =
@@ -416,6 +425,7 @@ fn project_root_effects(
     let view_field_count = inventories.view_fields.len();
     let automation_count = inventories.automations.len();
     let translation_count = inventories.translations.len();
+    let translation_definition_count = inventories.translation_definitions.len();
     let external_payload_count = inventories.external_payloads.len();
     let external_payload_field_count = inventories.external_payload_fields.len();
     let event_count = inventories.events.len();
@@ -641,6 +651,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelTranslationDefinitions :"),
+            artifact_marker(format!(
+                "def modelTranslationDefinitions : List (String × String × String × String × String × String) := {lean_model_translation_definition_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelExternalPayloads :"),
             artifact_marker(format!(
                 "def modelExternalPayloads : List (String × String × String) := {lean_model_external_payload_list}"
@@ -844,6 +862,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelTranslationDefinitionsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelTranslationDefinitionsAreDeclared : modelTranslationDefinitions.length = {translation_definition_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelExternalPayloadsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelExternalPayloadsAreDeclared : modelExternalPayloads.length = {external_payload_count} := rfl"
@@ -1013,6 +1039,14 @@ fn project_root_effects(
             artifact_marker("  type ModelTranslation ="),
             artifact_marker(
                 "  type ModelTranslation = { workflow: str, slice: str, translation: str }",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelTranslationDefinition ="),
+            artifact_marker(
+                "  type ModelTranslationDefinition = { workflow: str, slice: str, translation: str, externalEvent: str, payloadContract: str, command: str }",
             ),
             quint_message.clone(),
         ),
@@ -1219,6 +1253,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelTranslationDefinitions:"),
+            artifact_marker(format!(
+                "  val modelTranslationDefinitions: List[ModelTranslationDefinition] = {quint_model_translation_definition_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelExternalPayloads:"),
             artifact_marker(format!(
                 "  val modelExternalPayloads: List[ModelExternalPayload] = {quint_model_external_payload_list}"
@@ -1417,6 +1459,14 @@ fn project_root_effects(
             artifact_marker("  val modelTranslationsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelTranslationsAreDeclared = modelTranslations.length() == {translation_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelTranslationDefinitionsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelTranslationDefinitionsAreDeclared = modelTranslationDefinitions.length() == {translation_definition_count}"
             )),
             quint_message.clone(),
         ),
@@ -3467,6 +3517,87 @@ fn quint_model_translation_list(project_translations: &[ProjectTranslation]) -> 
     )
 }
 
+fn lean_model_translation_definition_list(definitions: &[ProjectTranslationDefinition]) -> String {
+    let mut definitions = definitions
+        .iter()
+        .map(|definition| {
+            (
+                definition.workflow_slug(),
+                definition.slice_slug(),
+                definition.translation(),
+                definition.external_event(),
+                definition.payload_contract(),
+                definition.command(),
+            )
+        })
+        .collect::<Vec<_>>();
+    definitions.sort_unstable();
+    format!(
+        "[{}]",
+        definitions
+            .into_iter()
+            .map(
+                |(
+                    workflow_slug,
+                    slice_slug,
+                    translation,
+                    external_event,
+                    payload_contract,
+                    command,
+                )| {
+                    format!(
+                        "({}, {}, {}, {}, {}, {})",
+                        json_string(workflow_slug),
+                        json_string(slice_slug),
+                        json_string(translation),
+                        json_string(external_event),
+                        json_string(payload_contract),
+                        json_string(command)
+                    )
+                },
+            )
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_translation_definition_list(definitions: &[ProjectTranslationDefinition]) -> String {
+    let mut definitions = definitions
+        .iter()
+        .map(|definition| {
+            (
+                definition.workflow_slug(),
+                definition.slice_slug(),
+                definition.translation(),
+                definition.external_event(),
+                definition.payload_contract(),
+                definition.command(),
+            )
+        })
+        .collect::<Vec<_>>();
+    definitions.sort_unstable();
+    format!(
+        "[{}]",
+        definitions
+            .into_iter()
+            .map(
+                |(workflow_slug, slice_slug, translation, external_event, payload_contract, command)| {
+                    format!(
+                        "{{ workflow: {}, slice: {}, translation: {}, externalEvent: {}, payloadContract: {}, command: {} }}",
+                        json_string(workflow_slug),
+                        json_string(slice_slug),
+                        json_string(translation),
+                        json_string(external_event),
+                        json_string(payload_contract),
+                        json_string(command)
+                    )
+                },
+            )
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn lean_model_external_payload_list(
     project_external_payloads: &[ProjectExternalPayload],
 ) -> String {
@@ -3748,7 +3879,7 @@ fn model_digest(
     inventories: &ProjectRootInventories<'_>,
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-fields={};automations={};translations={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
+        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-fields={};automations={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
@@ -3766,6 +3897,7 @@ fn model_digest(
         digest_view_fields(inventories.view_fields),
         digest_automations(inventories.automations),
         digest_translations(inventories.translations),
+        digest_translation_definitions(inventories.translation_definitions),
         digest_external_payloads(inventories.external_payloads),
         digest_external_payload_fields(inventories.external_payload_fields),
         digest_streams(inventories.streams),
@@ -4130,6 +4262,34 @@ fn digest_translations(project_translations: &[ProjectTranslation]) -> String {
         .map(|(workflow_slug, slice_slug, translation)| {
             format!("{workflow_slug}/{slice_slug}/{translation}")
         })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_translation_definitions(definitions: &[ProjectTranslationDefinition]) -> String {
+    let mut definitions = definitions
+        .iter()
+        .map(|definition| {
+            (
+                definition.workflow_slug(),
+                definition.slice_slug(),
+                definition.translation(),
+                definition.external_event(),
+                definition.payload_contract(),
+                definition.command(),
+            )
+        })
+        .collect::<Vec<_>>();
+    definitions.sort_unstable();
+    definitions
+        .into_iter()
+        .map(
+            |(workflow_slug, slice_slug, translation, external_event, payload_contract, command)| {
+                format!(
+                    "{workflow_slug}/{slice_slug}/{translation}@{external_event}#{payload_contract}#{command}"
+                )
+            },
+        )
         .collect::<Vec<_>>()
         .join(",")
 }

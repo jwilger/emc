@@ -1061,6 +1061,18 @@ impl NewTranslationDefinition {
     pub fn name(&self) -> &TranslationName {
         &self.name
     }
+
+    pub fn external_event_name(&self) -> &TranslationExternalEventName {
+        &self.external_event_name
+    }
+
+    pub fn payload_contract_name(&self) -> &PayloadContractName {
+        &self.payload_contract_name
+    }
+
+    pub fn command_name(&self) -> &CommandName {
+        &self.command_name
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
