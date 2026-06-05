@@ -3,8 +3,8 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::types::{
-    AutomationName, CommandName, EventName, ReadModelName, SliceSlug, StreamName, TranslationName,
-    ViewName, WorkflowSlug,
+    AutomationName, CommandName, EventAttributeSourceName, EventName, ReadModelName, SliceSlug,
+    StreamName, TranslationName, ViewName, WorkflowSlug,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -117,6 +117,27 @@ impl NewProjectTranslation {
             workflow_slug,
             slice_slug,
             translation,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NewProjectExternalPayload {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    external_payload: EventAttributeSourceName,
+}
+
+impl NewProjectExternalPayload {
+    pub fn new(
+        workflow_slug: WorkflowSlug,
+        slice_slug: SliceSlug,
+        external_payload: EventAttributeSourceName,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            slice_slug,
+            external_payload,
         }
     }
 }
@@ -254,6 +275,27 @@ impl ProjectTranslation {
 
     pub fn translation(&self) -> &str {
         &self.translation
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectExternalPayload {
+    workflow_slug: String,
+    slice_slug: String,
+    external_payload: String,
+}
+
+impl ProjectExternalPayload {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn external_payload(&self) -> &str {
+        &self.external_payload
     }
 }
 
@@ -399,6 +441,24 @@ pub fn parse_quint_project_translations(
     )
 }
 
+pub fn parse_lean_project_external_payloads(
+    contents: &FileContents,
+) -> Result<Vec<ProjectExternalPayload>, FormalProjectFactError> {
+    external_payload_entries_from_list(
+        contents.as_ref(),
+        "def modelExternalPayloads : List (String × String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_external_payloads(
+    contents: &FileContents,
+) -> Result<Vec<ProjectExternalPayload>, FormalProjectFactError> {
+    external_payload_entries_from_list(
+        contents.as_ref(),
+        "val modelExternalPayloads: List[ModelExternalPayload] = ",
+    )
+}
+
 pub fn parse_lean_project_events(
     contents: &FileContents,
 ) -> Result<Vec<ProjectEvent>, FormalProjectFactError> {
@@ -446,6 +506,8 @@ pub fn add_project_command(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
@@ -456,6 +518,7 @@ pub fn add_project_command(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -483,6 +546,8 @@ pub fn add_project_command(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
@@ -493,6 +558,7 @@ pub fn add_project_command(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -542,6 +608,8 @@ pub fn add_project_read_model(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
@@ -552,6 +620,7 @@ pub fn add_project_read_model(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -581,6 +650,8 @@ pub fn add_project_read_model(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
@@ -591,6 +662,7 @@ pub fn add_project_read_model(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -640,6 +712,8 @@ pub fn add_project_view(
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
@@ -650,6 +724,7 @@ pub fn add_project_view(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -676,6 +751,8 @@ pub fn add_project_view(
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
@@ -686,6 +763,7 @@ pub fn add_project_view(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -735,6 +813,8 @@ pub fn add_project_automation(
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
@@ -745,6 +825,7 @@ pub fn add_project_automation(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -774,6 +855,8 @@ pub fn add_project_automation(
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
@@ -784,6 +867,7 @@ pub fn add_project_automation(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -833,6 +917,8 @@ pub fn add_project_translation(
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
@@ -843,6 +929,7 @@ pub fn add_project_translation(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -872,6 +959,8 @@ pub fn add_project_translation(
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
@@ -882,6 +971,7 @@ pub fn add_project_translation(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -895,6 +985,111 @@ pub fn add_project_translation(
         Effect::Report(report_line(format!(
             "added translation {} to project root",
             translation.translation.as_ref()
+        ))?),
+    ]))
+}
+
+pub fn add_project_external_payload(
+    lean_path: ProjectPath,
+    lean_contents: FileContents,
+    quint_path: ProjectPath,
+    quint_contents: FileContents,
+    external_payload: NewProjectExternalPayload,
+) -> Result<EffectPlan, FormalProjectFactError> {
+    let lean_record = lean_external_payload_record(&external_payload);
+    let quint_record = quint_external_payload_record(&external_payload);
+    let lean = append_record_if_missing(
+        lean_contents.as_ref(),
+        "def modelExternalPayloads : List (String × String × String) := ",
+        &lean_record,
+    )
+    .and_then(|contents| {
+        let external_payloads = external_payload_entries_from_list(
+            &contents,
+            "def modelExternalPayloads : List (String × String × String) := ",
+        )?;
+        replace_declaration(
+            &contents,
+            "theorem modelExternalPayloadsAreDeclared :",
+            &format!(
+                "theorem modelExternalPayloadsAreDeclared : modelExternalPayloads.length = {} := rfl",
+                external_payloads.len()
+            ),
+        )
+        .and_then(|contents| {
+            let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let views = parse_lean_project_views_from_contents_or_empty(&contents);
+            let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
+            let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let external_payloads = parse_lean_project_external_payloads_from_contents_or_empty(&contents);
+            let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
+            let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            update_lean_digest(
+                &contents,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    external_payloads: &external_payloads,
+                    streams: &streams,
+                    events: &events,
+                },
+            )
+        })
+    })?;
+    let quint = append_record_if_missing(
+        quint_contents.as_ref(),
+        "val modelExternalPayloads: List[ModelExternalPayload] = ",
+        &quint_record,
+    )
+    .and_then(|contents| {
+        let external_payloads = external_payload_entries_from_list(
+            &contents,
+            "val modelExternalPayloads: List[ModelExternalPayload] = ",
+        )?;
+        replace_declaration(
+            &contents,
+            "val modelExternalPayloadsAreDeclared =",
+            &format!(
+                "val modelExternalPayloadsAreDeclared = modelExternalPayloads.length() == {}",
+                external_payloads.len()
+            ),
+        )
+        .and_then(|contents| {
+            let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let views = parse_quint_project_views_from_contents_or_empty(&contents);
+            let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
+            let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_quint_project_external_payloads_from_contents_or_empty(&contents);
+            let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
+            let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            update_quint_digest(
+                &contents,
+                ProjectDigestInventories {
+                    commands: &commands,
+                    read_models: &read_models,
+                    views: &views,
+                    automations: &automations,
+                    translations: &translations,
+                    external_payloads: &external_payloads,
+                    streams: &streams,
+                    events: &events,
+                },
+            )
+        })
+    })?;
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(lean_path, file_contents(lean)?),
+        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::Report(report_line(format!(
+            "added external payload {} to project root",
+            external_payload.external_payload.as_ref()
         ))?),
     ]))
 }
@@ -932,6 +1127,8 @@ pub fn add_project_stream(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
@@ -941,6 +1138,7 @@ pub fn add_project_stream(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -969,6 +1167,8 @@ pub fn add_project_stream(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
+            let external_payloads =
+                parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
@@ -978,6 +1178,7 @@ pub fn add_project_stream(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -1030,6 +1231,10 @@ pub fn add_project_event(
             &contents,
             "def modelTranslations : List (String × String × String) := ",
         )?;
+        let external_payloads = external_payload_entries_from_list(
+            &contents,
+            "def modelExternalPayloads : List (String × String × String) := ",
+        )?;
         let streams = stream_entries_from_list(
             &contents,
             "def modelStreams : List (String × String × String) := ",
@@ -1055,6 +1260,7 @@ pub fn add_project_event(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -1082,6 +1288,10 @@ pub fn add_project_event(
             &contents,
             "val modelTranslations: List[ModelTranslation] = ",
         )?;
+        let external_payloads = external_payload_entries_from_list(
+            &contents,
+            "val modelExternalPayloads: List[ModelExternalPayload] = ",
+        )?;
         let streams =
             stream_entries_from_list(&contents, "val modelStreams: List[ModelStream] = ")?;
         let events = event_entries_from_list(&contents, "val modelEvents: List[ModelEvent] = ")?;
@@ -1102,6 +1312,7 @@ pub fn add_project_event(
                     views: &views,
                     automations: &automations,
                     translations: &translations,
+                    external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
                 },
@@ -1322,6 +1533,26 @@ fn parse_quint_project_translations_from_contents_or_empty(
         .unwrap_or_default()
 }
 
+fn parse_lean_project_external_payloads_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectExternalPayload> {
+    external_payload_entries_from_list(
+        contents,
+        "def modelExternalPayloads : List (String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_external_payloads_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectExternalPayload> {
+    external_payload_entries_from_list(
+        contents,
+        "val modelExternalPayloads: List[ModelExternalPayload] = ",
+    )
+    .unwrap_or_default()
+}
+
 fn parse_lean_project_streams_from_contents_or_empty(contents: &str) -> Vec<ProjectStream> {
     stream_entries_from_list(
         contents,
@@ -1469,6 +1700,33 @@ fn translation_entries_from_list(
     Ok(translations)
 }
 
+fn external_payload_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectExternalPayload>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut external_payloads = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let strings = quoted_strings(&record)?;
+            if strings.len() < 3 {
+                Err(FormalProjectFactError::new(
+                    "formal project external payload record is malformed",
+                ))
+            } else {
+                Ok(ProjectExternalPayload {
+                    workflow_slug: strings[0].clone(),
+                    slice_slug: strings[1].clone(),
+                    external_payload: strings[2].clone(),
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    external_payloads.sort();
+    external_payloads.dedup();
+    Ok(external_payloads)
+}
+
 fn parse_lean_project_events_from_contents_or_empty(contents: &str) -> Vec<ProjectEvent> {
     event_entries_from_list(
         contents,
@@ -1596,6 +1854,7 @@ struct ProjectDigestInventories<'a> {
     views: &'a [ProjectView],
     automations: &'a [ProjectAutomation],
     translations: &'a [ProjectTranslation],
+    external_payloads: &'a [ProjectExternalPayload],
     streams: &'a [ProjectStream],
     events: &'a [ProjectEvent],
 }
@@ -1657,16 +1916,18 @@ fn digest_with_project_inventories(
         .or_else(|| current_digest.split_once(";views="))
         .or_else(|| current_digest.split_once(";automations="))
         .or_else(|| current_digest.split_once(";translations="))
+        .or_else(|| current_digest.split_once(";external-payloads="))
         .or_else(|| current_digest.split_once(";streams="))
         .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};commands={};read-models={};views={};automations={};translations={};streams={};events={}",
+        "{prefix};commands={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
         digest_commands(inventories.commands),
         digest_read_models(inventories.read_models),
         digest_views(inventories.views),
         digest_automations(inventories.automations),
         digest_translations(inventories.translations),
+        digest_external_payloads(inventories.external_payloads),
         digest_streams(inventories.streams),
         digest_events(inventories.events)
     )
@@ -1726,6 +1987,21 @@ fn digest_translations(translations: &[ProjectTranslation]) -> String {
             format!(
                 "{}/{}/{}",
                 translation.workflow_slug, translation.slice_slug, translation.translation
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_external_payloads(external_payloads: &[ProjectExternalPayload]) -> String {
+    external_payloads
+        .iter()
+        .map(|external_payload| {
+            format!(
+                "{}/{}/{}",
+                external_payload.workflow_slug,
+                external_payload.slice_slug,
+                external_payload.external_payload
             )
         })
         .collect::<Vec<_>>()
@@ -1875,6 +2151,24 @@ fn quint_translation_record(translation: &NewProjectTranslation) -> String {
         quoted(translation.workflow_slug.as_ref()),
         quoted(translation.slice_slug.as_ref()),
         quoted(translation.translation.as_ref())
+    )
+}
+
+fn lean_external_payload_record(external_payload: &NewProjectExternalPayload) -> String {
+    format!(
+        "({}, {}, {})",
+        quoted(external_payload.workflow_slug.as_ref()),
+        quoted(external_payload.slice_slug.as_ref()),
+        quoted(external_payload.external_payload.as_ref())
+    )
+}
+
+fn quint_external_payload_record(external_payload: &NewProjectExternalPayload) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, externalPayload: {} }}",
+        quoted(external_payload.workflow_slug.as_ref()),
+        quoted(external_payload.slice_slug.as_ref()),
+        quoted(external_payload.external_payload.as_ref())
     )
 }
 
