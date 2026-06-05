@@ -625,6 +625,12 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
+            artifact_marker("    \"workflowExternalTriggerPayloadContractsHaveProvenance\""),
+            artifact_marker("    \"workflowExternalTriggerPayloadContractsHaveProvenance\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
             artifact_marker("    \"workflowTransitionsHaveRequiredEvidence\""),
             artifact_marker("    \"workflowTransitionsHaveRequiredEvidence\","),
             quint_config_message.clone(),
