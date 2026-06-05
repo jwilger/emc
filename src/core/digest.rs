@@ -134,7 +134,7 @@ fn owned_definitions_digest(
         .iter()
         .map(|definition| {
             format!(
-                "{}:{}:{}:{}:{}:{}",
+                "{}:{}:{}:{}:{}:{}:{}",
                 definition.source_slice().as_ref(),
                 definition.definition_kind().as_ref(),
                 definition.definition_name().as_ref(),
@@ -146,7 +146,10 @@ fn owned_definitions_digest(
                     .map_or("", |source_provenance| source_provenance.as_ref()),
                 definition
                     .event_participation()
-                    .map_or("", |event_participation| event_participation.as_ref())
+                    .map_or("", |event_participation| event_participation.as_ref()),
+                definition
+                    .view_role()
+                    .map_or("", |view_role| view_role.as_ref())
             )
         })
         .collect::<Vec<_>>()

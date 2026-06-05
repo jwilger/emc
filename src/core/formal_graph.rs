@@ -15,7 +15,7 @@ use crate::core::types::{
     WorkflowSliceDetails, WorkflowSlug, WorkflowStepRelationshipName, WorkflowTransitionEndpoint,
     WorkflowTransitionEvidenceRecord, WorkflowTransitionEvidenceRecords,
     WorkflowTransitionEvidenceText, WorkflowTransitionKind, WorkflowTransitionRecord,
-    WorkflowTransitionRecords,
+    WorkflowTransitionRecords, WorkflowViewRole,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -456,21 +456,37 @@ fn parse_workflow_owned_definitions(
     if strings.is_empty() {
         return Ok(Vec::new());
     }
-    if strings.len() % 6 != 0 {
+    if strings.len() % 7 != 0 {
         return Err(FormalGraphError::new(
-            "workflow owned definition declarations must contain groups of 6 strings",
+            "workflow owned definition declarations must contain groups of 7 strings",
         ));
     }
     strings
-        .chunks_exact(6)
+        .chunks_exact(7)
         .map(|chunk| {
-            if chunk[3].is_empty() && chunk[4].is_empty() && chunk[5].is_empty() {
+            if chunk[3].is_empty()
+                && chunk[4].is_empty()
+                && chunk[5].is_empty()
+                && chunk[6].is_empty()
+            {
                 Ok(WorkflowOwnedDefinitionRecord::new(
                     transition_endpoint(&chunk[0])?,
                     workflow_owned_definition_kind(&chunk[1])?,
                     workflow_owned_definition_name(&chunk[2])?,
                 ))
-            } else if chunk[5].is_empty() {
+            } else if chunk[3].is_empty() && chunk[4].is_empty() && chunk[5].is_empty() {
+                Ok(WorkflowOwnedDefinitionRecord::new_with_view_role(
+                    transition_endpoint(&chunk[0])?,
+                    workflow_owned_definition_kind(&chunk[1])?,
+                    workflow_owned_definition_name(&chunk[2])?,
+                    workflow_view_role(&chunk[6])?,
+                )
+                .ok_or_else(|| {
+                    FormalGraphError::new(
+                        "workflow owned definition view roles require definition kind view",
+                    )
+                })?)
+            } else if chunk[5].is_empty() && chunk[6].is_empty() {
                 Ok(WorkflowOwnedDefinitionRecord::new_with_event_identity(
                     transition_endpoint(&chunk[0])?,
                     workflow_owned_definition_kind(&chunk[1])?,
@@ -478,7 +494,7 @@ fn parse_workflow_owned_definitions(
                     stream_name(&chunk[3])?,
                     model_description(chunk[4].clone())?,
                 ))
-            } else {
+            } else if chunk[6].is_empty() {
                 Ok(
                     WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
                         transition_endpoint(&chunk[0])?,
@@ -489,6 +505,10 @@ fn parse_workflow_owned_definitions(
                         workflow_event_participation(&chunk[5])?,
                     ),
                 )
+            } else {
+                Err(FormalGraphError::new(
+                    "workflow owned definition declarations cannot combine event participation and view role",
+                ))
             }
         })
         .collect()
@@ -746,6 +766,11 @@ fn workflow_event_participation(
     value: &str,
 ) -> Result<WorkflowEventParticipation, FormalGraphError> {
     WorkflowEventParticipation::try_new(value.to_owned())
+        .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn workflow_view_role(value: &str) -> Result<WorkflowViewRole, FormalGraphError> {
+    WorkflowViewRole::try_new(value.to_owned())
         .map_err(|error| FormalGraphError::new(error.to_string()))
 }
 

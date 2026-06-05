@@ -135,7 +135,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure WorkflowOwnedDefinition where\n  sourceSlice : String\n  definitionKind : String\n  definitionName : String\n  definitionStream : String\n  sourceProvenance : String\n  eventParticipation : String"
+                "structure WorkflowOwnedDefinition where\n  sourceSlice : String\n  definitionKind : String\n  definitionName : String\n  definitionStream : String\n  sourceProvenance : String\n  eventParticipation : String\n  viewRole : String"
             ),
             "Lean workflow artifacts must represent cross-slice definition ownership with event identity fields"
         );
@@ -164,7 +164,7 @@ mod tests {
             "Lean workflow artifacts must carry command-local errors so outcome transitions cannot use them"
         );
         assert!(
-            lean.contains("def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"external_payload\", definitionName := \"CallbackReceivedPayload\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\" }]"),
+            lean.contains("def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"external_payload\", definitionName := \"CallbackReceivedPayload\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"\" }]"),
             "Lean workflow artifacts must carry the authored cross-slice ownership inventory"
         );
         assert!(
@@ -495,9 +495,27 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def workflowOwnsEntryView (sourceSlice : String) (viewName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == \"view\" && definition.definitionName == viewName && workflowViewRoleIsEntry definition)"
+            ),
+            "Lean workflow artifacts must define workflow-scoped entry view ownership"
+        );
+        assert!(
+            lean.contains(
+                "def workflowNavigationTransitionTargetsEntryView (transition : WorkflowTransition) : Bool := transition.kind != \"navigation\" || workflowOwnsEntryView transition.target transition.trigger"
+            ),
+            "Lean workflow artifacts must require navigation transitions to target entry views"
+        );
+        assert!(
+            lean.contains(
                 "def workflowNavigationTransitionsResolveControlsAndViews : Bool := workflowTransitions.all (fun transition => workflowNavigationTransitionSourceOwnsControl transition && workflowNavigationTransitionTargetsOwnedView transition)"
             ),
             "Lean workflow artifacts must expose navigation transition control/view resolution as a proof obligation"
+        );
+        assert!(
+            lean.contains(
+                "def workflowNavigationTransitionsResolveToEntryViews : Bool := workflowTransitions.all workflowNavigationTransitionTargetsEntryView"
+            ),
+            "Lean workflow artifacts must expose navigation transition entry-view resolution as a proof obligation"
         );
         assert!(
             lean.contains(
@@ -594,6 +612,12 @@ mod tests {
                 "theorem workflowNavigationTransitionsResolveControlsAndViewsIsStable : workflowNavigationTransitionsResolveControlsAndViews = true := rfl"
             ),
             "Lean workflow artifacts must prove current navigation transitions resolve source controls and target views"
+        );
+        assert!(
+            lean.contains(
+                "theorem workflowNavigationTransitionsResolveToEntryViewsIsStable : workflowNavigationTransitionsResolveToEntryViews = true := rfl"
+            ),
+            "Lean workflow artifacts must prove current navigation transitions target entry views"
         );
         assert!(
             lean.contains(

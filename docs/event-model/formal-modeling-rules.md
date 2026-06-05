@@ -206,7 +206,7 @@ A model is complete and valid only when all of these are true:
 - ✅ Command transitions come from controls owned by source views.
 - ✅ Command transitions target the slice that owns the command.
 - ✅ Navigation transitions come from controls owned by source views.
-- 🟡 Navigation transitions resolve to the target workflow step's entry view.
+- ✅ Navigation transitions resolve to the target workflow step's entry view.
 - ✅ External-trigger transitions declare trigger payload contracts.
 - ✅ Workflow exits name the target workflow and why the exit is reached.
 
