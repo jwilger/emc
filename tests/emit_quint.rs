@@ -388,7 +388,7 @@ mod tests {
             "type BitLevelDataFlow = { datum: str, source: str, transformationSemantics: str, target: str, bitEncoding: str }"
         ));
         assert!(quint.contains(
-            "type CommandInput = { name: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str }"
+            "type CommandInput = { name: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str }"
         ));
         assert!(quint.contains(
             "type CommandErrorDefinition = { name: str, scenarioName: str, recoveryKind: str }"
@@ -591,6 +591,12 @@ mod tests {
         ));
         assert!(quint.contains(
             "val commandInputsSourcedFromEventStreamsResolve = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputEventStreamSourceResolves(command, input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
+        ));
+        assert!(quint.contains(
+            "def commandInputExternalPayloadSourceResolves(input) = input.sourceKind != \"external_payload\" or (input.externalPayloadSourceName != \"\" and input.externalPayloadSourceField != \"\" and sliceExternalPayloads.select(payload => payload.name == input.externalPayloadSourceName and payload.fields.select(payloadField => payloadField.name == input.externalPayloadSourceField).length() > 0).length() > 0)"
+        ));
+        assert!(quint.contains(
+            "val commandInputsSourcedFromExternalPayloadsResolve = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputExternalPayloadSourceResolves(input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(
             "def bitLevelFlowCoversTarget(target, datum) = sliceBitLevelDataFlows.select(flow => flow.target == target and flow.datum == datum and flow.source != \"\" and flow.transformationSemantics != \"\" and flow.bitEncoding != \"\").length() > 0"

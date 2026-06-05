@@ -694,7 +694,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure CommandInput where\n  name : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String"
+                "structure CommandInput where\n  name : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String"
             ),
             "Lean slice artifacts must represent command input source-chain provenance"
         );
@@ -1077,6 +1077,18 @@ mod tests {
                 "def commandInputsSourcedFromEventStreamsResolve : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all (commandInputEventStreamSourceResolves command))"
             ),
             "Lean slice artifacts must prove event-stream command input sources resolve"
+        );
+        assert!(
+            lean.contains(
+                "def commandInputExternalPayloadSourceResolves (input : CommandInput) : Bool := input.sourceKind != \"external_payload\" || (input.externalPayloadSourceName.isEmpty == false && input.externalPayloadSourceField.isEmpty == false && sliceExternalPayloads.any (fun payload => payload.name == input.externalPayloadSourceName && payload.fields.any (fun payloadField => payloadField.name == input.externalPayloadSourceField)))"
+            ),
+            "Lean slice artifacts must require external-payload command inputs to name payload fields"
+        );
+        assert!(
+            lean.contains(
+                "def commandInputsSourcedFromExternalPayloadsResolve : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputExternalPayloadSourceResolves)"
+            ),
+            "Lean slice artifacts must prove external-payload command input sources resolve"
         );
         assert!(
             lean.contains(

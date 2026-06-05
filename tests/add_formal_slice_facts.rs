@@ -732,7 +732,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\", inputs := [{ name := \"ticket_title\", sourceKind := \"actor\", sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\" }], emittedEvents := [\"TicketCaptured\"], observedStreams := [], errors := [], singleton := true, repeatBehavior := \"idempotent\" }]"
+                "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\", inputs := [{ name := \"ticket_title\", sourceKind := \"actor\", sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\" }], emittedEvents := [\"TicketCaptured\"], observedStreams := [], errors := [], singleton := true, repeatBehavior := \"idempotent\" }]"
             ),
             "Lean slice artifact must carry the authored command definition"
         );
@@ -742,13 +742,13 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val sliceCommandDefinitions: List[CommandDefinition] = [{ name: \"CaptureTicket\", inputs: [{ name: \"ticket_title\", sourceKind: \"actor\", sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\" }], emittedEvents: [\"TicketCaptured\"], observedStreams: [], errors: [], singleton: true, repeatBehavior: \"idempotent\" }]"
+                "val sliceCommandDefinitions: List[CommandDefinition] = [{ name: \"CaptureTicket\", inputs: [{ name: \"ticket_title\", sourceKind: \"actor\", sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\", externalPayloadSourceName: \"\", externalPayloadSourceField: \"\" }], emittedEvents: [\"TicketCaptured\"], observedStreams: [], errors: [], singleton: true, repeatBehavior: \"idempotent\" }]"
             ),
             "Quint slice artifact must carry the authored command definition"
         );
         assert!(
             lean_root.contains(
-                "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"CaptureTicket\", \"ticket_title\", \"actor\", \"title field on the intake form\", [\"actor keystrokes -> form field\"], \"\", \"\")]"
+                "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"CaptureTicket\", \"ticket_title\", \"actor\", \"title field on the intake form\", [\"actor keystrokes -> form field\"], \"\", \"\", \"\", \"\")]"
             ),
             "Lean project root must inventory authored command input source chains"
         );
@@ -760,13 +760,13 @@ mod tests {
         );
         assert!(
             quint_root.contains(
-                "type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str }"
+                "type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str }"
             ),
             "Quint project root must type authored command input source-chain inventory entries"
         );
         assert!(
             quint_root.contains(
-                "val modelCommandInputs: List[ModelCommandInput] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", command: \"CaptureTicket\", input: \"ticket_title\", sourceKind: \"actor\", sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\" }]"
+                "val modelCommandInputs: List[ModelCommandInput] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", command: \"CaptureTicket\", input: \"ticket_title\", sourceKind: \"actor\", sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\", externalPayloadSourceName: \"\", externalPayloadSourceField: \"\" }]"
             ),
             "Quint project root must inventory authored command input source chains"
         );
@@ -777,13 +777,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##"
+                "command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field####"
             ),
             "Lean project root digest must include authored command input source chains"
         );
         assert!(
             quint_root.contains(
-                "command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##"
+                "command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field####"
             ),
             "Quint project root digest must include authored command input source chains"
         );
@@ -949,6 +949,195 @@ mod tests {
             quint.contains("eventStreamSourceEvent: \"TicketCaptured\"")
                 && quint.contains("eventStreamSourceAttribute: \"status\""),
             "Quint slice artifact must link event-stream command inputs to an upstream event attribute"
+        );
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["verify"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    #[test]
+    fn add_command_definition_records_external_payload_input_source() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = initialized_project_with_slice()?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "slice",
+                "--slug",
+                "capture-ticket",
+                "--type",
+                "state_change",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "external-payload",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "intake_webhook",
+                "--field",
+                "ticket_title",
+                "--field-provenance",
+                "intake_webhook.ticket_title supplied by the external ticket intake system",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "command",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "CaptureTicket",
+                "--input",
+                "ticket_title",
+                "--input-source",
+                "external_payload",
+                "--input-description",
+                "ticket title loaded from the intake webhook payload",
+                "--input-provenance",
+                "intake_webhook.ticket_title -> CaptureTicket.ticket_title",
+                "--emits",
+                "TicketCaptured",
+                "--source-payload",
+                "intake_webhook",
+                "--source-field",
+                "ticket_title",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added command CaptureTicket to slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "tickets",
+                "--attribute",
+                "ticket_title",
+                "--attribute-source",
+                "command_input",
+                "--attribute-source-name",
+                "ticket_title",
+                "--attribute-source-field",
+                "value",
+                "--attribute-provenance",
+                "CaptureTicket.ticket_title",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "outcome",
+                "--slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--events",
+                "TicketCaptured",
+                "--externally-relevant",
+                "false",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "intake_webhook.ticket_title",
+                "--transformation",
+                "copied from webhook payload into command input",
+                "--target",
+                "CaptureTicket",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "CaptureTicket.ticket_title",
+                "--transformation",
+                "copied into TicketCaptured.ticket_title",
+                "--target",
+                "TicketCaptured",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            lean.contains("externalPayloadSourceName := \"intake_webhook\"")
+                && lean.contains("externalPayloadSourceField := \"ticket_title\""),
+            "Lean slice artifact must link external-payload command inputs to a payload field"
+        );
+        assert!(
+            lean.contains(
+                "theorem commandInputsSourcedFromExternalPayloadsResolveIsStable : commandInputsSourcedFromExternalPayloadsResolve = true"
+            ),
+            "Lean slice artifact must prove external-payload command inputs resolve to payload fields"
+        );
+        assert!(
+            quint.contains("externalPayloadSourceName: \"intake_webhook\"")
+                && quint.contains("externalPayloadSourceField: \"ticket_title\""),
+            "Quint slice artifact must link external-payload command inputs to a payload field"
+        );
+        assert!(
+            quint.contains("val commandInputsSourcedFromExternalPayloadsResolve"),
+            "Quint slice artifact must verify external-payload command inputs resolve to payload fields"
         );
 
         Command::cargo_bin("emc")?
@@ -1138,13 +1327,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\", inputs := [{ name := \"ticket_title\", sourceKind := \"actor\", sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\" }], emittedEvents := [\"TicketCaptured\"], observedStreams := [], errors := [{ name := \"DuplicateTicket\", scenarioName := \"Duplicate ticket is rejected\", recoveryKind := \"retry\" }], singleton := false, repeatBehavior := \"\" }]"
+                "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\", inputs := [{ name := \"ticket_title\", sourceKind := \"actor\", sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\" }], emittedEvents := [\"TicketCaptured\"], observedStreams := [], errors := [{ name := \"DuplicateTicket\", scenarioName := \"Duplicate ticket is rejected\", recoveryKind := \"retry\" }], singleton := false, repeatBehavior := \"\" }]"
             ),
             "Lean slice artifact must carry authored command errors and recovery"
         );
         assert!(
             quint.contains(
-                "val sliceCommandDefinitions: List[CommandDefinition] = [{ name: \"CaptureTicket\", inputs: [{ name: \"ticket_title\", sourceKind: \"actor\", sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\" }], emittedEvents: [\"TicketCaptured\"], observedStreams: [], errors: [{ name: \"DuplicateTicket\", scenarioName: \"Duplicate ticket is rejected\", recoveryKind: \"retry\" }], singleton: false, repeatBehavior: \"\" }]"
+                "val sliceCommandDefinitions: List[CommandDefinition] = [{ name: \"CaptureTicket\", inputs: [{ name: \"ticket_title\", sourceKind: \"actor\", sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\", externalPayloadSourceName: \"\", externalPayloadSourceField: \"\" }], emittedEvents: [\"TicketCaptured\"], observedStreams: [], errors: [{ name: \"DuplicateTicket\", scenarioName: \"Duplicate ticket is rejected\", recoveryKind: \"retry\" }], singleton: false, repeatBehavior: \"\" }]"
             ),
             "Quint slice artifact must carry authored command errors and recovery"
         );
@@ -1179,13 +1368,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Duplicate ticket is rejected;scenario-definitions=open-ticket/capture-ticket/contract/Duplicate ticket is rejected@tickets stream already contains duplicate title~CaptureTicket handles the duplicate title~DuplicateTicket is returned#tickets#tickets#command#CaptureTicket#DuplicateTicket;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~captured without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=open-ticket/capture-ticket/CaptureTicket/DuplicateTicket@Duplicate ticket is rejected#retry;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value#CaptureTicket.ticket_title\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Duplicate ticket is rejected;scenario-definitions=open-ticket/capture-ticket/contract/Duplicate ticket is rejected@tickets stream already contains duplicate title~CaptureTicket handles the duplicate title~DuplicateTicket is returned#tickets#tickets#command#CaptureTicket#DuplicateTicket;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~captured without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=open-ticket/capture-ticket/CaptureTicket/DuplicateTicket@Duplicate ticket is rejected#retry;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field####;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value#CaptureTicket.ticket_title\""
             ),
             "Lean project root digest must include authored command error inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Duplicate ticket is rejected;scenario-definitions=open-ticket/capture-ticket/contract/Duplicate ticket is rejected@tickets stream already contains duplicate title~CaptureTicket handles the duplicate title~DuplicateTicket is returned#tickets#tickets#command#CaptureTicket#DuplicateTicket;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~captured without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=open-ticket/capture-ticket/CaptureTicket/DuplicateTicket@Duplicate ticket is rejected#retry;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value#CaptureTicket.ticket_title\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Duplicate ticket is rejected;scenario-definitions=open-ticket/capture-ticket/contract/Duplicate ticket is rejected@tickets stream already contains duplicate title~CaptureTicket handles the duplicate title~DuplicateTicket is returned#tickets#tickets#command#CaptureTicket#DuplicateTicket;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~captured without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=open-ticket/capture-ticket/CaptureTicket/DuplicateTicket@Duplicate ticket is rejected#retry;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field####;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value#CaptureTicket.ticket_title\""
             ),
             "Quint project root digest must include authored command error inventory"
         );
@@ -1496,13 +1685,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~captured without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=open-ticket/capture-ticket/intake_webhook;external-payload-fields=open-ticket/capture-ticket/intake_webhook/ticket_title@intake_webhook.ticket_title supplied by the external ticket intake system#UTF-8 string;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#CaptureTicket.ticket_title\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~captured without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field####;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=open-ticket/capture-ticket/intake_webhook;external-payload-fields=open-ticket/capture-ticket/intake_webhook/ticket_title@intake_webhook.ticket_title supplied by the external ticket intake system#UTF-8 string;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#CaptureTicket.ticket_title\""
             ),
             "Lean project root digest must include authored external payload inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~captured without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=open-ticket/capture-ticket/intake_webhook;external-payload-fields=open-ticket/capture-ticket/intake_webhook/ticket_title@intake_webhook.ticket_title supplied by the external ticket intake system#UTF-8 string;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#CaptureTicket.ticket_title\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~captured without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field####;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=open-ticket/capture-ticket/intake_webhook;external-payload-fields=open-ticket/capture-ticket/intake_webhook/ticket_title@intake_webhook.ticket_title supplied by the external ticket intake system#UTF-8 string;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#CaptureTicket.ticket_title\""
             ),
             "Quint project root digest must include authored external payload inventory"
         );
@@ -1670,13 +1859,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~captured without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#CaptureTicket.ticket_title\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~captured without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field####;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#CaptureTicket.ticket_title\""
             ),
             "Lean project root digest must include authored outcome inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~captured without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#CaptureTicket.ticket_title\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~captured without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field####;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#CaptureTicket.ticket_title\""
             ),
             "Quint project root digest must include authored outcome inventory"
         );
@@ -2175,13 +2364,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@title field on the intake form~copied without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value#CaptureTicket.ticket_title\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@title field on the intake form~copied without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field####;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value#CaptureTicket.ticket_title\""
             ),
             "Lean project root digest must include authored command, stream, event, and event attribute inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@title field on the intake form~copied without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value#CaptureTicket.ticket_title\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~copied into TicketCaptured.ticket_title~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@title field on the intake form~copied without normalization~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field####;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value#CaptureTicket.ticket_title\""
             ),
             "Quint project root digest must include authored command, stream, event, and event attribute inventory"
         );
