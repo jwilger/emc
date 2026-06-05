@@ -45,6 +45,33 @@ mod tests {
             "Quint artifact must represent the added business workflow"
         );
 
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+
+        assert!(
+            lean_root.contains("def modelWorkflows : List String := [\"open-ticket\"]"),
+            "Lean root artifact must explicitly enumerate modeled workflows"
+        );
+        assert!(
+            lean_root
+                .contains("theorem modelWorkflowsAreDeclared : modelWorkflows.length = 1 := rfl"),
+            "Lean root artifact must prove the modeled workflow registry"
+        );
+        assert!(
+            quint_root.contains("val modelWorkflows: List[str] = [\"open-ticket\"]"),
+            "Quint root artifact must explicitly enumerate modeled workflows"
+        );
+        assert!(
+            quint_root.contains("val modelWorkflowsAreDeclared = modelWorkflows.length() == 1"),
+            "Quint root artifact must expose the modeled workflow registry invariant"
+        );
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
         Ok(())
     }
 

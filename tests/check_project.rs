@@ -310,6 +310,53 @@ mod tests {
     }
 
     #[test]
+    fn check_reports_project_root_workflow_registry_drift() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let lean_root_path = temp_dir.path().join("model/lean/RepairDesk.lean");
+        let lean_root = read_to_string(&lean_root_path)?;
+        write(
+            &lean_root_path,
+            lean_root.replace(
+                "def modelWorkflows : List String := [\"open-ticket\"]",
+                "def modelWorkflows : List String := []",
+            ),
+        )?;
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Lean project root drift for Repair Desk",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_reports_project_quint_config_drift() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 

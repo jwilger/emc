@@ -103,7 +103,7 @@ pub fn check_project(
         .iter()
         .map(modeled_workflow_layout)
         .collect::<Vec<_>>();
-    let root_effects = project_root_effects(&project_name, &module_name);
+    let root_effects = project_root_effects(&project_name, &module_name, &modeled_workflows);
     let lean_artifact_paths = modeled_artifact_paths(
         [
             project_path("model/lean/lakefile.lean"),
@@ -199,9 +199,15 @@ fn modeled_slice_artifact_paths(
         .collect()
 }
 
-fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Effect> {
+fn project_root_effects(
+    project_name: &ProjectName,
+    module_name: &str,
+    modeled_workflows: &[ModeledWorkflowLayout],
+) -> Vec<Effect> {
     let project_name_text = project_name.as_ref();
     let model_version = "0.1.0";
+    let workflow_slug_list = workflow_slug_list(modeled_workflows);
+    let workflow_count = modeled_workflows.len();
     let manifest_path = project_path("emc.toml");
     let lean_path = project_path(format!("model/lean/{module_name}.lean"));
     let lakefile_path = project_path("model/lean/lakefile.lean");
@@ -272,10 +278,26 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelWorkflows :"),
+            artifact_marker(format!(
+                "def modelWorkflows : List String := {workflow_slug_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelVersionIsStable"),
             artifact_marker(format!(
                 "theorem modelVersionIsStable : modelVersion = {} := rfl",
                 json_string(model_version)
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelWorkflowsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelWorkflowsAreDeclared : modelWorkflows.length = {workflow_count} := rfl"
             )),
             lean_message.clone(),
         ),
@@ -302,10 +324,26 @@ fn project_root_effects(project_name: &ProjectName, module_name: &str) -> Vec<Ef
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelWorkflows:"),
+            artifact_marker(format!(
+                "  val modelWorkflows: List[str] = {workflow_slug_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelVersionStable ="),
             artifact_marker(format!(
                 "  val modelVersionStable = modelVersion == {}",
                 json_string(model_version)
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelWorkflowsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelWorkflowsAreDeclared = modelWorkflows.length() == {workflow_count}"
             )),
             quint_message.clone(),
         ),
@@ -1115,6 +1153,17 @@ fn workflow_exit_targets(workflow: &FormalWorkflowGraph) -> Vec<String> {
         .filter(|transition| transition.kind().as_ref().starts_with("workflow_exit:"))
         .map(|transition| json_string(transition.target().as_ref()))
         .collect()
+}
+
+fn workflow_slug_list(modeled_workflows: &[ModeledWorkflowLayout]) -> String {
+    format!(
+        "[{}]",
+        modeled_workflows
+            .iter()
+            .map(|workflow| json_string(workflow.slug().as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
 }
 
 fn module_name(project_name: &ProjectName) -> String {
