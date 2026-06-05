@@ -3,8 +3,8 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::formal_slice_facts::{
-    CommandErrorDefinitions, NewBitLevelDataFlow, NewCommandErrorDefinition, OutcomeEventNames,
-    ScenarioKind,
+    CommandErrorDefinitions, NewBitLevelDataFlow, NewCommandDefinition, NewCommandErrorDefinition,
+    NewCommandInput, OutcomeEventNames, ScenarioKind,
 };
 use crate::core::types::{
     AutomationName, BitEncodingSemantics, CommandErrorName, CommandErrorRecoveryKind, CommandName,
@@ -35,6 +35,7 @@ pub struct NewProjectCommand {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     command: CommandName,
+    command_inputs: Vec<NewProjectCommandInput>,
     command_errors: Vec<NewProjectCommandError>,
 }
 
@@ -44,8 +45,24 @@ impl NewProjectCommand {
             workflow_slug,
             slice_slug,
             command,
+            command_inputs: Vec::new(),
             command_errors: Vec::new(),
         }
+    }
+
+    pub fn with_input(mut self, input: &NewCommandInput) -> Self {
+        self.command_inputs = vec![NewProjectCommandInput::from_command_input(&self, input)];
+        self
+    }
+
+    pub fn from_command(workflow_slug: WorkflowSlug, command: &NewCommandDefinition) -> Self {
+        Self::new(
+            workflow_slug,
+            command.slice_slug().clone(),
+            command.name().clone(),
+        )
+        .with_input(command.input())
+        .with_errors(command.errors().clone())
     }
 
     pub fn with_errors(mut self, errors: CommandErrorDefinitions) -> Self {
@@ -55,6 +72,36 @@ impl NewProjectCommand {
             .map(|error| NewProjectCommandError::from_command_error(&self, error))
             .collect();
         self
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NewProjectCommandInput {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    command: CommandName,
+    input: DatumName,
+    source_kind: String,
+    source_description: String,
+    provenance_chain: Vec<String>,
+}
+
+impl NewProjectCommandInput {
+    fn from_command_input(command: &NewProjectCommand, input: &NewCommandInput) -> Self {
+        Self {
+            workflow_slug: command.workflow_slug.clone(),
+            slice_slug: command.slice_slug.clone(),
+            command: command.command.clone(),
+            input: input.name().clone(),
+            source_kind: input.source_kind().as_ref().to_owned(),
+            source_description: input.source_description().as_ref().to_owned(),
+            provenance_chain: input
+                .provenance_chain()
+                .as_slice()
+                .iter()
+                .map(|hop| hop.as_ref().to_owned())
+                .collect(),
+        }
     }
 }
 
@@ -330,6 +377,47 @@ impl ProjectCommand {
 
     pub fn command(&self) -> &str {
         &self.command
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectCommandInput {
+    workflow_slug: String,
+    slice_slug: String,
+    command: String,
+    input: String,
+    source_kind: String,
+    source_description: String,
+    provenance_chain: Vec<String>,
+}
+
+impl ProjectCommandInput {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn command(&self) -> &str {
+        &self.command
+    }
+
+    pub fn input(&self) -> &str {
+        &self.input
+    }
+
+    pub fn source_kind(&self) -> &str {
+        &self.source_kind
+    }
+
+    pub fn source_description(&self) -> &str {
+        &self.source_description
+    }
+
+    pub fn provenance_chain(&self) -> &[String] {
+        &self.provenance_chain
     }
 }
 
@@ -699,6 +787,24 @@ pub fn parse_quint_project_commands(
     )
 }
 
+pub fn parse_lean_project_command_inputs(
+    contents: &FileContents,
+) -> Result<Vec<ProjectCommandInput>, FormalProjectFactError> {
+    command_input_entries_from_list(
+        contents.as_ref(),
+        "def modelCommandInputs : List (String × String × String × String × String × String × List String) := ",
+    )
+}
+
+pub fn parse_quint_project_command_inputs(
+    contents: &FileContents,
+) -> Result<Vec<ProjectCommandInput>, FormalProjectFactError> {
+    command_input_entries_from_list(
+        contents.as_ref(),
+        "val modelCommandInputs: List[ModelCommandInput] = ",
+    )
+}
+
 pub fn parse_lean_project_command_errors(
     contents: &FileContents,
 ) -> Result<Vec<ProjectCommandError>, FormalProjectFactError> {
@@ -862,6 +968,8 @@ pub fn add_project_scenario(
             let command_errors =
                 parse_lean_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -878,6 +986,7 @@ pub fn add_project_scenario(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -921,6 +1030,8 @@ pub fn add_project_scenario(
             let command_errors =
                 parse_quint_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -937,6 +1048,7 @@ pub fn add_project_scenario(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1004,6 +1116,7 @@ pub fn add_project_data_flow(
             let command_errors =
                 parse_lean_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let command_inputs = parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -1020,6 +1133,7 @@ pub fn add_project_data_flow(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1064,6 +1178,8 @@ pub fn add_project_data_flow(
             let command_errors =
                 parse_quint_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -1080,6 +1196,7 @@ pub fn add_project_data_flow(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1146,6 +1263,8 @@ pub fn add_project_outcome(
             let command_errors =
                 parse_lean_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -1162,6 +1281,7 @@ pub fn add_project_outcome(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1206,6 +1326,8 @@ pub fn add_project_outcome(
             let command_errors =
                 parse_quint_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -1222,6 +1344,7 @@ pub fn add_project_outcome(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1259,6 +1382,18 @@ pub fn add_project_command(
         &lean_record,
     )
     .and_then(|contents| {
+        command
+            .command_inputs
+            .iter()
+            .try_fold(contents, |contents, input| {
+                append_record_if_missing(
+                    &contents,
+                    "def modelCommandInputs : List (String × String × String × String × String × String × List String) := ",
+                    &lean_command_input_record(input),
+                )
+            })
+    })
+    .and_then(|contents| {
         command.command_errors.iter().try_fold(contents, |contents, error| {
             append_record_if_missing(
                 &contents,
@@ -1276,6 +1411,10 @@ pub fn add_project_command(
             &contents,
             "def modelCommandErrors : List (String × String × String × String × String × String) := ",
         )?;
+        let command_inputs = command_input_entries_from_list(
+            &contents,
+            "def modelCommandInputs : List (String × String × String × String × String × String × List String) := ",
+        )?;
         replace_declaration(
             &contents,
             "theorem modelCommandsAreDeclared :",
@@ -1284,6 +1423,16 @@ pub fn add_project_command(
                 commands.len()
             ),
         )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "theorem modelCommandInputsAreDeclared :",
+                &format!(
+                    "theorem modelCommandInputsAreDeclared : modelCommandInputs.length = {} := rfl",
+                    command_inputs.len()
+                ),
+            )
+        })
         .and_then(|contents| {
             replace_declaration(
                 &contents,
@@ -1299,6 +1448,7 @@ pub fn add_project_command(
             let data_flows = parse_lean_project_data_flows_from_contents_or_empty(&contents);
             let outcomes = parse_lean_project_outcomes_from_contents_or_empty(&contents);
             let command_errors = parse_lean_project_command_errors_from_contents_or_empty(&contents);
+            let command_inputs = parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -1315,6 +1465,7 @@ pub fn add_project_command(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1331,6 +1482,18 @@ pub fn add_project_command(
         "val modelCommands: List[ModelCommand] = ",
         &quint_record,
     )
+    .and_then(|contents| {
+        command
+            .command_inputs
+            .iter()
+            .try_fold(contents, |contents, input| {
+                append_record_if_missing(
+                    &contents,
+                    "val modelCommandInputs: List[ModelCommandInput] = ",
+                    &quint_command_input_record(input),
+                )
+            })
+    })
     .and_then(|contents| {
         command
             .command_errors
@@ -1350,6 +1513,10 @@ pub fn add_project_command(
             &contents,
             "val modelCommandErrors: List[ModelCommandError] = ",
         )?;
+        let command_inputs = command_input_entries_from_list(
+            &contents,
+            "val modelCommandInputs: List[ModelCommandInput] = ",
+        )?;
         replace_declaration(
             &contents,
             "val modelCommandsAreDeclared =",
@@ -1358,6 +1525,16 @@ pub fn add_project_command(
                 commands.len()
             ),
         )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "val modelCommandInputsAreDeclared =",
+                &format!(
+                    "val modelCommandInputsAreDeclared = modelCommandInputs.length() == {}",
+                    command_inputs.len()
+                ),
+            )
+        })
         .and_then(|contents| {
             replace_declaration(
                 &contents,
@@ -1374,6 +1551,8 @@ pub fn add_project_command(
             let outcomes = parse_quint_project_outcomes_from_contents_or_empty(&contents);
             let command_errors =
                 parse_quint_project_command_errors_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -1390,6 +1569,7 @@ pub fn add_project_command(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1446,6 +1626,8 @@ pub fn add_project_read_model(
             let command_errors =
                 parse_lean_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
@@ -1461,6 +1643,7 @@ pub fn add_project_read_model(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1497,6 +1680,8 @@ pub fn add_project_read_model(
             let command_errors =
                 parse_quint_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
@@ -1512,6 +1697,7 @@ pub fn add_project_read_model(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1568,6 +1754,8 @@ pub fn add_project_view(
             let command_errors =
                 parse_lean_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
@@ -1583,6 +1771,7 @@ pub fn add_project_view(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1616,6 +1805,8 @@ pub fn add_project_view(
             let command_errors =
                 parse_quint_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
@@ -1631,6 +1822,7 @@ pub fn add_project_view(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1687,6 +1879,8 @@ pub fn add_project_automation(
             let command_errors =
                 parse_lean_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
@@ -1702,6 +1896,7 @@ pub fn add_project_automation(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1738,6 +1933,8 @@ pub fn add_project_automation(
             let command_errors =
                 parse_quint_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
@@ -1753,6 +1950,7 @@ pub fn add_project_automation(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1809,6 +2007,8 @@ pub fn add_project_translation(
             let command_errors =
                 parse_lean_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -1824,6 +2024,7 @@ pub fn add_project_translation(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1860,6 +2061,8 @@ pub fn add_project_translation(
             let command_errors =
                 parse_quint_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -1875,6 +2078,7 @@ pub fn add_project_translation(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1930,6 +2134,7 @@ pub fn add_project_external_payload(
             let outcomes = parse_lean_project_outcomes_from_contents_or_empty(&contents);
             let command_errors = parse_lean_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let command_inputs = parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -1945,6 +2150,7 @@ pub fn add_project_external_payload(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -1981,6 +2187,8 @@ pub fn add_project_external_payload(
             let command_errors =
                 parse_quint_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -1997,6 +2205,7 @@ pub fn add_project_external_payload(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -2053,6 +2262,8 @@ pub fn add_project_stream(
             let command_errors =
                 parse_lean_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
@@ -2068,6 +2279,7 @@ pub fn add_project_stream(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -2102,6 +2314,8 @@ pub fn add_project_stream(
             let command_errors =
                 parse_quint_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_quint_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
@@ -2117,6 +2331,7 @@ pub fn add_project_stream(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -2168,6 +2383,10 @@ pub fn add_project_event(
             &contents,
             "def modelCommands : List (String × String × String) := ",
         )?;
+        let command_inputs = command_input_entries_from_list(
+            &contents,
+            "def modelCommandInputs : List (String × String × String × String × String × String × List String) := ",
+        )?;
         let read_models = read_model_entries_from_list(
             &contents,
             "def modelReadModels : List (String × String × String) := ",
@@ -2213,6 +2432,7 @@ pub fn add_project_event(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -2238,6 +2458,10 @@ pub fn add_project_event(
         let command_errors = parse_quint_project_command_errors_from_contents_or_empty(&contents);
         let commands =
             command_entries_from_list(&contents, "val modelCommands: List[ModelCommand] = ")?;
+        let command_inputs = command_input_entries_from_list(
+            &contents,
+            "val modelCommandInputs: List[ModelCommandInput] = ",
+        )?;
         let read_models = read_model_entries_from_list(
             &contents,
             "val modelReadModels: List[ModelReadModel] = ",
@@ -2275,6 +2499,7 @@ pub fn add_project_event(
                     outcomes: &outcomes,
                     command_errors: &command_errors,
                     commands: &commands,
+                    command_inputs: &command_inputs,
                     read_models: &read_models,
                     views: &views,
                     automations: &automations,
@@ -2438,6 +2663,16 @@ fn parse_lean_project_commands_from_contents_or_empty(contents: &str) -> Vec<Pro
     .unwrap_or_default()
 }
 
+fn parse_lean_project_command_inputs_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectCommandInput> {
+    command_input_entries_from_list(
+        contents,
+        "def modelCommandInputs : List (String × String × String × String × String × String × List String) := ",
+    )
+    .unwrap_or_default()
+}
+
 fn parse_lean_project_scenarios_from_contents_or_empty(contents: &str) -> Vec<ProjectScenario> {
     scenario_entries_from_list(
         contents,
@@ -2480,6 +2715,16 @@ fn parse_quint_project_outcomes_from_contents_or_empty(contents: &str) -> Vec<Pr
 fn parse_quint_project_commands_from_contents_or_empty(contents: &str) -> Vec<ProjectCommand> {
     command_entries_from_list(contents, "val modelCommands: List[ModelCommand] = ")
         .unwrap_or_default()
+}
+
+fn parse_quint_project_command_inputs_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectCommandInput> {
+    command_input_entries_from_list(
+        contents,
+        "val modelCommandInputs: List[ModelCommandInput] = ",
+    )
+    .unwrap_or_default()
 }
 
 fn parse_lean_project_command_errors_from_contents_or_empty(
@@ -2616,6 +2861,37 @@ fn command_entries_from_list(
     commands.sort();
     commands.dedup();
     Ok(commands)
+}
+
+fn command_input_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectCommandInput>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut command_inputs = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let strings = quoted_strings(&record)?;
+            if strings.len() < 7 {
+                Err(FormalProjectFactError::new(
+                    "formal project command input record is malformed",
+                ))
+            } else {
+                Ok(ProjectCommandInput {
+                    workflow_slug: strings[0].clone(),
+                    slice_slug: strings[1].clone(),
+                    command: strings[2].clone(),
+                    input: strings[3].clone(),
+                    source_kind: strings[4].clone(),
+                    source_description: strings[5].clone(),
+                    provenance_chain: strings[6..].to_vec(),
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    command_inputs.sort();
+    command_inputs.dedup();
+    Ok(command_inputs)
 }
 
 fn command_error_entries_from_list(
@@ -3015,6 +3291,7 @@ struct ProjectDigestInventories<'a> {
     outcomes: &'a [ProjectOutcome],
     command_errors: &'a [ProjectCommandError],
     commands: &'a [ProjectCommand],
+    command_inputs: &'a [ProjectCommandInput],
     read_models: &'a [ProjectReadModel],
     views: &'a [ProjectView],
     automations: &'a [ProjectAutomation],
@@ -3081,6 +3358,7 @@ fn digest_with_project_inventories(
         .or_else(|| current_digest.split_once(";outcomes="))
         .or_else(|| current_digest.split_once(";command-errors="))
         .or_else(|| current_digest.split_once(";commands="))
+        .or_else(|| current_digest.split_once(";command-inputs="))
         .or_else(|| current_digest.split_once(";read-models="))
         .or_else(|| current_digest.split_once(";views="))
         .or_else(|| current_digest.split_once(";automations="))
@@ -3090,12 +3368,13 @@ fn digest_with_project_inventories(
         .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};scenarios={};data-flows={};outcomes={};command-errors={};commands={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
+        "{prefix};scenarios={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
         digest_scenarios(inventories.scenarios),
         digest_data_flows(inventories.data_flows),
         digest_outcomes(inventories.outcomes),
         digest_command_errors(inventories.command_errors),
         digest_commands(inventories.commands),
+        digest_command_inputs(inventories.command_inputs),
         digest_read_models(inventories.read_models),
         digest_views(inventories.views),
         digest_automations(inventories.automations),
@@ -3183,6 +3462,25 @@ fn digest_commands(commands: &[ProjectCommand]) -> String {
             format!(
                 "{}/{}/{}",
                 command.workflow_slug, command.slice_slug, command.command
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_command_inputs(command_inputs: &[ProjectCommandInput]) -> String {
+    command_inputs
+        .iter()
+        .map(|command_input| {
+            format!(
+                "{}/{}/{}/{}@{}#{}#{}",
+                command_input.workflow_slug,
+                command_input.slice_slug,
+                command_input.command,
+                command_input.input,
+                command_input.source_kind,
+                command_input.source_description,
+                command_input.provenance_chain.join(" -> ")
             )
         })
         .collect::<Vec<_>>()
@@ -3322,6 +3620,32 @@ fn lean_command_record(command: &NewProjectCommand) -> String {
         quoted(command.workflow_slug.as_ref()),
         quoted(command.slice_slug.as_ref()),
         quoted(command.command.as_ref())
+    )
+}
+
+fn lean_command_input_record(command_input: &NewProjectCommandInput) -> String {
+    format!(
+        "({}, {}, {}, {}, {}, {}, [{}])",
+        quoted(command_input.workflow_slug.as_ref()),
+        quoted(command_input.slice_slug.as_ref()),
+        quoted(command_input.command.as_ref()),
+        quoted(command_input.input.as_ref()),
+        quoted(&command_input.source_kind),
+        quoted(&command_input.source_description),
+        quoted_string_list(&command_input.provenance_chain)
+    )
+}
+
+fn quint_command_input_record(command_input: &NewProjectCommandInput) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, command: {}, input: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}] }}",
+        quoted(command_input.workflow_slug.as_ref()),
+        quoted(command_input.slice_slug.as_ref()),
+        quoted(command_input.command.as_ref()),
+        quoted(command_input.input.as_ref()),
+        quoted(&command_input.source_kind),
+        quoted(&command_input.source_description),
+        quoted_string_list(&command_input.provenance_chain)
     )
 }
 
@@ -3735,6 +4059,14 @@ fn quoted(value: &str) -> String {
     serde_json::to_string(value).unwrap_or_else(|error| {
         unreachable!("EMC generated formal project string literal must be valid: {error}");
     })
+}
+
+fn quoted_string_list(values: &[String]) -> String {
+    values
+        .iter()
+        .map(|value| quoted(value))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn file_contents(value: String) -> Result<FileContents, FormalProjectFactError> {

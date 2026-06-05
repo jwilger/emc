@@ -22,16 +22,17 @@ use crate::core::formal_project_facts::{
     NewProjectAutomation, NewProjectCommand, NewProjectDataFlow, NewProjectEvent,
     NewProjectExternalPayload, NewProjectOutcome, NewProjectReadModel, NewProjectScenario,
     NewProjectStream, NewProjectTranslation, NewProjectView, ProjectAutomation, ProjectCommand,
-    ProjectCommandError, ProjectDataFlow, ProjectEvent, ProjectExternalPayload, ProjectOutcome,
-    ProjectReadModel, ProjectScenario, ProjectStream, ProjectTranslation, ProjectView,
-    add_project_automation, add_project_command, add_project_data_flow, add_project_event,
-    add_project_external_payload, add_project_outcome, add_project_read_model,
-    add_project_scenario, add_project_stream, add_project_translation, add_project_view,
-    parse_lean_project_automations, parse_lean_project_command_errors, parse_lean_project_commands,
-    parse_lean_project_data_flows, parse_lean_project_events, parse_lean_project_external_payloads,
-    parse_lean_project_outcomes, parse_lean_project_read_models, parse_lean_project_scenarios,
-    parse_lean_project_streams, parse_lean_project_translations, parse_lean_project_views,
-    parse_quint_project_automations, parse_quint_project_command_errors,
+    ProjectCommandError, ProjectCommandInput, ProjectDataFlow, ProjectEvent,
+    ProjectExternalPayload, ProjectOutcome, ProjectReadModel, ProjectScenario, ProjectStream,
+    ProjectTranslation, ProjectView, add_project_automation, add_project_command,
+    add_project_data_flow, add_project_event, add_project_external_payload, add_project_outcome,
+    add_project_read_model, add_project_scenario, add_project_stream, add_project_translation,
+    add_project_view, parse_lean_project_automations, parse_lean_project_command_errors,
+    parse_lean_project_command_inputs, parse_lean_project_commands, parse_lean_project_data_flows,
+    parse_lean_project_events, parse_lean_project_external_payloads, parse_lean_project_outcomes,
+    parse_lean_project_read_models, parse_lean_project_scenarios, parse_lean_project_streams,
+    parse_lean_project_translations, parse_lean_project_views, parse_quint_project_automations,
+    parse_quint_project_command_errors, parse_quint_project_command_inputs,
     parse_quint_project_commands, parse_quint_project_data_flows, parse_quint_project_events,
     parse_quint_project_external_payloads, parse_quint_project_outcomes,
     parse_quint_project_read_models, parse_quint_project_scenarios, parse_quint_project_streams,
@@ -256,12 +257,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 project_artifacts.lean_contents,
                 project_artifacts.quint_path,
                 project_artifacts.quint_contents,
-                NewProjectCommand::new(
-                    workflow_layout.slug().clone(),
-                    command.slice_slug().clone(),
-                    command.name().clone(),
-                )
-                .with_errors(command.errors().clone()),
+                NewProjectCommand::from_command(workflow_layout.slug().clone(), command),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
@@ -636,6 +632,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let project_outcomes = read_synchronized_project_outcomes(&project_name)?;
             let project_command_errors = read_synchronized_project_command_errors(&project_name)?;
             let project_commands = read_synchronized_project_commands(&project_name)?;
+            let project_command_inputs = read_synchronized_project_command_inputs(&project_name)?;
             let project_read_models = read_synchronized_project_read_models(&project_name)?;
             let project_views = read_synchronized_project_views(&project_name)?;
             let project_automations = read_synchronized_project_automations(&project_name)?;
@@ -653,6 +650,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                     outcomes: project_outcomes,
                     command_errors: project_command_errors,
                     commands: project_commands,
+                    command_inputs: project_command_inputs,
                     read_models: project_read_models,
                     views: project_views,
                     automations: project_automations,
@@ -1041,6 +1039,28 @@ fn read_synchronized_project_commands(
             "Lean and Quint project root command inventories disagree",
         )),
         (_lean_commands, _quint_commands) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_command_inputs(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectCommandInput>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_command_inputs(&artifacts.lean_contents),
+        parse_quint_project_command_inputs(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_command_inputs), Ok(quint_command_inputs))
+            if lean_command_inputs == quint_command_inputs =>
+        {
+            Ok(lean_command_inputs)
+        }
+        (Ok(_lean_command_inputs), Ok(_quint_command_inputs)) => Err(ShellError::message(
+            "Lean and Quint project root command input inventories disagree",
+        )),
+        (_lean_command_inputs, _quint_command_inputs) => Ok(Vec::new()),
     }
 }
 

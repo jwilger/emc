@@ -7,9 +7,9 @@ use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
 use crate::core::formal_project_facts::{
-    ProjectAutomation, ProjectCommand, ProjectCommandError, ProjectDataFlow, ProjectEvent,
-    ProjectExternalPayload, ProjectOutcome, ProjectReadModel, ProjectScenario, ProjectStream,
-    ProjectTranslation, ProjectView,
+    ProjectAutomation, ProjectCommand, ProjectCommandError, ProjectCommandInput, ProjectDataFlow,
+    ProjectEvent, ProjectExternalPayload, ProjectOutcome, ProjectReadModel, ProjectScenario,
+    ProjectStream, ProjectTranslation, ProjectView,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{
@@ -104,6 +104,7 @@ pub struct ModeledProjectRootInventories {
     outcomes: Vec<ProjectOutcome>,
     command_errors: Vec<ProjectCommandError>,
     commands: Vec<ProjectCommand>,
+    command_inputs: Vec<ProjectCommandInput>,
     read_models: Vec<ProjectReadModel>,
     views: Vec<ProjectView>,
     automations: Vec<ProjectAutomation>,
@@ -119,6 +120,7 @@ pub(crate) struct ModeledProjectRootInventoryParts {
     pub(crate) outcomes: Vec<ProjectOutcome>,
     pub(crate) command_errors: Vec<ProjectCommandError>,
     pub(crate) commands: Vec<ProjectCommand>,
+    pub(crate) command_inputs: Vec<ProjectCommandInput>,
     pub(crate) read_models: Vec<ProjectReadModel>,
     pub(crate) views: Vec<ProjectView>,
     pub(crate) automations: Vec<ProjectAutomation>,
@@ -136,6 +138,7 @@ impl ModeledProjectRootInventories {
             outcomes: parts.outcomes,
             command_errors: parts.command_errors,
             commands: parts.commands,
+            command_inputs: parts.command_inputs,
             read_models: parts.read_models,
             views: parts.views,
             automations: parts.automations,
@@ -170,6 +173,7 @@ pub fn check_project(
             outcomes: &project_inventories.outcomes,
             command_errors: &project_inventories.command_errors,
             commands: &project_inventories.commands,
+            command_inputs: &project_inventories.command_inputs,
             read_models: &project_inventories.read_models,
             views: &project_inventories.views,
             automations: &project_inventories.automations,
@@ -280,6 +284,7 @@ struct ProjectRootInventories<'a> {
     outcomes: &'a [ProjectOutcome],
     command_errors: &'a [ProjectCommandError],
     commands: &'a [ProjectCommand],
+    command_inputs: &'a [ProjectCommandInput],
     read_models: &'a [ProjectReadModel],
     views: &'a [ProjectView],
     automations: &'a [ProjectAutomation],
@@ -307,6 +312,7 @@ fn project_root_effects(
     let lean_model_outcome_list = lean_model_outcome_list(inventories.outcomes);
     let lean_model_command_error_list = lean_model_command_error_list(inventories.command_errors);
     let lean_model_command_list = lean_model_command_list(inventories.commands);
+    let lean_model_command_input_list = lean_model_command_input_list(inventories.command_inputs);
     let lean_model_read_model_list = lean_model_read_model_list(inventories.read_models);
     let lean_model_view_list = lean_model_view_list(inventories.views);
     let lean_model_automation_list = lean_model_automation_list(inventories.automations);
@@ -322,6 +328,7 @@ fn project_root_effects(
     let quint_model_outcome_list = quint_model_outcome_list(inventories.outcomes);
     let quint_model_command_error_list = quint_model_command_error_list(inventories.command_errors);
     let quint_model_command_list = quint_model_command_list(inventories.commands);
+    let quint_model_command_input_list = quint_model_command_input_list(inventories.command_inputs);
     let quint_model_read_model_list = quint_model_read_model_list(inventories.read_models);
     let quint_model_view_list = quint_model_view_list(inventories.views);
     let quint_model_automation_list = quint_model_automation_list(inventories.automations);
@@ -346,6 +353,7 @@ fn project_root_effects(
     let command_error_count = inventories.command_errors.len();
     let stream_count = inventories.streams.len();
     let command_count = inventories.commands.len();
+    let command_input_count = inventories.command_inputs.len();
     let read_model_count = inventories.read_models.len();
     let view_count = inventories.views.len();
     let automation_count = inventories.automations.len();
@@ -501,6 +509,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelCommandInputs :"),
+            artifact_marker(format!(
+                "def modelCommandInputs : List (String × String × String × String × String × String × List String) := {lean_model_command_input_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelReadModels :"),
             artifact_marker(format!(
                 "def modelReadModels : List (String × String × String) := {lean_model_read_model_list}"
@@ -648,6 +664,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelCommandInputsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelCommandInputsAreDeclared : modelCommandInputs.length = {command_input_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelReadModelsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelReadModelsAreDeclared : modelReadModels.length = {read_model_count} := rfl"
@@ -764,6 +788,14 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  type ModelCommand ="),
             artifact_marker("  type ModelCommand = { workflow: str, slice: str, command: str }"),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelCommandInput ="),
+            artifact_marker(
+                "  type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str] }",
+            ),
             quint_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -911,6 +943,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelCommandInputs:"),
+            artifact_marker(format!(
+                "  val modelCommandInputs: List[ModelCommandInput] = {quint_model_command_input_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelReadModels:"),
             artifact_marker(format!(
                 "  val modelReadModels: List[ModelReadModel] = {quint_model_read_model_list}"
@@ -1053,6 +1093,14 @@ fn project_root_effects(
             artifact_marker("  val modelCommandsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelCommandsAreDeclared = modelCommands.length() == {command_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelCommandInputsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelCommandInputsAreDeclared = modelCommandInputs.length() == {command_input_count}"
             )),
             quint_message.clone(),
         ),
@@ -2459,6 +2507,54 @@ fn quint_model_command_list(project_commands: &[ProjectCommand]) -> String {
     )
 }
 
+fn lean_model_command_input_list(project_command_inputs: &[ProjectCommandInput]) -> String {
+    let mut project_command_inputs = project_command_inputs.iter().collect::<Vec<_>>();
+    project_command_inputs.sort_unstable();
+    format!(
+        "[{}]",
+        project_command_inputs
+            .into_iter()
+            .map(|command_input| {
+                format!(
+                    "({}, {}, {}, {}, {}, {}, [{}])",
+                    json_string(command_input.workflow_slug()),
+                    json_string(command_input.slice_slug()),
+                    json_string(command_input.command()),
+                    json_string(command_input.input()),
+                    json_string(command_input.source_kind()),
+                    json_string(command_input.source_description()),
+                    json_string_list(command_input.provenance_chain())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_command_input_list(project_command_inputs: &[ProjectCommandInput]) -> String {
+    let mut project_command_inputs = project_command_inputs.iter().collect::<Vec<_>>();
+    project_command_inputs.sort_unstable();
+    format!(
+        "[{}]",
+        project_command_inputs
+            .into_iter()
+            .map(|command_input| {
+                format!(
+                    "{{ workflow: {}, slice: {}, command: {}, input: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}] }}",
+                    json_string(command_input.workflow_slug()),
+                    json_string(command_input.slice_slug()),
+                    json_string(command_input.command()),
+                    json_string(command_input.input()),
+                    json_string(command_input.source_kind()),
+                    json_string(command_input.source_description()),
+                    json_string_list(command_input.provenance_chain())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn lean_model_read_model_list(project_read_models: &[ProjectReadModel]) -> String {
     let mut project_read_models = project_read_models
         .iter()
@@ -2810,7 +2906,7 @@ fn model_digest(
     inventories: &ProjectRootInventories<'_>,
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};data-flows={};outcomes={};command-errors={};commands={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
+        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
@@ -2819,6 +2915,7 @@ fn model_digest(
         digest_outcomes(inventories.outcomes),
         digest_command_errors(inventories.command_errors),
         digest_commands(inventories.commands),
+        digest_command_inputs(inventories.command_inputs),
         digest_read_models(inventories.read_models),
         digest_views(inventories.views),
         digest_automations(inventories.automations),
@@ -2968,6 +3065,27 @@ fn digest_commands(project_commands: &[ProjectCommand]) -> String {
         .into_iter()
         .map(|(workflow_slug, slice_slug, command)| {
             format!("{workflow_slug}/{slice_slug}/{command}")
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_command_inputs(project_command_inputs: &[ProjectCommandInput]) -> String {
+    let mut command_inputs = project_command_inputs.iter().collect::<Vec<_>>();
+    command_inputs.sort_unstable();
+    command_inputs
+        .into_iter()
+        .map(|command_input| {
+            format!(
+                "{}/{}/{}/{}@{}#{}#{}",
+                command_input.workflow_slug(),
+                command_input.slice_slug(),
+                command_input.command(),
+                command_input.input(),
+                command_input.source_kind(),
+                command_input.source_description(),
+                command_input.provenance_chain().join(" -> ")
+            )
         })
         .collect::<Vec<_>>()
         .join(",")
@@ -3160,4 +3278,12 @@ fn json_string(value: &str) -> String {
     serde_json::to_string(value).unwrap_or_else(|error| {
         unreachable!("EMC generated JSON string must be valid: {error}");
     })
+}
+
+fn json_string_list(values: &[String]) -> String {
+    values
+        .iter()
+        .map(|value| json_string(value))
+        .collect::<Vec<_>>()
+        .join(",")
 }
