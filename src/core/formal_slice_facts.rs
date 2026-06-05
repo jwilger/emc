@@ -380,6 +380,18 @@ impl NewOutcomeDefinition {
     pub fn slice_slug(&self) -> &SliceSlug {
         &self.slice_slug
     }
+
+    pub fn label(&self) -> &OutcomeLabelName {
+        &self.label
+    }
+
+    pub fn event_set(&self) -> &OutcomeEventNames {
+        &self.event_set
+    }
+
+    pub fn externally_relevant(&self) -> bool {
+        self.externally_relevant
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
