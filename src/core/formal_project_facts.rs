@@ -4,13 +4,14 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, NewBitLevelDataFlow, NewCommandDefinition, NewCommandErrorDefinition,
-    NewCommandInput, OutcomeEventNames, ScenarioKind,
+    NewCommandInput, NewEventAttribute, NewEventDefinition, OutcomeEventNames, ScenarioKind,
 };
 use crate::core::types::{
     AutomationName, BitEncodingSemantics, CommandErrorName, CommandErrorRecoveryKind, CommandName,
-    DataFlowSource, DataFlowTarget, DatumName, EventAttributeSourceName, EventName,
-    OutcomeLabelName, ReadModelName, ScenarioName, SliceSlug, StreamName, TransformationSemantics,
-    TranslationName, ViewName, WorkflowSlug,
+    DataFlowSource, DataFlowTarget, DatumName, EventAttributeName, EventAttributeSourceField,
+    EventAttributeSourceKind, EventAttributeSourceName, EventName, OutcomeLabelName,
+    ProvenanceDescription, ReadModelName, ScenarioName, SliceSlug, StreamName,
+    TransformationSemantics, TranslationName, ViewName, WorkflowSlug,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -334,6 +335,7 @@ pub struct NewProjectEvent {
     slice_slug: SliceSlug,
     event: EventName,
     stream: StreamName,
+    event_attributes: Vec<NewProjectEventAttribute>,
 }
 
 impl NewProjectEvent {
@@ -348,6 +350,51 @@ impl NewProjectEvent {
             slice_slug,
             event,
             stream,
+            event_attributes: Vec::new(),
+        }
+    }
+
+    pub fn with_attribute(mut self, attribute: &NewEventAttribute) -> Self {
+        self.event_attributes = vec![NewProjectEventAttribute::from_event_attribute(
+            &self, attribute,
+        )];
+        self
+    }
+
+    pub fn from_event(workflow_slug: WorkflowSlug, event: &NewEventDefinition) -> Self {
+        Self::new(
+            workflow_slug,
+            event.slice_slug().clone(),
+            event.name().clone(),
+            event.stream().clone(),
+        )
+        .with_attribute(event.attribute())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NewProjectEventAttribute {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    event: EventName,
+    attribute: EventAttributeName,
+    source_kind: EventAttributeSourceKind,
+    source_name: EventAttributeSourceName,
+    source_field: EventAttributeSourceField,
+    provenance: ProvenanceDescription,
+}
+
+impl NewProjectEventAttribute {
+    fn from_event_attribute(event: &NewProjectEvent, attribute: &NewEventAttribute) -> Self {
+        Self {
+            workflow_slug: event.workflow_slug.clone(),
+            slice_slug: event.slice_slug.clone(),
+            event: event.event.clone(),
+            attribute: attribute.name().clone(),
+            source_kind: attribute.source_kind().clone(),
+            source_name: attribute.source_name().clone(),
+            source_field: attribute.source_field().clone(),
+            provenance: attribute.provenance_description().clone(),
         }
     }
 }
@@ -686,6 +733,52 @@ impl ProjectEvent {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectEventAttribute {
+    workflow_slug: String,
+    slice_slug: String,
+    event: String,
+    attribute: String,
+    source_kind: String,
+    source_name: String,
+    source_field: String,
+    provenance: String,
+}
+
+impl ProjectEventAttribute {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn event(&self) -> &str {
+        &self.event
+    }
+
+    pub fn attribute(&self) -> &str {
+        &self.attribute
+    }
+
+    pub fn source_kind(&self) -> &str {
+        &self.source_kind
+    }
+
+    pub fn source_name(&self) -> &str {
+        &self.source_name
+    }
+
+    pub fn source_field(&self) -> &str {
+        &self.source_field
+    }
+
+    pub fn provenance(&self) -> &str {
+        &self.provenance
+    }
+}
+
 impl ProjectStream {
     pub fn workflow_slug(&self) -> &str {
         &self.workflow_slug
@@ -925,6 +1018,24 @@ pub fn parse_quint_project_events(
     event_entries_from_list(contents.as_ref(), "val modelEvents: List[ModelEvent] = ")
 }
 
+pub fn parse_lean_project_event_attributes(
+    contents: &FileContents,
+) -> Result<Vec<ProjectEventAttribute>, FormalProjectFactError> {
+    event_attribute_entries_from_list(
+        contents.as_ref(),
+        "def modelEventAttributes : List (String × String × String × String × String × String × String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_event_attributes(
+    contents: &FileContents,
+) -> Result<Vec<ProjectEventAttribute>, FormalProjectFactError> {
+    event_attribute_entries_from_list(
+        contents.as_ref(),
+        "val modelEventAttributes: List[ModelEventAttribute] = ",
+    )
+}
+
 pub fn add_project_scenario(
     lean_path: ProjectPath,
     lean_contents: FileContents,
@@ -978,6 +1089,8 @@ pub fn add_project_scenario(
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_lean_project_event_attributes_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -994,6 +1107,7 @@ pub fn add_project_scenario(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -1040,6 +1154,8 @@ pub fn add_project_scenario(
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_quint_project_event_attributes_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -1056,6 +1172,7 @@ pub fn add_project_scenario(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -1125,6 +1242,7 @@ pub fn add_project_data_flow(
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            let event_attributes = parse_lean_project_event_attributes_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -1141,6 +1259,7 @@ pub fn add_project_data_flow(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -1188,6 +1307,8 @@ pub fn add_project_data_flow(
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_quint_project_event_attributes_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -1204,6 +1325,7 @@ pub fn add_project_data_flow(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -1273,6 +1395,8 @@ pub fn add_project_outcome(
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_lean_project_event_attributes_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -1289,6 +1413,7 @@ pub fn add_project_outcome(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -1336,6 +1461,8 @@ pub fn add_project_outcome(
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_quint_project_event_attributes_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -1352,6 +1479,7 @@ pub fn add_project_outcome(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -1457,6 +1585,7 @@ pub fn add_project_command(
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            let event_attributes = parse_lean_project_event_attributes_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -1473,6 +1602,7 @@ pub fn add_project_command(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -1561,6 +1691,8 @@ pub fn add_project_command(
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_quint_project_event_attributes_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -1577,6 +1709,7 @@ pub fn add_project_command(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -1635,6 +1768,8 @@ pub fn add_project_read_model(
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_lean_project_event_attributes_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -1651,6 +1786,7 @@ pub fn add_project_read_model(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -1689,6 +1825,8 @@ pub fn add_project_read_model(
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_quint_project_event_attributes_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -1705,6 +1843,7 @@ pub fn add_project_read_model(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -1763,6 +1902,8 @@ pub fn add_project_view(
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_lean_project_event_attributes_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -1779,6 +1920,7 @@ pub fn add_project_view(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -1814,6 +1956,8 @@ pub fn add_project_view(
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_quint_project_event_attributes_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -1830,6 +1974,7 @@ pub fn add_project_view(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -1888,6 +2033,8 @@ pub fn add_project_automation(
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_lean_project_event_attributes_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -1904,6 +2051,7 @@ pub fn add_project_automation(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -1942,6 +2090,8 @@ pub fn add_project_automation(
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_quint_project_event_attributes_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -1958,6 +2108,7 @@ pub fn add_project_automation(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -2016,6 +2167,8 @@ pub fn add_project_translation(
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_lean_project_event_attributes_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -2032,6 +2185,7 @@ pub fn add_project_translation(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -2070,6 +2224,8 @@ pub fn add_project_translation(
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_quint_project_event_attributes_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -2086,6 +2242,7 @@ pub fn add_project_translation(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -2142,6 +2299,7 @@ pub fn add_project_external_payload(
             let external_payloads = parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            let event_attributes = parse_lean_project_event_attributes_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -2158,6 +2316,7 @@ pub fn add_project_external_payload(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -2197,6 +2356,8 @@ pub fn add_project_external_payload(
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_quint_project_event_attributes_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -2213,6 +2374,7 @@ pub fn add_project_external_payload(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -2271,6 +2433,8 @@ pub fn add_project_stream(
             let external_payloads =
                 parse_lean_project_external_payloads_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_lean_project_event_attributes_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -2287,6 +2451,7 @@ pub fn add_project_stream(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -2323,6 +2488,8 @@ pub fn add_project_stream(
             let external_payloads =
                 parse_quint_project_external_payloads_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_quint_project_event_attributes_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -2339,6 +2506,7 @@ pub fn add_project_stream(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -2363,11 +2531,32 @@ pub fn add_project_event(
 ) -> Result<EffectPlan, FormalProjectFactError> {
     let lean_record = lean_event_record(&event);
     let quint_record = quint_event_record(&event);
+    let lean_attribute_records = event
+        .event_attributes
+        .iter()
+        .map(lean_event_attribute_record)
+        .collect::<Vec<_>>();
+    let quint_attribute_records = event
+        .event_attributes
+        .iter()
+        .map(quint_event_attribute_record)
+        .collect::<Vec<_>>();
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
         "def modelEvents : List (String × String × String × String) := ",
         &lean_record,
     )
+    .and_then(|contents| {
+        lean_attribute_records
+            .iter()
+            .try_fold(contents, |contents, record| {
+                append_record_if_missing(
+                    &contents,
+                    "def modelEventAttributes : List (String × String × String × String × String × String × String × String) := ",
+                    record,
+                )
+            })
+    })
     .and_then(|contents| {
         let scenarios = scenario_entries_from_list(
             &contents,
@@ -2415,6 +2604,10 @@ pub fn add_project_event(
             &contents,
             "def modelEvents : List (String × String × String × String) := ",
         )?;
+        let event_attributes = event_attribute_entries_from_list(
+            &contents,
+            "def modelEventAttributes : List (String × String × String × String × String × String × String × String) := ",
+        )?;
         replace_declaration(
             &contents,
             "theorem modelEventsAreDeclared :",
@@ -2423,6 +2616,16 @@ pub fn add_project_event(
                 events.len()
             ),
         )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "theorem modelEventAttributesAreDeclared :",
+                &format!(
+                    "theorem modelEventAttributesAreDeclared : modelEventAttributes.length = {} := rfl",
+                    event_attributes.len()
+                ),
+            )
+        })
         .and_then(|contents| {
             update_lean_digest(
                 &contents,
@@ -2440,6 +2643,7 @@ pub fn add_project_event(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -2449,6 +2653,17 @@ pub fn add_project_event(
         "val modelEvents: List[ModelEvent] = ",
         &quint_record,
     )
+    .and_then(|contents| {
+        quint_attribute_records
+            .iter()
+            .try_fold(contents, |contents, record| {
+                append_record_if_missing(
+                    &contents,
+                    "val modelEventAttributes: List[ModelEventAttribute] = ",
+                    record,
+                )
+            })
+    })
     .and_then(|contents| {
         let scenarios =
             scenario_entries_from_list(&contents, "val modelScenarios: List[ModelScenario] = ")?;
@@ -2482,6 +2697,10 @@ pub fn add_project_event(
         let streams =
             stream_entries_from_list(&contents, "val modelStreams: List[ModelStream] = ")?;
         let events = event_entries_from_list(&contents, "val modelEvents: List[ModelEvent] = ")?;
+        let event_attributes = event_attribute_entries_from_list(
+            &contents,
+            "val modelEventAttributes: List[ModelEventAttribute] = ",
+        )?;
         replace_declaration(
             &contents,
             "val modelEventsAreDeclared =",
@@ -2490,6 +2709,16 @@ pub fn add_project_event(
                 events.len()
             ),
         )
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "val modelEventAttributesAreDeclared =",
+                &format!(
+                    "val modelEventAttributesAreDeclared = modelEventAttributes.length() == {}",
+                    event_attributes.len()
+                ),
+            )
+        })
         .and_then(|contents| {
             update_quint_digest(
                 &contents,
@@ -2507,6 +2736,7 @@ pub fn add_project_event(
                     external_payloads: &external_payloads,
                     streams: &streams,
                     events: &events,
+                    event_attributes: &event_attributes,
                 },
             )
         })
@@ -3159,6 +3389,26 @@ fn parse_quint_project_events_from_contents_or_empty(contents: &str) -> Vec<Proj
     event_entries_from_list(contents, "val modelEvents: List[ModelEvent] = ").unwrap_or_default()
 }
 
+fn parse_lean_project_event_attributes_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectEventAttribute> {
+    event_attribute_entries_from_list(
+        contents,
+        "def modelEventAttributes : List (String × String × String × String × String × String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_event_attributes_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectEventAttribute> {
+    event_attribute_entries_from_list(
+        contents,
+        "val modelEventAttributes: List[ModelEventAttribute] = ",
+    )
+    .unwrap_or_default()
+}
+
 fn event_entries_from_list(
     contents: &str,
     marker: &str,
@@ -3185,6 +3435,38 @@ fn event_entries_from_list(
     events.sort();
     events.dedup();
     Ok(events)
+}
+
+fn event_attribute_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectEventAttribute>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut event_attributes = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let strings = quoted_strings(&record)?;
+            if strings.len() < 8 {
+                Err(FormalProjectFactError::new(
+                    "formal project event attribute record is malformed",
+                ))
+            } else {
+                Ok(ProjectEventAttribute {
+                    workflow_slug: strings[0].clone(),
+                    slice_slug: strings[1].clone(),
+                    event: strings[2].clone(),
+                    attribute: strings[3].clone(),
+                    source_kind: strings[4].clone(),
+                    source_name: strings[5].clone(),
+                    source_field: strings[6].clone(),
+                    provenance: strings[7].clone(),
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    event_attributes.sort();
+    event_attributes.dedup();
+    Ok(event_attributes)
 }
 
 fn split_top_level_records(list: &str) -> Result<Vec<String>, FormalProjectFactError> {
@@ -3299,6 +3581,7 @@ struct ProjectDigestInventories<'a> {
     external_payloads: &'a [ProjectExternalPayload],
     streams: &'a [ProjectStream],
     events: &'a [ProjectEvent],
+    event_attributes: &'a [ProjectEventAttribute],
 }
 
 fn update_lean_digest(
@@ -3365,10 +3648,11 @@ fn digest_with_project_inventories(
         .or_else(|| current_digest.split_once(";translations="))
         .or_else(|| current_digest.split_once(";external-payloads="))
         .or_else(|| current_digest.split_once(";streams="))
+        .or_else(|| current_digest.split_once(";events="))
         .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};scenarios={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={}",
+        "{prefix};scenarios={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};views={};automations={};translations={};external-payloads={};streams={};events={};event-attributes={}",
         digest_scenarios(inventories.scenarios),
         digest_data_flows(inventories.data_flows),
         digest_outcomes(inventories.outcomes),
@@ -3381,7 +3665,8 @@ fn digest_with_project_inventories(
         digest_translations(inventories.translations),
         digest_external_payloads(inventories.external_payloads),
         digest_streams(inventories.streams),
-        digest_events(inventories.events)
+        digest_events(inventories.events),
+        digest_event_attributes(inventories.event_attributes)
     )
 }
 
@@ -3569,6 +3854,26 @@ fn digest_events(events: &[ProjectEvent]) -> String {
             format!(
                 "{}/{}/{}@{}",
                 event.workflow_slug, event.slice_slug, event.event, event.stream
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_event_attributes(event_attributes: &[ProjectEventAttribute]) -> String {
+    event_attributes
+        .iter()
+        .map(|attribute| {
+            format!(
+                "{}/{}/{}/{}@{}#{}.{}#{}",
+                attribute.workflow_slug,
+                attribute.slice_slug,
+                attribute.event,
+                attribute.attribute,
+                attribute.source_kind,
+                attribute.source_name,
+                attribute.source_field,
+                attribute.provenance
             )
         })
         .collect::<Vec<_>>()
@@ -4045,6 +4350,20 @@ fn lean_event_record(event: &NewProjectEvent) -> String {
     )
 }
 
+fn lean_event_attribute_record(attribute: &NewProjectEventAttribute) -> String {
+    format!(
+        "({}, {}, {}, {}, {}, {}, {}, {})",
+        quoted(attribute.workflow_slug.as_ref()),
+        quoted(attribute.slice_slug.as_ref()),
+        quoted(attribute.event.as_ref()),
+        quoted(attribute.attribute.as_ref()),
+        quoted(attribute.source_kind.as_ref()),
+        quoted(attribute.source_name.as_ref()),
+        quoted(attribute.source_field.as_ref()),
+        quoted(attribute.provenance.as_ref())
+    )
+}
+
 fn quint_event_record(event: &NewProjectEvent) -> String {
     format!(
         "{{ workflow: {}, slice: {}, event: {}, stream: {} }}",
@@ -4052,6 +4371,20 @@ fn quint_event_record(event: &NewProjectEvent) -> String {
         quoted(event.slice_slug.as_ref()),
         quoted(event.event.as_ref()),
         quoted(event.stream.as_ref())
+    )
+}
+
+fn quint_event_attribute_record(attribute: &NewProjectEventAttribute) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, event: {}, attribute: {}, sourceKind: {}, sourceName: {}, sourceField: {}, provenance: {} }}",
+        quoted(attribute.workflow_slug.as_ref()),
+        quoted(attribute.slice_slug.as_ref()),
+        quoted(attribute.event.as_ref()),
+        quoted(attribute.attribute.as_ref()),
+        quoted(attribute.source_kind.as_ref()),
+        quoted(attribute.source_name.as_ref()),
+        quoted(attribute.source_field.as_ref()),
+        quoted(attribute.provenance.as_ref())
     )
 }
 
