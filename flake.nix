@@ -63,6 +63,8 @@
           pkg-config
         ];
 
+        runtimeTools = [ pkgs.lean4 pkgs.quint ];
+
         cargoToml = ./Cargo.toml;
         hasCargoProject = builtins.pathExists cargoToml;
         packageSource = pkgs.lib.cleanSourceWith {
@@ -74,10 +76,12 @@
             craneLib.filterCargoSources path type
             || pkgs.lib.hasSuffix "/flake.nix" pathText
             || pkgs.lib.hasSuffix "/justfile" pathText
-            || pkgs.lib.hasSuffix "/.github" pathText
-            || pkgs.lib.hasInfix "/.github/" pathText
+            || pkgs.lib.hasSuffix "/.forgejo" pathText
+            || pkgs.lib.hasInfix "/.forgejo/" pathText
             || pkgs.lib.hasSuffix "/docs" pathText
             || pkgs.lib.hasInfix "/docs/" pathText
+            || pkgs.lib.hasSuffix "/scripts" pathText
+            || pkgs.lib.hasInfix "/scripts/" pathText
             || pkgs.lib.hasSuffix "/tests" pathText
             || pkgs.lib.hasInfix "/tests/" pathText;
         };
@@ -86,10 +90,11 @@
           src = packageSource;
           strictDeps = true;
           buildInputs = commonBuildInputs;
-          nativeBuildInputs = commonNativeBuildInputs;
+          nativeBuildInputs = commonNativeBuildInputs ++ runtimeTools;
+          postPatch = ''
+            patchShebangs scripts/copyright-headers.sh
+          '';
         };
-
-        runtimeTools = [ pkgs.lean4 pkgs.quint ];
 
         package = pkgs.symlinkJoin {
           name = "emc";
@@ -143,14 +148,15 @@
             cd "$workdir"
 
             ${package}/bin/emc init --name "Package Smoke"
-            ${package}/bin/emc add workflow --slug package-smoke --name "Package smoke" --description "Packaged EMC verification smoke workflow."
-            ${package}/bin/emc add slice --workflow package-smoke --slug capture-smoke --name "Capture smoke" --type state_view --description "Capture package smoke details."
-            ${package}/bin/emc add slice --workflow package-smoke --slug review-smoke --name "Review smoke" --type state_view --description "Review package smoke details."
-            ${package}/bin/emc connect workflow --workflow package-smoke --from capture-smoke --to review-smoke --via navigation --name review-smoke-screen
             ${package}/bin/emc check
             ${package}/bin/emc verify
-            ${package}/bin/emc review record --workflow package-smoke --reviewer package-smoke --reviewed-at 2026-06-03T00:00:00.000Z
-            ${package}/bin/emc review gate --workflow package-smoke
+            ${package}/bin/emc add workflow --slug packaged-workflow --name "Packaged workflow" --description "Packaged EMC verification smoke workflow."
+            ${package}/bin/emc add slice --workflow packaged-workflow --slug capture-smoke --name "Capture smoke" --type state_change --description "Capture package smoke details."
+            ${package}/bin/emc add slice --workflow packaged-workflow --slug review-smoke --name "Review smoke" --type state_change --description "Review package smoke details."
+            ${package}/bin/emc connect workflow --workflow packaged-workflow --from capture-smoke --to review-smoke --via outcome --name review-ready
+            ${package}/bin/emc check
+            ${package}/bin/emc review record --workflow packaged-workflow --reviewer package-smoke --reviewed-at 2026-06-03T00:00:00.000Z
+            ${package}/bin/emc review gate --workflow packaged-workflow
 
             printf '%s\n' \
               '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"package-smoke","version":"0.0.0"}}}' \

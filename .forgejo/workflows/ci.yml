@@ -1,0 +1,260 @@
+# Copyright 2026 John Wilger
+
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  copyright-headers:
+    name: Copyright headers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install or reuse Nix
+        run: |
+          set -euo pipefail
+          NIX_BIN_DIR="/nix/var/nix/profiles/default/bin"
+          if [ -x "$NIX_BIN_DIR/nix" ]; then
+            echo "Nix already present at $NIX_BIN_DIR (volume cache hit)"
+          else
+            echo "Installing Nix (cold start or fresh volume)"
+            curl --proto '=https' --tlsv1.2 -sSf -L \
+              https://install.determinate.systems/nix \
+              | sh -s -- install linux \
+                --init none \
+                --no-confirm \
+                --extra-conf "experimental-features = nix-command flakes" \
+                --extra-conf "accept-flake-config = true"
+          fi
+          if ! getent group nixbld > /dev/null; then
+            groupadd -r nixbld
+          fi
+          for i in $(seq 1 32); do
+            if ! id -u "nixbld$i" > /dev/null 2>&1; then
+              useradd -r -g nixbld -G nixbld -d /var/empty \
+                -s /usr/sbin/nologin -c "Nix build user $i" "nixbld$i"
+            fi
+          done
+          echo "$NIX_BIN_DIR" >> "$GITHUB_PATH"
+
+      - name: Run copyright header check
+        run: |
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          nix develop --command just copyright-headers
+
+  fmt:
+    name: Format check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install or reuse Nix
+        run: |
+          set -euo pipefail
+          NIX_BIN_DIR="/nix/var/nix/profiles/default/bin"
+          if [ -x "$NIX_BIN_DIR/nix" ]; then
+            echo "Nix already present at $NIX_BIN_DIR (volume cache hit)"
+          else
+            echo "Installing Nix (cold start or fresh volume)"
+            curl --proto '=https' --tlsv1.2 -sSf -L \
+              https://install.determinate.systems/nix \
+              | sh -s -- install linux \
+                --init none \
+                --no-confirm \
+                --extra-conf "experimental-features = nix-command flakes" \
+                --extra-conf "accept-flake-config = true"
+          fi
+          if ! getent group nixbld > /dev/null; then
+            groupadd -r nixbld
+          fi
+          for i in $(seq 1 32); do
+            if ! id -u "nixbld$i" > /dev/null 2>&1; then
+              useradd -r -g nixbld -G nixbld -d /var/empty \
+                -s /usr/sbin/nologin -c "Nix build user $i" "nixbld$i"
+            fi
+          done
+          echo "$NIX_BIN_DIR" >> "$GITHUB_PATH"
+
+      - name: Run format check
+        run: |
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          nix develop --command just fmt
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install or reuse Nix
+        run: |
+          set -euo pipefail
+          NIX_BIN_DIR="/nix/var/nix/profiles/default/bin"
+          if [ -x "$NIX_BIN_DIR/nix" ]; then
+            echo "Nix already present at $NIX_BIN_DIR (volume cache hit)"
+          else
+            echo "Installing Nix (cold start or fresh volume)"
+            curl --proto '=https' --tlsv1.2 -sSf -L \
+              https://install.determinate.systems/nix \
+              | sh -s -- install linux \
+                --init none \
+                --no-confirm \
+                --extra-conf "experimental-features = nix-command flakes" \
+                --extra-conf "accept-flake-config = true"
+          fi
+          if ! getent group nixbld > /dev/null; then
+            groupadd -r nixbld
+          fi
+          for i in $(seq 1 32); do
+            if ! id -u "nixbld$i" > /dev/null 2>&1; then
+              useradd -r -g nixbld -G nixbld -d /var/empty \
+                -s /usr/sbin/nologin -c "Nix build user $i" "nixbld$i"
+            fi
+          done
+          echo "$NIX_BIN_DIR" >> "$GITHUB_PATH"
+
+      - name: Run clippy
+        run: |
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          nix develop --command just clippy
+
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install or reuse Nix
+        run: |
+          set -euo pipefail
+          NIX_BIN_DIR="/nix/var/nix/profiles/default/bin"
+          if [ -x "$NIX_BIN_DIR/nix" ]; then
+            echo "Nix already present at $NIX_BIN_DIR (volume cache hit)"
+          else
+            echo "Installing Nix (cold start or fresh volume)"
+            curl --proto '=https' --tlsv1.2 -sSf -L \
+              https://install.determinate.systems/nix \
+              | sh -s -- install linux \
+                --init none \
+                --no-confirm \
+                --extra-conf "experimental-features = nix-command flakes" \
+                --extra-conf "accept-flake-config = true"
+          fi
+          if ! getent group nixbld > /dev/null; then
+            groupadd -r nixbld
+          fi
+          for i in $(seq 1 32); do
+            if ! id -u "nixbld$i" > /dev/null 2>&1; then
+              useradd -r -g nixbld -G nixbld -d /var/empty \
+                -s /usr/sbin/nologin -c "Nix build user $i" "nixbld$i"
+            fi
+          done
+          echo "$NIX_BIN_DIR" >> "$GITHUB_PATH"
+
+      - name: Run tests
+        run: |
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          nix develop --command just test
+
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install or reuse Nix
+        run: |
+          set -euo pipefail
+          NIX_BIN_DIR="/nix/var/nix/profiles/default/bin"
+          if [ -x "$NIX_BIN_DIR/nix" ]; then
+            echo "Nix already present at $NIX_BIN_DIR (volume cache hit)"
+          else
+            echo "Installing Nix (cold start or fresh volume)"
+            curl --proto '=https' --tlsv1.2 -sSf -L \
+              https://install.determinate.systems/nix \
+              | sh -s -- install linux \
+                --init none \
+                --no-confirm \
+                --extra-conf "experimental-features = nix-command flakes" \
+                --extra-conf "accept-flake-config = true"
+          fi
+          if ! getent group nixbld > /dev/null; then
+            groupadd -r nixbld
+          fi
+          for i in $(seq 1 32); do
+            if ! id -u "nixbld$i" > /dev/null 2>&1; then
+              useradd -r -g nixbld -G nixbld -d /var/empty \
+                -s /usr/sbin/nologin -c "Nix build user $i" "nixbld$i"
+            fi
+          done
+          echo "$NIX_BIN_DIR" >> "$GITHUB_PATH"
+
+      - name: Run build
+        run: |
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          nix develop --command just build
+
+  flake-check:
+    name: Nix flake check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install or reuse Nix
+        run: |
+          set -euo pipefail
+          NIX_BIN_DIR="/nix/var/nix/profiles/default/bin"
+          if [ -x "$NIX_BIN_DIR/nix" ]; then
+            echo "Nix already present at $NIX_BIN_DIR (volume cache hit)"
+          else
+            echo "Installing Nix (cold start or fresh volume)"
+            curl --proto '=https' --tlsv1.2 -sSf -L \
+              https://install.determinate.systems/nix \
+              | sh -s -- install linux \
+                --init none \
+                --no-confirm \
+                --extra-conf "experimental-features = nix-command flakes" \
+                --extra-conf "accept-flake-config = true"
+          fi
+          if ! getent group nixbld > /dev/null; then
+            groupadd -r nixbld
+          fi
+          for i in $(seq 1 32); do
+            if ! id -u "nixbld$i" > /dev/null 2>&1; then
+              useradd -r -g nixbld -G nixbld -d /var/empty \
+                -s /usr/sbin/nologin -c "Nix build user $i" "nixbld$i"
+            fi
+          done
+          echo "$NIX_BIN_DIR" >> "$GITHUB_PATH"
+
+      - name: Run flake check
+        run: |
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          nix flake check --print-build-logs
