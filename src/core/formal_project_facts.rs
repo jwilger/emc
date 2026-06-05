@@ -94,6 +94,8 @@ pub struct NewProjectCommandInput {
     source_kind: String,
     source_description: String,
     provenance_chain: Vec<String>,
+    event_stream_source_event: String,
+    event_stream_source_attribute: String,
 }
 
 impl NewProjectCommandInput {
@@ -111,6 +113,14 @@ impl NewProjectCommandInput {
                 .iter()
                 .map(|hop| hop.as_ref().to_owned())
                 .collect(),
+            event_stream_source_event: input
+                .event_stream_source_event()
+                .map_or("", EventName::as_ref)
+                .to_owned(),
+            event_stream_source_attribute: input
+                .event_stream_source_attribute()
+                .map_or("", EventAttributeName::as_ref)
+                .to_owned(),
         }
     }
 }
@@ -960,6 +970,8 @@ pub struct ProjectCommandInput {
     source_kind: String,
     source_description: String,
     provenance_chain: Vec<String>,
+    event_stream_source_event: String,
+    event_stream_source_attribute: String,
 }
 
 impl ProjectCommandInput {
@@ -989,6 +1001,14 @@ impl ProjectCommandInput {
 
     pub fn provenance_chain(&self) -> &[String] {
         &self.provenance_chain
+    }
+
+    pub fn event_stream_source_event(&self) -> &str {
+        &self.event_stream_source_event
+    }
+
+    pub fn event_stream_source_attribute(&self) -> &str {
+        &self.event_stream_source_attribute
     }
 }
 
@@ -1990,7 +2010,7 @@ pub fn parse_lean_project_command_inputs(
 ) -> Result<Vec<ProjectCommandInput>, FormalProjectFactError> {
     command_input_entries_from_list(
         contents.as_ref(),
-        "def modelCommandInputs : List (String × String × String × String × String × String × List String) := ",
+        "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String) := ",
     )
 }
 
@@ -3048,7 +3068,7 @@ pub fn add_project_command(
             .try_fold(contents, |contents, input| {
                 append_record_if_missing(
                     &contents,
-                    "def modelCommandInputs : List (String × String × String × String × String × String × List String) := ",
+                    "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String) := ",
                     &lean_command_input_record(input),
                 )
             })
@@ -3073,7 +3093,7 @@ pub fn add_project_command(
         )?;
         let command_inputs = command_input_entries_from_list(
             &contents,
-            "def modelCommandInputs : List (String × String × String × String × String × String × List String) := ",
+            "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String) := ",
         )?;
         replace_declaration(
             &contents,
@@ -5197,7 +5217,7 @@ pub fn add_project_event(
         )?;
         let command_inputs = command_input_entries_from_list(
             &contents,
-            "def modelCommandInputs : List (String × String × String × String × String × String × List String) := ",
+            "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String) := ",
         )?;
         let read_models = read_model_entries_from_list(
             &contents,
@@ -5625,7 +5645,7 @@ fn parse_lean_project_command_inputs_from_contents_or_empty(
 ) -> Vec<ProjectCommandInput> {
     command_input_entries_from_list(
         contents,
-        "def modelCommandInputs : List (String × String × String × String × String × String × List String) := ",
+        "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String) := ",
     )
     .unwrap_or_default()
 }
@@ -6026,6 +6046,16 @@ fn command_input_entries_from_list(
                     "formal project command input record is malformed",
                 ))
             } else {
+                let (provenance_chain, event_stream_source_event, event_stream_source_attribute) =
+                    if strings.len() >= 9 {
+                        (
+                            strings[6..strings.len() - 2].to_vec(),
+                            strings[strings.len() - 2].clone(),
+                            strings[strings.len() - 1].clone(),
+                        )
+                    } else {
+                        (strings[6..].to_vec(), String::new(), String::new())
+                    };
                 Ok(ProjectCommandInput {
                     workflow_slug: strings[0].clone(),
                     slice_slug: strings[1].clone(),
@@ -6033,7 +6063,9 @@ fn command_input_entries_from_list(
                     input: strings[3].clone(),
                     source_kind: strings[4].clone(),
                     source_description: strings[5].clone(),
-                    provenance_chain: strings[6..].to_vec(),
+                    provenance_chain,
+                    event_stream_source_event,
+                    event_stream_source_attribute,
                 })
             }
         })
@@ -7407,14 +7439,16 @@ fn digest_command_inputs(command_inputs: &[ProjectCommandInput]) -> String {
         .iter()
         .map(|command_input| {
             format!(
-                "{}/{}/{}/{}@{}#{}#{}",
+                "{}/{}/{}/{}@{}#{}#{}#{}#{}",
                 command_input.workflow_slug,
                 command_input.slice_slug,
                 command_input.command,
                 command_input.input,
                 command_input.source_kind,
                 command_input.source_description,
-                command_input.provenance_chain.join(" -> ")
+                command_input.provenance_chain.join(" -> "),
+                command_input.event_stream_source_event,
+                command_input.event_stream_source_attribute
             )
         })
         .collect::<Vec<_>>()
@@ -7788,27 +7822,31 @@ fn lean_command_record(command: &NewProjectCommand) -> String {
 
 fn lean_command_input_record(command_input: &NewProjectCommandInput) -> String {
     format!(
-        "({}, {}, {}, {}, {}, {}, [{}])",
+        "({}, {}, {}, {}, {}, {}, [{}], {}, {})",
         quoted(command_input.workflow_slug.as_ref()),
         quoted(command_input.slice_slug.as_ref()),
         quoted(command_input.command.as_ref()),
         quoted(command_input.input.as_ref()),
         quoted(&command_input.source_kind),
         quoted(&command_input.source_description),
-        quoted_string_list(&command_input.provenance_chain)
+        quoted_string_list(&command_input.provenance_chain),
+        quoted(&command_input.event_stream_source_event),
+        quoted(&command_input.event_stream_source_attribute)
     )
 }
 
 fn quint_command_input_record(command_input: &NewProjectCommandInput) -> String {
     format!(
-        "{{ workflow: {}, slice: {}, command: {}, input: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}] }}",
+        "{{ workflow: {}, slice: {}, command: {}, input: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {} }}",
         quoted(command_input.workflow_slug.as_ref()),
         quoted(command_input.slice_slug.as_ref()),
         quoted(command_input.command.as_ref()),
         quoted(command_input.input.as_ref()),
         quoted(&command_input.source_kind),
         quoted(&command_input.source_description),
-        quoted_string_list(&command_input.provenance_chain)
+        quoted_string_list(&command_input.provenance_chain),
+        quoted(&command_input.event_stream_source_event),
+        quoted(&command_input.event_stream_source_attribute)
     )
 }
 

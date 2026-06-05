@@ -588,6 +588,80 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             slice,
             name_flag,
             name,
+            input_flag,
+            input,
+            input_source_flag,
+            input_source,
+            input_description_flag,
+            input_description,
+            input_provenance_flag,
+            input_provenance,
+            emits_flag,
+            emits,
+            observes_flag,
+            observes,
+            source_event_flag,
+            source_event,
+            source_attribute_flag,
+            source_attribute,
+        ] if command == "add"
+            && subject == "command"
+            && slice_flag == "--slice"
+            && name_flag == "--name"
+            && input_flag == "--input"
+            && input_source_flag == "--input-source"
+            && input_description_flag == "--input-description"
+            && input_provenance_flag == "--input-provenance"
+            && emits_flag == "--emits"
+            && observes_flag == "--observes"
+            && source_event_flag == "--source-event"
+            && source_attribute_flag == "--source-attribute" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+            let command_name =
+                parse_command_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+            let input_name =
+                parse_datum_name(input).map_err(|error| ShellError::message(error.to_string()))?;
+            let input_source = parse_command_input_source_kind(input_source)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let input_description = parse_command_input_source_description(input_description)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let provenance_chain = parse_source_chain_hops(input_provenance)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let emitted_events =
+                parse_event_names(emits).map_err(|error| ShellError::message(error.to_string()))?;
+            let observed_streams = parse_stream_names(observes)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_event = parse_event_name(source_event)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_attribute = parse_event_attribute_name(source_attribute)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::AddCommandDefinition {
+                    command: NewCommandDefinition::new(
+                        slice_slug,
+                        command_name,
+                        NewCommandInput::new(
+                            input_name,
+                            input_source,
+                            input_description,
+                            CommandInputProvenanceChain::from_hops(provenance_chain),
+                        )
+                        .with_event_stream_source(source_event, source_attribute),
+                        EmittedEventNames::from_events(emitted_events),
+                    )
+                    .with_observed_streams(CommandObservedStreams::from_streams(observed_streams)),
+                },
+            })
+        }
+        [
+            command,
+            subject,
+            slice_flag,
+            slice,
+            name_flag,
+            name,
             read_model_flag,
             read_model,
             field_flag,
@@ -3508,6 +3582,7 @@ fn help_command() -> ClapCommand {
   emc add workflow-transition-evidence --workflow <workflow> --from <step> --to <step> --via <kind> --name <trigger> --source-evidence <text> --target-evidence <text>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --observes <stream[,stream]>
+  emc add command --slice <slice> --name <name> --input <datum> --input-source event_stream_state --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --observes <stream[,stream]> --source-event <event> --source-attribute <attribute>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --singleton <true|false> --repeat-behavior <already_exists_error|idempotent>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --error <name> --error-scenario <scenario> --error-recovery <kind>
   emc add external-payload --slice <slice> --name <name> --field <field> --field-provenance <text> --bit-encoding <semantics>

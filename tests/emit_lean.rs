@@ -694,7 +694,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure CommandInput where\n  name : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String"
+                "structure CommandInput where\n  name : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String"
             ),
             "Lean slice artifacts must represent command input source-chain provenance"
         );
@@ -1068,9 +1068,9 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def commandInputEventStreamSourceResolves (command : CommandDefinition) (input : CommandInput) : Bool := input.sourceKind != \"event_stream_state\" || (command.observedStreams.isEmpty == false && command.observedStreams.all scenarioStreamResolves)"
+                "def commandInputEventStreamSourceResolves (command : CommandDefinition) (input : CommandInput) : Bool := input.sourceKind != \"event_stream_state\" || (command.observedStreams.isEmpty == false && command.observedStreams.all scenarioStreamResolves && input.eventStreamSourceEvent.isEmpty == false && input.eventStreamSourceAttribute.isEmpty == false && sliceEventDefinitions.any (fun event => event.name == input.eventStreamSourceEvent && event.attributes.any (fun eventAttribute => eventAttribute.name == input.eventStreamSourceAttribute)))"
             ),
-            "Lean slice artifacts must require event-stream command inputs to name observed streams"
+            "Lean slice artifacts must require event-stream command inputs to name observed streams and upstream event attributes"
         );
         assert!(
             lean.contains(
