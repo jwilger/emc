@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 

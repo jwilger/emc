@@ -1,3 +1,5 @@
+# Copyright 2026 John Wilger
+
 Feature: Event model review gate prevents weak reviews from advancing workflow modeling
 
   Workflow modeling may proceed only after explicit clean review. Empty output,

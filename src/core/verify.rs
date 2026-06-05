@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 use std::collections::BTreeSet;
 
 use crate::core::effect::{

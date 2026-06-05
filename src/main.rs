@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 use std::env;
 use std::process::ExitCode;
 

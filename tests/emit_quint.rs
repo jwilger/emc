@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 #[cfg(test)]
 mod tests {
     use std::error::Error;
@@ -800,6 +802,9 @@ mod tests {
             "val externalPayloadFieldsHaveProvenance = sliceExternalPayloads.select(payload => payload.name != \"\" and payload.fields.select(payloadField => externalPayloadFieldHasProvenance(payloadField)).length() == payload.fields.length()).length() == sliceExternalPayloads.length()"
         ));
         assert!(quint.contains(
+            "def externalPayloadFieldHasBitLevelFlow(payload, payloadField) = bitLevelFlowCoversTarget(payload.name, payloadField.name)"
+        ));
+        assert!(quint.contains(
             "def commandInputReferencesAttributeSource(event, attribute, command) = command.emittedEvents.select(eventName => eventName == event.name).length() > 0 and command.inputs.select(input => input.name == attribute.sourceName).length() > 0"
         ));
         assert!(quint.contains(
@@ -926,7 +931,10 @@ mod tests {
             "val viewFieldDataFlowsAreComplete = sliceViewDefinitions.select(view => view.fields.select(viewField => viewFieldHasBitLevelFlow(view, viewField)).length() == view.fields.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
-            "val modeledDataFlowsAreBitComplete = commandInputDataFlowsAreComplete and eventAttributeDataFlowsAreComplete and readModelFieldDataFlowsAreComplete and viewFieldDataFlowsAreComplete"
+            "val externalPayloadFieldDataFlowsAreComplete = sliceExternalPayloads.select(payload => payload.fields.select(payloadField => externalPayloadFieldHasBitLevelFlow(payload, payloadField)).length() == payload.fields.length()).length() == sliceExternalPayloads.length()"
+        ));
+        assert!(quint.contains(
+            "val modeledDataFlowsAreBitComplete = commandInputDataFlowsAreComplete and eventAttributeDataFlowsAreComplete and readModelFieldDataFlowsAreComplete and viewFieldDataFlowsAreComplete and externalPayloadFieldDataFlowsAreComplete"
         ));
         assert!(quint.contains(
             "val viewControlsHaveSketchTokens = sliceViewDefinitions.select(view => view.controls.select(control => control.name != \"\" and control.commandName != \"\" and control.sketchToken != \"\").length() == view.controls.length()).length() == sliceViewDefinitions.length()"
@@ -1095,7 +1103,7 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val modeledDataFlowsAreBitComplete = commandInputDataFlowsAreComplete and eventAttributeDataFlowsAreComplete and readModelFieldDataFlowsAreComplete and viewFieldDataFlowsAreComplete"
+                "val modeledDataFlowsAreBitComplete = commandInputDataFlowsAreComplete and eventAttributeDataFlowsAreComplete and readModelFieldDataFlowsAreComplete and viewFieldDataFlowsAreComplete and externalPayloadFieldDataFlowsAreComplete"
             ),
             "Quint slice artifacts must verify modeled data has bit-level flow coverage"
         );

@@ -1,3 +1,5 @@
+<!-- Copyright 2026 John Wilger -->
+
 # Event Model Compiler Full-System Plan
 
 > **Status:** This plan is retained as the historical implementation sequence.

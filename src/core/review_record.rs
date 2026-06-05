@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 

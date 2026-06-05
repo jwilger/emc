@@ -1,3 +1,5 @@
+# Copyright 2026 John Wilger
+
 Feature: Event model Gherkin suites are executable by dedicated Cucumber runners
 
   The review-gate specifications are not documentation-only.

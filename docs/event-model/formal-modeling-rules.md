@@ -1,3 +1,5 @@
+<!-- Copyright 2026 John Wilger -->
+
 # Formal Event Modeling Rules
 
 This document records the current event-modeling rule inventory for the EMC

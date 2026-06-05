@@ -1,0 +1,7 @@
+# Copyright 2026 John Wilger
+
+pre-commit:
+  parallel: true
+  commands:
+    copyright-headers:
+      run: scripts/copyright-headers.sh --check

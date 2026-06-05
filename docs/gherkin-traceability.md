@@ -1,3 +1,5 @@
+<!-- Copyright 2026 John Wilger -->
+
 # Gherkin Traceability
 
 This file maps each checked-in EMC Gherkin scenario to the Rust test target

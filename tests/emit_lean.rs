@@ -1,3 +1,5 @@
+// Copyright 2026 John Wilger
+
 #[cfg(test)]
 mod tests {
     use std::error::Error;
@@ -1500,6 +1502,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def externalPayloadFieldHasBitLevelFlow (payload : ExternalPayloadDefinition) (field : ExternalPayloadField) : Bool := bitLevelFlowCoversTarget payload.name field.name"
+            ),
+            "Lean slice artifacts must connect external payload fields to bit-level data-flow records"
+        );
+        assert!(
+            lean.contains(
                 "def externalPayloadFieldIsDeclared (eventAttribute : EventAttribute) : Bool := sliceExternalPayloads.any (fun payload => payload.name == eventAttribute.sourceName && payload.fields.any (fun field => field.name == eventAttribute.sourceField))"
             ),
             "Lean slice artifacts must connect external-sourced event attributes to declared payload fields"
@@ -1812,7 +1820,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def modeledDataFlowsAreBitComplete : Bool := commandInputDataFlowsAreComplete && eventAttributeDataFlowsAreComplete && readModelFieldDataFlowsAreComplete && viewFieldDataFlowsAreComplete"
+                "def externalPayloadFieldDataFlowsAreComplete : Bool := sliceExternalPayloads.all (fun payload => payload.fields.all (externalPayloadFieldHasBitLevelFlow payload))"
+            ),
+            "Lean slice artifacts must prove every external payload field has bit-level flow semantics"
+        );
+        assert!(
+            lean.contains(
+                "def modeledDataFlowsAreBitComplete : Bool := commandInputDataFlowsAreComplete && eventAttributeDataFlowsAreComplete && readModelFieldDataFlowsAreComplete && viewFieldDataFlowsAreComplete && externalPayloadFieldDataFlowsAreComplete"
             ),
             "Lean slice artifacts must aggregate bit-level information-completeness obligations for modeled data"
         );

@@ -1,3 +1,5 @@
+# Copyright 2026 John Wilger
+
 {
   description = "Development environment and release builds for EMC";
 
