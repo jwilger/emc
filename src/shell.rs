@@ -19,13 +19,14 @@ use crate::core::formal_graph::{
     parse_quint_workflow_graph,
 };
 use crate::core::formal_project_facts::{
-    NewProjectCommand, NewProjectEvent, NewProjectReadModel, NewProjectStream, NewProjectView,
-    ProjectCommand, ProjectEvent, ProjectReadModel, ProjectStream, ProjectView,
-    add_project_command, add_project_event, add_project_read_model, add_project_stream,
-    add_project_view, parse_lean_project_commands, parse_lean_project_events,
+    NewProjectAutomation, NewProjectCommand, NewProjectEvent, NewProjectReadModel,
+    NewProjectStream, NewProjectView, ProjectAutomation, ProjectCommand, ProjectEvent,
+    ProjectReadModel, ProjectStream, ProjectView, add_project_automation, add_project_command,
+    add_project_event, add_project_read_model, add_project_stream, add_project_view,
+    parse_lean_project_automations, parse_lean_project_commands, parse_lean_project_events,
     parse_lean_project_read_models, parse_lean_project_streams, parse_lean_project_views,
-    parse_quint_project_commands, parse_quint_project_events, parse_quint_project_read_models,
-    parse_quint_project_streams, parse_quint_project_views,
+    parse_quint_project_automations, parse_quint_project_commands, parse_quint_project_events,
+    parse_quint_project_read_models, parse_quint_project_streams, parse_quint_project_views,
 };
 use crate::core::formal_slice_facts::{
     add_automation_definition, add_bit_level_data_flow, add_board_connection, add_board_element,
@@ -40,9 +41,9 @@ use crate::core::formal_workflow_facts::{
 };
 use crate::core::json_object_document::JsonObjectDocument;
 use crate::core::layout::{
-    ModeledWorkflowLayout, ModeledWorkflowLayouts, ModeledWorkflowSliceDetails,
-    ModeledWorkflowTransitions, check_project, list_slices, list_transitions, list_workflows,
-    show_document, show_workflow,
+    ModeledProjectRootInventories, ModeledWorkflowLayout, ModeledWorkflowLayouts,
+    ModeledWorkflowSliceDetails, ModeledWorkflowTransitions, check_project, list_slices,
+    list_transitions, list_workflows, show_document, show_workflow,
 };
 use crate::core::project::{ProjectName, ProjectSliceMembership, ProjectSliceMemberships};
 use crate::core::review_record::{
@@ -138,7 +139,14 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::AddAutomationDefinitionFromSlice(automation) => {
             let slice_artifacts =
                 read_formal_slice_artifact_paths_and_contents(automation.slice_slug())?;
-            let plan = add_automation_definition(
+            let project_name = read_project_manifest_name()?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let (workflow_layout, _workflow_graph) = find_formal_workflow_containing_slice_in(
+                &formal_workflows,
+                automation.slice_slug(),
+            )?;
+            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
+            let slice_plan = add_automation_definition(
                 slice_artifacts.lean_path,
                 slice_artifacts.lean_contents,
                 slice_artifacts.quint_path,
@@ -146,7 +154,21 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 automation.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let project_automation_plan = add_project_automation(
+                project_artifacts.lean_path,
+                project_artifacts.lean_contents,
+                project_artifacts.quint_path,
+                project_artifacts.quint_contents,
+                NewProjectAutomation::new(
+                    workflow_layout.slug().clone(),
+                    automation.slice_slug().clone(),
+                    automation.name().clone(),
+                ),
+            )
+            .map_err(|error| ShellError::message(error.to_string()))?;
+            let mut reports = interpret_collect_reports(slice_plan)?;
+            reports.extend(interpret_collect_reports(project_automation_plan)?);
+            Ok(reports)
         }
         Effect::AddBitLevelDataFlowFromSlice(data_flow) => {
             let slice_artifacts =
@@ -502,16 +524,20 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let project_commands = read_synchronized_project_commands(&project_name)?;
             let project_read_models = read_synchronized_project_read_models(&project_name)?;
             let project_views = read_synchronized_project_views(&project_name)?;
+            let project_automations = read_synchronized_project_automations(&project_name)?;
             let project_streams = read_synchronized_project_streams(&project_name)?;
             let project_events = read_synchronized_project_events(&project_name)?;
             interpret_collect_reports(check_project(
                 project_name,
                 formal_workflows,
-                project_commands,
-                project_read_models,
-                project_views,
-                project_streams,
-                project_events,
+                ModeledProjectRootInventories::new(
+                    project_commands,
+                    project_read_models,
+                    project_views,
+                    project_automations,
+                    project_streams,
+                    project_events,
+                ),
             ))
         }
         Effect::ConnectWorkflowFromWorkflow(connection) => {
@@ -930,6 +956,26 @@ fn read_synchronized_project_views(
             "Lean and Quint project root view inventories disagree",
         )),
         (_lean_views, _quint_views) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_automations(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectAutomation>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_automations(&artifacts.lean_contents),
+        parse_quint_project_automations(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_automations), Ok(quint_automations)) if lean_automations == quint_automations => {
+            Ok(lean_automations)
+        }
+        (Ok(_lean_automations), Ok(_quint_automations)) => Err(ShellError::message(
+            "Lean and Quint project root automation inventories disagree",
+        )),
+        (_lean_automations, _quint_automations) => Ok(Vec::new()),
     }
 }
 

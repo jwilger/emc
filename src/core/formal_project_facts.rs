@@ -3,7 +3,8 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::types::{
-    CommandName, EventName, ReadModelName, SliceSlug, StreamName, ViewName, WorkflowSlug,
+    AutomationName, CommandName, EventName, ReadModelName, SliceSlug, StreamName, ViewName,
+    WorkflowSlug,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -74,6 +75,27 @@ impl NewProjectView {
             workflow_slug,
             slice_slug,
             view,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NewProjectAutomation {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    automation: AutomationName,
+}
+
+impl NewProjectAutomation {
+    pub fn new(
+        workflow_slug: WorkflowSlug,
+        slice_slug: SliceSlug,
+        automation: AutomationName,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            slice_slug,
+            automation,
         }
     }
 }
@@ -169,6 +191,27 @@ impl ProjectView {
 
     pub fn view(&self) -> &str {
         &self.view
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectAutomation {
+    workflow_slug: String,
+    slice_slug: String,
+    automation: String,
+}
+
+impl ProjectAutomation {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn automation(&self) -> &str {
+        &self.automation
     }
 }
 
@@ -278,6 +321,24 @@ pub fn parse_quint_project_views(
     view_entries_from_list(contents.as_ref(), "val modelViews: List[ModelView] = ")
 }
 
+pub fn parse_lean_project_automations(
+    contents: &FileContents,
+) -> Result<Vec<ProjectAutomation>, FormalProjectFactError> {
+    automation_entries_from_list(
+        contents.as_ref(),
+        "def modelAutomations : List (String × String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_automations(
+    contents: &FileContents,
+) -> Result<Vec<ProjectAutomation>, FormalProjectFactError> {
+    automation_entries_from_list(
+        contents.as_ref(),
+        "val modelAutomations: List[ModelAutomation] = ",
+    )
+}
+
 pub fn parse_lean_project_events(
     contents: &FileContents,
 ) -> Result<Vec<ProjectEvent>, FormalProjectFactError> {
@@ -323,6 +384,7 @@ pub fn add_project_command(
         .and_then(|contents| {
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
+            let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
@@ -330,6 +392,7 @@ pub fn add_project_command(
                 &commands,
                 &read_models,
                 &views,
+                &automations,
                 &streams,
                 &events,
             )
@@ -354,6 +417,7 @@ pub fn add_project_command(
         .and_then(|contents| {
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
+            let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
@@ -361,6 +425,7 @@ pub fn add_project_command(
                 &commands,
                 &read_models,
                 &views,
+                &automations,
                 &streams,
                 &events,
             )
@@ -407,6 +472,7 @@ pub fn add_project_read_model(
         .and_then(|contents| {
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
+            let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
@@ -414,6 +480,7 @@ pub fn add_project_read_model(
                 &commands,
                 &read_models,
                 &views,
+                &automations,
                 &streams,
                 &events,
             )
@@ -440,6 +507,7 @@ pub fn add_project_read_model(
         .and_then(|contents| {
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
+            let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
@@ -447,6 +515,7 @@ pub fn add_project_read_model(
                 &commands,
                 &read_models,
                 &views,
+                &automations,
                 &streams,
                 &events,
             )
@@ -493,6 +562,7 @@ pub fn add_project_view(
         .and_then(|contents| {
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
@@ -500,6 +570,7 @@ pub fn add_project_view(
                 &commands,
                 &read_models,
                 &views,
+                &automations,
                 &streams,
                 &events,
             )
@@ -523,6 +594,7 @@ pub fn add_project_view(
         .and_then(|contents| {
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
@@ -530,6 +602,7 @@ pub fn add_project_view(
                 &commands,
                 &read_models,
                 &views,
+                &automations,
                 &streams,
                 &events,
             )
@@ -542,6 +615,96 @@ pub fn add_project_view(
         Effect::Report(report_line(format!(
             "added view {} to project root",
             view.view.as_ref()
+        ))?),
+    ]))
+}
+
+pub fn add_project_automation(
+    lean_path: ProjectPath,
+    lean_contents: FileContents,
+    quint_path: ProjectPath,
+    quint_contents: FileContents,
+    automation: NewProjectAutomation,
+) -> Result<EffectPlan, FormalProjectFactError> {
+    let lean_record = lean_automation_record(&automation);
+    let quint_record = quint_automation_record(&automation);
+    let lean = append_record_if_missing(
+        lean_contents.as_ref(),
+        "def modelAutomations : List (String × String × String) := ",
+        &lean_record,
+    )
+    .and_then(|contents| {
+        let automations = automation_entries_from_list(
+            &contents,
+            "def modelAutomations : List (String × String × String) := ",
+        )?;
+        replace_declaration(
+            &contents,
+            "theorem modelAutomationsAreDeclared :",
+            &format!(
+                "theorem modelAutomationsAreDeclared : modelAutomations.length = {} := rfl",
+                automations.len()
+            ),
+        )
+        .and_then(|contents| {
+            let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
+            let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
+            let views = parse_lean_project_views_from_contents_or_empty(&contents);
+            let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
+            let events = parse_lean_project_events_from_contents_or_empty(&contents);
+            update_lean_digest(
+                &contents,
+                &commands,
+                &read_models,
+                &views,
+                &automations,
+                &streams,
+                &events,
+            )
+        })
+    })?;
+    let quint = append_record_if_missing(
+        quint_contents.as_ref(),
+        "val modelAutomations: List[ModelAutomation] = ",
+        &quint_record,
+    )
+    .and_then(|contents| {
+        let automations = automation_entries_from_list(
+            &contents,
+            "val modelAutomations: List[ModelAutomation] = ",
+        )?;
+        replace_declaration(
+            &contents,
+            "val modelAutomationsAreDeclared =",
+            &format!(
+                "val modelAutomationsAreDeclared = modelAutomations.length() == {}",
+                automations.len()
+            ),
+        )
+        .and_then(|contents| {
+            let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
+            let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
+            let views = parse_quint_project_views_from_contents_or_empty(&contents);
+            let streams = parse_quint_project_streams_from_contents_or_empty(&contents);
+            let events = parse_quint_project_events_from_contents_or_empty(&contents);
+            update_quint_digest(
+                &contents,
+                &commands,
+                &read_models,
+                &views,
+                &automations,
+                &streams,
+                &events,
+            )
+        })
+    })?;
+
+    Ok(EffectPlan::new(vec![
+        Effect::WriteFile(lean_path, file_contents(lean)?),
+        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::Report(report_line(format!(
+            "added automation {} to project root",
+            automation.automation.as_ref()
         ))?),
     ]))
 }
@@ -577,12 +740,14 @@ pub fn add_project_stream(
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
+            let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 &commands,
                 &read_models,
                 &views,
+                &automations,
                 &streams,
                 &events,
             )
@@ -608,12 +773,14 @@ pub fn add_project_stream(
             let commands = parse_quint_project_commands_from_contents_or_empty(&contents);
             let read_models = parse_quint_project_read_models_from_contents_or_empty(&contents);
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
+            let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let events = parse_quint_project_events_from_contents_or_empty(&contents);
             update_quint_digest(
                 &contents,
                 &commands,
                 &read_models,
                 &views,
+                &automations,
                 &streams,
                 &events,
             )
@@ -657,6 +824,10 @@ pub fn add_project_event(
             &contents,
             "def modelViews : List (String × String × String) := ",
         )?;
+        let automations = automation_entries_from_list(
+            &contents,
+            "def modelAutomations : List (String × String × String) := ",
+        )?;
         let streams = stream_entries_from_list(
             &contents,
             "def modelStreams : List (String × String × String) := ",
@@ -679,6 +850,7 @@ pub fn add_project_event(
                 &commands,
                 &read_models,
                 &views,
+                &automations,
                 &streams,
                 &events,
             )
@@ -697,6 +869,10 @@ pub fn add_project_event(
             "val modelReadModels: List[ModelReadModel] = ",
         )?;
         let views = view_entries_from_list(&contents, "val modelViews: List[ModelView] = ")?;
+        let automations = automation_entries_from_list(
+            &contents,
+            "val modelAutomations: List[ModelAutomation] = ",
+        )?;
         let streams =
             stream_entries_from_list(&contents, "val modelStreams: List[ModelStream] = ")?;
         let events = event_entries_from_list(&contents, "val modelEvents: List[ModelEvent] = ")?;
@@ -714,6 +890,7 @@ pub fn add_project_event(
                 &commands,
                 &read_models,
                 &views,
+                &automations,
                 &streams,
                 &events,
             )
@@ -901,6 +1078,21 @@ fn parse_quint_project_views_from_contents_or_empty(contents: &str) -> Vec<Proje
     view_entries_from_list(contents, "val modelViews: List[ModelView] = ").unwrap_or_default()
 }
 
+fn parse_lean_project_automations_from_contents_or_empty(contents: &str) -> Vec<ProjectAutomation> {
+    automation_entries_from_list(
+        contents,
+        "def modelAutomations : List (String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_automations_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectAutomation> {
+    automation_entries_from_list(contents, "val modelAutomations: List[ModelAutomation] = ")
+        .unwrap_or_default()
+}
+
 fn parse_lean_project_streams_from_contents_or_empty(contents: &str) -> Vec<ProjectStream> {
     stream_entries_from_list(
         contents,
@@ -992,6 +1184,33 @@ fn view_entries_from_list(
     views.sort();
     views.dedup();
     Ok(views)
+}
+
+fn automation_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectAutomation>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut automations = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let strings = quoted_strings(&record)?;
+            if strings.len() < 3 {
+                Err(FormalProjectFactError::new(
+                    "formal project automation record is malformed",
+                ))
+            } else {
+                Ok(ProjectAutomation {
+                    workflow_slug: strings[0].clone(),
+                    slice_slug: strings[1].clone(),
+                    automation: strings[2].clone(),
+                })
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    automations.sort();
+    automations.dedup();
+    Ok(automations)
 }
 
 fn parse_lean_project_events_from_contents_or_empty(contents: &str) -> Vec<ProjectEvent> {
@@ -1120,6 +1339,7 @@ fn update_lean_digest(
     commands: &[ProjectCommand],
     read_models: &[ProjectReadModel],
     views: &[ProjectView],
+    automations: &[ProjectAutomation],
     streams: &[ProjectStream],
     events: &[ProjectEvent],
 ) -> Result<String, FormalProjectFactError> {
@@ -1128,6 +1348,7 @@ fn update_lean_digest(
         commands,
         read_models,
         views,
+        automations,
         streams,
         events,
     );
@@ -1153,6 +1374,7 @@ fn update_quint_digest(
     commands: &[ProjectCommand],
     read_models: &[ProjectReadModel],
     views: &[ProjectView],
+    automations: &[ProjectAutomation],
     streams: &[ProjectStream],
     events: &[ProjectEvent],
 ) -> Result<String, FormalProjectFactError> {
@@ -1161,6 +1383,7 @@ fn update_quint_digest(
         commands,
         read_models,
         views,
+        automations,
         streams,
         events,
     );
@@ -1183,6 +1406,7 @@ fn digest_with_project_inventories(
     commands: &[ProjectCommand],
     read_models: &[ProjectReadModel],
     views: &[ProjectView],
+    automations: &[ProjectAutomation],
     streams: &[ProjectStream],
     events: &[ProjectEvent],
 ) -> String {
@@ -1190,14 +1414,16 @@ fn digest_with_project_inventories(
         .split_once(";commands=")
         .or_else(|| current_digest.split_once(";read-models="))
         .or_else(|| current_digest.split_once(";views="))
+        .or_else(|| current_digest.split_once(";automations="))
         .or_else(|| current_digest.split_once(";streams="))
         .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};commands={};read-models={};views={};streams={};events={}",
+        "{prefix};commands={};read-models={};views={};automations={};streams={};events={}",
         digest_commands(commands),
         digest_read_models(read_models),
         digest_views(views),
+        digest_automations(automations),
         digest_streams(streams),
         digest_events(events)
     )
@@ -1233,6 +1459,19 @@ fn digest_views(views: &[ProjectView]) -> String {
     views
         .iter()
         .map(|view| format!("{}/{}/{}", view.workflow_slug, view.slice_slug, view.view))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_automations(automations: &[ProjectAutomation]) -> String {
+    automations
+        .iter()
+        .map(|automation| {
+            format!(
+                "{}/{}/{}",
+                automation.workflow_slug, automation.slice_slug, automation.automation
+            )
+        })
         .collect::<Vec<_>>()
         .join(",")
 }
@@ -1344,6 +1583,24 @@ fn quint_view_record(view: &NewProjectView) -> String {
         quoted(view.workflow_slug.as_ref()),
         quoted(view.slice_slug.as_ref()),
         quoted(view.view.as_ref())
+    )
+}
+
+fn lean_automation_record(automation: &NewProjectAutomation) -> String {
+    format!(
+        "({}, {}, {})",
+        quoted(automation.workflow_slug.as_ref()),
+        quoted(automation.slice_slug.as_ref()),
+        quoted(automation.automation.as_ref())
+    )
+}
+
+fn quint_automation_record(automation: &NewProjectAutomation) -> String {
+    format!(
+        "{{ workflow: {}, slice: {}, automation: {} }}",
+        quoted(automation.workflow_slug.as_ref()),
+        quoted(automation.slice_slug.as_ref()),
+        quoted(automation.automation.as_ref())
     )
 }
 

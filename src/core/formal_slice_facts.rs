@@ -790,6 +790,10 @@ impl NewAutomationDefinition {
     pub fn slice_slug(&self) -> &SliceSlug {
         &self.slice_slug
     }
+
+    pub fn name(&self) -> &AutomationName {
+        &self.name
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
