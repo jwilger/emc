@@ -216,6 +216,7 @@ fn project_root_effects(
     let workflow_count = modeled_workflows.len();
     let lean_model_slice_list = lean_model_slice_list(formal_workflows);
     let quint_model_slice_list = quint_model_slice_list(formal_workflows);
+    let model_digest = model_digest(project_name, modeled_workflows, formal_workflows);
     let slice_count = formal_workflows
         .iter()
         .map(|workflow| workflow.slice_details().as_slice().len())
@@ -290,6 +291,21 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelName :="),
+            artifact_marker(format!(
+                "def modelName := {}",
+                json_string(project_name_text)
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelDigest :="),
+            artifact_marker(format!("def modelDigest := {}", json_string(&model_digest))),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelWorkflows :"),
             artifact_marker(format!(
                 "def modelWorkflows : List String := {workflow_slug_list}"
@@ -306,10 +322,28 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelIdentityIsStable"),
+            artifact_marker(format!(
+                "theorem modelIdentityIsStable : modelName = {} := rfl",
+                json_string(project_name_text)
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelVersionIsStable"),
             artifact_marker(format!(
                 "theorem modelVersionIsStable : modelVersion = {} := rfl",
                 json_string(model_version)
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelDigestIsStable"),
+            artifact_marker(format!(
+                "theorem modelDigestIsStable : modelDigest = {} := rfl",
+                json_string(&model_digest)
             )),
             lean_message.clone(),
         ),
@@ -358,6 +392,24 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelName ="),
+            artifact_marker(format!(
+                "  val modelName = {}",
+                json_string(project_name_text)
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelDigest ="),
+            artifact_marker(format!(
+                "  val modelDigest = {}",
+                json_string(&model_digest)
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelWorkflows:"),
             artifact_marker(format!(
                 "  val modelWorkflows: List[str] = {workflow_slug_list}"
@@ -374,10 +426,28 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelIdentityStable ="),
+            artifact_marker(format!(
+                "  val modelIdentityStable = modelName == {}",
+                json_string(project_name_text)
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelVersionStable ="),
             artifact_marker(format!(
                 "  val modelVersionStable = modelVersion == {}",
                 json_string(model_version)
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelDigestStable ="),
+            artifact_marker(format!(
+                "  val modelDigestStable = modelDigest == {}",
+                json_string(&model_digest)
             )),
             quint_message.clone(),
         ),
@@ -1270,6 +1340,47 @@ fn quint_model_slice_list(formal_workflows: &[FormalWorkflowGraph]) -> String {
             .collect::<Vec<_>>()
             .join(", ")
     )
+}
+
+fn model_digest(
+    project_name: &ProjectName,
+    modeled_workflows: &[ModeledWorkflowLayout],
+    formal_workflows: &[FormalWorkflowGraph],
+) -> String {
+    format!(
+        "project:name={};version=0.1.0;workflows={};slices={}",
+        project_name.as_ref(),
+        digest_workflows(modeled_workflows),
+        digest_slices(formal_workflows)
+    )
+}
+
+fn digest_workflows(modeled_workflows: &[ModeledWorkflowLayout]) -> String {
+    let mut workflow_slugs = modeled_workflows
+        .iter()
+        .map(|workflow| workflow.slug().as_ref())
+        .collect::<Vec<_>>();
+    workflow_slugs.sort_unstable();
+    workflow_slugs.join(",")
+}
+
+fn digest_slices(formal_workflows: &[FormalWorkflowGraph]) -> String {
+    let mut memberships = formal_workflows
+        .iter()
+        .flat_map(|workflow| {
+            workflow
+                .slice_details()
+                .as_slice()
+                .iter()
+                .map(|slice| (workflow.slug().as_ref(), slice.slug().as_ref()))
+        })
+        .collect::<Vec<_>>();
+    memberships.sort_unstable();
+    memberships
+        .into_iter()
+        .map(|(workflow_slug, slice_slug)| format!("{workflow_slug}/{slice_slug}"))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn module_name(project_name: &ProjectName) -> String {

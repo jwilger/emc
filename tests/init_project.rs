@@ -52,8 +52,30 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelName := \"Repair Desk\""),
+            "Lean project root must carry the project model name"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=;slices=\""
+            ),
+            "Lean project root must carry a deterministic project model digest"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
                 .contains("theorem modelVersionIsStable : modelVersion = \"0.1.0\" := rfl"),
             "Lean project root must prove the formal model version"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("theorem modelIdentityIsStable : modelName = \"Repair Desk\" := rfl"),
+            "Lean project root must prove project model identity"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "theorem modelDigestIsStable : modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=;slices=\" := rfl"
+            ),
+            "Lean project root must prove project model digest stability"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?
@@ -62,8 +84,30 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?
+                .contains("val modelName = \"Repair Desk\""),
+            "Quint project root must carry the project model name"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=;slices=\""
+            ),
+            "Quint project root must carry a deterministic project model digest"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?
                 .contains("val modelVersionStable = modelVersion == \"0.1.0\""),
             "Quint project root must expose the formal model version check"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?
+                .contains("val modelIdentityStable = modelName == \"Repair Desk\""),
+            "Quint project root must expose the project model identity check"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "val modelDigestStable = modelDigest == \"project:name=Repair Desk;version=0.1.0;workflows=;slices=\""
+            ),
+            "Quint project root must expose the project model digest invariant"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/lakefile.lean"))?

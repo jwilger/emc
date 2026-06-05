@@ -123,8 +123,10 @@ fn emit_lean_project_root(
     let workflow_count = workflow_slugs.len();
     let slice_list = lean_slice_membership_list(slice_memberships);
     let slice_count = slice_memberships.len();
+    let model_digest = model_digest(project_name, workflow_slugs, slice_memberships);
     file_contents(format!(
-        "namespace {module_name}\n\n-- EMC generated Lean4 model root.\n\ndef modelVersion := \"{FORMAL_MODEL_VERSION}\"\n\ndef modelWorkflows : List String := {workflow_list}\n\ndef modelSlices : List (String × String) := {slice_list}\n\ntheorem modelVersionIsStable : modelVersion = \"{FORMAL_MODEL_VERSION}\" := rfl\n\ntheorem modelWorkflowsAreDeclared : modelWorkflows.length = {workflow_count} := rfl\n\ntheorem modelSlicesAreDeclared : modelSlices.length = {slice_count} := rfl\n\nend {module_name}\n"
+        "namespace {module_name}\n\n-- EMC generated Lean4 model root.\n\ndef modelName := {project_name:?}\n\ndef modelVersion := \"{FORMAL_MODEL_VERSION}\"\n\ndef modelDigest := {model_digest:?}\n\ndef modelWorkflows : List String := {workflow_list}\n\ndef modelSlices : List (String × String) := {slice_list}\n\ntheorem modelIdentityIsStable : modelName = {project_name:?} := rfl\n\ntheorem modelVersionIsStable : modelVersion = \"{FORMAL_MODEL_VERSION}\" := rfl\n\ntheorem modelDigestIsStable : modelDigest = {model_digest:?} := rfl\n\ntheorem modelWorkflowsAreDeclared : modelWorkflows.length = {workflow_count} := rfl\n\ntheorem modelSlicesAreDeclared : modelSlices.length = {slice_count} := rfl\n\nend {module_name}\n",
+        project_name = project_name.as_ref(),
     ))
 }
 
@@ -138,8 +140,10 @@ fn emit_quint_project_root(
     let workflow_count = workflow_slugs.len();
     let slice_list = quint_slice_membership_list(slice_memberships);
     let slice_count = slice_memberships.len();
+    let model_digest = model_digest(project_name, workflow_slugs, slice_memberships);
     file_contents(format!(
-        "module {module_name} {{\n  type ModelSlice = {{ workflow: str, slice: str }}\n  val modelVersion = \"{FORMAL_MODEL_VERSION}\"\n  val modelWorkflows: List[str] = {workflow_list}\n  val modelSlices: List[ModelSlice] = {slice_list}\n  val modelVersionStable = modelVersion == \"{FORMAL_MODEL_VERSION}\"\n  val modelWorkflowsAreDeclared = modelWorkflows.length() == {workflow_count}\n  val modelSlicesAreDeclared = modelSlices.length() == {slice_count}\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}}\n"
+        "module {module_name} {{\n  type ModelSlice = {{ workflow: str, slice: str }}\n  val modelName = {project_name:?}\n  val modelVersion = \"{FORMAL_MODEL_VERSION}\"\n  val modelDigest = {model_digest:?}\n  val modelWorkflows: List[str] = {workflow_list}\n  val modelSlices: List[ModelSlice] = {slice_list}\n  val modelIdentityStable = modelName == {project_name:?}\n  val modelVersionStable = modelVersion == \"{FORMAL_MODEL_VERSION}\"\n  val modelDigestStable = modelDigest == {model_digest:?}\n  val modelWorkflowsAreDeclared = modelWorkflows.length() == {workflow_count}\n  val modelSlicesAreDeclared = modelSlices.length() == {slice_count}\n  var modelState: int\n  action init = modelState' = 0\n  action step = modelState' = modelState\n}}\n",
+        project_name = project_name.as_ref(),
     ))
 }
 
@@ -217,6 +221,46 @@ fn quint_slice_membership_list(slice_memberships: &[ProjectSliceMembership]) -> 
             .collect::<Vec<_>>()
             .join(", ")
     )
+}
+
+fn model_digest(
+    project_name: &ProjectName,
+    workflow_slugs: &[WorkflowSlug],
+    slice_memberships: &[ProjectSliceMembership],
+) -> String {
+    format!(
+        "project:name={};version={FORMAL_MODEL_VERSION};workflows={};slices={}",
+        project_name.as_ref(),
+        digest_workflows(workflow_slugs),
+        digest_slices(slice_memberships)
+    )
+}
+
+fn digest_workflows(workflow_slugs: &[WorkflowSlug]) -> String {
+    let mut workflow_slugs = workflow_slugs
+        .iter()
+        .map(|slug| slug.as_ref())
+        .collect::<Vec<_>>();
+    workflow_slugs.sort_unstable();
+    workflow_slugs.join(",")
+}
+
+fn digest_slices(slice_memberships: &[ProjectSliceMembership]) -> String {
+    let mut slice_memberships = slice_memberships
+        .iter()
+        .map(|membership| {
+            (
+                membership.workflow_slug.as_ref(),
+                membership.slice_slug.as_ref(),
+            )
+        })
+        .collect::<Vec<_>>();
+    slice_memberships.sort_unstable();
+    slice_memberships
+        .into_iter()
+        .map(|(workflow_slug, slice_slug)| format!("{workflow_slug}/{slice_slug}"))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn module_name(project_name: &ProjectName) -> String {

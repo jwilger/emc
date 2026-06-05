@@ -143,12 +143,36 @@ mod tests {
             "Lean project root must represent composed workflow-to-slice membership"
         );
         assert!(
+            lean_root.contains(
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket\""
+            ),
+            "Lean project root digest must include composed workflow and slice membership"
+        );
+        assert!(
+            lean_root.contains(
+                "theorem modelDigestIsStable : modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket\" := rfl"
+            ),
+            "Lean project root must prove composed model digest stability"
+        );
+        assert!(
             lean_root.contains("theorem modelSlicesAreDeclared : modelSlices.length = 1 := rfl"),
             "Lean project root must prove composed slice membership is declared"
         );
         assert!(
             quint_root.contains("val modelSlices: List[ModelSlice] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\" }]"),
             "Quint project root must represent composed workflow-to-slice membership"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket\""
+            ),
+            "Quint project root digest must include composed workflow and slice membership"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelDigestStable = modelDigest == \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket\""
+            ),
+            "Quint project root must verify composed model digest stability"
         );
         assert!(
             quint_root.contains("val modelSlicesAreDeclared = modelSlices.length() == 1"),
