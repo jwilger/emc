@@ -997,7 +997,7 @@ pub fn add_event_definition(
         &event_name,
     )
     .and_then(|contents| {
-        append_record(
+        append_record_if_missing(
             &contents,
             "def sliceStreams : List StreamDefinition := ",
             &lean_stream_record,
@@ -1016,7 +1016,7 @@ pub fn add_event_definition(
         &event_name,
     )
     .and_then(|contents| {
-        append_record(
+        append_record_if_missing(
             &contents,
             "val sliceStreams: List[StreamDefinition] = ",
             &quint_stream_record,
@@ -1485,6 +1485,42 @@ fn append_record(
     }
 }
 
+fn append_record_if_missing(
+    contents: &str,
+    marker: &str,
+    record: &str,
+) -> Result<String, FormalSliceFactError> {
+    let mut replaced = false;
+    let lines = contents
+        .lines()
+        .map(|line| {
+            let indentation_length = line.len() - line.trim_start().len();
+            let (indentation, declaration) = line.split_at(indentation_length);
+            if let Some(current_list) = declaration.strip_prefix(marker) {
+                replaced = true;
+                Ok(format!(
+                    "{indentation}{marker}{}",
+                    append_list_record_if_missing(current_list, record)?
+                ))
+            } else {
+                Ok(line.to_owned())
+            }
+        })
+        .collect::<Result<Vec<_>, FormalSliceFactError>>()?;
+
+    if replaced {
+        let mut updated = lines.join("\n");
+        if contents.ends_with('\n') {
+            updated.push('\n');
+        }
+        Ok(updated)
+    } else {
+        Err(FormalSliceFactError::new(format!(
+            "formal slice artifact is missing declaration {marker}"
+        )))
+    }
+}
+
 fn append_records(
     contents: &str,
     marker: &str,
@@ -1507,6 +1543,28 @@ fn append_list_record(current_list: &str, record: &str) -> Result<String, Formal
         .and_then(|without_open| without_open.strip_suffix(']'))
         .map(|existing| format!("[{existing},{record}]"))
         .ok_or_else(|| FormalSliceFactError::new("formal slice list declaration is malformed"))
+}
+
+fn append_list_record_if_missing(
+    current_list: &str,
+    record: &str,
+) -> Result<String, FormalSliceFactError> {
+    let trimmed = current_list.trim();
+    if trimmed == "[]" {
+        return Ok(format!("[{record}]"));
+    }
+    let existing = trimmed
+        .strip_prefix('[')
+        .and_then(|without_open| without_open.strip_suffix(']'))
+        .ok_or_else(|| FormalSliceFactError::new("formal slice list declaration is malformed"))?;
+    if existing
+        .split(',')
+        .any(|existing_record| existing_record == record)
+    {
+        Ok(trimmed.to_owned())
+    } else {
+        Ok(format!("[{existing},{record}]"))
+    }
 }
 
 fn lean_scenario_record(scenario: &NewSliceScenario) -> String {

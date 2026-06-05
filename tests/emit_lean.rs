@@ -912,6 +912,30 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def definitionNamesAreUnique (names : List String) : Bool := names.all (fun name => stringNameCount name names == 1)"
+            ),
+            "Lean slice artifacts must define owned-definition name uniqueness"
+        );
+        assert!(
+            lean.contains(
+                "def sliceOwnedCommandNames : List String := sliceCommandDefinitions.map (fun command => command.name)"
+            ),
+            "Lean slice artifacts must collect owned command names for uniqueness proofs"
+        );
+        assert!(
+            lean.contains(
+                "def sliceOwnedControlNames : List String := sliceViewDefinitions.flatMap (fun view => view.controls.map (fun control => control.name))"
+            ),
+            "Lean slice artifacts must collect owned control names for uniqueness proofs"
+        );
+        assert!(
+            lean.contains(
+                "def sliceNamedDefinitionsAreUniquelyOwned : Bool := definitionNamesAreUnique sliceCommands && definitionNamesAreUnique sliceOwnedCommandNames && definitionNamesAreUnique sliceEvents && definitionNamesAreUnique sliceOwnedEventNames && definitionNamesAreUnique sliceOwnedStreamNames && definitionNamesAreUnique sliceOwnedExternalPayloadNames && definitionNamesAreUnique sliceReadModels && definitionNamesAreUnique sliceOwnedReadModelNames && definitionNamesAreUnique sliceViews && definitionNamesAreUnique sliceOwnedViewNames && definitionNamesAreUnique sliceOwnedAutomationNames && definitionNamesAreUnique sliceOwnedTranslationNames && definitionNamesAreUnique sliceOwnedControlNames"
+            ),
+            "Lean slice artifacts must expose owned-definition uniqueness as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def scenarioStreamResolves (streamName : String) : Bool := sliceStreams.any (fun stream => stream.name == streamName)"
             ),
             "Lean slice artifacts must define scenario stream resolution against modeled streams"
@@ -2133,6 +2157,12 @@ mod tests {
                 "theorem sliceScenarioNamesAreUniqueIsStable : sliceScenarioNamesAreUnique = true := rfl"
             ),
             "Lean slice artifacts must prove current first-class scenario names are unique"
+        );
+        assert!(
+            lean.contains(
+                "theorem sliceNamedDefinitionsAreUniquelyOwnedIsStable : sliceNamedDefinitionsAreUniquelyOwned = true := by\n  native_decide"
+            ),
+            "Lean slice artifacts must prove current owned definition names are unique"
         );
         assert!(
             lean.contains(
