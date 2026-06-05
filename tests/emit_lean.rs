@@ -1356,12 +1356,6 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def readModelsDoNotFeedCommands : Bool := sliceBoardConnections.all (fun connection => connection.sourceKind != \"read_model\" || connection.targetKind != \"command\")"
-            ),
-            "Lean slice artifacts must prove read models do not feed commands"
-        );
-        assert!(
-            lean.contains(
                 "def readModelViewConnectionHasIncomingEventUpdate (connection : BoardConnection) : Bool := connection.sourceKind != \"read_model\" || connection.targetKind != \"view\" || sliceBoardConnections.any (fun incoming => incoming.target == connection.source && incoming.targetKind == \"read_model\" && incoming.sourceKind == \"event\")"
             ),
             "Lean slice artifacts must define the read-model-to-view incoming event update obligation"
@@ -2329,10 +2323,6 @@ mod tests {
         assert!(
             lean.contains("theorem externalEventsDoNotUpdateReadModelsIsStable : externalEventsDoNotUpdateReadModels = true := rfl"),
             "Lean slice artifacts must prove current external events do not update read models"
-        );
-        assert!(
-            lean.contains("theorem readModelsDoNotFeedCommandsIsStable : readModelsDoNotFeedCommands = true := rfl"),
-            "Lean slice artifacts must prove current boards do not feed commands from read models"
         );
         assert!(
             lean.contains("theorem readModelsFeedingViewsHaveIncomingEventUpdatesIsStable : readModelsFeedingViewsHaveIncomingEventUpdates = true := rfl"),

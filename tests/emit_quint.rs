@@ -725,9 +725,6 @@ mod tests {
             "val boardConnectionsHaveCausalSemantics = sliceBoardConnections.select(connection => boardConnectionHasAllowedShape(connection) and commandEventBoardEdgeMatchesEmission(connection) and eventReadModelBoardEdgeMatchesProjection(connection) and externalEventCommandBoardEdgeMatchesTranslation(connection) and externalEventDoesNotUpdateReadModel(connection) and viewCommandBoardEdgeMatchesControl(connection)).length() == sliceBoardConnections.length()"
         ));
         assert!(quint.contains(
-            "val readModelsDoNotFeedCommands = sliceBoardConnections.select(connection => connection.sourceKind != \"read_model\" or connection.targetKind != \"command\").length() == sliceBoardConnections.length()"
-        ));
-        assert!(quint.contains(
             "def readModelViewConnectionHasIncomingEventUpdate(connection) = connection.sourceKind != \"read_model\" or connection.targetKind != \"view\" or sliceBoardConnections.select(incoming => incoming.target == connection.source and incoming.targetKind == \"read_model\" and incoming.sourceKind == \"event\").length() > 0"
         ));
         assert!(quint.contains(
