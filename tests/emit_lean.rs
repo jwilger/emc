@@ -1866,7 +1866,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def navigationTargetIsComplete (view : ViewDefinition) (target : NavigationTarget) : Bool := (target.targetType.isEmpty && target.targetName.isEmpty && target.externalWorkflowName.isEmpty && target.externalSystemName.isEmpty && target.handoffContract.isEmpty) || (target.targetType == \"modeled_view\" && target.targetName.isEmpty == false && sliceViews.contains target.targetName) || (target.targetType == \"local_view_state\" && localViewStateNavigationTargetResolves view target) || (target.targetType == \"external_workflow\" && target.externalWorkflowName.isEmpty == false) || (target.targetType == \"external_system\" && target.externalSystemName.isEmpty == false && target.handoffContract.isEmpty == false)"
+                "def navigationExternalWorkflowTargetsNamed (target : NavigationTarget) : Bool := target.targetType != \"external_workflow\" || target.externalWorkflowName.isEmpty == false"
+            ),
+            "Lean slice artifacts must require external-workflow navigation to name the target workflow"
+        );
+        assert!(
+            lean.contains(
+                "def navigationTargetIsComplete (view : ViewDefinition) (target : NavigationTarget) : Bool := (target.targetType.isEmpty && target.targetName.isEmpty && target.externalWorkflowName.isEmpty && target.externalSystemName.isEmpty && target.handoffContract.isEmpty) || (target.targetType == \"modeled_view\" && target.targetName.isEmpty == false && sliceViews.contains target.targetName) || (target.targetType == \"local_view_state\" && localViewStateNavigationTargetResolves view target) || (target.targetType == \"external_workflow\" && navigationExternalWorkflowTargetsNamed target) || (target.targetType == \"external_system\" && target.externalSystemName.isEmpty == false && target.handoffContract.isEmpty == false)"
             ),
             "Lean slice artifacts must require navigation targets to be complete for their target type"
         );
@@ -1887,6 +1893,12 @@ mod tests {
                 "def viewControlModeledViewNavigationTargetsResolve : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => navigationModeledViewTargetsExistingView control.navigation))"
             ),
             "Lean slice artifacts must prove modeled-view navigation targets existing composed views"
+        );
+        assert!(
+            lean.contains(
+                "def viewControlExternalWorkflowNavigationTargetsNamed : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => navigationExternalWorkflowTargetsNamed control.navigation))"
+            ),
+            "Lean slice artifacts must prove external-workflow navigation targets name the workflow"
         );
         assert!(
             lean.contains(
@@ -2657,6 +2669,12 @@ mod tests {
                 "theorem viewControlModeledViewNavigationTargetsResolveIsStable : viewControlModeledViewNavigationTargetsResolve = true := rfl"
             ),
             "Lean slice artifacts must prove current modeled-view navigation targets resolve"
+        );
+        assert!(
+            lean.contains(
+                "theorem viewControlExternalWorkflowNavigationTargetsNamedIsStable : viewControlExternalWorkflowNavigationTargetsNamed = true := rfl"
+            ),
+            "Lean slice artifacts must prove current external-workflow navigation targets name the workflow"
         );
         assert!(
             lean.contains(
