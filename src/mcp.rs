@@ -809,6 +809,12 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         "source_attribute": {
                             "type": "string"
                         },
+                        "source_payload": {
+                            "type": "string"
+                        },
+                        "source_field": {
+                            "type": "string"
+                        },
                         "singleton": {
                             "type": "boolean"
                         },
@@ -2395,6 +2401,18 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         .map(parse_event_attribute_name)
         .transpose()
         .map_err(|error| ShellError::message(error.to_string()))?;
+    let source_payload = arguments
+        .get("source_payload")
+        .and_then(Value::as_str)
+        .map(parse_event_attribute_source_name)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let source_field = arguments
+        .get("source_field")
+        .and_then(Value::as_str)
+        .map(parse_event_attribute_source_field)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
     let command_errors = parse_optional_command_errors(arguments)?;
 
     let singleton_repeat_behavior = parse_optional_singleton_repeat_behavior(arguments)?;
@@ -2404,17 +2422,37 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         input_description,
         CommandInputProvenanceChain::from_hops(provenance_chain),
     );
-    let command_input = match (source_event, source_attribute) {
-        (Some(event), Some(attribute)) => command_input.with_event_stream_source(event, attribute),
-        (None, None) => command_input,
-        (Some(_), None) => {
+    let command_input = match (source_event, source_attribute, source_payload, source_field) {
+        (Some(event), Some(attribute), None, None) => {
+            command_input.with_event_stream_source(event, attribute)
+        }
+        (None, None, Some(payload), Some(field)) => {
+            command_input.with_external_payload_source(payload, field)
+        }
+        (None, None, None, None) => command_input,
+        (Some(_), None, None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_attribute when source_event is provided",
             ));
         }
-        (None, Some(_)) => {
+        (None, Some(_), None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_event when source_attribute is provided",
+            ));
+        }
+        (None, None, Some(_), None) => {
+            return Err(ShellError::message(
+                "add_command_definition requires source_field when source_payload is provided",
+            ));
+        }
+        (None, None, None, Some(_)) => {
+            return Err(ShellError::message(
+                "add_command_definition requires source_payload when source_field is provided",
+            ));
+        }
+        _ => {
+            return Err(ShellError::message(
+                "add_command_definition accepts one command input source reference at a time",
             ));
         }
     };

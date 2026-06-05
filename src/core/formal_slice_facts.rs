@@ -248,6 +248,8 @@ pub struct NewCommandInput {
     provenance_chain: CommandInputProvenanceChain,
     event_stream_source_event: Option<EventName>,
     event_stream_source_attribute: Option<EventAttributeName>,
+    external_payload_source_name: Option<EventAttributeSourceName>,
+    external_payload_source_field: Option<EventAttributeSourceField>,
 }
 
 impl NewCommandInput {
@@ -264,6 +266,8 @@ impl NewCommandInput {
             provenance_chain,
             event_stream_source_event: None,
             event_stream_source_attribute: None,
+            external_payload_source_name: None,
+            external_payload_source_field: None,
         }
     }
 
@@ -274,6 +278,16 @@ impl NewCommandInput {
     ) -> Self {
         self.event_stream_source_event = Some(event);
         self.event_stream_source_attribute = Some(attribute);
+        self
+    }
+
+    pub fn with_external_payload_source(
+        mut self,
+        payload: EventAttributeSourceName,
+        field: EventAttributeSourceField,
+    ) -> Self {
+        self.external_payload_source_name = Some(payload);
+        self.external_payload_source_field = Some(field);
         self
     }
 
@@ -299,6 +313,14 @@ impl NewCommandInput {
 
     pub fn event_stream_source_attribute(&self) -> Option<&EventAttributeName> {
         self.event_stream_source_attribute.as_ref()
+    }
+
+    pub fn external_payload_source_name(&self) -> Option<&EventAttributeSourceName> {
+        self.external_payload_source_name.as_ref()
+    }
+
+    pub fn external_payload_source_field(&self) -> Option<&EventAttributeSourceField> {
+        self.external_payload_source_field.as_ref()
     }
 }
 
@@ -2733,7 +2755,7 @@ fn quint_view_field_record(field: &NewViewField) -> String {
 
 fn lean_command_input_record(input: &NewCommandInput) -> String {
     format!(
-        "{{ name := {}, sourceKind := {}, sourceDescription := {}, provenanceChain := [{}], eventStreamSourceEvent := {}, eventStreamSourceAttribute := {} }}",
+        "{{ name := {}, sourceKind := {}, sourceDescription := {}, provenanceChain := [{}], eventStreamSourceEvent := {}, eventStreamSourceAttribute := {}, externalPayloadSourceName := {}, externalPayloadSourceField := {} }}",
         quoted(input.name.as_ref()),
         quoted(input.source_kind.as_ref()),
         quoted(input.source_description.as_ref()),
@@ -2750,12 +2772,24 @@ fn lean_command_input_record(input: &NewCommandInput) -> String {
                 .as_ref()
                 .map_or("", EventAttributeName::as_ref),
         ),
+        quoted(
+            input
+                .external_payload_source_name
+                .as_ref()
+                .map_or("", EventAttributeSourceName::as_ref),
+        ),
+        quoted(
+            input
+                .external_payload_source_field
+                .as_ref()
+                .map_or("", EventAttributeSourceField::as_ref),
+        ),
     )
 }
 
 fn quint_command_input_record(input: &NewCommandInput) -> String {
     format!(
-        "{{ name: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {} }}",
+        "{{ name: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {}, externalPayloadSourceName: {}, externalPayloadSourceField: {} }}",
         quoted(input.name.as_ref()),
         quoted(input.source_kind.as_ref()),
         quoted(input.source_description.as_ref()),
@@ -2771,6 +2805,18 @@ fn quint_command_input_record(input: &NewCommandInput) -> String {
                 .event_stream_source_attribute
                 .as_ref()
                 .map_or("", EventAttributeName::as_ref),
+        ),
+        quoted(
+            input
+                .external_payload_source_name
+                .as_ref()
+                .map_or("", EventAttributeSourceName::as_ref),
+        ),
+        quoted(
+            input
+                .external_payload_source_field
+                .as_ref()
+                .map_or("", EventAttributeSourceField::as_ref),
         ),
     )
 }
