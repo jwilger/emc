@@ -39,11 +39,12 @@ use crate::core::review_record::{
     RequiredReviewCategories, ReviewCategoryFinding, ReviewRecordDocument, record_clean_review,
 };
 use crate::core::slice::{
-    add_slice, remove_slice, update_slice_description, update_slice_kind, update_slice_name,
+    SliceProjectRootContext, add_slice, remove_slice, update_slice_description, update_slice_kind,
+    update_slice_name,
 };
 use crate::core::types::{
-    ReviewRuleName, SliceSlug, WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSlug,
-    WorkflowTransitionRecord,
+    LeanModuleName, ReviewRuleName, SliceSlug, WorkflowSliceDetail, WorkflowSliceDetails,
+    WorkflowSlug, WorkflowTransitionRecord,
 };
 use crate::core::verify::verify_project;
 use crate::core::workflow::{
@@ -627,8 +628,12 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::UpdateSliceNameFromWorkflow(slug, name) => {
-            let (workflow_layout, workflow_graph) = find_formal_workflow_containing_slice(slug)?;
+            let project_name = read_project_manifest_name()?;
+            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+            let (workflow_layout, workflow_graph) =
+                find_formal_workflow_containing_slice_in(&formal_workflows, slug)?;
             let plan = update_slice_name(
+                SliceProjectRootContext::new(project_name, &formal_workflows),
                 workflow_layout.name().clone(),
                 workflow_layout.description().clone(),
                 workflow_layout.slug().clone(),
@@ -810,11 +815,14 @@ fn formal_workflow_layouts(graphs: FormalWorkflowGraphs) -> Vec<ModeledWorkflowL
 
 fn formal_project_slice_memberships(graphs: &FormalWorkflowGraphs) -> ProjectSliceMemberships {
     ProjectSliceMemberships::from_memberships(graphs.as_slice().iter().flat_map(|workflow| {
-        workflow
-            .slice_details()
-            .as_slice()
-            .iter()
-            .map(|slice| ProjectSliceMembership::new(workflow.slug().clone(), slice.slug().clone()))
+        workflow.slice_details().as_slice().iter().map(|slice| {
+            let module_name = module_name_from_raw(slice.name().as_ref());
+            ProjectSliceMembership::new(
+                workflow.slug().clone(),
+                slice.slug().clone(),
+                lean_module_name(module_name),
+            )
+        })
     }))
 }
 
@@ -1463,6 +1471,12 @@ fn module_name_from_raw(raw: &str) -> String {
             }
         })
         .collect()
+}
+
+fn lean_module_name(value: impl Into<String>) -> LeanModuleName {
+    LeanModuleName::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("generated Lean module names must be valid: {error}");
+    })
 }
 
 fn write_file(path: &str, contents: &str) -> Result<(), ShellError> {

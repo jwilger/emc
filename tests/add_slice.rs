@@ -172,13 +172,19 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket\""
+                "def modelSliceModules : List (String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"CaptureTicket\")]"
             ),
-            "Lean project root digest must include composed workflow and slice membership"
+            "Lean project root must represent the formal module composed for each workflow slice"
         );
         assert!(
             lean_root.contains(
-                "theorem modelDigestIsStable : modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket\" := rfl"
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket\""
+            ),
+            "Lean project root digest must include composed workflow, slice, and module membership"
+        );
+        assert!(
+            lean_root.contains(
+                "theorem modelDigestIsStable : modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket\" := rfl"
             ),
             "Lean project root must prove composed model digest stability"
         );
@@ -187,24 +193,45 @@ mod tests {
             "Lean project root must prove composed slice membership is declared"
         );
         assert!(
+            lean_root.contains(
+                "theorem modelSliceModulesAreDeclared : modelSliceModules.length = 1 := rfl"
+            ),
+            "Lean project root must prove composed slice modules are declared"
+        );
+        assert!(
             quint_root.contains("val modelSlices: List[ModelSlice] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\" }]"),
             "Quint project root must represent composed workflow-to-slice membership"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket\""
+                "type ModelSliceModule = { workflow: str, slice: str, formalModule: str }"
             ),
-            "Quint project root digest must include composed workflow and slice membership"
+            "Quint project root must type the formal module composed for each workflow slice"
+        );
+        assert!(
+            quint_root.contains("val modelSliceModules: List[ModelSliceModule] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", formalModule: \"CaptureTicket\" }]"),
+            "Quint project root must represent the formal module composed for each workflow slice"
         );
         assert!(
             quint_root.contains(
-                "val modelDigestStable = modelDigest == \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket\""
+            ),
+            "Quint project root digest must include composed workflow, slice, and module membership"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelDigestStable = modelDigest == \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket\""
             ),
             "Quint project root must verify composed model digest stability"
         );
         assert!(
             quint_root.contains("val modelSlicesAreDeclared = modelSlices.length() == 1"),
             "Quint project root must verify composed slice membership is declared"
+        );
+        assert!(
+            quint_root
+                .contains("val modelSliceModulesAreDeclared = modelSliceModules.length() == 1"),
+            "Quint project root must verify composed slice modules are declared"
         );
         assert_ne!(
             initial_digest,

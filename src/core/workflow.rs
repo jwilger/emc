@@ -249,7 +249,11 @@ pub fn remove_workflow(
                     .as_slice()
                     .iter()
                     .map(|slice| {
-                        ProjectSliceMembership::new(graph.slug().clone(), slice.slug().clone())
+                        ProjectSliceMembership::new(
+                            graph.slug().clone(),
+                            slice.slug().clone(),
+                            lean_module_name(module_name(slice.name().as_ref())),
+                        )
                     })
             }),
     );
