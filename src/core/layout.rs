@@ -9,8 +9,8 @@ use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
 use crate::core::formal_project_facts::{
     ProjectAutomation, ProjectCommand, ProjectCommandError, ProjectCommandInput, ProjectDataFlow,
     ProjectEvent, ProjectEventAttribute, ProjectExternalPayload, ProjectOutcome, ProjectReadModel,
-    ProjectReadModelField, ProjectScenario, ProjectStream, ProjectTranslation, ProjectView,
-    ProjectViewField,
+    ProjectReadModelDefinition, ProjectReadModelField, ProjectScenario, ProjectStream,
+    ProjectTranslation, ProjectView, ProjectViewField,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{
@@ -107,6 +107,7 @@ pub struct ModeledProjectRootInventories {
     commands: Vec<ProjectCommand>,
     command_inputs: Vec<ProjectCommandInput>,
     read_models: Vec<ProjectReadModel>,
+    read_model_definitions: Vec<ProjectReadModelDefinition>,
     read_model_fields: Vec<ProjectReadModelField>,
     views: Vec<ProjectView>,
     view_fields: Vec<ProjectViewField>,
@@ -126,6 +127,7 @@ pub(crate) struct ModeledProjectRootInventoryParts {
     pub(crate) commands: Vec<ProjectCommand>,
     pub(crate) command_inputs: Vec<ProjectCommandInput>,
     pub(crate) read_models: Vec<ProjectReadModel>,
+    pub(crate) read_model_definitions: Vec<ProjectReadModelDefinition>,
     pub(crate) read_model_fields: Vec<ProjectReadModelField>,
     pub(crate) views: Vec<ProjectView>,
     pub(crate) view_fields: Vec<ProjectViewField>,
@@ -147,6 +149,7 @@ impl ModeledProjectRootInventories {
             commands: parts.commands,
             command_inputs: parts.command_inputs,
             read_models: parts.read_models,
+            read_model_definitions: parts.read_model_definitions,
             read_model_fields: parts.read_model_fields,
             views: parts.views,
             view_fields: parts.view_fields,
@@ -185,6 +188,7 @@ pub fn check_project(
             commands: &project_inventories.commands,
             command_inputs: &project_inventories.command_inputs,
             read_models: &project_inventories.read_models,
+            read_model_definitions: &project_inventories.read_model_definitions,
             read_model_fields: &project_inventories.read_model_fields,
             views: &project_inventories.views,
             view_fields: &project_inventories.view_fields,
@@ -299,6 +303,7 @@ struct ProjectRootInventories<'a> {
     commands: &'a [ProjectCommand],
     command_inputs: &'a [ProjectCommandInput],
     read_models: &'a [ProjectReadModel],
+    read_model_definitions: &'a [ProjectReadModelDefinition],
     read_model_fields: &'a [ProjectReadModelField],
     views: &'a [ProjectView],
     view_fields: &'a [ProjectViewField],
@@ -330,6 +335,8 @@ fn project_root_effects(
     let lean_model_command_list = lean_model_command_list(inventories.commands);
     let lean_model_command_input_list = lean_model_command_input_list(inventories.command_inputs);
     let lean_model_read_model_list = lean_model_read_model_list(inventories.read_models);
+    let lean_model_read_model_definition_list =
+        lean_model_read_model_definition_list(inventories.read_model_definitions);
     let lean_model_read_model_field_list =
         lean_model_read_model_field_list(inventories.read_model_fields);
     let lean_model_view_list = lean_model_view_list(inventories.views);
@@ -351,6 +358,8 @@ fn project_root_effects(
     let quint_model_command_list = quint_model_command_list(inventories.commands);
     let quint_model_command_input_list = quint_model_command_input_list(inventories.command_inputs);
     let quint_model_read_model_list = quint_model_read_model_list(inventories.read_models);
+    let quint_model_read_model_definition_list =
+        quint_model_read_model_definition_list(inventories.read_model_definitions);
     let quint_model_read_model_field_list =
         quint_model_read_model_field_list(inventories.read_model_fields);
     let quint_model_view_list = quint_model_view_list(inventories.views);
@@ -381,6 +390,7 @@ fn project_root_effects(
     let command_count = inventories.commands.len();
     let command_input_count = inventories.command_inputs.len();
     let read_model_count = inventories.read_models.len();
+    let read_model_definition_count = inventories.read_model_definitions.len();
     let read_model_field_count = inventories.read_model_fields.len();
     let view_count = inventories.views.len();
     let view_field_count = inventories.view_fields.len();
@@ -549,6 +559,14 @@ fn project_root_effects(
             artifact_marker("def modelReadModels :"),
             artifact_marker(format!(
                 "def modelReadModels : List (String × String × String) := {lean_model_read_model_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelReadModelDefinitions :"),
+            artifact_marker(format!(
+                "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := {lean_model_read_model_definition_list}"
             )),
             lean_message.clone(),
         ),
@@ -733,6 +751,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelReadModelDefinitionsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelReadModelDefinitionsAreDeclared : modelReadModelDefinitions.length = {read_model_definition_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelReadModelFieldsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelReadModelFieldsAreDeclared : modelReadModelFields.length = {read_model_field_count} := rfl"
@@ -880,6 +906,14 @@ fn project_root_effects(
             artifact_marker("  type ModelReadModel ="),
             artifact_marker(
                 "  type ModelReadModel = { workflow: str, slice: str, readModel: str }",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelReadModelDefinition ="),
+            artifact_marker(
+                "  type ModelReadModelDefinition = { workflow: str, slice: str, readModel: str, transitive: bool, relationshipFields: List[str], transitiveRule: str, exampleScenarioName: str }",
             ),
             quint_message.clone(),
         ),
@@ -1060,6 +1094,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelReadModelDefinitions:"),
+            artifact_marker(format!(
+                "  val modelReadModelDefinitions: List[ModelReadModelDefinition] = {quint_model_read_model_definition_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelReadModelFields:"),
             artifact_marker(format!(
                 "  val modelReadModelFields: List[ModelReadModelField] = {quint_model_read_model_field_list}"
@@ -1234,6 +1276,14 @@ fn project_root_effects(
             artifact_marker("  val modelReadModelsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelReadModelsAreDeclared = modelReadModels.length() == {read_model_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelReadModelDefinitionsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelReadModelDefinitionsAreDeclared = modelReadModelDefinitions.length() == {read_model_definition_count}"
             )),
             quint_message.clone(),
         ),
@@ -2762,6 +2812,104 @@ fn quint_model_read_model_list(project_read_models: &[ProjectReadModel]) -> Stri
     )
 }
 
+fn lean_model_read_model_definition_list(
+    project_read_model_definitions: &[ProjectReadModelDefinition],
+) -> String {
+    let mut project_read_model_definitions = project_read_model_definitions
+        .iter()
+        .map(|definition| {
+            (
+                definition.workflow_slug(),
+                definition.slice_slug(),
+                definition.read_model(),
+                definition.transitive(),
+                definition.relationship_fields(),
+                definition.transitive_rule(),
+                definition.example_scenario_name(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_read_model_definitions.sort_unstable();
+    format!(
+        "[{}]",
+        project_read_model_definitions
+            .into_iter()
+            .map(
+                |(
+                    workflow_slug,
+                    slice_slug,
+                    read_model,
+                    transitive,
+                    relationship_fields,
+                    transitive_rule,
+                    example_scenario_name,
+                )| {
+                    format!(
+                        "({}, {}, {}, {}, [{}], {}, {})",
+                        json_string(workflow_slug),
+                        json_string(slice_slug),
+                        json_string(read_model),
+                        transitive,
+                        json_string_list(relationship_fields),
+                        json_string(transitive_rule),
+                        json_string(example_scenario_name)
+                    )
+                },
+            )
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_read_model_definition_list(
+    project_read_model_definitions: &[ProjectReadModelDefinition],
+) -> String {
+    let mut project_read_model_definitions = project_read_model_definitions
+        .iter()
+        .map(|definition| {
+            (
+                definition.workflow_slug(),
+                definition.slice_slug(),
+                definition.read_model(),
+                definition.transitive(),
+                definition.relationship_fields(),
+                definition.transitive_rule(),
+                definition.example_scenario_name(),
+            )
+        })
+        .collect::<Vec<_>>();
+    project_read_model_definitions.sort_unstable();
+    format!(
+        "[{}]",
+        project_read_model_definitions
+            .into_iter()
+            .map(
+                |(
+                    workflow_slug,
+                    slice_slug,
+                    read_model,
+                    transitive,
+                    relationship_fields,
+                    transitive_rule,
+                    example_scenario_name,
+                )| {
+                    format!(
+                        "{{ workflow: {}, slice: {}, readModel: {}, transitive: {}, relationshipFields: [{}], transitiveRule: {}, exampleScenarioName: {} }}",
+                        json_string(workflow_slug),
+                        json_string(slice_slug),
+                        json_string(read_model),
+                        transitive,
+                        json_string_list(relationship_fields),
+                        json_string(transitive_rule),
+                        json_string(example_scenario_name)
+                    )
+                },
+            )
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn lean_model_read_model_field_list(project_read_model_fields: &[ProjectReadModelField]) -> String {
     let mut project_read_model_fields = project_read_model_fields
         .iter()
@@ -3387,7 +3535,7 @@ fn model_digest(
     inventories: &ProjectRootInventories<'_>,
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-fields={};views={};view-fields={};automations={};translations={};external-payloads={};streams={};events={};event-attributes={}",
+        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-fields={};automations={};translations={};external-payloads={};streams={};events={};event-attributes={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
@@ -3398,6 +3546,7 @@ fn model_digest(
         digest_commands(inventories.commands),
         digest_command_inputs(inventories.command_inputs),
         digest_read_models(inventories.read_models),
+        digest_read_model_definitions(inventories.read_model_definitions),
         digest_read_model_fields(inventories.read_model_fields),
         digest_views(inventories.views),
         digest_view_fields(inventories.view_fields),
@@ -3591,6 +3740,29 @@ fn digest_read_models(project_read_models: &[ProjectReadModel]) -> String {
         .into_iter()
         .map(|(workflow_slug, slice_slug, read_model)| {
             format!("{workflow_slug}/{slice_slug}/{read_model}")
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_read_model_definitions(
+    project_read_model_definitions: &[ProjectReadModelDefinition],
+) -> String {
+    let mut read_model_definitions = project_read_model_definitions.iter().collect::<Vec<_>>();
+    read_model_definitions.sort_unstable();
+    read_model_definitions
+        .into_iter()
+        .map(|definition| {
+            format!(
+                "{}/{}/{}@{}#{}#{}#{}",
+                definition.workflow_slug(),
+                definition.slice_slug(),
+                definition.read_model(),
+                definition.transitive(),
+                definition.relationship_fields().join("+"),
+                definition.transitive_rule(),
+                definition.example_scenario_name()
+            )
         })
         .collect::<Vec<_>>()
         .join(",")

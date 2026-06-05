@@ -23,22 +23,23 @@ use crate::core::formal_project_facts::{
     NewProjectExternalPayload, NewProjectOutcome, NewProjectReadModel, NewProjectScenario,
     NewProjectStream, NewProjectTranslation, NewProjectView, ProjectAutomation, ProjectCommand,
     ProjectCommandError, ProjectCommandInput, ProjectDataFlow, ProjectEvent, ProjectEventAttribute,
-    ProjectExternalPayload, ProjectOutcome, ProjectReadModel, ProjectReadModelField,
-    ProjectScenario, ProjectStream, ProjectTranslation, ProjectView, ProjectViewField,
-    add_project_automation, add_project_command, add_project_data_flow, add_project_event,
-    add_project_external_payload, add_project_outcome, add_project_read_model,
+    ProjectExternalPayload, ProjectOutcome, ProjectReadModel, ProjectReadModelDefinition,
+    ProjectReadModelField, ProjectScenario, ProjectStream, ProjectTranslation, ProjectView,
+    ProjectViewField, add_project_automation, add_project_command, add_project_data_flow,
+    add_project_event, add_project_external_payload, add_project_outcome, add_project_read_model,
     add_project_scenario, add_project_stream, add_project_translation, add_project_view,
     parse_lean_project_automations, parse_lean_project_command_errors,
     parse_lean_project_command_inputs, parse_lean_project_commands, parse_lean_project_data_flows,
     parse_lean_project_event_attributes, parse_lean_project_events,
     parse_lean_project_external_payloads, parse_lean_project_outcomes,
-    parse_lean_project_read_model_fields, parse_lean_project_read_models,
-    parse_lean_project_scenarios, parse_lean_project_streams, parse_lean_project_translations,
-    parse_lean_project_view_fields, parse_lean_project_views, parse_quint_project_automations,
-    parse_quint_project_command_errors, parse_quint_project_command_inputs,
-    parse_quint_project_commands, parse_quint_project_data_flows,
-    parse_quint_project_event_attributes, parse_quint_project_events,
-    parse_quint_project_external_payloads, parse_quint_project_outcomes,
+    parse_lean_project_read_model_definitions, parse_lean_project_read_model_fields,
+    parse_lean_project_read_models, parse_lean_project_scenarios, parse_lean_project_streams,
+    parse_lean_project_translations, parse_lean_project_view_fields, parse_lean_project_views,
+    parse_quint_project_automations, parse_quint_project_command_errors,
+    parse_quint_project_command_inputs, parse_quint_project_commands,
+    parse_quint_project_data_flows, parse_quint_project_event_attributes,
+    parse_quint_project_events, parse_quint_project_external_payloads,
+    parse_quint_project_outcomes, parse_quint_project_read_model_definitions,
     parse_quint_project_read_model_fields, parse_quint_project_read_models,
     parse_quint_project_scenarios, parse_quint_project_streams, parse_quint_project_translations,
     parse_quint_project_view_fields, parse_quint_project_views,
@@ -626,6 +627,8 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let project_commands = read_synchronized_project_commands(&project_name)?;
             let project_command_inputs = read_synchronized_project_command_inputs(&project_name)?;
             let project_read_models = read_synchronized_project_read_models(&project_name)?;
+            let project_read_model_definitions =
+                read_synchronized_project_read_model_definitions(&project_name)?;
             let project_read_model_fields =
                 read_synchronized_project_read_model_fields(&project_name)?;
             let project_views = read_synchronized_project_views(&project_name)?;
@@ -649,6 +652,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                     commands: project_commands,
                     command_inputs: project_command_inputs,
                     read_models: project_read_models,
+                    read_model_definitions: project_read_model_definitions,
                     read_model_fields: project_read_model_fields,
                     views: project_views,
                     view_fields: project_view_fields,
@@ -1163,6 +1167,30 @@ fn read_synchronized_project_read_models(
             "Lean and Quint project root read model inventories disagree",
         )),
         (_lean_read_models, _quint_read_models) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_read_model_definitions(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectReadModelDefinition>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_read_model_definitions(&artifacts.lean_contents),
+        parse_quint_project_read_model_definitions(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_read_model_definitions), Ok(quint_read_model_definitions))
+            if lean_read_model_definitions == quint_read_model_definitions =>
+        {
+            Ok(lean_read_model_definitions)
+        }
+        (Ok(_lean_read_model_definitions), Ok(_quint_read_model_definitions)) => {
+            Err(ShellError::message(
+                "Lean and Quint project root read model definition inventories disagree",
+            ))
+        }
+        (_lean_read_model_definitions, _quint_read_model_definitions) => Ok(Vec::new()),
     }
 }
 
