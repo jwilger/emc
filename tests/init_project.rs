@@ -57,7 +57,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;commands=;streams=;events=\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;commands=;read-models=;streams=;events=\""
             ),
             "Lean project root must carry a deterministic project model digest"
         );
@@ -73,7 +73,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "theorem modelDigestIsStable : modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;commands=;streams=;events=\" := rfl"
+                "theorem modelDigestIsStable : modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;commands=;read-models=;streams=;events=\" := rfl"
             ),
             "Lean project root must prove project model digest stability"
         );
@@ -89,7 +89,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;commands=;streams=;events=\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;commands=;read-models=;streams=;events=\""
             ),
             "Quint project root must carry a deterministic project model digest"
         );
@@ -105,7 +105,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
-                "val modelDigestStable = modelDigest == \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;commands=;streams=;events=\""
+                "val modelDigestStable = modelDigest == \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;commands=;read-models=;streams=;events=\""
             ),
             "Quint project root must expose the project model digest invariant"
         );
