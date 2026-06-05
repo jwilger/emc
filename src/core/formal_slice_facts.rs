@@ -515,6 +515,18 @@ impl NewExternalPayloadDefinition {
     pub fn name(&self) -> &EventAttributeSourceName {
         &self.name
     }
+
+    pub fn field(&self) -> &EventAttributeSourceField {
+        &self.field
+    }
+
+    pub fn field_provenance(&self) -> &ProvenanceDescription {
+        &self.field_provenance
+    }
+
+    pub fn bit_encoding(&self) -> &BitEncodingSemantics {
+        &self.bit_encoding
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
