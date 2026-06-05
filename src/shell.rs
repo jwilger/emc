@@ -23,23 +23,25 @@ use crate::core::formal_project_facts::{
     NewProjectExternalPayload, NewProjectOutcome, NewProjectReadModel, NewProjectScenario,
     NewProjectStream, NewProjectTranslation, NewProjectView, ProjectAutomation, ProjectCommand,
     ProjectCommandError, ProjectCommandInput, ProjectDataFlow, ProjectEvent, ProjectEventAttribute,
-    ProjectExternalPayload, ProjectOutcome, ProjectReadModel, ProjectScenario, ProjectStream,
-    ProjectTranslation, ProjectView, ProjectViewField, add_project_automation, add_project_command,
-    add_project_data_flow, add_project_event, add_project_external_payload, add_project_outcome,
-    add_project_read_model, add_project_scenario, add_project_stream, add_project_translation,
-    add_project_view, parse_lean_project_automations, parse_lean_project_command_errors,
+    ProjectExternalPayload, ProjectOutcome, ProjectReadModel, ProjectReadModelField,
+    ProjectScenario, ProjectStream, ProjectTranslation, ProjectView, ProjectViewField,
+    add_project_automation, add_project_command, add_project_data_flow, add_project_event,
+    add_project_external_payload, add_project_outcome, add_project_read_model,
+    add_project_scenario, add_project_stream, add_project_translation, add_project_view,
+    parse_lean_project_automations, parse_lean_project_command_errors,
     parse_lean_project_command_inputs, parse_lean_project_commands, parse_lean_project_data_flows,
     parse_lean_project_event_attributes, parse_lean_project_events,
     parse_lean_project_external_payloads, parse_lean_project_outcomes,
-    parse_lean_project_read_models, parse_lean_project_scenarios, parse_lean_project_streams,
-    parse_lean_project_translations, parse_lean_project_view_fields, parse_lean_project_views,
-    parse_quint_project_automations, parse_quint_project_command_errors,
-    parse_quint_project_command_inputs, parse_quint_project_commands,
-    parse_quint_project_data_flows, parse_quint_project_event_attributes,
-    parse_quint_project_events, parse_quint_project_external_payloads,
-    parse_quint_project_outcomes, parse_quint_project_read_models, parse_quint_project_scenarios,
-    parse_quint_project_streams, parse_quint_project_translations, parse_quint_project_view_fields,
-    parse_quint_project_views,
+    parse_lean_project_read_model_fields, parse_lean_project_read_models,
+    parse_lean_project_scenarios, parse_lean_project_streams, parse_lean_project_translations,
+    parse_lean_project_view_fields, parse_lean_project_views, parse_quint_project_automations,
+    parse_quint_project_command_errors, parse_quint_project_command_inputs,
+    parse_quint_project_commands, parse_quint_project_data_flows,
+    parse_quint_project_event_attributes, parse_quint_project_events,
+    parse_quint_project_external_payloads, parse_quint_project_outcomes,
+    parse_quint_project_read_model_fields, parse_quint_project_read_models,
+    parse_quint_project_scenarios, parse_quint_project_streams, parse_quint_project_translations,
+    parse_quint_project_view_fields, parse_quint_project_views,
 };
 use crate::core::formal_slice_facts::{
     add_automation_definition, add_bit_level_data_flow, add_board_connection, add_board_element,
@@ -400,11 +402,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 project_artifacts.lean_contents,
                 project_artifacts.quint_path,
                 project_artifacts.quint_contents,
-                NewProjectReadModel::new(
-                    workflow_layout.slug().clone(),
-                    read_model.slice_slug().clone(),
-                    read_model.name().clone(),
-                ),
+                NewProjectReadModel::from_read_model(workflow_layout.slug().clone(), read_model),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
@@ -628,6 +626,8 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             let project_commands = read_synchronized_project_commands(&project_name)?;
             let project_command_inputs = read_synchronized_project_command_inputs(&project_name)?;
             let project_read_models = read_synchronized_project_read_models(&project_name)?;
+            let project_read_model_fields =
+                read_synchronized_project_read_model_fields(&project_name)?;
             let project_views = read_synchronized_project_views(&project_name)?;
             let project_view_fields = read_synchronized_project_view_fields(&project_name)?;
             let project_automations = read_synchronized_project_automations(&project_name)?;
@@ -649,6 +649,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                     commands: project_commands,
                     command_inputs: project_command_inputs,
                     read_models: project_read_models,
+                    read_model_fields: project_read_model_fields,
                     views: project_views,
                     view_fields: project_view_fields,
                     automations: project_automations,
@@ -1162,6 +1163,28 @@ fn read_synchronized_project_read_models(
             "Lean and Quint project root read model inventories disagree",
         )),
         (_lean_read_models, _quint_read_models) => Ok(Vec::new()),
+    }
+}
+
+fn read_synchronized_project_read_model_fields(
+    project_name: &ProjectName,
+) -> Result<Vec<ProjectReadModelField>, ShellError> {
+    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
+        return Ok(Vec::new());
+    };
+    match (
+        parse_lean_project_read_model_fields(&artifacts.lean_contents),
+        parse_quint_project_read_model_fields(&artifacts.quint_contents),
+    ) {
+        (Ok(lean_read_model_fields), Ok(quint_read_model_fields))
+            if lean_read_model_fields == quint_read_model_fields =>
+        {
+            Ok(lean_read_model_fields)
+        }
+        (Ok(_lean_read_model_fields), Ok(_quint_read_model_fields)) => Err(ShellError::message(
+            "Lean and Quint project root read model field inventories disagree",
+        )),
+        (_lean_read_model_fields, _quint_read_model_fields) => Ok(Vec::new()),
     }
 }
 

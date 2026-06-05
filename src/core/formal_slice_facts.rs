@@ -662,6 +662,42 @@ impl NewReadModelField {
             provenance_description,
         }
     }
+
+    pub fn name(&self) -> &DatumName {
+        &self.name
+    }
+
+    pub fn source_kind(&self) -> &ReadModelFieldSourceKind {
+        &self.source_kind
+    }
+
+    pub fn source_event(&self) -> Option<&EventName> {
+        self.source_event.as_ref()
+    }
+
+    pub fn source_attribute(&self) -> Option<&EventAttributeName> {
+        self.source_attribute.as_ref()
+    }
+
+    pub fn derivation_rule(&self) -> Option<&ReadModelDerivationRule> {
+        self.derivation_rule.as_ref()
+    }
+
+    pub fn absence_event(&self) -> Option<&EventName> {
+        self.absence_event.as_ref()
+    }
+
+    pub fn derivation_scenario_name(&self) -> Option<&ScenarioName> {
+        self.derivation_scenario_name.as_ref()
+    }
+
+    pub fn absence_scenario_name(&self) -> Option<&ScenarioName> {
+        self.absence_scenario_name.as_ref()
+    }
+
+    pub fn provenance_description(&self) -> &ProvenanceDescription {
+        &self.provenance_description
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -707,6 +743,10 @@ impl NewReadModelDefinition {
 
     pub fn name(&self) -> &ReadModelName {
         &self.name
+    }
+
+    pub fn field(&self) -> &NewReadModelField {
+        &self.field
     }
 }
 
