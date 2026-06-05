@@ -4,19 +4,21 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, NewAutomationDefinition, NewBitLevelDataFlow, NewCommandDefinition,
-    NewCommandErrorDefinition, NewCommandInput, NewEventAttribute, NewEventDefinition,
-    NewExternalPayloadDefinition, NewReadModelDefinition, NewReadModelField, NewSliceScenario,
-    NewTranslationDefinition, NewViewDefinition, NewViewField, OutcomeEventNames, ScenarioKind,
+    NewCommandErrorDefinition, NewCommandInput, NewControlDefinition, NewEventAttribute,
+    NewEventDefinition, NewExternalPayloadDefinition, NewReadModelDefinition, NewReadModelField,
+    NewSliceScenario, NewTranslationDefinition, NewViewDefinition, NewViewField, OutcomeEventNames,
+    ScenarioKind,
 };
 use crate::core::types::{
     AutomationName, AutomationReactionDescription, AutomationTriggerName, BitEncodingSemantics,
-    CommandErrorName, CommandErrorRecoveryKind, CommandName, ContractKindName,
+    CommandErrorName, CommandErrorRecoveryKind, CommandInputSourceDescription,
+    CommandInputSourceKind, CommandName, ContractKindName, ControlName, ControlRecoveryBehavior,
     CoveredDefinitionName, DataFlowSource, DataFlowTarget, DatumName, EventAttributeName,
     EventAttributeSourceField, EventAttributeSourceKind, EventAttributeSourceName, EventName,
-    OutcomeLabelName, PayloadContractName, ProvenanceDescription, ReadModelFieldSourceKind,
-    ReadModelName, ScenarioName, ScenarioStepText, SketchToken, SliceSlug, StreamName,
-    TransformationSemantics, TranslationExternalEventName, TranslationName, ViewFieldName,
-    ViewFieldSourceKind, ViewName, WorkflowSlug,
+    NavigationTargetName, NavigationTargetType, OutcomeLabelName, PayloadContractName,
+    ProvenanceDescription, ReadModelFieldSourceKind, ReadModelName, ScenarioName, ScenarioStepText,
+    SketchToken, SliceSlug, StreamName, TransformationSemantics, TranslationExternalEventName,
+    TranslationName, ViewFieldName, ViewFieldSourceKind, ViewName, WorkflowSlug,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -329,6 +331,7 @@ pub struct NewProjectView {
     slice_slug: SliceSlug,
     view: ViewName,
     view_definition: Option<NewProjectViewDefinition>,
+    view_controls: Vec<NewProjectViewControl>,
     view_fields: Vec<NewProjectViewField>,
 }
 
@@ -339,6 +342,7 @@ impl NewProjectView {
             slice_slug,
             view,
             view_definition: None,
+            view_controls: Vec::new(),
             view_fields: Vec::new(),
         }
     }
@@ -357,6 +361,12 @@ impl NewProjectView {
         .with_field(view.field());
         project_view.view_definition =
             Some(NewProjectViewDefinition::from_view(&project_view, view));
+        project_view.view_controls = view
+            .controls()
+            .as_slice()
+            .iter()
+            .map(|control| NewProjectViewControl::from_control(&project_view, control))
+            .collect();
         project_view
     }
 }
@@ -382,6 +392,66 @@ impl NewProjectViewDefinition {
             sketch_tokens: vec![view.field().sketch_token().clone()],
             local_states: Vec::new(),
             filters: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct NewProjectViewControl {
+    workflow_slug: WorkflowSlug,
+    slice_slug: SliceSlug,
+    view: ViewName,
+    control: ControlName,
+    command: CommandName,
+    input: DatumName,
+    input_source_kind: CommandInputSourceKind,
+    input_source_description: CommandInputSourceDescription,
+    input_sketch_token: SketchToken,
+    input_visible_to_actor: bool,
+    input_decision_field: bool,
+    handled_errors: Vec<CommandErrorName>,
+    recovery_behavior: ControlRecoveryBehavior,
+    control_sketch_token: SketchToken,
+    navigation_type: NavigationTargetType,
+    navigation_target: NavigationTargetName,
+    external_workflow: String,
+    external_system: String,
+    handoff_contract: String,
+}
+
+impl NewProjectViewControl {
+    fn from_control(view: &NewProjectView, control: &NewControlDefinition) -> Self {
+        let input = control.input();
+        let navigation = control.navigation();
+        Self {
+            workflow_slug: view.workflow_slug.clone(),
+            slice_slug: view.slice_slug.clone(),
+            view: view.view.clone(),
+            control: control.name().clone(),
+            command: control.command_name().clone(),
+            input: input.name().clone(),
+            input_source_kind: input.source_kind().clone(),
+            input_source_description: input.source_description().clone(),
+            input_sketch_token: input.sketch_token().clone(),
+            input_visible_to_actor: input.visible_to_actor(),
+            input_decision_field: input.decision_field(),
+            handled_errors: control.handled_errors().as_slice().to_vec(),
+            recovery_behavior: control.recovery_behavior().clone(),
+            control_sketch_token: control.sketch_token().clone(),
+            navigation_type: navigation.target_type().clone(),
+            navigation_target: navigation.target_name().clone(),
+            external_workflow: navigation
+                .external_workflow_name()
+                .map_or("", NavigationTargetName::as_ref)
+                .to_owned(),
+            external_system: navigation
+                .external_system_name()
+                .map_or("", NavigationTargetName::as_ref)
+                .to_owned(),
+            handoff_contract: navigation
+                .handoff_contract()
+                .map_or("", PayloadContractName::as_ref)
+                .to_owned(),
         }
     }
 }
@@ -1117,6 +1187,107 @@ impl ProjectViewDefinition {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ProjectViewControl {
+    workflow_slug: String,
+    slice_slug: String,
+    view: String,
+    control: String,
+    command: String,
+    input: String,
+    input_source_kind: String,
+    input_source_description: String,
+    input_sketch_token: String,
+    input_visible_to_actor: bool,
+    input_decision_field: bool,
+    handled_errors: Vec<String>,
+    recovery_behavior: String,
+    control_sketch_token: String,
+    navigation_type: String,
+    navigation_target: String,
+    external_workflow: String,
+    external_system: String,
+    handoff_contract: String,
+}
+
+impl ProjectViewControl {
+    pub fn workflow_slug(&self) -> &str {
+        &self.workflow_slug
+    }
+
+    pub fn slice_slug(&self) -> &str {
+        &self.slice_slug
+    }
+
+    pub fn view(&self) -> &str {
+        &self.view
+    }
+
+    pub fn control(&self) -> &str {
+        &self.control
+    }
+
+    pub fn command(&self) -> &str {
+        &self.command
+    }
+
+    pub fn input(&self) -> &str {
+        &self.input
+    }
+
+    pub fn input_source_kind(&self) -> &str {
+        &self.input_source_kind
+    }
+
+    pub fn input_source_description(&self) -> &str {
+        &self.input_source_description
+    }
+
+    pub fn input_sketch_token(&self) -> &str {
+        &self.input_sketch_token
+    }
+
+    pub fn input_visible_to_actor(&self) -> bool {
+        self.input_visible_to_actor
+    }
+
+    pub fn input_decision_field(&self) -> bool {
+        self.input_decision_field
+    }
+
+    pub fn handled_errors(&self) -> &[String] {
+        &self.handled_errors
+    }
+
+    pub fn recovery_behavior(&self) -> &str {
+        &self.recovery_behavior
+    }
+
+    pub fn control_sketch_token(&self) -> &str {
+        &self.control_sketch_token
+    }
+
+    pub fn navigation_type(&self) -> &str {
+        &self.navigation_type
+    }
+
+    pub fn navigation_target(&self) -> &str {
+        &self.navigation_target
+    }
+
+    pub fn external_workflow(&self) -> &str {
+        &self.external_workflow
+    }
+
+    pub fn external_system(&self) -> &str {
+        &self.external_system
+    }
+
+    pub fn handoff_contract(&self) -> &str {
+        &self.handoff_contract
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct ProjectViewField {
     workflow_slug: String,
     slice_slug: String,
@@ -1782,6 +1953,24 @@ pub fn parse_quint_project_view_definitions(
     )
 }
 
+pub fn parse_lean_project_view_controls(
+    contents: &FileContents,
+) -> Result<Vec<ProjectViewControl>, FormalProjectFactError> {
+    view_control_entries_from_list(
+        contents.as_ref(),
+        "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := ",
+    )
+}
+
+pub fn parse_quint_project_view_controls(
+    contents: &FileContents,
+) -> Result<Vec<ProjectViewControl>, FormalProjectFactError> {
+    view_control_entries_from_list(
+        contents.as_ref(),
+        "val modelViewControls: List[ModelViewControl] = ",
+    )
+}
+
 pub fn parse_lean_project_view_fields(
     contents: &FileContents,
 ) -> Result<Vec<ProjectViewField>, FormalProjectFactError> {
@@ -2032,6 +2221,8 @@ pub fn add_project_scenario(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls =
+                parse_lean_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2062,6 +2253,7 @@ pub fn add_project_scenario(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2149,6 +2341,8 @@ pub fn add_project_scenario(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls =
+                parse_quint_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2179,6 +2373,7 @@ pub fn add_project_scenario(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2257,6 +2452,8 @@ pub fn add_project_data_flow(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls =
+                parse_lean_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2286,6 +2483,7 @@ pub fn add_project_data_flow(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2345,6 +2543,7 @@ pub fn add_project_data_flow(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls = parse_quint_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2375,6 +2574,7 @@ pub fn add_project_data_flow(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2456,6 +2656,7 @@ pub fn add_project_outcome(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls = parse_lean_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2486,6 +2687,7 @@ pub fn add_project_outcome(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2545,6 +2747,7 @@ pub fn add_project_outcome(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls = parse_quint_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2575,6 +2778,7 @@ pub fn add_project_outcome(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2689,6 +2893,8 @@ pub fn add_project_command(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls =
+                parse_lean_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2718,6 +2924,7 @@ pub fn add_project_command(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2818,6 +3025,7 @@ pub fn add_project_command(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls = parse_quint_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2848,6 +3056,7 @@ pub fn add_project_command(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -2983,6 +3192,8 @@ pub fn add_project_read_model(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls =
+                parse_lean_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -3013,6 +3224,7 @@ pub fn add_project_read_model(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3108,6 +3320,8 @@ pub fn add_project_read_model(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls =
+                parse_quint_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -3138,6 +3352,7 @@ pub fn add_project_read_model(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3180,6 +3395,16 @@ pub fn add_project_view(
         .view_definition
         .as_ref()
         .map(quint_view_definition_record);
+    let lean_control_records = view
+        .view_controls
+        .iter()
+        .map(lean_view_control_record)
+        .collect::<Vec<_>>();
+    let quint_control_records = view
+        .view_controls
+        .iter()
+        .map(quint_view_control_record)
+        .collect::<Vec<_>>();
     let lean_field_records = view
         .view_fields
         .iter()
@@ -3207,6 +3432,17 @@ pub fn add_project_view(
         }
     })
     .and_then(|contents| {
+        lean_control_records
+            .iter()
+            .try_fold(contents, |contents, record| {
+                append_record_if_missing(
+                    &contents,
+                    "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := ",
+                    record,
+                )
+            })
+    })
+    .and_then(|contents| {
         lean_field_records
             .iter()
             .try_fold(contents, |contents, record| {
@@ -3225,6 +3461,10 @@ pub fn add_project_view(
         let view_definitions = view_definition_entries_from_list(
             &contents,
             "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := ",
+        )?;
+        let view_controls = view_control_entries_from_list(
+            &contents,
+            "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := ",
         )?;
         let view_fields = view_field_entries_from_list(
             &contents,
@@ -3245,6 +3485,16 @@ pub fn add_project_view(
                 &format!(
                     "theorem modelViewDefinitionsAreDeclared : modelViewDefinitions.length = {} := rfl",
                     view_definitions.len()
+                ),
+            )
+        })
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "theorem modelViewControlsAreDeclared :",
+                &format!(
+                    "theorem modelViewControlsAreDeclared : modelViewControls.length = {} := rfl",
+                    view_controls.len()
                 ),
             )
         })
@@ -3300,6 +3550,7 @@ pub fn add_project_view(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3331,6 +3582,17 @@ pub fn add_project_view(
         }
     })
     .and_then(|contents| {
+        quint_control_records
+            .iter()
+            .try_fold(contents, |contents, record| {
+                append_record_if_missing(
+                    &contents,
+                    "val modelViewControls: List[ModelViewControl] = ",
+                    record,
+                )
+            })
+    })
+    .and_then(|contents| {
         quint_field_records
             .iter()
             .try_fold(contents, |contents, record| {
@@ -3346,6 +3608,10 @@ pub fn add_project_view(
         let view_definitions = view_definition_entries_from_list(
             &contents,
             "val modelViewDefinitions: List[ModelViewDefinition] = ",
+        )?;
+        let view_controls = view_control_entries_from_list(
+            &contents,
+            "val modelViewControls: List[ModelViewControl] = ",
         )?;
         let view_fields = view_field_entries_from_list(
             &contents,
@@ -3366,6 +3632,16 @@ pub fn add_project_view(
                 &format!(
                     "val modelViewDefinitionsAreDeclared = modelViewDefinitions.length() == {}",
                     view_definitions.len()
+                ),
+            )
+        })
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
+                "val modelViewControlsAreDeclared =",
+                &format!(
+                    "val modelViewControlsAreDeclared = modelViewControls.length() == {}",
+                    view_controls.len()
                 ),
             )
         })
@@ -3424,6 +3700,7 @@ pub fn add_project_view(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3538,6 +3815,8 @@ pub fn add_project_automation(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls =
+                parse_lean_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let translations = parse_lean_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
@@ -3565,6 +3844,7 @@ pub fn add_project_automation(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3651,6 +3931,8 @@ pub fn add_project_automation(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls =
+                parse_quint_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let translations = parse_quint_project_translations_from_contents_or_empty(&contents);
             let translation_definitions =
@@ -3678,6 +3960,7 @@ pub fn add_project_automation(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3792,6 +4075,8 @@ pub fn add_project_translation(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls =
+                parse_lean_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -3821,6 +4106,7 @@ pub fn add_project_translation(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -3907,6 +4193,8 @@ pub fn add_project_translation(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls =
+                parse_quint_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -3936,6 +4224,7 @@ pub fn add_project_translation(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4046,6 +4335,8 @@ pub fn add_project_external_payload(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls =
+                parse_lean_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -4076,6 +4367,7 @@ pub fn add_project_external_payload(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4158,6 +4450,8 @@ pub fn add_project_external_payload(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls =
+                parse_quint_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -4188,6 +4482,7 @@ pub fn add_project_external_payload(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4259,6 +4554,7 @@ pub fn add_project_stream(
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls = parse_lean_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -4288,6 +4584,7 @@ pub fn add_project_stream(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4337,6 +4634,7 @@ pub fn add_project_stream(
             let views = parse_quint_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_quint_project_view_definitions_from_contents_or_empty(&contents);
+            let view_controls = parse_quint_project_view_controls_from_contents_or_empty(&contents);
             let view_fields = parse_quint_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_quint_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -4366,6 +4664,7 @@ pub fn add_project_stream(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4467,6 +4766,10 @@ pub fn add_project_event(
             &contents,
             "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := ",
         )?;
+        let view_controls = view_control_entries_from_list(
+            &contents,
+            "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := ",
+        )?;
         let view_fields = view_field_entries_from_list(
             &contents,
             "def modelViewFields : List (String × String × String × String × String × String × String × String × String) := ",
@@ -4541,6 +4844,7 @@ pub fn add_project_event(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -4602,6 +4906,10 @@ pub fn add_project_event(
         let view_definitions = view_definition_entries_from_list(
             &contents,
             "val modelViewDefinitions: List[ModelViewDefinition] = ",
+        )?;
+        let view_controls = view_control_entries_from_list(
+            &contents,
+            "val modelViewControls: List[ModelViewControl] = ",
         )?;
         let view_fields = view_field_entries_from_list(
             &contents,
@@ -4672,6 +4980,7 @@ pub fn add_project_event(
                     read_model_fields: &read_model_fields,
                     views: &views,
                     view_definitions: &view_definitions,
+                    view_controls: &view_controls,
                     view_fields: &view_fields,
                     automations: &automations,
                     automation_definitions: &automation_definitions,
@@ -5027,6 +5336,23 @@ fn parse_quint_project_view_definitions_from_contents_or_empty(
         "val modelViewDefinitions: List[ModelViewDefinition] = ",
     )
     .unwrap_or_default()
+}
+
+fn parse_lean_project_view_controls_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectViewControl> {
+    view_control_entries_from_list(
+        contents,
+        "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := ",
+    )
+    .unwrap_or_default()
+}
+
+fn parse_quint_project_view_controls_from_contents_or_empty(
+    contents: &str,
+) -> Vec<ProjectViewControl> {
+    view_control_entries_from_list(contents, "val modelViewControls: List[ModelViewControl] = ")
+        .unwrap_or_default()
 }
 
 fn parse_lean_project_view_fields_from_contents_or_empty(contents: &str) -> Vec<ProjectViewField> {
@@ -5548,6 +5874,48 @@ fn view_definition_entries_from_list(
     Ok(definitions)
 }
 
+fn view_control_entries_from_list(
+    contents: &str,
+    marker: &str,
+) -> Result<Vec<ProjectViewControl>, FormalProjectFactError> {
+    let list = declaration_value(contents, marker)?;
+    let mut controls = split_top_level_records(list)?
+        .into_iter()
+        .map(|record| {
+            let values = record_values(&record)?;
+            if values.len() != 19 {
+                return Err(FormalProjectFactError::new(
+                    "formal project view control record is malformed",
+                ));
+            }
+            Ok(ProjectViewControl {
+                workflow_slug: single_quoted_string(&values[0])?,
+                slice_slug: single_quoted_string(&values[1])?,
+                view: single_quoted_string(&values[2])?,
+                control: single_quoted_string(&values[3])?,
+                command: single_quoted_string(&values[4])?,
+                input: single_quoted_string(&values[5])?,
+                input_source_kind: single_quoted_string(&values[6])?,
+                input_source_description: single_quoted_string(&values[7])?,
+                input_sketch_token: single_quoted_string(&values[8])?,
+                input_visible_to_actor: bool_value(&values[9])?,
+                input_decision_field: bool_value(&values[10])?,
+                handled_errors: string_list_value(&values[11])?,
+                recovery_behavior: single_quoted_string(&values[12])?,
+                control_sketch_token: single_quoted_string(&values[13])?,
+                navigation_type: single_quoted_string(&values[14])?,
+                navigation_target: single_quoted_string(&values[15])?,
+                external_workflow: single_quoted_string(&values[16])?,
+                external_system: single_quoted_string(&values[17])?,
+                handoff_contract: single_quoted_string(&values[18])?,
+            })
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    controls.sort();
+    controls.dedup();
+    Ok(controls)
+}
+
 fn view_field_entries_from_list(
     contents: &str,
     marker: &str,
@@ -5971,12 +6339,41 @@ fn record_field_value(field: &str) -> Result<&str, FormalProjectFactError> {
         .ok_or_else(|| FormalProjectFactError::new("formal project record field is malformed"))
 }
 
+fn record_values(record: &str) -> Result<Vec<String>, FormalProjectFactError> {
+    let uses_named_fields = record.trim_start().starts_with('{');
+    let fields = split_top_level_fields(record)?;
+    Ok(fields
+        .iter()
+        .map(|field| {
+            if uses_named_fields {
+                field
+                    .split_once(':')
+                    .map(|(_name, value)| value.trim())
+                    .unwrap_or(field.trim())
+            } else {
+                field.trim()
+            }
+            .to_owned()
+        })
+        .collect())
+}
+
 fn single_quoted_string(value: &str) -> Result<String, FormalProjectFactError> {
     let strings = quoted_strings(value)?;
     match strings.as_slice() {
         [string] => Ok(string.clone()),
         _ => Err(FormalProjectFactError::new(
             "formal project string field is malformed",
+        )),
+    }
+}
+
+fn bool_value(value: &str) -> Result<bool, FormalProjectFactError> {
+    match value.trim() {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(FormalProjectFactError::new(
+            "formal project boolean field is malformed",
         )),
     }
 }
@@ -6076,6 +6473,7 @@ struct ProjectDigestInventories<'a> {
     read_model_fields: &'a [ProjectReadModelField],
     views: &'a [ProjectView],
     view_definitions: &'a [ProjectViewDefinition],
+    view_controls: &'a [ProjectViewControl],
     view_fields: &'a [ProjectViewField],
     automations: &'a [ProjectAutomation],
     automation_definitions: &'a [ProjectAutomationDefinition],
@@ -6152,6 +6550,7 @@ fn digest_with_project_inventories(
         .or_else(|| current_digest.split_once(";read-model-fields="))
         .or_else(|| current_digest.split_once(";views="))
         .or_else(|| current_digest.split_once(";view-definitions="))
+        .or_else(|| current_digest.split_once(";view-controls="))
         .or_else(|| current_digest.split_once(";view-fields="))
         .or_else(|| current_digest.split_once(";automations="))
         .or_else(|| current_digest.split_once(";automation-definitions="))
@@ -6164,7 +6563,7 @@ fn digest_with_project_inventories(
         .map(|(prefix, _tail)| prefix.to_owned())
         .unwrap_or(current_digest);
     format!(
-        "{prefix};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-definitions={};view-fields={};automations={};automation-definitions={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
+        "{prefix};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-definitions={};view-controls={};view-fields={};automations={};automation-definitions={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
         digest_scenarios(inventories.scenarios),
         digest_scenario_definitions(inventories.scenario_definitions),
         digest_data_flows(inventories.data_flows),
@@ -6177,6 +6576,7 @@ fn digest_with_project_inventories(
         digest_read_model_fields(inventories.read_model_fields),
         digest_views(inventories.views),
         digest_view_definitions(inventories.view_definitions),
+        digest_view_controls(inventories.view_controls),
         digest_view_fields(inventories.view_fields),
         digest_automations(inventories.automations),
         digest_automation_definitions(inventories.automation_definitions),
@@ -6393,6 +6793,37 @@ fn digest_view_definitions(definitions: &[ProjectViewDefinition]) -> String {
                 definition.sketch_tokens.join("|"),
                 definition.local_states.join("|"),
                 definition.filters.join("|")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_view_controls(controls: &[ProjectViewControl]) -> String {
+    controls
+        .iter()
+        .map(|control| {
+            format!(
+                "{}/{}/{}/{}@{}#{}:{}:{}:{}:{}:{}#{}#{}#{}#{}:{}:{}:{}:{}",
+                control.workflow_slug,
+                control.slice_slug,
+                control.view,
+                control.control,
+                control.command,
+                control.input,
+                control.input_source_kind,
+                control.input_source_description,
+                control.input_sketch_token,
+                control.input_visible_to_actor,
+                control.input_decision_field,
+                control.handled_errors.join("|"),
+                control.recovery_behavior,
+                control.control_sketch_token,
+                control.navigation_type,
+                control.navigation_target,
+                control.external_workflow,
+                control.external_system,
+                control.handoff_contract
             )
         })
         .collect::<Vec<_>>()
@@ -7197,6 +7628,66 @@ fn quint_view_definition_record(definition: &NewProjectViewDefinition) -> String
         quoted_string_list(&sketch_tokens),
         quoted_string_list(&definition.local_states),
         quoted_string_list(&definition.filters)
+    )
+}
+
+fn lean_view_control_record(control: &NewProjectViewControl) -> String {
+    let handled_errors = control
+        .handled_errors
+        .iter()
+        .map(|error| error.as_ref().to_owned())
+        .collect::<Vec<_>>();
+    format!(
+        "({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {}, {}, {}, {})",
+        quoted(control.workflow_slug.as_ref()),
+        quoted(control.slice_slug.as_ref()),
+        quoted(control.view.as_ref()),
+        quoted(control.control.as_ref()),
+        quoted(control.command.as_ref()),
+        quoted(control.input.as_ref()),
+        quoted(control.input_source_kind.as_ref()),
+        quoted(control.input_source_description.as_ref()),
+        quoted(control.input_sketch_token.as_ref()),
+        control.input_visible_to_actor,
+        control.input_decision_field,
+        quoted_string_list(&handled_errors),
+        quoted(control.recovery_behavior.as_ref()),
+        quoted(control.control_sketch_token.as_ref()),
+        quoted(control.navigation_type.as_ref()),
+        quoted(control.navigation_target.as_ref()),
+        quoted(&control.external_workflow),
+        quoted(&control.external_system),
+        quoted(&control.handoff_contract)
+    )
+}
+
+fn quint_view_control_record(control: &NewProjectViewControl) -> String {
+    let handled_errors = control
+        .handled_errors
+        .iter()
+        .map(|error| error.as_ref().to_owned())
+        .collect::<Vec<_>>();
+    format!(
+        "{{ workflow: {}, slice: {}, view: {}, control: {}, command: {}, input: {}, inputSourceKind: {}, inputSourceDescription: {}, inputSketchToken: {}, inputVisibleToActor: {}, inputDecisionField: {}, handledErrors: [{}], recoveryBehavior: {}, controlSketchToken: {}, navigationType: {}, navigationTarget: {}, externalWorkflow: {}, externalSystem: {}, handoffContract: {} }}",
+        quoted(control.workflow_slug.as_ref()),
+        quoted(control.slice_slug.as_ref()),
+        quoted(control.view.as_ref()),
+        quoted(control.control.as_ref()),
+        quoted(control.command.as_ref()),
+        quoted(control.input.as_ref()),
+        quoted(control.input_source_kind.as_ref()),
+        quoted(control.input_source_description.as_ref()),
+        quoted(control.input_sketch_token.as_ref()),
+        control.input_visible_to_actor,
+        control.input_decision_field,
+        quoted_string_list(&handled_errors),
+        quoted(control.recovery_behavior.as_ref()),
+        quoted(control.control_sketch_token.as_ref()),
+        quoted(control.navigation_type.as_ref()),
+        quoted(control.navigation_target.as_ref()),
+        quoted(&control.external_workflow),
+        quoted(&control.external_system),
+        quoted(&control.handoff_contract)
     )
 }
 

@@ -12,7 +12,7 @@ use crate::core::formal_project_facts::{
     ProjectExternalPayload, ProjectExternalPayloadField, ProjectOutcome, ProjectReadModel,
     ProjectReadModelDefinition, ProjectReadModelField, ProjectScenario, ProjectScenarioDefinition,
     ProjectStream, ProjectTranslation, ProjectTranslationDefinition, ProjectView,
-    ProjectViewDefinition, ProjectViewField,
+    ProjectViewControl, ProjectViewDefinition, ProjectViewField,
 };
 use crate::core::project::ProjectName;
 use crate::core::types::{
@@ -114,6 +114,7 @@ pub struct ModeledProjectRootInventories {
     read_model_fields: Vec<ProjectReadModelField>,
     views: Vec<ProjectView>,
     view_definitions: Vec<ProjectViewDefinition>,
+    view_controls: Vec<ProjectViewControl>,
     view_fields: Vec<ProjectViewField>,
     automations: Vec<ProjectAutomation>,
     automation_definitions: Vec<ProjectAutomationDefinition>,
@@ -139,6 +140,7 @@ pub(crate) struct ModeledProjectRootInventoryParts {
     pub(crate) read_model_fields: Vec<ProjectReadModelField>,
     pub(crate) views: Vec<ProjectView>,
     pub(crate) view_definitions: Vec<ProjectViewDefinition>,
+    pub(crate) view_controls: Vec<ProjectViewControl>,
     pub(crate) view_fields: Vec<ProjectViewField>,
     pub(crate) automations: Vec<ProjectAutomation>,
     pub(crate) automation_definitions: Vec<ProjectAutomationDefinition>,
@@ -166,6 +168,7 @@ impl ModeledProjectRootInventories {
             read_model_fields: parts.read_model_fields,
             views: parts.views,
             view_definitions: parts.view_definitions,
+            view_controls: parts.view_controls,
             view_fields: parts.view_fields,
             automations: parts.automations,
             automation_definitions: parts.automation_definitions,
@@ -210,6 +213,7 @@ pub fn check_project(
             read_model_fields: &project_inventories.read_model_fields,
             views: &project_inventories.views,
             view_definitions: &project_inventories.view_definitions,
+            view_controls: &project_inventories.view_controls,
             view_fields: &project_inventories.view_fields,
             automations: &project_inventories.automations,
             automation_definitions: &project_inventories.automation_definitions,
@@ -330,6 +334,7 @@ struct ProjectRootInventories<'a> {
     read_model_fields: &'a [ProjectReadModelField],
     views: &'a [ProjectView],
     view_definitions: &'a [ProjectViewDefinition],
+    view_controls: &'a [ProjectViewControl],
     view_fields: &'a [ProjectViewField],
     automations: &'a [ProjectAutomation],
     automation_definitions: &'a [ProjectAutomationDefinition],
@@ -371,6 +376,7 @@ fn project_root_effects(
     let lean_model_view_list = lean_model_view_list(inventories.views);
     let lean_model_view_definition_list =
         lean_model_view_definition_list(inventories.view_definitions);
+    let lean_model_view_control_list = lean_model_view_control_list(inventories.view_controls);
     let lean_model_view_field_list = lean_model_view_field_list(inventories.view_fields);
     let lean_model_automation_list = lean_model_automation_list(inventories.automations);
     let lean_model_automation_definition_list =
@@ -404,6 +410,7 @@ fn project_root_effects(
     let quint_model_view_list = quint_model_view_list(inventories.views);
     let quint_model_view_definition_list =
         quint_model_view_definition_list(inventories.view_definitions);
+    let quint_model_view_control_list = quint_model_view_control_list(inventories.view_controls);
     let quint_model_view_field_list = quint_model_view_field_list(inventories.view_fields);
     let quint_model_automation_list = quint_model_automation_list(inventories.automations);
     let quint_model_automation_definition_list =
@@ -442,6 +449,7 @@ fn project_root_effects(
     let read_model_field_count = inventories.read_model_fields.len();
     let view_count = inventories.views.len();
     let view_definition_count = inventories.view_definitions.len();
+    let view_control_count = inventories.view_controls.len();
     let view_field_count = inventories.view_fields.len();
     let automation_count = inventories.automations.len();
     let automation_definition_count = inventories.automation_definitions.len();
@@ -651,6 +659,14 @@ fn project_root_effects(
             artifact_marker("def modelViewDefinitions :"),
             artifact_marker(format!(
                 "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := {lean_model_view_definition_list}"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelViewControls :"),
+            artifact_marker(format!(
+                "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := {lean_model_view_control_list}"
             )),
             lean_message.clone(),
         ),
@@ -883,6 +899,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelViewControlsAreDeclared"),
+            artifact_marker(format!(
+                "theorem modelViewControlsAreDeclared : modelViewControls.length = {view_control_count} := rfl"
+            )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelViewFieldsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelViewFieldsAreDeclared : modelViewFields.length = {view_field_count} := rfl"
@@ -1076,6 +1100,14 @@ fn project_root_effects(
             artifact_marker("  type ModelViewDefinition ="),
             artifact_marker(
                 "  type ModelViewDefinition = { workflow: str, slice: str, view: str, readModels: List[str], sketchTokens: List[str], localStates: List[str], filters: List[str] }",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  type ModelViewControl ="),
+            artifact_marker(
+                "  type ModelViewControl = { workflow: str, slice: str, view: str, control: str, command: str, input: str, inputSourceKind: str, inputSourceDescription: str, inputSketchToken: str, inputVisibleToActor: bool, inputDecisionField: bool, handledErrors: List[str], recoveryBehavior: str, controlSketchToken: str, navigationType: str, navigationTarget: str, externalWorkflow: str, externalSystem: str, handoffContract: str }",
             ),
             quint_message.clone(),
         ),
@@ -1306,6 +1338,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelViewControls:"),
+            artifact_marker(format!(
+                "  val modelViewControls: List[ModelViewControl] = {quint_model_view_control_list}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelViewFields:"),
             artifact_marker(format!(
                 "  val modelViewFields: List[ModelViewField] = {quint_model_view_field_list}"
@@ -1528,6 +1568,14 @@ fn project_root_effects(
             artifact_marker("  val modelViewDefinitionsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelViewDefinitionsAreDeclared = modelViewDefinitions.length() == {view_definition_count}"
+            )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelViewControlsAreDeclared ="),
+            artifact_marker(format!(
+                "  val modelViewControlsAreDeclared = modelViewControls.length() == {view_control_count}"
             )),
             quint_message.clone(),
         ),
@@ -3444,6 +3492,78 @@ fn quint_model_view_definition_list(project_view_definitions: &[ProjectViewDefin
     )
 }
 
+fn lean_model_view_control_list(project_view_controls: &[ProjectViewControl]) -> String {
+    let mut project_view_controls = project_view_controls.to_vec();
+    project_view_controls.sort();
+    format!(
+        "[{}]",
+        project_view_controls
+            .into_iter()
+            .map(|control| {
+                format!(
+                    "({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {}, {}, {}, {})",
+                    json_string(control.workflow_slug()),
+                    json_string(control.slice_slug()),
+                    json_string(control.view()),
+                    json_string(control.control()),
+                    json_string(control.command()),
+                    json_string(control.input()),
+                    json_string(control.input_source_kind()),
+                    json_string(control.input_source_description()),
+                    json_string(control.input_sketch_token()),
+                    control.input_visible_to_actor(),
+                    control.input_decision_field(),
+                    json_string_list(control.handled_errors()),
+                    json_string(control.recovery_behavior()),
+                    json_string(control.control_sketch_token()),
+                    json_string(control.navigation_type()),
+                    json_string(control.navigation_target()),
+                    json_string(control.external_workflow()),
+                    json_string(control.external_system()),
+                    json_string(control.handoff_contract())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn quint_model_view_control_list(project_view_controls: &[ProjectViewControl]) -> String {
+    let mut project_view_controls = project_view_controls.to_vec();
+    project_view_controls.sort();
+    format!(
+        "[{}]",
+        project_view_controls
+            .into_iter()
+            .map(|control| {
+                format!(
+                    "{{ workflow: {}, slice: {}, view: {}, control: {}, command: {}, input: {}, inputSourceKind: {}, inputSourceDescription: {}, inputSketchToken: {}, inputVisibleToActor: {}, inputDecisionField: {}, handledErrors: [{}], recoveryBehavior: {}, controlSketchToken: {}, navigationType: {}, navigationTarget: {}, externalWorkflow: {}, externalSystem: {}, handoffContract: {} }}",
+                    json_string(control.workflow_slug()),
+                    json_string(control.slice_slug()),
+                    json_string(control.view()),
+                    json_string(control.control()),
+                    json_string(control.command()),
+                    json_string(control.input()),
+                    json_string(control.input_source_kind()),
+                    json_string(control.input_source_description()),
+                    json_string(control.input_sketch_token()),
+                    control.input_visible_to_actor(),
+                    control.input_decision_field(),
+                    json_string_list(control.handled_errors()),
+                    json_string(control.recovery_behavior()),
+                    json_string(control.control_sketch_token()),
+                    json_string(control.navigation_type()),
+                    json_string(control.navigation_target()),
+                    json_string(control.external_workflow()),
+                    json_string(control.external_system()),
+                    json_string(control.handoff_contract())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn lean_model_view_field_list(project_view_fields: &[ProjectViewField]) -> String {
     let mut project_view_fields = project_view_fields
         .iter()
@@ -4076,7 +4196,7 @@ fn model_digest(
     inventories: &ProjectRootInventories<'_>,
 ) -> String {
     format!(
-        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-definitions={};view-fields={};automations={};automation-definitions={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
+        "project:name={};version=0.1.0;workflows={};slices={};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-definitions={};view-controls={};view-fields={};automations={};automation-definitions={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
         digest_slices(formal_workflows),
@@ -4092,6 +4212,7 @@ fn model_digest(
         digest_read_model_fields(inventories.read_model_fields),
         digest_views(inventories.views),
         digest_view_definitions(inventories.view_definitions),
+        digest_view_controls(inventories.view_controls),
         digest_view_fields(inventories.view_fields),
         digest_automations(inventories.automations),
         digest_automation_definitions(inventories.automation_definitions),
@@ -4415,6 +4536,39 @@ fn digest_view_definitions(project_view_definitions: &[ProjectViewDefinition]) -
                 definition.sketch_tokens().join("|"),
                 definition.local_states().join("|"),
                 definition.filters().join("|")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn digest_view_controls(project_view_controls: &[ProjectViewControl]) -> String {
+    let mut view_controls = project_view_controls.to_vec();
+    view_controls.sort();
+    view_controls
+        .into_iter()
+        .map(|control| {
+            format!(
+                "{}/{}/{}/{}@{}#{}:{}:{}:{}:{}:{}#{}#{}#{}#{}:{}:{}:{}:{}",
+                control.workflow_slug(),
+                control.slice_slug(),
+                control.view(),
+                control.control(),
+                control.command(),
+                control.input(),
+                control.input_source_kind(),
+                control.input_source_description(),
+                control.input_sketch_token(),
+                control.input_visible_to_actor(),
+                control.input_decision_field(),
+                control.handled_errors().join("|"),
+                control.recovery_behavior(),
+                control.control_sketch_token(),
+                control.navigation_type(),
+                control.navigation_target(),
+                control.external_workflow(),
+                control.external_system(),
+                control.handoff_contract()
             )
         })
         .collect::<Vec<_>>()
