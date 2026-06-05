@@ -46,6 +46,16 @@ fn verify_project_root(project_name: ProjectName) -> Vec<Effect> {
             ],
             report_line("Quint artifacts verified"),
         )),
+        Effect::RunProcess(ProcessInvocation::new(
+            program_name("quint"),
+            vec![
+                process_argument("verify"),
+                process_argument("--invariant"),
+                process_argument("modelVersionStable,modelWorkflowsAreDeclared"),
+                process_argument(format!("model/quint/{module_name}.qnt")),
+            ],
+            report_line("Quint artifacts verified"),
+        )),
     ]
 }
 

@@ -290,9 +290,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::AddWorkflowFromIndex(workflow) => {
+            let project_name = read_project_manifest_name()?;
             let existing_workflows =
                 formal_workflow_layouts(read_synchronized_formal_workflow_graphs()?);
             let plan = add_workflow(
+                project_name,
                 ModeledWorkflowLayouts::new(existing_workflows),
                 workflow.clone(),
             )
@@ -532,12 +534,14 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::RemoveWorkflowFromIndex(slug) => {
+            let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
             let existing_workflows = formal_workflow_layouts(FormalWorkflowGraphs::from_graphs(
                 formal_workflows.clone(),
             ));
             let workflow_graphs = indexed_formal_workflow_graphs(&formal_workflows);
             let plan = remove_workflow(
+                project_name,
                 ModeledWorkflowLayouts::new(existing_workflows),
                 IndexedWorkflowGraphs::new(workflow_graphs),
                 slug.clone(),

@@ -7,6 +7,7 @@ use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
 use crate::core::formal_graph::FormalWorkflowGraph;
 use crate::core::layout::{ModeledWorkflowLayout, ModeledWorkflowLayouts};
+use crate::core::project::{ProjectName, project_root_effects};
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowCommandErrorRecord,
     WorkflowCommandErrorRecords, WorkflowEntryLifecycleStateRecord,
@@ -69,12 +70,14 @@ impl IndexedWorkflowGraphs {
 }
 
 pub fn add_workflow(
+    project_name: ProjectName,
     existing_workflows: ModeledWorkflowLayouts,
     workflow: NewWorkflow,
 ) -> Result<EffectPlan, WorkflowMutationError> {
     reject_workflow_slug_collision(existing_workflows.as_slice(), &workflow)?;
     reject_workflow_module_collision(existing_workflows.as_slice(), &workflow)?;
     Ok(workflow_effect_plan(
+        project_name,
         existing_workflows.into_inner(),
         workflow,
     ))
@@ -193,6 +196,7 @@ pub fn update_workflow_name(
 }
 
 pub fn remove_workflow(
+    project_name: ProjectName,
     existing_workflows: ModeledWorkflowLayouts,
     workflow_graphs: IndexedWorkflowGraphs,
     slug: WorkflowSlug,
@@ -223,24 +227,31 @@ pub fn remove_workflow(
     let removed_slice_details = workflow_graph.graph().slice_details().as_slice().to_owned();
     let workflow_module_name = module_name(removed_workflow.name().as_ref());
     let workflow_name = removed_workflow.name().as_ref().to_owned();
+    let remaining_workflow_slugs = existing_workflows
+        .as_slice()
+        .iter()
+        .filter(|existing| existing.slug() != &slug)
+        .map(|existing| existing.slug().clone())
+        .collect::<Vec<_>>();
 
     let remove_slice_effects = removed_slice_details
         .into_iter()
         .flat_map(remove_slice_artifact_effects);
-    let effects = [
-        Effect::RemoveFile(project_path(format!(
-            "model/lean/{workflow_module_name}.lean"
-        ))),
-        Effect::RemoveFile(project_path(format!(
-            "model/quint/{workflow_module_name}.qnt"
-        ))),
-    ]
-    .into_iter()
-    .chain(remove_slice_effects)
-    .chain([Effect::Report(report_line(format!(
-        "removed workflow {workflow_name}"
-    )))])
-    .collect::<Vec<_>>();
+    let effects = project_root_effects(project_name, &remaining_workflow_slugs)
+        .into_iter()
+        .chain([
+            Effect::RemoveFile(project_path(format!(
+                "model/lean/{workflow_module_name}.lean"
+            ))),
+            Effect::RemoveFile(project_path(format!(
+                "model/quint/{workflow_module_name}.qnt"
+            ))),
+        ])
+        .chain(remove_slice_effects)
+        .chain([Effect::Report(report_line(format!(
+            "removed workflow {workflow_name}"
+        )))])
+        .collect::<Vec<_>>();
 
     Ok(EffectPlan::new(effects))
 }
@@ -267,7 +278,8 @@ impl Display for WorkflowMutationError {
 impl Error for WorkflowMutationError {}
 
 fn workflow_effect_plan(
-    _existing_workflows: Vec<ModeledWorkflowLayout>,
+    project_name: ProjectName,
+    existing_workflows: Vec<ModeledWorkflowLayout>,
     workflow: NewWorkflow,
 ) -> EffectPlan {
     let workflow_name = workflow.name.as_ref();
@@ -287,33 +299,43 @@ fn workflow_effect_plan(
         workflow_requires_entry_lifecycle_coverage: false,
         workflow_entry_lifecycle_states: Default::default(),
     });
-    EffectPlan::new(vec![
-        Effect::WriteFile(
-            project_path(format!("model/lean/{module_name}.lean")),
-            emit_lean_workflow_module(
-                lean_module_name,
-                WorkflowModuleData::new(
-                    workflow.name.clone(),
-                    workflow.description.clone(),
-                    workflow.slug.clone(),
-                    digest.clone(),
+    let workflow_slugs = existing_workflows
+        .iter()
+        .map(|existing| existing.slug().clone())
+        .chain([workflow.slug.clone()])
+        .collect::<Vec<_>>();
+    EffectPlan::new(
+        project_root_effects(project_name, &workflow_slugs)
+            .into_iter()
+            .chain([
+                Effect::WriteFile(
+                    project_path(format!("model/lean/{module_name}.lean")),
+                    emit_lean_workflow_module(
+                        lean_module_name,
+                        WorkflowModuleData::new(
+                            workflow.name.clone(),
+                            workflow.description.clone(),
+                            workflow.slug.clone(),
+                            digest.clone(),
+                        ),
+                    ),
                 ),
-            ),
-        ),
-        Effect::WriteFile(
-            project_path(format!("model/quint/{module_name}.qnt")),
-            emit_quint_workflow_module(
-                quint_module_name,
-                WorkflowModuleData::new(
-                    workflow.name.clone(),
-                    workflow.description.clone(),
-                    workflow.slug.clone(),
-                    digest,
+                Effect::WriteFile(
+                    project_path(format!("model/quint/{module_name}.qnt")),
+                    emit_quint_workflow_module(
+                        quint_module_name,
+                        WorkflowModuleData::new(
+                            workflow.name.clone(),
+                            workflow.description.clone(),
+                            workflow.slug.clone(),
+                            digest,
+                        ),
+                    ),
                 ),
-            ),
-        ),
-        Effect::Report(report_line(format!("added workflow {workflow_name}"))),
-    ])
+                Effect::Report(report_line(format!("added workflow {workflow_name}"))),
+            ])
+            .collect(),
+    )
 }
 
 fn reject_incoming_workflow_references(
