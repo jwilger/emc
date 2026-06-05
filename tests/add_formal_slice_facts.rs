@@ -1107,6 +1107,35 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_authors_shared_event_definitions() -> Result<(), Box<dyn Error>> {
+        let temp_dir = initialized_project_with_slice()?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(mcp_shared_event_definition_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"add_event_definition\""))
+            .stdout(predicate::str::contains(
+                "added event TicketTagged to slice capture-ticket",
+            ));
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            lean.contains("observed := false, shared := true"),
+            "MCP-authored shared event facts must be represented in the Lean artifact"
+        );
+        assert!(
+            quint.contains("observed: false, shared: true"),
+            "MCP-authored shared event facts must be represented in the Quint artifact"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn add_external_payload_definition_updates_formal_slice_artifacts() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = initialized_project_with_slice()?;
@@ -1913,6 +1942,111 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
+
+        Command::cargo_bin("emc")?
+            .args(["verify"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    #[test]
+    fn add_event_definition_records_shared_events() -> Result<(), Box<dyn Error>> {
+        let temp_dir = initialized_project_with_slice()?;
+        author_projected_ticket_title(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "view",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "ticket_summary",
+                "--read-model",
+                "ticket_state",
+                "--field",
+                "ticket_title",
+                "--source-field",
+                "ticket_title",
+                "--sketch-token",
+                "title-label",
+                "--field-provenance",
+                "ticket_state.ticket_title",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        complete_ticket_summary_display_flow(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketTagged",
+                "--stream",
+                "tickets",
+                "--attribute",
+                "tag",
+                "--attribute-source",
+                "generated",
+                "--attribute-source-name",
+                "tagging_policy",
+                "--attribute-source-field",
+                "tag",
+                "--attribute-provenance",
+                "TicketTagged.tag",
+                "--shared",
+                "true",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added event TicketTagged to slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "tag",
+                "--source",
+                "tagging_policy.tag",
+                "--transformation",
+                "shared without transformation",
+                "--target",
+                "TicketTagged",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            lean.contains("name := \"TicketTagged\", stream := \"tickets\"")
+                && lean.contains("observed := false, shared := true"),
+            "Lean slice artifact must carry authored shared event semantics"
+        );
+        assert!(
+            quint.contains("name: \"TicketTagged\", stream: \"tickets\"")
+                && quint.contains("observed: false, shared: true"),
+            "Quint slice artifact must carry authored shared event semantics"
+        );
 
         Command::cargo_bin("emc")?
             .args(["verify"])
@@ -4746,6 +4880,14 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_event_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketCaptured\",\"stream\":\"tickets\",\"attribute\":\"ticket_title\",\"attribute_source\":\"generated\",\"attribute_source_name\":\"upstream_event_store\",\"attribute_source_field\":\"ticket_title\",\"attribute_provenance\":\"TicketCaptured.ticket_title\",\"observed\":true}}}\n",
+        )
+    }
+
+    fn mcp_shared_event_definition_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_event_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketTagged\",\"stream\":\"tickets\",\"attribute\":\"tag\",\"attribute_source\":\"generated\",\"attribute_source_name\":\"tagging_policy\",\"attribute_source_field\":\"tag\",\"attribute_provenance\":\"TicketTagged.tag\",\"shared\":true}}}\n",
         )
     }
 

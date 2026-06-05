@@ -935,6 +935,9 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         },
                         "observed": {
                             "type": "boolean"
+                        },
+                        "shared": {
+                            "type": "boolean"
                         }
                     },
                     "required": ["slice", "name", "stream", "attribute", "attribute_source", "attribute_source_name", "attribute_source_field", "attribute_provenance"],
@@ -2740,11 +2743,17 @@ fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError>
         attribute_source_field,
         provenance_description,
     );
-    let event = if arguments
+    let observed = arguments
         .get("observed")
         .and_then(Value::as_bool)
-        .unwrap_or(false)
-    {
+        .unwrap_or(false);
+    let shared = arguments
+        .get("shared")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let event = if shared {
+        NewEventDefinition::new_shared(slice_slug, event_name, stream_name, attribute)
+    } else if observed {
         NewEventDefinition::new_observed(slice_slug, event_name, stream_name, attribute)
     } else {
         NewEventDefinition::new(slice_slug, event_name, stream_name, attribute)

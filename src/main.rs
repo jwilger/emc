@@ -1546,6 +1546,71 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             attribute_source_field,
             attribute_provenance_flag,
             attribute_provenance,
+            shared_flag,
+            shared,
+        ] if command == "add"
+            && subject == "event"
+            && slice_flag == "--slice"
+            && name_flag == "--name"
+            && stream_flag == "--stream"
+            && attribute_flag == "--attribute"
+            && attribute_source_flag == "--attribute-source"
+            && attribute_source_name_flag == "--attribute-source-name"
+            && attribute_source_field_flag == "--attribute-source-field"
+            && attribute_provenance_flag == "--attribute-provenance"
+            && shared_flag == "--shared" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+            let event_name =
+                parse_event_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+            let stream_name = parse_stream_name(stream)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let attribute_name = parse_event_attribute_name(attribute)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let attribute_source_kind = parse_event_attribute_source_kind(attribute_source)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let attribute_source_name = parse_event_attribute_source_name(attribute_source_name)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let attribute_source_field = parse_event_attribute_source_field(attribute_source_field)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let provenance_description = parse_provenance_description(attribute_provenance)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let attribute = NewEventAttribute::new(
+                attribute_name,
+                attribute_source_kind,
+                attribute_source_name,
+                attribute_source_field,
+                provenance_description,
+            );
+            let event = if parse_shared_flag(shared)? {
+                NewEventDefinition::new_shared(slice_slug, event_name, stream_name, attribute)
+            } else {
+                NewEventDefinition::new(slice_slug, event_name, stream_name, attribute)
+            };
+            Ok(Cli {
+                command: Command::AddEventDefinition { event },
+            })
+        }
+        [
+            command,
+            subject,
+            slice_flag,
+            slice,
+            name_flag,
+            name,
+            stream_flag,
+            stream,
+            attribute_flag,
+            attribute,
+            attribute_source_flag,
+            attribute_source,
+            attribute_source_name_flag,
+            attribute_source_name,
+            attribute_source_field_flag,
+            attribute_source_field,
+            attribute_provenance_flag,
+            attribute_provenance,
             observed_flag,
             observed,
         ] if command == "add"
@@ -3214,6 +3279,11 @@ fn parse_observed_flag(raw: &str) -> Result<bool, ShellError> {
         .map_err(|_error| ShellError::message("invalid observed flag: expected true or false"))
 }
 
+fn parse_shared_flag(raw: &str) -> Result<bool, ShellError> {
+    parse_bool_flag(raw)
+        .map_err(|_error| ShellError::message("invalid shared flag: expected true or false"))
+}
+
 fn parse_bool_flag(raw: &str) -> Result<bool, ShellError> {
     match raw {
         "true" => Ok(true),
@@ -3435,6 +3505,7 @@ fn help_command() -> ClapCommand {
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --error <name> --error-scenario <scenario> --error-recovery <kind>
   emc add external-payload --slice <slice> --name <name> --field <field> --field-provenance <text> --bit-encoding <semantics>
   emc add event --slice <slice> --name <event> --stream <stream> --attribute <name> --attribute-source <kind> --attribute-source-name <name> --attribute-source-field <field> --attribute-provenance <text> [--observed true]
+  emc add event --slice <slice> --name <event> --stream <stream> --attribute <name> --attribute-source <kind> --attribute-source-name <name> --attribute-source-field <field> --attribute-provenance <text> --shared <true|false>
   emc add outcome --slice <slice> --label <label> --events <event[,event]> --externally-relevant <true|false>
   emc add read-model --slice <slice> --name <read-model> --field <name> --field-source <kind> --source-event <event> --source-attribute <attribute> --field-provenance <text>
   emc add read-model --slice <slice> --name <read-model> --field <name> --field-source <kind> --source-event <event> --source-attribute <attribute> --field-provenance <text> --transitive <true|false> --relationship-fields <field[,field]> --transitive-rule <rule> --example-scenario <scenario>

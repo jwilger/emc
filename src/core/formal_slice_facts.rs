@@ -613,6 +613,7 @@ pub struct NewEventDefinition {
     stream: StreamName,
     attribute: NewEventAttribute,
     observed: bool,
+    shared: bool,
 }
 
 impl NewEventDefinition {
@@ -628,6 +629,7 @@ impl NewEventDefinition {
             stream,
             attribute,
             observed: false,
+            shared: false,
         }
     }
 
@@ -643,6 +645,23 @@ impl NewEventDefinition {
             stream,
             attribute,
             observed: true,
+            shared: false,
+        }
+    }
+
+    pub fn new_shared(
+        slice_slug: SliceSlug,
+        name: EventName,
+        stream: StreamName,
+        attribute: NewEventAttribute,
+    ) -> Self {
+        Self {
+            slice_slug,
+            name,
+            stream,
+            attribute,
+            observed: false,
+            shared: true,
         }
     }
 
@@ -2321,21 +2340,23 @@ fn quint_external_payload_definition_record(
 
 fn lean_event_definition_record(event: &NewEventDefinition) -> String {
     format!(
-        "{{ name := {}, stream := {}, attributes := [{}], observed := {}, shared := false }}",
+        "{{ name := {}, stream := {}, attributes := [{}], observed := {}, shared := {} }}",
         quoted(event.name.as_ref()),
         quoted(event.stream.as_ref()),
         lean_event_attribute_record(&event.attribute),
         lean_bool(event.observed),
+        lean_bool(event.shared),
     )
 }
 
 fn quint_event_definition_record(event: &NewEventDefinition) -> String {
     format!(
-        "{{ name: {}, stream: {}, attributes: [{}], observed: {}, shared: false }}",
+        "{{ name: {}, stream: {}, attributes: [{}], observed: {}, shared: {} }}",
         quoted(event.name.as_ref()),
         quoted(event.stream.as_ref()),
         quint_event_attribute_record(&event.attribute),
         event.observed,
+        event.shared,
     )
 }
 
