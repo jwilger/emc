@@ -920,6 +920,30 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelReadModelFieldTracesToOriginalProvenance"),
+            artifact_marker(
+                "def modelReadModelFieldTracesToOriginalProvenance (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := let (workflow, slice, _, _, sourceKind, sourceEvent, sourceAttribute, derivationRule, derivationSourceFields, absenceEvent, _, _, provenance) := field; provenance.isEmpty == false && ((sourceKind == \"event_attribute\" && modelEventAttributes.any (fun eventAttribute => eventAttribute.1 == workflow && eventAttribute.2.1 == slice && eventAttribute.2.2.1 == sourceEvent && eventAttribute.2.2.2.1 == sourceAttribute && modelEventAttributeSourceIsComplete eventAttribute)) || (sourceKind == \"derivation\" && derivationRule.isEmpty == false && derivationSourceFields.isEmpty == false) || (sourceKind == \"absence_default\" && absenceEvent.isEmpty == false))",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelViewFieldReadModelFieldSourceResolves"),
+            artifact_marker(
+                "def modelViewFieldReadModelFieldSourceResolves (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldSourceIsComplete viewField && modelReadModelFields.any (fun readModelField => readModelField.1 == workflow && readModelField.2.1 == slice && readModelField.2.2.1 == sourceReadModel && readModelField.2.2.2.1 == sourceField && modelReadModelFieldSourceIsComplete readModelField)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelDisplayedDatumTracesToOriginalProvenance"),
+            artifact_marker(
+                "def modelDisplayedDatumTracesToOriginalProvenance (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldReadModelFieldSourceResolves viewField && modelReadModelFields.any (fun readModelField => readModelField.1 == workflow && readModelField.2.1 == slice && readModelField.2.2.1 == sourceReadModel && readModelField.2.2.2.1 == sourceField && modelReadModelFieldTracesToOriginalProvenance readModelField)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelExternalPayloadFieldHasProvenance"),
             artifact_marker(
                 "def modelExternalPayloadFieldHasProvenance (field : String × String × String × String × String × String) : Bool := let (_, _, _, _, provenance, bitEncoding) := field; provenance.isEmpty == false && bitEncoding.isEmpty == false",
@@ -1142,6 +1166,22 @@ fn project_root_effects(
             artifact_marker("theorem modelViewFieldSourcesAreComplete"),
             artifact_marker(
                 "theorem modelViewFieldSourcesAreComplete : modelViewFields.all modelViewFieldSourceIsComplete = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelViewFieldReadModelFieldSourcesResolve"),
+            artifact_marker(
+                "theorem modelViewFieldReadModelFieldSourcesResolve : modelViewFields.all modelViewFieldReadModelFieldSourceResolves = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelDisplayedDataTraceToOriginalProvenance"),
+            artifact_marker(
+                "theorem modelDisplayedDataTraceToOriginalProvenance : modelViewFields.all modelDisplayedDatumTracesToOriginalProvenance = true := rfl",
             ),
             lean_message.clone(),
         ),
@@ -2029,6 +2069,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  def modelReadModelFieldTracesToOriginalProvenance"),
+            artifact_marker(
+                "  def modelReadModelFieldTracesToOriginalProvenance(readModelField) = readModelField.provenance != \"\" and ((readModelField.sourceKind == \"event_attribute\" and modelEventAttributes.select(eventAttr => eventAttr.workflow == readModelField.workflow and eventAttr.slice == readModelField.slice and eventAttr.event == readModelField.sourceEvent and eventAttr.attribute == readModelField.sourceAttribute and modelEventAttributeSourceIsComplete(eventAttr)).length() > 0) or (readModelField.sourceKind == \"derivation\" and readModelField.derivationRule != \"\" and readModelField.derivationSourceFields.length() > 0) or (readModelField.sourceKind == \"absence_default\" and readModelField.absenceEvent != \"\"))",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelReadModelsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelReadModelsAreDeclared = modelReadModels.length() == {read_model_count}"
@@ -2056,6 +2104,38 @@ fn project_root_effects(
             artifact_marker("  def modelViewFieldSourceIsComplete"),
             artifact_marker(
                 "  def modelViewFieldSourceIsComplete(viewField) = viewField.sourceKind == \"read_model\" and viewField.sourceReadModel != \"\" and viewField.sourceField != \"\" and viewField.provenance != \"\" and viewField.bitEncoding != \"\"",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelViewFieldReadModelFieldSourceResolves"),
+            artifact_marker(
+                "  def modelViewFieldReadModelFieldSourceResolves(viewField) = modelViewFieldSourceIsComplete(viewField) and modelReadModelFields.select(readModelField => readModelField.workflow == viewField.workflow and readModelField.slice == viewField.slice and readModelField.readModel == viewField.sourceReadModel and readModelField.field == viewField.sourceField and modelReadModelFieldSourceIsComplete(readModelField)).length() > 0",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelViewFieldReadModelFieldSourcesResolve ="),
+            artifact_marker(
+                "  val modelViewFieldReadModelFieldSourcesResolve = modelViewFields.select(viewField => modelViewFieldReadModelFieldSourceResolves(viewField)).length() == modelViewFields.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelDisplayedDatumTracesToOriginalProvenance"),
+            artifact_marker(
+                "  def modelDisplayedDatumTracesToOriginalProvenance(viewField) = modelViewFieldReadModelFieldSourceResolves(viewField) and modelReadModelFields.select(readModelField => readModelField.workflow == viewField.workflow and readModelField.slice == viewField.slice and readModelField.readModel == viewField.sourceReadModel and readModelField.field == viewField.sourceField and modelReadModelFieldTracesToOriginalProvenance(readModelField)).length() > 0",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelDisplayedDataTraceToOriginalProvenance ="),
+            artifact_marker(
+                "  val modelDisplayedDataTraceToOriginalProvenance = modelViewFields.select(viewField => modelDisplayedDatumTracesToOriginalProvenance(viewField)).length() == modelViewFields.length()",
             ),
             quint_message.clone(),
         ),
@@ -2479,6 +2559,18 @@ fn project_root_effects(
             quint_config_path.clone(),
             artifact_marker("    \"modelViewFieldSourcesAreComplete\""),
             artifact_marker("    \"modelViewFieldSourcesAreComplete\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelViewFieldReadModelFieldSourcesResolve\""),
+            artifact_marker("    \"modelViewFieldReadModelFieldSourcesResolve\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelDisplayedDataTraceToOriginalProvenance\""),
+            artifact_marker("    \"modelDisplayedDataTraceToOriginalProvenance\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
