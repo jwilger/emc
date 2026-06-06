@@ -22,7 +22,7 @@ A model is complete and valid only when all of these are true:
 - 🟡 The complete event model is represented in Lean4 and Quint.
 - 🟡 The event-model semantic rules in this document are encoded as Lean
   definitions, Lean theorems, Quint model structure, and Quint invariants.
-- 🟡 Every data flow is represented with source, transformation or projection,
+- ✅ Every data flow is represented with source, transformation or projection,
   target, and bit-level encoding semantics.
 - ✅ Every displayed datum traces to read model field, event attribute, and
   original provenance.
@@ -239,7 +239,7 @@ Lean4 should prove at least:
 - ✅ Slice architecture rules.
 - ✅ Event, stream, command, read model, view, and scenario well-formedness.
 - 🟡 Source-chain completeness.
-- 🟡 Bit-level data-flow completeness.
+- ✅ Bit-level data-flow completeness.
 - ✅ Outcome and error coverage.
 - ✅ Workflow reachability and transition resolution.
 
