@@ -2107,6 +2107,12 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
+            artifact_marker("    \"workflowStateViewCommandTransitionsTargetStateChanges\""),
+            artifact_marker("    \"workflowStateViewCommandTransitionsTargetStateChanges\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
             artifact_marker("    \"workflowEventTransitionsAreSharedByEndpointSlices\""),
             artifact_marker("    \"workflowEventTransitionsAreSharedByEndpointSlices\","),
             quint_config_message.clone(),
