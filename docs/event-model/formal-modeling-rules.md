@@ -33,7 +33,7 @@ A model is complete and valid only when all of these are true:
   boundary, and recovery path is modeled.
 - ✅ Lean verification passes for every Lean module with `lake env lean`.
 - ✅ Quint typechecking and invariant verification pass for every Quint module.
-- 🟡 Non-formal implementation code does not perform duplicate semantic
+- ✅ Non-formal implementation code does not perform duplicate semantic
   validation for correctness.
 
 ## Model Structure
@@ -259,4 +259,4 @@ Quint should verify at least:
 
 ## Non-Goals
 
-- 🟡 Do not duplicate event-model semantic validation in Rust or JavaScript.
+- ✅ Do not duplicate event-model semantic validation in Rust or JavaScript.
