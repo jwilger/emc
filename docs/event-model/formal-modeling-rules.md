@@ -19,8 +19,8 @@ Status markers:
 
 A model is complete and valid only when all of these are true:
 
-- 🟡 The complete event model is represented in Lean4 and Quint.
-- 🟡 The event-model semantic rules in this document are encoded as Lean
+- ✅ The complete event model is represented in Lean4 and Quint.
+- ✅ The event-model semantic rules in this document are encoded as Lean
   definitions, Lean theorems, Quint model structure, and Quint invariants.
 - ✅ Every data flow is represented with source, transformation or projection,
   target, and bit-level encoding semantics.
