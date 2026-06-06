@@ -135,9 +135,9 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelDataFlowCoversDatum (workflow : String) (slice : String) (datum : String) : Bool :="
+                "def modelDataFlowCoversDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) : Bool :="
             ),
-            "Lean project root must define datum-to-data-flow coverage in the formal artifact"
+            "Lean project root must define target-aware datum-to-data-flow coverage in the formal artifact"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
@@ -232,9 +232,10 @@ mod tests {
             "Quint project root must expose read-model field source completeness"
         );
         assert!(
-            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?
-                .contains("def modelDataFlowCoversDatum(workflow, sliceName, datum) ="),
-            "Quint project root must define datum-to-data-flow coverage in the formal artifact"
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "def modelDataFlowCoversDatumTarget(workflow, sliceName, datum, target) ="
+            ),
+            "Quint project root must define target-aware datum-to-data-flow coverage in the formal artifact"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
