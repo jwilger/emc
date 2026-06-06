@@ -81,6 +81,18 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelSliceBelongsToDeclaredWorkflow (slice : String × String) : Bool := modelWorkflows.any (fun workflow => workflow == slice.1)"
+            ),
+            "Lean project root must encode workflow composition slice membership"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "theorem modelWorkflowCompositionStructureComplete : (modelSlices.all modelSliceBelongsToDeclaredWorkflow && modelSlices.all modelSliceHasModule && modelSliceModules.all modelSliceModuleBelongsToDeclaredSlice && modelWorkflows.all modelWorkflowHasCompositionStructure) = true := rfl"
+            ),
+            "Lean project root must prove workflow composition structure completeness"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
                 "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := control.1 == input.1 && control.2.2.2.2.1 == input.2.2.1 && control.2.2.2.2.2.1 == input.2.2.2.1"
             ),
             "Lean project root must be able to prove controls provide target command inputs across composed slices"
@@ -346,6 +358,18 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "def modelSliceBelongsToDeclaredWorkflow(modelSlice) = modelWorkflows.select(workflow => workflow == modelSlice.workflow).length() > 0"
+            ),
+            "Quint project root must encode workflow composition slice membership"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "val modelWorkflowCompositionStructureComplete = modelSlices.select(modelSlice => modelSliceBelongsToDeclaredWorkflow(modelSlice)).length() == modelSlices.length() and modelSlices.select(modelSlice => modelSliceHasModule(modelSlice)).length() == modelSlices.length() and modelSliceModules.select(sliceModule => modelSliceModuleBelongsToDeclaredSlice(sliceModule)).length() == modelSliceModules.length() and modelWorkflows.select(workflow => modelWorkflowHasCompositionStructure(workflow)).length() == modelWorkflows.length()"
+            ),
+            "Quint project root must expose workflow composition structure completeness"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
                 "def modelControlProvidesCommandInput(control, input) = control.workflow == input.workflow and control.command == input.command and control.input == input.input"
             ),
             "Quint project root must be able to verify controls provide target command inputs across composed slices"
@@ -584,7 +608,7 @@ mod tests {
         );
         assert_eq!(
             fs::read_to_string(temp_dir.path().join("model/quint/quint.json"))?,
-            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowSliceModulesComplete\",\n    \"workflowTransitionsStructured\",\n    \"workflowTransitionSourcesResolve\",\n    \"workflowTransitionTargetsResolve\",\n    \"workflowStepRelationshipsAreAllowed\",\n    \"workflowStepSlugsAreUnique\",\n    \"workflowHasExactlyOneEntryStep\",\n    \"workflowMainStepsHaveIncomingReachability\",\n    \"workflowNonSupportingStepsReachableFromEntry\",\n    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\",\n    \"workflowTransitionsHaveModeledKinds\",\n    \"workflowExitsNameTargetsAndRationale\",\n    \"workflowExternallyRelevantOutcomesHandled\",\n    \"workflowOutcomesSourceResolve\",\n    \"workflowCommandErrorsSourceResolve\",\n    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\",\n    \"workflowNonEventDefinitionsAreUniquelyOwned\",\n    \"workflowSharedEventDefinitionsHaveIdenticalIdentity\",\n    \"workflowCommandTransitionsResolveControlsAndCommands\",\n    \"workflowStateViewCommandTransitionsTargetStateChanges\",\n    \"workflowEventTransitionsAreSharedByEndpointSlices\",\n    \"workflowEventTransitionsHaveParticipatingEndpointEvents\",\n    \"workflowNavigationTransitionsResolveControlsAndViews\",\n    \"workflowNavigationTransitionsResolveToEntryViews\",\n    \"workflowExternalTriggersDeclarePayloadContracts\",\n    \"workflowExternalTriggerPayloadContractsHaveProvenance\",\n    \"workflowTransitionsHaveRequiredEvidence\",\n    \"workflowEntryLifecycleStatesCoverRequiredStates\",\n    \"modelScenarioDefinitionsHaveGwt\",\n    \"modelScenarioKindsAreFirstClass\",\n    \"modelDataFlowsAreBitComplete\",\n    \"modelDataFlowSourceKindsAreModeled\",\n    \"modelDataFlowModeledSourcesResolve\",\n    \"modelDataFlowSourceChainsReachOriginals\",\n    \"modelDataFlowSourceChainsPreserveBitEncodingSemantics\",\n    \"modelDataFlowTransformationsAreModeled\",\n    \"modelMeaningfulDataFlowsAreCovered\",\n    \"modelDataFlowSourceBitEncodingsMatchModeledSources\",\n    \"modelViewFieldBitEncodingsMatchDataFlows\",\n    \"modelExternalPayloadFieldBitEncodingsMatchDataFlows\",\n    \"modelCommandInputsHaveProvenance\",\n    \"modelCommandInputsTraceToInvocationSources\",\n    \"modelEventAttributeSourcesAreComplete\",\n    \"modelReadModelFieldSourcesAreComplete\",\n    \"modelViewFieldSourcesAreComplete\",\n    \"modelViewFieldReadModelFieldSourcesResolve\",\n    \"modelDisplayedDataTraceToOriginalProvenance\",\n    \"modelExternalPayloadFieldsHaveProvenance\",\n    \"modelViewControlsProvideCommandInputs\"\n  ]\n}\n"
+            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowSliceModulesComplete\",\n    \"workflowTransitionsStructured\",\n    \"workflowTransitionSourcesResolve\",\n    \"workflowTransitionTargetsResolve\",\n    \"workflowStepRelationshipsAreAllowed\",\n    \"workflowStepSlugsAreUnique\",\n    \"workflowHasExactlyOneEntryStep\",\n    \"workflowMainStepsHaveIncomingReachability\",\n    \"workflowNonSupportingStepsReachableFromEntry\",\n    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\",\n    \"workflowTransitionsHaveModeledKinds\",\n    \"workflowExitsNameTargetsAndRationale\",\n    \"workflowExternallyRelevantOutcomesHandled\",\n    \"workflowOutcomesSourceResolve\",\n    \"workflowCommandErrorsSourceResolve\",\n    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\",\n    \"workflowNonEventDefinitionsAreUniquelyOwned\",\n    \"workflowSharedEventDefinitionsHaveIdenticalIdentity\",\n    \"workflowCommandTransitionsResolveControlsAndCommands\",\n    \"workflowStateViewCommandTransitionsTargetStateChanges\",\n    \"workflowEventTransitionsAreSharedByEndpointSlices\",\n    \"workflowEventTransitionsHaveParticipatingEndpointEvents\",\n    \"workflowNavigationTransitionsResolveControlsAndViews\",\n    \"workflowNavigationTransitionsResolveToEntryViews\",\n    \"workflowExternalTriggersDeclarePayloadContracts\",\n    \"workflowExternalTriggerPayloadContractsHaveProvenance\",\n    \"workflowTransitionsHaveRequiredEvidence\",\n    \"workflowEntryLifecycleStatesCoverRequiredStates\",\n    \"modelWorkflowCompositionStructureComplete\",\n    \"modelScenarioDefinitionsHaveGwt\",\n    \"modelScenarioKindsAreFirstClass\",\n    \"modelDataFlowsAreBitComplete\",\n    \"modelDataFlowSourceKindsAreModeled\",\n    \"modelDataFlowModeledSourcesResolve\",\n    \"modelDataFlowSourceChainsReachOriginals\",\n    \"modelDataFlowSourceChainsPreserveBitEncodingSemantics\",\n    \"modelDataFlowTransformationsAreModeled\",\n    \"modelMeaningfulDataFlowsAreCovered\",\n    \"modelDataFlowSourceBitEncodingsMatchModeledSources\",\n    \"modelViewFieldBitEncodingsMatchDataFlows\",\n    \"modelExternalPayloadFieldBitEncodingsMatchDataFlows\",\n    \"modelCommandInputsHaveProvenance\",\n    \"modelCommandInputsTraceToInvocationSources\",\n    \"modelEventAttributeSourcesAreComplete\",\n    \"modelReadModelFieldSourcesAreComplete\",\n    \"modelViewFieldSourcesAreComplete\",\n    \"modelViewFieldReadModelFieldSourcesResolve\",\n    \"modelDisplayedDataTraceToOriginalProvenance\",\n    \"modelExternalPayloadFieldsHaveProvenance\",\n    \"modelViewControlsProvideCommandInputs\"\n  ]\n}\n"
         );
         Ok(())
     }

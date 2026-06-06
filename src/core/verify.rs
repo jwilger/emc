@@ -62,6 +62,10 @@ fn verify_project_root(project_name: ProjectName) -> Vec<Effect> {
                         .replace(
                             "modelDataFlowSourceChainsReachOriginals,",
                             "modelDataFlowSourceChainsReachOriginals,modelDataFlowSourceChainsPreserveBitEncodingSemantics,",
+                        )
+                        .replace(
+                            "modelScenarioDefinitionsHaveGwt,",
+                            "modelWorkflowCompositionStructureComplete,modelScenarioDefinitionsHaveGwt,",
                         ),
                 ),
                 process_argument(format!("model/quint/{module_name}.qnt")),

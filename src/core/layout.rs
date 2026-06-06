@@ -600,6 +600,46 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelSliceBelongsToDeclaredWorkflow"),
+            artifact_marker(
+                "def modelSliceBelongsToDeclaredWorkflow (slice : String × String) : Bool := modelWorkflows.any (fun workflow => workflow == slice.1)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelSliceHasModule"),
+            artifact_marker(
+                "def modelSliceHasModule (slice : String × String) : Bool := modelSliceModules.any (fun sliceModule => sliceModule.1 == slice.1 && sliceModule.2.1 == slice.2 && sliceModule.2.2.isEmpty == false)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelSliceModuleBelongsToDeclaredSlice"),
+            artifact_marker(
+                "def modelSliceModuleBelongsToDeclaredSlice (sliceModule : String × String × String) : Bool := sliceModule.2.2.isEmpty == false && modelSlices.any (fun slice => slice.1 == sliceModule.1 && slice.2 == sliceModule.2.1)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelWorkflowSlicesHaveModules"),
+            artifact_marker(
+                "def modelWorkflowSlicesHaveModules (workflow : String) : Bool := modelSlices.all (fun slice => slice.1 != workflow || modelSliceHasModule slice)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelWorkflowHasCompositionStructure"),
+            artifact_marker(
+                "def modelWorkflowHasCompositionStructure (workflow : String) : Bool := modelWorkflowSlicesHaveModules workflow",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelScenarios :"),
             artifact_marker(format!(
                 "def modelScenarios : List (String × String × String × String) := {lean_model_scenario_list}"
@@ -1143,6 +1183,14 @@ fn project_root_effects(
             artifact_marker(format!(
                 "theorem modelSliceModulesAreDeclared : modelSliceModules.length = {slice_count} := rfl"
             )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelWorkflowCompositionStructureComplete"),
+            artifact_marker(
+                "theorem modelWorkflowCompositionStructureComplete : (modelSlices.all modelSliceBelongsToDeclaredWorkflow && modelSlices.all modelSliceHasModule && modelSliceModules.all modelSliceModuleBelongsToDeclaredSlice && modelWorkflows.all modelWorkflowHasCompositionStructure) = true := rfl",
+            ),
             lean_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -2043,6 +2091,54 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  def modelSliceBelongsToDeclaredWorkflow"),
+            artifact_marker(
+                "  def modelSliceBelongsToDeclaredWorkflow(modelSlice) = modelWorkflows.select(workflow => workflow == modelSlice.workflow).length() > 0",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelSliceHasModule"),
+            artifact_marker(
+                "  def modelSliceHasModule(modelSlice) = modelSliceModules.select(sliceModule => sliceModule.workflow == modelSlice.workflow and sliceModule.slice == modelSlice.slice and sliceModule.formalModule != \"\").length() > 0",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelSliceModuleBelongsToDeclaredSlice"),
+            artifact_marker(
+                "  def modelSliceModuleBelongsToDeclaredSlice(sliceModule) = sliceModule.formalModule != \"\" and modelSlices.select(modelSlice => modelSlice.workflow == sliceModule.workflow and modelSlice.slice == sliceModule.slice).length() > 0",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelWorkflowSlicesHaveModules"),
+            artifact_marker(
+                "  def modelWorkflowSlicesHaveModules(workflow) = modelSlices.select(modelSlice => modelSlice.workflow == workflow and not(modelSliceHasModule(modelSlice))).length() == 0",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelWorkflowHasCompositionStructure"),
+            artifact_marker(
+                "  def modelWorkflowHasCompositionStructure(workflow) = modelWorkflowSlicesHaveModules(workflow)",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelWorkflowCompositionStructureComplete ="),
+            artifact_marker(
+                "  val modelWorkflowCompositionStructureComplete = modelSlices.select(modelSlice => modelSliceBelongsToDeclaredWorkflow(modelSlice)).length() == modelSlices.length() and modelSlices.select(modelSlice => modelSliceHasModule(modelSlice)).length() == modelSlices.length() and modelSliceModules.select(sliceModule => modelSliceModuleBelongsToDeclaredSlice(sliceModule)).length() == modelSliceModules.length() and modelWorkflows.select(workflow => modelWorkflowHasCompositionStructure(workflow)).length() == modelWorkflows.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelScenariosAreDeclared ="),
             artifact_marker(format!(
                 "  val modelScenariosAreDeclared = modelScenarios.length() == {scenario_count}"
@@ -2895,6 +2991,12 @@ fn project_root_effects(
             quint_config_path.clone(),
             artifact_marker("    \"workflowEntryLifecycleStatesCoverRequiredStates\""),
             artifact_marker("    \"workflowEntryLifecycleStatesCoverRequiredStates\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelWorkflowCompositionStructureComplete\""),
+            artifact_marker("    \"modelWorkflowCompositionStructureComplete\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
