@@ -13,6 +13,7 @@ mod tests {
     use assert_cmd::cargo::cargo_bin;
     use predicates::Predicate;
     use predicates::prelude::predicate;
+    use serde_json::Value;
     use tempfile::TempDir;
 
     #[test]
@@ -295,6 +296,50 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_stdio_negotiates_codex_initialize_protocol_and_keeps_tools_available()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let output = Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(codex_protocol_mcp_requests())
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let stdout = String::from_utf8(output)?;
+        let responses = stdout
+            .lines()
+            .map(serde_json::from_str::<Value>)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        assert_eq!(responses.len(), 3);
+        assert_eq!(
+            responses[0]["result"]["protocolVersion"],
+            Value::String("2024-11-05".to_owned())
+        );
+        assert!(responses[1]["result"]["tools"].is_array());
+        assert!(
+            stdout.contains("\"check_project\""),
+            "tools/list must remain available after initialize"
+        );
+        assert!(
+            stdout.contains("project layout is complete"),
+            "tools/call must remain available after initialize"
+        );
+
+        Ok(())
+    }
+
     fn mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
@@ -330,5 +375,13 @@ mod tests {
 
     fn initialize_request() -> &'static str {
         "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}"
+    }
+
+    fn codex_protocol_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"check_project\",\"arguments\":{}}}\n",
+        )
     }
 }
