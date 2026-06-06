@@ -459,6 +459,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -965,6 +967,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -1175,6 +1179,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -1345,6 +1351,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -1514,6 +1522,8 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
+
+        complete_contract_scenario_coverage(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args(["verify"])
@@ -1697,6 +1707,8 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
+
+        complete_contract_scenario_coverage(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args(["verify"])
@@ -1937,6 +1949,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -2031,6 +2045,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -2087,6 +2103,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -2142,6 +2160,8 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
+
+        complete_contract_scenario_coverage(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args(["verify"])
@@ -2210,6 +2230,8 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
+
+        complete_contract_scenario_coverage(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args(["verify"])
@@ -2512,6 +2534,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -2637,6 +2661,8 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
+
+        complete_contract_scenario_coverage(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args(["verify"])
@@ -2839,6 +2865,8 @@ mod tests {
             "MCP-authored read-model derivation source fields and semantics must be represented in the Lean artifact"
         );
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -2871,6 +2899,8 @@ mod tests {
             lean.contains("transitive := true, relationshipFields := [\"parent_ticket_id\",\"child_ticket_id\"], transitiveRule := \"walk TicketLinked parent_ticket_id edges until root\", exampleScenarioName := \"Ticket hierarchy includes grandchild\""),
             "MCP-authored transitive read model semantics must be represented in the Lean artifact"
         );
+
+        complete_contract_scenario_coverage(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args(["verify"])
@@ -3143,6 +3173,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -3249,6 +3281,8 @@ mod tests {
                 && quint.contains("observed: false, shared: true"),
             "Quint slice artifact must carry authored shared event semantics"
         );
+
+        complete_contract_scenario_coverage(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args(["verify"])
@@ -3534,6 +3568,8 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
+
+        complete_contract_scenario_coverage(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args(["verify"])
@@ -3822,6 +3858,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -3921,6 +3959,8 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
+
+        complete_contract_scenario_coverage(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args(["verify"])
@@ -4231,6 +4271,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -4386,6 +4428,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -4517,6 +4561,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -4604,6 +4650,8 @@ mod tests {
             "Quint slice artifact must carry external-system navigation target and handoff contract"
         );
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -4689,6 +4737,8 @@ mod tests {
             "Quint slice artifact must carry external-workflow navigation metadata"
         );
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -4749,6 +4799,8 @@ mod tests {
             "MCP-authored external-system navigation metadata must be represented in the Lean artifact"
         );
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -4787,6 +4839,8 @@ mod tests {
             "MCP-authored external-workflow navigation metadata must be represented in the Quint artifact"
         );
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -4824,6 +4878,8 @@ mod tests {
             quint.contains("localStates: [\"details-expanded\"], filters: [\"open-only\"]"),
             "MCP-authored local view states and filters must be represented in the Quint artifact"
         );
+
+        complete_contract_scenario_coverage(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args(["verify"])
@@ -4978,6 +5034,7 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
+        complete_contract_scenario_coverage(&temp_dir)?;
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -5258,6 +5315,7 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
+        complete_contract_scenario_coverage(&temp_dir)?;
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -5513,6 +5571,8 @@ mod tests {
             .assert()
             .success();
 
+        complete_contract_scenario_coverage(&temp_dir)?;
+
         Command::cargo_bin("emc")?
             .args(["verify"])
             .current_dir(temp_dir.path())
@@ -5557,6 +5617,8 @@ mod tests {
             ),
             "MCP-authored board connections must be represented in the Lean artifact"
         );
+
+        complete_contract_scenario_coverage(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args(["verify"])
@@ -5611,6 +5673,151 @@ mod tests {
             .success();
 
         Ok(temp_dir)
+    }
+
+    fn complete_contract_scenario_coverage(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+
+        if lean.contains(
+            "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\"",
+        ) && !lean
+            .contains("contractKind := \"command\", coveredDefinition := \"CaptureTicket\"")
+        {
+            author_capture_ticket_command_contract(temp_dir, &lean)?;
+        }
+
+        if lean.contains(
+            "def sliceAutomations : List AutomationDefinition := [{ name := \"title-deduplicator\"",
+        ) && !lean
+            .contains("contractKind := \"automation\", coveredDefinition := \"title-deduplicator\"")
+        {
+            Command::cargo_bin("emc")?
+                .args([
+                    "add",
+                    "scenario",
+                    "--slice",
+                    "capture-ticket",
+                    "--kind",
+                    "contract",
+                    "--name",
+                    "Title deduplicator handles duplicate tickets",
+                    "--given",
+                    "TicketCaptured was emitted",
+                    "--when",
+                    "title-deduplicator reacts to the event",
+                    "--then",
+                    "CaptureTicket is issued for the duplicate title",
+                    "--contract-kind",
+                    "automation",
+                    "--covered-definition",
+                    "title-deduplicator",
+                ])
+                .current_dir(temp_dir.path())
+                .assert()
+                .success();
+        }
+
+        if lean.contains(
+            "def sliceTranslations : List TranslationDefinition := [{ name := \"intake-webhook-translator\"",
+        ) && !lean.contains(
+            "contractKind := \"translation\", coveredDefinition := \"intake-webhook-translator\"",
+        ) {
+            Command::cargo_bin("emc")?
+                .args([
+                    "add",
+                    "scenario",
+                    "--slice",
+                    "capture-ticket",
+                    "--kind",
+                    "contract",
+                    "--name",
+                    "Intake webhook translates to CaptureTicket",
+                    "--given",
+                    "intake_webhook_received carries intake_webhook",
+                    "--when",
+                    "intake-webhook-translator handles the external event",
+                    "--then",
+                    "CaptureTicket receives translated payload fields",
+                    "--contract-kind",
+                    "translation",
+                    "--covered-definition",
+                    "intake-webhook-translator",
+                ])
+                .current_dir(temp_dir.path())
+                .assert()
+                .success();
+        }
+
+        if lean.contains("name := \"normalized_title\", sourceKind := \"derivation\"")
+            && !lean.contains("contractKind := \"derivation\"")
+        {
+            Command::cargo_bin("emc")?
+                .args([
+                    "add",
+                    "scenario",
+                    "--slice",
+                    "capture-ticket",
+                    "--kind",
+                    "contract",
+                    "--name",
+                    "Ticket title is normalized",
+                    "--given",
+                    "TicketCaptured carries raw title text",
+                    "--when",
+                    "ticket_state derives normalized_title",
+                    "--then",
+                    "normalized_title trims surrounding whitespace",
+                    "--contract-kind",
+                    "derivation",
+                    "--covered-definition",
+                    "normalized_title",
+                ])
+                .current_dir(temp_dir.path())
+                .assert()
+                .success();
+        }
+
+        Ok(())
+    }
+
+    fn author_capture_ticket_command_contract(
+        temp_dir: &TempDir,
+        lean: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        let mut args = vec![
+            "add",
+            "scenario",
+            "--slice",
+            "capture-ticket",
+            "--kind",
+            "contract",
+            "--name",
+            "CaptureTicket emits TicketCaptured",
+            "--given",
+            "tickets stream is available",
+            "--when",
+            "CaptureTicket handles ticket input",
+            "--then",
+            "TicketCaptured is written",
+            "--contract-kind",
+            "command",
+            "--covered-definition",
+            "CaptureTicket",
+        ];
+
+        if lean.contains("def sliceKind := \"state_change\"")
+            && lean.contains("name := \"tickets\"")
+        {
+            args.extend(["--read-streams", "tickets", "--written-streams", "tickets"]);
+        }
+
+        Command::cargo_bin("emc")?
+            .args(args)
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
     }
 
     fn author_ticket_captured_outcome(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
