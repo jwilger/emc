@@ -405,7 +405,7 @@ mod tests {
             "type BitLevelDataFlow = { datum: str, source: str, transformationSemantics: str, target: str, bitEncoding: str }"
         ));
         assert!(quint.contains(
-            "type CommandInput = { name: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str }"
+            "type CommandInput = { name: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str, invocationArgumentSourceName: str, invocationArgumentSourceField: str }"
         ));
         assert!(quint.contains(
             "type CommandErrorDefinition = { name: str, scenarioName: str, recoveryKind: str }"
@@ -620,6 +620,12 @@ mod tests {
         ));
         assert!(quint.contains(
             "val commandInputsSourcedFromGeneratedValuesHaveCoordinates = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputGeneratedSourceHasCoordinates(input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
+        ));
+        assert!(quint.contains(
+            "def commandInputInvocationArgumentSourceHasCoordinates(input) = input.sourceKind != \"invocation_argument\" or (input.invocationArgumentSourceName != \"\" and input.invocationArgumentSourceField != \"\")"
+        ));
+        assert!(quint.contains(
+            "val commandInputsSourcedFromInvocationArgumentsHaveCoordinates = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputInvocationArgumentSourceHasCoordinates(input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(
             "def bitLevelFlowCoversTarget(target, datum) = sliceBitLevelDataFlows.select(flow => flow.target == target and flow.datum == datum and flow.source != \"\" and flow.transformationSemantics != \"\" and flow.bitEncoding != \"\").length() > 0"

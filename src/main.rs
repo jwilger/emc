@@ -613,6 +613,74 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             input_provenance,
             emits_flag,
             emits,
+            source_argument_flag,
+            source_argument,
+            source_field_flag,
+            source_field,
+        ] if command == "add"
+            && subject == "command"
+            && slice_flag == "--slice"
+            && name_flag == "--name"
+            && input_flag == "--input"
+            && input_source_flag == "--input-source"
+            && input_description_flag == "--input-description"
+            && input_provenance_flag == "--input-provenance"
+            && emits_flag == "--emits"
+            && source_argument_flag == "--source-argument"
+            && source_field_flag == "--source-field" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+            let command_name =
+                parse_command_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+            let input_name =
+                parse_datum_name(input).map_err(|error| ShellError::message(error.to_string()))?;
+            let input_source = parse_command_input_source_kind(input_source)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let input_description = parse_command_input_source_description(input_description)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let provenance_chain = parse_source_chain_hops(input_provenance)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let emitted_events =
+                parse_event_names(emits).map_err(|error| ShellError::message(error.to_string()))?;
+            let source_argument = parse_event_attribute_source_name(source_argument)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_field = parse_event_attribute_source_field(source_field)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::AddCommandDefinition {
+                    command: NewCommandDefinition::new(
+                        slice_slug,
+                        command_name,
+                        NewCommandInput::new(
+                            input_name,
+                            input_source,
+                            input_description,
+                            CommandInputProvenanceChain::from_hops(provenance_chain),
+                        )
+                        .with_invocation_argument_source(source_argument, source_field),
+                        EmittedEventNames::from_events(emitted_events),
+                    ),
+                },
+            })
+        }
+        [
+            command,
+            subject,
+            slice_flag,
+            slice,
+            name_flag,
+            name,
+            input_flag,
+            input,
+            input_source_flag,
+            input_source,
+            input_description_flag,
+            input_description,
+            input_provenance_flag,
+            input_provenance,
+            emits_flag,
+            emits,
             source_session_flag,
             source_session,
             source_field_flag,
@@ -4109,6 +4177,7 @@ fn help_command() -> ClapCommand {
   emc add command --slice <slice> --name <name> --input <datum> --input-source external_payload --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --source-payload <payload> --source-field <field>
   emc add command --slice <slice> --name <name> --input <datum> --input-source generated --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --source-name <source> --source-field <field>
   emc add command --slice <slice> --name <name> --input <datum> --input-source session --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --source-session <session> --source-field <field>
+  emc add command --slice <slice> --name <name> --input <datum> --input-source invocation_argument --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --source-argument <argument> --source-field <field>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --singleton <true|false> --repeat-behavior <already_exists_error|idempotent>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --error <name> --error-scenario <scenario> --error-recovery <kind>
   emc add external-payload --slice <slice> --name <name> --field <field> --field-provenance <text> --bit-encoding <semantics>
