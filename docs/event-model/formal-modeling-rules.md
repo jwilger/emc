@@ -41,7 +41,7 @@ A model is complete and valid only when all of these are true:
 - ✅ Model structure is explicit: name, version, streams, events, commands, read
   models, slices, workflows, and composition structure are represented.
 - ✅ Named definitions are unique where ownership requires uniqueness.
-- 🟡 Each slice model unit represents exactly one coherent slice.
+- ✅ Each slice model unit represents exactly one coherent slice.
 - ✅ Slices have first-class `acceptance_scenarios` and `contract_scenarios`.
 - ✅ Every scenario has Given, When, and Then.
 - ✅ Acceptance scenarios describe user-facing behavior only.
