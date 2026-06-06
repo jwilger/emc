@@ -217,7 +217,7 @@ A model is complete and valid only when all of these are true:
 - ✅ Every datum has an explicit target.
 - ✅ Every datum has transformation, projection, derivation, default, or absence
   semantics when applicable.
-- 🟡 Every datum has bit-level representation semantics sufficient to verify
+- ✅ Every datum has bit-level representation semantics sufficient to verify
   that no information is lost or invented.
 - ✅ Every user-visible datum traces through the model to original provenance.
 - ✅ Every stored event fact traces to command input, external payload,
