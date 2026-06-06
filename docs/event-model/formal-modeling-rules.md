@@ -117,7 +117,7 @@ A model is complete and valid only when all of these are true:
 
 ## Slice Architecture
 
-- 🟡 A slice is the smallest useful modeled behavior boundary.
+- ✅ A slice is the smallest useful modeled behavior boundary.
 - ✅ Only events may be shared across slices.
 - ✅ Commands, views, controls, read models, automations, translations,
   scenarios, and UI are owned by one slice.
