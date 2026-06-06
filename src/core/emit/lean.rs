@@ -138,7 +138,7 @@ def workflowReachableStepsAfterFuel : Nat -> List String -> List String
 
 def workflowReachableStepsFromEntry : List String := workflowReachableStepsAfterFuel workflowSlices.length workflowEntrySteps
 
-def workflowStepIsReachableFromEntry (step : String × String) : Bool := step.2 == "supporting" || workflowReachableStepsFromEntry.contains step.1
+def workflowStepIsReachableFromEntry (step : String × String) : Bool := step.2 == "supporting" || step.2 == "async_lifecycle" || workflowReachableStepsFromEntry.contains step.1
 
 def workflowNonSupportingStepsReachableFromEntry : Bool := workflowStepRelationships.all workflowStepIsReachableFromEntry
 
