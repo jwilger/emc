@@ -58,6 +58,10 @@ fn verify_project_root(project_name: ProjectName) -> Vec<Effect> {
                         .replace(
                             "modelDataFlowModeledSourcesResolve,",
                             "modelDataFlowModeledSourcesResolve,modelDataFlowSourceChainsReachOriginals,",
+                        )
+                        .replace(
+                            "modelDataFlowSourceChainsReachOriginals,",
+                            "modelDataFlowSourceChainsReachOriginals,modelDataFlowSourceChainsPreserveBitEncodingSemantics,",
                         ),
                 ),
                 process_argument(format!("model/quint/{module_name}.qnt")),

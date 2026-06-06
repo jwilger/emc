@@ -912,6 +912,38 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelDataFlowTargetsFromBitPreservingReachable"),
+            artifact_marker(
+                "def modelDataFlowTargetsFromBitPreservingReachable (reachable : List (String × String × String × String × String × String × String × String)) : List (String × String × String × String × String × String × String × String) := modelDataFlows.filter (fun dataFlow => let (workflow, slice, datum, sourceKind, source, _, _, bitEncoding) := dataFlow; sourceKind == \"modeled_target\" && reachable.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, sourceBitEncoding) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && sourceBitEncoding == bitEncoding && modelDataFlowIsBitComplete sourceFlow))",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel"),
+            artifact_marker(
+                "def modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel : Nat -> List (String × String × String × String × String × String × String × String) -> List (String × String × String × String × String × String × String × String)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelDataFlowsReachableFromOriginalsWithPreservedBits :"),
+            artifact_marker(
+                "def modelDataFlowsReachableFromOriginalsWithPreservedBits : List (String × String × String × String × String × String × String × String) := modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel modelDataFlows.length (modelDataFlows.filter (fun dataFlow => let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" && modelDataFlowIsBitComplete dataFlow))",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelDataFlowHasBitPreservingOriginalSourceChain"),
+            artifact_marker(
+                "def modelDataFlowHasBitPreservingOriginalSourceChain (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" || modelDataFlowsReachableFromOriginalsWithPreservedBits.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelCommandInputHasModeledDataFlow"),
             artifact_marker(
                 "def modelCommandInputHasModeledDataFlow (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetCommand, datum, _, _, _, _, _, _, _, _, _, _, _, _, _) := input; modelDataFlowCoversDatumTarget workflow slice datum targetCommand",
@@ -1182,6 +1214,14 @@ fn project_root_effects(
             artifact_marker("theorem modelDataFlowSourceChainsReachOriginals"),
             artifact_marker(
                 "theorem modelDataFlowSourceChainsReachOriginals : modelDataFlows.all modelDataFlowHasOriginalSourceChain = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelDataFlowSourceChainsPreserveBitEncodingSemantics"),
+            artifact_marker(
+                "theorem modelDataFlowSourceChainsPreserveBitEncodingSemantics : modelDataFlows.all modelDataFlowHasBitPreservingOriginalSourceChain = true := rfl",
             ),
             lean_message.clone(),
         ),
@@ -2131,7 +2171,7 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
-            artifact_marker("  val modelDataFlowsReachableFromOriginals"),
+            artifact_marker("  val modelDataFlowsReachableFromOriginals ="),
             artifact_marker(
                 "  val modelDataFlowsReachableFromOriginals = modelDataFlowsReachableFromOriginalsAfterFuel(modelDataFlowCount, modelDataFlows.select(dataFlow => dataFlow.sourceKind == \"original\" and modelDataFlowIsBitComplete(dataFlow)))",
             ),
@@ -2142,6 +2182,38 @@ fn project_root_effects(
             artifact_marker("  def modelDataFlowHasOriginalSourceChain"),
             artifact_marker(
                 "  def modelDataFlowHasOriginalSourceChain(dataFlow) = dataFlow.sourceKind == \"original\" or modelDataFlowsReachableFromOriginals.select(reachableFlow => modelSameDataFlowTarget(reachableFlow, dataFlow)).length() > 0",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelDataFlowTargetsFromBitPreservingReachable"),
+            artifact_marker(
+                "  def modelDataFlowTargetsFromBitPreservingReachable(reachable) = modelDataFlows.select(dataFlow => dataFlow.sourceKind == \"modeled_target\" and reachable.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and sourceFlow.bitEncoding == dataFlow.bitEncoding and modelDataFlowIsBitComplete(sourceFlow)).length() > 0)",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel"),
+            artifact_marker(
+                "  def modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel(fuel, reachable) = range(0, fuel).foldl(reachable, (currentReachable, _) => currentReachable.concat(modelDataFlowTargetsFromBitPreservingReachable(currentReachable)))",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelDataFlowsReachableFromOriginalsWithPreservedBits"),
+            artifact_marker(
+                "  val modelDataFlowsReachableFromOriginalsWithPreservedBits = modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel(modelDataFlowCount, modelDataFlows.select(dataFlow => dataFlow.sourceKind == \"original\" and modelDataFlowIsBitComplete(dataFlow)))",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelDataFlowHasBitPreservingOriginalSourceChain"),
+            artifact_marker(
+                "  def modelDataFlowHasBitPreservingOriginalSourceChain(dataFlow) = dataFlow.sourceKind == \"original\" or modelDataFlowsReachableFromOriginalsWithPreservedBits.select(reachableFlow => modelSameDataFlowTarget(reachableFlow, dataFlow)).length() > 0",
             ),
             quint_message.clone(),
         ),
@@ -2238,6 +2310,14 @@ fn project_root_effects(
             artifact_marker("  val modelDataFlowSourceChainsReachOriginals ="),
             artifact_marker(
                 "  val modelDataFlowSourceChainsReachOriginals = modelDataFlows.select(dataFlow => modelDataFlowHasOriginalSourceChain(dataFlow)).length() == modelDataFlows.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelDataFlowSourceChainsPreserveBitEncodingSemantics ="),
+            artifact_marker(
+                "  val modelDataFlowSourceChainsPreserveBitEncodingSemantics = modelDataFlows.select(dataFlow => modelDataFlowHasBitPreservingOriginalSourceChain(dataFlow)).length() == modelDataFlows.length()",
             ),
             quint_message.clone(),
         ),
@@ -2851,6 +2931,12 @@ fn project_root_effects(
             quint_config_path.clone(),
             artifact_marker("    \"modelDataFlowSourceChainsReachOriginals\""),
             artifact_marker("    \"modelDataFlowSourceChainsReachOriginals\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelDataFlowSourceChainsPreserveBitEncodingSemantics\""),
+            artifact_marker("    \"modelDataFlowSourceChainsPreserveBitEncodingSemantics\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
