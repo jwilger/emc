@@ -1065,6 +1065,9 @@ mod tests {
             "val stateViewSlicesOwnProjectionPaths = sliceKind != \"state_view\" or sliceReadModelDefinitions.select(readModel => readModelOwnsProjectionPath(readModel)).length() == sliceReadModelDefinitions.length()"
         ));
         assert!(quint.contains(
+            "val stateViewSlicesRepresentSingleViewProjectionBoundary = sliceKind != \"state_view\" or (sliceViewDefinitions.length() == 1 and sliceReadModelDefinitions.length() > 0)"
+        ));
+        assert!(quint.contains(
             "val stateChangeSlicesOwnCommands = sliceKind != \"state_change\" or (sliceCommands.length() > 0 or sliceCommandDefinitions.length() > 0)"
         ));
         assert!(quint.contains(
@@ -1098,7 +1101,7 @@ mod tests {
             "val stateChangeSlicesRepresentSingleCommandBoundary = sliceKind != \"state_change\" or sliceCommandDefinitions.length() == 1"
         ));
         assert!(quint.contains(
-            "val sliceRepresentsSmallestUsefulBehaviorBoundary = sliceRepresentsOneCoherentModelUnit and stateChangeSlicesRepresentSingleCommandBoundary and automationSlicesRepresentOneReaction and translationSlicesDeclareExternalContracts"
+            "val sliceRepresentsSmallestUsefulBehaviorBoundary = sliceRepresentsOneCoherentModelUnit and stateViewSlicesRepresentSingleViewProjectionBoundary and stateChangeSlicesRepresentSingleCommandBoundary and automationSlicesRepresentOneReaction and translationSlicesDeclareExternalContracts"
         ));
         assert!(quint.contains(
             "def navigationTargetTypeIsModeled(target) = target.targetType == \"\" or allowedNavigationTargetTypes.select(targetType => targetType == target.targetType).length() > 0"
