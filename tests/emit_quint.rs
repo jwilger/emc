@@ -577,6 +577,21 @@ mod tests {
             "val contractScenariosTargetKnownDefinitions = sliceContractScenarios.select(scenario => contractScenarioTargetsKnownDefinition(scenario)).length() == sliceContractScenarios.length()"
         ));
         assert!(quint.contains(
+            "def commandHasContractScenario(command) = sliceContractScenarios.select(scenario => scenarioCoversContract(\"command\", command.name, scenario)).length() > 0"
+        ));
+        assert!(quint.contains(
+            "def automationHasContractScenario(automation) = sliceContractScenarios.select(scenario => scenarioCoversContract(\"automation\", automation.name, scenario)).length() > 0"
+        ));
+        assert!(quint.contains(
+            "def translationHasContractScenario(translation) = sliceContractScenarios.select(scenario => scenarioCoversContract(\"translation\", translation.name, scenario)).length() > 0"
+        ));
+        assert!(quint.contains(
+            "def derivationFieldHasContractScenario(readModelField) = readModelField.sourceKind != \"derivation\" or sliceContractScenarios.select(scenario => scenario.contractKind == \"derivation\" and scenario.coveredDefinition != \"\" and scenario.name == readModelField.derivationScenarioName).length() > 0"
+        ));
+        assert!(quint.contains(
+            "val contractScenariosCoverModeledContracts = sliceCommandDefinitions.select(command => commandHasContractScenario(command)).length() == sliceCommandDefinitions.length() and sliceAutomations.select(automation => automationHasContractScenario(automation)).length() == sliceAutomations.length() and sliceTranslations.select(translation => translationHasContractScenario(translation)).length() == sliceTranslations.length() and sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => derivationFieldHasContractScenario(readModelField)).length() == readModel.fields.length()).length() == sliceReadModelDefinitions.length()"
+        ));
+        assert!(quint.contains(
             "val commandInputsHaveAllowedSources = sliceCommandDefinitions.select(command => command.inputs.select(input => allowedCommandInputSourceKinds.select(sourceKind => sourceKind == input.sourceKind).length() > 0).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(

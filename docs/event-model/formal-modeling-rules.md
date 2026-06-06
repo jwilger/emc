@@ -45,7 +45,7 @@ A model is complete and valid only when all of these are true:
 - ✅ Slices have first-class `acceptance_scenarios` and `contract_scenarios`.
 - ✅ Every scenario has Given, When, and Then.
 - ✅ Acceptance scenarios describe user-facing behavior only.
-- 🟡 Contract scenarios cover projector, command, automation, translation, and
+- ✅ Contract scenarios cover projector, command, automation, translation, and
   derivation contracts.
 - ✅ Scenario names are unique within a slice and across first-class scenario
   sets.

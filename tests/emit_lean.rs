@@ -1046,6 +1046,36 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def commandHasContractScenario (command : CommandDefinition) : Bool := sliceContractScenarios.any (scenarioCoversContract \"command\" command.name)"
+            ),
+            "Lean slice artifacts must require commands to have contract scenario coverage"
+        );
+        assert!(
+            lean.contains(
+                "def automationHasContractScenario (automation : AutomationDefinition) : Bool := sliceContractScenarios.any (scenarioCoversContract \"automation\" automation.name)"
+            ),
+            "Lean slice artifacts must require automations to have contract scenario coverage"
+        );
+        assert!(
+            lean.contains(
+                "def translationHasContractScenario (translation : TranslationDefinition) : Bool := sliceContractScenarios.any (scenarioCoversContract \"translation\" translation.name)"
+            ),
+            "Lean slice artifacts must require translations to have contract scenario coverage"
+        );
+        assert!(
+            lean.contains(
+                "def derivationFieldHasContractScenario (field : ReadModelField) : Bool := field.sourceKind != \"derivation\" || sliceContractScenarios.any (fun scenario => scenario.contractKind == \"derivation\" && scenario.coveredDefinition.isEmpty == false && scenario.name == field.derivationScenarioName)"
+            ),
+            "Lean slice artifacts must require derivation fields to have matching contract scenario coverage"
+        );
+        assert!(
+            lean.contains(
+                "def contractScenariosCoverModeledContracts : Bool := sliceCommandDefinitions.all commandHasContractScenario && sliceAutomations.all automationHasContractScenario && sliceTranslations.all translationHasContractScenario && sliceReadModelDefinitions.all (fun readModel => readModel.fields.all derivationFieldHasContractScenario)"
+            ),
+            "Lean slice artifacts must aggregate contract coverage for command, automation, translation, and derivation contracts"
+        );
+        assert!(
+            lean.contains(
                 "def commandInputHasAllowedSource (input : CommandInput) : Bool := allowedCommandInputSourceKinds.contains input.sourceKind"
             ),
             "Lean slice artifacts must reject read-model command input sources by construction"
@@ -2285,6 +2315,12 @@ mod tests {
                 "theorem contractScenariosTargetKnownDefinitionsIsStable : contractScenariosTargetKnownDefinitions = true := rfl"
             ),
             "Lean slice artifacts must prove current contract scenarios target known definitions"
+        );
+        assert!(
+            lean.contains(
+                "theorem contractScenariosCoverModeledContractsIsStable : contractScenariosCoverModeledContracts = true := rfl"
+            ),
+            "Lean slice artifacts must prove modeled contracts have contract scenario coverage"
         );
         assert!(
             lean.contains(
