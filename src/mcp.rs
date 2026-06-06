@@ -10,6 +10,9 @@ use rmcp::model::{
 use serde::Serialize;
 use serde_json::{Value, json};
 
+const DEFAULT_MCP_PROTOCOL_VERSION: &str = "2025-11-25";
+const SUPPORTED_MCP_PROTOCOL_VERSIONS: &[&str] = &["2025-11-25", "2024-11-05"];
+
 use crate::command;
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::formal_slice_facts::{
@@ -306,7 +309,7 @@ fn handle_request(request: &Value) -> Result<Option<Value>, ShellError> {
     };
 
     match request.get("method").and_then(Value::as_str) {
-        Some("initialize") => Ok(Some(success_response(id, initialize_result()?))),
+        Some("initialize") => Ok(Some(success_response(id, initialize_result(request)?))),
         Some("tools/list") => Ok(Some(success_response(id, tools_list_result()?))),
         Some("tools/call") => tool_call_response(id, request),
         Some(method) => Ok(Some(error_response(
@@ -322,13 +325,24 @@ fn handle_request(request: &Value) -> Result<Option<Value>, ShellError> {
     }
 }
 
-fn initialize_result() -> Result<Value, ShellError> {
+fn initialize_result(request: &Value) -> Result<Value, ShellError> {
     let mut capabilities = ServerCapabilities::default();
     capabilities.tools = Some(ToolsCapability::default());
-    mcp_model_value(
+    let mut result = mcp_model_value(
         InitializeResult::new(capabilities)
             .with_server_info(Implementation::new("emc", env!("CARGO_PKG_VERSION"))),
-    )
+    )?;
+    result["protocolVersion"] = Value::String(initialize_protocol_version(request).to_owned());
+    Ok(result)
+}
+
+fn initialize_protocol_version(request: &Value) -> &str {
+    request
+        .get("params")
+        .and_then(|params| params.get("protocolVersion"))
+        .and_then(Value::as_str)
+        .filter(|requested| SUPPORTED_MCP_PROTOCOL_VERSIONS.contains(requested))
+        .unwrap_or(DEFAULT_MCP_PROTOCOL_VERSION)
 }
 
 fn tools_list_result() -> Result<Value, ShellError> {
