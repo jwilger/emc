@@ -872,6 +872,46 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelSameDataFlowTarget"),
+            artifact_marker(
+                "def modelSameDataFlowTarget (left : String × String × String × String × String × String × String × String) (right : String × String × String × String × String × String × String × String) : Bool := let (leftWorkflow, leftSlice, leftDatum, _, _, _, leftTarget, _) := left; let (rightWorkflow, rightSlice, rightDatum, _, _, _, rightTarget, _) := right; leftWorkflow == rightWorkflow && leftSlice == rightSlice && leftDatum == rightDatum && leftTarget == rightTarget",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelDataFlowTargetsFromReachable"),
+            artifact_marker(
+                "def modelDataFlowTargetsFromReachable (reachable : List (String × String × String × String × String × String × String × String)) : List (String × String × String × String × String × String × String × String) := modelDataFlows.filter (fun dataFlow => let (workflow, slice, datum, sourceKind, source, _, _, _) := dataFlow; sourceKind == \"modeled_target\" && reachable.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && modelDataFlowIsBitComplete sourceFlow))",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelDataFlowsReachableFromOriginalsAfterFuel"),
+            artifact_marker(
+                "def modelDataFlowsReachableFromOriginalsAfterFuel : Nat -> List (String × String × String × String × String × String × String × String) -> List (String × String × String × String × String × String × String × String)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelDataFlowsReachableFromOriginals :"),
+            artifact_marker(
+                "def modelDataFlowsReachableFromOriginals : List (String × String × String × String × String × String × String × String) := modelDataFlowsReachableFromOriginalsAfterFuel modelDataFlows.length (modelDataFlows.filter (fun dataFlow => let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" && modelDataFlowIsBitComplete dataFlow))",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelDataFlowHasOriginalSourceChain"),
+            artifact_marker(
+                "def modelDataFlowHasOriginalSourceChain (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" || modelDataFlowsReachableFromOriginals.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelCommandInputHasModeledDataFlow"),
             artifact_marker(
                 "def modelCommandInputHasModeledDataFlow (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetCommand, datum, _, _, _, _, _, _, _, _, _, _, _, _, _) := input; modelDataFlowCoversDatumTarget workflow slice datum targetCommand",
@@ -1134,6 +1174,14 @@ fn project_root_effects(
             artifact_marker("theorem modelDataFlowModeledSourcesResolve"),
             artifact_marker(
                 "theorem modelDataFlowModeledSourcesResolve : modelDataFlows.all modelDataFlowModeledSourceResolves = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelDataFlowSourceChainsReachOriginals"),
+            artifact_marker(
+                "theorem modelDataFlowSourceChainsReachOriginals : modelDataFlows.all modelDataFlowHasOriginalSourceChain = true := rfl",
             ),
             lean_message.clone(),
         ),
@@ -1722,6 +1770,12 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  val modelDataFlowCount ="),
+            artifact_marker(format!("  val modelDataFlowCount = {data_flow_count}")),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelOutcomes:"),
             artifact_marker(format!(
                 "  val modelOutcomes: List[ModelOutcome] = {quint_model_outcome_list}"
@@ -2053,6 +2107,46 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  def modelSameDataFlowTarget"),
+            artifact_marker(
+                "  def modelSameDataFlowTarget(left, right) = left.workflow == right.workflow and left.slice == right.slice and left.datum == right.datum and left.target == right.target",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelDataFlowTargetsFromReachable"),
+            artifact_marker(
+                "  def modelDataFlowTargetsFromReachable(reachable) = modelDataFlows.select(dataFlow => dataFlow.sourceKind == \"modeled_target\" and reachable.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and modelDataFlowIsBitComplete(sourceFlow)).length() > 0)",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelDataFlowsReachableFromOriginalsAfterFuel"),
+            artifact_marker(
+                "  def modelDataFlowsReachableFromOriginalsAfterFuel(fuel, reachable) = range(0, fuel).foldl(reachable, (currentReachable, _) => currentReachable.concat(modelDataFlowTargetsFromReachable(currentReachable)))",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelDataFlowsReachableFromOriginals"),
+            artifact_marker(
+                "  val modelDataFlowsReachableFromOriginals = modelDataFlowsReachableFromOriginalsAfterFuel(modelDataFlowCount, modelDataFlows.select(dataFlow => dataFlow.sourceKind == \"original\" and modelDataFlowIsBitComplete(dataFlow)))",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelDataFlowHasOriginalSourceChain"),
+            artifact_marker(
+                "  def modelDataFlowHasOriginalSourceChain(dataFlow) = dataFlow.sourceKind == \"original\" or modelDataFlowsReachableFromOriginals.select(reachableFlow => modelSameDataFlowTarget(reachableFlow, dataFlow)).length() > 0",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  def modelCommandInputHasModeledDataFlow"),
             artifact_marker(
                 "  def modelCommandInputHasModeledDataFlow(input) = modelDataFlowCoversDatumTarget(input.workflow, input.slice, input.input, input.command)",
@@ -2136,6 +2230,14 @@ fn project_root_effects(
             artifact_marker("  val modelDataFlowModeledSourcesResolve ="),
             artifact_marker(
                 "  val modelDataFlowModeledSourcesResolve = modelDataFlows.select(dataFlow => modelDataFlowModeledSourceResolves(dataFlow)).length() == modelDataFlows.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelDataFlowSourceChainsReachOriginals ="),
+            artifact_marker(
+                "  val modelDataFlowSourceChainsReachOriginals = modelDataFlows.select(dataFlow => modelDataFlowHasOriginalSourceChain(dataFlow)).length() == modelDataFlows.length()",
             ),
             quint_message.clone(),
         ),
@@ -2743,6 +2845,12 @@ fn project_root_effects(
             quint_config_path.clone(),
             artifact_marker("    \"modelDataFlowModeledSourcesResolve\""),
             artifact_marker("    \"modelDataFlowModeledSourcesResolve\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelDataFlowSourceChainsReachOriginals\""),
+            artifact_marker("    \"modelDataFlowSourceChainsReachOriginals\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
