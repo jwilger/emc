@@ -66,6 +66,10 @@ fn verify_project_root(project_name: ProjectName) -> Vec<Effect> {
                         .replace(
                             "modelScenarioDefinitionsHaveGwt,",
                             "modelWorkflowCompositionStructureComplete,modelScenarioDefinitionsHaveGwt,",
+                        )
+                        .replace(
+                            "modelWorkflowCompositionStructureComplete,",
+                            "modelWorkflowCompositionStructureComplete,modelWorkflowBehaviorSurfaceIsComplete,",
                         ),
                 ),
                 process_argument(format!("model/quint/{module_name}.qnt")),
