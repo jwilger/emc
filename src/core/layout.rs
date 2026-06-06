@@ -848,6 +848,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelDataFlowHasModeledTransformationSemantics"),
+            artifact_marker(
+                "def modelDataFlowHasModeledTransformationSemantics (dataFlow : String × String × String × String × String × String × String) : Bool := let (_, _, _, _, transformation, _, _) := dataFlow; transformation == \"identity\" || transformation == \"projection\" || transformation == \"derivation\" || transformation == \"default\" || transformation == \"absence\" || transformation == \"transformation\"",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelCommandInputHasModeledDataFlow"),
             artifact_marker(
                 "def modelCommandInputHasModeledDataFlow (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetCommand, datum, _, _, _, _, _, _, _, _, _, _, _, _, _) := input; modelDataFlowCoversDatumTarget workflow slice datum targetCommand",
@@ -1094,6 +1102,14 @@ fn project_root_effects(
             artifact_marker("theorem modelDataFlowsAreBitComplete"),
             artifact_marker(
                 "theorem modelDataFlowsAreBitComplete : modelDataFlows.all modelDataFlowIsBitComplete = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelDataFlowTransformationsAreModeled"),
+            artifact_marker(
+                "theorem modelDataFlowTransformationsAreModeled : modelDataFlows.all modelDataFlowHasModeledTransformationSemantics = true := rfl",
             ),
             lean_message.clone(),
         ),
@@ -1981,6 +1997,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  def modelDataFlowHasModeledTransformationSemantics"),
+            artifact_marker(
+                "  def modelDataFlowHasModeledTransformationSemantics(dataFlow) = dataFlow.transformation == \"identity\" or dataFlow.transformation == \"projection\" or dataFlow.transformation == \"derivation\" or dataFlow.transformation == \"default\" or dataFlow.transformation == \"absence\" or dataFlow.transformation == \"transformation\"",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  def modelCommandInputHasModeledDataFlow"),
             artifact_marker(
                 "  def modelCommandInputHasModeledDataFlow(input) = modelDataFlowCoversDatumTarget(input.workflow, input.slice, input.input, input.command)",
@@ -2048,6 +2072,14 @@ fn project_root_effects(
             artifact_marker("  val modelDataFlowsAreBitComplete ="),
             artifact_marker(
                 "  val modelDataFlowsAreBitComplete = modelDataFlows.select(dataFlow => modelDataFlowIsBitComplete(dataFlow)).length() == modelDataFlows.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelDataFlowTransformationsAreModeled ="),
+            artifact_marker(
+                "  val modelDataFlowTransformationsAreModeled = modelDataFlows.select(dataFlow => modelDataFlowHasModeledTransformationSemantics(dataFlow)).length() == modelDataFlows.length()",
             ),
             quint_message.clone(),
         ),
@@ -2635,6 +2667,12 @@ fn project_root_effects(
             quint_config_path.clone(),
             artifact_marker("    \"modelDataFlowsAreBitComplete\""),
             artifact_marker("    \"modelDataFlowsAreBitComplete\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelDataFlowTransformationsAreModeled\""),
+            artifact_marker("    \"modelDataFlowTransformationsAreModeled\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(

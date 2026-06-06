@@ -2331,21 +2331,21 @@ mod tests {
             cwd,
             slug,
             "upstream event store",
-            "observed without transformation",
+            "identity",
             "TicketCaptured",
         )?;
         add_data_flow(
             cwd,
             slug,
             "TicketCaptured.ticket_title",
-            "projected without transformation",
+            "projection",
             "ticket_state",
         )?;
         add_data_flow(
             cwd,
             slug,
             "ticket_state.ticket_title",
-            "displayed without transformation",
+            "projection",
             "ticket_summary",
         )
     }
@@ -2457,7 +2457,7 @@ mod tests {
             cwd,
             slug,
             "actor submit form title field",
-            "captured without normalization",
+            "identity",
             "SubmitTicketForReview",
         )?;
         add_data_flow(
