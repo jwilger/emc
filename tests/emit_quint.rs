@@ -1095,6 +1095,12 @@ mod tests {
             "val sliceRepresentsOneCoherentModelUnit = recognizedSliceKind and stateViewSlicesDoNotOwnCommands and stateViewSlicesOwnViews and stateViewSlicesOwnReadModels and stateViewSlicesOwnProjectionPaths and stateChangeSlicesOwnCommands and stateChangeSlicesOwnEvents and stateChangeSlicesOwnOutcomes and stateChangeSlicesOwnErrors and stateChangeSlicesDoNotOwnReadModelsOrViews and stateChangeSlicesDoNotOwnAutomationsOrTranslations and stateChangeSlicesDoNotOwnControlsOrSketches and translationSlicesDeclareExternalContracts and externalBoundariesHavePayloadContractsAndFieldProvenance and translationsTargetKnownCommands and translationsReferenceObservedExternalEvents and translationSlicesDoNotOwnViews and automationSlicesDeclareTriggers and automationSlicesRepresentOneReaction and automationsIssueKnownCommands and automationsHandleCommandErrors"
         ));
         assert!(quint.contains(
+            "val stateChangeSlicesRepresentSingleCommandBoundary = sliceKind != \"state_change\" or sliceCommandDefinitions.length() == 1"
+        ));
+        assert!(quint.contains(
+            "val sliceRepresentsSmallestUsefulBehaviorBoundary = sliceRepresentsOneCoherentModelUnit and stateChangeSlicesRepresentSingleCommandBoundary and automationSlicesRepresentOneReaction and translationSlicesDeclareExternalContracts"
+        ));
+        assert!(quint.contains(
             "def navigationTargetTypeIsModeled(target) = target.targetType == \"\" or allowedNavigationTargetTypes.select(targetType => targetType == target.targetType).length() > 0"
         ));
         assert!(quint.contains(
