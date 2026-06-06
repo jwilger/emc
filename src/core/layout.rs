@@ -2935,6 +2935,12 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
+            artifact_marker("    \"workflowOnlyEventsMayBeSharedAcrossSlices\""),
+            artifact_marker("    \"workflowOnlyEventsMayBeSharedAcrossSlices\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
             artifact_marker("    \"workflowCommandTransitionsResolveControlsAndCommands\""),
             artifact_marker("    \"workflowCommandTransitionsResolveControlsAndCommands\","),
             quint_config_message.clone(),
