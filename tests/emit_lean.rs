@@ -423,6 +423,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def workflowOnlyEventsMayBeSharedAcrossSlices : Bool := workflowNonEventDefinitionsAreUniquelyOwned && workflowSharedEventDefinitionsHaveIdenticalIdentity"
+            ),
+            "Lean workflow artifacts must expose event-only cross-slice sharing as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def workflowOwnsDefinition (sourceSlice : String) (definitionKind : String) (definitionName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == definitionKind && definition.definitionName == definitionName)"
             ),
             "Lean workflow artifacts must define workflow-scoped definition ownership lookup"
@@ -594,6 +600,12 @@ mod tests {
                 "theorem workflowSharedEventDefinitionsHaveIdenticalIdentityIsStable : workflowSharedEventDefinitionsHaveIdenticalIdentity = true := rfl"
             ),
             "Lean workflow artifacts must prove current shared event definitions have identical stream and provenance identity"
+        );
+        assert!(
+            lean.contains(
+                "theorem workflowOnlyEventsMayBeSharedAcrossSlicesIsStable : workflowOnlyEventsMayBeSharedAcrossSlices = true := rfl"
+            ),
+            "Lean workflow artifacts must prove current cross-slice sharing is restricted to events"
         );
         assert!(
             lean.contains(

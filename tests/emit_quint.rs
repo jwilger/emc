@@ -302,6 +302,9 @@ mod tests {
             "val workflowSharedEventDefinitionsHaveIdenticalIdentity = workflowOwnedDefinitions.select(definition => workflowEventDefinitionHasIdentity(definition)).length() == workflowOwnedDefinitions.length() and workflowOwnedDefinitions.select(definition => workflowOwnedDefinitions.select(other => workflowSharedEventDefinitionMatches(definition, other)).length() == workflowOwnedDefinitions.length()).length() == workflowOwnedDefinitions.length()"
         ));
         assert!(quint.contains(
+            "val workflowOnlyEventsMayBeSharedAcrossSlices = workflowNonEventDefinitionsAreUniquelyOwned and workflowSharedEventDefinitionsHaveIdenticalIdentity"
+        ));
+        assert!(quint.contains(
             "def workflowOwnsDefinition(sourceSlice, definitionKind, definitionName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == definitionKind and definition.definitionName == definitionName).length() > 0"
         ));
         assert!(quint.contains(
