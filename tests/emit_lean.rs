@@ -459,6 +459,24 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def workflowSliceHasKind (slice : String) (kind : String) : Bool := workflowSliceDetails.any (fun detail => detail.1 == slice && detail.2.2.1 == kind)"
+            ),
+            "Lean workflow artifacts must be able to resolve workflow slice kinds"
+        );
+        assert!(
+            lean.contains(
+                "def workflowStateViewCommandTransitionTargetsStateChange (transition : WorkflowTransition) : Bool := transition.kind != \"command\" || workflowSliceHasKind transition.source \"state_view\" == false || workflowSliceHasKind transition.target \"state_change\""
+            ),
+            "Lean workflow artifacts must require state-view command transitions to target state-change slices"
+        );
+        assert!(
+            lean.contains(
+                "def workflowStateViewCommandTransitionsTargetStateChanges : Bool := workflowTransitions.all workflowStateViewCommandTransitionTargetsStateChange"
+            ),
+            "Lean workflow artifacts must expose state-view command target validity as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def workflowEventTransitionIsSharedByEndpoints (transition : WorkflowTransition) : Bool := transition.kind != \"event\" || (workflowOwnsDefinition transition.source \"event\" transition.trigger && workflowOwnsDefinition transition.target \"event\" transition.trigger)"
             ),
             "Lean workflow artifacts must require event transitions to be shared by source and target slices"
@@ -582,6 +600,12 @@ mod tests {
                 "theorem workflowCommandTransitionsResolveControlsAndCommandsIsStable : workflowCommandTransitionsResolveControlsAndCommands = true := rfl"
             ),
             "Lean workflow artifacts must prove current command transitions resolve source controls and target commands"
+        );
+        assert!(
+            lean.contains(
+                "theorem workflowStateViewCommandTransitionsTargetStateChangesIsStable : workflowStateViewCommandTransitionsTargetStateChanges = true := rfl"
+            ),
+            "Lean workflow artifacts must prove current state-view command transitions target state-change slices"
         );
         assert!(
             lean.contains(

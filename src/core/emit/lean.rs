@@ -182,6 +182,8 @@ def workflowSharedEventDefinitionsHaveIdenticalIdentity : Bool := workflowOwnedD
 
 def workflowOwnsDefinition (sourceSlice : String) (definitionKind : String) (definitionName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == definitionKind && definition.definitionName == definitionName)
 
+def workflowSliceHasKind (slice : String) (kind : String) : Bool := workflowSliceDetails.any (fun detail => detail.1 == slice && detail.2.2.1 == kind)
+
 def workflowEventParticipationIsModeled (definition : WorkflowOwnedDefinition) : Bool := definition.eventParticipation == "emitted" || definition.eventParticipation == "observed"
 
 def workflowEventDefinitionParticipates (sourceSlice : String) (eventName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == "event" && definition.definitionName == eventName && workflowEventParticipationIsModeled definition)
@@ -199,6 +201,10 @@ def workflowCommandTransitionSourceOwnsControl (transition : WorkflowTransition)
 def workflowCommandTransitionsSourceOwnedControls : Bool := workflowTransitions.all workflowCommandTransitionSourceOwnsControl
 
 def workflowCommandTransitionsResolveControlsAndCommands : Bool := workflowTransitions.all (fun transition => workflowCommandTransitionSourceOwnsControl transition && workflowCommandTransitionTargetsOwnedCommand transition)
+
+def workflowStateViewCommandTransitionTargetsStateChange (transition : WorkflowTransition) : Bool := transition.kind != "command" || workflowSliceHasKind transition.source "state_view" == false || workflowSliceHasKind transition.target "state_change"
+
+def workflowStateViewCommandTransitionsTargetStateChanges : Bool := workflowTransitions.all workflowStateViewCommandTransitionTargetsStateChange
 
 def workflowEventTransitionIsSharedByEndpoints (transition : WorkflowTransition) : Bool := transition.kind != "event" || (workflowOwnsDefinition transition.source "event" transition.trigger && workflowOwnsDefinition transition.target "event" transition.trigger)
 
@@ -285,6 +291,8 @@ theorem workflowCommandTransitionsTargetOwnedCommandsIsStable : workflowCommandT
 theorem workflowCommandTransitionsSourceOwnedControlsIsStable : workflowCommandTransitionsSourceOwnedControls = true := rfl
 
 theorem workflowCommandTransitionsResolveControlsAndCommandsIsStable : workflowCommandTransitionsResolveControlsAndCommands = true := rfl
+
+theorem workflowStateViewCommandTransitionsTargetStateChangesIsStable : workflowStateViewCommandTransitionsTargetStateChanges = true := rfl
 
 theorem workflowEventTransitionsAreSharedByEndpointSlicesIsStable : workflowEventTransitionsAreSharedByEndpointSlices = true := rfl
 

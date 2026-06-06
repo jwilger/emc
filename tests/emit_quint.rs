@@ -320,6 +320,15 @@ mod tests {
             "val workflowCommandTransitionsResolveControlsAndCommands = workflowTransitions.select(transition => workflowCommandTransitionSourceOwnsControl(transition) and workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()"
         ));
         assert!(quint.contains(
+            "def workflowSliceHasKind(sliceSlug, kind) = workflowSliceDetails.select(detail => detail.slug == sliceSlug and detail.kind == kind).length() > 0"
+        ));
+        assert!(quint.contains(
+            "def workflowStateViewCommandTransitionTargetsStateChange(transition) = transition.kind != \"command\" or not(workflowSliceHasKind(transition.source, \"state_view\")) or workflowSliceHasKind(transition.target, \"state_change\")"
+        ));
+        assert!(quint.contains(
+            "val workflowStateViewCommandTransitionsTargetStateChanges = workflowTransitions.select(transition => workflowStateViewCommandTransitionTargetsStateChange(transition)).length() == workflowTransitions.length()"
+        ));
+        assert!(quint.contains(
             "def workflowEventTransitionIsSharedByEndpoints(transition) = transition.kind != \"event\" or (workflowOwnsDefinition(transition.source, \"event\", transition.trigger) and workflowOwnsDefinition(transition.target, \"event\", transition.trigger))"
         ));
         assert!(quint.contains(

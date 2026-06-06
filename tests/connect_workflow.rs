@@ -935,7 +935,7 @@ mod tests {
             "Submit ticket",
             "Actor submits repair ticket details.",
         )?;
-        add_complete_state_view_facts(temp_dir.path(), "submit-ticket")?;
+        add_complete_state_change_facts(temp_dir.path(), "submit-ticket")?;
         add_slice(
             temp_dir.path(),
             "review-ticket",
@@ -2347,6 +2347,125 @@ mod tests {
             "ticket_state.ticket_title",
             "displayed without transformation",
             "ticket_summary",
+        )
+    }
+
+    fn add_complete_state_change_facts(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(["update", "slice", "--slug", slug, "--type", "state_change"])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                slug,
+                "--name",
+                "TicketSubmittedForReview",
+                "--stream",
+                "tickets",
+                "--attribute",
+                "ticket_title",
+                "--attribute-source",
+                "generated",
+                "--attribute-source-name",
+                "actor_input",
+                "--attribute-source-field",
+                "ticket_title",
+                "--generated-source-kind",
+                "actor_input",
+                "--attribute-provenance",
+                "SubmitTicketForReview.ticket_title",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "command",
+                "--slice",
+                slug,
+                "--name",
+                "SubmitTicketForReview",
+                "--input",
+                "ticket_title",
+                "--input-source",
+                "actor",
+                "--input-description",
+                "title field on the submit form",
+                "--input-provenance",
+                "actor confirmation -> form field",
+                "--emits",
+                "TicketSubmittedForReview",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                slug,
+                "--kind",
+                "contract",
+                "--name",
+                "Submit command emits review event",
+                "--given",
+                "The actor confirms the ticket title",
+                "--when",
+                "SubmitTicketForReview runs",
+                "--then",
+                "TicketSubmittedForReview carries the ticket title",
+                "--contract-kind",
+                "command",
+                "--covered-definition",
+                "SubmitTicketForReview",
+                "--read-streams",
+                "tickets",
+                "--written-streams",
+                "tickets",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "outcome",
+                "--slice",
+                slug,
+                "--label",
+                "ticket_submitted_for_review",
+                "--events",
+                "TicketSubmittedForReview",
+                "--externally-relevant",
+                "false",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        add_data_flow(
+            cwd,
+            slug,
+            "actor submit form title field",
+            "captured without normalization",
+            "SubmitTicketForReview",
+        )?;
+        add_data_flow(
+            cwd,
+            slug,
+            "SubmitTicketForReview.ticket_title",
+            "copied into TicketSubmittedForReview.ticket_title",
+            "TicketSubmittedForReview",
         )
     }
 

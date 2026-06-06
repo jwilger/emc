@@ -88,7 +88,7 @@ A model is complete and valid only when all of these are true:
 - ✅ State-view slices own views, read models, and projection paths.
 - ✅ State-view slices own at least one view.
 - ✅ State-view slices do not own state-changing commands.
-- 🟡 State-view controls may link to commands owned by state-change slices.
+- ✅ State-view controls may link to commands owned by state-change slices.
 - ✅ Views require wireframes or information sketches.
 - ✅ Wireframe tokens map to modeled fields, controls, or actor inputs.
 - ✅ Every displayed field appears in the sketch.
