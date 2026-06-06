@@ -239,9 +239,9 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowStepIsReachableFromEntry (step : String × String) : Bool := step.2 == \"supporting\" || workflowReachableStepsFromEntry.contains step.1"
+                "def workflowStepIsReachableFromEntry (step : String × String) : Bool := step.2 == \"supporting\" || step.2 == \"async_lifecycle\" || workflowReachableStepsFromEntry.contains step.1"
             ),
-            "Lean workflow artifacts must exempt only supporting steps from required entry reachability"
+            "Lean workflow artifacts must exempt supporting and async lifecycle steps from required entry reachability"
         );
         assert!(
             lean.contains(

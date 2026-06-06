@@ -80,7 +80,7 @@ pub fn emit_workflow_module(
   def workflowTargetsFromReachable(reachable) = workflowTransitions.select(transition => reachable.select(step => step == transition.source).length() > 0 and workflowSlices.select(step => step == transition.target).length() > 0).foldl([], (targets, transition) => targets.append(transition.target))
   def workflowReachableStepsAfterFuel(fuel, reachable) = range(0, fuel).foldl(reachable, (currentReachable, _) => currentReachable.concat(workflowTargetsFromReachable(currentReachable)))
   val workflowReachableStepsFromEntry = workflowReachableStepsAfterFuel({workflow_slice_count}, workflowEntrySteps)
-  def workflowStepIsReachableFromEntry(step) = step.relationship == "supporting" or workflowReachableStepsFromEntry.select(reachableStep => reachableStep == step.step).length() > 0
+  def workflowStepIsReachableFromEntry(step) = step.relationship == "supporting" or step.relationship == "async_lifecycle" or workflowReachableStepsFromEntry.select(reachableStep => reachableStep == step.step).length() > 0
   val workflowNonSupportingStepsReachableFromEntry = workflowStepRelationships.select(step => workflowStepIsReachableFromEntry(step)).length() == workflowStepRelationships.length()
   def workflowBranchOrAlternateStepHasTriggerOrRationale(step) = (step.relationship != "branch" and step.relationship != "alternate") or workflowTransitions.select(transition => transition.target == step.step and (transition.trigger != "" or transition.rationale != "")).length() > 0
   val workflowBranchAndAlternateStepsHaveTriggerOrRationale = workflowStepRelationships.select(step => workflowBranchOrAlternateStepHasTriggerOrRationale(step)).length() == workflowStepRelationships.length()

@@ -192,7 +192,7 @@ A model is complete and valid only when all of these are true:
 - ✅ Non-entry main steps need incoming reachability.
 - ✅ Branch and alternate steps declare a trigger or incoming-transition
   rationale.
-- 🟡 Async lifecycle steps are not modeled as required linear happy path.
+- ✅ Async lifecycle steps are not modeled as required linear happy path.
 - ✅ Workflow entry handles first-arrival lifecycle state before bootstrap.
 - ✅ Application-entry state views cover fresh/uninitialized, initialized
   unauthenticated, initialized authenticated, partially configured, and fully

@@ -210,8 +210,8 @@ mod tests {
             "Quint workflow artifacts must bound reachability traversal by the emitted workflow size"
         );
         assert!(
-            quint.contains("def workflowStepIsReachableFromEntry(step) = step.relationship == \"supporting\" or workflowReachableStepsFromEntry.select(reachableStep => reachableStep == step.step).length() > 0"),
-            "Quint workflow artifacts must exempt only supporting steps from required entry reachability"
+            quint.contains("def workflowStepIsReachableFromEntry(step) = step.relationship == \"supporting\" or step.relationship == \"async_lifecycle\" or workflowReachableStepsFromEntry.select(reachableStep => reachableStep == step.step).length() > 0"),
+            "Quint workflow artifacts must exempt supporting and async lifecycle steps from required entry reachability"
         );
         assert!(
             quint.contains("val workflowNonSupportingStepsReachableFromEntry = workflowStepRelationships.select(step => workflowStepIsReachableFromEntry(step)).length() == workflowStepRelationships.length()"),
