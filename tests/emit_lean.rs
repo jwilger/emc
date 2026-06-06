@@ -2228,6 +2228,12 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def stateViewSlicesRepresentSingleViewProjectionBoundary : Bool := sliceKind != \"state_view\" || (sliceViewDefinitions.length == 1 && sliceReadModelDefinitions.isEmpty == false)"
+            ),
+            "Lean slice artifacts must require state-view slices to model one view/projection boundary"
+        );
+        assert!(
+            lean.contains(
                 "def stateChangeSlicesOwnCommands : Bool := sliceKind != \"state_change\" || (sliceCommands.isEmpty == false || sliceCommandDefinitions.isEmpty == false)"
             ),
             "Lean slice artifacts must prove state-change slices own commands"
@@ -2294,7 +2300,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def sliceRepresentsSmallestUsefulBehaviorBoundary : Bool := sliceRepresentsOneCoherentModelUnit && stateChangeSlicesRepresentSingleCommandBoundary && automationSlicesRepresentOneReaction && translationSlicesDeclareExternalContracts"
+                "def sliceRepresentsSmallestUsefulBehaviorBoundary : Bool := sliceRepresentsOneCoherentModelUnit && stateViewSlicesRepresentSingleViewProjectionBoundary && stateChangeSlicesRepresentSingleCommandBoundary && automationSlicesRepresentOneReaction && translationSlicesDeclareExternalContracts"
             ),
             "Lean slice artifacts must expose smallest useful behavior boundary as a proof obligation"
         );
@@ -2829,6 +2835,12 @@ mod tests {
                 "theorem stateViewSlicesOwnProjectionPathsIsStable : stateViewSlicesOwnProjectionPaths = true := rfl"
             ),
             "Lean slice artifacts must prove current state-view slices own projection paths"
+        );
+        assert!(
+            lean.contains(
+                "theorem stateViewSlicesRepresentSingleViewProjectionBoundaryIsStable : stateViewSlicesRepresentSingleViewProjectionBoundary = true := by\n  native_decide"
+            ),
+            "Lean slice artifacts must prove current state-view slices model one view/projection boundary"
         );
         assert!(
             lean.contains(
