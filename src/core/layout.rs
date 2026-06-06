@@ -521,9 +521,21 @@ fn project_root_effects(
             manifest_message,
         ),
         Effect::RequireCanonicalDeclaration(
+            lakefile_path.clone(),
+            artifact_marker("import Lake"),
+            artifact_marker("import Lake"),
+            lean_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lakefile_path.clone(),
+            artifact_marker("open Lake"),
+            artifact_marker("open Lake DSL"),
+            lean_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
             lakefile_path,
             artifact_marker("package "),
-            artifact_marker("package EMCModel"),
+            artifact_marker("package EMCModel where"),
             lean_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -884,9 +896,33 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelEventAttributeSourceIsComplete"),
+            artifact_marker(
+                "def modelEventAttributeSourceIsComplete (eventAttribute : String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, sourceKind, sourceName, sourceField, generatedSourceKind, provenance) := eventAttribute; provenance.isEmpty == false && ((sourceKind == \"command_input\" && sourceName.isEmpty == false && sourceField.isEmpty == false) || (sourceKind == \"external_payload\" && sourceName.isEmpty == false && sourceField.isEmpty == false) || (sourceKind == \"generated\" && sourceName.isEmpty == false && generatedSourceKind.isEmpty == false) || (sourceKind == \"session\" && sourceName.isEmpty == false) || (sourceKind == \"derivation\" && sourceName.isEmpty == false && sourceField.isEmpty == false))",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelReadModelFieldSourceIsComplete"),
             artifact_marker(
                 "def modelReadModelFieldSourceIsComplete (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := (field.2.2.2.2.1 == \"event_attribute\" && field.2.2.2.2.2.1.isEmpty == false && field.2.2.2.2.2.2.1.isEmpty == false) || (field.2.2.2.2.1 == \"derivation\" && field.2.2.2.2.2.2.2.1.isEmpty == false && field.2.2.2.2.2.2.2.2.1.isEmpty == false) || (field.2.2.2.2.1 == \"absence_default\" && field.2.2.2.2.2.2.2.2.2.1.isEmpty == false)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelViewFieldSourceIsComplete"),
+            artifact_marker(
+                "def modelViewFieldSourceIsComplete (field : String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, sourceKind, sourceReadModel, sourceField, provenance, bitEncoding) := field; sourceKind == \"read_model\" && sourceReadModel.isEmpty == false && sourceField.isEmpty == false && provenance.isEmpty == false && bitEncoding.isEmpty == false",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelExternalPayloadFieldHasProvenance"),
+            artifact_marker(
+                "def modelExternalPayloadFieldHasProvenance (field : String × String × String × String × String × String) : Bool := let (_, _, _, _, provenance, bitEncoding) := field; provenance.isEmpty == false && bitEncoding.isEmpty == false",
             ),
             lean_message.clone(),
         ),
@@ -1063,6 +1099,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("theorem modelEventAttributeSourcesAreComplete"),
+            artifact_marker(
+                "theorem modelEventAttributeSourcesAreComplete : modelEventAttributes.all modelEventAttributeSourceIsComplete = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelReadModelsAreDeclared"),
             artifact_marker(format!(
                 "theorem modelReadModelsAreDeclared : modelReadModels.length = {read_model_count} := rfl"
@@ -1090,6 +1134,14 @@ fn project_root_effects(
             artifact_marker("theorem modelReadModelFieldSourcesAreComplete"),
             artifact_marker(
                 "theorem modelReadModelFieldSourcesAreComplete : modelReadModelFields.all modelReadModelFieldSourceIsComplete = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelViewFieldSourcesAreComplete"),
+            artifact_marker(
+                "theorem modelViewFieldSourcesAreComplete : modelViewFields.all modelViewFieldSourceIsComplete = true := rfl",
             ),
             lean_message.clone(),
         ),
@@ -1195,6 +1247,14 @@ fn project_root_effects(
             artifact_marker(format!(
                 "theorem modelExternalPayloadFieldsAreDeclared : modelExternalPayloadFields.length = {external_payload_field_count} := rfl"
             )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelExternalPayloadFieldsHaveProvenance"),
+            artifact_marker(
+                "theorem modelExternalPayloadFieldsHaveProvenance : modelExternalPayloadFields.all modelExternalPayloadFieldHasProvenance = true := rfl",
+            ),
             lean_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -1945,6 +2005,22 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  def modelEventAttributeSourceIsComplete"),
+            artifact_marker(
+                "  def modelEventAttributeSourceIsComplete(eventAttr) = eventAttr.provenance != \"\" and ((eventAttr.sourceKind == \"command_input\" and eventAttr.sourceName != \"\" and eventAttr.sourceField != \"\") or (eventAttr.sourceKind == \"external_payload\" and eventAttr.sourceName != \"\" and eventAttr.sourceField != \"\") or (eventAttr.sourceKind == \"generated\" and eventAttr.sourceName != \"\" and eventAttr.generatedSourceKind != \"\") or (eventAttr.sourceKind == \"session\" and eventAttr.sourceName != \"\") or (eventAttr.sourceKind == \"derivation\" and eventAttr.sourceName != \"\" and eventAttr.sourceField != \"\"))",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelEventAttributeSourcesAreComplete ="),
+            artifact_marker(
+                "  val modelEventAttributeSourcesAreComplete = modelEventAttributes.select(eventAttr => modelEventAttributeSourceIsComplete(eventAttr)).length() == modelEventAttributes.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  def modelReadModelFieldSourceIsComplete"),
             artifact_marker(
                 "  def modelReadModelFieldSourceIsComplete(readModelField) = (readModelField.sourceKind == \"event_attribute\" and readModelField.sourceEvent != \"\" and readModelField.sourceAttribute != \"\") or (readModelField.sourceKind == \"derivation\" and readModelField.derivationRule != \"\" and readModelField.derivationSourceFields.length() > 0) or (readModelField.sourceKind == \"absence_default\" and readModelField.absenceEvent != \"\")",
@@ -1972,6 +2048,38 @@ fn project_root_effects(
             artifact_marker("  val modelReadModelFieldSourcesAreComplete ="),
             artifact_marker(
                 "  val modelReadModelFieldSourcesAreComplete = modelReadModelFields.select(readModelField => modelReadModelFieldSourceIsComplete(readModelField)).length() == modelReadModelFields.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelViewFieldSourceIsComplete"),
+            artifact_marker(
+                "  def modelViewFieldSourceIsComplete(viewField) = viewField.sourceKind == \"read_model\" and viewField.sourceReadModel != \"\" and viewField.sourceField != \"\" and viewField.provenance != \"\" and viewField.bitEncoding != \"\"",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelViewFieldSourcesAreComplete ="),
+            artifact_marker(
+                "  val modelViewFieldSourcesAreComplete = modelViewFields.select(viewField => modelViewFieldSourceIsComplete(viewField)).length() == modelViewFields.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelExternalPayloadFieldHasProvenance"),
+            artifact_marker(
+                "  def modelExternalPayloadFieldHasProvenance(externalPayloadField) = externalPayloadField.provenance != \"\" and externalPayloadField.bitEncoding != \"\"",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelExternalPayloadFieldsHaveProvenance ="),
+            artifact_marker(
+                "  val modelExternalPayloadFieldsHaveProvenance = modelExternalPayloadFields.select(externalPayloadField => modelExternalPayloadFieldHasProvenance(externalPayloadField)).length() == modelExternalPayloadFields.length()",
             ),
             quint_message.clone(),
         ),
@@ -2357,8 +2465,26 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_config_path.clone(),
+            artifact_marker("    \"modelEventAttributeSourcesAreComplete\""),
+            artifact_marker("    \"modelEventAttributeSourcesAreComplete\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
             artifact_marker("    \"modelReadModelFieldSourcesAreComplete\""),
             artifact_marker("    \"modelReadModelFieldSourcesAreComplete\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelViewFieldSourcesAreComplete\""),
+            artifact_marker("    \"modelViewFieldSourcesAreComplete\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelExternalPayloadFieldsHaveProvenance\""),
+            artifact_marker("    \"modelExternalPayloadFieldsHaveProvenance\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
