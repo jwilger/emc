@@ -406,33 +406,6 @@ mod tests {
     }
 
     #[test]
-    fn check_reports_project_quint_config_drift() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        write(
-            temp_dir.path().join("model/quint/quint.json"),
-            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": []\n}\n",
-        )?;
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "Quint project config drift for Repair Desk",
-            ));
-
-        Ok(())
-    }
-
-    #[test]
     fn check_reports_missing_modeled_workflow_artifacts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
