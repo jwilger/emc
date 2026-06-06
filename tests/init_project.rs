@@ -219,6 +219,12 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelDataFlowSourceBitEncodingMatchesModeledSource (dataFlow : String × String × String × String × String × String × String) : Bool := let (workflow, slice, datum, source, _, _, bitEncoding) := dataFlow; (modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source) == false) || modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, sourceTarget, sourceBitEncoding) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && sourceBitEncoding == bitEncoding && modelDataFlowIsBitComplete sourceFlow)"
+            ),
+            "Lean project root must compare modeled data-flow source bit semantics with the source data-flow row"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
                 "theorem modelViewFieldBitEncodingsMatchDataFlows : modelViewFields.all modelViewFieldBitEncodingMatchesDataFlow = true := rfl"
             ),
             "Lean project root must prove displayed datum bit encodings match data-flow rows"
@@ -228,6 +234,12 @@ mod tests {
                 "theorem modelExternalPayloadFieldBitEncodingsMatchDataFlows : modelExternalPayloadFields.all modelExternalPayloadFieldBitEncodingMatchesDataFlow = true := rfl"
             ),
             "Lean project root must prove external payload bit encodings match data-flow rows"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "theorem modelDataFlowSourceBitEncodingsMatchModeledSources : modelDataFlows.all modelDataFlowSourceBitEncodingMatchesModeledSource = true := rfl"
+            ),
+            "Lean project root must prove modeled data-flow sources preserve bit encodings"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
@@ -407,6 +419,12 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "def modelDataFlowSourceBitEncodingMatchesModeledSource(dataFlow) = modelDataFlows.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source).length() == 0 or modelDataFlows.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and sourceFlow.bitEncoding == dataFlow.bitEncoding and modelDataFlowIsBitComplete(sourceFlow)).length() > 0"
+            ),
+            "Quint project root must compare modeled data-flow source bit semantics with the source data-flow row"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
                 "val modelViewFieldBitEncodingsMatchDataFlows = modelViewFields.select(viewField => modelViewFieldBitEncodingMatchesDataFlow(viewField)).length() == modelViewFields.length()"
             ),
             "Quint project root must verify displayed datum bit encodings match data-flow rows"
@@ -416,6 +434,12 @@ mod tests {
                 "val modelExternalPayloadFieldBitEncodingsMatchDataFlows = modelExternalPayloadFields.select(externalPayloadField => modelExternalPayloadFieldBitEncodingMatchesDataFlow(externalPayloadField)).length() == modelExternalPayloadFields.length()"
             ),
             "Quint project root must verify external payload bit encodings match data-flow rows"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "val modelDataFlowSourceBitEncodingsMatchModeledSources = modelDataFlows.select(dataFlow => modelDataFlowSourceBitEncodingMatchesModeledSource(dataFlow)).length() == modelDataFlows.length()"
+            ),
+            "Quint project root must verify modeled data-flow sources preserve bit encodings"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
@@ -429,7 +453,7 @@ mod tests {
         );
         assert_eq!(
             fs::read_to_string(temp_dir.path().join("model/quint/quint.json"))?,
-            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowSliceModulesComplete\",\n    \"workflowTransitionsStructured\",\n    \"workflowTransitionSourcesResolve\",\n    \"workflowTransitionTargetsResolve\",\n    \"workflowStepRelationshipsAreAllowed\",\n    \"workflowStepSlugsAreUnique\",\n    \"workflowHasExactlyOneEntryStep\",\n    \"workflowMainStepsHaveIncomingReachability\",\n    \"workflowNonSupportingStepsReachableFromEntry\",\n    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\",\n    \"workflowTransitionsHaveModeledKinds\",\n    \"workflowExitsNameTargetsAndRationale\",\n    \"workflowExternallyRelevantOutcomesHandled\",\n    \"workflowOutcomesSourceResolve\",\n    \"workflowCommandErrorsSourceResolve\",\n    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\",\n    \"workflowNonEventDefinitionsAreUniquelyOwned\",\n    \"workflowSharedEventDefinitionsHaveIdenticalIdentity\",\n    \"workflowCommandTransitionsResolveControlsAndCommands\",\n    \"workflowStateViewCommandTransitionsTargetStateChanges\",\n    \"workflowEventTransitionsAreSharedByEndpointSlices\",\n    \"workflowEventTransitionsHaveParticipatingEndpointEvents\",\n    \"workflowNavigationTransitionsResolveControlsAndViews\",\n    \"workflowNavigationTransitionsResolveToEntryViews\",\n    \"workflowExternalTriggersDeclarePayloadContracts\",\n    \"workflowExternalTriggerPayloadContractsHaveProvenance\",\n    \"workflowTransitionsHaveRequiredEvidence\",\n    \"workflowEntryLifecycleStatesCoverRequiredStates\",\n    \"modelScenarioDefinitionsHaveGwt\",\n    \"modelScenarioKindsAreFirstClass\",\n    \"modelDataFlowsAreBitComplete\",\n    \"modelMeaningfulDataFlowsAreCovered\",\n    \"modelViewFieldBitEncodingsMatchDataFlows\",\n    \"modelExternalPayloadFieldBitEncodingsMatchDataFlows\",\n    \"modelCommandInputsHaveProvenance\",\n    \"modelCommandInputsTraceToInvocationSources\",\n    \"modelEventAttributeSourcesAreComplete\",\n    \"modelReadModelFieldSourcesAreComplete\",\n    \"modelViewFieldSourcesAreComplete\",\n    \"modelViewFieldReadModelFieldSourcesResolve\",\n    \"modelDisplayedDataTraceToOriginalProvenance\",\n    \"modelExternalPayloadFieldsHaveProvenance\",\n    \"modelViewControlsProvideCommandInputs\"\n  ]\n}\n"
+            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowSliceModulesComplete\",\n    \"workflowTransitionsStructured\",\n    \"workflowTransitionSourcesResolve\",\n    \"workflowTransitionTargetsResolve\",\n    \"workflowStepRelationshipsAreAllowed\",\n    \"workflowStepSlugsAreUnique\",\n    \"workflowHasExactlyOneEntryStep\",\n    \"workflowMainStepsHaveIncomingReachability\",\n    \"workflowNonSupportingStepsReachableFromEntry\",\n    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\",\n    \"workflowTransitionsHaveModeledKinds\",\n    \"workflowExitsNameTargetsAndRationale\",\n    \"workflowExternallyRelevantOutcomesHandled\",\n    \"workflowOutcomesSourceResolve\",\n    \"workflowCommandErrorsSourceResolve\",\n    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\",\n    \"workflowNonEventDefinitionsAreUniquelyOwned\",\n    \"workflowSharedEventDefinitionsHaveIdenticalIdentity\",\n    \"workflowCommandTransitionsResolveControlsAndCommands\",\n    \"workflowStateViewCommandTransitionsTargetStateChanges\",\n    \"workflowEventTransitionsAreSharedByEndpointSlices\",\n    \"workflowEventTransitionsHaveParticipatingEndpointEvents\",\n    \"workflowNavigationTransitionsResolveControlsAndViews\",\n    \"workflowNavigationTransitionsResolveToEntryViews\",\n    \"workflowExternalTriggersDeclarePayloadContracts\",\n    \"workflowExternalTriggerPayloadContractsHaveProvenance\",\n    \"workflowTransitionsHaveRequiredEvidence\",\n    \"workflowEntryLifecycleStatesCoverRequiredStates\",\n    \"modelScenarioDefinitionsHaveGwt\",\n    \"modelScenarioKindsAreFirstClass\",\n    \"modelDataFlowsAreBitComplete\",\n    \"modelMeaningfulDataFlowsAreCovered\",\n    \"modelDataFlowSourceBitEncodingsMatchModeledSources\",\n    \"modelViewFieldBitEncodingsMatchDataFlows\",\n    \"modelExternalPayloadFieldBitEncodingsMatchDataFlows\",\n    \"modelCommandInputsHaveProvenance\",\n    \"modelCommandInputsTraceToInvocationSources\",\n    \"modelEventAttributeSourcesAreComplete\",\n    \"modelReadModelFieldSourcesAreComplete\",\n    \"modelViewFieldSourcesAreComplete\",\n    \"modelViewFieldReadModelFieldSourcesResolve\",\n    \"modelDisplayedDataTraceToOriginalProvenance\",\n    \"modelExternalPayloadFieldsHaveProvenance\",\n    \"modelViewControlsProvideCommandInputs\"\n  ]\n}\n"
         );
         Ok(())
     }
