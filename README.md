@@ -183,7 +183,6 @@ model/
     <ProjectModule>.lean
     slices/
   quint/
-    quint.json
     <ProjectModule>.qnt
     slices/
 reviews/
