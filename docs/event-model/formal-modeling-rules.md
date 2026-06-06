@@ -212,7 +212,7 @@ A model is complete and valid only when all of these are true:
 
 ## Information Completeness
 
-- 🟡 Every meaningful datum that flows through the system is modeled.
+- ✅ Every meaningful datum that flows through the system is modeled.
 - 🟡 Every datum has an original source.
 - 🟡 Every datum has an explicit target.
 - 🟡 Every datum has transformation, projection, derivation, default, or absence

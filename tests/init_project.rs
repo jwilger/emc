@@ -134,6 +134,18 @@ mod tests {
             "Lean project root must prove read-model field source completeness"
         );
         assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelDataFlowCoversDatum (workflow : String) (slice : String) (datum : String) : Bool :="
+            ),
+            "Lean project root must define datum-to-data-flow coverage in the formal artifact"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "theorem modelMeaningfulDataFlowsAreCovered : modelMeaningfulDataHasModeledDataFlows = true := rfl"
+            ),
+            "Lean project root must prove every meaningful datum has a modeled bit-level data flow"
+        );
+        assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?
                 .contains("val modelVersion = \"0.1.0\""),
             "Quint project root must carry the formal model version"
@@ -220,12 +232,23 @@ mod tests {
             "Quint project root must expose read-model field source completeness"
         );
         assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?
+                .contains("def modelDataFlowCoversDatum(workflow, sliceName, datum) ="),
+            "Quint project root must define datum-to-data-flow coverage in the formal artifact"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "val modelMeaningfulDataFlowsAreCovered = modelMeaningfulDataHasModeledDataFlows"
+            ),
+            "Quint project root must expose every meaningful datum coverage as an invariant"
+        );
+        assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/lakefile.lean"))?
                 .contains("package EMCModel")
         );
         assert_eq!(
             fs::read_to_string(temp_dir.path().join("model/quint/quint.json"))?,
-            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowSliceModulesComplete\",\n    \"workflowTransitionsStructured\",\n    \"workflowTransitionSourcesResolve\",\n    \"workflowTransitionTargetsResolve\",\n    \"workflowStepRelationshipsAreAllowed\",\n    \"workflowStepSlugsAreUnique\",\n    \"workflowHasExactlyOneEntryStep\",\n    \"workflowMainStepsHaveIncomingReachability\",\n    \"workflowNonSupportingStepsReachableFromEntry\",\n    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\",\n    \"workflowTransitionsHaveModeledKinds\",\n    \"workflowExitsNameTargetsAndRationale\",\n    \"workflowExternallyRelevantOutcomesHandled\",\n    \"workflowOutcomesSourceResolve\",\n    \"workflowCommandErrorsSourceResolve\",\n    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\",\n    \"workflowNonEventDefinitionsAreUniquelyOwned\",\n    \"workflowSharedEventDefinitionsHaveIdenticalIdentity\",\n    \"workflowCommandTransitionsResolveControlsAndCommands\",\n    \"workflowStateViewCommandTransitionsTargetStateChanges\",\n    \"workflowEventTransitionsAreSharedByEndpointSlices\",\n    \"workflowEventTransitionsHaveParticipatingEndpointEvents\",\n    \"workflowNavigationTransitionsResolveControlsAndViews\",\n    \"workflowNavigationTransitionsResolveToEntryViews\",\n    \"workflowExternalTriggersDeclarePayloadContracts\",\n    \"workflowExternalTriggerPayloadContractsHaveProvenance\",\n    \"workflowTransitionsHaveRequiredEvidence\",\n    \"workflowEntryLifecycleStatesCoverRequiredStates\",\n    \"modelScenarioDefinitionsHaveGwt\",\n    \"modelScenarioKindsAreFirstClass\",\n    \"modelDataFlowsAreBitComplete\",\n    \"modelCommandInputsHaveProvenance\",\n    \"modelCommandInputsTraceToInvocationSources\",\n    \"modelReadModelFieldSourcesAreComplete\",\n    \"modelViewControlsProvideCommandInputs\"\n  ]\n}\n"
+            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowSliceModulesComplete\",\n    \"workflowTransitionsStructured\",\n    \"workflowTransitionSourcesResolve\",\n    \"workflowTransitionTargetsResolve\",\n    \"workflowStepRelationshipsAreAllowed\",\n    \"workflowStepSlugsAreUnique\",\n    \"workflowHasExactlyOneEntryStep\",\n    \"workflowMainStepsHaveIncomingReachability\",\n    \"workflowNonSupportingStepsReachableFromEntry\",\n    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\",\n    \"workflowTransitionsHaveModeledKinds\",\n    \"workflowExitsNameTargetsAndRationale\",\n    \"workflowExternallyRelevantOutcomesHandled\",\n    \"workflowOutcomesSourceResolve\",\n    \"workflowCommandErrorsSourceResolve\",\n    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\",\n    \"workflowNonEventDefinitionsAreUniquelyOwned\",\n    \"workflowSharedEventDefinitionsHaveIdenticalIdentity\",\n    \"workflowCommandTransitionsResolveControlsAndCommands\",\n    \"workflowStateViewCommandTransitionsTargetStateChanges\",\n    \"workflowEventTransitionsAreSharedByEndpointSlices\",\n    \"workflowEventTransitionsHaveParticipatingEndpointEvents\",\n    \"workflowNavigationTransitionsResolveControlsAndViews\",\n    \"workflowNavigationTransitionsResolveToEntryViews\",\n    \"workflowExternalTriggersDeclarePayloadContracts\",\n    \"workflowExternalTriggerPayloadContractsHaveProvenance\",\n    \"workflowTransitionsHaveRequiredEvidence\",\n    \"workflowEntryLifecycleStatesCoverRequiredStates\",\n    \"modelScenarioDefinitionsHaveGwt\",\n    \"modelScenarioKindsAreFirstClass\",\n    \"modelDataFlowsAreBitComplete\",\n    \"modelMeaningfulDataFlowsAreCovered\",\n    \"modelCommandInputsHaveProvenance\",\n    \"modelCommandInputsTraceToInvocationSources\",\n    \"modelReadModelFieldSourcesAreComplete\",\n    \"modelViewControlsProvideCommandInputs\"\n  ]\n}\n"
         );
         Ok(())
     }

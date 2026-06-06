@@ -804,6 +804,70 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelDataFlowIsBitComplete"),
+            artifact_marker(
+                "def modelDataFlowIsBitComplete (dataFlow : String × String × String × String × String × String × String) : Bool := dataFlow.2.2.1.isEmpty == false && dataFlow.2.2.2.1.isEmpty == false && dataFlow.2.2.2.2.1.isEmpty == false && dataFlow.2.2.2.2.2.1.isEmpty == false && dataFlow.2.2.2.2.2.2.isEmpty == false",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelDataFlowCoversDatum"),
+            artifact_marker(
+                "def modelDataFlowCoversDatum (workflow : String) (slice : String) (datum : String) : Bool := modelDataFlows.any (fun dataFlow => let (flowWorkflow, flowSlice, flowDatum, _, _, _, _) := dataFlow; flowWorkflow == workflow && flowSlice == slice && flowDatum == datum)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelCommandInputHasModeledDataFlow"),
+            artifact_marker(
+                "def modelCommandInputHasModeledDataFlow (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, datum, _, _, _, _, _, _, _, _, _, _, _, _, _) := input; modelDataFlowCoversDatum workflow slice datum",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelEventAttributeHasModeledDataFlow"),
+            artifact_marker(
+                "def modelEventAttributeHasModeledDataFlow (eventAttribute : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, datum, _, _, _, _, _) := eventAttribute; modelDataFlowCoversDatum workflow slice datum",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelReadModelFieldHasModeledDataFlow"),
+            artifact_marker(
+                "def modelReadModelFieldHasModeledDataFlow (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := let (workflow, slice, _, datum, _, _, _, _, _, _, _, _, _) := field; modelDataFlowCoversDatum workflow slice datum",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelViewFieldHasModeledDataFlow"),
+            artifact_marker(
+                "def modelViewFieldHasModeledDataFlow (field : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, datum, _, _, _, _, _) := field; modelDataFlowCoversDatum workflow slice datum",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelExternalPayloadFieldHasModeledDataFlow"),
+            artifact_marker(
+                "def modelExternalPayloadFieldHasModeledDataFlow (field : String × String × String × String × String × String) : Bool := let (workflow, slice, _, datum, _, _) := field; modelDataFlowCoversDatum workflow slice datum",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelMeaningfulDataHasModeledDataFlows"),
+            artifact_marker(
+                "def modelMeaningfulDataHasModeledDataFlows : Bool := modelCommandInputs.all modelCommandInputHasModeledDataFlow && modelEventAttributes.all modelEventAttributeHasModeledDataFlow && modelReadModelFields.all modelReadModelFieldHasModeledDataFlow && modelViewFields.all modelViewFieldHasModeledDataFlow && modelExternalPayloadFields.all modelExternalPayloadFieldHasModeledDataFlow",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelCommandInputHasProvenance"),
             artifact_marker(
                 "def modelCommandInputHasProvenance (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, sourceDescription, provenanceChain, _, _, _, _, _, _, _, _, _, _) := input; sourceDescription.isEmpty == false && provenanceChain.isEmpty == false",
@@ -931,6 +995,22 @@ fn project_root_effects(
             artifact_marker(format!(
                 "theorem modelDataFlowsAreDeclared : modelDataFlows.length = {data_flow_count} := rfl"
             )),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelDataFlowsAreBitComplete"),
+            artifact_marker(
+                "theorem modelDataFlowsAreBitComplete : modelDataFlows.all modelDataFlowIsBitComplete = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelMeaningfulDataFlowsAreCovered"),
+            artifact_marker(
+                "theorem modelMeaningfulDataFlowsAreCovered : modelMeaningfulDataHasModeledDataFlows = true := rfl",
+            ),
             lean_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -1713,10 +1793,90 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  def modelDataFlowIsBitComplete"),
+            artifact_marker(
+                "  def modelDataFlowIsBitComplete(dataFlow) = dataFlow.datum != \"\" and dataFlow.source != \"\" and dataFlow.transformation != \"\" and dataFlow.target != \"\" and dataFlow.bitEncoding != \"\"",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelDataFlowCoversDatum"),
+            artifact_marker(
+                "  def modelDataFlowCoversDatum(workflow, sliceName, datum) = modelDataFlows.select(dataFlow => dataFlow.workflow == workflow and dataFlow.slice == sliceName and dataFlow.datum == datum).length() > 0",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelCommandInputHasModeledDataFlow"),
+            artifact_marker(
+                "  def modelCommandInputHasModeledDataFlow(input) = modelDataFlowCoversDatum(input.workflow, input.slice, input.input)",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelEventAttributeHasModeledDataFlow"),
+            artifact_marker(
+                "  def modelEventAttributeHasModeledDataFlow(eventAttr) = modelDataFlowCoversDatum(eventAttr.workflow, eventAttr.slice, eventAttr.attribute)",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelReadModelFieldHasModeledDataFlow"),
+            artifact_marker(
+                "  def modelReadModelFieldHasModeledDataFlow(readModelField) = modelDataFlowCoversDatum(readModelField.workflow, readModelField.slice, readModelField.field)",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelViewFieldHasModeledDataFlow"),
+            artifact_marker(
+                "  def modelViewFieldHasModeledDataFlow(viewField) = modelDataFlowCoversDatum(viewField.workflow, viewField.slice, viewField.field)",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelExternalPayloadFieldHasModeledDataFlow"),
+            artifact_marker(
+                "  def modelExternalPayloadFieldHasModeledDataFlow(externalPayloadField) = modelDataFlowCoversDatum(externalPayloadField.workflow, externalPayloadField.slice, externalPayloadField.field)",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelDataFlowsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelDataFlowsAreDeclared = modelDataFlows.length() == {data_flow_count}"
             )),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelDataFlowsAreBitComplete ="),
+            artifact_marker(
+                "  val modelDataFlowsAreBitComplete = modelDataFlows.select(dataFlow => modelDataFlowIsBitComplete(dataFlow)).length() == modelDataFlows.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelMeaningfulDataHasModeledDataFlows ="),
+            artifact_marker(
+                "  val modelMeaningfulDataHasModeledDataFlows = modelCommandInputs.select(input => modelCommandInputHasModeledDataFlow(input)).length() == modelCommandInputs.length() and modelEventAttributes.select(eventAttr => modelEventAttributeHasModeledDataFlow(eventAttr)).length() == modelEventAttributes.length() and modelReadModelFields.select(readModelField => modelReadModelFieldHasModeledDataFlow(readModelField)).length() == modelReadModelFields.length() and modelViewFields.select(viewField => modelViewFieldHasModeledDataFlow(viewField)).length() == modelViewFields.length() and modelExternalPayloadFields.select(externalPayloadField => modelExternalPayloadFieldHasModeledDataFlow(externalPayloadField)).length() == modelExternalPayloadFields.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelMeaningfulDataFlowsAreCovered ="),
+            artifact_marker(
+                "  val modelMeaningfulDataFlowsAreCovered = modelMeaningfulDataHasModeledDataFlows",
+            ),
             quint_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -2169,6 +2329,18 @@ fn project_root_effects(
             quint_config_path.clone(),
             artifact_marker("    \"modelScenarioKindsAreFirstClass\""),
             artifact_marker("    \"modelScenarioKindsAreFirstClass\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelDataFlowsAreBitComplete\""),
+            artifact_marker("    \"modelDataFlowsAreBitComplete\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelMeaningfulDataFlowsAreCovered\""),
+            artifact_marker("    \"modelMeaningfulDataFlowsAreCovered\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
