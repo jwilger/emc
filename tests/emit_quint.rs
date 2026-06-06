@@ -411,7 +411,7 @@ mod tests {
             "type EventModelScenario = { name: str, givenSteps: List[str], whenSteps: List[str], thenSteps: List[str], readStreams: List[str], writtenStreams: List[str], contractKind: str, coveredDefinition: str, errorReferences: List[str] }"
         ));
         assert!(quint.contains(
-            "type BitLevelDataFlow = { datum: str, source: str, transformationSemantics: str, target: str, bitEncoding: str }"
+            "type BitLevelDataFlow = { datum: str, sourceKind: str, source: str, transformationSemantics: str, target: str, bitEncoding: str }"
         ));
         assert!(quint.contains(
             "type CommandInput = { name: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str, invocationArgumentSourceName: str, invocationArgumentSourceField: str }"
@@ -652,7 +652,7 @@ mod tests {
             "val commandInputsSourcedFromInvocationArgumentsHaveCoordinates = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputInvocationArgumentSourceHasCoordinates(input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(
-            "def bitLevelFlowCoversTarget(target, datum) = sliceBitLevelDataFlows.select(flow => flow.target == target and flow.datum == datum and flow.source != \"\" and flow.transformationSemantics != \"\" and flow.bitEncoding != \"\").length() > 0"
+            "def bitLevelFlowCoversTarget(target, datum) = sliceBitLevelDataFlows.select(flow => flow.target == target and flow.datum == datum and flow.sourceKind != \"\" and flow.source != \"\" and flow.transformationSemantics != \"\" and flow.bitEncoding != \"\").length() > 0"
         ));
         assert!(quint.contains(
             "def commandInputHasBitLevelFlow(command, input) = bitLevelFlowCoversTarget(command.name, input.name)"
@@ -1142,7 +1142,7 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val sliceBitLevelDataFlowsStructured = sliceBitLevelDataFlows.select(flow => flow.datum != \"\" and flow.source != \"\" and flow.transformationSemantics != \"\" and flow.target != \"\" and flow.bitEncoding != \"\").length() == sliceBitLevelDataFlows.length()"
+                "val sliceBitLevelDataFlowsStructured = sliceBitLevelDataFlows.select(flow => flow.datum != \"\" and flow.sourceKind != \"\" and flow.source != \"\" and flow.transformationSemantics != \"\" and flow.target != \"\" and flow.bitEncoding != \"\").length() == sliceBitLevelDataFlows.length()"
             ),
             "Quint slice artifacts must verify represented data-flow rows include source, transformation/projection, target, and bit encoding fields"
         );

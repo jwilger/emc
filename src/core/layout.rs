@@ -618,7 +618,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelDataFlows :"),
             artifact_marker(format!(
-                "def modelDataFlows : List (String × String × String × String × String × String × String) := {lean_model_data_flow_list}"
+                "def modelDataFlows : List (String × String × String × String × String × String × String × String) := {lean_model_data_flow_list}"
             )),
             lean_message.clone(),
         ),
@@ -818,7 +818,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelDataFlowIsBitComplete"),
             artifact_marker(
-                "def modelDataFlowIsBitComplete (dataFlow : String × String × String × String × String × String × String) : Bool := dataFlow.2.2.1.isEmpty == false && dataFlow.2.2.2.1.isEmpty == false && dataFlow.2.2.2.2.1.isEmpty == false && dataFlow.2.2.2.2.2.1.isEmpty == false && dataFlow.2.2.2.2.2.2.isEmpty == false",
+                "def modelDataFlowIsBitComplete (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, datum, sourceKind, source, transformation, target, bitEncoding) := dataFlow; datum.isEmpty == false && sourceKind.isEmpty == false && source.isEmpty == false && transformation.isEmpty == false && target.isEmpty == false && bitEncoding.isEmpty == false",
             ),
             lean_message.clone(),
         ),
@@ -826,7 +826,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelDataFlowCoversDatumTarget"),
             artifact_marker(
-                "def modelDataFlowCoversDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) : Bool := modelDataFlows.any (fun dataFlow => let (flowWorkflow, flowSlice, flowDatum, _, _, flowTarget, _) := dataFlow; flowWorkflow == workflow && flowSlice == slice && flowDatum == datum && flowTarget == target && modelDataFlowIsBitComplete dataFlow)",
+                "def modelDataFlowCoversDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) : Bool := modelDataFlows.any (fun dataFlow => let (flowWorkflow, flowSlice, flowDatum, _, _, _, flowTarget, _) := dataFlow; flowWorkflow == workflow && flowSlice == slice && flowDatum == datum && flowTarget == target && modelDataFlowIsBitComplete dataFlow)",
             ),
             lean_message.clone(),
         ),
@@ -834,7 +834,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelDataFlowBitEncodingMatchesDatumTarget"),
             artifact_marker(
-                "def modelDataFlowBitEncodingMatchesDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) (bitEncoding : String) : Bool := modelDataFlows.any (fun dataFlow => let (flowWorkflow, flowSlice, flowDatum, _, _, flowTarget, flowBitEncoding) := dataFlow; flowWorkflow == workflow && flowSlice == slice && flowDatum == datum && flowTarget == target && flowBitEncoding == bitEncoding && modelDataFlowIsBitComplete dataFlow)",
+                "def modelDataFlowBitEncodingMatchesDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) (bitEncoding : String) : Bool := modelDataFlows.any (fun dataFlow => let (flowWorkflow, flowSlice, flowDatum, _, _, _, flowTarget, flowBitEncoding) := dataFlow; flowWorkflow == workflow && flowSlice == slice && flowDatum == datum && flowTarget == target && flowBitEncoding == bitEncoding && modelDataFlowIsBitComplete dataFlow)",
             ),
             lean_message.clone(),
         ),
@@ -842,7 +842,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelDataFlowSourceBitEncodingMatchesModeledSource"),
             artifact_marker(
-                "def modelDataFlowSourceBitEncodingMatchesModeledSource (dataFlow : String × String × String × String × String × String × String) : Bool := let (workflow, slice, datum, source, _, _, bitEncoding) := dataFlow; (modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source) == false) || modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, sourceTarget, sourceBitEncoding) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && sourceBitEncoding == bitEncoding && modelDataFlowIsBitComplete sourceFlow)",
+                "def modelDataFlowSourceBitEncodingMatchesModeledSource (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, datum, _, source, _, _, bitEncoding) := dataFlow; (modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source) == false) || modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, sourceBitEncoding) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && sourceBitEncoding == bitEncoding && modelDataFlowIsBitComplete sourceFlow)",
             ),
             lean_message.clone(),
         ),
@@ -850,7 +850,23 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelDataFlowHasModeledTransformationSemantics"),
             artifact_marker(
-                "def modelDataFlowHasModeledTransformationSemantics (dataFlow : String × String × String × String × String × String × String) : Bool := let (_, _, _, _, transformation, _, _) := dataFlow; transformation == \"identity\" || transformation == \"projection\" || transformation == \"derivation\" || transformation == \"default\" || transformation == \"absence\" || transformation == \"transformation\"",
+                "def modelDataFlowHasModeledTransformationSemantics (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, transformation, _, _) := dataFlow; transformation == \"identity\" || transformation == \"projection\" || transformation == \"derivation\" || transformation == \"default\" || transformation == \"absence\" || transformation == \"transformation\"",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelDataFlowHasModeledSourceKind"),
+            artifact_marker(
+                "def modelDataFlowHasModeledSourceKind (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, sourceKind, source, _, _, _) := dataFlow; (sourceKind == \"original\" && source.isEmpty == false) || (sourceKind == \"modeled_target\" && source.isEmpty == false)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelDataFlowModeledSourceResolves"),
+            artifact_marker(
+                "def modelDataFlowModeledSourceResolves (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, datum, sourceKind, source, _, _, _) := dataFlow; sourceKind != \"modeled_target\" || modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && modelDataFlowIsBitComplete sourceFlow)",
             ),
             lean_message.clone(),
         ),
@@ -1102,6 +1118,22 @@ fn project_root_effects(
             artifact_marker("theorem modelDataFlowsAreBitComplete"),
             artifact_marker(
                 "theorem modelDataFlowsAreBitComplete : modelDataFlows.all modelDataFlowIsBitComplete = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelDataFlowSourceKindsAreModeled"),
+            artifact_marker(
+                "theorem modelDataFlowSourceKindsAreModeled : modelDataFlows.all modelDataFlowHasModeledSourceKind = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelDataFlowModeledSourcesResolve"),
+            artifact_marker(
+                "theorem modelDataFlowModeledSourcesResolve : modelDataFlows.all modelDataFlowModeledSourceResolves = true := rfl",
             ),
             lean_message.clone(),
         ),
@@ -1439,7 +1471,7 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  type ModelDataFlow ="),
             artifact_marker(
-                "  type ModelDataFlow = { workflow: str, slice: str, datum: str, source: str, transformation: str, target: str, bitEncoding: str }",
+                "  type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: str, source: str, transformation: str, target: str, bitEncoding: str }",
             ),
             quint_message.clone(),
         ),
@@ -1967,7 +1999,7 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  def modelDataFlowIsBitComplete"),
             artifact_marker(
-                "  def modelDataFlowIsBitComplete(dataFlow) = dataFlow.datum != \"\" and dataFlow.source != \"\" and dataFlow.transformation != \"\" and dataFlow.target != \"\" and dataFlow.bitEncoding != \"\"",
+                "  def modelDataFlowIsBitComplete(dataFlow) = dataFlow.datum != \"\" and dataFlow.sourceKind != \"\" and dataFlow.source != \"\" and dataFlow.transformation != \"\" and dataFlow.target != \"\" and dataFlow.bitEncoding != \"\"",
             ),
             quint_message.clone(),
         ),
@@ -2000,6 +2032,22 @@ fn project_root_effects(
             artifact_marker("  def modelDataFlowHasModeledTransformationSemantics"),
             artifact_marker(
                 "  def modelDataFlowHasModeledTransformationSemantics(dataFlow) = dataFlow.transformation == \"identity\" or dataFlow.transformation == \"projection\" or dataFlow.transformation == \"derivation\" or dataFlow.transformation == \"default\" or dataFlow.transformation == \"absence\" or dataFlow.transformation == \"transformation\"",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelDataFlowHasModeledSourceKind"),
+            artifact_marker(
+                "  def modelDataFlowHasModeledSourceKind(dataFlow) = (dataFlow.sourceKind == \"original\" and dataFlow.source != \"\") or (dataFlow.sourceKind == \"modeled_target\" and dataFlow.source != \"\")",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelDataFlowModeledSourceResolves"),
+            artifact_marker(
+                "  def modelDataFlowModeledSourceResolves(dataFlow) = dataFlow.sourceKind != \"modeled_target\" or modelDataFlows.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and modelDataFlowIsBitComplete(sourceFlow)).length() > 0",
             ),
             quint_message.clone(),
         ),
@@ -2072,6 +2120,22 @@ fn project_root_effects(
             artifact_marker("  val modelDataFlowsAreBitComplete ="),
             artifact_marker(
                 "  val modelDataFlowsAreBitComplete = modelDataFlows.select(dataFlow => modelDataFlowIsBitComplete(dataFlow)).length() == modelDataFlows.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelDataFlowSourceKindsAreModeled ="),
+            artifact_marker(
+                "  val modelDataFlowSourceKindsAreModeled = modelDataFlows.select(dataFlow => modelDataFlowHasModeledSourceKind(dataFlow)).length() == modelDataFlows.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelDataFlowModeledSourcesResolve ="),
+            artifact_marker(
+                "  val modelDataFlowModeledSourcesResolve = modelDataFlows.select(dataFlow => modelDataFlowModeledSourceResolves(dataFlow)).length() == modelDataFlows.length()",
             ),
             quint_message.clone(),
         ),
@@ -2667,6 +2731,18 @@ fn project_root_effects(
             quint_config_path.clone(),
             artifact_marker("    \"modelDataFlowsAreBitComplete\""),
             artifact_marker("    \"modelDataFlowsAreBitComplete\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelDataFlowSourceKindsAreModeled\""),
+            artifact_marker("    \"modelDataFlowSourceKindsAreModeled\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelDataFlowModeledSourcesResolve\""),
+            artifact_marker("    \"modelDataFlowModeledSourcesResolve\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
@@ -3745,10 +3821,11 @@ fn lean_model_data_flow_list(project_data_flows: &[ProjectDataFlow]) -> String {
             .into_iter()
             .map(|data_flow| {
                 format!(
-                    "({}, {}, {}, {}, {}, {}, {})",
+                    "({}, {}, {}, {}, {}, {}, {}, {})",
                     json_string(data_flow.workflow_slug()),
                     json_string(data_flow.slice_slug()),
                     json_string(data_flow.datum()),
+                    json_string(data_flow.source_kind()),
                     json_string(data_flow.source()),
                     json_string(data_flow.transformation()),
                     json_string(data_flow.target()),
@@ -3769,10 +3846,11 @@ fn quint_model_data_flow_list(project_data_flows: &[ProjectDataFlow]) -> String 
             .into_iter()
             .map(|data_flow| {
                 format!(
-                    "{{ workflow: {}, slice: {}, datum: {}, source: {}, transformation: {}, target: {}, bitEncoding: {} }}",
+                    "{{ workflow: {}, slice: {}, datum: {}, sourceKind: {}, source: {}, transformation: {}, target: {}, bitEncoding: {} }}",
                     json_string(data_flow.workflow_slug()),
                     json_string(data_flow.slice_slug()),
                     json_string(data_flow.datum()),
+                    json_string(data_flow.source_kind()),
                     json_string(data_flow.source()),
                     json_string(data_flow.transformation()),
                     json_string(data_flow.target()),
@@ -5394,10 +5472,11 @@ fn digest_data_flows(project_data_flows: &[ProjectDataFlow]) -> String {
         .iter()
         .map(|data_flow| {
             format!(
-                "{}/{}/{}@{}~{}~{}#{}",
+                "{}/{}/{}@{}:{}~{}~{}#{}",
                 data_flow.workflow_slug(),
                 data_flow.slice_slug(),
                 data_flow.datum(),
+                data_flow.source_kind(),
                 data_flow.source(),
                 data_flow.transformation(),
                 data_flow.target(),

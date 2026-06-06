@@ -252,6 +252,13 @@ pub struct DataFlowSource(String);
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
 )]
+pub struct DataFlowSourceKind(String);
+
+#[nutype(
+    sanitize(trim),
+    validate(not_empty),
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+)]
 pub struct TransformationSemantics(String);
 
 #[nutype(

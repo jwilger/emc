@@ -39,10 +39,10 @@ use crate::io::dto::{
     parse_command_input_source_description, parse_command_input_source_kind, parse_command_name,
     parse_connection_kind, parse_contract_kind_name, parse_control_name,
     parse_control_recovery_behavior, parse_covered_definition_name, parse_data_flow_source,
-    parse_data_flow_target, parse_datum_name, parse_datum_names, parse_event_attribute_name,
-    parse_event_attribute_source_field, parse_event_attribute_source_kind,
-    parse_event_attribute_source_name, parse_event_name, parse_event_names,
-    parse_model_description, parse_model_name, parse_navigation_target_name,
+    parse_data_flow_source_kind, parse_data_flow_target, parse_datum_name, parse_datum_names,
+    parse_event_attribute_name, parse_event_attribute_source_field,
+    parse_event_attribute_source_kind, parse_event_attribute_source_name, parse_event_name,
+    parse_event_names, parse_model_description, parse_model_name, parse_navigation_target_name,
     parse_navigation_target_names, parse_navigation_target_type, parse_outcome_label_name,
     parse_payload_contract_name, parse_project_name, parse_provenance_description,
     parse_read_model_derivation_rule, parse_read_model_field_source_kind, parse_read_model_name,
@@ -713,6 +713,9 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         "source": {
                             "type": "string"
                         },
+                        "source_kind": {
+                            "type": "string"
+                        },
                         "transformation": {
                             "type": "string"
                         },
@@ -723,7 +726,7 @@ fn tools_list_result() -> Result<Value, ShellError> {
                             "type": "string"
                         }
                     },
-                    "required": ["slice", "datum", "source", "transformation", "target", "bit_encoding"],
+                    "required": ["slice", "datum", "source", "source_kind", "transformation", "target", "bit_encoding"],
                     "additionalProperties": false
             })),
         ),
@@ -2252,6 +2255,14 @@ fn add_bit_level_data_flow_tool_text(request: &Value) -> Result<String, ShellErr
             parse_data_flow_source(raw_source)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
+    let source_kind = arguments
+        .get("source_kind")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires source_kind"))
+        .and_then(|raw_source_kind| {
+            parse_data_flow_source_kind(raw_source_kind)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
     let transformation = arguments
         .get("transformation")
         .and_then(Value::as_str)
@@ -2280,6 +2291,7 @@ fn add_bit_level_data_flow_tool_text(request: &Value) -> Result<String, ShellErr
     interpret_collect_reports(command::add_bit_level_data_flow(NewBitLevelDataFlow::new(
         slice_slug,
         datum,
+        source_kind,
         source,
         transformation,
         target,

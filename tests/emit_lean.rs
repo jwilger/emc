@@ -756,7 +756,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure BitLevelDataFlow where\n  datum : String\n  source : String\n  transformationSemantics : String\n  target : String\n  bitEncoding : String"
+                "structure BitLevelDataFlow where\n  datum : String\n  sourceKind : String\n  source : String\n  transformationSemantics : String\n  target : String\n  bitEncoding : String"
             ),
             "Lean slice artifacts must reserve formal space for bit-level source, transformation/projection, target, and encoding semantics"
         );
@@ -1214,7 +1214,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def bitLevelFlowCoversTarget (target : String) (datum : String) : Bool := sliceBitLevelDataFlows.any (fun flow => flow.target == target && flow.datum == datum && flow.source.isEmpty == false && flow.transformationSemantics.isEmpty == false && flow.bitEncoding.isEmpty == false)"
+                "def bitLevelFlowCoversTarget (target : String) (datum : String) : Bool := sliceBitLevelDataFlows.any (fun flow => flow.target == target && flow.datum == datum && flow.sourceKind.isEmpty == false && flow.source.isEmpty == false && flow.transformationSemantics.isEmpty == false && flow.bitEncoding.isEmpty == false)"
             ),
             "Lean slice artifacts must define bit-level data-flow coverage by target and datum"
         );
@@ -2282,7 +2282,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem sliceBitLevelDataFlowsAreStructured : sliceBitLevelDataFlows.all (fun flow => flow.datum.isEmpty == false && flow.source.isEmpty == false && flow.transformationSemantics.isEmpty == false && flow.target.isEmpty == false && flow.bitEncoding.isEmpty == false) = true := rfl"
+                "theorem sliceBitLevelDataFlowsAreStructured : sliceBitLevelDataFlows.all (fun flow => flow.datum.isEmpty == false && flow.sourceKind.isEmpty == false && flow.source.isEmpty == false && flow.transformationSemantics.isEmpty == false && flow.target.isEmpty == false && flow.bitEncoding.isEmpty == false) = true := rfl"
             ),
             "Lean slice artifacts must prove represented data-flow rows include source, transformation/projection, target, and bit encoding fields"
         );
