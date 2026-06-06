@@ -81,7 +81,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String) : Bool := control.1 == input.1 && control.2.2.2.2.1 == input.2.2.1 && control.2.2.2.2.2.1 == input.2.2.2.1"
+                "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := control.1 == input.1 && control.2.2.2.2.1 == input.2.2.1 && control.2.2.2.2.2.1 == input.2.2.2.1"
             ),
             "Lean project root must be able to prove controls provide target command inputs across composed slices"
         );
@@ -111,7 +111,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelCommandInputHasProvenance (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String) : Bool := input.2.2.2.2.2.1.isEmpty == false && input.2.2.2.2.2.2.1.isEmpty == false"
+                "def modelCommandInputHasProvenance (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, sourceDescription, provenanceChain, _, _, _, _, _, _, _, _, _, _) := input; sourceDescription.isEmpty == false && provenanceChain.isEmpty == false"
             ),
             "Lean project root must prove command inputs carry source descriptions and provenance chains"
         );

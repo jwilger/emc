@@ -75,7 +75,7 @@ A model is complete and valid only when all of these are true:
 
 ## Commands And Inputs
 
-- 🟡 Commands get inputs from invocation arguments and event streams.
+- ✅ Commands get inputs from invocation arguments and event streams.
 - ✅ Command inputs have reportable source chains.
 - ✅ Control-provided command inputs declare source and description.
 - ✅ Actor-provided inputs are visible in the information sketch.

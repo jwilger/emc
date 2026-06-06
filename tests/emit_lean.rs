@@ -738,7 +738,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure CommandInput where\n  name : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String"
+                "structure CommandInput where\n  name : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
             ),
             "Lean slice artifacts must represent command input source-chain provenance"
         );
@@ -1145,6 +1145,18 @@ mod tests {
                 "def commandInputsSourcedFromGeneratedValuesHaveCoordinates : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputGeneratedSourceHasCoordinates)"
             ),
             "Lean slice artifacts must prove generated command inputs have source coordinates"
+        );
+        assert!(
+            lean.contains(
+                "def commandInputInvocationArgumentSourceHasCoordinates (input : CommandInput) : Bool := input.sourceKind != \"invocation_argument\" || (input.invocationArgumentSourceName.isEmpty == false && input.invocationArgumentSourceField.isEmpty == false)"
+            ),
+            "Lean slice artifacts must require invocation-argument command inputs to name invocation argument coordinates"
+        );
+        assert!(
+            lean.contains(
+                "def commandInputsSourcedFromInvocationArgumentsHaveCoordinates : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputInvocationArgumentSourceHasCoordinates)"
+            ),
+            "Lean slice artifacts must prove invocation-argument command inputs have source coordinates"
         );
         assert!(
             lean.contains(
@@ -2303,6 +2315,12 @@ mod tests {
                 "theorem commandInputsTraceToInvocationSourcesIsStable : commandInputsTraceToInvocationSources = true := rfl"
             ),
             "Lean slice artifacts must prove current command inputs trace to modeled invocation sources"
+        );
+        assert!(
+            lean.contains(
+                "theorem commandInputsSourcedFromInvocationArgumentsHaveCoordinatesIsStable : commandInputsSourcedFromInvocationArgumentsHaveCoordinates = true := rfl"
+            ),
+            "Lean slice artifacts must prove current invocation-argument command inputs have source coordinates"
         );
         assert!(
             lean.contains(

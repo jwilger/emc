@@ -638,7 +638,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelCommandInputs :"),
             artifact_marker(format!(
-                "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String) := {lean_model_command_input_list}"
+                "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) := {lean_model_command_input_list}"
             )),
             lean_message.clone(),
         ),
@@ -806,7 +806,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelCommandInputHasProvenance"),
             artifact_marker(
-                "def modelCommandInputHasProvenance (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String) : Bool := input.2.2.2.2.2.1.isEmpty == false && input.2.2.2.2.2.2.1.isEmpty == false",
+                "def modelCommandInputHasProvenance (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, sourceDescription, provenanceChain, _, _, _, _, _, _, _, _, _, _) := input; sourceDescription.isEmpty == false && provenanceChain.isEmpty == false",
             ),
             lean_message.clone(),
         ),
@@ -814,7 +814,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelCommandInputTracesToInvocationSource"),
             artifact_marker(
-                "def modelCommandInputTracesToInvocationSource (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String) : Bool := input.2.2.2.2.1 == \"actor\" || (input.2.2.2.2.1 == \"event_stream_state\" && input.2.2.2.2.2.2.2.1.isEmpty == false && input.2.2.2.2.2.2.2.2.1.isEmpty == false) || (input.2.2.2.2.1 == \"external_payload\" && input.2.2.2.2.2.2.2.2.2.1.isEmpty == false && input.2.2.2.2.2.2.2.2.2.2.1.isEmpty == false) || (input.2.2.2.2.1 == \"generated\" && input.2.2.2.2.2.2.2.2.2.2.2.1.isEmpty == false && input.2.2.2.2.2.2.2.2.2.2.2.2.1.isEmpty == false) || (input.2.2.2.2.1 == \"session\" && input.2.2.2.2.2.2.2.2.2.2.2.2.2.1.isEmpty == false && input.2.2.2.2.2.2.2.2.2.2.2.2.2.2.isEmpty == false)",
+                "def modelCommandInputTracesToInvocationSource (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, sourceKind, _, _, eventStreamSourceEvent, eventStreamSourceAttribute, externalPayloadSourceName, externalPayloadSourceField, generatedSourceName, generatedSourceField, sessionSourceName, sessionSourceField, invocationArgumentSourceName, invocationArgumentSourceField) := input; sourceKind == \"actor\" || (sourceKind == \"event_stream_state\" && eventStreamSourceEvent.isEmpty == false && eventStreamSourceAttribute.isEmpty == false) || (sourceKind == \"external_payload\" && externalPayloadSourceName.isEmpty == false && externalPayloadSourceField.isEmpty == false) || (sourceKind == \"generated\" && generatedSourceName.isEmpty == false && generatedSourceField.isEmpty == false) || (sourceKind == \"session\" && sessionSourceName.isEmpty == false && sessionSourceField.isEmpty == false) || (sourceKind == \"invocation_argument\" && invocationArgumentSourceName.isEmpty == false && invocationArgumentSourceField.isEmpty == false)",
             ),
             lean_message.clone(),
         ),
@@ -830,7 +830,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelControlProvidesCommandInput"),
             artifact_marker(
-                "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String) : Bool := control.1 == input.1 && control.2.2.2.2.1 == input.2.2.1 && control.2.2.2.2.2.1 == input.2.2.2.1",
+                "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := control.1 == input.1 && control.2.2.2.2.1 == input.2.2.1 && control.2.2.2.2.2.1 == input.2.2.2.1",
             ),
             lean_message.clone(),
         ),
@@ -1217,7 +1217,7 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  type ModelCommandInput ="),
             artifact_marker(
-                "  type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str }",
+                "  type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str, invocationArgumentSourceName: str, invocationArgumentSourceField: str }",
             ),
             quint_message.clone(),
         ),
@@ -1763,7 +1763,7 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  def modelCommandInputTracesToInvocationSource"),
             artifact_marker(
-                "  def modelCommandInputTracesToInvocationSource(input) = input.sourceKind == \"actor\" or (input.sourceKind == \"event_stream_state\" and input.eventStreamSourceEvent != \"\" and input.eventStreamSourceAttribute != \"\") or (input.sourceKind == \"external_payload\" and input.externalPayloadSourceName != \"\" and input.externalPayloadSourceField != \"\") or (input.sourceKind == \"generated\" and input.generatedSourceName != \"\" and input.generatedSourceField != \"\") or (input.sourceKind == \"session\" and input.sessionSourceName != \"\" and input.sessionSourceField != \"\")",
+                "  def modelCommandInputTracesToInvocationSource(input) = input.sourceKind == \"actor\" or (input.sourceKind == \"event_stream_state\" and input.eventStreamSourceEvent != \"\" and input.eventStreamSourceAttribute != \"\") or (input.sourceKind == \"external_payload\" and input.externalPayloadSourceName != \"\" and input.externalPayloadSourceField != \"\") or (input.sourceKind == \"generated\" and input.generatedSourceName != \"\" and input.generatedSourceField != \"\") or (input.sourceKind == \"session\" and input.sessionSourceName != \"\" and input.sessionSourceField != \"\") or (input.sourceKind == \"invocation_argument\" and input.invocationArgumentSourceName != \"\" and input.invocationArgumentSourceField != \"\")",
             ),
             quint_message.clone(),
         ),
@@ -3433,7 +3433,7 @@ fn lean_model_command_input_list(project_command_inputs: &[ProjectCommandInput])
             .into_iter()
             .map(|command_input| {
                 format!(
-                    "({}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {}, {}, {}, {}, {})",
+                    "({}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
                     json_string(command_input.workflow_slug()),
                     json_string(command_input.slice_slug()),
                     json_string(command_input.command()),
@@ -3448,7 +3448,9 @@ fn lean_model_command_input_list(project_command_inputs: &[ProjectCommandInput])
                     json_string(command_input.generated_source_name()),
                     json_string(command_input.generated_source_field()),
                     json_string(command_input.session_source_name()),
-                    json_string(command_input.session_source_field())
+                    json_string(command_input.session_source_field()),
+                    json_string(command_input.invocation_argument_source_name()),
+                    json_string(command_input.invocation_argument_source_field())
                 )
             })
             .collect::<Vec<_>>()
@@ -3465,7 +3467,7 @@ fn quint_model_command_input_list(project_command_inputs: &[ProjectCommandInput]
             .into_iter()
             .map(|command_input| {
                 format!(
-                    "{{ workflow: {}, slice: {}, command: {}, input: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {}, externalPayloadSourceName: {}, externalPayloadSourceField: {}, generatedSourceName: {}, generatedSourceField: {}, sessionSourceName: {}, sessionSourceField: {} }}",
+                    "{{ workflow: {}, slice: {}, command: {}, input: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {}, externalPayloadSourceName: {}, externalPayloadSourceField: {}, generatedSourceName: {}, generatedSourceField: {}, sessionSourceName: {}, sessionSourceField: {}, invocationArgumentSourceName: {}, invocationArgumentSourceField: {} }}",
                     json_string(command_input.workflow_slug()),
                     json_string(command_input.slice_slug()),
                     json_string(command_input.command()),
@@ -3480,7 +3482,9 @@ fn quint_model_command_input_list(project_command_inputs: &[ProjectCommandInput]
                     json_string(command_input.generated_source_name()),
                     json_string(command_input.generated_source_field()),
                     json_string(command_input.session_source_name()),
-                    json_string(command_input.session_source_field())
+                    json_string(command_input.session_source_field()),
+                    json_string(command_input.invocation_argument_source_name()),
+                    json_string(command_input.invocation_argument_source_field())
                 )
             })
             .collect::<Vec<_>>()
@@ -4899,7 +4903,7 @@ fn digest_command_inputs(project_command_inputs: &[ProjectCommandInput]) -> Stri
         .into_iter()
         .map(|command_input| {
             format!(
-                "{}/{}/{}/{}@{}#{}#{}#{}#{}#{}#{}#{}#{}#{}#{}",
+                "{}/{}/{}/{}@{}#{}#{}#{}#{}#{}#{}#{}#{}#{}#{}#{}#{}",
                 command_input.workflow_slug(),
                 command_input.slice_slug(),
                 command_input.command(),
@@ -4914,7 +4918,9 @@ fn digest_command_inputs(project_command_inputs: &[ProjectCommandInput]) -> Stri
                 command_input.generated_source_name(),
                 command_input.generated_source_field(),
                 command_input.session_source_name(),
-                command_input.session_source_field()
+                command_input.session_source_field(),
+                command_input.invocation_argument_source_name(),
+                command_input.invocation_argument_source_field()
             )
         })
         .collect::<Vec<_>>()

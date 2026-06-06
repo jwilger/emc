@@ -827,6 +827,9 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         "source_session": {
                             "type": "string"
                         },
+                        "source_argument": {
+                            "type": "string"
+                        },
                         "source_field": {
                             "type": "string"
                         },
@@ -2492,6 +2495,12 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         .map(parse_event_attribute_source_name)
         .transpose()
         .map_err(|error| ShellError::message(error.to_string()))?;
+    let source_argument = arguments
+        .get("source_argument")
+        .and_then(Value::as_str)
+        .map(parse_event_attribute_source_name)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
     let source_field = arguments
         .get("source_field")
         .and_then(Value::as_str)
@@ -2513,49 +2522,58 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         source_payload,
         source_name,
         source_session,
+        source_argument,
         source_field,
     ) {
-        (Some(event), Some(attribute), None, None, None, None) => {
+        (Some(event), Some(attribute), None, None, None, None, None) => {
             command_input.with_event_stream_source(event, attribute)
         }
-        (None, None, Some(payload), None, None, Some(field)) => {
+        (None, None, Some(payload), None, None, None, Some(field)) => {
             command_input.with_external_payload_source(payload, field)
         }
-        (None, None, None, Some(source), None, Some(field)) => {
+        (None, None, None, Some(source), None, None, Some(field)) => {
             command_input.with_generated_source(source, field)
         }
-        (None, None, None, None, Some(session), Some(field)) => {
+        (None, None, None, None, Some(session), None, Some(field)) => {
             command_input.with_session_source(session, field)
         }
-        (None, None, None, None, None, None) => command_input,
-        (Some(_), None, None, None, None, None) => {
+        (None, None, None, None, None, Some(argument), Some(field)) => {
+            command_input.with_invocation_argument_source(argument, field)
+        }
+        (None, None, None, None, None, None, None) => command_input,
+        (Some(_), None, None, None, None, None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_attribute when source_event is provided",
             ));
         }
-        (None, Some(_), None, None, None, None) => {
+        (None, Some(_), None, None, None, None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_event when source_attribute is provided",
             ));
         }
-        (None, None, Some(_), None, None, None) => {
+        (None, None, Some(_), None, None, None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_field when source_payload is provided",
             ));
         }
-        (None, None, None, Some(_), None, None) => {
+        (None, None, None, Some(_), None, None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_field when source_name is provided",
             ));
         }
-        (None, None, None, None, Some(_), None) => {
+        (None, None, None, None, Some(_), None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_field when source_session is provided",
             ));
         }
-        (None, None, None, None, None, Some(_)) => {
+        (None, None, None, None, None, Some(_), None) => {
             return Err(ShellError::message(
-                "add_command_definition requires source_payload, source_name, or source_session when source_field is provided",
+                "add_command_definition requires source_field when source_argument is provided",
+            ));
+        }
+        (None, None, None, None, None, None, Some(_)) => {
+            return Err(ShellError::message(
+                "add_command_definition requires source_payload, source_name, source_session, or source_argument when source_field is provided",
             ));
         }
         _ => {
