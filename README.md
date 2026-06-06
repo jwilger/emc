@@ -29,7 +29,7 @@ through EMC operations that emit Lean4 and Quint. A model is acceptable only whe
 EMC has a Rust CLI, MCP stdio and HTTP entrypoints, review-gate checks, Lean4
 and Quint artifact emission, strict lint guardrails, and package smoke tests.
 The formal metamodel is still being expanded toward the rule inventory in
-[docs/event-model/formal-modeling-rules.md](https://git.johnwilger.com/Slipstream/emc/src/branch/main/docs/event-model/formal-modeling-rules.md).
+[docs/event-model/formal-modeling-rules.md](docs/event-model/formal-modeling-rules.md).
 
 ## Why Lean4 and Quint
 
