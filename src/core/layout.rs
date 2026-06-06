@@ -1136,6 +1136,46 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelOutcomeBranchIsModeled"),
+            artifact_marker(
+                "def modelOutcomeBranchIsModeled (outcome : String × String × String × List String × Bool) : Bool := let (_, _, outcomeName, events, _) := outcome; outcomeName.isEmpty == false && events.isEmpty == false",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelCommandErrorRecoveryIsModeled"),
+            artifact_marker(
+                "def modelCommandErrorRecoveryIsModeled (commandError : String × String × String × String × String × String) : Bool := let (_, _, command, error, scenario, recovery) := commandError; command.isEmpty == false && error.isEmpty == false && scenario.isEmpty == false && recovery.isEmpty == false",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelViewControlNavigationTargetIsModeled"),
+            artifact_marker(
+                "def modelViewControlNavigationTargetIsModeled (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, _, _, _, _, _, _, _, _, _, navigationType, navigationTarget, externalWorkflow, externalSystem, handoffContract) := control; navigationType.isEmpty || ((navigationType == \"modeled_view\" || navigationType == \"local_view_state\") && navigationTarget.isEmpty == false) || (navigationType == \"external_workflow\" && externalWorkflow.isEmpty == false) || (navigationType == \"external_system\" && externalSystem.isEmpty == false && handoffContract.isEmpty == false)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelExternalBoundaryContractIsModeled"),
+            artifact_marker(
+                "def modelExternalBoundaryContractIsModeled (translation : String × String × String × String × String × String) : Bool := let (_, _, translationName, externalEvent, payloadContract, command) := translation; translationName.isEmpty == false && externalEvent.isEmpty == false && payloadContract.isEmpty == false && command.isEmpty == false",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("def modelWorkflowBehaviorSurfaceIsComplete"),
+            artifact_marker(
+                "def modelWorkflowBehaviorSurfaceIsComplete : Bool := modelOutcomes.all modelOutcomeBranchIsModeled && modelCommandErrors.all modelCommandErrorRecoveryIsModeled && modelViewControls.all modelViewControlNavigationTargetIsModeled && modelTranslationDefinitions.all modelExternalBoundaryContractIsModeled",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("theorem modelIdentityIsStable"),
             artifact_marker(format!(
                 "theorem modelIdentityIsStable : modelName = {} := rfl",
@@ -1190,6 +1230,14 @@ fn project_root_effects(
             artifact_marker("theorem modelWorkflowCompositionStructureComplete"),
             artifact_marker(
                 "theorem modelWorkflowCompositionStructureComplete : (modelSlices.all modelSliceBelongsToDeclaredWorkflow && modelSlices.all modelSliceHasModule && modelSliceModules.all modelSliceModuleBelongsToDeclaredSlice && modelWorkflows.all modelWorkflowHasCompositionStructure) = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelWorkflowBehaviorSurfaceIsCompleteIsStable"),
+            artifact_marker(
+                "theorem modelWorkflowBehaviorSurfaceIsCompleteIsStable : modelWorkflowBehaviorSurfaceIsComplete = true := rfl",
             ),
             lean_message.clone(),
         ),
@@ -2707,6 +2755,46 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  def modelOutcomeBranchIsModeled"),
+            artifact_marker(
+                "  def modelOutcomeBranchIsModeled(outcome) = outcome.outcome != \"\" and outcome.events.length() > 0",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelCommandErrorRecoveryIsModeled"),
+            artifact_marker(
+                "  def modelCommandErrorRecoveryIsModeled(commandError) = commandError.command != \"\" and commandError.error != \"\" and commandError.scenario != \"\" and commandError.recovery != \"\"",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelViewControlNavigationTargetIsModeled"),
+            artifact_marker(
+                "  def modelViewControlNavigationTargetIsModeled(control) = control.navigationType == \"\" or ((control.navigationType == \"modeled_view\" or control.navigationType == \"local_view_state\") and control.navigationTarget != \"\") or (control.navigationType == \"external_workflow\" and control.externalWorkflow != \"\") or (control.navigationType == \"external_system\" and control.externalSystem != \"\" and control.handoffContract != \"\")",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  def modelExternalBoundaryContractIsModeled"),
+            artifact_marker(
+                "  def modelExternalBoundaryContractIsModeled(translation) = translation.translation != \"\" and translation.externalEvent != \"\" and translation.payloadContract != \"\" and translation.command != \"\"",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelWorkflowBehaviorSurfaceIsComplete ="),
+            artifact_marker(
+                "  val modelWorkflowBehaviorSurfaceIsComplete = modelOutcomes.select(outcome => modelOutcomeBranchIsModeled(outcome)).length() == modelOutcomes.length() and modelCommandErrors.select(commandError => modelCommandErrorRecoveryIsModeled(commandError)).length() == modelCommandErrors.length() and modelViewControls.select(control => modelViewControlNavigationTargetIsModeled(control)).length() == modelViewControls.length() and modelTranslationDefinitions.select(translation => modelExternalBoundaryContractIsModeled(translation)).length() == modelTranslationDefinitions.length()",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  val modelBoardElementsAreDeclared ="),
             artifact_marker(format!(
                 "  val modelBoardElementsAreDeclared = modelBoardElements.length() == {board_element_count}"
@@ -3003,6 +3091,12 @@ fn project_root_effects(
             quint_config_path.clone(),
             artifact_marker("    \"modelWorkflowCompositionStructureComplete\""),
             artifact_marker("    \"modelWorkflowCompositionStructureComplete\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelWorkflowBehaviorSurfaceIsComplete\""),
+            artifact_marker("    \"modelWorkflowBehaviorSurfaceIsComplete\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(

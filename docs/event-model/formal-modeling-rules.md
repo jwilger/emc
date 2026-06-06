@@ -29,7 +29,7 @@ A model is complete and valid only when all of these are true:
 - ✅ Every command input traces to actor input, session value, generated value,
   external payload, or event-stream-derived state.
 - ✅ Every state change is justified by emitted or observed events.
-- 🟡 Every workflow branch, outcome, command error, navigation target, external
+- ✅ Every workflow branch, outcome, command error, navigation target, external
   boundary, and recovery path is modeled.
 - ✅ Lean verification passes for every Lean module with `lake env lean`.
 - ✅ Quint typechecking and invariant verification pass for every Quint module.

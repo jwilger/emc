@@ -93,7 +93,7 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
                 )
                 .replace(
                     "    \"modelScenarioDefinitionsHaveGwt\",\n",
-                    "    \"modelWorkflowCompositionStructureComplete\",\n    \"modelScenarioDefinitionsHaveGwt\",\n",
+                    "    \"modelWorkflowCompositionStructureComplete\",\n    \"modelWorkflowBehaviorSurfaceIsComplete\",\n    \"modelScenarioDefinitionsHaveGwt\",\n",
                 ),
             ),
         ),
@@ -157,7 +157,11 @@ fn emit_lean_project_root(
     )
     .replace(
         "\ntheorem modelScenariosAreDeclared",
-        "\ntheorem modelWorkflowCompositionStructureComplete : (modelSlices.all modelSliceBelongsToDeclaredWorkflow && modelSlices.all modelSliceHasModule && modelSliceModules.all modelSliceModuleBelongsToDeclaredSlice && modelWorkflows.all modelWorkflowHasCompositionStructure) = true := rfl\n\ntheorem modelScenariosAreDeclared",
+        "\ntheorem modelWorkflowCompositionStructureComplete : (modelSlices.all modelSliceBelongsToDeclaredWorkflow && modelSlices.all modelSliceHasModule && modelSliceModules.all modelSliceModuleBelongsToDeclaredSlice && modelWorkflows.all modelWorkflowHasCompositionStructure) = true := rfl\n\ntheorem modelWorkflowBehaviorSurfaceIsCompleteIsStable : modelWorkflowBehaviorSurfaceIsComplete = true := rfl\n\ntheorem modelScenariosAreDeclared",
+    )
+    .replace(
+        "\ntheorem modelIdentityIsStable",
+        "\ndef modelOutcomeBranchIsModeled (outcome : String × String × String × List String × Bool) : Bool := let (_, _, outcomeName, events, _) := outcome; outcomeName.isEmpty == false && events.isEmpty == false\n\ndef modelCommandErrorRecoveryIsModeled (commandError : String × String × String × String × String × String) : Bool := let (_, _, command, error, scenario, recovery) := commandError; command.isEmpty == false && error.isEmpty == false && scenario.isEmpty == false && recovery.isEmpty == false\n\ndef modelViewControlNavigationTargetIsModeled (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, _, _, _, _, _, _, _, _, _, navigationType, navigationTarget, externalWorkflow, externalSystem, handoffContract) := control; navigationType.isEmpty || ((navigationType == \"modeled_view\" || navigationType == \"local_view_state\") && navigationTarget.isEmpty == false) || (navigationType == \"external_workflow\" && externalWorkflow.isEmpty == false) || (navigationType == \"external_system\" && externalSystem.isEmpty == false && handoffContract.isEmpty == false)\n\ndef modelExternalBoundaryContractIsModeled (translation : String × String × String × String × String × String) : Bool := let (_, _, translationName, externalEvent, payloadContract, command) := translation; translationName.isEmpty == false && externalEvent.isEmpty == false && payloadContract.isEmpty == false && command.isEmpty == false\n\ndef modelWorkflowBehaviorSurfaceIsComplete : Bool := modelOutcomes.all modelOutcomeBranchIsModeled && modelCommandErrors.all modelCommandErrorRecoveryIsModeled && modelViewControls.all modelViewControlNavigationTargetIsModeled && modelTranslationDefinitions.all modelExternalBoundaryContractIsModeled\n\ntheorem modelIdentityIsStable",
     )
     .replace(
         "def modelDataFlowIsBitComplete (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, datum, sourceKind, source, transformation, target, bitEncoding) := dataFlow; datum.isEmpty == false && sourceKind.isEmpty == false && source.isEmpty == false && transformation.isEmpty == false && target.isEmpty == false && bitEncoding.isEmpty == false",
@@ -216,6 +220,10 @@ fn emit_quint_project_root(
     .replace(
         "\n  val modelScenariosAreDeclared",
         "\n  val modelWorkflowCompositionStructureComplete = modelSlices.select(modelSlice => modelSliceBelongsToDeclaredWorkflow(modelSlice)).length() == modelSlices.length() and modelSlices.select(modelSlice => modelSliceHasModule(modelSlice)).length() == modelSlices.length() and modelSliceModules.select(sliceModule => modelSliceModuleBelongsToDeclaredSlice(sliceModule)).length() == modelSliceModules.length() and modelWorkflows.select(workflow => modelWorkflowHasCompositionStructure(workflow)).length() == modelWorkflows.length()\n  val modelScenariosAreDeclared",
+    )
+    .replace(
+        "val modelViewControlsProvideCommandInputs = modelViewControls.select(control => modelViewControlProvidesEveryCommandInput(control)).length() == modelViewControls.length()",
+        "val modelViewControlsProvideCommandInputs = modelViewControls.select(control => modelViewControlProvidesEveryCommandInput(control)).length() == modelViewControls.length()\n  def modelOutcomeBranchIsModeled(outcome) = outcome.outcome != \"\" and outcome.events.length() > 0\n  def modelCommandErrorRecoveryIsModeled(commandError) = commandError.command != \"\" and commandError.error != \"\" and commandError.scenario != \"\" and commandError.recovery != \"\"\n  def modelViewControlNavigationTargetIsModeled(control) = control.navigationType == \"\" or ((control.navigationType == \"modeled_view\" or control.navigationType == \"local_view_state\") and control.navigationTarget != \"\") or (control.navigationType == \"external_workflow\" and control.externalWorkflow != \"\") or (control.navigationType == \"external_system\" and control.externalSystem != \"\" and control.handoffContract != \"\")\n  def modelExternalBoundaryContractIsModeled(translation) = translation.translation != \"\" and translation.externalEvent != \"\" and translation.payloadContract != \"\" and translation.command != \"\"\n  val modelWorkflowBehaviorSurfaceIsComplete = modelOutcomes.select(outcome => modelOutcomeBranchIsModeled(outcome)).length() == modelOutcomes.length() and modelCommandErrors.select(commandError => modelCommandErrorRecoveryIsModeled(commandError)).length() == modelCommandErrors.length() and modelViewControls.select(control => modelViewControlNavigationTargetIsModeled(control)).length() == modelViewControls.length() and modelTranslationDefinitions.select(translation => modelExternalBoundaryContractIsModeled(translation)).length() == modelTranslationDefinitions.length()",
     )
     .replace(
         "val modelDataFlows: List[ModelDataFlow] = []",
