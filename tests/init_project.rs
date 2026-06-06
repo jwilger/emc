@@ -141,6 +141,12 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "flowWorkflow == workflow && flowSlice == slice && flowDatum == datum && flowTarget == target && modelDataFlowIsBitComplete dataFlow"
+            ),
+            "Lean project root must require the matching data-flow coverage row to carry complete source, transformation, target, and bit encoding semantics"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
                 "theorem modelMeaningfulDataFlowsAreCovered : modelMeaningfulDataHasModeledDataFlows = true := rfl"
             ),
             "Lean project root must prove every meaningful datum has a modeled bit-level data flow"
@@ -236,6 +242,12 @@ mod tests {
                 "def modelDataFlowCoversDatumTarget(workflow, sliceName, datum, target) ="
             ),
             "Quint project root must define target-aware datum-to-data-flow coverage in the formal artifact"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "dataFlow.workflow == workflow and dataFlow.slice == sliceName and dataFlow.datum == datum and dataFlow.target == target and modelDataFlowIsBitComplete(dataFlow)"
+            ),
+            "Quint project root must require the matching data-flow coverage row to carry complete source, transformation, target, and bit encoding semantics"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
