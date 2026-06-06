@@ -2264,6 +2264,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def recognizedSliceKind : Bool := sliceKind == \"state_view\" || sliceKind == \"state_change\" || sliceKind == \"translation\" || sliceKind == \"automation\""
+            ),
+            "Lean slice artifacts must reject unrecognized slice kinds"
+        );
+        assert!(
+            lean.contains(
+                "def sliceRepresentsOneCoherentModelUnit : Bool := recognizedSliceKind && stateViewSlicesDoNotOwnCommands && stateViewSlicesOwnViews && stateViewSlicesOwnReadModels && stateViewSlicesOwnProjectionPaths && stateChangeSlicesOwnCommands && stateChangeSlicesOwnEvents && stateChangeSlicesOwnOutcomes && stateChangeSlicesOwnErrors && stateChangeSlicesDoNotOwnReadModelsOrViews && stateChangeSlicesDoNotOwnAutomationsOrTranslations && stateChangeSlicesDoNotOwnControlsOrSketches && translationSlicesDeclareExternalContracts && externalBoundariesHavePayloadContractsAndFieldProvenance && translationsTargetKnownCommands && translationsReferenceObservedExternalEvents && translationSlicesDoNotOwnViews && automationSlicesDeclareTriggers && automationSlicesRepresentOneReaction && automationsIssueKnownCommands && automationsHandleCommandErrors"
+            ),
+            "Lean slice artifacts must expose one coherent model-unit proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def sliceHasLocallyEmittedEvent : Bool := sliceEvents.isEmpty == false || sliceEventDefinitions.any (fun event => event.observed == false && event.shared == false)"
             ),
             "Lean slice artifacts must count locally emitted formal event definitions"
@@ -2841,6 +2853,12 @@ mod tests {
                 "theorem translationSlicesDoNotOwnViewsIsStable : translationSlicesDoNotOwnViews = true := rfl"
             ),
             "Lean slice artifacts must prove current translation slices do not own views"
+        );
+        assert!(
+            lean.contains(
+                "theorem sliceRepresentsOneCoherentModelUnitIsStable : sliceRepresentsOneCoherentModelUnit = true := by\n  native_decide"
+            ),
+            "Lean slice artifacts must prove current slices satisfy one coherent model-unit shape"
         );
         assert!(
             lean.contains(
