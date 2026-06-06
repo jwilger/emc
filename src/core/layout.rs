@@ -840,6 +840,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
+            artifact_marker("def modelDataFlowSourceBitEncodingMatchesModeledSource"),
+            artifact_marker(
+                "def modelDataFlowSourceBitEncodingMatchesModeledSource (dataFlow : String × String × String × String × String × String × String) : Bool := let (workflow, slice, datum, source, _, _, bitEncoding) := dataFlow; (modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source) == false) || modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, sourceTarget, sourceBitEncoding) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && sourceBitEncoding == bitEncoding && modelDataFlowIsBitComplete sourceFlow)",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
             artifact_marker("def modelCommandInputHasModeledDataFlow"),
             artifact_marker(
                 "def modelCommandInputHasModeledDataFlow (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetCommand, datum, _, _, _, _, _, _, _, _, _, _, _, _, _) := input; modelDataFlowCoversDatumTarget workflow slice datum targetCommand",
@@ -1094,6 +1102,14 @@ fn project_root_effects(
             artifact_marker("theorem modelMeaningfulDataFlowsAreCovered"),
             artifact_marker(
                 "theorem modelMeaningfulDataFlowsAreCovered : modelMeaningfulDataHasModeledDataFlows = true := rfl",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            lean_path.clone(),
+            artifact_marker("theorem modelDataFlowSourceBitEncodingsMatchModeledSources"),
+            artifact_marker(
+                "theorem modelDataFlowSourceBitEncodingsMatchModeledSources : modelDataFlows.all modelDataFlowSourceBitEncodingMatchesModeledSource = true := rfl",
             ),
             lean_message.clone(),
         ),
@@ -1957,6 +1973,14 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
+            artifact_marker("  def modelDataFlowSourceBitEncodingMatchesModeledSource"),
+            artifact_marker(
+                "  def modelDataFlowSourceBitEncodingMatchesModeledSource(dataFlow) = modelDataFlows.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source).length() == 0 or modelDataFlows.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and sourceFlow.bitEncoding == dataFlow.bitEncoding and modelDataFlowIsBitComplete(sourceFlow)).length() > 0",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
             artifact_marker("  def modelCommandInputHasModeledDataFlow"),
             artifact_marker(
                 "  def modelCommandInputHasModeledDataFlow(input) = modelDataFlowCoversDatumTarget(input.workflow, input.slice, input.input, input.command)",
@@ -2040,6 +2064,14 @@ fn project_root_effects(
             artifact_marker("  val modelMeaningfulDataFlowsAreCovered ="),
             artifact_marker(
                 "  val modelMeaningfulDataFlowsAreCovered = modelMeaningfulDataHasModeledDataFlows",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_path.clone(),
+            artifact_marker("  val modelDataFlowSourceBitEncodingsMatchModeledSources ="),
+            artifact_marker(
+                "  val modelDataFlowSourceBitEncodingsMatchModeledSources = modelDataFlows.select(dataFlow => modelDataFlowSourceBitEncodingMatchesModeledSource(dataFlow)).length() == modelDataFlows.length()",
             ),
             quint_message.clone(),
         ),
@@ -2609,6 +2641,12 @@ fn project_root_effects(
             quint_config_path.clone(),
             artifact_marker("    \"modelMeaningfulDataFlowsAreCovered\""),
             artifact_marker("    \"modelMeaningfulDataFlowsAreCovered\","),
+            quint_config_message.clone(),
+        ),
+        Effect::RequireCanonicalDeclaration(
+            quint_config_path.clone(),
+            artifact_marker("    \"modelDataFlowSourceBitEncodingsMatchModeledSources\""),
+            artifact_marker("    \"modelDataFlowSourceBitEncodingsMatchModeledSources\","),
             quint_config_message.clone(),
         ),
         Effect::RequireCanonicalDeclaration(
