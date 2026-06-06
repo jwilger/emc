@@ -215,7 +215,7 @@ A model is complete and valid only when all of these are true:
 - ✅ Every meaningful datum that flows through the system is modeled.
 - 🟡 Every datum has an original source.
 - ✅ Every datum has an explicit target.
-- 🟡 Every datum has transformation, projection, derivation, default, or absence
+- ✅ Every datum has transformation, projection, derivation, default, or absence
   semantics when applicable.
 - 🟡 Every datum has bit-level representation semantics sufficient to verify
   that no information is lost or invented.
