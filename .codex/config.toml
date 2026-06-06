@@ -1,0 +1,6 @@
+# Copyright 2026 John Wilger
+
+[mcp_servers.emc]
+command = "/home/jwilger/.build/cargo/debug/emc"
+args = ["mcp", "stdio"]
+cwd = "/home/jwilger/projects/emc"

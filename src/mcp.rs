@@ -11,7 +11,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 const DEFAULT_MCP_PROTOCOL_VERSION: &str = "2025-11-25";
-const SUPPORTED_MCP_PROTOCOL_VERSIONS: &[&str] = &["2025-11-25", "2024-11-05"];
+const SUPPORTED_MCP_PROTOCOL_VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "2024-11-05"];
 
 use crate::command;
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};

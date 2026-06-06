@@ -340,6 +340,30 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_stdio_echoes_current_codex_initialize_protocol() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        let output = Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(current_codex_initialize_request())
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let stdout = String::from_utf8(output)?;
+        let response = serde_json::from_str::<Value>(stdout.trim())?;
+
+        assert_eq!(
+            response["result"]["protocolVersion"],
+            Value::String("2025-06-18".to_owned())
+        );
+
+        Ok(())
+    }
+
     fn mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
@@ -383,5 +407,9 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"check_project\",\"arguments\":{}}}\n",
         )
+    }
+
+    fn current_codex_initialize_request() -> &'static str {
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{\"elicitation\":{}},\"clientInfo\":{\"name\":\"codex-mcp-client\",\"title\":\"Codex\",\"version\":\"0.137.0\"}}}\n"
     }
 }
