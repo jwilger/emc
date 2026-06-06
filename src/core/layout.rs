@@ -812,9 +812,9 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowCoversDatum"),
+            artifact_marker("def modelDataFlowCoversDatumTarget"),
             artifact_marker(
-                "def modelDataFlowCoversDatum (workflow : String) (slice : String) (datum : String) : Bool := modelDataFlows.any (fun dataFlow => let (flowWorkflow, flowSlice, flowDatum, _, _, _, _) := dataFlow; flowWorkflow == workflow && flowSlice == slice && flowDatum == datum)",
+                "def modelDataFlowCoversDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) : Bool := modelDataFlows.any (fun dataFlow => let (flowWorkflow, flowSlice, flowDatum, _, _, flowTarget, _) := dataFlow; flowWorkflow == workflow && flowSlice == slice && flowDatum == datum && flowTarget == target)",
             ),
             lean_message.clone(),
         ),
@@ -822,7 +822,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelCommandInputHasModeledDataFlow"),
             artifact_marker(
-                "def modelCommandInputHasModeledDataFlow (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, datum, _, _, _, _, _, _, _, _, _, _, _, _, _) := input; modelDataFlowCoversDatum workflow slice datum",
+                "def modelCommandInputHasModeledDataFlow (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetCommand, datum, _, _, _, _, _, _, _, _, _, _, _, _, _) := input; modelDataFlowCoversDatumTarget workflow slice datum targetCommand",
             ),
             lean_message.clone(),
         ),
@@ -830,7 +830,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelEventAttributeHasModeledDataFlow"),
             artifact_marker(
-                "def modelEventAttributeHasModeledDataFlow (eventAttribute : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, datum, _, _, _, _, _) := eventAttribute; modelDataFlowCoversDatum workflow slice datum",
+                "def modelEventAttributeHasModeledDataFlow (eventAttribute : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetEvent, datum, _, _, _, _, _) := eventAttribute; modelDataFlowCoversDatumTarget workflow slice datum targetEvent",
             ),
             lean_message.clone(),
         ),
@@ -838,7 +838,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelReadModelFieldHasModeledDataFlow"),
             artifact_marker(
-                "def modelReadModelFieldHasModeledDataFlow (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := let (workflow, slice, _, datum, _, _, _, _, _, _, _, _, _) := field; modelDataFlowCoversDatum workflow slice datum",
+                "def modelReadModelFieldHasModeledDataFlow (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := let (workflow, slice, targetReadModel, datum, _, _, _, _, _, _, _, _, _) := field; modelDataFlowCoversDatumTarget workflow slice datum targetReadModel",
             ),
             lean_message.clone(),
         ),
@@ -846,7 +846,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelViewFieldHasModeledDataFlow"),
             artifact_marker(
-                "def modelViewFieldHasModeledDataFlow (field : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, datum, _, _, _, _, _) := field; modelDataFlowCoversDatum workflow slice datum",
+                "def modelViewFieldHasModeledDataFlow (field : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetView, datum, _, _, _, _, _) := field; modelDataFlowCoversDatumTarget workflow slice datum targetView",
             ),
             lean_message.clone(),
         ),
@@ -854,7 +854,7 @@ fn project_root_effects(
             lean_path.clone(),
             artifact_marker("def modelExternalPayloadFieldHasModeledDataFlow"),
             artifact_marker(
-                "def modelExternalPayloadFieldHasModeledDataFlow (field : String × String × String × String × String × String) : Bool := let (workflow, slice, _, datum, _, _) := field; modelDataFlowCoversDatum workflow slice datum",
+                "def modelExternalPayloadFieldHasModeledDataFlow (field : String × String × String × String × String × String) : Bool := let (workflow, slice, targetPayload, datum, _, _) := field; modelDataFlowCoversDatumTarget workflow slice datum targetPayload",
             ),
             lean_message.clone(),
         ),
@@ -1801,9 +1801,9 @@ fn project_root_effects(
         ),
         Effect::RequireCanonicalDeclaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowCoversDatum"),
+            artifact_marker("  def modelDataFlowCoversDatumTarget"),
             artifact_marker(
-                "  def modelDataFlowCoversDatum(workflow, sliceName, datum) = modelDataFlows.select(dataFlow => dataFlow.workflow == workflow and dataFlow.slice == sliceName and dataFlow.datum == datum).length() > 0",
+                "  def modelDataFlowCoversDatumTarget(workflow, sliceName, datum, target) = modelDataFlows.select(dataFlow => dataFlow.workflow == workflow and dataFlow.slice == sliceName and dataFlow.datum == datum and dataFlow.target == target).length() > 0",
             ),
             quint_message.clone(),
         ),
@@ -1811,7 +1811,7 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  def modelCommandInputHasModeledDataFlow"),
             artifact_marker(
-                "  def modelCommandInputHasModeledDataFlow(input) = modelDataFlowCoversDatum(input.workflow, input.slice, input.input)",
+                "  def modelCommandInputHasModeledDataFlow(input) = modelDataFlowCoversDatumTarget(input.workflow, input.slice, input.input, input.command)",
             ),
             quint_message.clone(),
         ),
@@ -1819,7 +1819,7 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  def modelEventAttributeHasModeledDataFlow"),
             artifact_marker(
-                "  def modelEventAttributeHasModeledDataFlow(eventAttr) = modelDataFlowCoversDatum(eventAttr.workflow, eventAttr.slice, eventAttr.attribute)",
+                "  def modelEventAttributeHasModeledDataFlow(eventAttr) = modelDataFlowCoversDatumTarget(eventAttr.workflow, eventAttr.slice, eventAttr.attribute, eventAttr.event)",
             ),
             quint_message.clone(),
         ),
@@ -1827,7 +1827,7 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  def modelReadModelFieldHasModeledDataFlow"),
             artifact_marker(
-                "  def modelReadModelFieldHasModeledDataFlow(readModelField) = modelDataFlowCoversDatum(readModelField.workflow, readModelField.slice, readModelField.field)",
+                "  def modelReadModelFieldHasModeledDataFlow(readModelField) = modelDataFlowCoversDatumTarget(readModelField.workflow, readModelField.slice, readModelField.field, readModelField.readModel)",
             ),
             quint_message.clone(),
         ),
@@ -1835,7 +1835,7 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  def modelViewFieldHasModeledDataFlow"),
             artifact_marker(
-                "  def modelViewFieldHasModeledDataFlow(viewField) = modelDataFlowCoversDatum(viewField.workflow, viewField.slice, viewField.field)",
+                "  def modelViewFieldHasModeledDataFlow(viewField) = modelDataFlowCoversDatumTarget(viewField.workflow, viewField.slice, viewField.field, viewField.view)",
             ),
             quint_message.clone(),
         ),
@@ -1843,7 +1843,7 @@ fn project_root_effects(
             quint_path.clone(),
             artifact_marker("  def modelExternalPayloadFieldHasModeledDataFlow"),
             artifact_marker(
-                "  def modelExternalPayloadFieldHasModeledDataFlow(externalPayloadField) = modelDataFlowCoversDatum(externalPayloadField.workflow, externalPayloadField.slice, externalPayloadField.field)",
+                "  def modelExternalPayloadFieldHasModeledDataFlow(externalPayloadField) = modelDataFlowCoversDatumTarget(externalPayloadField.workflow, externalPayloadField.slice, externalPayloadField.field, externalPayloadField.externalPayload)",
             ),
             quint_message.clone(),
         ),
