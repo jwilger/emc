@@ -2486,6 +2486,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 source,
+                "--source-kind",
+                "original",
                 "--transformation",
                 transformation,
                 "--target",

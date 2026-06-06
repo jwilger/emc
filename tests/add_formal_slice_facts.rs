@@ -81,6 +81,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "actor input title field",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -116,7 +118,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def sliceBitLevelDataFlows : List BitLevelDataFlow := [{ datum := \"ticket_title\", source := \"actor input title field\", transformationSemantics := \"identity\", target := \"Capture ticket.ticket_title\", bitEncoding := \"UTF-8 string\" }]"
+                "def sliceBitLevelDataFlows : List BitLevelDataFlow := [{ datum := \"ticket_title\", sourceKind := \"original\", source := \"actor input title field\", transformationSemantics := \"identity\", target := \"Capture ticket.ticket_title\", bitEncoding := \"UTF-8 string\" }]"
             ),
             "Lean slice artifact must carry authored bit-level data flows"
         );
@@ -135,7 +137,7 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val sliceBitLevelDataFlows: List[BitLevelDataFlow] = [{ datum: \"ticket_title\", source: \"actor input title field\", transformationSemantics: \"identity\", target: \"Capture ticket.ticket_title\", bitEncoding: \"UTF-8 string\" }]"
+                "val sliceBitLevelDataFlows: List[BitLevelDataFlow] = [{ datum: \"ticket_title\", sourceKind: \"original\", source: \"actor input title field\", transformationSemantics: \"identity\", target: \"Capture ticket.ticket_title\", bitEncoding: \"UTF-8 string\" }]"
             ),
             "Quint slice artifact must carry authored bit-level data flows"
         );
@@ -198,7 +200,7 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDataFlows : List (String × String × String × String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"ticket_title\", \"actor input title field\", \"identity\", \"Capture ticket.ticket_title\", \"UTF-8 string\")]"
+                "def modelDataFlows : List (String × String × String × String × String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"ticket_title\", \"original\", \"actor input title field\", \"identity\", \"Capture ticket.ticket_title\", \"UTF-8 string\")]"
             ),
             "Lean project root must inventory authored bit-level data flows"
         );
@@ -209,13 +211,13 @@ mod tests {
         );
         assert!(
             quint_root.contains(
-                "type ModelDataFlow = { workflow: str, slice: str, datum: str, source: str, transformation: str, target: str, bitEncoding: str }"
+                "type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: str, source: str, transformation: str, target: str, bitEncoding: str }"
             ),
             "Quint project root must type authored bit-level data-flow inventory entries"
         );
         assert!(
             quint_root.contains(
-                "val modelDataFlows: List[ModelDataFlow] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", datum: \"ticket_title\", source: \"actor input title field\", transformation: \"identity\", target: \"Capture ticket.ticket_title\", bitEncoding: \"UTF-8 string\" }]"
+                "val modelDataFlows: List[ModelDataFlow] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", datum: \"ticket_title\", sourceKind: \"original\", source: \"actor input title field\", transformation: \"identity\", target: \"Capture ticket.ticket_title\", bitEncoding: \"UTF-8 string\" }]"
             ),
             "Quint project root must inventory authored bit-level data flows"
         );
@@ -225,13 +227,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/acceptance/Actor captures ticket,open-ticket/capture-ticket/contract/Ticket state projector records title;scenario-definitions=open-ticket/capture-ticket/acceptance/Actor captures ticket@ticket intake screen is open~the actor submits ticket details~the ticket details are visible for review#####,open-ticket/capture-ticket/contract/Ticket state projector records title@TicketCaptured is stored~ticket_state projects the event~ticket_state.title equals the event title###projector#ticket_state#;data-flows=open-ticket/capture-ticket/ticket_title@actor input title field~identity~Capture ticket.ticket_title#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/acceptance/Actor captures ticket,open-ticket/capture-ticket/contract/Ticket state projector records title;scenario-definitions=open-ticket/capture-ticket/acceptance/Actor captures ticket@ticket intake screen is open~the actor submits ticket details~the ticket details are visible for review#####,open-ticket/capture-ticket/contract/Ticket state projector records title@TicketCaptured is stored~ticket_state projects the event~ticket_state.title equals the event title###projector#ticket_state#;data-flows=open-ticket/capture-ticket/ticket_title@original:actor input title field~identity~Capture ticket.ticket_title#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\""
             ),
             "Lean project root digest must include authored scenario and bit-level data-flow inventories"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/acceptance/Actor captures ticket,open-ticket/capture-ticket/contract/Ticket state projector records title;scenario-definitions=open-ticket/capture-ticket/acceptance/Actor captures ticket@ticket intake screen is open~the actor submits ticket details~the ticket details are visible for review#####,open-ticket/capture-ticket/contract/Ticket state projector records title@TicketCaptured is stored~ticket_state projects the event~ticket_state.title equals the event title###projector#ticket_state#;data-flows=open-ticket/capture-ticket/ticket_title@actor input title field~identity~Capture ticket.ticket_title#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/acceptance/Actor captures ticket,open-ticket/capture-ticket/contract/Ticket state projector records title;scenario-definitions=open-ticket/capture-ticket/acceptance/Actor captures ticket@ticket intake screen is open~the actor submits ticket details~the ticket details are visible for review#####,open-ticket/capture-ticket/contract/Ticket state projector records title@TicketCaptured is stored~ticket_state projects the event~ticket_state.title equals the event title###projector#ticket_state#;data-flows=open-ticket/capture-ticket/ticket_title@original:actor input title field~identity~Capture ticket.ticket_title#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\""
             ),
             "Quint project root digest must include authored scenario and bit-level data-flow inventories"
         );
@@ -377,6 +379,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "actor input title field",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -398,6 +402,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "CaptureTicket.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -528,6 +534,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "actor input title field",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -698,6 +706,8 @@ mod tests {
                 "ticket_status",
                 "--source",
                 "TicketCaptured.status",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -719,6 +729,8 @@ mod tests {
                 "status",
                 "--source",
                 "ticket feed snapshot",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -908,6 +920,8 @@ mod tests {
                 "ticket_status",
                 "--source",
                 "TicketCaptured.status",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -929,6 +943,8 @@ mod tests {
                 "status",
                 "--source",
                 "ticket feed snapshot",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -1025,6 +1041,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "intake_webhook.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "transformation",
                 "--target",
@@ -1118,6 +1136,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "intake_webhook.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -1139,6 +1159,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "CaptureTicket.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -1290,6 +1312,8 @@ mod tests {
                 "ticket_id",
                 "--source",
                 "ticket_id_generator.uuid",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "transformation",
                 "--target",
@@ -1311,6 +1335,8 @@ mod tests {
                 "ticket_id",
                 "--source",
                 "CaptureTicket.ticket_id",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -1462,6 +1488,8 @@ mod tests {
                 "organization_id",
                 "--source",
                 "authenticated_session.organization_id",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -1483,6 +1511,8 @@ mod tests {
                 "organization_id",
                 "--source",
                 "CaptureTicket.organization_id",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -1634,6 +1664,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "CaptureTicket.title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -1655,6 +1687,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "CaptureTicket.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -1852,6 +1886,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "actor input title field",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -1873,6 +1909,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "CaptureTicket.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -1932,13 +1970,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Duplicate ticket is rejected;scenario-definitions=open-ticket/capture-ticket/contract/Duplicate ticket is rejected@tickets stream already contains duplicate title~CaptureTicket handles the duplicate title~DuplicateTicket is returned#tickets#tickets#command#CaptureTicket#DuplicateTicket;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=open-ticket/capture-ticket/CaptureTicket/DuplicateTicket@Duplicate ticket is rejected#retry;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value##CaptureTicket.ticket_title\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Duplicate ticket is rejected;scenario-definitions=open-ticket/capture-ticket/contract/Duplicate ticket is rejected@tickets stream already contains duplicate title~CaptureTicket handles the duplicate title~DuplicateTicket is returned#tickets#tickets#command#CaptureTicket#DuplicateTicket;data-flows=open-ticket/capture-ticket/ticket_title@original:CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:actor input title field~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=open-ticket/capture-ticket/CaptureTicket/DuplicateTicket@Duplicate ticket is rejected#retry;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value##CaptureTicket.ticket_title\""
             ),
             "Lean project root digest must include authored command error inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Duplicate ticket is rejected;scenario-definitions=open-ticket/capture-ticket/contract/Duplicate ticket is rejected@tickets stream already contains duplicate title~CaptureTicket handles the duplicate title~DuplicateTicket is returned#tickets#tickets#command#CaptureTicket#DuplicateTicket;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=open-ticket/capture-ticket/CaptureTicket/DuplicateTicket@Duplicate ticket is rejected#retry;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value##CaptureTicket.ticket_title\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Duplicate ticket is rejected;scenario-definitions=open-ticket/capture-ticket/contract/Duplicate ticket is rejected@tickets stream already contains duplicate title~CaptureTicket handles the duplicate title~DuplicateTicket is returned#tickets#tickets#command#CaptureTicket#DuplicateTicket;data-flows=open-ticket/capture-ticket/ticket_title@original:CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:actor input title field~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=open-ticket/capture-ticket/CaptureTicket/DuplicateTicket@Duplicate ticket is rejected#retry;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value##CaptureTicket.ticket_title\""
             ),
             "Quint project root digest must include authored command error inventory"
         );
@@ -2448,13 +2486,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=open-ticket/capture-ticket/intake_webhook;external-payload-fields=open-ticket/capture-ticket/intake_webhook/ticket_title@intake_webhook.ticket_title supplied by the external ticket intake system#UTF-8 string;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#actor_input#CaptureTicket.ticket_title\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@original:CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:actor input title field~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=open-ticket/capture-ticket/intake_webhook;external-payload-fields=open-ticket/capture-ticket/intake_webhook/ticket_title@intake_webhook.ticket_title supplied by the external ticket intake system#UTF-8 string;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#actor_input#CaptureTicket.ticket_title\""
             ),
             "Lean project root digest must include authored external payload inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=open-ticket/capture-ticket/intake_webhook;external-payload-fields=open-ticket/capture-ticket/intake_webhook/ticket_title@intake_webhook.ticket_title supplied by the external ticket intake system#UTF-8 string;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#actor_input#CaptureTicket.ticket_title\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@original:CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:actor input title field~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=open-ticket/capture-ticket/intake_webhook;external-payload-fields=open-ticket/capture-ticket/intake_webhook/ticket_title@intake_webhook.ticket_title supplied by the external ticket intake system#UTF-8 string;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#actor_input#CaptureTicket.ticket_title\""
             ),
             "Quint project root digest must include authored external payload inventory"
         );
@@ -2469,6 +2507,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "intake_webhook.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "transformation",
                 "--target",
@@ -2517,6 +2557,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "intake webhook ticket_title field",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "transformation",
                 "--target",
@@ -2645,13 +2687,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#actor_input#CaptureTicket.ticket_title\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@original:CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:actor input title field~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#actor_input#CaptureTicket.ticket_title\""
             ),
             "Lean project root digest must include authored outcome inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@actor input title field~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#actor_input#CaptureTicket.ticket_title\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@original:CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:actor input title field~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#actor_input.ticket_title#actor_input#CaptureTicket.ticket_title\""
             ),
             "Quint project root digest must include authored outcome inventory"
         );
@@ -2825,6 +2867,8 @@ mod tests {
                 "normalized_title",
                 "--source",
                 "TicketCaptured.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "derivation",
                 "--target",
@@ -2846,6 +2890,8 @@ mod tests {
                 "normalized_title",
                 "--source",
                 "ticket_state.normalized_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -2992,6 +3038,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "title field on the intake form",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -3013,6 +3061,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "CaptureTicket.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -3156,13 +3206,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@title field on the intake form~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value##CaptureTicket.ticket_title\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@original:CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:title field on the intake form~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value##CaptureTicket.ticket_title\""
             ),
             "Lean project root digest must include authored command, stream, event, and event attribute inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@title field on the intake form~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value##CaptureTicket.ticket_title\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@original:CaptureTicket.ticket_title~identity~TicketCaptured#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:title field on the intake form~identity~CaptureTicket#UTF-8 string;outcomes=open-ticket/capture-ticket/ticket_captured@TicketCaptured#false;command-errors=;commands=open-ticket/capture-ticket/CaptureTicket;command-inputs=open-ticket/capture-ticket/CaptureTicket/ticket_title@actor#title field on the intake form#actor keystrokes -> form field##########;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@command_input#ticket_title.value##CaptureTicket.ticket_title\""
             ),
             "Quint project root digest must include authored command, stream, event, and event attribute inventory"
         );
@@ -3258,6 +3308,8 @@ mod tests {
                 "tag",
                 "--source",
                 "tagging_policy.tag",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -3416,6 +3468,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "upstream event store",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -3437,6 +3491,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "TicketCaptured.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -3458,6 +3514,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "ticket_state.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -3552,13 +3610,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Ticket state projects title;scenario-definitions=open-ticket/capture-ticket/contract/Ticket state projects title@TicketCaptured carries ticket_title~ticket_state projects TicketCaptured~ticket_state.ticket_title equals TicketCaptured.ticket_title###projector#ticket_state#;data-flows=open-ticket/capture-ticket/ticket_title@TicketCaptured.ticket_title~projection~ticket_state#UTF-8 string,open-ticket/capture-ticket/ticket_title@ticket_state.ticket_title~projection~ticket_summary#UTF-8 string,open-ticket/capture-ticket/ticket_title@upstream event store~identity~TicketCaptured#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=open-ticket/capture-ticket/ticket_state;read-model-definitions=open-ticket/capture-ticket/ticket_state@false###;read-model-fields=open-ticket/capture-ticket/ticket_state/ticket_title@event_attribute#TicketCaptured.ticket_title######TicketCaptured.ticket_title;views=open-ticket/capture-ticket/ticket_summary;view-definitions=open-ticket/capture-ticket/ticket_summary@ticket_state#title-label##;view-controls=;board-elements=;board-connections=;view-fields=open-ticket/capture-ticket/ticket_summary/ticket_title@read_model#ticket_state.ticket_title#ticket_state.ticket_title#UTF-8 string;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#upstream_event_store.ticket_title#upstream_event_store#TicketCaptured.ticket_title\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Ticket state projects title;scenario-definitions=open-ticket/capture-ticket/contract/Ticket state projects title@TicketCaptured carries ticket_title~ticket_state projects TicketCaptured~ticket_state.ticket_title equals TicketCaptured.ticket_title###projector#ticket_state#;data-flows=open-ticket/capture-ticket/ticket_title@original:TicketCaptured.ticket_title~projection~ticket_state#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:ticket_state.ticket_title~projection~ticket_summary#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:upstream event store~identity~TicketCaptured#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=open-ticket/capture-ticket/ticket_state;read-model-definitions=open-ticket/capture-ticket/ticket_state@false###;read-model-fields=open-ticket/capture-ticket/ticket_state/ticket_title@event_attribute#TicketCaptured.ticket_title######TicketCaptured.ticket_title;views=open-ticket/capture-ticket/ticket_summary;view-definitions=open-ticket/capture-ticket/ticket_summary@ticket_state#title-label##;view-controls=;board-elements=;board-connections=;view-fields=open-ticket/capture-ticket/ticket_summary/ticket_title@read_model#ticket_state.ticket_title#ticket_state.ticket_title#UTF-8 string;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#upstream_event_store.ticket_title#upstream_event_store#TicketCaptured.ticket_title\""
             ),
             "Lean project root digest must include authored read model field inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Ticket state projects title;scenario-definitions=open-ticket/capture-ticket/contract/Ticket state projects title@TicketCaptured carries ticket_title~ticket_state projects TicketCaptured~ticket_state.ticket_title equals TicketCaptured.ticket_title###projector#ticket_state#;data-flows=open-ticket/capture-ticket/ticket_title@TicketCaptured.ticket_title~projection~ticket_state#UTF-8 string,open-ticket/capture-ticket/ticket_title@ticket_state.ticket_title~projection~ticket_summary#UTF-8 string,open-ticket/capture-ticket/ticket_title@upstream event store~identity~TicketCaptured#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=open-ticket/capture-ticket/ticket_state;read-model-definitions=open-ticket/capture-ticket/ticket_state@false###;read-model-fields=open-ticket/capture-ticket/ticket_state/ticket_title@event_attribute#TicketCaptured.ticket_title######TicketCaptured.ticket_title;views=open-ticket/capture-ticket/ticket_summary;view-definitions=open-ticket/capture-ticket/ticket_summary@ticket_state#title-label##;view-controls=;board-elements=;board-connections=;view-fields=open-ticket/capture-ticket/ticket_summary/ticket_title@read_model#ticket_state.ticket_title#ticket_state.ticket_title#UTF-8 string;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#upstream_event_store.ticket_title#upstream_event_store#TicketCaptured.ticket_title\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Ticket state projects title;scenario-definitions=open-ticket/capture-ticket/contract/Ticket state projects title@TicketCaptured carries ticket_title~ticket_state projects TicketCaptured~ticket_state.ticket_title equals TicketCaptured.ticket_title###projector#ticket_state#;data-flows=open-ticket/capture-ticket/ticket_title@original:TicketCaptured.ticket_title~projection~ticket_state#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:ticket_state.ticket_title~projection~ticket_summary#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:upstream event store~identity~TicketCaptured#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=open-ticket/capture-ticket/ticket_state;read-model-definitions=open-ticket/capture-ticket/ticket_state@false###;read-model-fields=open-ticket/capture-ticket/ticket_state/ticket_title@event_attribute#TicketCaptured.ticket_title######TicketCaptured.ticket_title;views=open-ticket/capture-ticket/ticket_summary;view-definitions=open-ticket/capture-ticket/ticket_summary@ticket_state#title-label##;view-controls=;board-elements=;board-connections=;view-fields=open-ticket/capture-ticket/ticket_summary/ticket_title@read_model#ticket_state.ticket_title#ticket_state.ticket_title#UTF-8 string;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#upstream_event_store.ticket_title#upstream_event_store#TicketCaptured.ticket_title\""
             ),
             "Quint project root digest must include authored read model field inventory"
         );
@@ -3771,6 +3829,8 @@ mod tests {
                 "normalized_title",
                 "--source",
                 "TicketCaptured.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "derivation",
                 "--target",
@@ -3792,6 +3852,8 @@ mod tests {
                 "has_ticket",
                 "--source",
                 "absence of TicketCaptured",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "default",
                 "--target",
@@ -3813,6 +3875,8 @@ mod tests {
                 "normalized_title",
                 "--source",
                 "ticket_state.normalized_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -4062,6 +4126,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "upstream event store",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -4114,6 +4180,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "TicketCaptured.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -4135,6 +4203,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "ticket_state.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -4254,13 +4324,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Ticket state projects title;scenario-definitions=open-ticket/capture-ticket/contract/Ticket state projects title@TicketCaptured carries ticket_title~ticket_state projects TicketCaptured~ticket_state.ticket_title equals TicketCaptured.ticket_title###projector#ticket_state#;data-flows=open-ticket/capture-ticket/ticket_title@TicketCaptured.ticket_title~projection~ticket_state#UTF-8 string,open-ticket/capture-ticket/ticket_title@ticket_state.ticket_title~projection~ticket_summary#UTF-8 string,open-ticket/capture-ticket/ticket_title@upstream event store~identity~TicketCaptured#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=open-ticket/capture-ticket/ticket_state;read-model-definitions=open-ticket/capture-ticket/ticket_state@false###;read-model-fields=open-ticket/capture-ticket/ticket_state/ticket_title@event_attribute#TicketCaptured.ticket_title######TicketCaptured.ticket_title;views=open-ticket/capture-ticket/ticket_summary;view-definitions=open-ticket/capture-ticket/ticket_summary@ticket_state#title-label##;view-controls=;board-elements=;board-connections=;view-fields=open-ticket/capture-ticket/ticket_summary/ticket_title@read_model#ticket_state.ticket_title#ticket_state.ticket_title#UTF-8 string;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#upstream_event_store.ticket_title#upstream_event_store#TicketCaptured.ticket_title\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Ticket state projects title;scenario-definitions=open-ticket/capture-ticket/contract/Ticket state projects title@TicketCaptured carries ticket_title~ticket_state projects TicketCaptured~ticket_state.ticket_title equals TicketCaptured.ticket_title###projector#ticket_state#;data-flows=open-ticket/capture-ticket/ticket_title@original:TicketCaptured.ticket_title~projection~ticket_state#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:ticket_state.ticket_title~projection~ticket_summary#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:upstream event store~identity~TicketCaptured#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=open-ticket/capture-ticket/ticket_state;read-model-definitions=open-ticket/capture-ticket/ticket_state@false###;read-model-fields=open-ticket/capture-ticket/ticket_state/ticket_title@event_attribute#TicketCaptured.ticket_title######TicketCaptured.ticket_title;views=open-ticket/capture-ticket/ticket_summary;view-definitions=open-ticket/capture-ticket/ticket_summary@ticket_state#title-label##;view-controls=;board-elements=;board-connections=;view-fields=open-ticket/capture-ticket/ticket_summary/ticket_title@read_model#ticket_state.ticket_title#ticket_state.ticket_title#UTF-8 string;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#upstream_event_store.ticket_title#upstream_event_store#TicketCaptured.ticket_title\""
             ),
             "Lean project root digest must include authored displayed datum inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Ticket state projects title;scenario-definitions=open-ticket/capture-ticket/contract/Ticket state projects title@TicketCaptured carries ticket_title~ticket_state projects TicketCaptured~ticket_state.ticket_title equals TicketCaptured.ticket_title###projector#ticket_state#;data-flows=open-ticket/capture-ticket/ticket_title@TicketCaptured.ticket_title~projection~ticket_state#UTF-8 string,open-ticket/capture-ticket/ticket_title@ticket_state.ticket_title~projection~ticket_summary#UTF-8 string,open-ticket/capture-ticket/ticket_title@upstream event store~identity~TicketCaptured#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=open-ticket/capture-ticket/ticket_state;read-model-definitions=open-ticket/capture-ticket/ticket_state@false###;read-model-fields=open-ticket/capture-ticket/ticket_state/ticket_title@event_attribute#TicketCaptured.ticket_title######TicketCaptured.ticket_title;views=open-ticket/capture-ticket/ticket_summary;view-definitions=open-ticket/capture-ticket/ticket_summary@ticket_state#title-label##;view-controls=;board-elements=;board-connections=;view-fields=open-ticket/capture-ticket/ticket_summary/ticket_title@read_model#ticket_state.ticket_title#ticket_state.ticket_title#UTF-8 string;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#upstream_event_store.ticket_title#upstream_event_store#TicketCaptured.ticket_title\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=open-ticket/capture-ticket/contract/Ticket state projects title;scenario-definitions=open-ticket/capture-ticket/contract/Ticket state projects title@TicketCaptured carries ticket_title~ticket_state projects TicketCaptured~ticket_state.ticket_title equals TicketCaptured.ticket_title###projector#ticket_state#;data-flows=open-ticket/capture-ticket/ticket_title@original:TicketCaptured.ticket_title~projection~ticket_state#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:ticket_state.ticket_title~projection~ticket_summary#UTF-8 string,open-ticket/capture-ticket/ticket_title@original:upstream event store~identity~TicketCaptured#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=open-ticket/capture-ticket/ticket_state;read-model-definitions=open-ticket/capture-ticket/ticket_state@false###;read-model-fields=open-ticket/capture-ticket/ticket_state/ticket_title@event_attribute#TicketCaptured.ticket_title######TicketCaptured.ticket_title;views=open-ticket/capture-ticket/ticket_summary;view-definitions=open-ticket/capture-ticket/ticket_summary@ticket_state#title-label##;view-controls=;board-elements=;board-connections=;view-fields=open-ticket/capture-ticket/ticket_summary/ticket_title@read_model#ticket_state.ticket_title#ticket_state.ticket_title#UTF-8 string;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=open-ticket/capture-ticket/tickets;events=open-ticket/capture-ticket/TicketCaptured@tickets;event-attributes=open-ticket/capture-ticket/TicketCaptured/ticket_title@generated#upstream_event_store.ticket_title#upstream_event_store#TicketCaptured.ticket_title\""
             ),
             "Quint project root digest must include authored displayed datum inventory"
         );
@@ -4352,6 +4422,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "ticket_state.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -4509,6 +4581,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "ticket_state.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -5156,6 +5230,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "intake_webhook.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -5278,13 +5354,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@intake_webhook.ticket_title~identity~intake_webhook_received#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=open-ticket/capture-ticket/intake-webhook-translator;translation-definitions=open-ticket/capture-ticket/intake-webhook-translator@intake_webhook_received#intake_webhook#CaptureTicket;external-payloads=open-ticket/capture-ticket/intake_webhook;external-payload-fields=open-ticket/capture-ticket/intake_webhook/ticket_title@intake_webhook.ticket_title supplied by the external ticket intake system#UTF-8 string;streams=open-ticket/capture-ticket/intake-webhooks;events=open-ticket/capture-ticket/intake_webhook_received@intake-webhooks;event-attributes=open-ticket/capture-ticket/intake_webhook_received/ticket_title@external_payload#intake_webhook.ticket_title##intake_webhook.ticket_title\""
+                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@original:intake_webhook.ticket_title~identity~intake_webhook_received#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=open-ticket/capture-ticket/intake-webhook-translator;translation-definitions=open-ticket/capture-ticket/intake-webhook-translator@intake_webhook_received#intake_webhook#CaptureTicket;external-payloads=open-ticket/capture-ticket/intake_webhook;external-payload-fields=open-ticket/capture-ticket/intake_webhook/ticket_title@intake_webhook.ticket_title supplied by the external ticket intake system#UTF-8 string;streams=open-ticket/capture-ticket/intake-webhooks;events=open-ticket/capture-ticket/intake_webhook_received@intake-webhooks;event-attributes=open-ticket/capture-ticket/intake_webhook_received/ticket_title@external_payload#intake_webhook.ticket_title##intake_webhook.ticket_title\""
             ),
             "Lean project root digest must include authored translation inventory"
         );
         assert!(
             quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@intake_webhook.ticket_title~identity~intake_webhook_received#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=open-ticket/capture-ticket/intake-webhook-translator;translation-definitions=open-ticket/capture-ticket/intake-webhook-translator@intake_webhook_received#intake_webhook#CaptureTicket;external-payloads=open-ticket/capture-ticket/intake_webhook;external-payload-fields=open-ticket/capture-ticket/intake_webhook/ticket_title@intake_webhook.ticket_title supplied by the external ticket intake system#UTF-8 string;streams=open-ticket/capture-ticket/intake-webhooks;events=open-ticket/capture-ticket/intake_webhook_received@intake-webhooks;event-attributes=open-ticket/capture-ticket/intake_webhook_received/ticket_title@external_payload#intake_webhook.ticket_title##intake_webhook.ticket_title\""
+                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=open-ticket/capture-ticket/ticket_title@original:intake_webhook.ticket_title~identity~intake_webhook_received#UTF-8 string;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=open-ticket/capture-ticket/intake-webhook-translator;translation-definitions=open-ticket/capture-ticket/intake-webhook-translator@intake_webhook_received#intake_webhook#CaptureTicket;external-payloads=open-ticket/capture-ticket/intake_webhook;external-payload-fields=open-ticket/capture-ticket/intake_webhook/ticket_title@intake_webhook.ticket_title supplied by the external ticket intake system#UTF-8 string;streams=open-ticket/capture-ticket/intake-webhooks;events=open-ticket/capture-ticket/intake_webhook_received@intake-webhooks;event-attributes=open-ticket/capture-ticket/intake_webhook_received/ticket_title@external_payload#intake_webhook.ticket_title##intake_webhook.ticket_title\""
             ),
             "Quint project root digest must include authored translation inventory"
         );
@@ -5299,6 +5375,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "intake_webhook.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "transformation",
                 "--target",
@@ -5915,6 +5993,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "actor input title field",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -5936,6 +6016,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "CaptureTicket.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -6038,6 +6120,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "upstream event store",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -6059,6 +6143,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "TicketCaptured.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -6194,6 +6280,8 @@ mod tests {
                 "parent_ticket_id",
                 "--source",
                 "upstream event store",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "identity",
                 "--target",
@@ -6215,6 +6303,8 @@ mod tests {
                 "ancestor_ticket_id",
                 "--source",
                 "TicketLinked.parent_ticket_id",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "derivation",
                 "--target",
@@ -6236,6 +6326,8 @@ mod tests {
                 "ancestor_ticket_id",
                 "--source",
                 "ticket_hierarchy.ancestor_ticket_id",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -6261,6 +6353,8 @@ mod tests {
                 "ticket_title",
                 "--source",
                 "ticket_state.ticket_title",
+                "--source-kind",
+                "original",
                 "--transformation",
                 "projection",
                 "--target",
@@ -6280,7 +6374,7 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_slice_scenario\",\"arguments\":{\"slice\":\"capture-ticket\",\"kind\":\"acceptance\",\"name\":\"Actor captures ticket\",\"given\":\"ticket intake screen is open\",\"when\":\"the actor submits ticket details\",\"then\":\"the ticket details are visible for review\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"actor input title field\",\"transformation\":\"identity\",\"target\":\"Capture ticket.ticket_title\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"actor input title field\",\"source_kind\":\"original\",\"transformation\":\"identity\",\"target\":\"Capture ticket.ticket_title\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
         )
     }
 
@@ -6307,8 +6401,8 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_event_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketCaptured\",\"stream\":\"tickets\",\"attribute\":\"status\",\"attribute_source\":\"generated\",\"attribute_source_name\":\"ticket_feed_snapshot\",\"attribute_source_field\":\"status\",\"generated_source_kind\":\"ticket_feed_snapshot\",\"attribute_provenance\":\"ticket feed status field\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_command_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"CaptureTicket\",\"input\":\"ticket_status\",\"input_source\":\"event_stream_state\",\"input_description\":\"current ticket status loaded from the ticket stream\",\"input_provenance\":\"TicketCaptured.status -> ticket_status\",\"emits\":\"TicketCaptured\",\"observes\":\"tickets\",\"source_event\":\"TicketCaptured\",\"source_attribute\":\"status\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"add_outcome_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"label\":\"ticket_captured\",\"events\":\"TicketCaptured\",\"externally_relevant\":false}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_status\",\"source\":\"TicketCaptured.status\",\"transformation\":\"projection\",\"target\":\"CaptureTicket\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"status\",\"source\":\"ticket feed snapshot\",\"transformation\":\"identity\",\"target\":\"TicketCaptured\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_status\",\"source\":\"TicketCaptured.status\",\"source_kind\":\"original\",\"transformation\":\"projection\",\"target\":\"CaptureTicket\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"status\",\"source\":\"ticket feed snapshot\",\"source_kind\":\"original\",\"transformation\":\"identity\",\"target\":\"TicketCaptured\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
         )
     }
 
@@ -6319,8 +6413,8 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_command_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"CaptureTicket\",\"input\":\"ticket_id\",\"input_source\":\"generated\",\"input_description\":\"ticket id allocated by the ticket id generator\",\"input_provenance\":\"ticket_id_generator.uuid -> CaptureTicket.ticket_id\",\"emits\":\"TicketCaptured\",\"source_name\":\"ticket_id_generator\",\"source_field\":\"uuid\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_event_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketCaptured\",\"stream\":\"tickets\",\"attribute\":\"ticket_id\",\"attribute_source\":\"command_input\",\"attribute_source_name\":\"ticket_id\",\"attribute_source_field\":\"value\",\"attribute_provenance\":\"CaptureTicket.ticket_id\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"add_outcome_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"label\":\"ticket_captured\",\"events\":\"TicketCaptured\",\"externally_relevant\":false}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_id\",\"source\":\"ticket_id_generator.uuid\",\"transformation\":\"transformation\",\"target\":\"CaptureTicket\",\"bit_encoding\":\"128-bit UUIDv7 string\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_id\",\"source\":\"CaptureTicket.ticket_id\",\"transformation\":\"identity\",\"target\":\"TicketCaptured\",\"bit_encoding\":\"128-bit UUIDv7 string\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_id\",\"source\":\"ticket_id_generator.uuid\",\"source_kind\":\"original\",\"transformation\":\"transformation\",\"target\":\"CaptureTicket\",\"bit_encoding\":\"128-bit UUIDv7 string\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_id\",\"source\":\"CaptureTicket.ticket_id\",\"source_kind\":\"original\",\"transformation\":\"identity\",\"target\":\"TicketCaptured\",\"bit_encoding\":\"128-bit UUIDv7 string\"}}}\n",
         )
     }
 
@@ -6331,8 +6425,8 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_command_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"CaptureTicket\",\"input\":\"organization_id\",\"input_source\":\"session\",\"input_description\":\"organization id loaded from authenticated session\",\"input_provenance\":\"authenticated_session.organization_id -> CaptureTicket.organization_id\",\"emits\":\"TicketCaptured\",\"source_session\":\"authenticated_session\",\"source_field\":\"organization_id\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_event_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketCaptured\",\"stream\":\"tickets\",\"attribute\":\"organization_id\",\"attribute_source\":\"command_input\",\"attribute_source_name\":\"organization_id\",\"attribute_source_field\":\"value\",\"attribute_provenance\":\"CaptureTicket.organization_id\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"add_outcome_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"label\":\"ticket_captured\",\"events\":\"TicketCaptured\",\"externally_relevant\":false}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"organization_id\",\"source\":\"authenticated_session.organization_id\",\"transformation\":\"projection\",\"target\":\"CaptureTicket\",\"bit_encoding\":\"128-bit organization UUID string\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"organization_id\",\"source\":\"CaptureTicket.organization_id\",\"transformation\":\"identity\",\"target\":\"TicketCaptured\",\"bit_encoding\":\"128-bit organization UUID string\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"organization_id\",\"source\":\"authenticated_session.organization_id\",\"source_kind\":\"original\",\"transformation\":\"projection\",\"target\":\"CaptureTicket\",\"bit_encoding\":\"128-bit organization UUID string\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"organization_id\",\"source\":\"CaptureTicket.organization_id\",\"source_kind\":\"original\",\"transformation\":\"identity\",\"target\":\"TicketCaptured\",\"bit_encoding\":\"128-bit organization UUID string\"}}}\n",
         )
     }
 
@@ -6343,8 +6437,8 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_command_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"CaptureTicket\",\"input\":\"ticket_title\",\"input_source\":\"invocation_argument\",\"input_description\":\"ticket title supplied by the command invocation\",\"input_provenance\":\"invoke CaptureTicket.title -> CaptureTicket.ticket_title\",\"emits\":\"TicketCaptured\",\"source_argument\":\"CaptureTicket\",\"source_field\":\"title\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_event_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketCaptured\",\"stream\":\"tickets\",\"attribute\":\"ticket_title\",\"attribute_source\":\"command_input\",\"attribute_source_name\":\"ticket_title\",\"attribute_source_field\":\"value\",\"attribute_provenance\":\"CaptureTicket.ticket_title\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"add_outcome_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"label\":\"ticket_captured\",\"events\":\"TicketCaptured\",\"externally_relevant\":false}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"CaptureTicket.title\",\"transformation\":\"projection\",\"target\":\"CaptureTicket\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"CaptureTicket.ticket_title\",\"transformation\":\"identity\",\"target\":\"TicketCaptured\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"CaptureTicket.title\",\"source_kind\":\"original\",\"transformation\":\"projection\",\"target\":\"CaptureTicket\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"CaptureTicket.ticket_title\",\"source_kind\":\"original\",\"transformation\":\"identity\",\"target\":\"TicketCaptured\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
         )
     }
 
@@ -6434,7 +6528,7 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_event_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"intake_webhook_received\",\"stream\":\"intake-webhooks\",\"attribute\":\"ticket_title\",\"attribute_source\":\"external_payload\",\"attribute_source_name\":\"intake_webhook\",\"attribute_source_field\":\"ticket_title\",\"attribute_provenance\":\"intake_webhook.ticket_title\",\"observed\":true}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"intake_webhook.ticket_title\",\"transformation\":\"identity\",\"target\":\"intake_webhook_received\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"intake_webhook.ticket_title\",\"source_kind\":\"original\",\"transformation\":\"identity\",\"target\":\"intake_webhook_received\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"add_translation_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"intake-webhook-translator\",\"external_event\":\"intake_webhook_received\",\"payload_contract\":\"intake_webhook\",\"command\":\"CaptureTicket\"}}}\n",
         )
     }

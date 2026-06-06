@@ -13,15 +13,16 @@ use crate::core::types::{
     BoardConnectionEndpoint, BoardConnectionEndpointKind, BoardElementDeclaredName,
     BoardElementKind, BoardElementName, BoardLaneId, CommandErrorName, CommandErrorRecoveryKind,
     CommandInputSourceDescription, CommandInputSourceKind, CommandName, ContractKindName,
-    ControlName, ControlRecoveryBehavior, CoveredDefinitionName, DataFlowSource, DataFlowTarget,
-    DatumName, EventAttributeName, EventAttributeSourceField, EventAttributeSourceKind,
-    EventAttributeSourceName, EventName, LeanModuleName, ModelDescription, ModelDigest, ModelName,
-    NavigationTargetName, NavigationTargetType, OutcomeLabelName, PayloadContractName,
-    ProvenanceDescription, QuintModuleName, ReadModelDerivationRule, ReadModelFieldSourceKind,
-    ReadModelName, ReadModelTransitiveRule, ReviewTimestamp, ReviewerId, ScenarioName,
-    ScenarioStepText, SingletonRepeatBehavior, SketchToken, SliceSlug, SourceChainHop, StreamName,
-    TransformationSemantics, TransitionTriggerName, TranslationExternalEventName, TranslationName,
-    ViewFieldName, ViewFieldSourceKind, ViewName, WorkflowEntryLifecycleEvidenceText,
+    ControlName, ControlRecoveryBehavior, CoveredDefinitionName, DataFlowSource,
+    DataFlowSourceKind, DataFlowTarget, DatumName, EventAttributeName, EventAttributeSourceField,
+    EventAttributeSourceKind, EventAttributeSourceName, EventName, LeanModuleName,
+    ModelDescription, ModelDigest, ModelName, NavigationTargetName, NavigationTargetType,
+    OutcomeLabelName, PayloadContractName, ProvenanceDescription, QuintModuleName,
+    ReadModelDerivationRule, ReadModelFieldSourceKind, ReadModelName, ReadModelTransitiveRule,
+    ReviewTimestamp, ReviewerId, ScenarioName, ScenarioStepText, SingletonRepeatBehavior,
+    SketchToken, SliceSlug, SourceChainHop, StreamName, TransformationSemantics,
+    TransitionTriggerName, TranslationExternalEventName, TranslationName, ViewFieldName,
+    ViewFieldSourceKind, ViewName, WorkflowEntryLifecycleEvidenceText,
     WorkflowEntryLifecycleStateName, WorkflowEventParticipation, WorkflowOwnedDefinitionKind,
     WorkflowOwnedDefinitionName, WorkflowSlug, WorkflowTransitionEndpoint,
     WorkflowTransitionEvidenceText, WorkflowTransitionKind, WorkflowViewRole,
@@ -195,6 +196,11 @@ pub fn parse_datum_names(raw: &str) -> Result<Vec<DatumName>, BoundaryParseError
 pub fn parse_data_flow_source(raw: &str) -> Result<DataFlowSource, BoundaryParseError> {
     DataFlowSource::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid data-flow source: {error}")))
+}
+
+pub fn parse_data_flow_source_kind(raw: &str) -> Result<DataFlowSourceKind, BoundaryParseError> {
+    DataFlowSourceKind::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid data-flow source kind: {error}")))
 }
 
 pub fn parse_transformation_semantics(

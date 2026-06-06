@@ -16,13 +16,13 @@ use crate::core::types::{
     BoardConnectionEndpoint, BoardConnectionEndpointKind, BoardElementDeclaredName,
     BoardElementKind, BoardElementName, BoardLaneId, CommandErrorName, CommandErrorRecoveryKind,
     CommandInputSourceDescription, CommandInputSourceKind, CommandName, ContractKindName,
-    ControlName, ControlRecoveryBehavior, CoveredDefinitionName, DataFlowSource, DataFlowTarget,
-    DatumName, EventAttributeName, EventAttributeSourceField, EventAttributeSourceKind,
-    EventAttributeSourceName, EventName, NavigationTargetName, NavigationTargetType,
-    OutcomeLabelName, PayloadContractName, ProvenanceDescription, ReadModelFieldSourceKind,
-    ReadModelName, ScenarioName, ScenarioStepText, SketchToken, SliceSlug, StreamName,
-    TransformationSemantics, TranslationExternalEventName, TranslationName, ViewFieldName,
-    ViewFieldSourceKind, ViewName, WorkflowSlug,
+    ControlName, ControlRecoveryBehavior, CoveredDefinitionName, DataFlowSource,
+    DataFlowSourceKind, DataFlowTarget, DatumName, EventAttributeName, EventAttributeSourceField,
+    EventAttributeSourceKind, EventAttributeSourceName, EventName, NavigationTargetName,
+    NavigationTargetType, OutcomeLabelName, PayloadContractName, ProvenanceDescription,
+    ReadModelFieldSourceKind, ReadModelName, ScenarioName, ScenarioStepText, SketchToken,
+    SliceSlug, StreamName, TransformationSemantics, TranslationExternalEventName, TranslationName,
+    ViewFieldName, ViewFieldSourceKind, ViewName, WorkflowSlug,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -195,6 +195,7 @@ pub struct NewProjectDataFlow {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     datum: DatumName,
+    source_kind: DataFlowSourceKind,
     source: DataFlowSource,
     transformation: TransformationSemantics,
     target: DataFlowTarget,
@@ -202,39 +203,20 @@ pub struct NewProjectDataFlow {
 }
 
 impl NewProjectDataFlow {
-    pub fn new(
-        workflow_slug: WorkflowSlug,
-        slice_slug: SliceSlug,
-        datum: DatumName,
-        source: DataFlowSource,
-        transformation: TransformationSemantics,
-        target: DataFlowTarget,
-        bit_encoding: BitEncodingSemantics,
-    ) -> Self {
-        Self {
-            workflow_slug,
-            slice_slug,
-            datum,
-            source,
-            transformation,
-            target,
-            bit_encoding,
-        }
-    }
-
     pub fn from_slice_data_flow(
         workflow_slug: WorkflowSlug,
         data_flow: &NewBitLevelDataFlow,
     ) -> Self {
-        Self::new(
+        Self {
             workflow_slug,
-            data_flow.slice_slug().clone(),
-            data_flow.datum().clone(),
-            data_flow.source().clone(),
-            data_flow.transformation().clone(),
-            data_flow.target().clone(),
-            data_flow.bit_encoding().clone(),
-        )
+            slice_slug: data_flow.slice_slug().clone(),
+            datum: data_flow.datum().clone(),
+            source_kind: data_flow.source_kind().clone(),
+            source: data_flow.source().clone(),
+            transformation: data_flow.transformation().clone(),
+            target: data_flow.target().clone(),
+            bit_encoding: data_flow.bit_encoding().clone(),
+        }
     }
 }
 
@@ -1137,6 +1119,7 @@ pub struct ProjectDataFlow {
     workflow_slug: String,
     slice_slug: String,
     datum: String,
+    source_kind: String,
     source: String,
     transformation: String,
     target: String,
@@ -1158,6 +1141,10 @@ impl ProjectDataFlow {
 
     pub fn source(&self) -> &str {
         &self.source
+    }
+
+    pub fn source_kind(&self) -> &str {
+        &self.source_kind
     }
 
     pub fn transformation(&self) -> &str {
@@ -2045,7 +2032,7 @@ pub fn parse_lean_project_data_flows(
 ) -> Result<Vec<ProjectDataFlow>, FormalProjectFactError> {
     data_flow_entries_from_list(
         contents.as_ref(),
-        "def modelDataFlows : List (String × String × String × String × String × String × String) := ",
+        "def modelDataFlows : List (String × String × String × String × String × String × String × String) := ",
     )
 }
 
@@ -2721,19 +2708,19 @@ pub fn add_project_data_flow(
     let quint_record = quint_data_flow_record(&data_flow);
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelDataFlows : List (String × String × String × String × String × String × String) := ",
+        "def modelDataFlows : List (String × String × String × String × String × String × String × String) := ",
         &lean_record,
     )
     .and_then(|contents| {
         let data_flows = data_flow_entries_from_list(
             &contents,
-            "def modelDataFlows : List (String × String × String × String × String × String × String) := ",
+            "def modelDataFlows : List (String × String × String × String × String × String × String × String) := ",
         )?;
         replace_declaration(
             &contents,
             "def modelDataFlows :",
             &format!(
-                "def modelDataFlows : List (String × String × String × String × String × String × String) := {}",
+                "def modelDataFlows : List (String × String × String × String × String × String × String × String) := {}",
                 lean_project_data_flow_list(&data_flows)
             ),
         )
@@ -5777,7 +5764,7 @@ fn parse_quint_project_scenario_definitions_from_contents_or_empty(
 fn parse_lean_project_data_flows_from_contents_or_empty(contents: &str) -> Vec<ProjectDataFlow> {
     data_flow_entries_from_list(
         contents,
-        "def modelDataFlows : List (String × String × String × String × String × String × String) := ",
+        "def modelDataFlows : List (String × String × String × String × String × String × String × String) := ",
     )
     .unwrap_or_default()
 }
@@ -6381,7 +6368,7 @@ fn data_flow_entries_from_list(
         .into_iter()
         .map(|record| {
             let strings = quoted_strings(&record)?;
-            if strings.len() < 7 {
+            if strings.len() < 8 {
                 Err(FormalProjectFactError::new(
                     "formal project data-flow record is malformed",
                 ))
@@ -6390,10 +6377,11 @@ fn data_flow_entries_from_list(
                     workflow_slug: strings[0].clone(),
                     slice_slug: strings[1].clone(),
                     datum: strings[2].clone(),
-                    source: strings[3].clone(),
-                    transformation: strings[4].clone(),
-                    target: strings[5].clone(),
-                    bit_encoding: strings[6].clone(),
+                    source_kind: strings[3].clone(),
+                    source: strings[4].clone(),
+                    transformation: strings[5].clone(),
+                    target: strings[6].clone(),
+                    bit_encoding: strings[7].clone(),
                 })
             }
         })
@@ -7517,10 +7505,11 @@ fn digest_data_flows(data_flows: &[ProjectDataFlow]) -> String {
         .iter()
         .map(|data_flow| {
             format!(
-                "{}/{}/{}@{}~{}~{}#{}",
+                "{}/{}/{}@{}:{}~{}~{}#{}",
                 data_flow.workflow_slug,
                 data_flow.slice_slug,
                 data_flow.datum,
+                data_flow.source_kind,
                 data_flow.source,
                 data_flow.transformation,
                 data_flow.target,
@@ -8129,10 +8118,11 @@ fn lean_scenario_definition_record(scenario: &NewProjectScenarioDefinition) -> S
 
 fn lean_data_flow_record(data_flow: &NewProjectDataFlow) -> String {
     format!(
-        "({}, {}, {}, [{}], [{}], [{}], [{}])",
+        "({}, {}, {}, [{}], [{}], [{}], [{}], [{}])",
         quoted(data_flow.workflow_slug.as_ref()),
         quoted(data_flow.slice_slug.as_ref()),
         quoted(data_flow.datum.as_ref()),
+        quoted(data_flow.source_kind.as_ref()),
         quoted(data_flow.source.as_ref()),
         quoted(data_flow.transformation.as_ref()),
         quoted(data_flow.target.as_ref()),
@@ -8142,10 +8132,11 @@ fn lean_data_flow_record(data_flow: &NewProjectDataFlow) -> String {
 
 fn quint_data_flow_record(data_flow: &NewProjectDataFlow) -> String {
     format!(
-        "{{ workflow: {}, slice: {}, datum: {}, source: {}, transformation: {}, target: {}, bitEncoding: {} }}",
+        "{{ workflow: {}, slice: {}, datum: {}, sourceKind: {}, source: {}, transformation: {}, target: {}, bitEncoding: {} }}",
         quoted(data_flow.workflow_slug.as_ref()),
         quoted(data_flow.slice_slug.as_ref()),
         quoted(data_flow.datum.as_ref()),
+        quoted(data_flow.source_kind.as_ref()),
         quoted(data_flow.source.as_ref()),
         quoted(data_flow.transformation.as_ref()),
         quoted(data_flow.target.as_ref()),
@@ -8395,10 +8386,11 @@ fn lean_project_data_flow_list(project_data_flows: &[ProjectDataFlow]) -> String
             .into_iter()
             .map(|data_flow| {
                 format!(
-                    "({}, {}, {}, {}, {}, {}, {})",
+                    "({}, {}, {}, {}, {}, {}, {}, {})",
                     quoted(data_flow.workflow_slug()),
                     quoted(data_flow.slice_slug()),
                     quoted(data_flow.datum()),
+                    quoted(data_flow.source_kind()),
                     quoted(data_flow.source()),
                     quoted(data_flow.transformation()),
                     quoted(data_flow.target()),
@@ -8419,10 +8411,11 @@ fn quint_project_data_flow_list(project_data_flows: &[ProjectDataFlow]) -> Strin
             .into_iter()
             .map(|data_flow| {
                 format!(
-                    "{{ workflow: {}, slice: {}, datum: {}, source: {}, transformation: {}, target: {}, bitEncoding: {} }}",
+                    "{{ workflow: {}, slice: {}, datum: {}, sourceKind: {}, source: {}, transformation: {}, target: {}, bitEncoding: {} }}",
                     quoted(data_flow.workflow_slug()),
                     quoted(data_flow.slice_slug()),
                     quoted(data_flow.datum()),
+                    quoted(data_flow.source_kind()),
                     quoted(data_flow.source()),
                     quoted(data_flow.transformation()),
                     quoted(data_flow.target()),

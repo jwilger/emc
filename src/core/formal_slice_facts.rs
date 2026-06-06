@@ -9,14 +9,14 @@ use crate::core::types::{
     BoardConnectionEndpoint, BoardConnectionEndpointKind, BoardElementDeclaredName,
     BoardElementKind, BoardElementName, BoardLaneId, CommandErrorName, CommandErrorRecoveryKind,
     CommandInputSourceDescription, CommandInputSourceKind, CommandName, ContractKindName,
-    ControlName, ControlRecoveryBehavior, CoveredDefinitionName, DataFlowSource, DataFlowTarget,
-    DatumName, EventAttributeName, EventAttributeSourceField, EventAttributeSourceKind,
-    EventAttributeSourceName, EventName, NavigationTargetName, NavigationTargetType,
-    OutcomeLabelName, PayloadContractName, ProvenanceDescription, ReadModelDerivationRule,
-    ReadModelFieldSourceKind, ReadModelName, ReadModelTransitiveRule, ScenarioName,
-    ScenarioStepText, SingletonRepeatBehavior, SketchToken, SliceSlug, SourceChainHop, StreamName,
-    TransformationSemantics, TranslationExternalEventName, TranslationName, ViewFieldName,
-    ViewFieldSourceKind, ViewName,
+    ControlName, ControlRecoveryBehavior, CoveredDefinitionName, DataFlowSource,
+    DataFlowSourceKind, DataFlowTarget, DatumName, EventAttributeName, EventAttributeSourceField,
+    EventAttributeSourceKind, EventAttributeSourceName, EventName, NavigationTargetName,
+    NavigationTargetType, OutcomeLabelName, PayloadContractName, ProvenanceDescription,
+    ReadModelDerivationRule, ReadModelFieldSourceKind, ReadModelName, ReadModelTransitiveRule,
+    ScenarioName, ScenarioStepText, SingletonRepeatBehavior, SketchToken, SliceSlug,
+    SourceChainHop, StreamName, TransformationSemantics, TranslationExternalEventName,
+    TranslationName, ViewFieldName, ViewFieldSourceKind, ViewName,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -192,6 +192,7 @@ impl ScenarioStreamNames {
 pub struct NewBitLevelDataFlow {
     slice_slug: SliceSlug,
     datum: DatumName,
+    source_kind: DataFlowSourceKind,
     source: DataFlowSource,
     transformation: TransformationSemantics,
     target: DataFlowTarget,
@@ -202,6 +203,7 @@ impl NewBitLevelDataFlow {
     pub fn new(
         slice_slug: SliceSlug,
         datum: DatumName,
+        source_kind: DataFlowSourceKind,
         source: DataFlowSource,
         transformation: TransformationSemantics,
         target: DataFlowTarget,
@@ -210,6 +212,7 @@ impl NewBitLevelDataFlow {
         Self {
             slice_slug,
             datum,
+            source_kind,
             source,
             transformation,
             target,
@@ -227,6 +230,10 @@ impl NewBitLevelDataFlow {
 
     pub fn source(&self) -> &DataFlowSource {
         &self.source
+    }
+
+    pub fn source_kind(&self) -> &DataFlowSourceKind {
+        &self.source_kind
     }
 
     pub fn transformation(&self) -> &TransformationSemantics {
@@ -3011,8 +3018,9 @@ fn quint_list<T: AsRef<str>>(values: &[T]) -> String {
 
 fn lean_data_flow_record(data_flow: &NewBitLevelDataFlow) -> String {
     format!(
-        "{{ datum := {}, source := {}, transformationSemantics := {}, target := {}, bitEncoding := {} }}",
+        "{{ datum := {}, sourceKind := {}, source := {}, transformationSemantics := {}, target := {}, bitEncoding := {} }}",
         quoted(data_flow.datum.as_ref()),
+        quoted(data_flow.source_kind.as_ref()),
         quoted(data_flow.source.as_ref()),
         quoted(data_flow.transformation.as_ref()),
         quoted(data_flow.target.as_ref()),
@@ -3022,8 +3030,9 @@ fn lean_data_flow_record(data_flow: &NewBitLevelDataFlow) -> String {
 
 fn quint_data_flow_record(data_flow: &NewBitLevelDataFlow) -> String {
     format!(
-        "{{ datum: {}, source: {}, transformationSemantics: {}, target: {}, bitEncoding: {} }}",
+        "{{ datum: {}, sourceKind: {}, source: {}, transformationSemantics: {}, target: {}, bitEncoding: {} }}",
         quoted(data_flow.datum.as_ref()),
+        quoted(data_flow.source_kind.as_ref()),
         quoted(data_flow.source.as_ref()),
         quoted(data_flow.transformation.as_ref()),
         quoted(data_flow.target.as_ref()),

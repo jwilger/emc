@@ -36,17 +36,17 @@ use emc::io::dto::{
     parse_command_input_source_description, parse_command_input_source_kind, parse_command_name,
     parse_connection_kind, parse_contract_kind_name, parse_control_name,
     parse_control_recovery_behavior, parse_covered_definition_name, parse_data_flow_source,
-    parse_data_flow_target, parse_datum_name, parse_datum_names, parse_event_attribute_name,
-    parse_event_attribute_source_field, parse_event_attribute_source_kind,
-    parse_event_attribute_source_name, parse_event_name, parse_event_names, parse_gherkin_suite,
-    parse_model_description, parse_model_name, parse_navigation_target_name,
-    parse_navigation_target_names, parse_navigation_target_type, parse_outcome_label_name,
-    parse_payload_contract_name, parse_project_name, parse_provenance_description,
-    parse_read_model_derivation_rule, parse_read_model_field_source_kind, parse_read_model_name,
-    parse_read_model_transitive_rule, parse_review_timestamp, parse_reviewer_id,
-    parse_scenario_name, parse_scenario_step_text, parse_singleton_repeat_behavior,
-    parse_sketch_token, parse_slice_kind, parse_slice_slug, parse_source_chain_hops,
-    parse_stream_name, parse_stream_names, parse_transformation_semantics,
+    parse_data_flow_source_kind, parse_data_flow_target, parse_datum_name, parse_datum_names,
+    parse_event_attribute_name, parse_event_attribute_source_field,
+    parse_event_attribute_source_kind, parse_event_attribute_source_name, parse_event_name,
+    parse_event_names, parse_gherkin_suite, parse_model_description, parse_model_name,
+    parse_navigation_target_name, parse_navigation_target_names, parse_navigation_target_type,
+    parse_outcome_label_name, parse_payload_contract_name, parse_project_name,
+    parse_provenance_description, parse_read_model_derivation_rule,
+    parse_read_model_field_source_kind, parse_read_model_name, parse_read_model_transitive_rule,
+    parse_review_timestamp, parse_reviewer_id, parse_scenario_name, parse_scenario_step_text,
+    parse_singleton_repeat_behavior, parse_sketch_token, parse_slice_kind, parse_slice_slug,
+    parse_source_chain_hops, parse_stream_name, parse_stream_names, parse_transformation_semantics,
     parse_transition_trigger_name, parse_translation_external_event_name, parse_translation_name,
     parse_view_field_name, parse_view_field_source_kind, parse_view_name,
     parse_workflow_entry_lifecycle_evidence_text, parse_workflow_entry_lifecycle_state_name,
@@ -337,6 +337,8 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             datum,
             source_flag,
             source,
+            source_kind_flag,
+            source_kind,
             transformation_flag,
             transformation,
             target_flag,
@@ -348,6 +350,7 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             && slice_flag == "--slice"
             && datum_flag == "--datum"
             && source_flag == "--source"
+            && source_kind_flag == "--source-kind"
             && transformation_flag == "--transformation"
             && target_flag == "--target"
             && bit_encoding_flag == "--bit-encoding" =>
@@ -357,6 +360,8 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             let datum =
                 parse_datum_name(datum).map_err(|error| ShellError::message(error.to_string()))?;
             let source = parse_data_flow_source(source)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_kind = parse_data_flow_source_kind(source_kind)
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let transformation = parse_transformation_semantics(transformation)
                 .map_err(|error| ShellError::message(error.to_string()))?;
@@ -369,6 +374,7 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                     data_flow: NewBitLevelDataFlow::new(
                         slice_slug,
                         datum,
+                        source_kind,
                         source,
                         transformation,
                         target,
@@ -4195,7 +4201,7 @@ fn help_command() -> ClapCommand {
   emc add view --slice <slice> --name <view> --read-model <read-model> --field <name> --source-field <field> --sketch-token <token> --field-provenance <text> --bit-encoding <semantics> --control <control> --control-command <command> --control-input <datum> --control-input-source <kind> --control-input-description <text> --control-input-sketch-token <token> --control-input-visible <true|false> --control-input-decision <true|false> --handled-errors <error[,error]> --recovery-behavior <kind> --control-sketch-token <token> --navigation-type external_system --navigation-target <target> --external-system <name> --handoff-contract <contract>
   emc add automation --slice <slice> --name <name> --trigger <event-or-signal> --command <command> --handled-errors <error[,error]> --reaction <semantics>
   emc add translation --slice <slice> --name <name> --external-event <event-or-signal> --payload-contract <payload> --command <command>
-  emc add data-flow --slice <slice> --datum <name> --source <source> --transformation <semantics> --target <target> --bit-encoding <semantics>
+  emc add data-flow --slice <slice> --datum <name> --source <source> --source-kind <original|modeled_target> --transformation <semantics> --target <target> --bit-encoding <semantics>
   emc update slice --slug <slice> --description <text>
   emc update slice --slug <slice> --type <kind>
   emc update slice --slug <slice> --name <name>
