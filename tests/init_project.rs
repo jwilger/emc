@@ -243,6 +243,18 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelDataFlowsReachableFromOriginalsAfterFuel : Nat -> List (String × String × String × String × String × String × String × String) -> List (String × String × String × String × String × String × String × String)"
+            ),
+            "Lean project root must compute finite data-flow source-chain reachability from original sources"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelDataFlowHasOriginalSourceChain (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" || modelDataFlowsReachableFromOriginals.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)"
+            ),
+            "Lean project root must require modeled-target data-flow chains to terminate at reachable original sources"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
                 "theorem modelViewFieldBitEncodingsMatchDataFlows : modelViewFields.all modelViewFieldBitEncodingMatchesDataFlow = true := rfl"
             ),
             "Lean project root must prove displayed datum bit encodings match data-flow rows"
@@ -279,6 +291,12 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "theorem modelDataFlowSourceChainsReachOriginals : modelDataFlows.all modelDataFlowHasOriginalSourceChain = true := rfl"
+            ),
+            "Lean project root must prove modeled-target data-flow source chains reach original sources"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
                 "theorem modelMeaningfulDataFlowsAreCovered : modelMeaningfulDataHasModeledDataFlows = true := rfl"
             ),
             "Lean project root must prove every meaningful datum has a modeled bit-level data flow"
@@ -298,6 +316,11 @@ mod tests {
                 "type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: str, source: str, transformation: str, target: str, bitEncoding: str }"
             ),
             "Quint project root must make data-flow source kind part of the formal record"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?
+                .contains("val modelDataFlowCount = 0"),
+            "Quint project root must expose a concrete data-flow count for finite reachability fuel"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
@@ -485,6 +508,18 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "def modelDataFlowsReachableFromOriginalsAfterFuel(fuel, reachable) = range(0, fuel).foldl(reachable, (currentReachable, _) => currentReachable.concat(modelDataFlowTargetsFromReachable(currentReachable)))"
+            ),
+            "Quint project root must compute finite data-flow source-chain reachability from original sources"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "def modelDataFlowHasOriginalSourceChain(dataFlow) = dataFlow.sourceKind == \"original\" or modelDataFlowsReachableFromOriginals.select(reachableFlow => modelSameDataFlowTarget(reachableFlow, dataFlow)).length() > 0"
+            ),
+            "Quint project root must require modeled-target data-flow chains to terminate at reachable original sources"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
                 "val modelViewFieldBitEncodingsMatchDataFlows = modelViewFields.select(viewField => modelViewFieldBitEncodingMatchesDataFlow(viewField)).length() == modelViewFields.length()"
             ),
             "Quint project root must verify displayed datum bit encodings match data-flow rows"
@@ -521,6 +556,12 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
+                "val modelDataFlowSourceChainsReachOriginals = modelDataFlows.select(dataFlow => modelDataFlowHasOriginalSourceChain(dataFlow)).length() == modelDataFlows.length()"
+            ),
+            "Quint project root must expose data-flow source-chain completeness"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
                 "val modelMeaningfulDataFlowsAreCovered = modelMeaningfulDataHasModeledDataFlows"
             ),
             "Quint project root must expose every meaningful datum coverage as an invariant"
@@ -531,7 +572,7 @@ mod tests {
         );
         assert_eq!(
             fs::read_to_string(temp_dir.path().join("model/quint/quint.json"))?,
-            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowSliceModulesComplete\",\n    \"workflowTransitionsStructured\",\n    \"workflowTransitionSourcesResolve\",\n    \"workflowTransitionTargetsResolve\",\n    \"workflowStepRelationshipsAreAllowed\",\n    \"workflowStepSlugsAreUnique\",\n    \"workflowHasExactlyOneEntryStep\",\n    \"workflowMainStepsHaveIncomingReachability\",\n    \"workflowNonSupportingStepsReachableFromEntry\",\n    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\",\n    \"workflowTransitionsHaveModeledKinds\",\n    \"workflowExitsNameTargetsAndRationale\",\n    \"workflowExternallyRelevantOutcomesHandled\",\n    \"workflowOutcomesSourceResolve\",\n    \"workflowCommandErrorsSourceResolve\",\n    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\",\n    \"workflowNonEventDefinitionsAreUniquelyOwned\",\n    \"workflowSharedEventDefinitionsHaveIdenticalIdentity\",\n    \"workflowCommandTransitionsResolveControlsAndCommands\",\n    \"workflowStateViewCommandTransitionsTargetStateChanges\",\n    \"workflowEventTransitionsAreSharedByEndpointSlices\",\n    \"workflowEventTransitionsHaveParticipatingEndpointEvents\",\n    \"workflowNavigationTransitionsResolveControlsAndViews\",\n    \"workflowNavigationTransitionsResolveToEntryViews\",\n    \"workflowExternalTriggersDeclarePayloadContracts\",\n    \"workflowExternalTriggerPayloadContractsHaveProvenance\",\n    \"workflowTransitionsHaveRequiredEvidence\",\n    \"workflowEntryLifecycleStatesCoverRequiredStates\",\n    \"modelScenarioDefinitionsHaveGwt\",\n    \"modelScenarioKindsAreFirstClass\",\n    \"modelDataFlowsAreBitComplete\",\n    \"modelDataFlowSourceKindsAreModeled\",\n    \"modelDataFlowModeledSourcesResolve\",\n    \"modelDataFlowTransformationsAreModeled\",\n    \"modelMeaningfulDataFlowsAreCovered\",\n    \"modelDataFlowSourceBitEncodingsMatchModeledSources\",\n    \"modelViewFieldBitEncodingsMatchDataFlows\",\n    \"modelExternalPayloadFieldBitEncodingsMatchDataFlows\",\n    \"modelCommandInputsHaveProvenance\",\n    \"modelCommandInputsTraceToInvocationSources\",\n    \"modelEventAttributeSourcesAreComplete\",\n    \"modelReadModelFieldSourcesAreComplete\",\n    \"modelViewFieldSourcesAreComplete\",\n    \"modelViewFieldReadModelFieldSourcesResolve\",\n    \"modelDisplayedDataTraceToOriginalProvenance\",\n    \"modelExternalPayloadFieldsHaveProvenance\",\n    \"modelViewControlsProvideCommandInputs\"\n  ]\n}\n"
+            "{\n  \"main\": \"RepairDesk.qnt\",\n  \"invariants\": [\n    \"workflowIdentityStable\",\n    \"workflowSliceDetailsComplete\",\n    \"workflowSliceModulesComplete\",\n    \"workflowTransitionsStructured\",\n    \"workflowTransitionSourcesResolve\",\n    \"workflowTransitionTargetsResolve\",\n    \"workflowStepRelationshipsAreAllowed\",\n    \"workflowStepSlugsAreUnique\",\n    \"workflowHasExactlyOneEntryStep\",\n    \"workflowMainStepsHaveIncomingReachability\",\n    \"workflowNonSupportingStepsReachableFromEntry\",\n    \"workflowBranchAndAlternateStepsHaveTriggerOrRationale\",\n    \"workflowTransitionsHaveModeledKinds\",\n    \"workflowExitsNameTargetsAndRationale\",\n    \"workflowExternallyRelevantOutcomesHandled\",\n    \"workflowOutcomesSourceResolve\",\n    \"workflowCommandErrorsSourceResolve\",\n    \"workflowTransitionsDoNotUseCommandErrorsAsOutcomes\",\n    \"workflowNonEventDefinitionsAreUniquelyOwned\",\n    \"workflowSharedEventDefinitionsHaveIdenticalIdentity\",\n    \"workflowCommandTransitionsResolveControlsAndCommands\",\n    \"workflowStateViewCommandTransitionsTargetStateChanges\",\n    \"workflowEventTransitionsAreSharedByEndpointSlices\",\n    \"workflowEventTransitionsHaveParticipatingEndpointEvents\",\n    \"workflowNavigationTransitionsResolveControlsAndViews\",\n    \"workflowNavigationTransitionsResolveToEntryViews\",\n    \"workflowExternalTriggersDeclarePayloadContracts\",\n    \"workflowExternalTriggerPayloadContractsHaveProvenance\",\n    \"workflowTransitionsHaveRequiredEvidence\",\n    \"workflowEntryLifecycleStatesCoverRequiredStates\",\n    \"modelScenarioDefinitionsHaveGwt\",\n    \"modelScenarioKindsAreFirstClass\",\n    \"modelDataFlowsAreBitComplete\",\n    \"modelDataFlowSourceKindsAreModeled\",\n    \"modelDataFlowModeledSourcesResolve\",\n    \"modelDataFlowSourceChainsReachOriginals\",\n    \"modelDataFlowTransformationsAreModeled\",\n    \"modelMeaningfulDataFlowsAreCovered\",\n    \"modelDataFlowSourceBitEncodingsMatchModeledSources\",\n    \"modelViewFieldBitEncodingsMatchDataFlows\",\n    \"modelExternalPayloadFieldBitEncodingsMatchDataFlows\",\n    \"modelCommandInputsHaveProvenance\",\n    \"modelCommandInputsTraceToInvocationSources\",\n    \"modelEventAttributeSourcesAreComplete\",\n    \"modelReadModelFieldSourcesAreComplete\",\n    \"modelViewFieldSourcesAreComplete\",\n    \"modelViewFieldReadModelFieldSourcesResolve\",\n    \"modelDisplayedDataTraceToOriginalProvenance\",\n    \"modelExternalPayloadFieldsHaveProvenance\",\n    \"modelViewControlsProvideCommandInputs\"\n  ]\n}\n"
         );
         Ok(())
     }

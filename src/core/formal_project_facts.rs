@@ -2818,6 +2818,13 @@ pub fn add_project_data_flow(
         .and_then(|contents| {
             replace_declaration(
                 &contents,
+                "val modelDataFlowCount =",
+                &format!("val modelDataFlowCount = {}", data_flows.len()),
+            )
+        })
+        .and_then(|contents| {
+            replace_declaration(
+                &contents,
                 "val modelDataFlowsAreDeclared =",
                 &format!(
                     "val modelDataFlowsAreDeclared = modelDataFlows.length() == {}",
