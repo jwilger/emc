@@ -2288,6 +2288,18 @@ mod tests {
         );
         assert!(
             lean.contains(
+                "def stateChangeSlicesRepresentSingleCommandBoundary : Bool := sliceKind != \"state_change\" || sliceCommandDefinitions.length == 1"
+            ),
+            "Lean slice artifacts must require state-change slices to model one command-level behavior"
+        );
+        assert!(
+            lean.contains(
+                "def sliceRepresentsSmallestUsefulBehaviorBoundary : Bool := sliceRepresentsOneCoherentModelUnit && stateChangeSlicesRepresentSingleCommandBoundary && automationSlicesRepresentOneReaction && translationSlicesDeclareExternalContracts"
+            ),
+            "Lean slice artifacts must expose smallest useful behavior boundary as a proof obligation"
+        );
+        assert!(
+            lean.contains(
                 "def sliceHasLocallyEmittedEvent : Bool := sliceEvents.isEmpty == false || sliceEventDefinitions.any (fun event => event.observed == false && event.shared == false)"
             ),
             "Lean slice artifacts must count locally emitted formal event definitions"
@@ -2871,6 +2883,18 @@ mod tests {
                 "theorem sliceRepresentsOneCoherentModelUnitIsStable : sliceRepresentsOneCoherentModelUnit = true := by\n  native_decide"
             ),
             "Lean slice artifacts must prove current slices satisfy one coherent model-unit shape"
+        );
+        assert!(
+            lean.contains(
+                "theorem stateChangeSlicesRepresentSingleCommandBoundaryIsStable : stateChangeSlicesRepresentSingleCommandBoundary = true := by\n  native_decide"
+            ),
+            "Lean slice artifacts must prove current state-change slices model one command-level behavior"
+        );
+        assert!(
+            lean.contains(
+                "theorem sliceRepresentsSmallestUsefulBehaviorBoundaryIsStable : sliceRepresentsSmallestUsefulBehaviorBoundary = true := by\n  native_decide"
+            ),
+            "Lean slice artifacts must prove current slices stay inside the smallest useful modeled behavior boundary"
         );
         assert!(
             lean.contains(
