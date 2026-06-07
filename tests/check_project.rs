@@ -60,6 +60,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(&temp_dir)?;
         remove_file(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
         Command::cargo_bin("emc")?
@@ -84,6 +85,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(&temp_dir)?;
         write(
             temp_dir.path().join("emc.toml"),
             "[project]\nname = \"Repair Desk\"\nlean_module = \"StaleRoot\"\nquint_module = \"RepairDesk\"\n",
@@ -111,6 +113,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(&temp_dir)?;
         write(
             temp_dir.path().join("emc.toml"),
             "[project]\nname = \"Repair Desk\"\nlean_module = \"RepairDesk\"\nquint_module = \"StaleRoot\"\n",
@@ -138,6 +141,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(&temp_dir)?;
         remove_file(temp_dir.path().join("model/lean/lakefile.lean"))?;
 
         Command::cargo_bin("emc")?
@@ -162,6 +166,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(&temp_dir)?;
         remove_file(temp_dir.path().join("model/quint/slices/.gitkeep"))?;
 
         Command::cargo_bin("emc")?
@@ -185,6 +190,8 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
+
+        stabilize_project(&temp_dir)?;
 
         write(
             temp_dir.path().join("model/lean/lakefile.lean"),
@@ -213,6 +220,8 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(&temp_dir)?;
+
         write(
             temp_dir.path().join("model/lean/lean-toolchain"),
             "leanprover/lean4:4.28.0\n",
@@ -240,6 +249,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(&temp_dir)?;
         write(
             temp_dir.path().join("model/lean/RepairDesk.lean"),
             "namespace StaleRoot\n\n-- EMC generated Lean4 model root.\n\nend StaleRoot\n",
@@ -267,6 +277,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(&temp_dir)?;
         write(
             temp_dir.path().join("model/lean/RepairDesk.lean"),
             "namespace RepairDesk\n\n-- EMC generated Lean4 model root.\n\nend StaleRoot\n",
@@ -294,6 +305,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(&temp_dir)?;
         write(
             temp_dir.path().join("model/quint/RepairDesk.qnt"),
             "module StaleRoot {\n}\n",
@@ -336,6 +348,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(&temp_dir)?;
         let lean_root_path = temp_dir.path().join("model/lean/RepairDesk.lean");
         let lean_root = read_to_string(&lean_root_path)?;
         write(
@@ -359,7 +372,7 @@ mod tests {
     }
 
     #[test]
-    fn check_reports_project_root_digest_drift() -> Result<(), Box<dyn Error>> {
+    fn check_repairs_project_root_digest_drift_from_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
         Command::cargo_bin("emc")?
@@ -385,22 +398,29 @@ mod tests {
 
         let lean_root_path = temp_dir.path().join("model/lean/RepairDesk.lean");
         let lean_root = read_to_string(&lean_root_path)?;
+        let current_digest = generated_model_digest(&lean_root, "def modelDigest := \"")?;
+        let stale_digest = if current_digest == "0".repeat(64) {
+            "1".repeat(64)
+        } else {
+            "0".repeat(64)
+        };
         write(
             &lean_root_path,
-            lean_root.replace(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\"",
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=stale;slices=;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\"",
-            ),
+            lean_root.replace(current_digest, &stale_digest),
         )?;
 
         Command::cargo_bin("emc")?
             .arg("check")
             .current_dir(temp_dir.path())
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "Lean project root drift for Repair Desk",
-            ));
+            .success()
+            .stdout(predicate::str::contains("project layout is complete"));
+
+        let repaired_root = read_to_string(&lean_root_path)?;
+        assert!(
+            repaired_root.contains(current_digest),
+            "check must repair generated project root digest drift from exported events"
+        );
 
         Ok(())
     }
@@ -430,6 +450,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(&temp_dir)?;
         remove_file(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
 
         Command::cargo_bin("emc")?
@@ -553,6 +574,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(&temp_dir)?;
         write(
             temp_dir.path().join("model/lean/OpenTicket.lean"),
             "namespace OpenTicket\n\ndef workflowName := \"Changed\"\n\nend OpenTicket\n",
@@ -635,6 +657,12 @@ mod tests {
                 "--description",
                 "Actor opens a repair ticket with priority.",
             ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .arg("check")
             .current_dir(temp_dir.path())
             .assert()
             .success();
@@ -777,6 +805,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(&temp_dir)?;
         write(
             temp_dir.path().join("model/lean/OpenTicket.lean"),
             "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Changed\"\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
@@ -1578,6 +1607,16 @@ mod tests {
         Ok(())
     }
 
+    fn stabilize_project(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
     fn create_connected_workflow(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args(["init", "--name", "Repair Desk"])
@@ -1622,6 +1661,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(temp_dir)?;
         Ok(())
     }
 
@@ -1670,6 +1710,7 @@ mod tests {
             .assert()
             .success();
 
+        stabilize_project(temp_dir)?;
         Ok(())
     }
 
@@ -1693,5 +1734,21 @@ mod tests {
             .assert()
             .success();
         Ok(())
+    }
+
+    fn generated_model_digest<'a>(
+        artifact: &'a str,
+        prefix: &str,
+    ) -> Result<&'a str, Box<dyn Error>> {
+        let start = artifact
+            .find(prefix)
+            .ok_or_else(|| format!("generated artifact must contain {prefix}"))?
+            + prefix.len();
+        let tail = &artifact[start..];
+        let end = tail
+            .find('"')
+            .ok_or("generated artifact model digest must terminate with a quote")?;
+
+        Ok(&tail[..end])
     }
 }

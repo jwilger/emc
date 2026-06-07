@@ -5,9 +5,9 @@ mod tests {
     use std::collections::BTreeSet;
     use std::env;
     use std::error::Error;
-    use std::fs::{Permissions, create_dir_all, read_to_string, set_permissions, write};
+    use std::fs::{Permissions, create_dir_all, read_dir, read_to_string, set_permissions, write};
     use std::os::unix::fs::PermissionsExt;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -516,6 +516,203 @@ mod tests {
     }
 
     #[test]
+    fn verify_appends_workflow_readiness_event_after_successful_verification()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let tool_dir = temp_dir.path().join("tools");
+
+        create_fake_tool(&tool_dir, "lake", "lake.log")?;
+        create_fake_tool(&tool_dir, "quint", "quint.log")?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let verified_frontier =
+            read_to_string(temp_dir.path().join("model/events/projection.fingerprint"))?;
+
+        Command::cargo_bin("emc")?
+            .arg("verify")
+            .current_dir(temp_dir.path())
+            .env("PATH", path_with_fake_tools(&tool_dir)?)
+            .assert()
+            .success();
+
+        let readiness_event = exported_events(temp_dir.path().join("model/events/v1"))?
+            .into_iter()
+            .find(|event| event["type"] == "WorkflowReadinessDeclared")
+            .ok_or("verify must export a WorkflowReadinessDeclared event")?;
+
+        assert_eq!(readiness_event["stream_id"], "workflow::open-ticket");
+        assert_eq!(readiness_event["payload"]["workflow"], "open-ticket");
+        assert_eq!(
+            readiness_event["payload"]["projection_fingerprint"],
+            verified_frontier.trim()
+        );
+        assert_eq!(readiness_event["payload"]["verified_by"], "emc verify");
+        assert_eq!(
+            readiness_event["payload"]["review_event_id"],
+            serde_json::Value::Null
+        );
+        assert!(
+            readiness_event["payload"]["verified_at"]
+                .as_str()
+                .is_some_and(|value| value.ends_with('Z')),
+            "readiness event must record a UTC verification timestamp"
+        );
+        assert!(
+            readiness_event["payload"]["model_content_digest"]
+                .as_str()
+                .is_some_and(|value| !value.is_empty()),
+            "readiness event must record the verified model content digest"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn verify_rejects_workflow_readiness_when_event_frontier_changes() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        let tool_dir = temp_dir.path().join("tools");
+
+        create_frontier_mutating_tool(&tool_dir, "lake", "lake.log")?;
+        create_fake_tool(&tool_dir, "quint", "quint.log")?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .arg("verify")
+            .current_dir(temp_dir.path())
+            .env("PATH", path_with_fake_tools(&tool_dir)?)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "event frontier changed during verification",
+            ));
+
+        assert!(
+            exported_events(temp_dir.path().join("model/events/v1"))?
+                .into_iter()
+                .all(|event| event["type"] != "WorkflowReadinessDeclared"),
+            "verify must not export readiness for a changed event frontier"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn list_workflows_reports_readiness_stale_after_later_workflow_event()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let tool_dir = temp_dir.path().join("tools");
+
+        create_fake_tool(&tool_dir, "lake", "lake.log")?;
+        create_fake_tool(&tool_dir, "quint", "quint.log")?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .arg("verify")
+            .current_dir(temp_dir.path())
+            .env("PATH", path_with_fake_tools(&tool_dir)?)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--description",
+                "Actor opens a repair ticket with priority.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["list", "workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Open ticket"))
+            .stdout(predicate::str::contains(
+                "workflow open-ticket readiness is stale for current event frontier",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
     fn verify_runs_lean_and_quint_for_modeled_slices() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let tool_dir = temp_dir.path().join("tools");
@@ -738,6 +935,26 @@ mod tests {
         Ok(())
     }
 
+    fn create_frontier_mutating_tool(
+        tool_dir: &Path,
+        tool_name: &str,
+        log_file: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        create_dir_all(tool_dir)?;
+        let tool_path = tool_dir.join(tool_name);
+        write(
+            &tool_path,
+            format!(
+                "#!/bin/sh\n\
+                 printf '%s\\n' \"$*\" >> {log_file}\n\
+                 mkdir -p model/events/v1\n\
+                 printf '%s\\n' '{{\"event_id\":\"frontier-changed\",\"parents\":[],\"type\":\"WorkflowUpdated\"}}' > model/events/v1/frontier-changed.json\n"
+            ),
+        )?;
+        set_permissions(&tool_path, Permissions::from_mode(0o755))?;
+        Ok(())
+    }
+
     fn normalize_quint_log(source: &str) -> String {
         source
             .lines()
@@ -798,5 +1015,16 @@ mod tests {
         let mut paths = vec![tool_dir.to_path_buf()];
         paths.extend(env::split_paths(&env::var_os("PATH").unwrap_or_default()));
         Ok(env::join_paths(paths)?.to_string_lossy().into_owned())
+    }
+
+    fn exported_events(path: PathBuf) -> Result<Vec<serde_json::Value>, Box<dyn Error>> {
+        let mut events = read_dir(path)?
+            .map(|entry| {
+                let contents = read_to_string(entry?.path())?;
+                serde_json::from_str::<serde_json::Value>(&contents).map_err(Into::into)
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+        events.sort_by_key(|event| event["parents"].as_array().map_or(0, Vec::len));
+        Ok(events)
     }
 }

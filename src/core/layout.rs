@@ -21,6 +21,7 @@ use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowSliceDetail,
     WorkflowSlug, WorkflowTransitionRecord,
 };
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ModeledWorkflowLayout {
@@ -5396,7 +5397,7 @@ fn model_digest(
     formal_workflows: &[FormalWorkflowGraph],
     inventories: &ProjectRootInventories<'_>,
 ) -> String {
-    format!(
+    let canonical_source = format!(
         "project:name={};version=0.1.0;workflows={};slices={};scenarios={};scenario-definitions={};data-flows={};outcomes={};command-errors={};commands={};command-inputs={};read-models={};read-model-definitions={};read-model-fields={};views={};view-definitions={};view-controls={};board-elements={};board-connections={};view-fields={};automations={};automation-definitions={};translations={};translation-definitions={};external-payloads={};external-payload-fields={};streams={};events={};event-attributes={}",
         project_name.as_ref(),
         digest_workflows(modeled_workflows),
@@ -5426,7 +5427,8 @@ fn model_digest(
         digest_streams(inventories.streams),
         digest_events(inventories.events),
         digest_event_attributes(inventories.event_attributes)
-    )
+    );
+    hex::encode(Sha256::digest(canonical_source.as_bytes()))
 }
 
 fn digest_outcomes(project_outcomes: &[ProjectOutcome]) -> String {

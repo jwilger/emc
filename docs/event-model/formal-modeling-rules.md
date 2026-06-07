@@ -6,6 +6,9 @@ This document records the current event-modeling rule inventory for the EMC
 Lean4 and Quint direction.
 
 The source of truth for an event model is the Lean4 model and the Quint model.
+For repository interchange, EMC also exports authoring events under
+`model/events/v1` and projects the generated Lean4, Quint, project, and review
+artifacts from that event history.
 
 Status markers:
 
@@ -233,7 +236,9 @@ A model is complete and valid only when all of these are true:
 
 Lean4 should prove at least:
 
-- ✅ Model identity and digest stability.
+- ✅ Model identity and digest stability. Generated root model digests are
+  canonical SHA-256 hashes of ordered model content rather than delimiter-joined
+  field summaries.
 - ✅ Required structure is present.
 - ✅ Ownership uniqueness rules.
 - ✅ Slice architecture rules.
@@ -256,6 +261,37 @@ Quint should verify at least:
 - ✅ Outcome handling invariants.
 - ✅ Command error handling invariants.
 - ✅ External boundary and payload-contract invariants.
+
+## Event-Sourced Authoring Runtime
+
+- 🟡 Project, workflow, workflow-fact, workflow-transition, slice, slice-fact,
+  conflict-resolution, clean-review, and workflow-readiness operations export
+  domain events with schema version, event id, command id, ordinal, stream id,
+  parents, event type, and typed payload data.
+- 🟡 Exported project, workflow, workflow-fact, workflow-transition, slice,
+  slice-fact, review, conflict-resolution, and workflow-readiness events
+  project into `emc.toml`, Lean4 artifacts, Quint artifacts, and review records
+  during runtime checks. Workflow-readiness events are ignored by artifact
+  projection fingerprints so a readiness declaration does not make itself
+  stale.
+- 🟡 Runtime checks initialize an eventcore-sqlite operational cache outside
+  the repository, but exported JSON events remain the mechanically exercised
+  interchange path.
+- 🟡 Independent exported event files merge deterministically, and concurrent
+  semantic conflicts for changed workflow or slice fields are listed, blocked,
+  and resolved through exported `ConflictResolved` events.
+- 🟡 Mutating operations execute eventcore 0.8 command structs backed by
+  eventcore-sqlite and carry semantic data types internally after CLI/MCP/JSON
+  boundary parsing. Project initialization, workflow creation, workflow updates,
+  workflow removals, workflow connections, workflow facts, slice creation, slice
+  updates, slice removals, slice facts, workflow transition removals, clean
+  review records, conflict resolutions, and workflow-readiness declarations use
+  eventcore command paths; the current repository-tracked event export remains
+  the mechanically exercised interchange path for the full command set.
+- 🟡 `emc verify` declares workflow readiness only after Lean4 and Quint
+  verification succeeds for an unchanged exported-event frontier. If the
+  frontier changes during verification, readiness is not appended and the
+  verification command reports a retryable frontier-change error.
 
 ## Non-Goals
 

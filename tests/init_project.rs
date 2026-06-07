@@ -56,12 +56,10 @@ mod tests {
                 .contains("def modelName := \"Repair Desk\""),
             "Lean project root must carry the project model name"
         );
-        assert!(
-            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\""
-            ),
-            "Lean project root must carry a deterministic project model digest"
-        );
+        assert_project_root_digests_are_canonical_hashes(
+            &fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?,
+            &fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?,
+        )?;
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
                 .contains("theorem modelVersionIsStable : modelVersion = \"0.1.0\" := rfl"),
@@ -71,12 +69,6 @@ mod tests {
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
                 .contains("theorem modelIdentityIsStable : modelName = \"Repair Desk\" := rfl"),
             "Lean project root must prove project model identity"
-        );
-        assert!(
-            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "theorem modelDigestIsStable : modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\" := rfl"
-            ),
-            "Lean project root must prove project model digest stability"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
@@ -346,12 +338,6 @@ mod tests {
             "Quint project root must expose a concrete data-flow count for finite reachability fuel"
         );
         assert!(
-            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\""
-            ),
-            "Quint project root must carry a deterministic project model digest"
-        );
-        assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?
                 .contains("val modelVersionStable = modelVersion == \"0.1.0\""),
             "Quint project root must expose the formal model version check"
@@ -360,12 +346,6 @@ mod tests {
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?
                 .contains("val modelIdentityStable = modelName == \"Repair Desk\""),
             "Quint project root must expose the project model identity check"
-        );
-        assert!(
-            fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
-                "val modelDigestStable = modelDigest == \"project:name=Repair Desk;version=0.1.0;workflows=;slices=;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\""
-            ),
-            "Quint project root must expose the project model digest invariant"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
@@ -627,7 +607,7 @@ mod tests {
     }
 
     #[test]
-    fn init_does_not_overwrite_existing_project_files() -> Result<(), Box<dyn Error>> {
+    fn init_repairs_generated_project_manifest_from_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         let manifest_path = temp_dir.path().join("emc.toml");
         let user_manifest = "[project]\nname = \"User Edited\"\n";
@@ -647,9 +627,13 @@ mod tests {
             .success();
 
         let actual_manifest = fs::read_to_string(&manifest_path)?;
-        assert_eq!(
-            actual_manifest, user_manifest,
-            "re-running init must not overwrite existing project files"
+        assert!(
+            actual_manifest.contains("name = \"Repair Desk\""),
+            "re-running init must repair generated manifest drift from exported events"
+        );
+        assert!(
+            actual_manifest.contains("version = \"0.1.0\""),
+            "re-running init must restore the generated manifest version"
         );
 
         Ok(())
@@ -674,5 +658,56 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    fn assert_project_root_digests_are_canonical_hashes(
+        lean_root: &str,
+        quint_root: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        let lean_digest = generated_model_digest(lean_root, "def modelDigest := \"")?;
+        let quint_digest = generated_model_digest(quint_root, "val modelDigest = \"")?;
+
+        assert_eq!(
+            lean_digest, quint_digest,
+            "Lean and Quint project roots must use the same generated model digest"
+        );
+        assert!(
+            is_lowercase_sha256_hex(lean_digest),
+            "project root digest must be a canonical SHA-256 content hash"
+        );
+        assert!(
+            lean_root.contains(&format!(
+                "theorem modelDigestIsStable : modelDigest = \"{lean_digest}\" := rfl"
+            )),
+            "Lean project root must prove project model digest stability"
+        );
+        assert!(
+            quint_root.contains(&format!(
+                "val modelDigestStable = modelDigest == \"{quint_digest}\""
+            )),
+            "Quint project root must expose the project model digest invariant"
+        );
+
+        Ok(())
+    }
+
+    fn generated_model_digest<'a>(
+        artifact: &'a str,
+        prefix: &str,
+    ) -> Result<&'a str, Box<dyn Error>> {
+        let start = artifact
+            .find(prefix)
+            .ok_or_else(|| format!("generated artifact must contain {prefix}"))?
+            + prefix.len();
+        let tail = &artifact[start..];
+        let end = tail
+            .find('"')
+            .ok_or("generated artifact model digest must terminate with a quote")?;
+
+        Ok(&tail[..end])
+    }
+
+    fn is_lowercase_sha256_hex(value: &str) -> bool {
+        value.len() == 64 && value.chars().all(|character| character.is_ascii_hexdigit())
     }
 }

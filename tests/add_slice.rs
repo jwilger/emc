@@ -178,18 +178,7 @@ mod tests {
             ),
             "Lean project root must represent the formal module composed for each workflow slice"
         );
-        assert!(
-            lean_root.contains(
-                "def modelDigest := \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\""
-            ),
-            "Lean project root digest must include composed workflow, slice, and module membership"
-        );
-        assert!(
-            lean_root.contains(
-                "theorem modelDigestIsStable : modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\" := rfl"
-            ),
-            "Lean project root must prove composed model digest stability"
-        );
+        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
         assert!(
             lean_root.contains("theorem modelSlicesAreDeclared : modelSlices.length = 1 := rfl"),
             "Lean project root must prove composed slice membership is declared"
@@ -213,18 +202,6 @@ mod tests {
         assert!(
             quint_root.contains("val modelSliceModules: List[ModelSliceModule] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", formalModule: \"CaptureTicket\" }]"),
             "Quint project root must represent the formal module composed for each workflow slice"
-        );
-        assert!(
-            quint_root.contains(
-                "val modelDigest = \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\""
-            ),
-            "Quint project root digest must include composed workflow, slice, and module membership"
-        );
-        assert!(
-            quint_root.contains(
-                "val modelDigestStable = modelDigest == \"project:name=Repair Desk;version=0.1.0;workflows=open-ticket;slices=open-ticket/capture-ticket@CaptureTicket;scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=\""
-            ),
-            "Quint project root must verify composed model digest stability"
         );
         assert!(
             quint_root.contains("val modelSlicesAreDeclared = modelSlices.length() == 1"),
@@ -611,5 +588,56 @@ mod tests {
                 .or_else(|| line.trim().strip_prefix("// EMC-DIGEST: "))
                 .map(str::to_owned)
         })
+    }
+
+    fn assert_project_root_digests_are_canonical_hashes(
+        lean_root: &str,
+        quint_root: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        let lean_digest = generated_model_digest(lean_root, "def modelDigest := \"")?;
+        let quint_digest = generated_model_digest(quint_root, "val modelDigest = \"")?;
+
+        assert_eq!(
+            lean_digest, quint_digest,
+            "Lean and Quint project roots must use the same generated model digest"
+        );
+        assert!(
+            is_lowercase_sha256_hex(lean_digest),
+            "project root digest must be a canonical SHA-256 content hash"
+        );
+        assert!(
+            lean_root.contains(&format!(
+                "theorem modelDigestIsStable : modelDigest = \"{lean_digest}\" := rfl"
+            )),
+            "Lean project root must prove composed model digest stability"
+        );
+        assert!(
+            quint_root.contains(&format!(
+                "val modelDigestStable = modelDigest == \"{quint_digest}\""
+            )),
+            "Quint project root must verify composed model digest stability"
+        );
+
+        Ok(())
+    }
+
+    fn generated_model_digest<'a>(
+        artifact: &'a str,
+        prefix: &str,
+    ) -> Result<&'a str, Box<dyn Error>> {
+        let start = artifact
+            .find(prefix)
+            .ok_or_else(|| format!("generated artifact must contain {prefix}"))?
+            + prefix.len();
+        let tail = &artifact[start..];
+        let end = tail
+            .find('"')
+            .ok_or("generated artifact model digest must terminate with a quote")?;
+
+        Ok(&tail[..end])
+    }
+
+    fn is_lowercase_sha256_hex(value: &str) -> bool {
+        value.len() == 64 && value.chars().all(|character| character.is_ascii_hexdigit())
     }
 }

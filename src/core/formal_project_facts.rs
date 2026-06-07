@@ -24,6 +24,7 @@ use crate::core::types::{
     SliceSlug, StreamName, TransformationSemantics, TranslationExternalEventName, TranslationName,
     ViewFieldName, ViewFieldSourceKind, ViewName, WorkflowSlug,
 };
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NewProjectStream {
@@ -7277,10 +7278,17 @@ fn update_lean_digest(
     contents: &str,
     inventories: ProjectDigestInventories<'_>,
 ) -> Result<String, FormalProjectFactError> {
-    let digest = digest_with_project_inventories(
-        declaration_json_string(contents, "def modelDigest := ")?,
+    let digest_source = digest_with_project_inventories(
+        project_digest_prefix(
+            contents,
+            "def modelName := ",
+            "def modelVersion := ",
+            "def modelWorkflows : List String := ",
+            "def modelSliceModules : List (String × String × String) := ",
+        )?,
         &inventories,
     );
+    let digest = hex::encode(Sha256::digest(digest_source.as_bytes()));
     replace_declaration(
         contents,
         "def modelDigest :=",
@@ -7302,10 +7310,17 @@ fn update_quint_digest(
     contents: &str,
     inventories: ProjectDigestInventories<'_>,
 ) -> Result<String, FormalProjectFactError> {
-    let digest = digest_with_project_inventories(
-        declaration_json_string(contents, "val modelDigest = ")?,
+    let digest_source = digest_with_project_inventories(
+        project_digest_prefix(
+            contents,
+            "val modelName = ",
+            "val modelVersion = ",
+            "val modelWorkflows: List[str] = ",
+            "val modelSliceModules: List[ModelSliceModule] = ",
+        )?,
         &inventories,
     );
+    let digest = hex::encode(Sha256::digest(digest_source.as_bytes()));
     replace_declaration(
         contents,
         "val modelDigest =",
@@ -7505,6 +7520,49 @@ fn digest_with_project_inventories(
         digest_events(inventories.events),
         digest_event_attributes(inventories.event_attributes)
     )
+}
+
+fn project_digest_prefix(
+    contents: &str,
+    name_marker: &str,
+    version_marker: &str,
+    workflows_marker: &str,
+    slice_modules_marker: &str,
+) -> Result<String, FormalProjectFactError> {
+    let project_name = declaration_json_string(contents, name_marker)?;
+    let model_version = declaration_json_string(contents, version_marker)?;
+    let workflows = digest_declared_workflows(declaration_value(contents, workflows_marker)?)?;
+    let slices = digest_declared_slice_modules(declaration_value(contents, slice_modules_marker)?)?;
+    Ok(format!(
+        "project:name={project_name};version={model_version};workflows={workflows};slices={slices}"
+    ))
+}
+
+fn digest_declared_workflows(value: &str) -> Result<String, FormalProjectFactError> {
+    let mut workflows = quoted_strings(value)?;
+    workflows.sort();
+    workflows.dedup();
+    Ok(workflows.join(","))
+}
+
+fn digest_declared_slice_modules(value: &str) -> Result<String, FormalProjectFactError> {
+    let mut slices = split_top_level_records(value)?
+        .into_iter()
+        .map(|record| {
+            let fields = quoted_strings(&record)?;
+            match fields.as_slice() {
+                [workflow_slug, slice_slug, module_name] => {
+                    Ok(format!("{workflow_slug}/{slice_slug}@{module_name}"))
+                }
+                _ => Err(FormalProjectFactError::new(
+                    "formal project slice module declaration is malformed",
+                )),
+            }
+        })
+        .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
+    slices.sort();
+    slices.dedup();
+    Ok(slices.join(","))
 }
 
 fn digest_data_flows(data_flows: &[ProjectDataFlow]) -> String {

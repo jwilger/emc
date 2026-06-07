@@ -4,6 +4,7 @@ use nutype::nutype;
 use std::path::{Component, Path};
 
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
+use crate::core::events::EventDraft;
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
     NewCommandDefinition, NewEventDefinition, NewExternalPayloadDefinition, NewOutcomeDefinition,
@@ -42,7 +43,9 @@ pub enum Effect {
     ConnectWorkflowFromWorkflow(WorkflowConnection),
     CopyDirectory(ProjectPath, ProjectPath),
     EnsureDirectory(ProjectPath),
+    ExportEvent(EventDraft),
     Fail(ReportLine),
+    ListConflictsFromEvents,
     ListSlicesFromIndex,
     ListTransitionsFromIndex,
     ListWorkflowsFromIndex,
@@ -61,12 +64,21 @@ pub enum Effect {
     RequireReviewRecord(ProjectPath, WorkflowSlug, ReportLine),
     RunProcess(ProcessInvocation),
     RecordCleanReviewFromWorkflow(WorkflowSlug, ReviewerId, ReviewTimestamp),
+    DeclareWorkflowReadinessFromWorkflow {
+        workflow: WorkflowSlug,
+        projection_fingerprint: ArtifactDigest,
+        model_content_digest: ArtifactDigest,
+        verified_at: ReviewTimestamp,
+        verified_by: ReviewerId,
+        review_event_id: Option<ArtifactDigest>,
+    },
     RequireWorkflowEntryLifecycleCoverageFromWorkflow(WorkflowSlug),
     RemoveDirectory(ProjectPath),
     RemoveFile(ProjectPath),
     RemoveSliceFromWorkflow(SliceSlug),
     RemoveTransitionFromWorkflow(WorkflowTransitionRemoval),
     RemoveWorkflowFromIndex(WorkflowSlug),
+    ResolveEventConflict(ArtifactDigest, ArtifactDigest),
     ShowSliceFromSlice(SliceSlug),
     ShowWorkflowFromWorkflow(WorkflowSlug),
     UpdateSliceDescriptionFromWorkflow(SliceSlug, ModelDescription),

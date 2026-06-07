@@ -16,6 +16,15 @@ use crate::core::connection::{connect_workflow, remove_transition};
 use crate::core::effect::{
     ArtifactDigest, Effect, EffectPlan, FileContents, ProcessInvocation, ProjectPath,
 };
+use crate::core::event_runtime::{
+    ProjectRuntimeLock, ensure_sqlite_event_store, execute_eventcore_command_for_exported_event,
+    lock_project_runtime,
+};
+use crate::core::events::{
+    EventDraft, export_event_file_contents, exported_events_projection_fingerprint,
+    list_event_conflicts, list_stale_workflow_readiness, project_exported_events,
+    reject_legacy_artifact_only_project, resolve_event_conflict, unresolved_event_conflicts_exist,
+};
 use crate::core::formal_graph::{
     FormalGraphError, FormalWorkflowGraph, FormalWorkflowGraphs, parse_lean_workflow_graph,
     parse_quint_workflow_graph,
@@ -86,8 +95,8 @@ use crate::core::slice::{
     update_slice_name,
 };
 use crate::core::types::{
-    LeanModuleName, ReviewRuleName, SliceSlug, WorkflowSliceDetail, WorkflowSliceDetails,
-    WorkflowSlug, WorkflowTransitionRecord,
+    LeanModuleName, ReviewRuleName, ReviewTimestamp, ReviewerId, SliceSlug, WorkflowSliceDetail,
+    WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionRecord,
 };
 use crate::core::verify::verify_project;
 use crate::core::workflow::{
@@ -158,12 +167,170 @@ pub fn interpret(plan: EffectPlan) -> Result<(), ShellError> {
 }
 
 pub fn interpret_collect_reports(plan: EffectPlan) -> Result<Vec<String>, ShellError> {
+    let runtime_lock = lock_project_runtime_if_needed()?;
+    if runtime_lock.is_some() {
+        reject_legacy_artifact_only_project().map_err(ShellError::message)?;
+        ensure_sqlite_event_store_if_needed()?;
+        project_exported_events_into_worktree()?;
+        reject_mutation_when_event_conflicts_exist(&plan)?;
+    }
     plan.effects()
         .iter()
         .try_fold(Vec::new(), |mut reports, effect| {
             reports.extend(interpret_effect(effect)?);
             Ok(reports)
         })
+}
+
+struct ShellProjectRuntimeLock {
+    _lock: ProjectRuntimeLock,
+}
+
+impl Drop for ShellProjectRuntimeLock {
+    fn drop(&mut self) {
+        if let Ok(mut is_locked) = project_runtime_lock_state().lock() {
+            *is_locked = false;
+        }
+    }
+}
+
+fn lock_project_runtime_if_needed() -> Result<Option<ShellProjectRuntimeLock>, ShellError> {
+    let mut is_locked = project_runtime_lock_state()
+        .lock()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    if *is_locked {
+        return Ok(None);
+    }
+
+    let runtime_lock = lock_project_runtime(Path::new(".")).map_err(ShellError::message)?;
+    *is_locked = true;
+    Ok(Some(ShellProjectRuntimeLock {
+        _lock: runtime_lock,
+    }))
+}
+
+fn project_runtime_lock_state() -> &'static Mutex<bool> {
+    static LOCKING_PROJECT_RUNTIME: OnceLock<Mutex<bool>> = OnceLock::new();
+    LOCKING_PROJECT_RUNTIME.get_or_init(|| Mutex::new(false))
+}
+
+fn ensure_sqlite_event_store_if_needed() -> Result<(), ShellError> {
+    if !Path::new("model/events/v1").exists() {
+        return Ok(());
+    }
+    ensure_sqlite_event_store(Path::new("."))
+        .map(|_path| ())
+        .map_err(ShellError::message)
+}
+
+fn reject_mutation_when_event_conflicts_exist(plan: &EffectPlan) -> Result<(), ShellError> {
+    if plan.effects().iter().any(effect_is_mutation)
+        && unresolved_event_conflicts_exist().map_err(ShellError::message)?
+    {
+        return Err(ShellError::message(
+            "unresolved event conflicts; run `emc list conflicts` and `emc resolve conflict`",
+        ));
+    }
+    Ok(())
+}
+
+fn effect_is_mutation(effect: &Effect) -> bool {
+    matches!(
+        effect,
+        Effect::AddAutomationDefinitionFromSlice(_)
+            | Effect::AddBitLevelDataFlowFromSlice(_)
+            | Effect::AddBoardConnectionFromSlice(_)
+            | Effect::AddBoardElementFromSlice(_)
+            | Effect::AddCommandDefinitionFromSlice(_)
+            | Effect::AddEventDefinitionFromSlice(_)
+            | Effect::AddExternalPayloadDefinitionFromSlice(_)
+            | Effect::AddOutcomeDefinitionFromSlice(_)
+            | Effect::AddReadModelDefinitionFromSlice(_)
+            | Effect::AddSliceFromWorkflow(_)
+            | Effect::AddSliceScenarioFromSlice(_)
+            | Effect::AddTranslationDefinitionFromSlice(_)
+            | Effect::AddViewDefinitionFromSlice(_)
+            | Effect::AddWorkflowCommandErrorFromWorkflow(_, _)
+            | Effect::AddWorkflowEntryLifecycleStateFromWorkflow(_, _)
+            | Effect::AddWorkflowFromIndex(_)
+            | Effect::AddWorkflowOutcomeFromWorkflow(_, _)
+            | Effect::AddWorkflowOwnedDefinitionFromWorkflow(_, _)
+            | Effect::AddWorkflowTransitionEvidenceFromWorkflow(_, _)
+            | Effect::ConnectWorkflowFromWorkflow(_)
+            | Effect::DeclareWorkflowReadinessFromWorkflow { .. }
+            | Effect::RecordCleanReviewFromWorkflow(_, _, _)
+            | Effect::RemoveSliceFromWorkflow(_)
+            | Effect::RemoveTransitionFromWorkflow(_)
+            | Effect::RemoveWorkflowFromIndex(_)
+            | Effect::RequireWorkflowEntryLifecycleCoverageFromWorkflow(_)
+            | Effect::UpdateSliceDescriptionFromWorkflow(_, _)
+            | Effect::UpdateSliceKindFromWorkflow(_, _)
+            | Effect::UpdateSliceNameFromWorkflow(_, _)
+            | Effect::UpdateWorkflowDescriptionFromIndexAndWorkflow(_, _)
+            | Effect::UpdateWorkflowNameFromIndexAndWorkflow(_, _)
+    )
+}
+
+fn project_exported_events_into_worktree() -> Result<(), ShellError> {
+    if !event_projection_is_needed() {
+        return Ok(());
+    }
+
+    let projecting = projecting_events_state();
+    {
+        let mut is_projecting = projecting
+            .lock()
+            .map_err(|error| ShellError::message(error.to_string()))?;
+        if *is_projecting {
+            return Ok(());
+        }
+        *is_projecting = true;
+    }
+
+    let result = project_exported_events()
+        .map_err(ShellError::message)
+        .and_then(|projection| {
+            projection.map_or(Ok(()), |plan| {
+                plan.effects()
+                    .iter()
+                    .try_for_each(|effect| interpret_effect(effect).map(|_reports| ()))
+            })
+        });
+
+    let mut is_projecting = projecting
+        .lock()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    *is_projecting = false;
+    result
+}
+
+fn projecting_events_state() -> &'static Mutex<bool> {
+    static PROJECTING_EVENTS: OnceLock<Mutex<bool>> = OnceLock::new();
+    PROJECTING_EVENTS.get_or_init(|| Mutex::new(false))
+}
+
+fn exported_events_are_projecting() -> Result<bool, ShellError> {
+    projecting_events_state()
+        .lock()
+        .map(|is_projecting| *is_projecting)
+        .map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn event_projection_is_needed() -> bool {
+    if !Path::new("emc.toml").exists()
+        || !Path::new("model/lean").exists()
+        || !Path::new("model/quint").exists()
+        || !Path::new("reviews").exists()
+    {
+        return true;
+    }
+
+    let Ok(Some(current_fingerprint)) = exported_events_projection_fingerprint() else {
+        return false;
+    };
+    fs::read_to_string("model/events/projection.fingerprint")
+        .map(|fingerprint| fingerprint.trim() != current_fingerprint)
+        .unwrap_or(true)
 }
 
 fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
@@ -196,6 +363,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
             reports.extend(interpret_collect_reports(project_automation_plan)?);
+            interpret_effect(&Effect::ExportEvent(EventDraft::slice_automation_added(
+                automation,
+            )))?;
             Ok(reports)
         }
         Effect::AddBitLevelDataFlowFromSlice(data_flow) => {
@@ -226,6 +396,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
             reports.extend(interpret_collect_reports(project_data_flow_plan)?);
+            interpret_effect(&Effect::ExportEvent(
+                EventDraft::slice_bit_level_data_flow_added(data_flow),
+            ))?;
             Ok(reports)
         }
         Effect::AddBoardConnectionFromSlice(connection) => {
@@ -259,6 +432,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
             reports.extend(interpret_collect_reports(project_board_plan)?);
+            interpret_effect(&Effect::ExportEvent(
+                EventDraft::slice_board_connection_added(connection),
+            ))?;
             Ok(reports)
         }
         Effect::AddBoardElementFromSlice(element) => {
@@ -290,6 +466,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
             reports.extend(interpret_collect_reports(project_board_plan)?);
+            interpret_effect(&Effect::ExportEvent(EventDraft::slice_board_element_added(
+                element,
+            )))?;
             Ok(reports)
         }
         Effect::AddCommandDefinitionFromSlice(command) => {
@@ -318,6 +497,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
             reports.extend(interpret_collect_reports(project_command_plan)?);
+            interpret_effect(&Effect::ExportEvent(
+                EventDraft::slice_command_definition_added(command),
+            ))?;
             Ok(reports)
         }
         Effect::AddEventDefinitionFromSlice(event) => {
@@ -360,6 +542,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
             reports.extend(interpret_collect_reports(project_event_plan)?);
+            interpret_effect(&Effect::ExportEvent(
+                EventDraft::slice_event_definition_added(event),
+            ))?;
             Ok(reports)
         }
         Effect::AddExternalPayloadDefinitionFromSlice(external_payload) => {
@@ -393,6 +578,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
             reports.extend(interpret_collect_reports(project_external_payload_plan)?);
+            interpret_effect(&Effect::ExportEvent(
+                EventDraft::slice_external_payload_added(external_payload),
+            ))?;
             Ok(reports)
         }
         Effect::AddOutcomeDefinitionFromSlice(outcome) => {
@@ -427,6 +615,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
             reports.extend(interpret_collect_reports(project_outcome_plan)?);
+            interpret_effect(&Effect::ExportEvent(EventDraft::slice_outcome_added(
+                outcome,
+            )))?;
             Ok(reports)
         }
         Effect::AddReadModelDefinitionFromSlice(read_model) => {
@@ -457,6 +648,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
             reports.extend(interpret_collect_reports(project_read_model_plan)?);
+            interpret_effect(&Effect::ExportEvent(EventDraft::slice_read_model_added(
+                read_model,
+            )))?;
             Ok(reports)
         }
         Effect::AddViewDefinitionFromSlice(view) => {
@@ -484,6 +678,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
             reports.extend(interpret_collect_reports(project_view_plan)?);
+            interpret_effect(&Effect::ExportEvent(EventDraft::slice_view_added(view)))?;
             Ok(reports)
         }
         Effect::AddSliceFromWorkflow(slice) => {
@@ -528,6 +723,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
             reports.extend(interpret_collect_reports(project_scenario_plan)?);
+            interpret_effect(&Effect::ExportEvent(EventDraft::slice_scenario_added(
+                scenario,
+            )))?;
             Ok(reports)
         }
         Effect::AddTranslationDefinitionFromSlice(translation) => {
@@ -561,6 +759,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             let mut reports = interpret_collect_reports(slice_plan)?;
             reports.extend(interpret_collect_reports(project_translation_plan)?);
+            interpret_effect(&Effect::ExportEvent(EventDraft::slice_translation_added(
+                translation,
+            )))?;
             Ok(reports)
         }
         Effect::AddWorkflowFromIndex(workflow) => {
@@ -589,7 +790,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 error.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let reports = interpret_collect_reports(plan)?;
+            interpret_effect(&Effect::ExportEvent(
+                EventDraft::workflow_command_error_added(workflow_slug, error),
+            ))?;
+            Ok(reports)
         }
         Effect::AddWorkflowOwnedDefinitionFromWorkflow(workflow_slug, definition) => {
             let workflow_artifacts =
@@ -603,7 +808,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 definition.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let reports = interpret_collect_reports(plan)?;
+            interpret_effect(&Effect::ExportEvent(
+                EventDraft::workflow_owned_definition_added(workflow_slug, definition),
+            ))?;
+            Ok(reports)
         }
         Effect::AddWorkflowOutcomeFromWorkflow(workflow_slug, outcome) => {
             let workflow_artifacts =
@@ -617,7 +826,12 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 outcome.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let reports = interpret_collect_reports(plan)?;
+            interpret_effect(&Effect::ExportEvent(EventDraft::workflow_outcome_added(
+                workflow_slug,
+                outcome,
+            )))?;
+            Ok(reports)
         }
         Effect::AddWorkflowTransitionEvidenceFromWorkflow(workflow_slug, evidence) => {
             let workflow_artifacts =
@@ -631,7 +845,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 evidence.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let reports = interpret_collect_reports(plan)?;
+            interpret_effect(&Effect::ExportEvent(
+                EventDraft::workflow_transition_evidence_added(workflow_slug, evidence),
+            ))?;
+            Ok(reports)
         }
         Effect::RequireWorkflowEntryLifecycleCoverageFromWorkflow(workflow_slug) => {
             let workflow_artifacts =
@@ -644,7 +862,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 workflow_slug.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let reports = interpret_collect_reports(plan)?;
+            interpret_effect(&Effect::ExportEvent(
+                EventDraft::workflow_entry_lifecycle_coverage_required(workflow_slug),
+            ))?;
+            Ok(reports)
         }
         Effect::AddWorkflowEntryLifecycleStateFromWorkflow(workflow_slug, coverage) => {
             let workflow_artifacts =
@@ -658,7 +880,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 coverage.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let reports = interpret_collect_reports(plan)?;
+            interpret_effect(&Effect::ExportEvent(
+                EventDraft::workflow_entry_lifecycle_state_added(workflow_slug, coverage),
+            ))?;
+            Ok(reports)
         }
         Effect::CheckCurrentProject => {
             let project_name = read_project_manifest_name()?;
@@ -740,7 +966,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 connection.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let reports = interpret_collect_reports(plan)?;
+            interpret_effect(&Effect::ExportEvent(EventDraft::workflow_connected(
+                connection,
+            )))?;
+            Ok(reports)
         }
         Effect::CopyDirectory(source, target) => {
             copy_directory(source.as_ref(), target.as_ref()).map(|()| Vec::new())
@@ -748,13 +978,30 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::EnsureDirectory(path) => fs::create_dir_all(Path::new(path.as_ref()))
             .map(|()| Vec::new())
             .map_err(ShellError::io),
+        Effect::ExportEvent(draft) => {
+            if exported_events_are_projecting()? {
+                return Ok(Vec::new());
+            }
+            execute_eventcore_command_for_exported_event(Path::new("."), draft)
+                .map_err(ShellError::message)?;
+            let (path, contents) =
+                export_event_file_contents(draft).map_err(ShellError::message)?;
+            write_file(&path, contents.as_ref()).map(|()| Vec::new())
+        }
         Effect::Fail(message) => Err(ShellError::message(message.as_ref().to_owned())),
+        Effect::ListConflictsFromEvents => {
+            interpret_collect_reports(list_event_conflicts().map_err(ShellError::message)?)
+        }
         Effect::ListWorkflowsFromIndex => {
             let modeled_workflows =
                 formal_workflow_layouts(read_synchronized_formal_workflow_graphs()?);
-            interpret_collect_reports(list_workflows(ModeledWorkflowLayouts::new(
-                modeled_workflows,
-            )))
+            let mut reports = interpret_collect_reports(list_workflows(
+                ModeledWorkflowLayouts::new(modeled_workflows),
+            ))?;
+            reports.extend(interpret_collect_reports(
+                list_stale_workflow_readiness().map_err(ShellError::message)?,
+            )?);
+            Ok(reports)
         }
         Effect::ListSlicesFromIndex => {
             let modeled_slices =
@@ -833,18 +1080,43 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             }
         }
         Effect::RunProcess(invocation) => run_process(invocation),
+        Effect::DeclareWorkflowReadinessFromWorkflow {
+            workflow,
+            projection_fingerprint,
+            model_content_digest,
+            verified_at,
+            verified_by,
+            review_event_id,
+        } => interpret_effect(&Effect::ExportEvent(
+            EventDraft::workflow_readiness_declared(
+                workflow,
+                projection_fingerprint,
+                model_content_digest,
+                verified_at,
+                verified_by,
+                review_event_id.as_ref(),
+            ),
+        )),
         Effect::RecordCleanReviewFromWorkflow(slug, reviewer_id, reviewed_at) => {
             let current_digest = formal_model_content_digest(slug)?;
             let required_categories = required_review_categories()?;
             let plan = record_clean_review(
                 slug.clone(),
-                current_digest,
+                current_digest.clone(),
                 reviewer_id.clone(),
                 reviewed_at.clone(),
-                RequiredReviewCategories::new(required_categories),
+                RequiredReviewCategories::new(required_categories.clone()),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let reports = interpret_collect_reports(plan)?;
+            interpret_effect(&Effect::ExportEvent(EventDraft::review_recorded(
+                slug,
+                &current_digest,
+                reviewer_id,
+                reviewed_at,
+                &required_categories,
+            )))?;
+            Ok(reports)
         }
         Effect::RemoveDirectory(path) => {
             remove_directory_if_present(path.as_ref()).map(|()| Vec::new())
@@ -877,7 +1149,11 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 removal.clone(),
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
+            let reports = interpret_collect_reports(plan)?;
+            interpret_effect(&Effect::ExportEvent(
+                EventDraft::workflow_transition_removed(removal),
+            ))?;
+            Ok(reports)
         }
         Effect::RemoveWorkflowFromIndex(slug) => {
             let project_name = read_project_manifest_name()?;
@@ -894,6 +1170,19 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             )
             .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
+        }
+        Effect::ResolveEventConflict(conflict_id, chosen_event_id) => {
+            let plan = resolve_event_conflict(
+                conflict_id.as_ref().to_owned(),
+                chosen_event_id.as_ref().to_owned(),
+            )
+            .map_err(ShellError::message)?;
+            plan.effects()
+                .iter()
+                .try_fold(Vec::new(), |mut reports, effect| {
+                    reports.extend(interpret_effect(effect)?);
+                    Ok(reports)
+                })
         }
         Effect::ShowSliceFromSlice(slug) => {
             let slice_document = read_formal_slice_artifacts(slug)?;
@@ -979,13 +1268,40 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         Effect::VerifyProjectFromIndex => {
             let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?;
+            let readiness_workflows = formal_workflows
+                .as_slice()
+                .iter()
+                .map(FormalWorkflowGraph::slug)
+                .cloned()
+                .collect::<Vec<_>>();
+            let verified_frontier = current_projection_fingerprint()?;
             let modeled_slices = formal_workflow_slice_details(formal_workflows.clone());
             let modeled_workflows = formal_workflow_layouts(formal_workflows);
-            interpret_collect_reports(verify_project(
+            let mut reports = interpret_collect_reports(verify_project(
                 project_name,
                 ModeledWorkflowLayouts::new(modeled_workflows),
                 WorkflowSliceDetails::from_details(modeled_slices),
-            ))
+            ))?;
+            let current_frontier = current_projection_fingerprint()?;
+            if current_frontier != verified_frontier {
+                return Err(ShellError::message(
+                    "event frontier changed during verification; retry `emc verify`",
+                ));
+            }
+            for workflow in readiness_workflows {
+                let model_content_digest = formal_model_content_digest(&workflow)?;
+                reports.extend(interpret_effect(
+                    &Effect::DeclareWorkflowReadinessFromWorkflow {
+                        workflow,
+                        projection_fingerprint: verified_frontier.clone(),
+                        model_content_digest,
+                        verified_at: readiness_verified_at()?,
+                        verified_by: readiness_verified_by()?,
+                        review_event_id: None,
+                    },
+                )?);
+            }
+            Ok(reports)
         }
         Effect::WriteFile(path, contents) => {
             write_file(path.as_ref(), contents.as_ref()).map(|()| Vec::new())
@@ -2213,6 +2529,26 @@ fn required_review_categories() -> Result<Vec<ReviewRuleName>, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))
         })
         .collect()
+}
+
+fn current_projection_fingerprint() -> Result<ArtifactDigest, ShellError> {
+    exported_events_projection_fingerprint()
+        .map_err(ShellError::message)?
+        .ok_or_else(|| ShellError::message("event export is required before verification"))
+        .and_then(|fingerprint| {
+            ArtifactDigest::try_new(fingerprint)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+}
+
+fn readiness_verified_at() -> Result<ReviewTimestamp, ShellError> {
+    ReviewTimestamp::try_new("1970-01-01T00:00:00.000Z".to_owned())
+        .map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn readiness_verified_by() -> Result<ReviewerId, ShellError> {
+    ReviewerId::try_new("emc verify".to_owned())
+        .map_err(|error| ShellError::message(error.to_string()))
 }
 
 fn formal_model_content_digest(slug: &WorkflowSlug) -> Result<ArtifactDigest, ShellError> {

@@ -1,8 +1,10 @@
 // Copyright 2026 John Wilger
 
 use nutype::nutype;
+use sha2::{Digest, Sha256};
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
+use crate::core::events::EventDraft;
 use crate::core::types::{LeanModuleName, SliceSlug, WorkflowSlug};
 
 #[nutype(
@@ -91,6 +93,8 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         ),
         Effect::EnsureDirectory(project_path("reviews")),
         Effect::WriteFileIfMissing(project_path("reviews/.gitkeep"), file_contents("\n")),
+        Effect::EnsureDirectory(project_path("model/events/v1")),
+        Effect::ExportEvent(EventDraft::project_initialized(&project_name)),
         Effect::Report(report_line(format!(
             "EMC project {project_name} layout is present"
         ))),
@@ -362,12 +366,13 @@ fn model_digest(
     workflow_slugs: &[WorkflowSlug],
     slice_memberships: &[ProjectSliceMembership],
 ) -> String {
-    format!(
+    let canonical_source = format!(
         "project:name={};version={FORMAL_MODEL_VERSION};workflows={};slices={};scenarios=;scenario-definitions=;data-flows=;outcomes=;command-errors=;commands=;command-inputs=;read-models=;read-model-definitions=;read-model-fields=;views=;view-definitions=;view-controls=;board-elements=;board-connections=;view-fields=;automations=;automation-definitions=;translations=;translation-definitions=;external-payloads=;external-payload-fields=;streams=;events=;event-attributes=",
         project_name.as_ref(),
         digest_workflows(workflow_slugs),
         digest_slices(slice_memberships)
-    )
+    );
+    hex::encode(Sha256::digest(canonical_source.as_bytes()))
 }
 
 fn digest_workflows(workflow_slugs: &[WorkflowSlug]) -> String {

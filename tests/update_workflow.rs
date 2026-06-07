@@ -242,6 +242,12 @@ mod tests {
             .assert()
             .success();
 
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
         remove_file(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         remove_file(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 

@@ -1,7 +1,7 @@
 // Copyright 2026 John Wilger
 
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
-use crate::core::effect::{Effect, EffectPlan};
+use crate::core::effect::{ArtifactDigest, Effect, EffectPlan};
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
     NewCommandDefinition, NewEventDefinition, NewExternalPayloadDefinition, NewOutcomeDefinition,
@@ -152,6 +152,16 @@ pub fn remove_workflow(slug: WorkflowSlug) -> EffectPlan {
     EffectPlan::new(vec![Effect::RemoveWorkflowFromIndex(slug)])
 }
 
+pub fn resolve_conflict(
+    conflict_id: ArtifactDigest,
+    chosen_event_id: ArtifactDigest,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::ResolveEventConflict(
+        conflict_id,
+        chosen_event_id,
+    )])
+}
+
 pub fn gherkin_list(suite: GherkinSuite) -> EffectPlan {
     list_gherkin_features(suite)
 }
@@ -170,6 +180,10 @@ pub fn init(name: ProjectName) -> EffectPlan {
 
 pub fn list_workflows() -> EffectPlan {
     EffectPlan::new(vec![Effect::ListWorkflowsFromIndex])
+}
+
+pub fn list_conflicts() -> EffectPlan {
+    EffectPlan::new(vec![Effect::ListConflictsFromEvents])
 }
 
 pub fn list_slices() -> EffectPlan {
