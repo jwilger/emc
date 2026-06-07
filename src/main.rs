@@ -1,34 +1,41 @@
 // Copyright 2026 John Wilger
 
+#![cfg_attr(test, allow(dead_code))]
+
 use std::env;
 use std::process::ExitCode;
 
 use clap::{Arg, Command as ClapCommand};
-use emc::command;
-use emc::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
-use emc::core::effect::ArtifactDigest;
-use emc::core::formal_slice_facts::{
-    CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain,
+mod command;
+mod core;
+mod io;
+mod mcp;
+mod shell;
+
+use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
+use crate::core::effect::ArtifactDigest;
+use crate::core::formal_slice_facts::{
+    CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, CommandInputSource,
     CommandObservedStreams, EmittedEventNames, NewAutomationDefinition, NewBitLevelDataFlow,
     NewBoardConnection, NewBoardElement, NewCommandDefinition, NewCommandErrorDefinition,
     NewCommandInput, NewControlDefinition, NewControlInputProvision, NewEventAttribute,
     NewEventDefinition, NewExternalPayloadDefinition, NewNavigationTarget, NewOutcomeDefinition,
     NewReadModelDefinition, NewReadModelField, NewSliceScenario, NewTranslationDefinition,
     NewViewDefinition, NewViewField, OutcomeEventNames, ReadModelDerivationSourceFields,
-    ReadModelRelationshipFields, ScenarioKind, ScenarioStreamNames, ViewControls, ViewFilters,
-    ViewLocalStates,
+    ReadModelFieldSource, ReadModelRelationshipFields, ScenarioKind, ScenarioStreamNames,
+    ViewControls, ViewFilters, ViewLocalStates,
 };
-use emc::core::gherkin::GherkinSuite;
-use emc::core::project::ProjectName;
-use emc::core::slice::{NewSlice, SliceKind};
-use emc::core::types::{
-    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceSlug,
-    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
-    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
+use crate::core::gherkin::GherkinSuite;
+use crate::core::project::ProjectName;
+use crate::core::slice::{NewSlice, SliceKind};
+use crate::core::types::{
+    CommandInputSourceKind, ModelDescription, ModelName, ReadModelFieldSourceKind, ReviewTimestamp,
+    ReviewerId, SliceSlug, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
+    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
     WorkflowTransitionEvidenceRecord,
 };
-use emc::core::workflow::NewWorkflow;
-use emc::io::dto::{
+use crate::core::workflow::NewWorkflow;
+use crate::io::dto::{
     parse_automation_name, parse_automation_reaction_description, parse_automation_trigger_name,
     parse_bit_encoding_semantics, parse_board_connection_endpoint,
     parse_board_connection_endpoint_kind, parse_board_element_declared_name,
@@ -40,12 +47,13 @@ use emc::io::dto::{
     parse_data_flow_source_kind, parse_data_flow_target, parse_datum_name, parse_datum_names,
     parse_event_attribute_name, parse_event_attribute_source_field,
     parse_event_attribute_source_kind, parse_event_attribute_source_name, parse_event_name,
-    parse_event_names, parse_gherkin_suite, parse_model_description, parse_model_name,
-    parse_navigation_target_name, parse_navigation_target_names, parse_navigation_target_type,
-    parse_outcome_label_name, parse_payload_contract_name, parse_project_name,
-    parse_provenance_description, parse_read_model_derivation_rule,
-    parse_read_model_field_source_kind, parse_read_model_name, parse_read_model_transitive_rule,
-    parse_review_timestamp, parse_reviewer_id, parse_scenario_name, parse_scenario_step_text,
+    parse_event_names, parse_generated_event_attribute_source_kind, parse_gherkin_suite,
+    parse_model_description, parse_model_name, parse_navigation_target_name,
+    parse_navigation_target_names, parse_navigation_target_type, parse_outcome_label_name,
+    parse_payload_contract_name, parse_project_name, parse_provenance_description,
+    parse_read_model_derivation_rule, parse_read_model_field_source_kind, parse_read_model_name,
+    parse_read_model_transitive_rule, parse_review_timestamp, parse_reviewer_id,
+    parse_scenario_kind, parse_scenario_name, parse_scenario_step_text,
     parse_singleton_repeat_behavior, parse_sketch_token, parse_slice_kind, parse_slice_slug,
     parse_source_chain_hops, parse_stream_name, parse_stream_names, parse_transformation_semantics,
     parse_transition_trigger_name, parse_translation_external_event_name, parse_translation_name,
@@ -53,11 +61,11 @@ use emc::io::dto::{
     parse_workflow_entry_lifecycle_evidence_text, parse_workflow_entry_lifecycle_state_name,
     parse_workflow_event_participation, parse_workflow_owned_definition_kind,
     parse_workflow_owned_definition_name, parse_workflow_slug, parse_workflow_transition_endpoint,
-    parse_workflow_transition_evidence_text, parse_workflow_transition_kind,
-    parse_workflow_view_role,
+    parse_workflow_transition_kind, parse_workflow_transition_source_evidence_text,
+    parse_workflow_transition_target_evidence_text, parse_workflow_view_role,
 };
-use emc::mcp::{serve_http, serve_stdio};
-use emc::shell::{ShellError, interpret};
+use crate::mcp::{serve_http, serve_stdio};
+use crate::shell::{ShellError, interpret};
 
 struct Cli {
     command: Command,
@@ -611,11 +619,20 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                         command_name,
                         NewCommandInput::new(
                             input_name,
-                            input_source,
+                            match input_source {
+                                CommandInputSourceKind::Generated => {
+                                    CommandInputSource::generated(source_name, source_field)
+                                }
+                                other => {
+                                    return Err(command_input_source_kind_mismatch(
+                                        other,
+                                        CommandInputSourceKind::Generated,
+                                    ));
+                                }
+                            },
                             input_description,
                             CommandInputProvenanceChain::from_hops(provenance_chain),
-                        )
-                        .with_generated_source(source_name, source_field),
+                        ),
                         EmittedEventNames::from_events(emitted_events),
                     ),
                 },
@@ -679,11 +696,23 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                         command_name,
                         NewCommandInput::new(
                             input_name,
-                            input_source,
+                            match input_source {
+                                CommandInputSourceKind::InvocationArgument => {
+                                    CommandInputSource::invocation_argument(
+                                        source_argument,
+                                        source_field,
+                                    )
+                                }
+                                other => {
+                                    return Err(command_input_source_kind_mismatch(
+                                        other,
+                                        CommandInputSourceKind::InvocationArgument,
+                                    ));
+                                }
+                            },
                             input_description,
                             CommandInputProvenanceChain::from_hops(provenance_chain),
-                        )
-                        .with_invocation_argument_source(source_argument, source_field),
+                        ),
                         EmittedEventNames::from_events(emitted_events),
                     ),
                 },
@@ -747,11 +776,20 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                         command_name,
                         NewCommandInput::new(
                             input_name,
-                            input_source,
+                            match input_source {
+                                CommandInputSourceKind::Session => {
+                                    CommandInputSource::session(source_session, source_field)
+                                }
+                                other => {
+                                    return Err(command_input_source_kind_mismatch(
+                                        other,
+                                        CommandInputSourceKind::Session,
+                                    ));
+                                }
+                            },
                             input_description,
                             CommandInputProvenanceChain::from_hops(provenance_chain),
-                        )
-                        .with_session_source(source_session, source_field),
+                        ),
                         EmittedEventNames::from_events(emitted_events),
                     ),
                 },
@@ -978,11 +1016,23 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                         command_name,
                         NewCommandInput::new(
                             input_name,
-                            input_source,
+                            match input_source {
+                                CommandInputSourceKind::EventStreamState => {
+                                    CommandInputSource::event_stream_state(
+                                        source_event,
+                                        source_attribute,
+                                    )
+                                }
+                                other => {
+                                    return Err(command_input_source_kind_mismatch(
+                                        other,
+                                        CommandInputSourceKind::EventStreamState,
+                                    ));
+                                }
+                            },
                             input_description,
                             CommandInputProvenanceChain::from_hops(provenance_chain),
-                        )
-                        .with_event_stream_source(source_event, source_attribute),
+                        ),
                         EmittedEventNames::from_events(emitted_events),
                     )
                     .with_observed_streams(CommandObservedStreams::from_streams(observed_streams)),
@@ -1047,11 +1097,23 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                         command_name,
                         NewCommandInput::new(
                             input_name,
-                            input_source,
+                            match input_source {
+                                CommandInputSourceKind::ExternalPayload => {
+                                    CommandInputSource::external_payload(
+                                        source_payload,
+                                        source_field,
+                                    )
+                                }
+                                other => {
+                                    return Err(command_input_source_kind_mismatch(
+                                        other,
+                                        CommandInputSourceKind::ExternalPayload,
+                                    ));
+                                }
+                            },
                             input_description,
                             CommandInputProvenanceChain::from_hops(provenance_chain),
-                        )
-                        .with_external_payload_source(source_payload, source_field),
+                        ),
                         EmittedEventNames::from_events(emitted_events),
                     ),
                 },
@@ -1579,9 +1641,17 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 read_model_name,
                 NewReadModelField::new(
                     field_name,
-                    field_source_kind,
-                    source_event,
-                    source_attribute,
+                    match field_source_kind {
+                        ReadModelFieldSourceKind::EventAttribute => {
+                            ReadModelFieldSource::event_attribute(source_event, source_attribute)
+                        }
+                        other => {
+                            return Err(read_model_field_source_kind_mismatch(
+                                other,
+                                ReadModelFieldSourceKind::EventAttribute,
+                            ));
+                        }
+                    },
                     provenance_description,
                 ),
             );
@@ -1649,12 +1719,23 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                     read_model: NewReadModelDefinition::new(
                         slice_slug,
                         read_model_name,
-                        NewReadModelField::new_derivation(
+                        NewReadModelField::new(
                             field_name,
-                            field_source_kind,
-                            derivation_rule,
-                            ReadModelDerivationSourceFields::from_fields(source_fields),
-                            derivation_scenario,
+                            match field_source_kind {
+                                ReadModelFieldSourceKind::Derivation => {
+                                    ReadModelFieldSource::derivation(
+                                        derivation_rule,
+                                        ReadModelDerivationSourceFields::from_fields(source_fields),
+                                        derivation_scenario,
+                                    )
+                                }
+                                other => {
+                                    return Err(read_model_field_source_kind_mismatch(
+                                        other,
+                                        ReadModelFieldSourceKind::Derivation,
+                                    ));
+                                }
+                            },
                             provenance_description,
                         ),
                     ),
@@ -1878,11 +1959,22 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                     read_model: NewReadModelDefinition::new(
                         slice_slug,
                         read_model_name,
-                        NewReadModelField::new_absence_default(
+                        NewReadModelField::new(
                             field_name,
-                            field_source_kind,
-                            absence_event,
-                            absence_scenario,
+                            match field_source_kind {
+                                ReadModelFieldSourceKind::AbsenceDefault => {
+                                    ReadModelFieldSource::absence_default(
+                                        absence_event,
+                                        absence_scenario,
+                                    )
+                                }
+                                other => {
+                                    return Err(read_model_field_source_kind_mismatch(
+                                        other,
+                                        ReadModelFieldSourceKind::AbsenceDefault,
+                                    ));
+                                }
+                            },
                             provenance_description,
                         ),
                     ),
@@ -2172,9 +2264,20 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                         read_model_name,
                         NewReadModelField::new(
                             field_name,
-                            field_source_kind,
-                            source_event,
-                            source_attribute,
+                            match field_source_kind {
+                                ReadModelFieldSourceKind::EventAttribute => {
+                                    ReadModelFieldSource::event_attribute(
+                                        source_event,
+                                        source_attribute,
+                                    )
+                                }
+                                other => {
+                                    return Err(read_model_field_source_kind_mismatch(
+                                        other,
+                                        ReadModelFieldSourceKind::EventAttribute,
+                                    ));
+                                }
+                            },
                             provenance_description,
                         ),
                     ),
@@ -2477,7 +2580,9 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             && contract_kind_flag == "--contract-kind"
             && covered_definition_flag == "--covered-definition" =>
         {
-            if scenario_kind != "contract" {
+            let scenario_kind = parse_scenario_kind(scenario_kind)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            if scenario_kind != ScenarioKind::contract() {
                 return Err(ShellError::message(
                     "--contract-kind and --covered-definition require --kind contract",
                 ));
@@ -2543,7 +2648,9 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             && covered_definition_flag == "--covered-definition"
             && error_references_flag == "--error-references" =>
         {
-            if scenario_kind != "contract" {
+            let scenario_kind = parse_scenario_kind(scenario_kind)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            if scenario_kind != ScenarioKind::contract() {
                 return Err(ShellError::message(
                     "--contract-kind and --covered-definition require --kind contract",
                 ));
@@ -2707,7 +2814,9 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             && read_streams_flag == "--read-streams"
             && written_streams_flag == "--written-streams" =>
         {
-            if scenario_kind != "contract" {
+            let scenario_kind = parse_scenario_kind(scenario_kind)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            if scenario_kind != ScenarioKind::contract() {
                 return Err(ShellError::message(
                     "--contract-kind and --covered-definition require --kind contract",
                 ));
@@ -2782,7 +2891,9 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
             && written_streams_flag == "--written-streams"
             && error_references_flag == "--error-references" =>
         {
-            if scenario_kind != "contract" {
+            let scenario_kind = parse_scenario_kind(scenario_kind)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            if scenario_kind != ScenarioKind::contract() {
                 return Err(ShellError::message(
                     "--contract-kind and --covered-definition require --kind contract",
                 ));
@@ -2884,7 +2995,7 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                         command_name,
                         NewCommandInput::new(
                             input_name,
-                            input_source,
+                            require_actor_command_input_source(input_source)?,
                             input_description,
                             CommandInputProvenanceChain::from_hops(provenance_chain),
                         ),
@@ -2955,7 +3066,7 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 command_name,
                 NewCommandInput::new(
                     input_name,
-                    input_source,
+                    require_actor_command_input_source(input_source)?,
                     input_description,
                     CommandInputProvenanceChain::from_hops(provenance_chain),
                 ),
@@ -3024,7 +3135,7 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                         command_name,
                         NewCommandInput::new(
                             input_name,
-                            input_source,
+                            require_actor_command_input_source(input_source)?,
                             input_description,
                             CommandInputProvenanceChain::from_hops(provenance_chain),
                         ),
@@ -3082,7 +3193,7 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                         command_name,
                         NewCommandInput::new(
                             input_name,
-                            input_source,
+                            require_actor_command_input_source(input_source)?,
                             input_description,
                             CommandInputProvenanceChain::from_hops(provenance_chain),
                         ),
@@ -3349,9 +3460,9 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let trigger = parse_transition_trigger_name(trigger)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            let source_evidence = parse_workflow_transition_evidence_text(source_evidence)
+            let source_evidence = parse_workflow_transition_source_evidence_text(source_evidence)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            let target_evidence = parse_workflow_transition_evidence_text(target_evidence)
+            let target_evidence = parse_workflow_transition_target_evidence_text(target_evidence)
                 .map_err(|error| ShellError::message(error.to_string()))?;
             Ok(Cli {
                 command: Command::AddWorkflowTransitionEvidence {
@@ -3955,6 +4066,36 @@ fn parse_observed_flag(raw: &str) -> Result<bool, ShellError> {
         .map_err(|_error| ShellError::message("invalid observed flag: expected true or false"))
 }
 
+fn command_input_source_kind_mismatch(
+    actual: CommandInputSourceKind,
+    expected: CommandInputSourceKind,
+) -> ShellError {
+    ShellError::message(format!(
+        "add command source reference requires --input-source {expected}, got {actual}"
+    ))
+}
+
+fn require_actor_command_input_source(
+    source_kind: CommandInputSourceKind,
+) -> Result<CommandInputSource, ShellError> {
+    match source_kind {
+        CommandInputSourceKind::Actor => Ok(CommandInputSource::actor()),
+        other => Err(command_input_source_kind_mismatch(
+            other,
+            CommandInputSourceKind::Actor,
+        )),
+    }
+}
+
+fn read_model_field_source_kind_mismatch(
+    actual: ReadModelFieldSourceKind,
+    expected: ReadModelFieldSourceKind,
+) -> ShellError {
+    ShellError::message(format!(
+        "add read-model source reference requires --field-source {expected}, got {actual}"
+    ))
+}
+
 fn parse_event_attribute(
     attribute: &str,
     attribute_source: &str,
@@ -3976,8 +4117,9 @@ fn parse_event_attribute(
 
     match generated_source_kind {
         Some(generated_source_kind) => {
-            let generated_source_kind = parse_event_attribute_source_kind(generated_source_kind)
-                .map_err(|error| ShellError::message(error.to_string()))?;
+            let generated_source_kind =
+                parse_generated_event_attribute_source_kind(generated_source_kind)
+                    .map_err(|error| ShellError::message(error.to_string()))?;
             Ok(NewEventAttribute::new_with_generated_source_kind(
                 attribute_name,
                 attribute_source_kind,
@@ -4033,8 +4175,10 @@ fn parse_basic_scenario(
         parse_scenario_step_text(when).map_err(|error| ShellError::message(error.to_string()))?;
     let then =
         parse_scenario_step_text(then).map_err(|error| ShellError::message(error.to_string()))?;
-    match scenario_kind {
-        "acceptance" => Ok(NewSliceScenario::new(
+    match parse_scenario_kind(scenario_kind)
+        .map_err(|error| ShellError::message(error.to_string()))?
+    {
+        ScenarioKind::Acceptance => Ok(NewSliceScenario::new(
             slice_slug,
             ScenarioKind::acceptance(),
             name,
@@ -4042,12 +4186,9 @@ fn parse_basic_scenario(
             when,
             then,
         )),
-        "contract" => Err(ShellError::message(
+        ScenarioKind::Contract => Err(ShellError::message(
             "contract scenarios require --contract-kind and --covered-definition",
         )),
-        _ => Err(ShellError::message(format!(
-            "invalid scenario kind: {scenario_kind}"
-        ))),
     }
 }
 

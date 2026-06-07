@@ -2,15 +2,21 @@
 
 use crate::core::effect::{ArtifactDigest, FileContents};
 use crate::core::types::{
-    LeanModuleName, ModelDescription, ModelName, SliceKindName, SliceSlug,
-    WorkflowCommandErrorRecord, WorkflowCommandErrorRecords, WorkflowEntryLifecycleStateRecord,
-    WorkflowEntryLifecycleStateRecords, WorkflowModuleData, WorkflowOutcomeRecord,
-    WorkflowOutcomeRecords, WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords,
-    WorkflowSliceDetail, WorkflowTransitionEvidenceRecord, WorkflowTransitionEvidenceRecords,
-    WorkflowTransitionRecord, WorkflowTransitionRecords,
+    BoardLaneId, CommandErrorRecoveryKind, CommandInputSourceKind, EventAttributeSourceKind,
+    LeanModuleName, ModelDescription, ModelName, NavigationTargetType, ReadModelFieldSourceKind,
+    SingletonRepeatBehavior, SliceKindName, SliceSlug, ViewFieldSourceKind,
+    WorkflowCommandErrorRecord, WorkflowCommandErrorRecords, WorkflowEntryLifecycleStateName,
+    WorkflowEntryLifecycleStateRecord, WorkflowEntryLifecycleStateRecords, WorkflowModuleData,
+    WorkflowOutcomeRecord, WorkflowOutcomeRecords, WorkflowOwnedDefinitionRecord,
+    WorkflowOwnedDefinitionRecords, WorkflowSliceDetail, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionEvidenceRecords, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 
-pub fn emit_workflow_module(
+#[cfg(test)]
+#[path = "lean_tests.rs"]
+mod external_tests;
+
+pub(crate) fn emit_workflow_module(
     module_name: LeanModuleName,
     workflow_module: WorkflowModuleData,
 ) -> FileContents {
@@ -30,6 +36,7 @@ pub fn emit_workflow_module(
         workflow_transition_evidence_list(workflow_module.workflow_transition_evidences());
     let workflow_entry_lifecycle_state_list =
         workflow_entry_lifecycle_state_list(workflow_module.workflow_entry_lifecycle_states());
+    let required_entry_lifecycle_state_list = required_entry_lifecycle_state_list();
     let transition_list = transition_list(workflow_module.workflow_transitions().clone());
     let workflow_requires_entry_lifecycle_coverage =
         workflow_module.workflow_requires_entry_lifecycle_coverage();
@@ -106,7 +113,7 @@ def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := {workflow
 
 def workflowExitTargets : List String := {workflow_exit_target_list}
 
-def requiredEntryLifecycleStates : List String := ["fresh_uninitialized","initialized_unauthenticated","initialized_authenticated","partially_configured","fully_configured"]
+def requiredEntryLifecycleStates : List String := {required_entry_lifecycle_state_list}
 
 def allowedWorkflowStepRelationships : List String := ["entry","main","branch","alternate","async_lifecycle","supporting"]
 
@@ -332,11 +339,12 @@ end {module_name}
         workflow_transition_evidence_list = workflow_transition_evidence_list,
         workflow_requires_entry_lifecycle_coverage = workflow_requires_entry_lifecycle_coverage,
         workflow_entry_lifecycle_state_list = workflow_entry_lifecycle_state_list,
+        required_entry_lifecycle_state_list = required_entry_lifecycle_state_list,
         workflow_exit_target_list = workflow_exit_target_list,
     ))
 }
 
-pub fn emit_slice_module(
+pub(crate) fn emit_slice_module(
     module_name: LeanModuleName,
     slice_name: ModelName,
     slice_description: ModelDescription,
@@ -344,6 +352,14 @@ pub fn emit_slice_module(
     slice_kind: SliceKindName,
     digest: ArtifactDigest,
 ) -> FileContents {
+    let allowed_command_input_source_kind_list = command_input_source_kind_list();
+    let allowed_recovery_kind_list = command_error_recovery_kind_list();
+    let allowed_singleton_repeat_behavior_list = singleton_repeat_behavior_list();
+    let allowed_navigation_target_type_list = navigation_target_type_list();
+    let stored_event_fact_source_kind_list = event_attribute_source_kind_list();
+    let allowed_read_model_field_source_kind_list = read_model_field_source_kind_list();
+    let allowed_view_field_source_kind_list = view_field_source_kind_list();
+    let canonical_board_lane_list = board_lane_id_list();
     let contents = format!(
         "namespace {module_name}\n\n-- EMC-DIGEST: {digest}\n-- EMC generated Lean4 business slice model.\ndef sliceName := {slice_name_json}\n\ndef sliceSlug := {slice_slug_json}\n\ndef sliceKind := {slice_kind_json}\n\ndef sliceDescription := {slice_description_json}\n\nstructure EventModelScenario where\n  name : String\n  givenSteps : List String\n  whenSteps : List String\n  thenSteps : List String\n\nstructure BitLevelDataFlow where\n  datum : String\n  sourceKind : String\n  source : String\n  transformationSemantics : String\n  target : String\n  bitEncoding : String\n\nstructure CommandInput where\n  name : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String\n\nstructure CommandErrorDefinition where\n  name : String\n  scenarioName : String\n  recoveryKind : String\n\nstructure CommandDefinition where\n  name : String\n  inputs : List CommandInput\n  emittedEvents : List String\n  observedStreams : List String\n  errors : List CommandErrorDefinition\n  singleton : Bool\n  repeatBehavior : String\n\nstructure OutcomeDefinition where\n  label : String\n  eventSet : List String\n  externallyRelevant : Bool\n\nstructure StreamDefinition where\n  name : String\n\nstructure EventAttribute where\n  name : String\n  sourceKind : String\n  sourceName : String\n  sourceField : String\n  generatedSourceKind : String\n  provenanceDescription : String\n\nstructure EventDefinition where\n  name : String\n  stream : String\n  attributes : List EventAttribute\n  observed : Bool\n  shared : Bool\n\nstructure ReadModelField where\n  name : String\n  sourceKind : String\n  sourceEvent : String\n  sourceAttribute : String\n  derivationRule : String\n  absenceEvent : String\n  provenanceDescription : String\n\nstructure ReadModelDefinition where\n  name : String\n  fields : List ReadModelField\n\nstructure ViewField where\n  name : String\n  sourceKind : String\n  sourceReadModel : String\n  sourceField : String\n  sketchToken : String\n  provenanceDescription : String\n  bitEncoding : String\n\nstructure ControlInputProvision where\n  name : String\n  sourceKind : String\n  sourceDescription : String\n  sketchToken : String\n  visibleToActor : Bool\n  decisionField : Bool\n\nstructure ControlDefinition where\n  name : String\n  commandName : String\n  inputs : List ControlInputProvision\n  handledErrors : List String\n  recoveryBehavior : String\n  sketchToken : String\n\nstructure ViewDefinition where\n  name : String\n  readModels : List String\n  fields : List ViewField\n  controls : List ControlDefinition\n  sketchTokens : List String\n\ndef sliceCommands : List String := []\n\ndef sliceCommandDefinitions : List CommandDefinition := []\n\ndef sliceReferencedCommands : List String := []\n\ndef sliceOutcomeDefinitions : List OutcomeDefinition := []\n\ndef allowedCommandInputSourceKinds : List String := [\"actor\",\"session\",\"generated\",\"external_payload\",\"event_stream_state\",\"invocation_argument\"]\n\ndef allowedRecoveryKinds : List String := [\"retry\",\"stay_on_screen\",\"navigation\",\"explicit_recovery_action\"]\n\ndef allowedSingletonRepeatBehaviors : List String := [\"already_exists_error\",\"idempotent\"]\n\ndef sliceEvents : List String := []\n\ndef sliceStreams : List StreamDefinition := []\n\ndef sliceEventDefinitions : List EventDefinition := []\n\ndef storedEventFactSourceKinds : List String := [\"command_input\",\"external_payload\",\"generated\",\"session\",\"derivation\"]\n\ndef allowedEventAttributeSourceKinds : List String := storedEventFactSourceKinds\n\ndef sliceReadModels : List String := []\n\ndef sliceReadModelDefinitions : List ReadModelDefinition := []\n\ndef allowedReadModelFieldSourceKinds : List String := [\"event_attribute\",\"derivation\",\"absence_default\"]\n\ndef sliceViews : List String := []\n\ndef sliceViewDefinitions : List ViewDefinition := []\n\ndef allowedViewFieldSourceKinds : List String := [\"read_model\"]\n\ndef allowedControlInputSourceKinds : List String := [\"actor\",\"session\",\"generated\",\"external_payload\",\"event_stream_state\",\"invocation_argument\"]\n\ndef sliceAcceptanceScenarios : List EventModelScenario := []\n\ndef sliceContractScenarios : List EventModelScenario := []\n\ndef sliceBitLevelDataFlows : List BitLevelDataFlow := []\n\ndef scenarioHasGwt (scenario : EventModelScenario) : Bool := scenario.name.isEmpty == false && scenario.givenSteps.isEmpty == false && scenario.whenSteps.isEmpty == false && scenario.thenSteps.isEmpty == false\n\ndef sliceScenariosHaveGwt : Bool := sliceAcceptanceScenarios.all scenarioHasGwt && sliceContractScenarios.all scenarioHasGwt\n\ndef scenarioNameCount (name : String) (scenarios : List EventModelScenario) : Nat := (scenarios.filter (fun scenario => scenario.name == name)).length\n\ndef scenarioNamesAreUnique (scenarios : List EventModelScenario) : Bool := scenarios.all (fun scenario => scenarioNameCount scenario.name scenarios == 1)\n\ndef sliceScenarioNamesAreUnique : Bool := scenarioNamesAreUnique (sliceAcceptanceScenarios ++ sliceContractScenarios)\n\ndef stringNameCount (name : String) (names : List String) : Nat := (names.filter (fun other => other == name)).length\n\ndef definitionNamesAreUnique (names : List String) : Bool := names.all (fun name => stringNameCount name names == 1)\n\ndef sliceOwnedCommandNames : List String := sliceCommandDefinitions.map (fun command => command.name)\n\ndef sliceOwnedEventNames : List String := sliceEventDefinitions.map (fun event => event.name)\n\ndef sliceOwnedStreamNames : List String := sliceStreams.map (fun stream => stream.name)\n\ndef sliceOwnedExternalPayloadNames : List String := sliceExternalPayloads.map (fun payload => payload.name)\n\ndef sliceOwnedReadModelNames : List String := sliceReadModelDefinitions.map (fun readModel => readModel.name)\n\ndef sliceOwnedViewNames : List String := sliceViewDefinitions.map (fun view => view.name)\n\ndef sliceOwnedAutomationNames : List String := sliceAutomations.map (fun automation => automation.name)\n\ndef sliceOwnedTranslationNames : List String := sliceTranslations.map (fun translation => translation.name)\n\ndef sliceOwnedControlNames : List String := sliceViewDefinitions.flatMap (fun view => view.controls.map (fun control => control.name))\n\ndef sliceNamedDefinitionsAreUniquelyOwned : Bool := definitionNamesAreUnique sliceCommands && definitionNamesAreUnique sliceOwnedCommandNames && definitionNamesAreUnique sliceEvents && definitionNamesAreUnique sliceOwnedEventNames && definitionNamesAreUnique sliceOwnedStreamNames && definitionNamesAreUnique sliceOwnedExternalPayloadNames && definitionNamesAreUnique sliceReadModels && definitionNamesAreUnique sliceOwnedReadModelNames && definitionNamesAreUnique sliceViews && definitionNamesAreUnique sliceOwnedViewNames && definitionNamesAreUnique sliceOwnedAutomationNames && definitionNamesAreUnique sliceOwnedTranslationNames && definitionNamesAreUnique sliceOwnedControlNames\n\ndef commandInputHasAllowedSource (input : CommandInput) : Bool := allowedCommandInputSourceKinds.contains input.sourceKind\n\ndef commandInputHasProvenance (input : CommandInput) : Bool := input.name.isEmpty == false && input.sourceKind.isEmpty == false && input.sourceDescription.isEmpty == false && input.provenanceChain.isEmpty == false\n\ndef commandInputsHaveAllowedSources : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputHasAllowedSource)\n\ndef commandInputsHaveProvenance : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all commandInputHasProvenance)\n\ndef commandErrorHasDeclaration (error : CommandErrorDefinition) : Bool := error.name.isEmpty == false && error.scenarioName.isEmpty == false && error.recoveryKind.isEmpty == false\n\ndef commandErrorHasAllowedRecovery (error : CommandErrorDefinition) : Bool := allowedRecoveryKinds.contains error.recoveryKind\n\ndef commandErrorsAreDeclared : Bool := sliceCommandDefinitions.all (fun command => command.errors.all commandErrorHasDeclaration)\n\ndef commandErrorsHaveAllowedRecovery : Bool := sliceCommandDefinitions.all (fun command => command.errors.all commandErrorHasAllowedRecovery)\n\ndef outcomeLabelCount (label : String) : Nat := (sliceOutcomeDefinitions.filter (fun outcome => outcome.label == label)).length\n\ndef outcomeLabelsAreUnique : Bool := sliceOutcomeDefinitions.all (fun outcome => outcomeLabelCount outcome.label == 1)\n\ndef outcomeEventSetsAreNonEmpty : Bool := sliceOutcomeDefinitions.all (fun outcome => outcome.eventSet.isEmpty == false)\n\ndef sameOutcomeEventSet (left : OutcomeDefinition) (right : OutcomeDefinition) : Bool := left.eventSet.all (fun eventName => right.eventSet.contains eventName) && right.eventSet.all (fun eventName => left.eventSet.contains eventName)\n\ndef eventIsKnownToSlice (eventName : String) : Bool := sliceEvents.contains eventName || sliceEventDefinitions.any (fun event => event.name == eventName && (event.observed || event.shared))\n\ndef outcomeEventSetsAreDistinct : Bool := sliceOutcomeDefinitions.all (fun outcome => sliceOutcomeDefinitions.all (fun other => outcome.label == other.label || sameOutcomeEventSet outcome other == false))\n\ndef outcomeEventsAreKnownToSlice : Bool := sliceOutcomeDefinitions.all (fun outcome => outcome.eventSet.all eventIsKnownToSlice)\n\ndef eventReferencesKnownStream (event : EventDefinition) : Bool := sliceStreams.any (fun stream => stream.name == event.stream)\n\ndef eventAttributeHasAllowedSource (eventAttribute : EventAttribute) : Bool := allowedEventAttributeSourceKinds.contains eventAttribute.sourceKind\n\ndef eventAttributeHasProvenance (eventAttribute : EventAttribute) : Bool := eventAttribute.name.isEmpty == false && eventAttribute.sourceKind.isEmpty == false && eventAttribute.sourceName.isEmpty == false && eventAttribute.provenanceDescription.isEmpty == false\n\ndef eventsReferenceKnownStreams : Bool := sliceEventDefinitions.all eventReferencesKnownStream\n\ndef eventAttributesHaveAllowedSources : Bool := sliceEventDefinitions.all (fun event => event.attributes.all eventAttributeHasAllowedSource)\n\ndef eventAttributesHaveProvenance : Bool := sliceEventDefinitions.all (fun event => event.attributes.all eventAttributeHasProvenance)\n\ndef readModelFieldHasAllowedSource (field : ReadModelField) : Bool := allowedReadModelFieldSourceKinds.contains field.sourceKind\n\ndef readModelFieldHasProvenance (field : ReadModelField) : Bool := field.name.isEmpty == false && field.sourceKind.isEmpty == false && field.provenanceDescription.isEmpty == false\n\ndef readModelFieldSourceIsComplete (field : ReadModelField) : Bool := (field.sourceKind == \"event_attribute\" && field.sourceEvent.isEmpty == false && field.sourceAttribute.isEmpty == false) || (field.sourceKind == \"derivation\" && field.derivationRule.isEmpty == false) || (field.sourceKind == \"absence_default\" && field.absenceEvent.isEmpty == false)\n\ndef readModelFieldsHaveAllowedSources : Bool := sliceReadModelDefinitions.all (fun readModel => readModel.fields.all readModelFieldHasAllowedSource)\n\ndef readModelFieldsHaveProvenance : Bool := sliceReadModelDefinitions.all (fun readModel => readModel.fields.all readModelFieldHasProvenance)\n\ndef readModelFieldSourcesAreComplete : Bool := sliceReadModelDefinitions.all (fun readModel => readModel.fields.all readModelFieldSourceIsComplete)\n\ndef viewFieldHasAllowedSource (field : ViewField) : Bool := allowedViewFieldSourceKinds.contains field.sourceKind\n\ndef viewFieldHasProvenance (field : ViewField) : Bool := field.name.isEmpty == false && field.sourceKind.isEmpty == false && field.provenanceDescription.isEmpty == false && field.bitEncoding.isEmpty == false\n\ndef viewFieldSourceIsComplete (field : ViewField) : Bool := field.sourceKind == \"read_model\" && field.sourceReadModel.isEmpty == false && field.sourceField.isEmpty == false && field.sketchToken.isEmpty == false\n\ndef viewFieldSourceReadModelIsUsed (view : ViewDefinition) (field : ViewField) : Bool := view.readModels.contains field.sourceReadModel && sliceReadModels.contains field.sourceReadModel\n\ndef viewFieldsHaveAllowedSources : Bool := sliceViewDefinitions.all (fun view => view.fields.all viewFieldHasAllowedSource)\n\ndef viewFieldsHaveProvenance : Bool := sliceViewDefinitions.all (fun view => view.fields.all viewFieldHasProvenance)\n\ndef viewFieldSourcesAreComplete : Bool := sliceViewDefinitions.all (fun view => view.fields.all viewFieldSourceIsComplete)\n\ndef viewFieldsSourceFromUsedReadModels : Bool := sliceViewDefinitions.all (fun view => view.fields.all (viewFieldSourceReadModelIsUsed view))\n\ndef controlInputHasAllowedSource (input : ControlInputProvision) : Bool := allowedControlInputSourceKinds.contains input.sourceKind\n\ndef controlInputHasProvenance (input : ControlInputProvision) : Bool := input.name.isEmpty == false && input.sourceKind.isEmpty == false && input.sourceDescription.isEmpty == false\n\ndef controlInputVisibilityIsModeled (input : ControlInputProvision) : Bool := (input.sourceKind != \"actor\" || input.sketchToken.isEmpty == false || input.visibleToActor) && (input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor)\n\ndef controlHasSketchToken (control : ControlDefinition) : Bool := control.name.isEmpty == false && control.commandName.isEmpty == false && control.sketchToken.isEmpty == false\n\ndef controlReferencesKnownCommand (control : ControlDefinition) : Bool := sliceCommands.contains control.commandName || sliceReferencedCommands.contains control.commandName || sliceCommandDefinitions.any (fun command => command.name == control.commandName)\n\ndef commandErrorsHandledByControl (control : ControlDefinition) (command : CommandDefinition) : Bool := command.name != control.commandName || command.errors.all (fun error => control.handledErrors.contains error.name && control.recoveryBehavior.isEmpty == false)\n\ndef viewControlsHaveSketchTokens : Bool := sliceViewDefinitions.all (fun view => view.controls.all controlHasSketchToken)\n\ndef viewControlsReferenceKnownCommands : Bool := sliceViewDefinitions.all (fun view => view.controls.all controlReferencesKnownCommand)\n\ndef viewControlInputsHaveAllowedSources : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputHasAllowedSource))\n\ndef viewControlInputsHaveProvenance : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputHasProvenance))\n\ndef viewControlInputVisibilityIsModeled : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputVisibilityIsModeled))\n\ndef viewControlsHandleCommandErrors : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => sliceCommandDefinitions.all (commandErrorsHandledByControl control)))\n\ndef sliceHasLocallyEmittedEvent : Bool := sliceEvents.isEmpty == false || sliceEventDefinitions.any (fun event => event.observed == false && event.shared == false)
 
@@ -572,6 +588,65 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
         "theorem viewControlInputsHaveProvenanceIsStable : viewControlInputsHaveProvenance = true := rfl\n\ntheorem viewControlInputVisibilityIsModeledIsStable",
         "theorem viewControlInputsHaveProvenanceIsStable : viewControlInputsHaveProvenance = true := rfl\n\ntheorem viewControlInputsHaveDescriptionsIsStable : viewControlInputsHaveDescriptions = true := rfl\n\ntheorem viewControlSessionInputsHaveDescriptionsIsStable : viewControlSessionInputsHaveDescriptions = true := rfl\n\ntheorem viewControlInputVisibilityIsModeledIsStable",
     );
+    let contents = contents
+        .replace(
+            "def allowedCommandInputSourceKinds : List String := [\"actor\",\"session\",\"generated\",\"external_payload\",\"event_stream_state\",\"invocation_argument\"]",
+            &format!(
+                "def allowedCommandInputSourceKinds : List String := {allowed_command_input_source_kind_list}"
+            ),
+        )
+        .replace(
+            "def allowedRecoveryKinds : List String := [\"retry\",\"stay_on_screen\",\"navigation\",\"explicit_recovery_action\"]",
+            &format!(
+                "def allowedRecoveryKinds : List String := {allowed_recovery_kind_list}"
+            ),
+        )
+        .replace(
+            "def allowedSingletonRepeatBehaviors : List String := [\"already_exists_error\",\"idempotent\"]",
+            &format!(
+                "def allowedSingletonRepeatBehaviors : List String := {allowed_singleton_repeat_behavior_list}"
+            ),
+        )
+        .replace(
+            "def storedEventFactSourceKinds : List String := [\"command_input\",\"external_payload\",\"generated\",\"session\",\"derivation\"]",
+            &format!(
+                "def storedEventFactSourceKinds : List String := {stored_event_fact_source_kind_list}"
+            ),
+        )
+        .replace(
+            "def allowedReadModelFieldSourceKinds : List String := [\"event_attribute\",\"derivation\",\"absence_default\"]",
+            &format!(
+                "def allowedReadModelFieldSourceKinds : List String := {allowed_read_model_field_source_kind_list}"
+            ),
+        )
+        .replace(
+            "def allowedViewFieldSourceKinds : List String := [\"read_model\"]",
+            &format!(
+                "def allowedViewFieldSourceKinds : List String := {allowed_view_field_source_kind_list}"
+            ),
+        )
+        .replace(
+            "def allowedNavigationTargetTypes : List String := [\"modeled_view\",\"local_view_state\",\"external_system\",\"external_workflow\"]",
+            &format!(
+                "def allowedNavigationTargetTypes : List String := {allowed_navigation_target_type_list}"
+            ),
+        )
+        .replace(
+            "def canonicalBoardLanes : List String := [\"ux\",\"actions\",\"events\"]",
+            &format!("def canonicalBoardLanes : List String := {canonical_board_lane_list}"),
+        )
+        .replace(
+            "def boardLanesAreCanonical : Bool := canonicalBoardLanes == [\"ux\",\"actions\",\"events\"]",
+            &format!(
+                "def boardLanesAreCanonical : Bool := canonicalBoardLanes == {canonical_board_lane_list}"
+            ),
+        )
+        .replace(
+            "def allowedControlInputSourceKinds : List String := [\"actor\",\"session\",\"generated\",\"external_payload\",\"event_stream_state\",\"invocation_argument\"]",
+            &format!(
+                "def allowedControlInputSourceKinds : List String := {allowed_command_input_source_kind_list}"
+            ),
+        );
     file_contents(contents)
 }
 
@@ -585,6 +660,94 @@ fn quoted(value: &str) -> String {
     serde_json::to_string(value).unwrap_or_else(|error| {
         unreachable!("EMC generated Lean4 string literal must be valid: {error}");
     })
+}
+
+fn command_input_source_kind_list() -> String {
+    format!(
+        "[{}]",
+        CommandInputSourceKind::ALLOWED
+            .iter()
+            .map(|source_kind| quoted(source_kind.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn command_error_recovery_kind_list() -> String {
+    format!(
+        "[{}]",
+        CommandErrorRecoveryKind::ALLOWED
+            .iter()
+            .map(|recovery_kind| quoted(recovery_kind.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn singleton_repeat_behavior_list() -> String {
+    format!(
+        "[{}]",
+        SingletonRepeatBehavior::ALLOWED
+            .iter()
+            .map(|repeat_behavior| quoted(repeat_behavior.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn navigation_target_type_list() -> String {
+    format!(
+        "[{}]",
+        NavigationTargetType::ALLOWED
+            .iter()
+            .map(|target_type| quoted(target_type.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn event_attribute_source_kind_list() -> String {
+    format!(
+        "[{}]",
+        EventAttributeSourceKind::ALLOWED
+            .iter()
+            .map(|source_kind| quoted(source_kind.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn board_lane_id_list() -> String {
+    format!(
+        "[{}]",
+        BoardLaneId::CANONICAL
+            .iter()
+            .map(|lane| quoted(lane.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn read_model_field_source_kind_list() -> String {
+    format!(
+        "[{}]",
+        ReadModelFieldSourceKind::ALLOWED
+            .iter()
+            .map(|source_kind| quoted(source_kind.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn view_field_source_kind_list() -> String {
+    format!(
+        "[{}]",
+        ViewFieldSourceKind::ALLOWED
+            .iter()
+            .map(|source_kind| quoted(source_kind.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
 }
 
 fn slice_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
@@ -651,6 +814,17 @@ fn workflow_step_relationship_list(workflow_slice_details: &[WorkflowSliceDetail
     )
 }
 
+fn required_entry_lifecycle_state_list() -> String {
+    format!(
+        "[{}]",
+        WorkflowEntryLifecycleStateName::REQUIRED
+            .iter()
+            .map(|state| quoted(state.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn module_name_from_raw(raw: &str) -> String {
     let mut capitalize_next = true;
     raw.chars()
@@ -688,7 +862,7 @@ fn workflow_exit_target_list(workflow_transitions: &[WorkflowTransitionRecord]) 
         "[{}]",
         workflow_transitions
             .iter()
-            .filter(|transition| transition.kind().as_ref().starts_with("workflow_exit:"))
+            .filter(|transition| transition.kind().is_workflow_exit())
             .map(|transition| quoted(transition.target().as_ref()))
             .collect::<Vec<_>>()
             .join(",")

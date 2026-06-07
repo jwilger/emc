@@ -1,16 +1,20 @@
 // Copyright 2026 John Wilger
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::error::Error;
+use std::fmt::{Display, Formatter, Result as FormatResult};
 use std::fs;
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest};
 use crate::core::effect::{
-    ArtifactDigest, Effect, EffectPlan, FileContents, ProjectPath, ReportLine,
+    ArtifactDigest, ChosenEventId, Effect, EffectPlan, EventConflictId, FileContents,
+    ModelContentDigest, ProjectPath, ProjectionFingerprint, ReportLine, ReviewEventReference,
 };
 use crate::core::emit::lean::{
     emit_slice_module as emit_lean_slice_module, emit_workflow_module as emit_lean_workflow_module,
@@ -20,15 +24,15 @@ use crate::core::emit::quint::{
     emit_workflow_module as emit_quint_workflow_module,
 };
 use crate::core::formal_slice_facts::{
-    CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain,
+    CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, CommandInputSource,
     CommandObservedStreams, EmittedEventNames, NewAutomationDefinition, NewBitLevelDataFlow,
     NewBoardConnection, NewBoardElement, NewCommandDefinition, NewCommandErrorDefinition,
     NewCommandInput, NewControlDefinition, NewControlInputProvision, NewEventAttribute,
     NewEventDefinition, NewExternalPayloadDefinition, NewNavigationTarget, NewOutcomeDefinition,
     NewReadModelDefinition, NewReadModelField, NewSliceScenario, NewTranslationDefinition,
     NewViewDefinition, NewViewField, OutcomeEventNames, ReadModelDerivationSourceFields,
-    ReadModelRelationshipFields, ScenarioKind, ScenarioStreamNames, ViewControls, ViewFilters,
-    ViewLocalStates,
+    ReadModelFieldSource, ReadModelRelationshipFields, ScenarioKind, ScenarioStreamNames,
+    ViewControls, ViewFilters, ViewLocalStates,
 };
 use crate::core::project::{ProjectName, ProjectSliceMembership, project_root_effects};
 use crate::core::slice::NewSlice;
@@ -39,22 +43,24 @@ use crate::core::types::{
     CommandInputSourceDescription, CommandInputSourceKind, CommandName, ContractKindName,
     ControlName, ControlRecoveryBehavior, CoveredDefinitionName, DataFlowSource,
     DataFlowSourceKind, DataFlowTarget, DatumName, EventAttributeName, EventAttributeSourceField,
-    EventAttributeSourceKind, EventAttributeSourceName, EventName, LeanModuleName,
-    ModelDescription, ModelName, NavigationTargetName, NavigationTargetType, OutcomeLabelName,
-    PayloadContractName, ProvenanceDescription, QuintModuleName, ReadModelDerivationRule,
-    ReadModelFieldSourceKind, ReadModelName, ReadModelTransitiveRule, ReviewRuleName,
-    ReviewTimestamp, ReviewerId, ScenarioName, ScenarioStepText, SingletonRepeatBehavior,
-    SketchToken, SliceKindName, SliceSlug, SourceChainHop, StreamName, TransformationSemantics,
-    TransitionTriggerName, TranslationExternalEventName, TranslationName, ViewFieldName,
-    ViewFieldSourceKind, ViewName, WorkflowCommandErrorRecord, WorkflowCommandErrorRecords,
-    WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
-    WorkflowEntryLifecycleStateRecord, WorkflowEntryLifecycleStateRecords,
-    WorkflowEventParticipation, WorkflowModuleData, WorkflowOutcomeRecord, WorkflowOutcomeRecords,
-    WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
-    WorkflowOwnedDefinitionRecords, WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSlug,
-    WorkflowStepRelationshipName, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecord,
-    WorkflowTransitionEvidenceRecords, WorkflowTransitionEvidenceText, WorkflowTransitionKind,
-    WorkflowTransitionRecord, WorkflowTransitionRecords, WorkflowViewRole,
+    EventAttributeSourceKind, EventAttributeSourceName, EventName,
+    GeneratedEventAttributeSourceKind, LeanModuleName, ModelDescription, ModelName,
+    NavigationTargetName, NavigationTargetType, OutcomeLabelName, PayloadContractName,
+    ProvenanceDescription, QuintModuleName, ReadModelDerivationRule, ReadModelFieldSourceKind,
+    ReadModelName, ReadModelTransitiveRule, ReviewRuleName, ReviewTimestamp, ReviewerId,
+    ScenarioName, ScenarioStepText, SingletonRepeatBehavior, SketchToken, SliceKindName, SliceSlug,
+    SourceChainHop, StreamName, TransformationSemantics, TransitionTriggerName,
+    TranslationExternalEventName, TranslationName, ViewFieldName, ViewFieldSourceKind, ViewName,
+    WorkflowCommandErrorRecord, WorkflowCommandErrorRecords, WorkflowEntryLifecycleEvidenceText,
+    WorkflowEntryLifecycleStateName, WorkflowEntryLifecycleStateRecord,
+    WorkflowEntryLifecycleStateRecords, WorkflowEventParticipation, WorkflowModuleData,
+    WorkflowOutcomeRecord, WorkflowOutcomeRecords, WorkflowOwnedDefinitionKind,
+    WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords,
+    WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSlug, WorkflowStepRelationshipName,
+    WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionEvidenceRecords, WorkflowTransitionKind, WorkflowTransitionRecord,
+    WorkflowTransitionRecords, WorkflowTransitionSourceEvidenceText,
+    WorkflowTransitionTargetEvidenceText, WorkflowViewRole,
 };
 use crate::core::workflow::NewWorkflow;
 
@@ -63,37 +69,321 @@ const EVENT_EXPORT_DIRECTORY: &str = "model/events/v1";
 const PROJECTION_FINGERPRINT_PATH: &str = "model/events/projection.fingerprint";
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct EventDraft {
-    stream_id: String,
-    event_type: String,
+pub(crate) struct EventDraft {
+    stream_id: EventStreamId,
+    event_type: EventDraftType,
     payload: Value,
 }
 
-impl EventDraft {
-    pub fn project_initialized(name: &ProjectName) -> Self {
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub(crate) struct EventStreamId {
+    value: String,
+}
+
+impl EventStreamId {
+    pub(crate) fn project() -> Self {
         Self {
-            stream_id: "project".to_owned(),
-            event_type: "ProjectInitialized".to_owned(),
+            value: "project".to_owned(),
+        }
+    }
+
+    pub(crate) fn workflow(slug: &WorkflowSlug) -> Self {
+        Self {
+            value: format!("workflow::{}", slug.as_ref()),
+        }
+    }
+
+    pub(crate) fn slice(slug: &SliceSlug) -> Self {
+        Self {
+            value: format!("slice::{}", slug.as_ref()),
+        }
+    }
+
+    pub(crate) fn review(workflow: &WorkflowSlug) -> Self {
+        Self {
+            value: format!("review::{}", workflow.as_ref()),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn try_new(value: String) -> Result<Self, EventStreamIdError> {
+        let trimmed = value.trim().to_owned();
+        let trimmed = trimmed.as_str();
+        if trimmed == "project" {
+            return Ok(Self::project());
+        }
+
+        if let Some(slug) = trimmed.strip_prefix("workflow::") {
+            return Self::workflow_stream(value, slug);
+        }
+
+        if let Some(slug) = trimmed.strip_prefix("slice::") {
+            return Self::slice_stream(value, slug);
+        }
+
+        if let Some(workflow) = trimmed.strip_prefix("review::") {
+            return Self::review_stream(value, workflow);
+        }
+
+        Err(EventStreamIdError::new(value))
+    }
+
+    #[cfg(test)]
+    fn workflow_stream(value: String, slug: &str) -> Result<Self, EventStreamIdError> {
+        if slug.contains("::") {
+            return Err(EventStreamIdError::new(value));
+        }
+
+        WorkflowSlug::try_new(slug.to_owned())
+            .map(|slug| Self::workflow(&slug))
+            .map_err(|_error| EventStreamIdError::new(value))
+    }
+
+    #[cfg(test)]
+    fn slice_stream(value: String, slug: &str) -> Result<Self, EventStreamIdError> {
+        if slug.contains("::") {
+            return Err(EventStreamIdError::new(value));
+        }
+
+        SliceSlug::try_new(slug.to_owned())
+            .map(|slug| Self::slice(&slug))
+            .map_err(|_error| EventStreamIdError::new(value))
+    }
+
+    #[cfg(test)]
+    fn review_stream(value: String, workflow: &str) -> Result<Self, EventStreamIdError> {
+        if workflow.contains("::") {
+            return Err(EventStreamIdError::new(value));
+        }
+
+        WorkflowSlug::try_new(workflow.to_owned())
+            .map(|workflow| Self::review(&workflow))
+            .map_err(|_error| EventStreamIdError::new(value))
+    }
+}
+
+impl AsRef<str> for EventStreamId {
+    fn as_ref(&self) -> &str {
+        &self.value
+    }
+}
+
+impl Display for EventStreamId {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
+        formatter.write_str(self.as_ref())
+    }
+}
+
+#[cfg(test)]
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct EventStreamIdError {
+    message: String,
+}
+
+#[cfg(test)]
+impl EventStreamIdError {
+    fn new(value: String) -> Self {
+        Self {
+            message: format!(
+                "expected a project, workflow, slice, or review event stream id, got '{value}'"
+            ),
+        }
+    }
+}
+
+#[cfg(test)]
+impl Display for EventStreamIdError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
+        formatter.write_str(&self.message)
+    }
+}
+
+#[cfg(test)]
+impl Error for EventStreamIdError {}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+pub(crate) enum EventDraftType {
+    ProjectInitialized,
+    WorkflowAdded,
+    WorkflowUpdated,
+    WorkflowRemoved,
+    WorkflowOutcomeAdded,
+    WorkflowCommandErrorAdded,
+    WorkflowOwnedDefinitionAdded,
+    WorkflowTransitionEvidenceAdded,
+    WorkflowEntryLifecycleCoverageRequired,
+    WorkflowEntryLifecycleStateAdded,
+    WorkflowReadinessDeclared,
+    WorkflowConnected,
+    WorkflowTransitionRemoved,
+    SliceAdded,
+    SliceUpdated,
+    SliceRemoved,
+    SliceScenarioAdded,
+    SliceOutcomeAdded,
+    SliceExternalPayloadAdded,
+    SliceEventDefinitionAdded,
+    SliceCommandDefinitionAdded,
+    SliceReadModelAdded,
+    SliceViewAdded,
+    SliceBitLevelDataFlowAdded,
+    SliceTranslationAdded,
+    SliceAutomationAdded,
+    SliceBoardElementAdded,
+    SliceBoardConnectionAdded,
+    ReviewRecorded,
+    ConflictResolved,
+}
+
+impl EventDraftType {
+    pub(crate) fn try_new(value: String) -> Result<Self, EventDraftTypeError> {
+        match value.trim() {
+            "ProjectInitialized" => Ok(Self::ProjectInitialized),
+            "WorkflowAdded" => Ok(Self::WorkflowAdded),
+            "WorkflowUpdated" => Ok(Self::WorkflowUpdated),
+            "WorkflowRemoved" => Ok(Self::WorkflowRemoved),
+            "WorkflowOutcomeAdded" => Ok(Self::WorkflowOutcomeAdded),
+            "WorkflowCommandErrorAdded" => Ok(Self::WorkflowCommandErrorAdded),
+            "WorkflowOwnedDefinitionAdded" => Ok(Self::WorkflowOwnedDefinitionAdded),
+            "WorkflowTransitionEvidenceAdded" => Ok(Self::WorkflowTransitionEvidenceAdded),
+            "WorkflowEntryLifecycleCoverageRequired" => {
+                Ok(Self::WorkflowEntryLifecycleCoverageRequired)
+            }
+            "WorkflowEntryLifecycleStateAdded" => Ok(Self::WorkflowEntryLifecycleStateAdded),
+            "WorkflowReadinessDeclared" => Ok(Self::WorkflowReadinessDeclared),
+            "WorkflowConnected" => Ok(Self::WorkflowConnected),
+            "WorkflowTransitionRemoved" => Ok(Self::WorkflowTransitionRemoved),
+            "SliceAdded" => Ok(Self::SliceAdded),
+            "SliceUpdated" => Ok(Self::SliceUpdated),
+            "SliceRemoved" => Ok(Self::SliceRemoved),
+            "SliceScenarioAdded" => Ok(Self::SliceScenarioAdded),
+            "SliceOutcomeAdded" => Ok(Self::SliceOutcomeAdded),
+            "SliceExternalPayloadAdded" => Ok(Self::SliceExternalPayloadAdded),
+            "SliceEventDefinitionAdded" => Ok(Self::SliceEventDefinitionAdded),
+            "SliceCommandDefinitionAdded" => Ok(Self::SliceCommandDefinitionAdded),
+            "SliceReadModelAdded" => Ok(Self::SliceReadModelAdded),
+            "SliceViewAdded" => Ok(Self::SliceViewAdded),
+            "SliceBitLevelDataFlowAdded" => Ok(Self::SliceBitLevelDataFlowAdded),
+            "SliceTranslationAdded" => Ok(Self::SliceTranslationAdded),
+            "SliceAutomationAdded" => Ok(Self::SliceAutomationAdded),
+            "SliceBoardElementAdded" => Ok(Self::SliceBoardElementAdded),
+            "SliceBoardConnectionAdded" => Ok(Self::SliceBoardConnectionAdded),
+            "ReviewRecorded" => Ok(Self::ReviewRecorded),
+            "ConflictResolved" => Ok(Self::ConflictResolved),
+            _ => Err(EventDraftTypeError::new(value)),
+        }
+    }
+
+    pub(crate) fn is_slice_fact(self) -> bool {
+        matches!(
+            self,
+            Self::SliceScenarioAdded
+                | Self::SliceOutcomeAdded
+                | Self::SliceExternalPayloadAdded
+                | Self::SliceEventDefinitionAdded
+                | Self::SliceCommandDefinitionAdded
+                | Self::SliceReadModelAdded
+                | Self::SliceViewAdded
+                | Self::SliceBitLevelDataFlowAdded
+                | Self::SliceTranslationAdded
+                | Self::SliceAutomationAdded
+                | Self::SliceBoardElementAdded
+                | Self::SliceBoardConnectionAdded
+        )
+    }
+}
+
+impl AsRef<str> for EventDraftType {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::ProjectInitialized => "ProjectInitialized",
+            Self::WorkflowAdded => "WorkflowAdded",
+            Self::WorkflowUpdated => "WorkflowUpdated",
+            Self::WorkflowRemoved => "WorkflowRemoved",
+            Self::WorkflowOutcomeAdded => "WorkflowOutcomeAdded",
+            Self::WorkflowCommandErrorAdded => "WorkflowCommandErrorAdded",
+            Self::WorkflowOwnedDefinitionAdded => "WorkflowOwnedDefinitionAdded",
+            Self::WorkflowTransitionEvidenceAdded => "WorkflowTransitionEvidenceAdded",
+            Self::WorkflowEntryLifecycleCoverageRequired => {
+                "WorkflowEntryLifecycleCoverageRequired"
+            }
+            Self::WorkflowEntryLifecycleStateAdded => "WorkflowEntryLifecycleStateAdded",
+            Self::WorkflowReadinessDeclared => "WorkflowReadinessDeclared",
+            Self::WorkflowConnected => "WorkflowConnected",
+            Self::WorkflowTransitionRemoved => "WorkflowTransitionRemoved",
+            Self::SliceAdded => "SliceAdded",
+            Self::SliceUpdated => "SliceUpdated",
+            Self::SliceRemoved => "SliceRemoved",
+            Self::SliceScenarioAdded => "SliceScenarioAdded",
+            Self::SliceOutcomeAdded => "SliceOutcomeAdded",
+            Self::SliceExternalPayloadAdded => "SliceExternalPayloadAdded",
+            Self::SliceEventDefinitionAdded => "SliceEventDefinitionAdded",
+            Self::SliceCommandDefinitionAdded => "SliceCommandDefinitionAdded",
+            Self::SliceReadModelAdded => "SliceReadModelAdded",
+            Self::SliceViewAdded => "SliceViewAdded",
+            Self::SliceBitLevelDataFlowAdded => "SliceBitLevelDataFlowAdded",
+            Self::SliceTranslationAdded => "SliceTranslationAdded",
+            Self::SliceAutomationAdded => "SliceAutomationAdded",
+            Self::SliceBoardElementAdded => "SliceBoardElementAdded",
+            Self::SliceBoardConnectionAdded => "SliceBoardConnectionAdded",
+            Self::ReviewRecorded => "ReviewRecorded",
+            Self::ConflictResolved => "ConflictResolved",
+        }
+    }
+}
+
+impl Display for EventDraftType {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
+        formatter.write_str(self.as_ref())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct EventDraftTypeError {
+    message: String,
+}
+
+impl EventDraftTypeError {
+    fn new(value: String) -> Self {
+        Self {
+            message: format!("expected a modeled exported event type, got '{value}'"),
+        }
+    }
+}
+
+impl Display for EventDraftTypeError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl Error for EventDraftTypeError {}
+
+impl EventDraft {
+    pub(crate) fn project_initialized(name: &ProjectName) -> Self {
+        Self {
+            stream_id: EventStreamId::project(),
+            event_type: EventDraftType::ProjectInitialized,
             payload: json!({ "name": name.as_ref() }),
         }
     }
 
-    pub fn event_type(&self) -> &str {
-        &self.event_type
+    pub(crate) fn event_type(&self) -> EventDraftType {
+        self.event_type
     }
 
-    pub fn stream_id(&self) -> &str {
-        &self.stream_id
+    pub(crate) fn stream_id(&self) -> &str {
+        self.stream_id.as_ref()
     }
 
-    pub fn payload(&self) -> &Value {
+    pub(crate) fn payload(&self) -> &Value {
         &self.payload
     }
 
-    pub fn workflow_added(workflow: &NewWorkflow) -> Self {
+    pub(crate) fn workflow_added(workflow: &NewWorkflow) -> Self {
         Self {
-            stream_id: format!("workflow::{}", workflow.slug().as_ref()),
-            event_type: "WorkflowAdded".to_owned(),
+            stream_id: EventStreamId::workflow(workflow.slug()),
+            event_type: EventDraftType::WorkflowAdded,
             payload: json!({
                 "slug": workflow.slug().as_ref(),
                 "name": workflow.name().as_ref(),
@@ -102,10 +392,10 @@ impl EventDraft {
         }
     }
 
-    pub fn workflow_updated(workflow: &NewWorkflow) -> Self {
+    pub(crate) fn workflow_updated(workflow: &NewWorkflow) -> Self {
         Self {
-            stream_id: format!("workflow::{}", workflow.slug().as_ref()),
-            event_type: "WorkflowUpdated".to_owned(),
+            stream_id: EventStreamId::workflow(workflow.slug()),
+            event_type: EventDraftType::WorkflowUpdated,
             payload: json!({
                 "slug": workflow.slug().as_ref(),
                 "name": workflow.name().as_ref(),
@@ -114,23 +404,23 @@ impl EventDraft {
         }
     }
 
-    pub fn workflow_removed(workflow: &WorkflowSlug) -> Self {
+    pub(crate) fn workflow_removed(workflow: &WorkflowSlug) -> Self {
         Self {
-            stream_id: format!("workflow::{}", workflow.as_ref()),
-            event_type: "WorkflowRemoved".to_owned(),
+            stream_id: EventStreamId::workflow(workflow),
+            event_type: EventDraftType::WorkflowRemoved,
             payload: json!({
                 "slug": workflow.as_ref(),
             }),
         }
     }
 
-    pub fn workflow_outcome_added(
+    pub(crate) fn workflow_outcome_added(
         workflow: &WorkflowSlug,
         outcome: &WorkflowOutcomeRecord,
     ) -> Self {
         Self {
-            stream_id: format!("workflow::{}", workflow.as_ref()),
-            event_type: "WorkflowOutcomeAdded".to_owned(),
+            stream_id: EventStreamId::workflow(workflow),
+            event_type: EventDraftType::WorkflowOutcomeAdded,
             payload: json!({
                 "workflow": workflow.as_ref(),
                 "source_slice": outcome.source_slice().as_ref(),
@@ -140,13 +430,13 @@ impl EventDraft {
         }
     }
 
-    pub fn workflow_command_error_added(
+    pub(crate) fn workflow_command_error_added(
         workflow: &WorkflowSlug,
         error: &WorkflowCommandErrorRecord,
     ) -> Self {
         Self {
-            stream_id: format!("workflow::{}", workflow.as_ref()),
-            event_type: "WorkflowCommandErrorAdded".to_owned(),
+            stream_id: EventStreamId::workflow(workflow),
+            event_type: EventDraftType::WorkflowCommandErrorAdded,
             payload: json!({
                 "workflow": workflow.as_ref(),
                 "source_slice": error.source_slice().as_ref(),
@@ -156,13 +446,13 @@ impl EventDraft {
         }
     }
 
-    pub fn workflow_owned_definition_added(
+    pub(crate) fn workflow_owned_definition_added(
         workflow: &WorkflowSlug,
         definition: &WorkflowOwnedDefinitionRecord,
     ) -> Self {
         Self {
-            stream_id: format!("workflow::{}", workflow.as_ref()),
-            event_type: "WorkflowOwnedDefinitionAdded".to_owned(),
+            stream_id: EventStreamId::workflow(workflow),
+            event_type: EventDraftType::WorkflowOwnedDefinitionAdded,
             payload: json!({
                 "workflow": workflow.as_ref(),
                 "source_slice": definition.source_slice().as_ref(),
@@ -182,13 +472,13 @@ impl EventDraft {
         }
     }
 
-    pub fn workflow_transition_evidence_added(
+    pub(crate) fn workflow_transition_evidence_added(
         workflow: &WorkflowSlug,
         evidence: &WorkflowTransitionEvidenceRecord,
     ) -> Self {
         Self {
-            stream_id: format!("workflow::{}", workflow.as_ref()),
-            event_type: "WorkflowTransitionEvidenceAdded".to_owned(),
+            stream_id: EventStreamId::workflow(workflow),
+            event_type: EventDraftType::WorkflowTransitionEvidenceAdded,
             payload: json!({
                 "workflow": workflow.as_ref(),
                 "from": evidence.source().as_ref(),
@@ -201,23 +491,23 @@ impl EventDraft {
         }
     }
 
-    pub fn workflow_entry_lifecycle_coverage_required(workflow: &WorkflowSlug) -> Self {
+    pub(crate) fn workflow_entry_lifecycle_coverage_required(workflow: &WorkflowSlug) -> Self {
         Self {
-            stream_id: format!("workflow::{}", workflow.as_ref()),
-            event_type: "WorkflowEntryLifecycleCoverageRequired".to_owned(),
+            stream_id: EventStreamId::workflow(workflow),
+            event_type: EventDraftType::WorkflowEntryLifecycleCoverageRequired,
             payload: json!({
                 "workflow": workflow.as_ref(),
             }),
         }
     }
 
-    pub fn workflow_entry_lifecycle_state_added(
+    pub(crate) fn workflow_entry_lifecycle_state_added(
         workflow: &WorkflowSlug,
         coverage: &WorkflowEntryLifecycleStateRecord,
     ) -> Self {
         Self {
-            stream_id: format!("workflow::{}", workflow.as_ref()),
-            event_type: "WorkflowEntryLifecycleStateAdded".to_owned(),
+            stream_id: EventStreamId::workflow(workflow),
+            event_type: EventDraftType::WorkflowEntryLifecycleStateAdded,
             payload: json!({
                 "workflow": workflow.as_ref(),
                 "state": coverage.state().as_ref(),
@@ -227,32 +517,34 @@ impl EventDraft {
         }
     }
 
-    pub fn workflow_readiness_declared(
+    pub(crate) fn workflow_readiness_declared(
         workflow: &WorkflowSlug,
-        projection_fingerprint: &ArtifactDigest,
-        model_content_digest: &ArtifactDigest,
+        projection_fingerprint: &ProjectionFingerprint,
+        model_content_digest: &ModelContentDigest,
         verified_at: &ReviewTimestamp,
         verified_by: &ReviewerId,
-        review_event_id: Option<&ArtifactDigest>,
+        review_event: &ReviewEventReference,
     ) -> Self {
         Self {
-            stream_id: format!("workflow::{}", workflow.as_ref()),
-            event_type: "WorkflowReadinessDeclared".to_owned(),
+            stream_id: EventStreamId::workflow(workflow),
+            event_type: EventDraftType::WorkflowReadinessDeclared,
             payload: json!({
                 "workflow": workflow.as_ref(),
                 "projection_fingerprint": projection_fingerprint.as_ref(),
                 "model_content_digest": model_content_digest.as_ref(),
                 "verified_at": verified_at.as_ref(),
                 "verified_by": verified_by.as_ref(),
-                "review_event_id": review_event_id.map(ArtifactDigest::as_ref),
+                "review_event_id": review_event
+                    .as_review_event_id()
+                    .map(|event_id| event_id.as_ref()),
             }),
         }
     }
 
-    pub fn workflow_connected(connection: &WorkflowConnection) -> Self {
+    pub(crate) fn workflow_connected(connection: &WorkflowConnection) -> Self {
         Self {
-            stream_id: format!("workflow::{}", connection.workflow_slug().as_ref()),
-            event_type: "WorkflowConnected".to_owned(),
+            stream_id: EventStreamId::workflow(connection.workflow_slug()),
+            event_type: EventDraftType::WorkflowConnected,
             payload: json!({
                 "workflow": connection.workflow_slug().as_ref(),
                 "from": connection.source().as_ref(),
@@ -274,10 +566,10 @@ impl EventDraft {
         }
     }
 
-    pub fn workflow_transition_removed(removal: &WorkflowTransitionRemoval) -> Self {
+    pub(crate) fn workflow_transition_removed(removal: &WorkflowTransitionRemoval) -> Self {
         Self {
-            stream_id: format!("workflow::{}", removal.workflow_slug().as_ref()),
-            event_type: "WorkflowTransitionRemoved".to_owned(),
+            stream_id: EventStreamId::workflow(removal.workflow_slug()),
+            event_type: EventDraftType::WorkflowTransitionRemoved,
             payload: json!({
                 "workflow": removal.workflow_slug().as_ref(),
                 "from": removal.source().as_ref(),
@@ -292,10 +584,10 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_added(slice: &NewSlice) -> Self {
+    pub(crate) fn slice_added(slice: &NewSlice) -> Self {
         Self {
-            stream_id: format!("slice::{}", slice.slug().as_ref()),
-            event_type: "SliceAdded".to_owned(),
+            stream_id: EventStreamId::slice(slice.slug()),
+            event_type: EventDraftType::SliceAdded,
             payload: json!({
                 "workflow": slice.workflow_slug().as_ref(),
                 "slug": slice.slug().as_ref(),
@@ -306,10 +598,10 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_updated(slice: &WorkflowSliceDetail) -> Self {
+    pub(crate) fn slice_updated(slice: &WorkflowSliceDetail) -> Self {
         Self {
-            stream_id: format!("slice::{}", slice.slug().as_ref()),
-            event_type: "SliceUpdated".to_owned(),
+            stream_id: EventStreamId::slice(slice.slug()),
+            event_type: EventDraftType::SliceUpdated,
             payload: json!({
                 "slug": slice.slug().as_ref(),
                 "name": slice.name().as_ref(),
@@ -319,20 +611,20 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_removed(slice: &WorkflowSliceDetail) -> Self {
+    pub(crate) fn slice_removed(slice: &WorkflowSliceDetail) -> Self {
         Self {
-            stream_id: format!("slice::{}", slice.slug().as_ref()),
-            event_type: "SliceRemoved".to_owned(),
+            stream_id: EventStreamId::slice(slice.slug()),
+            event_type: EventDraftType::SliceRemoved,
             payload: json!({
                 "slug": slice.slug().as_ref(),
             }),
         }
     }
 
-    pub fn slice_scenario_added(scenario: &NewSliceScenario) -> Self {
+    pub(crate) fn slice_scenario_added(scenario: &NewSliceScenario) -> Self {
         Self {
-            stream_id: format!("slice::{}", scenario.slice_slug().as_ref()),
-            event_type: "SliceScenarioAdded".to_owned(),
+            stream_id: EventStreamId::slice(scenario.slice_slug()),
+            event_type: EventDraftType::SliceScenarioAdded,
             payload: json!({
                 "slice": scenario.slice_slug().as_ref(),
                 "kind": scenario.kind().as_str(),
@@ -366,10 +658,10 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_outcome_added(outcome: &NewOutcomeDefinition) -> Self {
+    pub(crate) fn slice_outcome_added(outcome: &NewOutcomeDefinition) -> Self {
         Self {
-            stream_id: format!("slice::{}", outcome.slice_slug().as_ref()),
-            event_type: "SliceOutcomeAdded".to_owned(),
+            stream_id: EventStreamId::slice(outcome.slice_slug()),
+            event_type: EventDraftType::SliceOutcomeAdded,
             payload: json!({
                 "slice": outcome.slice_slug().as_ref(),
                 "label": outcome.label().as_ref(),
@@ -384,10 +676,12 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_external_payload_added(external_payload: &NewExternalPayloadDefinition) -> Self {
+    pub(crate) fn slice_external_payload_added(
+        external_payload: &NewExternalPayloadDefinition,
+    ) -> Self {
         Self {
-            stream_id: format!("slice::{}", external_payload.slice_slug().as_ref()),
-            event_type: "SliceExternalPayloadAdded".to_owned(),
+            stream_id: EventStreamId::slice(external_payload.slice_slug()),
+            event_type: EventDraftType::SliceExternalPayloadAdded,
             payload: json!({
                 "slice": external_payload.slice_slug().as_ref(),
                 "name": external_payload.name().as_ref(),
@@ -398,11 +692,11 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_event_definition_added(event: &NewEventDefinition) -> Self {
+    pub(crate) fn slice_event_definition_added(event: &NewEventDefinition) -> Self {
         let attribute = event.attribute();
         Self {
-            stream_id: format!("slice::{}", event.slice_slug().as_ref()),
-            event_type: "SliceEventDefinitionAdded".to_owned(),
+            stream_id: EventStreamId::slice(event.slice_slug()),
+            event_type: EventDraftType::SliceEventDefinitionAdded,
             payload: json!({
                 "slice": event.slice_slug().as_ref(),
                 "name": event.name().as_ref(),
@@ -423,10 +717,10 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_command_definition_added(command: &NewCommandDefinition) -> Self {
+    pub(crate) fn slice_command_definition_added(command: &NewCommandDefinition) -> Self {
         Self {
-            stream_id: format!("slice::{}", command.slice_slug().as_ref()),
-            event_type: "SliceCommandDefinitionAdded".to_owned(),
+            stream_id: EventStreamId::slice(command.slice_slug()),
+            event_type: EventDraftType::SliceCommandDefinitionAdded,
             payload: json!({
                 "slice": command.slice_slug().as_ref(),
                 "name": command.name().as_ref(),
@@ -462,10 +756,10 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_read_model_added(read_model: &NewReadModelDefinition) -> Self {
+    pub(crate) fn slice_read_model_added(read_model: &NewReadModelDefinition) -> Self {
         Self {
-            stream_id: format!("slice::{}", read_model.slice_slug().as_ref()),
-            event_type: "SliceReadModelAdded".to_owned(),
+            stream_id: EventStreamId::slice(read_model.slice_slug()),
+            event_type: EventDraftType::SliceReadModelAdded,
             payload: json!({
                 "slice": read_model.slice_slug().as_ref(),
                 "name": read_model.name().as_ref(),
@@ -487,10 +781,10 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_view_added(view: &NewViewDefinition) -> Self {
+    pub(crate) fn slice_view_added(view: &NewViewDefinition) -> Self {
         Self {
-            stream_id: format!("slice::{}", view.slice_slug().as_ref()),
-            event_type: "SliceViewAdded".to_owned(),
+            stream_id: EventStreamId::slice(view.slice_slug()),
+            event_type: EventDraftType::SliceViewAdded,
             payload: json!({
                 "slice": view.slice_slug().as_ref(),
                 "name": view.name().as_ref(),
@@ -517,10 +811,10 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_bit_level_data_flow_added(data_flow: &NewBitLevelDataFlow) -> Self {
+    pub(crate) fn slice_bit_level_data_flow_added(data_flow: &NewBitLevelDataFlow) -> Self {
         Self {
-            stream_id: format!("slice::{}", data_flow.slice_slug().as_ref()),
-            event_type: "SliceBitLevelDataFlowAdded".to_owned(),
+            stream_id: EventStreamId::slice(data_flow.slice_slug()),
+            event_type: EventDraftType::SliceBitLevelDataFlowAdded,
             payload: json!({
                 "slice": data_flow.slice_slug().as_ref(),
                 "datum": data_flow.datum().as_ref(),
@@ -533,10 +827,10 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_translation_added(translation: &NewTranslationDefinition) -> Self {
+    pub(crate) fn slice_translation_added(translation: &NewTranslationDefinition) -> Self {
         Self {
-            stream_id: format!("slice::{}", translation.slice_slug().as_ref()),
-            event_type: "SliceTranslationAdded".to_owned(),
+            stream_id: EventStreamId::slice(translation.slice_slug()),
+            event_type: EventDraftType::SliceTranslationAdded,
             payload: json!({
                 "slice": translation.slice_slug().as_ref(),
                 "name": translation.name().as_ref(),
@@ -547,10 +841,10 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_automation_added(automation: &NewAutomationDefinition) -> Self {
+    pub(crate) fn slice_automation_added(automation: &NewAutomationDefinition) -> Self {
         Self {
-            stream_id: format!("slice::{}", automation.slice_slug().as_ref()),
-            event_type: "SliceAutomationAdded".to_owned(),
+            stream_id: EventStreamId::slice(automation.slice_slug()),
+            event_type: EventDraftType::SliceAutomationAdded,
             payload: json!({
                 "slice": automation.slice_slug().as_ref(),
                 "name": automation.name().as_ref(),
@@ -567,10 +861,10 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_board_element_added(element: &NewBoardElement) -> Self {
+    pub(crate) fn slice_board_element_added(element: &NewBoardElement) -> Self {
         Self {
-            stream_id: format!("slice::{}", element.slice_slug().as_ref()),
-            event_type: "SliceBoardElementAdded".to_owned(),
+            stream_id: EventStreamId::slice(element.slice_slug()),
+            event_type: EventDraftType::SliceBoardElementAdded,
             payload: json!({
                 "slice": element.slice_slug().as_ref(),
                 "name": element.name().as_ref(),
@@ -582,10 +876,10 @@ impl EventDraft {
         }
     }
 
-    pub fn slice_board_connection_added(connection: &NewBoardConnection) -> Self {
+    pub(crate) fn slice_board_connection_added(connection: &NewBoardConnection) -> Self {
         Self {
-            stream_id: format!("slice::{}", connection.slice_slug().as_ref()),
-            event_type: "SliceBoardConnectionAdded".to_owned(),
+            stream_id: EventStreamId::slice(connection.slice_slug()),
+            event_type: EventDraftType::SliceBoardConnectionAdded,
             payload: json!({
                 "slice": connection.slice_slug().as_ref(),
                 "source": connection.source().as_ref(),
@@ -596,13 +890,13 @@ impl EventDraft {
         }
     }
 
-    pub fn conflict_resolved(
-        conflict_id: &ArtifactDigest,
-        chosen_event_id: &ArtifactDigest,
+    pub(crate) fn conflict_resolved(
+        conflict_id: &EventConflictId,
+        chosen_event_id: &ChosenEventId,
     ) -> Self {
         Self {
-            stream_id: "project".to_owned(),
-            event_type: "ConflictResolved".to_owned(),
+            stream_id: EventStreamId::project(),
+            event_type: EventDraftType::ConflictResolved,
             payload: json!({
                 "conflict_id": conflict_id.as_ref(),
                 "chosen_event_id": chosen_event_id.as_ref(),
@@ -610,16 +904,16 @@ impl EventDraft {
         }
     }
 
-    pub fn review_recorded(
+    pub(crate) fn review_recorded(
         workflow_slug: &WorkflowSlug,
-        model_content_digest: &ArtifactDigest,
+        model_content_digest: &ModelContentDigest,
         reviewer_id: &ReviewerId,
         reviewed_at: &ReviewTimestamp,
         categories: &[ReviewRuleName],
     ) -> Self {
         Self {
-            stream_id: format!("review::{}", workflow_slug.as_ref()),
-            event_type: "ReviewRecorded".to_owned(),
+            stream_id: EventStreamId::review(workflow_slug),
+            event_type: EventDraftType::ReviewRecorded,
             payload: json!({
                 "workflow": workflow_slug.as_ref(),
                 "model_content_digest": model_content_digest.as_ref(),
@@ -760,9 +1054,11 @@ fn navigation_payload(navigation: &NewNavigationTarget) -> Value {
     })
 }
 
-pub fn export_event_file_contents(draft: &EventDraft) -> Result<(String, FileContents), String> {
+pub(crate) fn export_event_file_contents(
+    draft: &EventDraft,
+) -> Result<(String, FileContents), String> {
     let parents = exported_event_ids()?;
-    let command_ordinal = command_ordinal_for_stream(&draft.stream_id)?;
+    let command_ordinal = command_ordinal_for_stream(draft.stream_id.as_ref())?;
     let event_id = event_id(draft, &parents, command_ordinal)?;
     let command_id = command_id(&event_id);
     let exported = json!({
@@ -770,9 +1066,9 @@ pub fn export_event_file_contents(draft: &EventDraft) -> Result<(String, FileCon
         "event_id": event_id.clone(),
         "command_id": command_id,
         "command_ordinal": command_ordinal,
-        "stream_id": draft.stream_id.clone(),
+        "stream_id": draft.stream_id.as_ref(),
         "parents": parents,
-        "type": draft.event_type.clone(),
+        "type": draft.event_type.as_ref(),
         "payload": draft.payload.clone(),
     });
     let json = serde_json::to_string_pretty(&exported).map_err(|error| error.to_string())?;
@@ -783,7 +1079,7 @@ pub fn export_event_file_contents(draft: &EventDraft) -> Result<(String, FileCon
     ))
 }
 
-pub fn project_exported_events() -> Result<Option<EffectPlan>, String> {
+pub(crate) fn project_exported_events() -> Result<Option<EffectPlan>, String> {
     let path = Path::new(EVENT_EXPORT_DIRECTORY);
     if !path.exists() {
         return Ok(None);
@@ -800,7 +1096,7 @@ pub fn project_exported_events() -> Result<Option<EffectPlan>, String> {
         .map(Some)
 }
 
-pub fn exported_events_projection_fingerprint() -> Result<Option<String>, String> {
+pub(crate) fn exported_events_projection_fingerprint() -> Result<Option<String>, String> {
     let path = Path::new(EVENT_EXPORT_DIRECTORY);
     if !path.exists() {
         return Ok(None);
@@ -814,7 +1110,7 @@ pub fn exported_events_projection_fingerprint() -> Result<Option<String>, String
     projection_fingerprint(&events).map(Some)
 }
 
-pub fn list_event_conflicts() -> Result<EffectPlan, String> {
+pub(crate) fn list_event_conflicts() -> Result<EffectPlan, String> {
     let path = Path::new(EVENT_EXPORT_DIRECTORY);
     if !path.exists() {
         return Ok(EffectPlan::new(vec![Effect::Report(report_line(
@@ -847,7 +1143,7 @@ pub fn list_event_conflicts() -> Result<EffectPlan, String> {
     Ok(EffectPlan::new(effects))
 }
 
-pub fn list_stale_workflow_readiness() -> Result<EffectPlan, String> {
+pub(crate) fn list_stale_workflow_readiness() -> Result<EffectPlan, String> {
     let path = Path::new(EVENT_EXPORT_DIRECTORY);
     if !path.exists() {
         return Ok(EffectPlan::new(Vec::new()));
@@ -881,7 +1177,7 @@ pub fn list_stale_workflow_readiness() -> Result<EffectPlan, String> {
     Ok(EffectPlan::new(effects))
 }
 
-pub fn resolve_event_conflict(
+pub(crate) fn resolve_event_conflict(
     conflict_id: String,
     chosen_event_id: String,
 ) -> Result<EffectPlan, String> {
@@ -899,17 +1195,22 @@ pub fn resolve_event_conflict(
             "event {chosen_event_id} is not part of conflict {conflict_id}"
         ));
     }
+    let conflict_id = EventConflictId::new(artifact_digest_from_str(&conflict_id)?);
+    let chosen_event_id = ChosenEventId::new(artifact_digest_from_str(&chosen_event_id)?);
 
     Ok(EffectPlan::new(vec![
         Effect::ExportEvent(EventDraft::conflict_resolved(
-            &artifact_digest_from_str(&conflict_id)?,
-            &artifact_digest_from_str(&chosen_event_id)?,
+            &conflict_id,
+            &chosen_event_id,
         )),
-        Effect::Report(report_line(format!("resolved conflict {conflict_id}"))?),
+        Effect::Report(report_line(format!(
+            "resolved conflict {}",
+            conflict_id.as_ref()
+        ))?),
     ]))
 }
 
-pub fn unresolved_event_conflicts_exist() -> Result<bool, String> {
+pub(crate) fn unresolved_event_conflicts_exist() -> Result<bool, String> {
     let path = Path::new(EVENT_EXPORT_DIRECTORY);
     if !path.exists() {
         return Ok(false);
@@ -918,7 +1219,7 @@ pub fn unresolved_event_conflicts_exist() -> Result<bool, String> {
     event_conflicts(path).map(|conflicts| !conflicts.is_empty())
 }
 
-pub fn reject_legacy_artifact_only_project() -> Result<(), String> {
+pub(crate) fn reject_legacy_artifact_only_project() -> Result<(), String> {
     let has_project_manifest = Path::new("emc.toml").exists();
     let has_generated_artifacts =
         Path::new("model/lean").exists() || Path::new("model/quint").exists();
@@ -1119,7 +1420,7 @@ fn projection_fingerprint(events: &[Value]) -> Result<String, String> {
     projection_fingerprint_digest(events).map(|digest| digest.as_ref().to_owned())
 }
 
-fn projection_fingerprint_digest(events: &[Value]) -> Result<ArtifactDigest, String> {
+fn projection_fingerprint_digest(events: &[Value]) -> Result<ProjectionFingerprint, String> {
     let event_ids = events
         .iter()
         .filter(|event| {
@@ -1130,6 +1431,7 @@ fn projection_fingerprint_digest(events: &[Value]) -> Result<ArtifactDigest, Str
     ArtifactDigest::try_new(hex::encode(Sha256::digest(
         serde_json::to_vec(&event_ids).map_err(|error| error.to_string())?,
     )))
+    .map(ProjectionFingerprint::new)
     .map_err(|error| error.to_string())
 }
 
@@ -1164,9 +1466,9 @@ fn event_id(
     let canonical = serde_json::to_vec(&json!({
         "schema_version": SCHEMA_VERSION,
         "command_ordinal": command_ordinal,
-        "stream_id": draft.stream_id,
+        "stream_id": draft.stream_id.as_ref(),
         "parents": parents,
-        "type": draft.event_type,
+        "type": draft.event_type.as_ref(),
         "payload": draft.payload,
     }))
     .map_err(|error| error.to_string())?;
@@ -1278,7 +1580,11 @@ impl ProjectedModel {
                         .ok_or_else(|| {
                             format!("SliceAdded references unknown workflow {workflow_slug_text}")
                         })?;
-                            let entry = workflow.slices.is_empty();
+                            let relationship = if workflow.slices.is_empty() {
+                                WorkflowStepRelationshipName::Entry
+                            } else {
+                                WorkflowStepRelationshipName::Main
+                            };
                             workflow.slices.push(ProjectedSlice {
                                 slug: slice_slug(required_str(payload, "slug")?)?,
                                 name: model_name(required_str(payload, "name")?)?,
@@ -1287,11 +1593,7 @@ impl ProjectedModel {
                                     payload,
                                     "description",
                                 )?)?,
-                                relationship: workflow_step_relationship_name(if entry {
-                                    "entry"
-                                } else {
-                                    "main"
-                                })?,
+                                relationship,
                                 scenarios: Vec::new(),
                                 outcomes: Vec::new(),
                                 external_payloads: Vec::new(),
@@ -1798,8 +2100,12 @@ impl ProjectedModel {
                             }
                             let review = ProjectedReview {
                                 workflow_slug: workflow_slug(workflow_slug_text)?,
-                                model_content_digest: required_str(payload, "model_content_digest")?
-                                    .to_owned(),
+                                model_content_digest: ModelContentDigest::new(
+                                    artifact_digest_from_str(required_str(
+                                        payload,
+                                        "model_content_digest",
+                                    )?)?,
+                                ),
                                 reviewer_id: required_str(payload, "reviewer_id")?.to_owned(),
                                 reviewed_at: required_str(payload, "reviewed_at")?.to_owned(),
                                 categories: required_string_array(payload, "categories")?,
@@ -1831,11 +2137,11 @@ impl ProjectedModel {
             .collect::<Vec<_>>();
 
         let mut effects = vec![
-            Effect::WriteFile(
+            Effect::write_file(
                 project_path(PROJECTION_FINGERPRINT_PATH)?,
                 file_contents(format!("{projection_fingerprint}\n"))?,
             ),
-            Effect::WriteFile(
+            Effect::write_file(
                 project_path("emc.toml")?,
                 file_contents(format!(
                     "[project]\nname = \"{}\"\nversion = \"0.1.0\"\nlean_module = \"{project_module_name}\"\nquint_module = \"{project_module_name}\"\n",
@@ -1843,27 +2149,27 @@ impl ProjectedModel {
                 ))?,
             ),
             Effect::EnsureDirectory(project_path("model/lean")?),
-            Effect::WriteFile(
+            Effect::write_file(
                 project_path("model/lean/lean-toolchain")?,
                 file_contents("leanprover/lean4:4.29.1\n")?,
             ),
-            Effect::WriteFile(
+            Effect::write_file(
                 project_path("model/lean/lakefile.lean")?,
                 file_contents("import Lake\nopen Lake DSL\npackage EMCModel where\n")?,
             ),
             Effect::EnsureDirectory(project_path("model/lean/slices")?),
-            Effect::WriteFile(
+            Effect::write_file(
                 project_path("model/lean/slices/.gitkeep")?,
                 file_contents("\n")?,
             ),
             Effect::EnsureDirectory(project_path("model/quint")?),
             Effect::EnsureDirectory(project_path("model/quint/slices")?),
-            Effect::WriteFile(
+            Effect::write_file(
                 project_path("model/quint/slices/.gitkeep")?,
                 file_contents("\n")?,
             ),
             Effect::EnsureDirectory(project_path("reviews")?),
-            Effect::WriteFile(project_path("reviews/.gitkeep")?, file_contents("\n")?),
+            Effect::write_file(project_path("reviews/.gitkeep")?, file_contents("\n")?),
         ];
 
         effects.extend(project_root_effects(
@@ -1893,7 +2199,7 @@ impl ProjectedModel {
 #[derive(Debug)]
 struct ProjectedReview {
     workflow_slug: WorkflowSlug,
-    model_content_digest: String,
+    model_content_digest: ModelContentDigest,
     reviewer_id: String,
     reviewed_at: String,
     categories: Vec<String>,
@@ -1902,7 +2208,7 @@ struct ProjectedReview {
 #[derive(Debug)]
 struct WorkflowReadinessDeclaration {
     workflow: WorkflowSlug,
-    projection_fingerprint: ArtifactDigest,
+    projection_fingerprint: ProjectionFingerprint,
 }
 
 impl ProjectedReview {
@@ -1916,7 +2222,7 @@ impl ProjectedReview {
                 });
         let document = json!({
             "workflow_slug": self.workflow_slug.as_ref(),
-            "model_content_digest": self.model_content_digest,
+            "model_content_digest": self.model_content_digest.as_ref(),
             "reviewer_id": self.reviewer_id,
             "status": "clean",
             "category_results": category_results,
@@ -1925,7 +2231,7 @@ impl ProjectedReview {
         });
         let contents =
             serde_json::to_string_pretty(&document).map_err(|error| error.to_string())?;
-        Ok(Effect::WriteFile(
+        Ok(Effect::write_file(
             project_path(format!(
                 "reviews/{}.review.json",
                 self.workflow_slug.as_ref()
@@ -2013,14 +2319,14 @@ impl ProjectedWorkflow {
                 self.entry_lifecycle_states,
             ));
         let mut effects = vec![
-            Effect::WriteFile(
+            Effect::write_file(
                 project_path(format!("model/lean/{module_name}.lean"))?,
                 emit_lean_workflow_module(
                     lean_module_name(module_name.clone()),
                     workflow_data.clone(),
                 ),
             ),
-            Effect::WriteFile(
+            Effect::write_file(
                 project_path(format!("model/quint/{module_name}.qnt"))?,
                 emit_quint_workflow_module(quint_module_name(module_name), workflow_data),
             ),
@@ -2065,9 +2371,9 @@ impl ProjectedSlice {
         WorkflowSliceDetail::new_with_relationship(
             self.slug.clone(),
             self.name.clone(),
-            self.kind.clone(),
+            self.kind,
             self.description.clone(),
-            self.relationship.clone(),
+            self.relationship,
         )
     }
 
@@ -2076,22 +2382,22 @@ impl ProjectedSlice {
         let digest = slice_artifact_digest(
             self.name.clone(),
             self.slug.clone(),
-            self.kind.clone(),
+            self.kind,
             self.description.clone(),
         );
         let mut effects = vec![
-            Effect::WriteFile(
+            Effect::write_file(
                 project_path(format!("model/lean/slices/{module_name}.lean"))?,
                 emit_lean_slice_module(
                     lean_module_name(module_name.clone()),
                     self.name.clone(),
                     self.description.clone(),
                     self.slug.clone(),
-                    self.kind.clone(),
+                    self.kind,
                     digest.clone(),
                 ),
             ),
-            Effect::WriteFile(
+            Effect::write_file(
                 project_path(format!("model/quint/slices/{module_name}.qnt"))?,
                 emit_quint_slice_module(
                     quint_module_name(module_name),
@@ -2299,7 +2605,7 @@ pub(crate) fn slice_event_definition_from_payload(
 ) -> Result<NewEventDefinition, String> {
     let attribute_payload = required_object(payload, "attribute")?;
     let generated_source_kind = optional_str(attribute_payload, "generated_source_kind")?
-        .map(event_attribute_source_kind)
+        .map(generated_event_attribute_source_kind)
         .transpose()?;
     let attribute = match generated_source_kind {
         Some(generated_source_kind) => NewEventAttribute::new_with_generated_source_kind(
@@ -2343,9 +2649,10 @@ pub(crate) fn slice_command_definition_from_payload(
     payload: &Value,
 ) -> Result<NewCommandDefinition, String> {
     let input_payload = required_object(payload, "input")?;
-    let mut input = NewCommandInput::new(
+    let source_kind = command_input_source_kind(required_str(input_payload, "source_kind")?)?;
+    let input = NewCommandInput::new(
         datum_name(required_str(input_payload, "name")?)?,
-        command_input_source_kind(required_str(input_payload, "source_kind")?)?,
+        command_input_source_from_payload(source_kind, input_payload)?,
         command_input_source_description(required_str(input_payload, "source_description")?)?,
         CommandInputProvenanceChain::from_hops(
             required_string_array(input_payload, "provenance_chain")?
@@ -2354,35 +2661,6 @@ pub(crate) fn slice_command_definition_from_payload(
                 .collect::<Result<Vec<_>, _>>()?,
         ),
     );
-    if let Some((event, attribute)) = optional_event_stream_source(input_payload)? {
-        input = input.with_event_stream_source(event, attribute);
-    }
-    if let Some((source, field)) = optional_source_field_pair(
-        input_payload,
-        "external_payload_source_name",
-        "external_payload_source_field",
-    )? {
-        input = input.with_external_payload_source(source, field);
-    }
-    if let Some((source, field)) = optional_source_field_pair(
-        input_payload,
-        "generated_source_name",
-        "generated_source_field",
-    )? {
-        input = input.with_generated_source(source, field);
-    }
-    if let Some((source, field)) =
-        optional_source_field_pair(input_payload, "session_source_name", "session_source_field")?
-    {
-        input = input.with_session_source(source, field);
-    }
-    if let Some((source, field)) = optional_source_field_pair(
-        input_payload,
-        "invocation_argument_source_name",
-        "invocation_argument_source_field",
-    )? {
-        input = input.with_invocation_argument_source(source, field);
-    }
 
     let mut command = NewCommandDefinition::new(
         slice_slug(required_str(payload, "slice")?)?,
@@ -2414,6 +2692,77 @@ pub(crate) fn slice_command_definition_from_payload(
     }
 
     Ok(command)
+}
+
+fn command_input_source_from_payload(
+    source_kind: CommandInputSourceKind,
+    input_payload: &Value,
+) -> Result<CommandInputSource, String> {
+    let event_stream = optional_event_stream_source(input_payload)?;
+    let external_payload = optional_source_field_pair(
+        input_payload,
+        "external_payload_source_name",
+        "external_payload_source_field",
+    )?;
+    let generated = optional_source_field_pair(
+        input_payload,
+        "generated_source_name",
+        "generated_source_field",
+    )?;
+    let session =
+        optional_source_field_pair(input_payload, "session_source_name", "session_source_field")?;
+    let invocation_argument = optional_source_field_pair(
+        input_payload,
+        "invocation_argument_source_name",
+        "invocation_argument_source_field",
+    )?;
+
+    match (
+        source_kind,
+        event_stream,
+        external_payload,
+        generated,
+        session,
+        invocation_argument,
+    ) {
+        (CommandInputSourceKind::Actor, None, None, None, None, None) => {
+            Ok(CommandInputSource::actor())
+        }
+        (
+            CommandInputSourceKind::EventStreamState,
+            Some((event, attribute)),
+            None,
+            None,
+            None,
+            None,
+        ) => Ok(CommandInputSource::event_stream_state(event, attribute)),
+        (
+            CommandInputSourceKind::ExternalPayload,
+            None,
+            Some((payload, field)),
+            None,
+            None,
+            None,
+        ) => Ok(CommandInputSource::external_payload(payload, field)),
+        (CommandInputSourceKind::Generated, None, None, Some((source, field)), None, None) => {
+            Ok(CommandInputSource::generated(source, field))
+        }
+        (CommandInputSourceKind::Session, None, None, None, Some((source, field)), None) => {
+            Ok(CommandInputSource::session(source, field))
+        }
+        (
+            CommandInputSourceKind::InvocationArgument,
+            None,
+            None,
+            None,
+            None,
+            Some((argument, field)),
+        ) => Ok(CommandInputSource::invocation_argument(argument, field)),
+        _ => Err(
+            "command input source kind and source coordinates must describe the same source"
+                .to_owned(),
+        ),
+    }
 }
 
 fn optional_event_stream_source(
@@ -2502,7 +2851,8 @@ fn read_model_field_from_payload(payload: &Value) -> Result<NewReadModelField, S
     let name = datum_name(required_str(payload, "name")?)?;
     let source_kind = read_model_field_source_kind(required_str(payload, "source_kind")?)?;
     let provenance = provenance_description(required_str(payload, "provenance")?)?;
-    match (
+    let source = match (
+        source_kind,
         optional_str(payload, "source_event")?,
         optional_str(payload, "source_attribute")?,
         optional_str(payload, "derivation_rule")?,
@@ -2512,6 +2862,7 @@ fn read_model_field_from_payload(payload: &Value) -> Result<NewReadModelField, S
         optional_str(payload, "absence_scenario")?,
     ) {
         (
+            ReadModelFieldSourceKind::EventAttribute,
             Some(source_event),
             Some(source_attribute),
             None,
@@ -2519,14 +2870,12 @@ fn read_model_field_from_payload(payload: &Value) -> Result<NewReadModelField, S
             None,
             None,
             None,
-        ) if derivation_source_fields.is_empty() => Ok(NewReadModelField::new(
-            name,
-            source_kind,
+        ) if derivation_source_fields.is_empty() => ReadModelFieldSource::event_attribute(
             event_name(source_event)?,
             event_attribute_name(source_attribute)?,
-            provenance,
-        )),
+        ),
         (
+            ReadModelFieldSourceKind::Derivation,
             None,
             None,
             Some(derivation_rule),
@@ -2534,9 +2883,7 @@ fn read_model_field_from_payload(payload: &Value) -> Result<NewReadModelField, S
             None,
             Some(derivation_scenario),
             None,
-        ) => Ok(NewReadModelField::new_derivation(
-            name,
-            source_kind,
+        ) => ReadModelFieldSource::derivation(
             read_model_derivation_rule(derivation_rule)?,
             ReadModelDerivationSourceFields::from_fields(
                 derivation_source_fields
@@ -2545,9 +2892,9 @@ fn read_model_field_from_payload(payload: &Value) -> Result<NewReadModelField, S
                     .collect::<Result<Vec<_>, _>>()?,
             ),
             scenario_name(derivation_scenario)?,
-            provenance,
-        )),
+        ),
         (
+            ReadModelFieldSourceKind::AbsenceDefault,
             None,
             None,
             None,
@@ -2555,15 +2902,14 @@ fn read_model_field_from_payload(payload: &Value) -> Result<NewReadModelField, S
             Some(absence_event),
             None,
             Some(absence_scenario),
-        ) if derivation_source_fields.is_empty() => Ok(NewReadModelField::new_absence_default(
-            name,
-            source_kind,
+        ) if derivation_source_fields.is_empty() => ReadModelFieldSource::absence_default(
             event_name(absence_event)?,
             scenario_name(absence_scenario)?,
-            provenance,
-        )),
-        _ => Err("SliceReadModelAdded has incompatible field source fields".to_owned()),
-    }
+        ),
+        _ => return Err("SliceReadModelAdded has incompatible field source fields".to_owned()),
+    };
+
+    Ok(NewReadModelField::new(name, source, provenance))
 }
 
 pub(crate) fn slice_bit_level_data_flow_from_payload(
@@ -2793,8 +3139,8 @@ fn workflow_transition_evidence_from_payload(
         workflow_transition_endpoint(required_str(payload, "to")?)?,
         workflow_transition_kind(required_str(payload, "via")?)?,
         transition_trigger_name(required_str(payload, "name")?)?,
-        workflow_transition_evidence_text(required_str(payload, "source_evidence")?)?,
-        workflow_transition_evidence_text(required_str(payload, "target_evidence")?)?,
+        workflow_transition_source_evidence_text(required_str(payload, "source_evidence")?)?,
+        workflow_transition_target_evidence_text(required_str(payload, "target_evidence")?)?,
     ))
 }
 
@@ -2852,10 +3198,9 @@ fn workflow_readiness_declaration_from_payload(
 ) -> Result<WorkflowReadinessDeclaration, String> {
     Ok(WorkflowReadinessDeclaration {
         workflow: workflow_slug(required_str(payload, "workflow")?)?,
-        projection_fingerprint: artifact_digest_from_str(required_str(
-            payload,
-            "projection_fingerprint",
-        )?)?,
+        projection_fingerprint: ProjectionFingerprint::new(artifact_digest_from_str(
+            required_str(payload, "projection_fingerprint")?,
+        )?),
     })
 }
 
@@ -2912,10 +3257,6 @@ fn slice_slug(value: &str) -> Result<SliceSlug, String> {
 
 fn slice_kind_name(value: &str) -> Result<SliceKindName, String> {
     SliceKindName::try_new(value.to_owned()).map_err(|error| error.to_string())
-}
-
-fn workflow_step_relationship_name(value: &str) -> Result<WorkflowStepRelationshipName, String> {
-    WorkflowStepRelationshipName::try_new(value.to_owned()).map_err(|error| error.to_string())
 }
 
 fn workflow_transition_endpoint(value: &str) -> Result<WorkflowTransitionEndpoint, String> {
@@ -3079,11 +3420,7 @@ fn singleton_repeat_behavior(value: &str) -> Result<SingletonRepeatBehavior, Str
 }
 
 fn scenario_kind(value: &str) -> Result<ScenarioKind, String> {
-    match value {
-        "acceptance" => Ok(ScenarioKind::acceptance()),
-        "contract" => Ok(ScenarioKind::contract()),
-        _ => Err(format!("unknown scenario kind {value}")),
-    }
+    ScenarioKind::try_new(value.to_owned()).map_err(|error| error.to_string())
 }
 
 fn scenario_name(value: &str) -> Result<ScenarioName, String> {
@@ -3108,6 +3445,12 @@ fn event_attribute_name(value: &str) -> Result<EventAttributeName, String> {
 
 fn event_attribute_source_kind(value: &str) -> Result<EventAttributeSourceKind, String> {
     EventAttributeSourceKind::try_new(value.to_owned()).map_err(|error| error.to_string())
+}
+
+fn generated_event_attribute_source_kind(
+    value: &str,
+) -> Result<GeneratedEventAttributeSourceKind, String> {
+    GeneratedEventAttributeSourceKind::try_new(value.to_owned()).map_err(|error| error.to_string())
 }
 
 fn event_attribute_source_name(value: &str) -> Result<EventAttributeSourceName, String> {
@@ -3166,10 +3509,18 @@ fn workflow_view_role(value: &str) -> Result<WorkflowViewRole, String> {
     WorkflowViewRole::try_new(value.to_owned()).map_err(|error| error.to_string())
 }
 
-fn workflow_transition_evidence_text(
+fn workflow_transition_source_evidence_text(
     value: &str,
-) -> Result<WorkflowTransitionEvidenceText, String> {
-    WorkflowTransitionEvidenceText::try_new(value.to_owned()).map_err(|error| error.to_string())
+) -> Result<WorkflowTransitionSourceEvidenceText, String> {
+    WorkflowTransitionSourceEvidenceText::try_new(value.to_owned())
+        .map_err(|error| error.to_string())
+}
+
+fn workflow_transition_target_evidence_text(
+    value: &str,
+) -> Result<WorkflowTransitionTargetEvidenceText, String> {
+    WorkflowTransitionTargetEvidenceText::try_new(value.to_owned())
+        .map_err(|error| error.to_string())
 }
 
 fn workflow_entry_lifecycle_state_name(

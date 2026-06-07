@@ -9,7 +9,273 @@ use crate::core::layout::{ModeledWorkflowLayout, ModeledWorkflowLayouts};
 use crate::core::project::ProjectName;
 use crate::core::types::{WorkflowSliceDetail, WorkflowSliceDetails};
 
-pub fn verify_project(
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct QuintInvariantName(&'static str);
+
+impl QuintInvariantName {
+    pub(crate) const MODEL_DATA_FLOW_SOURCE_CHAINS_PRESERVE_BIT_ENCODING_SEMANTICS: Self =
+        Self("modelDataFlowSourceChainsPreserveBitEncodingSemantics");
+    pub(crate) const MODEL_WORKFLOW_BEHAVIOR_SURFACE_IS_COMPLETE: Self =
+        Self("modelWorkflowBehaviorSurfaceIsComplete");
+    pub(crate) const WORKFLOW_ONLY_EVENTS_MAY_BE_SHARED_ACROSS_SLICES: Self =
+        Self("workflowOnlyEventsMayBeSharedAcrossSlices");
+    pub(crate) const STATE_VIEW_SLICES_REPRESENT_SINGLE_VIEW_PROJECTION_BOUNDARY: Self =
+        Self("stateViewSlicesRepresentSingleViewProjectionBoundary");
+}
+
+impl AsRef<str> for QuintInvariantName {
+    fn as_ref(&self) -> &str {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct QuintInvariantSet {
+    invariants: &'static [QuintInvariantName],
+}
+
+impl QuintInvariantSet {
+    pub(crate) fn project_root() -> Self {
+        Self {
+            invariants: PROJECT_ROOT_INVARIANTS,
+        }
+    }
+
+    pub(crate) fn workflow() -> Self {
+        Self {
+            invariants: WORKFLOW_INVARIANTS,
+        }
+    }
+
+    pub(crate) fn slice() -> Self {
+        Self {
+            invariants: SLICE_INVARIANTS,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn contains(&self, invariant: QuintInvariantName) -> bool {
+        self.invariants.contains(&invariant)
+    }
+
+    pub(crate) fn as_process_argument(&self) -> ProcessArgument {
+        process_argument(
+            self.invariants
+                .iter()
+                .map(AsRef::as_ref)
+                .collect::<Vec<_>>()
+                .join(","),
+        )
+    }
+}
+
+const PROJECT_ROOT_INVARIANTS: &[QuintInvariantName] = &[
+    QuintInvariantName("modelIdentityStable"),
+    QuintInvariantName("modelVersionStable"),
+    QuintInvariantName("modelDigestStable"),
+    QuintInvariantName("modelWorkflowsAreDeclared"),
+    QuintInvariantName("modelSlicesAreDeclared"),
+    QuintInvariantName("modelSliceModulesAreDeclared"),
+    QuintInvariantName("modelScenariosAreDeclared"),
+    QuintInvariantName("modelScenarioDefinitionsAreDeclared"),
+    QuintInvariantName("modelWorkflowCompositionStructureComplete"),
+    QuintInvariantName::MODEL_WORKFLOW_BEHAVIOR_SURFACE_IS_COMPLETE,
+    QuintInvariantName("modelScenarioDefinitionsHaveGwt"),
+    QuintInvariantName("modelScenarioKindsAreFirstClass"),
+    QuintInvariantName("modelDataFlowsAreDeclared"),
+    QuintInvariantName("modelDataFlowsAreBitComplete"),
+    QuintInvariantName("modelDataFlowSourceKindsAreModeled"),
+    QuintInvariantName("modelDataFlowModeledSourcesResolve"),
+    QuintInvariantName("modelDataFlowSourceChainsReachOriginals"),
+    QuintInvariantName::MODEL_DATA_FLOW_SOURCE_CHAINS_PRESERVE_BIT_ENCODING_SEMANTICS,
+    QuintInvariantName("modelDataFlowTransformationsAreModeled"),
+    QuintInvariantName("modelMeaningfulDataFlowsAreCovered"),
+    QuintInvariantName("modelDataFlowSourceBitEncodingsMatchModeledSources"),
+    QuintInvariantName("modelViewFieldBitEncodingsMatchDataFlows"),
+    QuintInvariantName("modelExternalPayloadFieldBitEncodingsMatchDataFlows"),
+    QuintInvariantName("modelOutcomesAreDeclared"),
+    QuintInvariantName("modelCommandErrorsAreDeclared"),
+    QuintInvariantName("modelCommandsAreDeclared"),
+    QuintInvariantName("modelCommandInputsAreDeclared"),
+    QuintInvariantName("modelCommandInputsHaveProvenance"),
+    QuintInvariantName("modelCommandInputsTraceToInvocationSources"),
+    QuintInvariantName("modelReadModelsAreDeclared"),
+    QuintInvariantName("modelReadModelDefinitionsAreDeclared"),
+    QuintInvariantName("modelReadModelFieldsAreDeclared"),
+    QuintInvariantName("modelReadModelFieldSourcesAreComplete"),
+    QuintInvariantName("modelViewFieldSourcesAreComplete"),
+    QuintInvariantName("modelViewFieldReadModelFieldSourcesResolve"),
+    QuintInvariantName("modelDisplayedDataTraceToOriginalProvenance"),
+    QuintInvariantName("modelExternalPayloadFieldsHaveProvenance"),
+    QuintInvariantName("modelViewsAreDeclared"),
+    QuintInvariantName("modelViewDefinitionsAreDeclared"),
+    QuintInvariantName("modelViewControlsAreDeclared"),
+    QuintInvariantName("modelBoardElementsAreDeclared"),
+    QuintInvariantName("modelBoardConnectionsAreDeclared"),
+    QuintInvariantName("modelViewFieldsAreDeclared"),
+    QuintInvariantName("modelAutomationsAreDeclared"),
+    QuintInvariantName("modelAutomationDefinitionsAreDeclared"),
+    QuintInvariantName("modelTranslationsAreDeclared"),
+    QuintInvariantName("modelTranslationDefinitionsAreDeclared"),
+    QuintInvariantName("modelExternalPayloadsAreDeclared"),
+    QuintInvariantName("modelExternalPayloadFieldsAreDeclared"),
+    QuintInvariantName("modelStreamsAreDeclared"),
+    QuintInvariantName("modelEventsAreDeclared"),
+    QuintInvariantName("modelEventAttributesAreDeclared"),
+    QuintInvariantName("modelViewControlsProvideCommandInputs"),
+];
+
+const WORKFLOW_INVARIANTS: &[QuintInvariantName] = &[
+    QuintInvariantName("workflowIdentityStable"),
+    QuintInvariantName("workflowSliceDetailsComplete"),
+    QuintInvariantName("workflowSliceModulesComplete"),
+    QuintInvariantName("workflowTransitionsStructured"),
+    QuintInvariantName("workflowTransitionSourcesResolve"),
+    QuintInvariantName("workflowTransitionTargetsResolve"),
+    QuintInvariantName("workflowStepRelationshipsAreAllowed"),
+    QuintInvariantName("workflowStepSlugsAreUnique"),
+    QuintInvariantName("workflowHasExactlyOneEntryStep"),
+    QuintInvariantName("workflowMainStepsHaveIncomingReachability"),
+    QuintInvariantName("workflowNonSupportingStepsReachableFromEntry"),
+    QuintInvariantName("workflowBranchAndAlternateStepsHaveTriggerOrRationale"),
+    QuintInvariantName("workflowTransitionsHaveModeledKinds"),
+    QuintInvariantName("workflowExitsNameTargetsAndRationale"),
+    QuintInvariantName("workflowExternallyRelevantOutcomesHandled"),
+    QuintInvariantName("workflowOutcomesSourceResolve"),
+    QuintInvariantName("workflowCommandErrorsSourceResolve"),
+    QuintInvariantName("workflowTransitionsDoNotUseCommandErrorsAsOutcomes"),
+    QuintInvariantName("workflowNonEventDefinitionsAreUniquelyOwned"),
+    QuintInvariantName("workflowSharedEventDefinitionsHaveIdenticalIdentity"),
+    QuintInvariantName::WORKFLOW_ONLY_EVENTS_MAY_BE_SHARED_ACROSS_SLICES,
+    QuintInvariantName("workflowCommandTransitionsTargetOwnedCommands"),
+    QuintInvariantName("workflowCommandTransitionsSourceOwnedControls"),
+    QuintInvariantName("workflowCommandTransitionsResolveControlsAndCommands"),
+    QuintInvariantName("workflowStateViewCommandTransitionsTargetStateChanges"),
+    QuintInvariantName("workflowEventTransitionsAreSharedByEndpointSlices"),
+    QuintInvariantName("workflowEventTransitionsHaveParticipatingEndpointEvents"),
+    QuintInvariantName("workflowNavigationTransitionsResolveControlsAndViews"),
+    QuintInvariantName("workflowNavigationTransitionsResolveToEntryViews"),
+    QuintInvariantName("workflowExternalTriggersDeclarePayloadContracts"),
+    QuintInvariantName("workflowExternalTriggerPayloadContractsHaveProvenance"),
+    QuintInvariantName("workflowTransitionsHaveRequiredEvidence"),
+    QuintInvariantName("workflowEntryLifecycleStatesCoverRequiredStates"),
+];
+
+const SLICE_INVARIANTS: &[QuintInvariantName] = &[
+    QuintInvariantName("sliceIdentityStable"),
+    QuintInvariantName("sliceRepresentsOneCoherentModelUnit"),
+    QuintInvariantName("sliceRepresentsSmallestUsefulBehaviorBoundary"),
+    QuintInvariantName("sliceStateChangeRequiresEvent"),
+    QuintInvariantName("sliceBitLevelDataFlowsStructured"),
+    QuintInvariantName("modeledDataFlowsAreBitComplete"),
+    QuintInvariantName("sliceScenariosHaveGwt"),
+    QuintInvariantName("sliceScenarioNamesAreUnique"),
+    QuintInvariantName("sliceNamedDefinitionsAreUniquelyOwned"),
+    QuintInvariantName("sliceScenarioStreamsResolve"),
+    QuintInvariantName("stateChangeScenariosNameStreams"),
+    QuintInvariantName("acceptanceScenariosAreUserFacing"),
+    QuintInvariantName("stateViewReadModelsHaveProjectorContracts"),
+    QuintInvariantName("contractScenariosTargetKnownDefinitions"),
+    QuintInvariantName("contractScenariosCoverModeledContracts"),
+    QuintInvariantName("commandInputsHaveAllowedSources"),
+    QuintInvariantName("commandInputsHaveProvenance"),
+    QuintInvariantName("commandInputsWithoutIssuingControlsHaveProvenance"),
+    QuintInvariantName("commandSessionInputsHaveDescriptions"),
+    QuintInvariantName("commandInputsTraceToInvocationSources"),
+    QuintInvariantName("commandInputsSourcedFromEventStreamsResolve"),
+    QuintInvariantName("commandInputsSourcedFromExternalPayloadsResolve"),
+    QuintInvariantName("commandInputsSourcedFromGeneratedValuesHaveCoordinates"),
+    QuintInvariantName("commandInputsSourcedFromSessionValuesHaveCoordinates"),
+    QuintInvariantName("commandErrorsAreDeclared"),
+    QuintInvariantName("commandErrorsHaveAllowedRecovery"),
+    QuintInvariantName("commandErrorsHaveScenarioCoverage"),
+    QuintInvariantName("scenarioErrorReferencesAreDeclared"),
+    QuintInvariantName("singletonCommandsDeclareRepeatBehavior"),
+    QuintInvariantName("automationSlicesDeclareTriggers"),
+    QuintInvariantName("automationSlicesRepresentOneReaction"),
+    QuintInvariantName("automationsIssueKnownCommands"),
+    QuintInvariantName("automationsHandleCommandErrors"),
+    QuintInvariantName("translationSlicesDeclareExternalContracts"),
+    QuintInvariantName("externalBoundariesHavePayloadContractsAndFieldProvenance"),
+    QuintInvariantName("translationsTargetKnownCommands"),
+    QuintInvariantName("translationsReferenceObservedExternalEvents"),
+    QuintInvariantName("boardLanesAreCanonical"),
+    QuintInvariantName("boardElementsUseCanonicalLanes"),
+    QuintInvariantName("boardElementsReferenceDeclarations"),
+    QuintInvariantName("automationBoardElementsAreDeclaredAutomations"),
+    QuintInvariantName("externalBoardElementsAreObservedEvents"),
+    QuintInvariantName("commandEventBoardEdgesMatchEmissions"),
+    QuintInvariantName("eventReadModelBoardEdgesMatchProjectionSources"),
+    QuintInvariantName("viewCommandBoardEdgesMatchControls"),
+    QuintInvariantName("boardConnectionsHaveCausalSemantics"),
+    QuintInvariantName("externalEventTriggersMatchTranslations"),
+    QuintInvariantName("externalEventsDoNotUpdateReadModels"),
+    QuintInvariantName("readModelsFeedingViewsHaveIncomingEventUpdates"),
+    QuintInvariantName("commandsHaveIncomingTriggers"),
+    QuintInvariantName("mainPathBoardHasNoDisconnectedIslands"),
+    QuintInvariantName("outcomeLabelsAreUnique"),
+    QuintInvariantName("outcomeEventSetsAreNonEmpty"),
+    QuintInvariantName("outcomeEventSetsAreDistinct"),
+    QuintInvariantName("outcomeEventsAreKnownToSlice"),
+    QuintInvariantName("eventsReferenceKnownStreams"),
+    QuintInvariantName("commandEmittedEventsAreKnown"),
+    QuintInvariantName("locallyEmittedEventsAreProducedByCommands"),
+    QuintInvariantName("externalPayloadFieldsHaveProvenance"),
+    QuintInvariantName("eventAttributesHaveAllowedSources"),
+    QuintInvariantName("eventAttributesHaveProvenance"),
+    QuintInvariantName("eventAttributeSourcesAreComplete"),
+    QuintInvariantName("storedEventFactsTraceToOriginalSources"),
+    QuintInvariantName("readModelFieldsHaveAllowedSources"),
+    QuintInvariantName("readModelFieldsHaveProvenance"),
+    QuintInvariantName("readModelFieldSourcesAreComplete"),
+    QuintInvariantName("readModelFieldEventAttributeSourcesResolve"),
+    QuintInvariantName("derivedReadModelFieldsHaveScenarioCoverage"),
+    QuintInvariantName("absenceReadModelFieldsHaveScenarioCoverage"),
+    QuintInvariantName("transitiveReadModelsHaveSemantics"),
+    QuintInvariantName("viewFieldsHaveAllowedSources"),
+    QuintInvariantName("viewFieldsHaveProvenance"),
+    QuintInvariantName("viewFieldSourcesAreComplete"),
+    QuintInvariantName("viewFieldsSourceFromUsedReadModels"),
+    QuintInvariantName("viewsHaveInformationSketches"),
+    QuintInvariantName("viewFieldsAppearInSketch"),
+    QuintInvariantName("viewSketchTokensMapToModeledElements"),
+    QuintInvariantName("viewFieldReadModelFieldSourcesResolve"),
+    QuintInvariantName("displayedDataTraceToOriginalProvenance"),
+    QuintInvariantName("viewControlsHaveSketchTokens"),
+    QuintInvariantName("viewControlsAppearInSketch"),
+    QuintInvariantName("viewControlsReferenceKnownCommands"),
+    QuintInvariantName("viewControlsProvideCommandInputs"),
+    QuintInvariantName("viewControlInputsHaveAllowedSources"),
+    QuintInvariantName("viewControlInputsHaveProvenance"),
+    QuintInvariantName("viewControlInputsHaveDescriptions"),
+    QuintInvariantName("viewControlSessionInputsHaveDescriptions"),
+    QuintInvariantName("viewControlInputVisibilityIsModeled"),
+    QuintInvariantName("viewControlDecisionFieldsAreVisible"),
+    QuintInvariantName("viewControlActorInputsAreVisible"),
+    QuintInvariantName("viewControlsHandleCommandErrors"),
+    QuintInvariantName("viewControlRecoveryBehaviorIsModeled"),
+    QuintInvariantName("stateViewSlicesDoNotOwnCommands"),
+    QuintInvariantName("stateViewSlicesOwnViews"),
+    QuintInvariantName("stateViewSlicesOwnReadModels"),
+    QuintInvariantName("stateViewSlicesOwnProjectionPaths"),
+    QuintInvariantName::STATE_VIEW_SLICES_REPRESENT_SINGLE_VIEW_PROJECTION_BOUNDARY,
+    QuintInvariantName("stateChangeSlicesOwnCommands"),
+    QuintInvariantName("stateChangeSlicesOwnEvents"),
+    QuintInvariantName("stateChangeSlicesOwnOutcomes"),
+    QuintInvariantName("stateChangeSlicesOwnErrors"),
+    QuintInvariantName("stateChangeSlicesDoNotOwnReadModelsOrViews"),
+    QuintInvariantName("stateChangeSlicesDoNotOwnAutomationsOrTranslations"),
+    QuintInvariantName("stateChangeSlicesDoNotOwnControlsOrSketches"),
+    QuintInvariantName("translationSlicesDoNotOwnViews"),
+    QuintInvariantName("viewControlNavigationTypesAreModeled"),
+    QuintInvariantName("viewControlNavigationTypesAreDeclared"),
+    QuintInvariantName("viewControlModeledViewNavigationTargetsResolve"),
+    QuintInvariantName("viewControlExternalWorkflowNavigationTargetsNamed"),
+    QuintInvariantName("viewControlExternalSystemNavigationTargetsHaveContracts"),
+    QuintInvariantName("viewControlNavigationTargetsAreComplete"),
+];
+
+pub(crate) fn verify_project(
     project_name: ProjectName,
     modeled_workflows: ModeledWorkflowLayouts,
     workflow_slice_details: WorkflowSliceDetails,
@@ -53,25 +319,7 @@ fn verify_project_root(project_name: ProjectName) -> Vec<Effect> {
             vec![
                 process_argument("verify"),
                 process_argument("--invariant"),
-                process_argument(
-                    "modelIdentityStable,modelVersionStable,modelDigestStable,modelWorkflowsAreDeclared,modelSlicesAreDeclared,modelSliceModulesAreDeclared,modelScenariosAreDeclared,modelScenarioDefinitionsAreDeclared,modelScenarioDefinitionsHaveGwt,modelScenarioKindsAreFirstClass,modelDataFlowsAreDeclared,modelDataFlowsAreBitComplete,modelDataFlowSourceKindsAreModeled,modelDataFlowModeledSourcesResolve,modelDataFlowTransformationsAreModeled,modelMeaningfulDataFlowsAreCovered,modelDataFlowSourceBitEncodingsMatchModeledSources,modelViewFieldBitEncodingsMatchDataFlows,modelExternalPayloadFieldBitEncodingsMatchDataFlows,modelOutcomesAreDeclared,modelCommandErrorsAreDeclared,modelCommandsAreDeclared,modelCommandInputsAreDeclared,modelCommandInputsHaveProvenance,modelCommandInputsTraceToInvocationSources,modelReadModelsAreDeclared,modelReadModelDefinitionsAreDeclared,modelReadModelFieldsAreDeclared,modelReadModelFieldSourcesAreComplete,modelViewFieldSourcesAreComplete,modelViewFieldReadModelFieldSourcesResolve,modelDisplayedDataTraceToOriginalProvenance,modelExternalPayloadFieldsHaveProvenance,modelViewsAreDeclared,modelViewDefinitionsAreDeclared,modelViewControlsAreDeclared,modelBoardElementsAreDeclared,modelBoardConnectionsAreDeclared,modelViewFieldsAreDeclared,modelAutomationsAreDeclared,modelAutomationDefinitionsAreDeclared,modelTranslationsAreDeclared,modelTranslationDefinitionsAreDeclared,modelExternalPayloadsAreDeclared,modelExternalPayloadFieldsAreDeclared,modelStreamsAreDeclared,modelEventsAreDeclared,modelEventAttributesAreDeclared,modelViewControlsProvideCommandInputs"
-                        .replace(
-                            "modelDataFlowModeledSourcesResolve,",
-                            "modelDataFlowModeledSourcesResolve,modelDataFlowSourceChainsReachOriginals,",
-                        )
-                        .replace(
-                            "modelDataFlowSourceChainsReachOriginals,",
-                            "modelDataFlowSourceChainsReachOriginals,modelDataFlowSourceChainsPreserveBitEncodingSemantics,",
-                        )
-                        .replace(
-                            "modelScenarioDefinitionsHaveGwt,",
-                            "modelWorkflowCompositionStructureComplete,modelScenarioDefinitionsHaveGwt,",
-                        )
-                        .replace(
-                            "modelWorkflowCompositionStructureComplete,",
-                            "modelWorkflowCompositionStructureComplete,modelWorkflowBehaviorSurfaceIsComplete,",
-                        ),
-                ),
+                QuintInvariantSet::project_root().as_process_argument(),
                 process_argument(format!("model/quint/{module_name}.qnt")),
             ],
             report_line("Quint artifacts verified"),
@@ -95,9 +343,7 @@ fn verify_modeled_workflow(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
             vec![
                 process_argument("verify"),
                 process_argument("--invariant"),
-                process_argument(
-                    "workflowIdentityStable,workflowSliceDetailsComplete,workflowSliceModulesComplete,workflowTransitionsStructured,workflowTransitionSourcesResolve,workflowTransitionTargetsResolve,workflowStepRelationshipsAreAllowed,workflowStepSlugsAreUnique,workflowHasExactlyOneEntryStep,workflowMainStepsHaveIncomingReachability,workflowNonSupportingStepsReachableFromEntry,workflowBranchAndAlternateStepsHaveTriggerOrRationale,workflowTransitionsHaveModeledKinds,workflowExitsNameTargetsAndRationale,workflowExternallyRelevantOutcomesHandled,workflowOutcomesSourceResolve,workflowCommandErrorsSourceResolve,workflowTransitionsDoNotUseCommandErrorsAsOutcomes,workflowNonEventDefinitionsAreUniquelyOwned,workflowSharedEventDefinitionsHaveIdenticalIdentity,workflowOnlyEventsMayBeSharedAcrossSlices,workflowCommandTransitionsTargetOwnedCommands,workflowCommandTransitionsSourceOwnedControls,workflowCommandTransitionsResolveControlsAndCommands,workflowStateViewCommandTransitionsTargetStateChanges,workflowEventTransitionsAreSharedByEndpointSlices,workflowEventTransitionsHaveParticipatingEndpointEvents,workflowNavigationTransitionsResolveControlsAndViews,workflowNavigationTransitionsResolveToEntryViews,workflowExternalTriggersDeclarePayloadContracts,workflowExternalTriggerPayloadContractsHaveProvenance,workflowTransitionsHaveRequiredEvidence,workflowEntryLifecycleStatesCoverRequiredStates",
-                ),
+                QuintInvariantSet::workflow().as_process_argument(),
                 process_argument(workflow.quint_artifact_path().as_ref().to_owned()),
             ],
             report_line("Quint artifacts verified"),
@@ -131,9 +377,7 @@ fn verify_modeled_slice(module_name: String) -> Vec<Effect> {
             vec![
                 process_argument("verify"),
                 process_argument("--invariant"),
-                process_argument(
-                    "sliceIdentityStable,sliceRepresentsOneCoherentModelUnit,sliceRepresentsSmallestUsefulBehaviorBoundary,sliceStateChangeRequiresEvent,sliceBitLevelDataFlowsStructured,modeledDataFlowsAreBitComplete,sliceScenariosHaveGwt,sliceScenarioNamesAreUnique,sliceNamedDefinitionsAreUniquelyOwned,sliceScenarioStreamsResolve,stateChangeScenariosNameStreams,acceptanceScenariosAreUserFacing,stateViewReadModelsHaveProjectorContracts,contractScenariosTargetKnownDefinitions,contractScenariosCoverModeledContracts,commandInputsHaveAllowedSources,commandInputsHaveProvenance,commandInputsWithoutIssuingControlsHaveProvenance,commandSessionInputsHaveDescriptions,commandInputsTraceToInvocationSources,commandInputsSourcedFromEventStreamsResolve,commandInputsSourcedFromExternalPayloadsResolve,commandInputsSourcedFromGeneratedValuesHaveCoordinates,commandInputsSourcedFromSessionValuesHaveCoordinates,commandErrorsAreDeclared,commandErrorsHaveAllowedRecovery,commandErrorsHaveScenarioCoverage,scenarioErrorReferencesAreDeclared,singletonCommandsDeclareRepeatBehavior,automationSlicesDeclareTriggers,automationSlicesRepresentOneReaction,automationsIssueKnownCommands,automationsHandleCommandErrors,translationSlicesDeclareExternalContracts,externalBoundariesHavePayloadContractsAndFieldProvenance,translationsTargetKnownCommands,translationsReferenceObservedExternalEvents,boardLanesAreCanonical,boardElementsUseCanonicalLanes,boardElementsReferenceDeclarations,automationBoardElementsAreDeclaredAutomations,externalBoardElementsAreObservedEvents,commandEventBoardEdgesMatchEmissions,eventReadModelBoardEdgesMatchProjectionSources,viewCommandBoardEdgesMatchControls,boardConnectionsHaveCausalSemantics,externalEventTriggersMatchTranslations,externalEventsDoNotUpdateReadModels,readModelsFeedingViewsHaveIncomingEventUpdates,commandsHaveIncomingTriggers,mainPathBoardHasNoDisconnectedIslands,outcomeLabelsAreUnique,outcomeEventSetsAreNonEmpty,outcomeEventSetsAreDistinct,outcomeEventsAreKnownToSlice,eventsReferenceKnownStreams,commandEmittedEventsAreKnown,locallyEmittedEventsAreProducedByCommands,externalPayloadFieldsHaveProvenance,eventAttributesHaveAllowedSources,eventAttributesHaveProvenance,eventAttributeSourcesAreComplete,storedEventFactsTraceToOriginalSources,readModelFieldsHaveAllowedSources,readModelFieldsHaveProvenance,readModelFieldSourcesAreComplete,readModelFieldEventAttributeSourcesResolve,derivedReadModelFieldsHaveScenarioCoverage,absenceReadModelFieldsHaveScenarioCoverage,transitiveReadModelsHaveSemantics,viewFieldsHaveAllowedSources,viewFieldsHaveProvenance,viewFieldSourcesAreComplete,viewFieldsSourceFromUsedReadModels,viewsHaveInformationSketches,viewFieldsAppearInSketch,viewSketchTokensMapToModeledElements,viewFieldReadModelFieldSourcesResolve,displayedDataTraceToOriginalProvenance,viewControlsHaveSketchTokens,viewControlsAppearInSketch,viewControlsReferenceKnownCommands,viewControlsProvideCommandInputs,viewControlInputsHaveAllowedSources,viewControlInputsHaveProvenance,viewControlInputsHaveDescriptions,viewControlSessionInputsHaveDescriptions,viewControlInputVisibilityIsModeled,viewControlDecisionFieldsAreVisible,viewControlActorInputsAreVisible,viewControlsHandleCommandErrors,viewControlRecoveryBehaviorIsModeled,stateViewSlicesDoNotOwnCommands,stateViewSlicesOwnViews,stateViewSlicesOwnReadModels,stateViewSlicesOwnProjectionPaths,stateViewSlicesRepresentSingleViewProjectionBoundary,stateChangeSlicesOwnCommands,stateChangeSlicesOwnEvents,stateChangeSlicesOwnOutcomes,stateChangeSlicesOwnErrors,stateChangeSlicesDoNotOwnReadModelsOrViews,stateChangeSlicesDoNotOwnAutomationsOrTranslations,stateChangeSlicesDoNotOwnControlsOrSketches,translationSlicesDoNotOwnViews,viewControlNavigationTypesAreModeled,viewControlNavigationTypesAreDeclared,viewControlModeledViewNavigationTargetsResolve,viewControlExternalWorkflowNavigationTargetsNamed,viewControlExternalSystemNavigationTargetsHaveContracts,viewControlNavigationTargetsAreComplete",
-                ),
+                QuintInvariantSet::slice().as_process_argument(),
                 process_argument(format!("model/quint/slices/{module_name}.qnt")),
             ],
             report_line("Quint artifacts verified"),

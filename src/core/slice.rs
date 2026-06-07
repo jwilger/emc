@@ -58,6 +58,28 @@ impl SliceKind {
     }
 }
 
+impl From<SliceKindName> for SliceKind {
+    fn from(kind: SliceKindName) -> Self {
+        match kind {
+            SliceKindName::StateView => Self::StateView,
+            SliceKindName::StateChange => Self::StateChange,
+            SliceKindName::Translation => Self::Translation,
+            SliceKindName::Automation => Self::Automation,
+        }
+    }
+}
+
+impl From<SliceKind> for SliceKindName {
+    fn from(kind: SliceKind) -> Self {
+        match kind {
+            SliceKind::StateView => Self::StateView,
+            SliceKind::StateChange => Self::StateChange,
+            SliceKind::Translation => Self::Translation,
+            SliceKind::Automation => Self::Automation,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NewSlice {
     workflow_slug: WorkflowSlug,
@@ -105,7 +127,7 @@ impl NewSlice {
     }
 }
 
-pub fn add_slice(
+pub(crate) fn add_slice(
     project_name: ProjectName,
     formal_workflows: &[FormalWorkflowGraph],
     indexed_workflow_name: ModelName,
@@ -177,7 +199,7 @@ pub fn add_slice(
     let slice_digest = slice_artifact_digest(
         new_slice.name.clone(),
         new_slice.slug.clone(),
-        slice_kind.clone(),
+        slice_kind,
         new_slice.description.clone(),
     );
     let workflow_slugs = formal_workflows
@@ -194,18 +216,18 @@ pub fn add_slice(
         project_root_effects(project_name, &workflow_slugs, &slice_memberships)
             .into_iter()
             .chain([
-                Effect::WriteFile(
+                Effect::write_file(
                     project_path(format!("model/lean/slices/{slice_module_name}.lean")),
                     emit_lean_slice_module(
                         lean_module_name(slice_module_name.clone()),
                         new_slice.name.clone(),
                         new_slice.description.clone(),
                         new_slice.slug.clone(),
-                        slice_kind.clone(),
+                        slice_kind,
                         slice_digest.clone(),
                     ),
                 ),
-                Effect::WriteFile(
+                Effect::write_file(
                     project_path(format!("model/quint/slices/{slice_module_name}.qnt")),
                     emit_quint_slice_module(
                         quint_module_name(slice_module_name),
@@ -216,7 +238,7 @@ pub fn add_slice(
                         slice_digest,
                     ),
                 ),
-                Effect::WriteFile(
+                Effect::write_file(
                     project_path(format!("model/lean/{workflow_module_name}.lean")),
                     emit_lean_workflow_module(
                         lean_module_name(workflow_module_name.clone()),
@@ -240,7 +262,7 @@ pub fn add_slice(
                         .with_entry_lifecycle_states(workflow_entry_lifecycle_states.clone()),
                     ),
                 ),
-                Effect::WriteFile(
+                Effect::write_file(
                     project_path(format!("model/quint/{workflow_module_name}.qnt")),
                     emit_quint_workflow_module(
                         quint_module_name(workflow_module_name),
@@ -308,7 +330,7 @@ fn project_slice_memberships(
         .collect()
 }
 
-pub fn update_slice_description(
+pub(crate) fn update_slice_description(
     indexed_workflow_name: ModelName,
     indexed_workflow_description: ModelDescription,
     workflow_slug: WorkflowSlug,
@@ -344,9 +366,9 @@ pub fn update_slice_description(
     let updated_slice = WorkflowSliceDetail::new_with_relationship(
         slice_slug.clone(),
         existing_slice.name().clone(),
-        existing_slice.kind().clone(),
+        *existing_slice.kind(),
         description,
-        existing_slice.relationship().clone(),
+        *existing_slice.relationship(),
     );
     updated_slice_plan(
         UpdatedSliceWorkflow {
@@ -372,7 +394,7 @@ pub fn update_slice_description(
     )
 }
 
-pub fn update_slice_kind(
+pub(crate) fn update_slice_kind(
     indexed_workflow_name: ModelName,
     indexed_workflow_description: ModelDescription,
     workflow_slug: WorkflowSlug,
@@ -410,7 +432,7 @@ pub fn update_slice_kind(
         existing_slice.name().clone(),
         slice_kind_name(kind),
         existing_slice.description().clone(),
-        existing_slice.relationship().clone(),
+        *existing_slice.relationship(),
     );
     updated_slice_plan(
         UpdatedSliceWorkflow {
@@ -436,7 +458,7 @@ pub fn update_slice_kind(
     )
 }
 
-pub fn update_slice_name(
+pub(crate) fn update_slice_name(
     project_root: SliceProjectRootContext<'_>,
     indexed_workflow_name: ModelName,
     indexed_workflow_description: ModelDescription,
@@ -475,9 +497,9 @@ pub fn update_slice_name(
     let updated_slice = WorkflowSliceDetail::new_with_relationship(
         slice_slug.clone(),
         name,
-        existing_slice.kind().clone(),
+        *existing_slice.kind(),
         existing_slice.description().clone(),
-        existing_slice.relationship().clone(),
+        *existing_slice.relationship(),
     );
     let workflow_slice_details = replace_slice_detail(existing_slices, updated_slice.clone());
     let formal_workflows = project_root.formal_workflows();
@@ -513,13 +535,16 @@ pub fn update_slice_name(
     )
 }
 
-pub struct SliceProjectRootContext<'a> {
+pub(crate) struct SliceProjectRootContext<'a> {
     project_name: ProjectName,
     formal_workflows: &'a [FormalWorkflowGraph],
 }
 
 impl<'a> SliceProjectRootContext<'a> {
-    pub fn new(project_name: ProjectName, formal_workflows: &'a [FormalWorkflowGraph]) -> Self {
+    pub(crate) fn new(
+        project_name: ProjectName,
+        formal_workflows: &'a [FormalWorkflowGraph],
+    ) -> Self {
         Self {
             project_name,
             formal_workflows,
@@ -531,7 +556,7 @@ impl<'a> SliceProjectRootContext<'a> {
     }
 }
 
-pub fn remove_slice(
+pub(crate) fn remove_slice(
     project_name: ProjectName,
     formal_workflows: &[FormalWorkflowGraph],
     indexed_workflow_name: ModelName,
@@ -612,7 +637,7 @@ pub fn remove_slice(
                 Effect::RemoveFile(project_path(format!(
                     "model/quint/slices/{removed_slice_module_name}.qnt"
                 ))),
-                Effect::WriteFile(
+                Effect::write_file(
                     project_path(format!("model/lean/{workflow_module_name}.lean")),
                     emit_lean_workflow_module(
                         lean_module_name(workflow_module_name.clone()),
@@ -636,7 +661,7 @@ pub fn remove_slice(
                         .with_entry_lifecycle_states(workflow_entry_lifecycle_states.clone()),
                     ),
                 ),
-                Effect::WriteFile(
+                Effect::write_file(
                     project_path(format!("model/quint/{workflow_module_name}.qnt")),
                     emit_quint_workflow_module(
                         quint_module_name(workflow_module_name),
@@ -714,7 +739,7 @@ fn updated_slice_plan(
     let slice_digest = slice_artifact_digest(
         updated_slice.name().clone(),
         slice_slug.clone(),
-        updated_slice.kind().clone(),
+        *updated_slice.kind(),
         updated_slice.description().clone(),
     );
     let source_slice_module_name = previous_slice_module_name
@@ -738,7 +763,7 @@ fn updated_slice_plan(
         root_effects
             .into_iter()
             .chain([
-                Effect::WriteFormalSliceArtifactPreservingAuthoredFacts(
+                Effect::write_formal_slice_artifact_preserving_authored_facts(
                     project_path(format!("model/lean/slices/{source_slice_module_name}.lean")),
                     project_path(format!("model/lean/slices/{slice_module_name}.lean")),
                     emit_lean_slice_module(
@@ -746,11 +771,11 @@ fn updated_slice_plan(
                         updated_slice.name().clone(),
                         updated_slice.description().clone(),
                         slice_slug.clone(),
-                        updated_slice.kind().clone(),
+                        *updated_slice.kind(),
                         slice_digest.clone(),
                     ),
                 ),
-                Effect::WriteFormalSliceArtifactPreservingAuthoredFacts(
+                Effect::write_formal_slice_artifact_preserving_authored_facts(
                     project_path(format!("model/quint/slices/{source_slice_module_name}.qnt")),
                     project_path(format!("model/quint/slices/{slice_module_name}.qnt")),
                     emit_quint_slice_module(
@@ -758,11 +783,11 @@ fn updated_slice_plan(
                         updated_slice.name().clone(),
                         updated_slice.description().clone(),
                         slice_slug.clone(),
-                        updated_slice.kind().clone(),
+                        *updated_slice.kind(),
                         slice_digest,
                     ),
                 ),
-                Effect::WriteFile(
+                Effect::write_file(
                     project_path(format!("model/lean/{workflow_module_name}.lean")),
                     emit_lean_workflow_module(
                         lean_module_name(workflow_module_name.clone()),
@@ -788,7 +813,7 @@ fn updated_slice_plan(
                         ),
                     ),
                 ),
-                Effect::WriteFile(
+                Effect::write_file(
                     project_path(format!("model/quint/{workflow_module_name}.qnt")),
                     emit_quint_workflow_module(
                         quint_module_name(workflow_module_name),
@@ -865,14 +890,12 @@ fn workflow_slice_detail(new_slice: &NewSlice, entry: bool) -> WorkflowSliceDeta
         new_slice.name.clone(),
         slice_kind_name(new_slice.kind),
         new_slice.description.clone(),
-        workflow_step_relationship_name(if entry { "entry" } else { "main" }),
+        if entry {
+            WorkflowStepRelationshipName::Entry
+        } else {
+            WorkflowStepRelationshipName::Main
+        },
     )
-}
-
-fn workflow_step_relationship_name(value: &str) -> WorkflowStepRelationshipName {
-    WorkflowStepRelationshipName::try_new(value.to_owned()).unwrap_or_else(|error| {
-        unreachable!("EMC generated workflow step relationship must be valid: {error}");
-    })
 }
 
 fn replace_slice_detail(

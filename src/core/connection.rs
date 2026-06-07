@@ -3,6 +3,9 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
+use serde::de::Error as DeserializeError;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
 use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest};
 use crate::core::effect::{Effect, EffectPlan, ProjectPath, ReportLine};
 use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
@@ -46,6 +49,17 @@ impl ConnectionKind {
         Self::Outcome
     }
 
+    pub fn try_new(value: String) -> Result<Self, ConnectionKindError> {
+        match value.trim() {
+            "command" => Ok(Self::Command),
+            "event" => Ok(Self::Event),
+            "navigation" => Ok(Self::Navigation),
+            "external_trigger" => Ok(Self::ExternalTrigger),
+            "outcome" => Ok(Self::Outcome),
+            _ => Err(ConnectionKindError::new(value)),
+        }
+    }
+
     pub(crate) fn trigger_kind(self) -> &'static str {
         match self {
             Self::Command => "command",
@@ -56,6 +70,58 @@ impl ConnectionKind {
         }
     }
 }
+
+impl AsRef<str> for ConnectionKind {
+    fn as_ref(&self) -> &str {
+        self.trigger_kind()
+    }
+}
+
+impl Display for ConnectionKind {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
+        formatter.write_str(self.as_ref())
+    }
+}
+
+impl Serialize for ConnectionKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.as_ref())
+    }
+}
+
+impl<'de> Deserialize<'de> for ConnectionKind {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::try_new(value).map_err(DeserializeError::custom)
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ConnectionKindError {
+    message: String,
+}
+
+impl ConnectionKindError {
+    fn new(value: String) -> Self {
+        Self {
+            message: format!("expected a modeled workflow connection kind, got '{value}'"),
+        }
+    }
+}
+
+impl Display for ConnectionKindError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl Error for ConnectionKindError {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum WorkflowConnectionTarget {
@@ -280,7 +346,7 @@ impl WorkflowTransitionRemoval {
     }
 }
 
-pub fn connect_workflow(
+pub(crate) fn connect_workflow(
     indexed_workflow_name: ModelName,
     indexed_workflow_description: ModelDescription,
     workflow_graph: FormalWorkflowGraph,
@@ -336,7 +402,7 @@ pub fn connect_workflow(
     let source = connection.source.as_ref();
     let target = connection.target.as_ref();
     let effects = vec![
-        Effect::WriteFile(
+        Effect::write_file(
             project_path(format!("model/lean/{module_name}.lean")),
             emit_lean_workflow_module(
                 lean_module_name(module_name.clone()),
@@ -366,7 +432,7 @@ pub fn connect_workflow(
                 .with_entry_lifecycle_states(workflow_entry_lifecycle_states.clone()),
             ),
         ),
-        Effect::WriteFile(
+        Effect::write_file(
             project_path(format!("model/quint/{module_name}.qnt")),
             emit_quint_workflow_module(
                 quint_module_name(module_name),
@@ -398,7 +464,7 @@ pub fn connect_workflow(
     Ok(EffectPlan::new(effects))
 }
 
-pub fn remove_transition(
+pub(crate) fn remove_transition(
     indexed_workflow_name: ModelName,
     indexed_workflow_description: ModelDescription,
     workflow_graph: FormalWorkflowGraph,
@@ -474,7 +540,7 @@ pub fn remove_transition(
     let target = removal.target.as_ref();
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(
+        Effect::write_file(
             project_path(format!("model/lean/{module_name}.lean")),
             emit_lean_workflow_module(
                 lean_module_name(module_name.clone()),
@@ -504,7 +570,7 @@ pub fn remove_transition(
                 .with_entry_lifecycle_states(workflow_entry_lifecycle_states.clone()),
             ),
         ),
-        Effect::WriteFile(
+        Effect::write_file(
             project_path(format!("model/quint/{module_name}.qnt")),
             emit_quint_workflow_module(
                 quint_module_name(module_name),
@@ -561,15 +627,13 @@ fn removal_transition_record(
     removal: &WorkflowTransitionRemoval,
 ) -> Result<WorkflowTransitionRecord, ConnectionMutationError> {
     let kind = match removal.target {
-        WorkflowTransitionRemovalTarget::Slice(_) => removal.kind.trigger_kind().to_owned(),
-        WorkflowTransitionRemovalTarget::Workflow(_) => {
-            format!("workflow_exit:{}", removal.kind.trigger_kind())
-        }
+        WorkflowTransitionRemovalTarget::Slice(_) => transition_kind(removal.kind),
+        WorkflowTransitionRemovalTarget::Workflow(_) => workflow_exit_transition_kind(removal.kind),
     };
     Ok(WorkflowTransitionRecord::new(
         workflow_transition_endpoint("source", removal.source.as_ref())?,
         workflow_transition_endpoint("target", removal.target.as_ref())?,
-        workflow_transition_kind(&kind)?,
+        kind,
         removal.trigger.clone(),
     ))
 }
@@ -580,12 +644,9 @@ fn connection_transition_record(
     let source = workflow_transition_endpoint("source", connection.source.as_ref())?;
     let target = workflow_transition_endpoint("target", connection.target.as_ref())?;
     let kind = match connection.target {
-        WorkflowConnectionTarget::Slice(_) => connection.kind.trigger_kind().to_owned(),
-        WorkflowConnectionTarget::Workflow { .. } => {
-            format!("workflow_exit:{}", connection.kind.trigger_kind())
-        }
+        WorkflowConnectionTarget::Slice(_) => transition_kind(connection.kind),
+        WorkflowConnectionTarget::Workflow { .. } => workflow_exit_transition_kind(connection.kind),
     };
-    let kind = workflow_transition_kind(&kind)?;
     match &connection.target {
         WorkflowConnectionTarget::Slice(_) => {
             if let Some(payload_contract) = &connection.payload_contract {
@@ -713,10 +774,24 @@ fn workflow_transition_endpoint(
     })
 }
 
-fn workflow_transition_kind(raw: &str) -> Result<WorkflowTransitionKind, ConnectionMutationError> {
-    WorkflowTransitionKind::try_new(raw.to_owned()).map_err(|error| {
-        ConnectionMutationError::new(format!("invalid workflow transition kind: {error}"))
-    })
+fn transition_kind(kind: ConnectionKind) -> WorkflowTransitionKind {
+    match kind {
+        ConnectionKind::Command => WorkflowTransitionKind::Command,
+        ConnectionKind::Event => WorkflowTransitionKind::Event,
+        ConnectionKind::Navigation => WorkflowTransitionKind::Navigation,
+        ConnectionKind::ExternalTrigger => WorkflowTransitionKind::ExternalTrigger,
+        ConnectionKind::Outcome => WorkflowTransitionKind::Outcome,
+    }
+}
+
+fn workflow_exit_transition_kind(kind: ConnectionKind) -> WorkflowTransitionKind {
+    match kind {
+        ConnectionKind::Command => WorkflowTransitionKind::WorkflowExitCommand,
+        ConnectionKind::Event => WorkflowTransitionKind::WorkflowExitEvent,
+        ConnectionKind::Navigation => WorkflowTransitionKind::WorkflowExitNavigation,
+        ConnectionKind::ExternalTrigger => WorkflowTransitionKind::WorkflowExitExternalTrigger,
+        ConnectionKind::Outcome => WorkflowTransitionKind::WorkflowExitOutcome,
+    }
 }
 
 fn module_name(raw: &str) -> String {

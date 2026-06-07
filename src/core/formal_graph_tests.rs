@@ -4,18 +4,18 @@
 mod tests {
     use std::error::Error;
 
-    use emc::core::digest::{WorkflowArtifactDigestInput, artifact_digest};
-    use emc::core::effect::FileContents;
-    use emc::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
-    use emc::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
-    use emc::core::formal_graph::{parse_lean_workflow_graph, parse_quint_workflow_graph};
-    use emc::core::types::{
+    use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest};
+    use crate::core::effect::FileContents;
+    use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
+    use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
+    use crate::core::formal_graph::{parse_lean_workflow_graph, parse_quint_workflow_graph};
+    use crate::core::types::{
         SliceKindName, TransitionTriggerName, WorkflowCommandErrorRecords, WorkflowModuleData,
         WorkflowOutcomeRecords, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
         WorkflowSliceDetails, WorkflowStepRelationshipName, WorkflowTransitionEndpoint,
         WorkflowTransitionKind, WorkflowTransitionRecord, WorkflowTransitionRecords,
     };
-    use emc::io::dto::{
+    use crate::io::dto::{
         parse_lean_module_name, parse_model_description, parse_model_name, parse_quint_module_name,
         parse_slice_slug, parse_workflow_slug,
     };
@@ -165,14 +165,14 @@ mod tests {
                 parse_model_name("Capture ticket")?,
                 SliceKindName::try_new("state_view".to_owned())?,
                 parse_model_description("Actor enters repair ticket details.")?,
-                WorkflowStepRelationshipName::try_new("entry".to_owned())?,
+                WorkflowStepRelationshipName::Entry,
             ),
             WorkflowSliceDetail::new_with_relationship(
                 parse_slice_slug("review-ticket")?,
                 parse_model_name("Review ticket")?,
                 SliceKindName::try_new("state_view".to_owned())?,
                 parse_model_description("Actor reviews the repair ticket.")?,
-                WorkflowStepRelationshipName::try_new("main".to_owned())?,
+                WorkflowStepRelationshipName::Main,
             ),
         ])
     }
@@ -190,7 +190,7 @@ mod tests {
         Ok(vec![WorkflowTransitionRecord::new_with_rationale(
             WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
             WorkflowTransitionEndpoint::try_new("repair-complete".to_owned())?,
-            WorkflowTransitionKind::try_new("workflow_exit".to_owned())?,
+            WorkflowTransitionKind::try_new("workflow_exit:navigation".to_owned())?,
             TransitionTriggerName::try_new("ticket_closed".to_owned())?,
             parse_model_description("Closed tickets continue to completion.")?,
         )])
@@ -201,7 +201,7 @@ mod tests {
         Ok(vec![WorkflowTransitionRecord::new(
             WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
             WorkflowTransitionEndpoint::try_new("repair-complete".to_owned())?,
-            WorkflowTransitionKind::try_new("workflow_exit".to_owned())?,
+            WorkflowTransitionKind::try_new("workflow_exit:navigation".to_owned())?,
             TransitionTriggerName::try_new("ticket_closed".to_owned())?,
         )])
     }

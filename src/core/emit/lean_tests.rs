@@ -4,9 +4,11 @@
 mod tests {
     use std::error::Error;
 
-    use emc::core::digest::{WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest};
-    use emc::core::emit::lean::{emit_slice_module, emit_workflow_module};
-    use emc::core::types::{
+    use crate::core::digest::{
+        WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest,
+    };
+    use crate::core::emit::lean::{emit_slice_module, emit_workflow_module};
+    use crate::core::types::{
         CommandErrorName, CommandName, OutcomeLabelName, PayloadContractName, SliceKindName,
         TransitionTriggerName, WorkflowCommandErrorRecord, WorkflowCommandErrorRecords,
         WorkflowModuleData, WorkflowOutcomeRecord, WorkflowOutcomeRecords,
@@ -15,7 +17,7 @@ mod tests {
         WorkflowStepRelationshipName, WorkflowTransitionEndpoint, WorkflowTransitionKind,
         WorkflowTransitionRecord, WorkflowTransitionRecords,
     };
-    use emc::io::dto::{
+    use crate::io::dto::{
         parse_lean_module_name, parse_model_description, parse_model_name, parse_slice_slug,
         parse_workflow_slug,
     };
@@ -31,14 +33,14 @@ mod tests {
                 parse_model_name("Capture ticket")?,
                 SliceKindName::try_new("state_view".to_owned())?,
                 parse_model_description("Actor enters repair ticket details.")?,
-                WorkflowStepRelationshipName::try_new("entry".to_owned())?,
+                WorkflowStepRelationshipName::Entry,
             ),
             WorkflowSliceDetail::new_with_relationship(
                 parse_slice_slug("review-ticket")?,
                 parse_model_name("Review ticket")?,
                 SliceKindName::try_new("state_view".to_owned())?,
                 parse_model_description("Actor reviews repair ticket details.")?,
-                WorkflowStepRelationshipName::try_new("main".to_owned())?,
+                WorkflowStepRelationshipName::Main,
             ),
         ];
         let workflow_transitions = vec![WorkflowTransitionRecord::new_with_payload_contract(
@@ -745,7 +747,7 @@ mod tests {
             slice_name.clone(),
             slice_description.clone(),
             slice_slug.clone(),
-            slice_kind.clone(),
+            slice_kind,
             slice_artifact_digest(slice_name, slice_slug, slice_kind, slice_description),
         );
         let lean = module.as_ref();

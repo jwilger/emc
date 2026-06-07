@@ -13,13 +13,17 @@ use crate::core::types::{
     WorkflowOutcomeRecords, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
     WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
     WorkflowSliceDetails, WorkflowSlug, WorkflowStepRelationshipName, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceRecord, WorkflowTransitionEvidenceRecords,
-    WorkflowTransitionEvidenceText, WorkflowTransitionKind, WorkflowTransitionRecord,
-    WorkflowTransitionRecords, WorkflowViewRole,
+    WorkflowTransitionEvidenceRecord, WorkflowTransitionEvidenceRecords, WorkflowTransitionKind,
+    WorkflowTransitionRecord, WorkflowTransitionRecords, WorkflowTransitionSourceEvidenceText,
+    WorkflowTransitionTargetEvidenceText, WorkflowViewRole,
 };
 
+#[cfg(test)]
+#[path = "formal_graph_tests.rs"]
+mod external_tests;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct FormalWorkflowGraph {
+pub(crate) struct FormalWorkflowGraph {
     name: ModelName,
     slug: WorkflowSlug,
     description: ModelDescription,
@@ -34,58 +38,58 @@ pub struct FormalWorkflowGraph {
 }
 
 impl FormalWorkflowGraph {
-    pub fn name(&self) -> &ModelName {
+    pub(crate) fn name(&self) -> &ModelName {
         &self.name
     }
 
-    pub fn slug(&self) -> &WorkflowSlug {
+    pub(crate) fn slug(&self) -> &WorkflowSlug {
         &self.slug
     }
 
-    pub fn description(&self) -> &ModelDescription {
+    pub(crate) fn description(&self) -> &ModelDescription {
         &self.description
     }
 
-    pub fn slice_details(&self) -> &WorkflowSliceDetails {
+    pub(crate) fn slice_details(&self) -> &WorkflowSliceDetails {
         &self.slice_details
     }
 
-    pub fn transitions(&self) -> &WorkflowTransitionRecords {
+    pub(crate) fn transitions(&self) -> &WorkflowTransitionRecords {
         &self.transitions
     }
 
-    pub fn outcomes(&self) -> &WorkflowOutcomeRecords {
+    pub(crate) fn outcomes(&self) -> &WorkflowOutcomeRecords {
         &self.outcomes
     }
 
-    pub fn command_errors(&self) -> &WorkflowCommandErrorRecords {
+    pub(crate) fn command_errors(&self) -> &WorkflowCommandErrorRecords {
         &self.command_errors
     }
 
-    pub fn owned_definitions(&self) -> &WorkflowOwnedDefinitionRecords {
+    pub(crate) fn owned_definitions(&self) -> &WorkflowOwnedDefinitionRecords {
         &self.owned_definitions
     }
 
-    pub fn transition_evidences(&self) -> &WorkflowTransitionEvidenceRecords {
+    pub(crate) fn transition_evidences(&self) -> &WorkflowTransitionEvidenceRecords {
         &self.transition_evidences
     }
 
-    pub fn entry_lifecycle_required(&self) -> bool {
+    pub(crate) fn entry_lifecycle_required(&self) -> bool {
         self.entry_lifecycle_required
     }
 
-    pub fn entry_lifecycle_states(&self) -> &WorkflowEntryLifecycleStateRecords {
+    pub(crate) fn entry_lifecycle_states(&self) -> &WorkflowEntryLifecycleStateRecords {
         &self.entry_lifecycle_states
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct FormalWorkflowGraphs {
+pub(crate) struct FormalWorkflowGraphs {
     graphs: Vec<FormalWorkflowGraph>,
 }
 
 impl FormalWorkflowGraphs {
-    pub fn from_graphs(graphs: impl IntoIterator<Item = FormalWorkflowGraph>) -> Self {
+    pub(crate) fn from_graphs(graphs: impl IntoIterator<Item = FormalWorkflowGraph>) -> Self {
         Self {
             graphs: graphs.into_iter().collect(),
         }
@@ -100,7 +104,7 @@ impl FormalWorkflowGraphs {
     }
 }
 
-pub fn parse_lean_workflow_graph(
+pub(crate) fn parse_lean_workflow_graph(
     artifact: &FileContents,
 ) -> Result<FormalWorkflowGraph, FormalGraphError> {
     parse_workflow_graph(
@@ -122,7 +126,7 @@ pub fn parse_lean_workflow_graph(
     )
 }
 
-pub fn parse_quint_workflow_graph(
+pub(crate) fn parse_quint_workflow_graph(
     artifact: &FileContents,
 ) -> Result<FormalWorkflowGraph, FormalGraphError> {
     let artifact = artifact.as_ref();
@@ -383,12 +387,12 @@ fn slice_details_with_relationships(
             let relationship = step_relationships
                 .iter()
                 .find(|(step, _relationship)| step == slice.slug().as_ref())
-                .map(|(_step, relationship)| relationship.clone())
-                .unwrap_or_else(|| slice.relationship().clone());
+                .map(|(_step, relationship)| *relationship)
+                .unwrap_or(*slice.relationship());
             WorkflowSliceDetail::new_with_relationship(
                 slice.slug().clone(),
                 slice.name().clone(),
-                slice.kind().clone(),
+                *slice.kind(),
                 slice.description().clone(),
                 relationship,
             )
@@ -525,8 +529,8 @@ fn parse_workflow_transition_evidences(
                 transition_endpoint(&chunk[1])?,
                 workflow_transition_kind(&chunk[2])?,
                 transition_trigger_name(&chunk[3])?,
-                workflow_transition_evidence_text(&chunk[4])?,
-                workflow_transition_evidence_text(&chunk[5])?,
+                workflow_transition_source_evidence_text(&chunk[4])?,
+                workflow_transition_target_evidence_text(&chunk[5])?,
             ))
         })
         .collect()
@@ -704,10 +708,17 @@ fn transition_trigger_name(value: &str) -> Result<TransitionTriggerName, FormalG
         .map_err(|error| FormalGraphError::new(error.to_string()))
 }
 
-fn workflow_transition_evidence_text(
+fn workflow_transition_source_evidence_text(
     value: &str,
-) -> Result<WorkflowTransitionEvidenceText, FormalGraphError> {
-    WorkflowTransitionEvidenceText::try_new(value.to_owned())
+) -> Result<WorkflowTransitionSourceEvidenceText, FormalGraphError> {
+    WorkflowTransitionSourceEvidenceText::try_new(value.to_owned())
+        .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn workflow_transition_target_evidence_text(
+    value: &str,
+) -> Result<WorkflowTransitionTargetEvidenceText, FormalGraphError> {
+    WorkflowTransitionTargetEvidenceText::try_new(value.to_owned())
         .map_err(|error| FormalGraphError::new(error.to_string()))
 }
 
@@ -775,7 +786,7 @@ fn workflow_view_role(value: &str) -> Result<WorkflowViewRole, FormalGraphError>
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct FormalGraphError {
+pub(crate) struct FormalGraphError {
     message: String,
 }
 

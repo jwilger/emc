@@ -6,15 +6,20 @@ mod tests {
     use std::ffi::OsString;
     use std::path::Path;
 
-    use emc::core::effect::ArtifactDigest;
-    use emc::core::event_commands::{
+    use super::super::sqlite_event_store_path_with_env;
+    use crate::core::connection::ConnectionKind;
+    use crate::core::effect::{
+        ArtifactDigest, ModelContentDigest, ProjectionFingerprint, ReviewEventReference,
+    };
+    use crate::core::event_commands::{
         AddSliceCommand, AddWorkflowCommand, ConnectWorkflowCommand, ConnectWorkflowInput,
         DeclareWorkflowReadinessCommand, InitializeProjectCommand, RemoveSliceCommand,
         RemoveWorkflowCommand, RemoveWorkflowTransitionCommand, RemoveWorkflowTransitionInput,
         UpdateSliceCommand, UpdateWorkflowCommand,
     };
-    use emc::core::event_runtime::sqlite_event_store_path_with_env;
-    use emc::core::types::{ReviewTimestamp, ReviewerId, WorkflowSlug};
+    use crate::core::types::{
+        ReviewTimestamp, ReviewerId, SliceSlug, TransitionTriggerName, WorkflowSlug,
+    };
     use eventcore::{RetryPolicy, execute};
     use eventcore_sqlite::{SqliteConfig, SqliteEventStore, rusqlite};
     use sha2::{Digest, Sha256};
@@ -287,16 +292,14 @@ mod tests {
             .await?;
             execute(
                 &store,
-                ConnectWorkflowCommand::new(ConnectWorkflowInput {
-                    workflow: "open-ticket".to_owned(),
-                    source: "capture-ticket".to_owned(),
-                    target_slice: Some("review-ticket".to_owned()),
-                    target_workflow: None,
-                    via: "navigation".to_owned(),
-                    name: "review-ticket-screen".to_owned(),
-                    payload_contract: None,
-                    reason: None,
-                })?,
+                ConnectWorkflowCommand::new(ConnectWorkflowInput::slice(
+                    WorkflowSlug::try_new("open-ticket".to_owned())?,
+                    SliceSlug::try_new("capture-ticket".to_owned())?,
+                    SliceSlug::try_new("review-ticket".to_owned())?,
+                    ConnectionKind::Navigation,
+                    TransitionTriggerName::try_new("review-ticket-screen".to_owned())?,
+                    None,
+                ))?,
                 RetryPolicy::new(),
             )
             .await?;
@@ -348,14 +351,13 @@ mod tests {
             .await?;
             execute(
                 &store,
-                RemoveWorkflowTransitionCommand::new(RemoveWorkflowTransitionInput {
-                    workflow: "open-ticket".to_owned(),
-                    source: "capture-ticket".to_owned(),
-                    target_slice: Some("review-ticket".to_owned()),
-                    target_workflow: None,
-                    via: "navigation".to_owned(),
-                    name: "review-ticket-screen".to_owned(),
-                })?,
+                RemoveWorkflowTransitionCommand::new(RemoveWorkflowTransitionInput::slice(
+                    WorkflowSlug::try_new("open-ticket".to_owned())?,
+                    SliceSlug::try_new("capture-ticket".to_owned())?,
+                    SliceSlug::try_new("review-ticket".to_owned())?,
+                    ConnectionKind::Navigation,
+                    TransitionTriggerName::try_new("review-ticket-screen".to_owned())?,
+                ))?,
                 RetryPolicy::new(),
             )
             .await?;
@@ -409,11 +411,13 @@ mod tests {
                 &store,
                 DeclareWorkflowReadinessCommand::new(
                     WorkflowSlug::try_new("open-ticket".to_owned())?,
-                    ArtifactDigest::try_new("verified-frontier".to_owned())?,
-                    ArtifactDigest::try_new("model-content".to_owned())?,
+                    ProjectionFingerprint::new(ArtifactDigest::try_new(
+                        "verified-frontier".to_owned(),
+                    )?),
+                    ModelContentDigest::new(ArtifactDigest::try_new("model-content".to_owned())?),
                     ReviewTimestamp::try_new("2026-06-07T00:00:00.000Z".to_owned())?,
                     ReviewerId::try_new("emc verify".to_owned())?,
-                    None,
+                    ReviewEventReference::unrecorded(),
                 )?,
                 RetryPolicy::new(),
             )

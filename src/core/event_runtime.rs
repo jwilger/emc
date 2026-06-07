@@ -14,7 +14,10 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tokio::runtime::Builder;
 
-use crate::core::effect::ArtifactDigest;
+use crate::core::connection::ConnectionKind;
+use crate::core::effect::{
+    ArtifactDigest, ModelContentDigest, ProjectionFingerprint, ReviewEventId, ReviewEventReference,
+};
 use crate::core::event_commands::{
     AddSliceCommand, AddSliceFactCommand, AddWorkflowCommand, AddWorkflowFactCommand,
     ConnectWorkflowCommand, ConnectWorkflowInput, DeclareWorkflowReadinessCommand,
@@ -23,20 +26,22 @@ use crate::core::event_commands::{
     SliceFactInput, UpdateSliceCommand, UpdateWorkflowCommand, WorkflowFactInput,
 };
 use crate::core::events::{
-    EventDraft, slice_automation_from_payload, slice_bit_level_data_flow_from_payload,
-    slice_board_connection_from_payload, slice_board_element_from_payload,
-    slice_command_definition_from_payload, slice_event_definition_from_payload,
-    slice_external_payload_from_payload, slice_outcome_from_payload, slice_read_model_from_payload,
-    slice_scenario_from_payload, slice_translation_from_payload, slice_view_from_payload,
+    EventDraft, EventDraftType, slice_automation_from_payload,
+    slice_bit_level_data_flow_from_payload, slice_board_connection_from_payload,
+    slice_board_element_from_payload, slice_command_definition_from_payload,
+    slice_event_definition_from_payload, slice_external_payload_from_payload,
+    slice_outcome_from_payload, slice_read_model_from_payload, slice_scenario_from_payload,
+    slice_translation_from_payload, slice_view_from_payload,
 };
 use crate::core::types::{
-    CommandErrorName, CommandName, ModelDescription, OutcomeLabelName, ReviewTimestamp, ReviewerId,
-    StreamName, TransitionTriggerName, WorkflowCommandErrorRecord,
-    WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
-    WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation, WorkflowOutcomeRecord,
-    WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
-    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecord,
-    WorkflowTransitionEvidenceText, WorkflowTransitionKind, WorkflowViewRole,
+    CommandErrorName, CommandName, ModelDescription, ModelName, OutcomeLabelName,
+    PayloadContractName, ReviewTimestamp, ReviewerId, SliceKindName, SliceSlug, StreamName,
+    TransitionTriggerName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleEvidenceText,
+    WorkflowEntryLifecycleStateName, WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation,
+    WorkflowOutcomeRecord, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
+    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
+    WorkflowTransitionEvidenceRecord, WorkflowTransitionKind, WorkflowTransitionSourceEvidenceText,
+    WorkflowTransitionTargetEvidenceText, WorkflowViewRole,
 };
 
 const EVENT_EXPORT_DIRECTORY: &str = "model/events/v1";
@@ -44,11 +49,15 @@ const EVENT_EXPORT_DIRECTORY: &str = "model/events/v1";
 const EVENT_STORE_PATH_ENV: &str = "EMC_EVENT_STORE_PATH";
 const XDG_STATE_HOME_ENV: &str = "XDG_STATE_HOME";
 
-pub fn sqlite_event_store_path(project_root: &Path) -> Result<PathBuf, String> {
+#[cfg(test)]
+#[path = "event_runtime_external_tests.rs"]
+mod external_tests;
+
+pub(crate) fn sqlite_event_store_path(project_root: &Path) -> Result<PathBuf, String> {
     sqlite_event_store_path_with_env(project_root, |name| env::var_os(name))
 }
 
-pub fn sqlite_event_store_path_with_env(
+fn sqlite_event_store_path_with_env(
     project_root: &Path,
     env_var: impl Fn(&str) -> Option<OsString>,
 ) -> Result<PathBuf, String> {
@@ -69,7 +78,7 @@ pub fn sqlite_event_store_path_with_env(
         .join("events.sqlite3"))
 }
 
-pub struct ProjectRuntimeLock {
+pub(crate) struct ProjectRuntimeLock {
     file: File,
 }
 
@@ -79,7 +88,7 @@ impl Drop for ProjectRuntimeLock {
     }
 }
 
-pub fn lock_project_runtime(project_root: &Path) -> Result<ProjectRuntimeLock, String> {
+pub(crate) fn lock_project_runtime(project_root: &Path) -> Result<ProjectRuntimeLock, String> {
     let lock_directory = project_root.join("model/events");
     fs::create_dir_all(&lock_directory).map_err(|error| error.to_string())?;
     let path = lock_directory.join(".lock");
@@ -94,14 +103,14 @@ pub fn lock_project_runtime(project_root: &Path) -> Result<ProjectRuntimeLock, S
     Ok(ProjectRuntimeLock { file })
 }
 
-pub fn ensure_sqlite_event_store(project_root: &Path) -> Result<PathBuf, String> {
+pub(crate) fn ensure_sqlite_event_store(project_root: &Path) -> Result<PathBuf, String> {
     let path = sqlite_event_store_path(project_root)?;
     migrate_eventcore_sqlite_store(&path)?;
     sync_exported_events_into_sqlite(project_root, &path)?;
     Ok(path)
 }
 
-pub fn execute_eventcore_command_for_exported_event(
+pub(crate) fn execute_eventcore_command_for_exported_event(
     project_root: &Path,
     draft: &EventDraft,
 ) -> Result<(), String> {
@@ -116,26 +125,36 @@ pub fn execute_eventcore_command_for_exported_event(
         .build()
         .map_err(|error| error.to_string())?
         .block_on(async {
-            if let Some((slug, name, description)) = workflow_added_prerequisite {
+            if let Some(prerequisite) = workflow_added_prerequisite {
                 execute(
                     &store,
-                    AddWorkflowCommand::new(slug, name, description)?,
+                    AddWorkflowCommand::from_semantic(
+                        prerequisite.slug,
+                        prerequisite.name,
+                        prerequisite.description,
+                    )?,
                     RetryPolicy::new(),
                 )
                 .await
                 .map_err(|error| error.to_string())?;
             }
-            if let Some((workflow, slug, name, kind, description)) = slice_added_prerequisite {
+            if let Some(prerequisite) = slice_added_prerequisite {
                 execute(
                     &store,
-                    AddSliceCommand::new(workflow, slug, name, kind, description)?,
+                    AddSliceCommand::from_semantic(
+                        prerequisite.workflow,
+                        prerequisite.slug,
+                        prerequisite.name,
+                        prerequisite.kind,
+                        prerequisite.description,
+                    )?,
                     RetryPolicy::new(),
                 )
                 .await
                 .map_err(|error| error.to_string())?;
             }
             match draft.event_type() {
-                "ProjectInitialized" => {
+                EventDraftType::ProjectInitialized => {
                     execute(
                         &store,
                         InitializeProjectCommand::new(required_payload_str(draft, "name")?)?,
@@ -144,7 +163,7 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "WorkflowAdded" => {
+                EventDraftType::WorkflowAdded => {
                     execute(
                         &store,
                         AddWorkflowCommand::new(
@@ -157,7 +176,7 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "WorkflowUpdated" => {
+                EventDraftType::WorkflowUpdated => {
                     execute(
                         &store,
                         UpdateWorkflowCommand::new(
@@ -170,7 +189,7 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "WorkflowRemoved" => {
+                EventDraftType::WorkflowRemoved => {
                     execute(
                         &store,
                         RemoveWorkflowCommand::new(required_payload_str(draft, "slug")?)?,
@@ -179,7 +198,7 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "WorkflowOutcomeAdded" => {
+                EventDraftType::WorkflowOutcomeAdded => {
                     execute(
                         &store,
                         AddWorkflowFactCommand::new(WorkflowFactInput::OutcomeAdded {
@@ -191,7 +210,7 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "WorkflowCommandErrorAdded" => {
+                EventDraftType::WorkflowCommandErrorAdded => {
                     execute(
                         &store,
                         AddWorkflowFactCommand::new(WorkflowFactInput::CommandErrorAdded {
@@ -203,7 +222,7 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "WorkflowOwnedDefinitionAdded" => {
+                EventDraftType::WorkflowOwnedDefinitionAdded => {
                     execute(
                         &store,
                         AddWorkflowFactCommand::new(WorkflowFactInput::OwnedDefinitionAdded {
@@ -215,7 +234,7 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "WorkflowTransitionEvidenceAdded" => {
+                EventDraftType::WorkflowTransitionEvidenceAdded => {
                     execute(
                         &store,
                         AddWorkflowFactCommand::new(WorkflowFactInput::TransitionEvidenceAdded {
@@ -227,7 +246,7 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "WorkflowEntryLifecycleCoverageRequired" => {
+                EventDraftType::WorkflowEntryLifecycleCoverageRequired => {
                     execute(
                         &store,
                         AddWorkflowFactCommand::new(
@@ -240,7 +259,7 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "WorkflowEntryLifecycleStateAdded" => {
+                EventDraftType::WorkflowEntryLifecycleStateAdded => {
                     execute(
                         &store,
                         AddWorkflowFactCommand::new(WorkflowFactInput::EntryLifecycleStateAdded {
@@ -252,57 +271,52 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "WorkflowReadinessDeclared" => {
+                EventDraftType::WorkflowReadinessDeclared => {
                     execute(
                         &store,
                         DeclareWorkflowReadinessCommand::new(
                             workflow_slug_payload(draft, "workflow")?,
-                            artifact_digest_payload(draft, "projection_fingerprint")?,
-                            artifact_digest_payload(draft, "model_content_digest")?,
+                            ProjectionFingerprint::new(artifact_digest_payload(
+                                draft,
+                                "projection_fingerprint",
+                            )?),
+                            ModelContentDigest::new(artifact_digest_payload(
+                                draft,
+                                "model_content_digest",
+                            )?),
                             review_timestamp_payload(draft, "verified_at")?,
                             reviewer_id_payload(draft, "verified_by")?,
-                            optional_artifact_digest_payload(draft, "review_event_id")?,
+                            ReviewEventReference::from_optional(
+                                optional_artifact_digest_payload(draft, "review_event_id")?
+                                    .map(ReviewEventId::new),
+                            ),
                         )?,
                         RetryPolicy::new(),
                     )
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "WorkflowConnected" => {
+                EventDraftType::WorkflowConnected => {
                     execute(
                         &store,
-                        ConnectWorkflowCommand::new(ConnectWorkflowInput {
-                            workflow: required_payload_str(draft, "workflow")?,
-                            source: required_payload_str(draft, "from")?,
-                            target_slice: optional_payload_str(draft, "to"),
-                            target_workflow: optional_payload_str(draft, "to_workflow"),
-                            via: required_payload_str(draft, "via")?,
-                            name: required_payload_str(draft, "name")?,
-                            payload_contract: optional_payload_str(draft, "payload_contract"),
-                            reason: optional_payload_str(draft, "reason"),
-                        })?,
+                        ConnectWorkflowCommand::new(connect_workflow_input(draft)?)?,
                         RetryPolicy::new(),
                     )
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "WorkflowTransitionRemoved" => {
+                EventDraftType::WorkflowTransitionRemoved => {
                     execute(
                         &store,
-                        RemoveWorkflowTransitionCommand::new(RemoveWorkflowTransitionInput {
-                            workflow: required_payload_str(draft, "workflow")?,
-                            source: required_payload_str(draft, "from")?,
-                            target_slice: optional_payload_str(draft, "to"),
-                            target_workflow: optional_payload_str(draft, "to_workflow"),
-                            via: required_payload_str(draft, "via")?,
-                            name: required_payload_str(draft, "name")?,
-                        })?,
+                        RemoveWorkflowTransitionCommand::new(remove_workflow_transition_input(
+                            draft,
+                        )?)?,
                         RetryPolicy::new(),
                     )
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "SliceAdded" => {
+                EventDraftType::SliceAdded => {
                     execute(
                         &store,
                         AddSliceCommand::new(
@@ -317,7 +331,7 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "SliceUpdated" => {
+                EventDraftType::SliceUpdated => {
                     execute(
                         &store,
                         UpdateSliceCommand::new(
@@ -331,7 +345,7 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "SliceRemoved" => {
+                EventDraftType::SliceRemoved => {
                     execute(
                         &store,
                         RemoveSliceCommand::new(required_payload_str(draft, "slug")?)?,
@@ -340,7 +354,18 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                event_type if event_type_is_slice_fact(event_type) => {
+                EventDraftType::SliceScenarioAdded
+                | EventDraftType::SliceOutcomeAdded
+                | EventDraftType::SliceExternalPayloadAdded
+                | EventDraftType::SliceEventDefinitionAdded
+                | EventDraftType::SliceCommandDefinitionAdded
+                | EventDraftType::SliceReadModelAdded
+                | EventDraftType::SliceViewAdded
+                | EventDraftType::SliceBitLevelDataFlowAdded
+                | EventDraftType::SliceTranslationAdded
+                | EventDraftType::SliceAutomationAdded
+                | EventDraftType::SliceBoardElementAdded
+                | EventDraftType::SliceBoardConnectionAdded => {
                     execute(
                         &store,
                         AddSliceFactCommand::new(slice_fact_input(draft)?)?,
@@ -349,7 +374,7 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "ReviewRecorded" => {
+                EventDraftType::ReviewRecorded => {
                     execute(
                         &store,
                         RecordReviewCommand::new(
@@ -364,7 +389,7 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                "ConflictResolved" => {
+                EventDraftType::ConflictResolved => {
                     execute(
                         &store,
                         ResolveConflictCommand::new(
@@ -376,14 +401,13 @@ pub fn execute_eventcore_command_for_exported_event(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                _ => {}
             }
             Ok::<(), String>(())
         })
 }
 
 fn repair_project_stream_if_needed(sqlite_path: &Path, draft: &EventDraft) -> Result<(), String> {
-    if draft.event_type() != "ConflictResolved" {
+    if draft.event_type() != EventDraftType::ConflictResolved {
         return Ok(());
     }
 
@@ -404,20 +428,20 @@ fn workflow_added_prerequisite_if_stream_needs_repair(
     project_root: &Path,
     sqlite_path: &Path,
     draft: &EventDraft,
-) -> Result<Option<(String, String, String)>, String> {
+) -> Result<Option<WorkflowAddedPrerequisite>, String> {
     if !matches!(
         draft.event_type(),
-        "WorkflowUpdated"
-            | "WorkflowRemoved"
-            | "WorkflowConnected"
-            | "WorkflowTransitionRemoved"
-            | "WorkflowOutcomeAdded"
-            | "WorkflowCommandErrorAdded"
-            | "WorkflowOwnedDefinitionAdded"
-            | "WorkflowTransitionEvidenceAdded"
-            | "WorkflowEntryLifecycleCoverageRequired"
-            | "WorkflowEntryLifecycleStateAdded"
-            | "WorkflowReadinessDeclared"
+        EventDraftType::WorkflowUpdated
+            | EventDraftType::WorkflowRemoved
+            | EventDraftType::WorkflowConnected
+            | EventDraftType::WorkflowTransitionRemoved
+            | EventDraftType::WorkflowOutcomeAdded
+            | EventDraftType::WorkflowCommandErrorAdded
+            | EventDraftType::WorkflowOwnedDefinitionAdded
+            | EventDraftType::WorkflowTransitionEvidenceAdded
+            | EventDraftType::WorkflowEntryLifecycleCoverageRequired
+            | EventDraftType::WorkflowEntryLifecycleStateAdded
+            | EventDraftType::WorkflowReadinessDeclared
     ) {
         return Ok(None);
     }
@@ -439,15 +463,15 @@ fn workflow_added_prerequisite_if_stream_needs_repair(
     workflow_added_payload(project_root, draft.stream_id()).map(Some)
 }
 
-type SliceAddedPayload = (String, String, String, String, String);
-
 fn slice_added_prerequisite_if_stream_needs_repair(
     project_root: &Path,
     sqlite_path: &Path,
     draft: &EventDraft,
-) -> Result<Option<SliceAddedPayload>, String> {
-    if !matches!(draft.event_type(), "SliceUpdated" | "SliceRemoved")
-        && !event_type_is_slice_fact(draft.event_type())
+) -> Result<Option<SliceAddedPrerequisite>, String> {
+    if !matches!(
+        draft.event_type(),
+        EventDraftType::SliceUpdated | EventDraftType::SliceRemoved
+    ) && !draft.event_type().is_slice_fact()
     {
         return Ok(None);
     }
@@ -489,10 +513,62 @@ fn non_emc_event_rows_for_stream(
     )
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowAddedPrerequisite {
+    slug: WorkflowSlug,
+    name: ModelName,
+    description: ModelDescription,
+}
+
+impl WorkflowAddedPrerequisite {
+    fn from_exported_event(event: &Value) -> Result<Self, String> {
+        Ok(Self {
+            slug: WorkflowSlug::try_new(required_json_payload_str(event, "slug")?)
+                .map_err(|error| error.to_string())?,
+            name: ModelName::try_new(required_json_payload_str(event, "name")?)
+                .map_err(|error| error.to_string())?,
+            description: ModelDescription::try_new(required_json_payload_str(
+                event,
+                "description",
+            )?)
+            .map_err(|error| error.to_string())?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceAddedPrerequisite {
+    workflow: WorkflowSlug,
+    slug: SliceSlug,
+    name: ModelName,
+    kind: SliceKindName,
+    description: ModelDescription,
+}
+
+impl SliceAddedPrerequisite {
+    fn from_exported_event(event: &Value) -> Result<Self, String> {
+        Ok(Self {
+            workflow: WorkflowSlug::try_new(required_json_payload_str(event, "workflow")?)
+                .map_err(|error| error.to_string())?,
+            slug: SliceSlug::try_new(required_json_payload_str(event, "slug")?)
+                .map_err(|error| error.to_string())?,
+            name: ModelName::try_new(required_json_payload_str(event, "name")?)
+                .map_err(|error| error.to_string())?,
+            kind: SliceKindName::try_new(required_json_payload_str(event, "kind")?)
+                .map_err(|error| error.to_string())?,
+            description: ModelDescription::try_new(required_json_payload_str(
+                event,
+                "description",
+            )?)
+            .map_err(|error| error.to_string())?,
+        })
+    }
+}
+
 fn workflow_added_payload(
     project_root: &Path,
     stream_id: &str,
-) -> Result<(String, String, String), String> {
+) -> Result<WorkflowAddedPrerequisite, String> {
     let event_directory = project_root.join(EVENT_EXPORT_DIRECTORY);
     for entry in fs::read_dir(event_directory).map_err(|error| error.to_string())? {
         let path = entry.map_err(|error| error.to_string())?.path();
@@ -504,17 +580,16 @@ fn workflow_added_payload(
         if required_event_str(&event, "stream_id") == stream_id
             && required_event_str(&event, "type") == "WorkflowAdded"
         {
-            return Ok((
-                required_json_payload_str(&event, "slug")?,
-                required_json_payload_str(&event, "name")?,
-                required_json_payload_str(&event, "description")?,
-            ));
+            return WorkflowAddedPrerequisite::from_exported_event(&event);
         }
     }
     Err(format!("{stream_id} requires exported WorkflowAdded event"))
 }
 
-fn slice_added_payload(project_root: &Path, stream_id: &str) -> Result<SliceAddedPayload, String> {
+fn slice_added_payload(
+    project_root: &Path,
+    stream_id: &str,
+) -> Result<SliceAddedPrerequisite, String> {
     let event_directory = project_root.join(EVENT_EXPORT_DIRECTORY);
     for entry in fs::read_dir(event_directory).map_err(|error| error.to_string())? {
         let path = entry.map_err(|error| error.to_string())?.path();
@@ -526,13 +601,7 @@ fn slice_added_payload(project_root: &Path, stream_id: &str) -> Result<SliceAdde
         if required_event_str(&event, "stream_id") == stream_id
             && required_event_str(&event, "type") == "SliceAdded"
         {
-            return Ok((
-                required_json_payload_str(&event, "workflow")?,
-                required_json_payload_str(&event, "slug")?,
-                required_json_payload_str(&event, "name")?,
-                required_json_payload_str(&event, "kind")?,
-                required_json_payload_str(&event, "description")?,
-            ));
+            return SliceAddedPrerequisite::from_exported_event(&event);
         }
     }
     Err(format!("{stream_id} requires exported SliceAdded event"))
@@ -609,6 +678,14 @@ fn workflow_slug_payload(draft: &EventDraft, field: &str) -> Result<WorkflowSlug
     WorkflowSlug::try_new(required_payload_str(draft, field)?).map_err(|error| error.to_string())
 }
 
+fn slice_slug_payload(draft: &EventDraft, field: &str) -> Result<SliceSlug, String> {
+    SliceSlug::try_new(required_payload_str(draft, field)?).map_err(|error| error.to_string())
+}
+
+fn connection_kind_payload(draft: &EventDraft, field: &str) -> Result<ConnectionKind, String> {
+    ConnectionKind::try_new(required_payload_str(draft, field)?).map_err(|error| error.to_string())
+}
+
 fn artifact_digest_payload(draft: &EventDraft, field: &str) -> Result<ArtifactDigest, String> {
     ArtifactDigest::try_new(required_payload_str(draft, field)?).map_err(|error| error.to_string())
 }
@@ -631,37 +708,135 @@ fn reviewer_id_payload(draft: &EventDraft, field: &str) -> Result<ReviewerId, St
     ReviewerId::try_new(required_payload_str(draft, field)?).map_err(|error| error.to_string())
 }
 
+fn connect_workflow_input(draft: &EventDraft) -> Result<ConnectWorkflowInput, String> {
+    let workflow = workflow_slug_payload(draft, "workflow")?;
+    let source = slice_slug_payload(draft, "from")?;
+    let via = connection_kind_payload(draft, "via")?;
+    let name = transition_trigger_payload(draft, "name")?;
+
+    match (
+        optional_payload_str(draft, "to"),
+        optional_payload_str(draft, "to_workflow"),
+        optional_payload_str(draft, "payload_contract"),
+        optional_payload_str(draft, "reason"),
+    ) {
+        (Some(target), None, None, None) => Ok(ConnectWorkflowInput::slice(
+            workflow,
+            source,
+            SliceSlug::try_new(target).map_err(|error| error.to_string())?,
+            via,
+            name,
+            None,
+        )),
+        (Some(target), None, Some(payload_contract), None) => Ok(ConnectWorkflowInput::slice(
+            workflow,
+            source,
+            SliceSlug::try_new(target).map_err(|error| error.to_string())?,
+            via,
+            name,
+            Some(
+                PayloadContractName::try_new(payload_contract)
+                    .map_err(|error| error.to_string())?,
+            ),
+        )),
+        (None, Some(target), None, Some(reason)) => Ok(ConnectWorkflowInput::workflow_exit(
+            workflow,
+            source,
+            WorkflowSlug::try_new(target).map_err(|error| error.to_string())?,
+            via,
+            name,
+            ModelDescription::try_new(reason).map_err(|error| error.to_string())?,
+        )),
+        (Some(_), Some(_), _, _) => {
+            Err("workflow connection cannot target both slice and workflow".to_owned())
+        }
+        (None, None, _, _) => Err("workflow connection target is required".to_owned()),
+        (None, Some(_), Some(_), _) => {
+            Err("workflow exit connection cannot declare a payload contract".to_owned())
+        }
+        (None, Some(_), None, None) => Err("workflow exit connection requires a reason".to_owned()),
+        (Some(_), None, _, Some(_)) => {
+            Err("slice workflow connection cannot declare a workflow exit reason".to_owned())
+        }
+    }
+}
+
+fn remove_workflow_transition_input(
+    draft: &EventDraft,
+) -> Result<RemoveWorkflowTransitionInput, String> {
+    let workflow = workflow_slug_payload(draft, "workflow")?;
+    let source = slice_slug_payload(draft, "from")?;
+    let via = connection_kind_payload(draft, "via")?;
+    let name = transition_trigger_payload(draft, "name")?;
+
+    match (
+        optional_payload_str(draft, "to"),
+        optional_payload_str(draft, "to_workflow"),
+    ) {
+        (Some(target), None) => Ok(RemoveWorkflowTransitionInput::slice(
+            workflow,
+            source,
+            SliceSlug::try_new(target).map_err(|error| error.to_string())?,
+            via,
+            name,
+        )),
+        (None, Some(target)) => Ok(RemoveWorkflowTransitionInput::workflow_exit(
+            workflow,
+            source,
+            WorkflowSlug::try_new(target).map_err(|error| error.to_string())?,
+            via,
+            name,
+        )),
+        (Some(_), Some(_)) => {
+            Err("workflow transition removal cannot target both slice and workflow".to_owned())
+        }
+        (None, None) => Err("workflow transition removal target is required".to_owned()),
+    }
+}
+
 fn slice_fact_input(draft: &EventDraft) -> Result<SliceFactInput, String> {
     match draft.event_type() {
-        "SliceScenarioAdded" => {
+        EventDraftType::SliceScenarioAdded => {
             slice_scenario_from_payload(draft.payload()).map(SliceFactInput::Scenario)
         }
-        "SliceOutcomeAdded" => {
+        EventDraftType::SliceOutcomeAdded => {
             slice_outcome_from_payload(draft.payload()).map(SliceFactInput::Outcome)
         }
-        "SliceExternalPayloadAdded" => slice_external_payload_from_payload(draft.payload())
-            .map(SliceFactInput::ExternalPayload),
-        "SliceEventDefinitionAdded" => slice_event_definition_from_payload(draft.payload())
-            .map(SliceFactInput::EventDefinition),
-        "SliceCommandDefinitionAdded" => slice_command_definition_from_payload(draft.payload())
-            .map(SliceFactInput::CommandDefinition),
-        "SliceReadModelAdded" => {
+        EventDraftType::SliceExternalPayloadAdded => {
+            slice_external_payload_from_payload(draft.payload())
+                .map(SliceFactInput::ExternalPayload)
+        }
+        EventDraftType::SliceEventDefinitionAdded => {
+            slice_event_definition_from_payload(draft.payload())
+                .map(SliceFactInput::EventDefinition)
+        }
+        EventDraftType::SliceCommandDefinitionAdded => {
+            slice_command_definition_from_payload(draft.payload())
+                .map(SliceFactInput::CommandDefinition)
+        }
+        EventDraftType::SliceReadModelAdded => {
             slice_read_model_from_payload(draft.payload()).map(SliceFactInput::ReadModel)
         }
-        "SliceViewAdded" => slice_view_from_payload(draft.payload()).map(SliceFactInput::View),
-        "SliceBitLevelDataFlowAdded" => slice_bit_level_data_flow_from_payload(draft.payload())
-            .map(SliceFactInput::BitLevelDataFlow),
-        "SliceTranslationAdded" => {
+        EventDraftType::SliceViewAdded => {
+            slice_view_from_payload(draft.payload()).map(SliceFactInput::View)
+        }
+        EventDraftType::SliceBitLevelDataFlowAdded => {
+            slice_bit_level_data_flow_from_payload(draft.payload())
+                .map(SliceFactInput::BitLevelDataFlow)
+        }
+        EventDraftType::SliceTranslationAdded => {
             slice_translation_from_payload(draft.payload()).map(SliceFactInput::Translation)
         }
-        "SliceAutomationAdded" => {
+        EventDraftType::SliceAutomationAdded => {
             slice_automation_from_payload(draft.payload()).map(SliceFactInput::Automation)
         }
-        "SliceBoardElementAdded" => {
+        EventDraftType::SliceBoardElementAdded => {
             slice_board_element_from_payload(draft.payload()).map(SliceFactInput::BoardElement)
         }
-        "SliceBoardConnectionAdded" => slice_board_connection_from_payload(draft.payload())
-            .map(SliceFactInput::BoardConnection),
+        EventDraftType::SliceBoardConnectionAdded => {
+            slice_board_connection_from_payload(draft.payload())
+                .map(SliceFactInput::BoardConnection)
+        }
         event_type => Err(format!("unsupported slice fact event type {event_type}")),
     }
 }
@@ -756,8 +931,8 @@ fn workflow_transition_evidence_payload(
         workflow_transition_endpoint_payload(draft, "to")?,
         workflow_transition_kind_payload(draft, "via")?,
         transition_trigger_payload(draft, "name")?,
-        workflow_transition_evidence_text_payload(draft, "source_evidence")?,
-        workflow_transition_evidence_text_payload(draft, "target_evidence")?,
+        workflow_transition_source_evidence_text_payload(draft, "source_evidence")?,
+        workflow_transition_target_evidence_text_payload(draft, "target_evidence")?,
     ))
 }
 
@@ -825,11 +1000,19 @@ fn workflow_owned_definition_name_payload(
         .map_err(|error| error.to_string())
 }
 
-fn workflow_transition_evidence_text_payload(
+fn workflow_transition_source_evidence_text_payload(
     draft: &EventDraft,
     field: &str,
-) -> Result<WorkflowTransitionEvidenceText, String> {
-    WorkflowTransitionEvidenceText::try_new(required_payload_str(draft, field)?)
+) -> Result<WorkflowTransitionSourceEvidenceText, String> {
+    WorkflowTransitionSourceEvidenceText::try_new(required_payload_str(draft, field)?)
+        .map_err(|error| error.to_string())
+}
+
+fn workflow_transition_target_evidence_text_payload(
+    draft: &EventDraft,
+    field: &str,
+) -> Result<WorkflowTransitionTargetEvidenceText, String> {
+    WorkflowTransitionTargetEvidenceText::try_new(required_payload_str(draft, field)?)
         .map_err(|error| error.to_string())
 }
 
@@ -904,45 +1087,7 @@ fn sync_exported_events_into_sqlite(project_root: &Path, sqlite_path: &Path) -> 
 }
 
 fn event_type_is_backed_by_eventcore(event_type: &str) -> bool {
-    matches!(
-        event_type,
-        "ProjectInitialized"
-            | "WorkflowAdded"
-            | "WorkflowUpdated"
-            | "WorkflowRemoved"
-            | "WorkflowOutcomeAdded"
-            | "WorkflowCommandErrorAdded"
-            | "WorkflowOwnedDefinitionAdded"
-            | "WorkflowTransitionEvidenceAdded"
-            | "WorkflowEntryLifecycleCoverageRequired"
-            | "WorkflowEntryLifecycleStateAdded"
-            | "WorkflowReadinessDeclared"
-            | "WorkflowConnected"
-            | "WorkflowTransitionRemoved"
-            | "SliceAdded"
-            | "SliceUpdated"
-            | "SliceRemoved"
-            | "ReviewRecorded"
-            | "ConflictResolved"
-    ) || event_type_is_slice_fact(event_type)
-}
-
-fn event_type_is_slice_fact(event_type: &str) -> bool {
-    matches!(
-        event_type,
-        "SliceScenarioAdded"
-            | "SliceOutcomeAdded"
-            | "SliceExternalPayloadAdded"
-            | "SliceEventDefinitionAdded"
-            | "SliceCommandDefinitionAdded"
-            | "SliceReadModelAdded"
-            | "SliceViewAdded"
-            | "SliceBitLevelDataFlowAdded"
-            | "SliceTranslationAdded"
-            | "SliceAutomationAdded"
-            | "SliceBoardElementAdded"
-            | "SliceBoardConnectionAdded"
-    )
+    EventDraftType::try_new(event_type.to_owned()).is_ok()
 }
 
 fn existing_eventcore_streams(
@@ -980,4 +1125,79 @@ fn project_realpath_hash(project_root: &Path) -> Result<String, String> {
     Ok(hex::encode(Sha256::digest(
         canonical.to_string_lossy().as_bytes(),
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn workflow_added_prerequisite_parses_exported_payload_into_semantic_fields()
+    -> Result<(), String> {
+        let event = json!({
+            "payload": {
+                "slug": "open-ticket",
+                "name": "Open ticket",
+                "description": "Actor opens a repair ticket."
+            }
+        });
+
+        let prerequisite = WorkflowAddedPrerequisite::from_exported_event(&event)?;
+
+        assert_eq!(prerequisite.slug.as_ref(), "open-ticket");
+        assert_eq!(prerequisite.name.as_ref(), "Open ticket");
+        assert_eq!(
+            prerequisite.description.as_ref(),
+            "Actor opens a repair ticket."
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_added_prerequisite_parses_exported_payload_into_semantic_fields() -> Result<(), String>
+    {
+        let event = json!({
+            "payload": {
+                "workflow": "open-ticket",
+                "slug": "capture-ticket",
+                "name": "Capture ticket",
+                "kind": "state_view",
+                "description": "Actor captures repair ticket details."
+            }
+        });
+
+        let prerequisite = SliceAddedPrerequisite::from_exported_event(&event)?;
+
+        assert_eq!(prerequisite.workflow.as_ref(), "open-ticket");
+        assert_eq!(prerequisite.slug.as_ref(), "capture-ticket");
+        assert_eq!(prerequisite.name.as_ref(), "Capture ticket");
+        assert_eq!(prerequisite.kind, SliceKindName::StateView);
+        assert_eq!(
+            prerequisite.description.as_ref(),
+            "Actor captures repair ticket details."
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_added_prerequisite_rejects_unmodeled_slice_kinds() {
+        let event = json!({
+            "payload": {
+                "workflow": "open-ticket",
+                "slug": "capture-ticket",
+                "name": "Capture ticket",
+                "kind": "screen",
+                "description": "Actor captures repair ticket details."
+            }
+        });
+
+        assert!(
+            SliceAddedPrerequisite::from_exported_event(&event).is_err(),
+            "unmodeled exported slice kinds must not enter runtime repair payloads"
+        );
+    }
 }

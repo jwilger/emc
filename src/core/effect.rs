@@ -1,6 +1,7 @@
 // Copyright 2026 John Wilger
 
 use nutype::nutype;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::path::{Component, Path};
 
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
@@ -18,8 +19,652 @@ use crate::core::types::{
 };
 use crate::core::workflow::NewWorkflow;
 
+macro_rules! semantic_artifact_digest {
+    ($name:ident) => {
+        #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+        #[serde(transparent)]
+        pub(crate) struct $name(ArtifactDigest);
+
+        impl $name {
+            pub(crate) fn new(digest: ArtifactDigest) -> Self {
+                Self(digest)
+            }
+        }
+
+        impl AsRef<str> for $name {
+            fn as_ref(&self) -> &str {
+                self.0.as_ref()
+            }
+        }
+    };
+}
+
+semantic_artifact_digest!(ProjectionFingerprint);
+semantic_artifact_digest!(ModelContentDigest);
+semantic_artifact_digest!(ReviewEventId);
+semantic_artifact_digest!(EventConflictId);
+semantic_artifact_digest!(ChosenEventId);
+
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Effect {
+pub(crate) struct WorkflowCommandErrorEffect {
+    workflow_slug: WorkflowSlug,
+    error: WorkflowCommandErrorRecord,
+}
+
+impl WorkflowCommandErrorEffect {
+    pub(crate) fn new(workflow_slug: WorkflowSlug, error: WorkflowCommandErrorRecord) -> Self {
+        Self {
+            workflow_slug,
+            error,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn error(&self) -> &WorkflowCommandErrorRecord {
+        &self.error
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowOwnedDefinitionEffect {
+    workflow_slug: WorkflowSlug,
+    definition: WorkflowOwnedDefinitionRecord,
+}
+
+impl WorkflowOwnedDefinitionEffect {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        definition: WorkflowOwnedDefinitionRecord,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            definition,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn definition(&self) -> &WorkflowOwnedDefinitionRecord {
+        &self.definition
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowOutcomeEffect {
+    workflow_slug: WorkflowSlug,
+    outcome: WorkflowOutcomeRecord,
+}
+
+impl WorkflowOutcomeEffect {
+    pub(crate) fn new(workflow_slug: WorkflowSlug, outcome: WorkflowOutcomeRecord) -> Self {
+        Self {
+            workflow_slug,
+            outcome,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn outcome(&self) -> &WorkflowOutcomeRecord {
+        &self.outcome
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowTransitionEvidenceEffect {
+    workflow_slug: WorkflowSlug,
+    evidence: WorkflowTransitionEvidenceRecord,
+}
+
+impl WorkflowTransitionEvidenceEffect {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        evidence: WorkflowTransitionEvidenceRecord,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            evidence,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn evidence(&self) -> &WorkflowTransitionEvidenceRecord {
+        &self.evidence
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowEntryLifecycleStateEffect {
+    workflow_slug: WorkflowSlug,
+    coverage: WorkflowEntryLifecycleStateRecord,
+}
+
+impl WorkflowEntryLifecycleStateEffect {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        coverage: WorkflowEntryLifecycleStateRecord,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            coverage,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn coverage(&self) -> &WorkflowEntryLifecycleStateRecord {
+        &self.coverage
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct CleanReviewEffect {
+    workflow_slug: WorkflowSlug,
+    reviewer_id: ReviewerId,
+    reviewed_at: ReviewTimestamp,
+}
+
+impl CleanReviewEffect {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        reviewer_id: ReviewerId,
+        reviewed_at: ReviewTimestamp,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            reviewer_id,
+            reviewed_at,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn reviewer_id(&self) -> &ReviewerId {
+        &self.reviewer_id
+    }
+
+    pub(crate) fn reviewed_at(&self) -> &ReviewTimestamp {
+        &self.reviewed_at
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum ReviewEventReference {
+    Unrecorded,
+    Recorded(ReviewEventId),
+}
+
+impl ReviewEventReference {
+    pub(crate) fn unrecorded() -> Self {
+        Self::Unrecorded
+    }
+
+    pub(crate) fn from_optional(event_id: Option<ReviewEventId>) -> Self {
+        event_id.map_or(Self::Unrecorded, Self::Recorded)
+    }
+
+    pub(crate) fn as_review_event_id(&self) -> Option<&ReviewEventId> {
+        match self {
+            Self::Unrecorded => None,
+            Self::Recorded(event_id) => Some(event_id),
+        }
+    }
+}
+
+impl Serialize for ReviewEventReference {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Unrecorded => serializer.serialize_none(),
+            Self::Recorded(event_id) => event_id.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ReviewEventReference {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Option::<ReviewEventId>::deserialize(deserializer).map(Self::from_optional)
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowReadinessEffect {
+    workflow_slug: WorkflowSlug,
+    projection_fingerprint: ProjectionFingerprint,
+    model_content_digest: ModelContentDigest,
+    verified_at: ReviewTimestamp,
+    verified_by: ReviewerId,
+    review_event: ReviewEventReference,
+}
+
+impl WorkflowReadinessEffect {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        projection_fingerprint: ProjectionFingerprint,
+        model_content_digest: ModelContentDigest,
+        verified_at: ReviewTimestamp,
+        verified_by: ReviewerId,
+        review_event: ReviewEventReference,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            projection_fingerprint,
+            model_content_digest,
+            verified_at,
+            verified_by,
+            review_event,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn projection_fingerprint(&self) -> &ProjectionFingerprint {
+        &self.projection_fingerprint
+    }
+
+    pub(crate) fn model_content_digest(&self) -> &ModelContentDigest {
+        &self.model_content_digest
+    }
+
+    pub(crate) fn verified_at(&self) -> &ReviewTimestamp {
+        &self.verified_at
+    }
+
+    pub(crate) fn verified_by(&self) -> &ReviewerId {
+        &self.verified_by
+    }
+
+    pub(crate) fn review_event(&self) -> &ReviewEventReference {
+        &self.review_event
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct EventConflictResolution {
+    conflict_id: EventConflictId,
+    chosen_event_id: ChosenEventId,
+}
+
+impl EventConflictResolution {
+    pub(crate) fn new(conflict_id: EventConflictId, chosen_event_id: ChosenEventId) -> Self {
+        Self {
+            conflict_id,
+            chosen_event_id,
+        }
+    }
+
+    pub(crate) fn conflict_id(&self) -> &EventConflictId {
+        &self.conflict_id
+    }
+
+    pub(crate) fn chosen_event_id(&self) -> &ChosenEventId {
+        &self.chosen_event_id
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceDescriptionUpdateEffect {
+    slice_slug: SliceSlug,
+    description: ModelDescription,
+}
+
+impl SliceDescriptionUpdateEffect {
+    pub(crate) fn new(slice_slug: SliceSlug, description: ModelDescription) -> Self {
+        Self {
+            slice_slug,
+            description,
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn description(&self) -> &ModelDescription {
+        &self.description
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceKindUpdateEffect {
+    slice_slug: SliceSlug,
+    kind: SliceKind,
+}
+
+impl SliceKindUpdateEffect {
+    pub(crate) fn new(slice_slug: SliceSlug, kind: SliceKind) -> Self {
+        Self { slice_slug, kind }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn kind(&self) -> SliceKind {
+        self.kind
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceNameUpdateEffect {
+    slice_slug: SliceSlug,
+    name: ModelName,
+}
+
+impl SliceNameUpdateEffect {
+    pub(crate) fn new(slice_slug: SliceSlug, name: ModelName) -> Self {
+        Self { slice_slug, name }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn name(&self) -> &ModelName {
+        &self.name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowDescriptionUpdateEffect {
+    workflow_slug: WorkflowSlug,
+    description: ModelDescription,
+}
+
+impl WorkflowDescriptionUpdateEffect {
+    pub(crate) fn new(workflow_slug: WorkflowSlug, description: ModelDescription) -> Self {
+        Self {
+            workflow_slug,
+            description,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn description(&self) -> &ModelDescription {
+        &self.description
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowNameUpdateEffect {
+    workflow_slug: WorkflowSlug,
+    name: ModelName,
+}
+
+impl WorkflowNameUpdateEffect {
+    pub(crate) fn new(workflow_slug: WorkflowSlug, name: ModelName) -> Self {
+        Self {
+            workflow_slug,
+            name,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn name(&self) -> &ModelName {
+        &self.name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct CanonicalDeclarationRequirement {
+    path: ProjectPath,
+    prefix: CanonicalDeclarationPrefix,
+    marker: CanonicalDeclarationMarker,
+    message: ReportLine,
+}
+
+impl CanonicalDeclarationRequirement {
+    pub(crate) fn new(
+        path: ProjectPath,
+        prefix: CanonicalDeclarationPrefix,
+        marker: CanonicalDeclarationMarker,
+        message: ReportLine,
+    ) -> Self {
+        Self {
+            path,
+            prefix,
+            marker,
+            message,
+        }
+    }
+
+    pub(crate) fn path(&self) -> &ProjectPath {
+        &self.path
+    }
+
+    pub(crate) fn prefix(&self) -> &CanonicalDeclarationPrefix {
+        &self.prefix
+    }
+
+    pub(crate) fn marker(&self) -> &CanonicalDeclarationMarker {
+        &self.marker
+    }
+
+    pub(crate) fn message(&self) -> &ReportLine {
+        &self.message
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ArtifactDigestRequirement {
+    path: ProjectPath,
+    digest: ArtifactDigest,
+    message: ReportLine,
+}
+
+impl ArtifactDigestRequirement {
+    pub(crate) fn new(path: ProjectPath, digest: ArtifactDigest, message: ReportLine) -> Self {
+        Self {
+            path,
+            digest,
+            message,
+        }
+    }
+
+    pub(crate) fn path(&self) -> &ProjectPath {
+        &self.path
+    }
+
+    pub(crate) fn digest(&self) -> &ArtifactDigest {
+        &self.digest
+    }
+
+    pub(crate) fn message(&self) -> &ReportLine {
+        &self.message
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct FileContentsRequirement {
+    path: ProjectPath,
+    expected: FileContents,
+    message: ReportLine,
+}
+
+impl FileContentsRequirement {
+    pub(crate) fn new(path: ProjectPath, expected: FileContents, message: ReportLine) -> Self {
+        Self {
+            path,
+            expected,
+            message,
+        }
+    }
+
+    pub(crate) fn path(&self) -> &ProjectPath {
+        &self.path
+    }
+
+    pub(crate) fn expected(&self) -> &FileContents {
+        &self.expected
+    }
+
+    pub(crate) fn message(&self) -> &ReportLine {
+        &self.message
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ModeledArtifactPaths {
+    paths: Vec<ProjectPath>,
+}
+
+impl ModeledArtifactPaths {
+    pub(crate) fn new(paths: Vec<ProjectPath>) -> Self {
+        Self { paths }
+    }
+
+    pub(crate) fn as_slice(&self) -> &[ProjectPath] {
+        &self.paths
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ModeledArtifactsRequirement {
+    path: ProjectPath,
+    extension: ArtifactFileExtension,
+    allowed_paths: ModeledArtifactPaths,
+    message: ReportLine,
+}
+
+impl ModeledArtifactsRequirement {
+    pub(crate) fn new(
+        path: ProjectPath,
+        extension: ArtifactFileExtension,
+        allowed_paths: ModeledArtifactPaths,
+        message: ReportLine,
+    ) -> Self {
+        Self {
+            path,
+            extension,
+            allowed_paths,
+            message,
+        }
+    }
+
+    pub(crate) fn path(&self) -> &ProjectPath {
+        &self.path
+    }
+
+    pub(crate) fn extension(&self) -> &ArtifactFileExtension {
+        &self.extension
+    }
+
+    pub(crate) fn allowed_paths(&self) -> &ModeledArtifactPaths {
+        &self.allowed_paths
+    }
+
+    pub(crate) fn message(&self) -> &ReportLine {
+        &self.message
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ReviewRecordRequirement {
+    path: ProjectPath,
+    workflow_slug: WorkflowSlug,
+    message: ReportLine,
+}
+
+impl ReviewRecordRequirement {
+    pub(crate) fn new(path: ProjectPath, workflow_slug: WorkflowSlug, message: ReportLine) -> Self {
+        Self {
+            path,
+            workflow_slug,
+            message,
+        }
+    }
+
+    pub(crate) fn path(&self) -> &ProjectPath {
+        &self.path
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn message(&self) -> &ReportLine {
+        &self.message
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct FileWriteEffect {
+    path: ProjectPath,
+    contents: FileContents,
+}
+
+impl FileWriteEffect {
+    pub(crate) fn new(path: ProjectPath, contents: FileContents) -> Self {
+        Self { path, contents }
+    }
+
+    pub(crate) fn path(&self) -> &ProjectPath {
+        &self.path
+    }
+
+    pub(crate) fn contents(&self) -> &FileContents {
+        &self.contents
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct FormalSliceArtifactWriteEffect {
+    source: ProjectPath,
+    target: ProjectPath,
+    generated: FileContents,
+}
+
+impl FormalSliceArtifactWriteEffect {
+    pub(crate) fn new(source: ProjectPath, target: ProjectPath, generated: FileContents) -> Self {
+        Self {
+            source,
+            target,
+            generated,
+        }
+    }
+
+    pub(crate) fn source(&self) -> &ProjectPath {
+        &self.source
+    }
+
+    pub(crate) fn target(&self) -> &ProjectPath {
+        &self.target
+    }
+
+    pub(crate) fn generated(&self) -> &FileContents {
+        &self.generated
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum Effect {
     AddAutomationDefinitionFromSlice(NewAutomationDefinition),
     AddBitLevelDataFlowFromSlice(NewBitLevelDataFlow),
     AddBoardConnectionFromSlice(NewBoardConnection),
@@ -34,64 +679,136 @@ pub enum Effect {
     AddSliceScenarioFromSlice(NewSliceScenario),
     AddTranslationDefinitionFromSlice(NewTranslationDefinition),
     AddWorkflowFromIndex(NewWorkflow),
-    AddWorkflowCommandErrorFromWorkflow(WorkflowSlug, WorkflowCommandErrorRecord),
-    AddWorkflowOwnedDefinitionFromWorkflow(WorkflowSlug, WorkflowOwnedDefinitionRecord),
-    AddWorkflowOutcomeFromWorkflow(WorkflowSlug, WorkflowOutcomeRecord),
-    AddWorkflowTransitionEvidenceFromWorkflow(WorkflowSlug, WorkflowTransitionEvidenceRecord),
-    AddWorkflowEntryLifecycleStateFromWorkflow(WorkflowSlug, WorkflowEntryLifecycleStateRecord),
+    AddWorkflowCommandErrorFromWorkflow(WorkflowCommandErrorEffect),
+    AddWorkflowOwnedDefinitionFromWorkflow(WorkflowOwnedDefinitionEffect),
+    AddWorkflowOutcomeFromWorkflow(WorkflowOutcomeEffect),
+    AddWorkflowTransitionEvidenceFromWorkflow(WorkflowTransitionEvidenceEffect),
+    AddWorkflowEntryLifecycleStateFromWorkflow(WorkflowEntryLifecycleStateEffect),
     CheckCurrentProject,
     ConnectWorkflowFromWorkflow(WorkflowConnection),
-    CopyDirectory(ProjectPath, ProjectPath),
     EnsureDirectory(ProjectPath),
     ExportEvent(EventDraft),
-    Fail(ReportLine),
     ListConflictsFromEvents,
     ListSlicesFromIndex,
     ListTransitionsFromIndex,
     ListWorkflowsFromIndex,
-    RequireCanonicalDeclaration(ProjectPath, ArtifactMarker, ArtifactMarker, ReportLine),
-    RequireDigest(ProjectPath, ArtifactDigest, ReportLine),
+    RequireCanonicalDeclaration(CanonicalDeclarationRequirement),
+    RequireDigest(ArtifactDigestRequirement),
     RequireFile(ProjectPath),
-    RequireFileContents(ProjectPath, FileContents, ReportLine),
-    RequireFileContentsWithAuthoredFormalFacts(ProjectPath, FileContents, ReportLine),
-    RequireJsonObjectKeysUnique(ProjectPath, ReportLine),
-    RequireOnlyModeledArtifacts(
-        ProjectPath,
-        ArtifactFileExtension,
-        Vec<ProjectPath>,
-        ReportLine,
-    ),
-    RequireReviewRecord(ProjectPath, WorkflowSlug, ReportLine),
+    RequireFileContentsWithAuthoredFormalFacts(FileContentsRequirement),
+    RequireOnlyModeledArtifacts(ModeledArtifactsRequirement),
+    RequireReviewRecord(ReviewRecordRequirement),
     RunProcess(ProcessInvocation),
-    RecordCleanReviewFromWorkflow(WorkflowSlug, ReviewerId, ReviewTimestamp),
-    DeclareWorkflowReadinessFromWorkflow {
-        workflow: WorkflowSlug,
-        projection_fingerprint: ArtifactDigest,
-        model_content_digest: ArtifactDigest,
-        verified_at: ReviewTimestamp,
-        verified_by: ReviewerId,
-        review_event_id: Option<ArtifactDigest>,
-    },
+    RecordCleanReviewFromWorkflow(CleanReviewEffect),
+    DeclareWorkflowReadinessFromWorkflow(WorkflowReadinessEffect),
     RequireWorkflowEntryLifecycleCoverageFromWorkflow(WorkflowSlug),
-    RemoveDirectory(ProjectPath),
     RemoveFile(ProjectPath),
     RemoveSliceFromWorkflow(SliceSlug),
     RemoveTransitionFromWorkflow(WorkflowTransitionRemoval),
     RemoveWorkflowFromIndex(WorkflowSlug),
-    ResolveEventConflict(ArtifactDigest, ArtifactDigest),
+    ResolveEventConflict(EventConflictResolution),
     ShowSliceFromSlice(SliceSlug),
     ShowWorkflowFromWorkflow(WorkflowSlug),
-    UpdateSliceDescriptionFromWorkflow(SliceSlug, ModelDescription),
-    UpdateSliceKindFromWorkflow(SliceSlug, SliceKind),
-    UpdateSliceNameFromWorkflow(SliceSlug, ModelName),
-    UpdateWorkflowDescriptionFromIndexAndWorkflow(WorkflowSlug, ModelDescription),
-    UpdateWorkflowNameFromIndexAndWorkflow(WorkflowSlug, ModelName),
+    UpdateSliceDescriptionFromWorkflow(SliceDescriptionUpdateEffect),
+    UpdateSliceKindFromWorkflow(SliceKindUpdateEffect),
+    UpdateSliceNameFromWorkflow(SliceNameUpdateEffect),
+    UpdateWorkflowDescriptionFromIndexAndWorkflow(WorkflowDescriptionUpdateEffect),
+    UpdateWorkflowNameFromIndexAndWorkflow(WorkflowNameUpdateEffect),
     VerifyProjectFromIndex,
-    WriteFile(ProjectPath, FileContents),
-    WriteFormalSliceArtifactPreservingAuthoredFacts(ProjectPath, ProjectPath, FileContents),
-    WriteFileIfMissing(ProjectPath, FileContents),
+    WriteFile(FileWriteEffect),
+    WriteFormalSliceArtifactPreservingAuthoredFacts(FormalSliceArtifactWriteEffect),
+    WriteFileIfMissing(FileWriteEffect),
     Report(ReportLine),
     ReportDocument(FileContents),
+}
+
+impl Effect {
+    pub(crate) fn require_canonical_declaration(
+        path: ProjectPath,
+        prefix: CanonicalDeclarationPrefix,
+        marker: CanonicalDeclarationMarker,
+        message: ReportLine,
+    ) -> Self {
+        Self::RequireCanonicalDeclaration(CanonicalDeclarationRequirement::new(
+            path, prefix, marker, message,
+        ))
+    }
+
+    pub(crate) fn require_digest(
+        path: ProjectPath,
+        digest: ArtifactDigest,
+        message: ReportLine,
+    ) -> Self {
+        Self::RequireDigest(ArtifactDigestRequirement::new(path, digest, message))
+    }
+
+    pub(crate) fn require_file_contents_with_authored_formal_facts(
+        path: ProjectPath,
+        expected: FileContents,
+        message: ReportLine,
+    ) -> Self {
+        Self::RequireFileContentsWithAuthoredFormalFacts(FileContentsRequirement::new(
+            path, expected, message,
+        ))
+    }
+
+    pub(crate) fn require_only_modeled_artifacts(
+        path: ProjectPath,
+        extension: ArtifactFileExtension,
+        allowed_paths: Vec<ProjectPath>,
+        message: ReportLine,
+    ) -> Self {
+        Self::RequireOnlyModeledArtifacts(ModeledArtifactsRequirement::new(
+            path,
+            extension,
+            ModeledArtifactPaths::new(allowed_paths),
+            message,
+        ))
+    }
+
+    pub(crate) fn require_review_record(
+        path: ProjectPath,
+        workflow_slug: WorkflowSlug,
+        message: ReportLine,
+    ) -> Self {
+        Self::RequireReviewRecord(ReviewRecordRequirement::new(path, workflow_slug, message))
+    }
+
+    pub(crate) fn write_file(path: ProjectPath, contents: FileContents) -> Self {
+        Self::WriteFile(FileWriteEffect::new(path, contents))
+    }
+
+    pub(crate) fn write_formal_slice_artifact_preserving_authored_facts(
+        source: ProjectPath,
+        target: ProjectPath,
+        generated: FileContents,
+    ) -> Self {
+        Self::WriteFormalSliceArtifactPreservingAuthoredFacts(FormalSliceArtifactWriteEffect::new(
+            source, target, generated,
+        ))
+    }
+
+    pub(crate) fn write_file_if_missing(path: ProjectPath, contents: FileContents) -> Self {
+        Self::WriteFileIfMissing(FileWriteEffect::new(path, contents))
+    }
+
+    pub(crate) fn declare_workflow_readiness(
+        workflow_slug: WorkflowSlug,
+        projection_fingerprint: ProjectionFingerprint,
+        model_content_digest: ModelContentDigest,
+        verified_at: ReviewTimestamp,
+        verified_by: ReviewerId,
+        review_event: ReviewEventReference,
+    ) -> Self {
+        Self::DeclareWorkflowReadinessFromWorkflow(WorkflowReadinessEffect::new(
+            workflow_slug,
+            projection_fingerprint,
+            model_content_digest,
+            verified_at,
+            verified_by,
+            review_event,
+        ))
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -106,13 +823,13 @@ impl EffectPlan {
         }
     }
 
-    pub fn effects(&self) -> &Effects {
+    pub(crate) fn effects(&self) -> &Effects {
         &self.effects
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Effects {
+pub(crate) struct Effects {
     effects: Vec<Effect>,
 }
 
@@ -121,13 +838,13 @@ impl Effects {
         Self { effects }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Effect> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &Effect> {
         self.effects.iter()
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ProcessInvocation {
+pub(crate) struct ProcessInvocation {
     program: ProgramName,
     arguments: ProcessArguments,
     success: ReportLine,
@@ -146,21 +863,21 @@ impl ProcessInvocation {
         }
     }
 
-    pub fn program(&self) -> &ProgramName {
+    pub(crate) fn program(&self) -> &ProgramName {
         &self.program
     }
 
-    pub fn arguments(&self) -> &ProcessArguments {
+    pub(crate) fn arguments(&self) -> &ProcessArguments {
         &self.arguments
     }
 
-    pub fn success(&self) -> &ReportLine {
+    pub(crate) fn success(&self) -> &ReportLine {
         &self.success
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ProcessArguments {
+pub(crate) struct ProcessArguments {
     arguments: Vec<ProcessArgument>,
 }
 
@@ -169,7 +886,7 @@ impl ProcessArguments {
         Self { arguments }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &ProcessArgument> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &ProcessArgument> {
         self.arguments.iter()
     }
 }
@@ -185,45 +902,48 @@ fn is_project_relative_path(value: &str) -> bool {
     validate(not_empty, predicate = is_project_relative_path),
     derive(Debug, Clone, Eq, PartialEq, AsRef)
 )]
-pub struct ProjectPath(String);
+pub(crate) struct ProjectPath(String);
 
 #[nutype(validate(not_empty), derive(Debug, Clone, Eq, PartialEq, AsRef))]
-pub struct FileContents(String);
+pub(crate) struct FileContents(String);
 
 #[nutype(
     sanitize(trim),
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef)
 )]
-pub struct ReportLine(String);
+pub(crate) struct ReportLine(String);
 
 #[nutype(
     sanitize(trim),
     validate(not_empty),
-    derive(Debug, Clone, Eq, PartialEq, AsRef)
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Serialize, Deserialize)
 )]
 pub struct ArtifactDigest(String);
 
 #[nutype(validate(not_empty), derive(Debug, Clone, Eq, PartialEq, AsRef))]
-pub struct ArtifactMarker(String);
+pub(crate) struct CanonicalDeclarationPrefix(String);
+
+#[nutype(validate(not_empty), derive(Debug, Clone, Eq, PartialEq, AsRef))]
+pub(crate) struct CanonicalDeclarationMarker(String);
 
 #[nutype(
     sanitize(trim),
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef)
 )]
-pub struct ArtifactFileExtension(String);
+pub(crate) struct ArtifactFileExtension(String);
 
 #[nutype(
     sanitize(trim),
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef)
 )]
-pub struct ProgramName(String);
+pub(crate) struct ProgramName(String);
 
 #[nutype(
     sanitize(trim),
     validate(not_empty),
     derive(Debug, Clone, Eq, PartialEq, AsRef)
 )]
-pub struct ProcessArgument(String);
+pub(crate) struct ProcessArgument(String);

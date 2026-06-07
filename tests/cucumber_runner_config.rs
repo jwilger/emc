@@ -9,8 +9,6 @@ mod tests {
     use std::path::Path;
 
     use assert_cmd::Command;
-    use emc::core::effect::Effect;
-    use emc::core::gherkin::run_all_gherkin_suites;
     use predicates::prelude::PredicateBooleanExt;
     use predicates::prelude::predicate;
     use tempfile::TempDir;
@@ -65,42 +63,6 @@ mod tests {
         assert_eq!(read_to_string(cargo_log)?, "test --test review_gate\n");
 
         Ok(())
-    }
-
-    #[test]
-    fn gherkin_runner_run_all_executes_every_configured_suite() -> Result<(), Box<dyn Error>> {
-        let plan = run_all_gherkin_suites();
-        let commands = plan
-            .effects()
-            .iter()
-            .map(run_process_command)
-            .collect::<Result<Vec<_>, _>>()?;
-
-        assert_eq!(
-            commands,
-            vec![
-                "cargo test --test review_gate",
-                "cargo test --test cucumber_runner_config",
-            ]
-        );
-
-        Ok(())
-    }
-
-    fn run_process_command(effect: &Effect) -> Result<String, Box<dyn Error>> {
-        match effect {
-            Effect::RunProcess(invocation) => Ok(format!(
-                "{} {}",
-                invocation.program().as_ref(),
-                invocation
-                    .arguments()
-                    .iter()
-                    .map(|argument| argument.as_ref())
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            )),
-            _ => Err("expected a run-process effect".into()),
-        }
     }
 
     fn create_fake_cargo(tool_dir: &Path, log_path: &Path) -> Result<(), Box<dyn Error>> {

@@ -10,21 +10,21 @@ use crate::core::types::{
     WorkflowTransitionEvidenceRecords, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 
-pub struct WorkflowArtifactDigestInput {
-    pub workflow_name: ModelName,
-    pub workflow_slug: WorkflowSlug,
-    pub workflow_description: ModelDescription,
-    pub workflow_slice_details: WorkflowSliceDetails,
-    pub workflow_transitions: WorkflowTransitionRecords,
-    pub workflow_outcomes: WorkflowOutcomeRecords,
-    pub workflow_command_errors: WorkflowCommandErrorRecords,
-    pub workflow_owned_definitions: WorkflowOwnedDefinitionRecords,
-    pub workflow_transition_evidences: WorkflowTransitionEvidenceRecords,
-    pub workflow_requires_entry_lifecycle_coverage: bool,
-    pub workflow_entry_lifecycle_states: WorkflowEntryLifecycleStateRecords,
+pub(crate) struct WorkflowArtifactDigestInput {
+    pub(crate) workflow_name: ModelName,
+    pub(crate) workflow_slug: WorkflowSlug,
+    pub(crate) workflow_description: ModelDescription,
+    pub(crate) workflow_slice_details: WorkflowSliceDetails,
+    pub(crate) workflow_transitions: WorkflowTransitionRecords,
+    pub(crate) workflow_outcomes: WorkflowOutcomeRecords,
+    pub(crate) workflow_command_errors: WorkflowCommandErrorRecords,
+    pub(crate) workflow_owned_definitions: WorkflowOwnedDefinitionRecords,
+    pub(crate) workflow_transition_evidences: WorkflowTransitionEvidenceRecords,
+    pub(crate) workflow_requires_entry_lifecycle_coverage: bool,
+    pub(crate) workflow_entry_lifecycle_states: WorkflowEntryLifecycleStateRecords,
 }
 
-pub fn artifact_digest(input: WorkflowArtifactDigestInput) -> ArtifactDigest {
+pub(crate) fn artifact_digest(input: WorkflowArtifactDigestInput) -> ArtifactDigest {
     ArtifactDigest::try_new(format!(
         "workflow:name={};slug={};description={};slices={};transitions={};outcomes={};command_errors={};owned_definitions={};transition_evidences={};entry_lifecycle_required={};entry_lifecycle_states={}",
         input.workflow_name,
@@ -44,7 +44,7 @@ pub fn artifact_digest(input: WorkflowArtifactDigestInput) -> ArtifactDigest {
     })
 }
 
-pub fn slice_artifact_digest(
+pub(crate) fn slice_artifact_digest(
     slice_name: ModelName,
     slice_slug: SliceSlug,
     slice_kind: SliceKindName,

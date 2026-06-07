@@ -12,7 +12,7 @@ use crate::core::types::{
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct FormalWorkflowFactError {
+pub(crate) struct FormalWorkflowFactError {
     message: String,
 }
 
@@ -32,7 +32,7 @@ impl Display for FormalWorkflowFactError {
 
 impl Error for FormalWorkflowFactError {}
 
-pub fn add_workflow_outcome(
+pub(crate) fn add_workflow_outcome(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -54,8 +54,8 @@ pub fn add_workflow_outcome(
     )?)?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added workflow outcome {} to workflow {}",
             outcome.label().as_ref(),
@@ -64,7 +64,7 @@ pub fn add_workflow_outcome(
     ]))
 }
 
-pub fn add_workflow_command_error(
+pub(crate) fn add_workflow_command_error(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -86,8 +86,8 @@ pub fn add_workflow_command_error(
     )?)?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added workflow command error {} to workflow {}",
             error.error_name().as_ref(),
@@ -96,7 +96,7 @@ pub fn add_workflow_command_error(
     ]))
 }
 
-pub fn add_workflow_owned_definition(
+pub(crate) fn add_workflow_owned_definition(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -118,8 +118,8 @@ pub fn add_workflow_owned_definition(
     )?)?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added workflow owned definition {} {} to workflow {}",
             definition.definition_kind().as_ref(),
@@ -129,7 +129,7 @@ pub fn add_workflow_owned_definition(
     ]))
 }
 
-pub fn add_workflow_transition_evidence(
+pub(crate) fn add_workflow_transition_evidence(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -151,8 +151,8 @@ pub fn add_workflow_transition_evidence(
     )?)?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added workflow transition evidence {} {} to workflow {}",
             evidence.kind().as_ref(),
@@ -162,7 +162,7 @@ pub fn add_workflow_transition_evidence(
     ]))
 }
 
-pub fn require_workflow_entry_lifecycle_coverage(
+pub(crate) fn require_workflow_entry_lifecycle_coverage(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -181,8 +181,8 @@ pub fn require_workflow_entry_lifecycle_coverage(
     )?)?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "marked workflow {} as requiring entry lifecycle coverage",
             workflow_slug.as_ref()
@@ -190,7 +190,7 @@ pub fn require_workflow_entry_lifecycle_coverage(
     ]))
 }
 
-pub fn add_workflow_entry_lifecycle_state(
+pub(crate) fn add_workflow_entry_lifecycle_state(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -212,8 +212,8 @@ pub fn add_workflow_entry_lifecycle_state(
     )?)?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added workflow entry lifecycle state {} to workflow {}",
             coverage.state().as_ref(),

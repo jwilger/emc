@@ -52,27 +52,27 @@ impl NewWorkflow {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct IndexedWorkflowGraph {
+pub(crate) struct IndexedWorkflowGraph {
     slug: WorkflowSlug,
     graph: FormalWorkflowGraph,
 }
 
 impl IndexedWorkflowGraph {
-    pub fn new(slug: WorkflowSlug, graph: FormalWorkflowGraph) -> Self {
+    pub(crate) fn new(slug: WorkflowSlug, graph: FormalWorkflowGraph) -> Self {
         Self { slug, graph }
     }
 
-    pub fn slug(&self) -> &WorkflowSlug {
+    pub(crate) fn slug(&self) -> &WorkflowSlug {
         &self.slug
     }
 
-    pub fn graph(&self) -> &FormalWorkflowGraph {
+    pub(crate) fn graph(&self) -> &FormalWorkflowGraph {
         &self.graph
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct IndexedWorkflowGraphs {
+pub(crate) struct IndexedWorkflowGraphs {
     graphs: Vec<IndexedWorkflowGraph>,
 }
 
@@ -86,7 +86,7 @@ impl IndexedWorkflowGraphs {
     }
 }
 
-pub fn add_workflow(
+pub(crate) fn add_workflow(
     project_name: ProjectName,
     existing_workflows: ModeledWorkflowLayouts,
     existing_slice_memberships: ProjectSliceMemberships,
@@ -102,7 +102,7 @@ pub fn add_workflow(
     ))
 }
 
-pub fn update_workflow_description(
+pub(crate) fn update_workflow_description(
     existing_workflows: ModeledWorkflowLayouts,
     workflow_graph: FormalWorkflowGraph,
     slug: WorkflowSlug,
@@ -150,7 +150,7 @@ pub fn update_workflow_description(
     ))
 }
 
-pub fn update_workflow_name(
+pub(crate) fn update_workflow_name(
     existing_workflows: ModeledWorkflowLayouts,
     workflow_graph: FormalWorkflowGraph,
     slug: WorkflowSlug,
@@ -214,7 +214,7 @@ pub fn update_workflow_name(
     ))
 }
 
-pub fn remove_workflow(
+pub(crate) fn remove_workflow(
     project_name: ProjectName,
     existing_workflows: ModeledWorkflowLayouts,
     workflow_graphs: IndexedWorkflowGraphs,
@@ -357,7 +357,7 @@ fn workflow_effect_plan(
         )
         .into_iter()
         .chain([
-            Effect::WriteFile(
+            Effect::write_file(
                 project_path(format!("model/lean/{module_name}.lean")),
                 emit_lean_workflow_module(
                     lean_module_name,
@@ -369,7 +369,7 @@ fn workflow_effect_plan(
                     ),
                 ),
             ),
-            Effect::WriteFile(
+            Effect::write_file(
                 project_path(format!("model/quint/{module_name}.qnt")),
                 emit_quint_workflow_module(
                     quint_module_name,
@@ -418,7 +418,7 @@ fn incoming_workflow_reference(
         .as_slice()
         .iter()
         .any(|transition| {
-            transition.kind().as_ref().starts_with("workflow_exit:")
+            transition.kind().is_workflow_exit()
                 && transition.target().as_ref() == removed_slug.as_ref()
         })
         .then(|| Ok(graph.slug().clone()))
@@ -498,7 +498,7 @@ fn update_workflow_effect_plan(
         cleanup_effects
             .chain([
                 Effect::ExportEvent(EventDraft::workflow_updated(&workflow)),
-                Effect::WriteFile(
+                Effect::write_file(
                     project_path(format!("model/lean/{module_name}.lean")),
                     emit_lean_workflow_module(
                         lean_module_name,
@@ -534,7 +534,7 @@ fn update_workflow_effect_plan(
                         ),
                     ),
                 ),
-                Effect::WriteFile(
+                Effect::write_file(
                     project_path(format!("model/quint/{module_name}.qnt")),
                     emit_quint_workflow_module(
                         quint_module_name,

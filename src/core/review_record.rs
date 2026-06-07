@@ -6,12 +6,12 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 use serde_json::{Map, Value, json};
 
 use crate::core::effect::{
-    ArtifactDigest, Effect, EffectPlan, FileContents, ProjectPath, ReportLine,
+    ArtifactDigest, Effect, EffectPlan, FileContents, ModelContentDigest, ProjectPath, ReportLine,
 };
 use crate::core::types::{ReviewRuleName, ReviewStatus, ReviewTimestamp, ReviewerId, WorkflowSlug};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct RequiredReviewCategories {
+pub(crate) struct RequiredReviewCategories {
     categories: Vec<ReviewRuleName>,
 }
 
@@ -25,15 +25,15 @@ impl RequiredReviewCategories {
     }
 }
 
-pub fn record_clean_review(
+pub(crate) fn record_clean_review(
     workflow_slug: WorkflowSlug,
-    model_content_digest: ArtifactDigest,
+    model_content_digest: ModelContentDigest,
     reviewer_id: ReviewerId,
     reviewed_at: ReviewTimestamp,
     required_categories: RequiredReviewCategories,
 ) -> Result<EffectPlan, ReviewRecordDocumentError> {
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(
+        Effect::write_file(
             review_record_path(&workflow_slug)?,
             clean_review_record_contents(
                 &workflow_slug,
@@ -56,7 +56,7 @@ fn review_record_path(
 
 fn clean_review_record_contents(
     workflow_slug: &WorkflowSlug,
-    model_content_digest: &ArtifactDigest,
+    model_content_digest: &ModelContentDigest,
     reviewer_id: &ReviewerId,
     reviewed_at: &ReviewTimestamp,
     required_categories: &[ReviewRuleName],
@@ -64,14 +64,17 @@ fn clean_review_record_contents(
     let category_results = required_categories
         .iter()
         .fold(Map::new(), |mut results, category| {
-            results.insert(category.as_ref().to_owned(), json!("clean"));
+            results.insert(
+                category.as_ref().to_owned(),
+                json!(ReviewStatus::Clean.as_ref()),
+            );
             results
         });
     let document = json!({
         "workflow_slug": workflow_slug.as_ref(),
         "model_content_digest": model_content_digest.as_ref(),
         "reviewer_id": reviewer_id.as_ref(),
-        "status": "clean",
+        "status": ReviewStatus::Clean.as_ref(),
         "category_results": category_results,
         "mandatory_findings": [],
         "reviewed_at": reviewed_at.as_ref()
@@ -95,111 +98,221 @@ fn recorded_clean_review_report(
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ReviewRecordDocument {
-    value: Value,
+pub(crate) struct ReviewRecordDocument {
+    workflow_slug: Option<WorkflowSlug>,
+    model_content_digest: Option<ModelContentDigest>,
+    status: Option<ReviewStatus>,
+    category_results: Option<Vec<ReviewCategoryResult>>,
+    mandatory_findings: Option<Vec<MandatoryReviewFinding>>,
 }
 
 impl ReviewRecordDocument {
-    pub fn parse(contents: &FileContents) -> Result<Self, ReviewRecordDocumentError> {
+    pub(crate) fn parse(contents: &FileContents) -> Result<Self, ReviewRecordDocumentError> {
         let value = serde_json::from_str::<Value>(contents.as_ref()).map_err(|error| {
             ReviewRecordDocumentError::new(format!("invalid review record JSON: {error}"))
         })?;
-        value
+        let object = value
             .as_object()
             .ok_or_else(|| ReviewRecordDocumentError::new("review record must be a JSON object"))?;
-        Ok(Self { value })
-    }
-
-    pub fn matches_workflow(&self, workflow_slug: &WorkflowSlug) -> bool {
-        self.string_field("workflow_slug")
-            .is_some_and(|observed| observed == workflow_slug.as_ref())
-    }
-
-    pub fn workflow_slug(&self) -> Option<WorkflowSlug> {
-        self.string_field("workflow_slug")
-            .and_then(|slug| WorkflowSlug::try_new(slug.to_owned()).ok())
-    }
-
-    pub fn is_clean(&self) -> bool {
-        self.status()
-            .is_some_and(|status| status.as_ref() == "clean")
-    }
-
-    pub fn model_content_digest_matches(&self, digest: &ArtifactDigest) -> bool {
-        self.string_field("model_content_digest")
-            .is_some_and(|observed| observed == digest.as_ref())
-    }
-
-    pub fn current_mandatory_findings_include(&self, digest: &ArtifactDigest) -> bool {
-        self.object()
-            .and_then(|object| object.get("mandatory_findings"))
-            .and_then(Value::as_array)
-            .is_some_and(|findings| {
-                findings.iter().any(|finding| {
-                    finding.get("model_content_digest").and_then(Value::as_str)
-                        == Some(digest.as_ref())
+        Ok(Self {
+            workflow_slug: optional_string_field(object, "workflow_slug")?
+                .map(|slug| {
+                    WorkflowSlug::try_new(slug.to_owned()).map_err(|error| {
+                        ReviewRecordDocumentError::new(format!(
+                            "invalid review record workflow slug: {error}"
+                        ))
+                    })
                 })
-            })
+                .transpose()?,
+            model_content_digest: optional_string_field(object, "model_content_digest")?
+                .map(|digest| {
+                    ArtifactDigest::try_new(digest.to_owned())
+                        .map(ModelContentDigest::new)
+                        .map_err(|error| {
+                            ReviewRecordDocumentError::new(format!(
+                                "invalid review record model content digest: {error}"
+                            ))
+                        })
+                })
+                .transpose()?,
+            status: optional_string_field(object, "status")?
+                .map(|status| {
+                    ReviewStatus::try_new(status.to_owned()).map_err(|error| {
+                        ReviewRecordDocumentError::new(format!(
+                            "invalid review record status: {error}"
+                        ))
+                    })
+                })
+                .transpose()?,
+            category_results: parse_category_results(object)?,
+            mandatory_findings: parse_mandatory_findings(object)?,
+        })
     }
 
-    pub fn has_mandatory_findings(&self) -> bool {
-        self.object()
-            .and_then(|object| object.get("mandatory_findings"))
-            .and_then(Value::as_array)
+    pub(crate) fn matches_workflow(&self, workflow_slug: &WorkflowSlug) -> bool {
+        self.workflow_slug.as_ref() == Some(workflow_slug)
+    }
+
+    pub(crate) fn workflow_slug(&self) -> Option<WorkflowSlug> {
+        self.workflow_slug.clone()
+    }
+
+    pub(crate) fn is_clean(&self) -> bool {
+        self.status == Some(ReviewStatus::Clean)
+    }
+
+    pub(crate) fn model_content_digest_matches(&self, digest: &ModelContentDigest) -> bool {
+        self.model_content_digest.as_ref() == Some(digest)
+    }
+
+    pub(crate) fn current_mandatory_findings_include(&self, digest: &ModelContentDigest) -> bool {
+        self.mandatory_findings.as_deref().is_some_and(|findings| {
+            findings
+                .iter()
+                .any(|finding| finding.model_content_digest.as_ref() == Some(digest))
+        })
+    }
+
+    pub(crate) fn has_mandatory_findings(&self) -> bool {
+        self.mandatory_findings
+            .as_deref()
             .is_some_and(|findings| !findings.is_empty())
     }
 
-    pub fn first_non_clean_category(
+    pub(crate) fn first_non_clean_category(
         &self,
         required_categories: &[ReviewRuleName],
     ) -> Option<ReviewCategoryFinding> {
-        let category_results = self
-            .object()
-            .and_then(|object| object.get("category_results"))
-            .and_then(Value::as_object)?;
+        let category_results = self.category_results.as_deref()?;
         required_categories.iter().find_map(|category| {
             match category_results
-                .get(category.as_ref())
-                .and_then(Value::as_str)
+                .iter()
+                .find(|result| result.category == *category)
+                .map(|result| result.status)
             {
-                Some("clean") => None,
-                Some(_) => Some(ReviewCategoryFinding::NotClean(category.clone())),
-                None => Some(ReviewCategoryFinding::Missing(category.clone())),
+                Some(ReviewStatus::Clean) => None,
+                Some(_status) => Some(ReviewCategoryFinding::NotClean(*category)),
+                None => Some(ReviewCategoryFinding::Missing(*category)),
             }
         })
     }
 
-    pub fn has_category_results(&self) -> bool {
-        self.object()
-            .and_then(|object| object.get("category_results"))
-            .and_then(Value::as_object)
-            .is_some()
-    }
-
-    fn status(&self) -> Option<ReviewStatus> {
-        self.string_field("status")
-            .and_then(|status| ReviewStatus::try_new(status.to_owned()).ok())
-    }
-
-    fn string_field(&self, field: &str) -> Option<&str> {
-        self.object()
-            .and_then(|object| object.get(field))
-            .and_then(Value::as_str)
-    }
-
-    fn object(&self) -> Option<&serde_json::Map<String, Value>> {
-        self.value.as_object()
+    pub(crate) fn has_category_results(&self) -> bool {
+        self.category_results.is_some()
     }
 }
 
+fn optional_string_field<'a>(
+    object: &'a Map<String, Value>,
+    field: &str,
+) -> Result<Option<&'a str>, ReviewRecordDocumentError> {
+    match object.get(field) {
+        Some(Value::String(value)) => Ok(Some(value.as_str())),
+        Some(_value) => Err(ReviewRecordDocumentError::new(format!(
+            "review record field '{field}' must be a string"
+        ))),
+        None => Ok(None),
+    }
+}
+
+fn parse_category_results(
+    object: &Map<String, Value>,
+) -> Result<Option<Vec<ReviewCategoryResult>>, ReviewRecordDocumentError> {
+    object
+        .get("category_results")
+        .map(|value| {
+            let results = value.as_object().ok_or_else(|| {
+                ReviewRecordDocumentError::new("review record category_results must be an object")
+            })?;
+            results
+                .iter()
+                .map(|(category, status)| {
+                    let status = status.as_str().ok_or_else(|| {
+                        ReviewRecordDocumentError::new(format!(
+                            "review record category '{category}' status must be a string"
+                        ))
+                    })?;
+                    Ok(ReviewCategoryResult {
+                        category: ReviewRuleName::try_new(category.to_owned()).map_err(
+                            |error| {
+                                ReviewRecordDocumentError::new(format!(
+                                    "invalid review record category: {error}"
+                                ))
+                            },
+                        )?,
+                        status: ReviewStatus::try_new(status.to_owned()).map_err(|error| {
+                            ReviewRecordDocumentError::new(format!(
+                                "invalid review record category status: {error}"
+                            ))
+                        })?,
+                    })
+                })
+                .collect()
+        })
+        .transpose()
+}
+
+fn parse_mandatory_findings(
+    object: &Map<String, Value>,
+) -> Result<Option<Vec<MandatoryReviewFinding>>, ReviewRecordDocumentError> {
+    object
+        .get("mandatory_findings")
+        .map(|value| {
+            let findings = value.as_array().ok_or_else(|| {
+                ReviewRecordDocumentError::new("review record mandatory_findings must be an array")
+            })?;
+            findings
+                .iter()
+                .map(|finding| {
+                    let model_content_digest = finding
+                        .as_object()
+                        .and_then(|finding_object| finding_object.get("model_content_digest"))
+                        .map(|digest| {
+                            digest.as_str().ok_or_else(|| {
+                                ReviewRecordDocumentError::new(
+                                    "review record mandatory finding model_content_digest must be a string",
+                                )
+                            })
+                        })
+                        .transpose()?
+                        .map(|digest| {
+                            ArtifactDigest::try_new(digest.to_owned())
+                                .map(ModelContentDigest::new)
+                                .map_err(|error| {
+                                    ReviewRecordDocumentError::new(format!(
+                                        "invalid review record mandatory finding digest: {error}"
+                                    ))
+                                })
+                        })
+                        .transpose()?;
+                    Ok(MandatoryReviewFinding {
+                        model_content_digest,
+                    })
+                })
+                .collect()
+        })
+        .transpose()
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum ReviewCategoryFinding {
+struct ReviewCategoryResult {
+    category: ReviewRuleName,
+    status: ReviewStatus,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct MandatoryReviewFinding {
+    model_content_digest: Option<ModelContentDigest>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum ReviewCategoryFinding {
     Missing(ReviewRuleName),
     NotClean(ReviewRuleName),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ReviewRecordDocumentError {
+pub(crate) struct ReviewRecordDocumentError {
     message: String,
 }
 
