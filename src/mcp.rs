@@ -17,21 +17,21 @@ use crate::command;
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::effect::ArtifactDigest;
 use crate::core::formal_slice_facts::{
-    CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain,
+    CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, CommandInputSource,
     CommandObservedStreams, EmittedEventNames, NewAutomationDefinition, NewBitLevelDataFlow,
     NewBoardConnection, NewBoardElement, NewCommandDefinition, NewCommandErrorDefinition,
     NewCommandInput, NewControlDefinition, NewControlInputProvision, NewEventAttribute,
     NewEventDefinition, NewExternalPayloadDefinition, NewNavigationTarget, NewOutcomeDefinition,
     NewReadModelDefinition, NewReadModelField, NewSliceScenario, NewTranslationDefinition,
     NewViewDefinition, NewViewField, OutcomeEventNames, ReadModelDerivationSourceFields,
-    ReadModelRelationshipFields, ScenarioKind, ScenarioStreamNames, ViewControls, ViewFilters,
-    ViewLocalStates,
+    ReadModelFieldSource, ReadModelRelationshipFields, ScenarioKind, ScenarioStreamNames,
+    ViewControls, ViewFilters, ViewLocalStates,
 };
 use crate::core::slice::NewSlice;
 use crate::core::types::{
-    SingletonRepeatBehavior, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
-    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceRecord,
+    CommandInputSourceKind, ReadModelFieldSourceKind, SingletonRepeatBehavior,
+    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionRecord, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
@@ -46,25 +46,26 @@ use crate::io::dto::{
     parse_data_flow_source_kind, parse_data_flow_target, parse_datum_name, parse_datum_names,
     parse_event_attribute_name, parse_event_attribute_source_field,
     parse_event_attribute_source_kind, parse_event_attribute_source_name, parse_event_name,
-    parse_event_names, parse_model_description, parse_model_name, parse_navigation_target_name,
-    parse_navigation_target_names, parse_navigation_target_type, parse_outcome_label_name,
-    parse_payload_contract_name, parse_project_name, parse_provenance_description,
-    parse_read_model_derivation_rule, parse_read_model_field_source_kind, parse_read_model_name,
-    parse_read_model_transitive_rule, parse_review_timestamp, parse_reviewer_id,
-    parse_scenario_name, parse_scenario_step_text, parse_singleton_repeat_behavior,
-    parse_sketch_token, parse_slice_kind, parse_slice_slug, parse_source_chain_hops,
-    parse_stream_name, parse_stream_names, parse_transformation_semantics,
-    parse_transition_trigger_name, parse_translation_external_event_name, parse_translation_name,
-    parse_view_field_name, parse_view_field_source_kind, parse_view_name,
-    parse_workflow_entry_lifecycle_evidence_text, parse_workflow_entry_lifecycle_state_name,
-    parse_workflow_event_participation, parse_workflow_owned_definition_kind,
-    parse_workflow_owned_definition_name, parse_workflow_slug, parse_workflow_transition_endpoint,
-    parse_workflow_transition_evidence_text, parse_workflow_transition_kind,
+    parse_event_names, parse_generated_event_attribute_source_kind, parse_model_description,
+    parse_model_name, parse_navigation_target_name, parse_navigation_target_names,
+    parse_navigation_target_type, parse_outcome_label_name, parse_payload_contract_name,
+    parse_project_name, parse_provenance_description, parse_read_model_derivation_rule,
+    parse_read_model_field_source_kind, parse_read_model_name, parse_read_model_transitive_rule,
+    parse_review_timestamp, parse_reviewer_id, parse_scenario_kind, parse_scenario_name,
+    parse_scenario_step_text, parse_singleton_repeat_behavior, parse_sketch_token,
+    parse_slice_kind, parse_slice_slug, parse_source_chain_hops, parse_stream_name,
+    parse_stream_names, parse_transformation_semantics, parse_transition_trigger_name,
+    parse_translation_external_event_name, parse_translation_name, parse_view_field_name,
+    parse_view_field_source_kind, parse_view_name, parse_workflow_entry_lifecycle_evidence_text,
+    parse_workflow_entry_lifecycle_state_name, parse_workflow_event_participation,
+    parse_workflow_owned_definition_kind, parse_workflow_owned_definition_name,
+    parse_workflow_slug, parse_workflow_transition_endpoint, parse_workflow_transition_kind,
+    parse_workflow_transition_source_evidence_text, parse_workflow_transition_target_evidence_text,
     parse_workflow_view_role,
 };
 use crate::shell::{ShellError, interpret_collect_reports};
 
-pub fn serve_stdio() -> Result<(), ShellError> {
+pub(crate) fn serve_stdio() -> Result<(), ShellError> {
     let stdin = io::stdin();
     stdin.lock().lines().try_for_each(|line| {
         line.map_err(|error| ShellError::message(error.to_string()))
@@ -73,7 +74,7 @@ pub fn serve_stdio() -> Result<(), ShellError> {
     })
 }
 
-pub fn serve_http(
+pub(crate) fn serve_http(
     host: &str,
     port: u16,
     once: bool,
@@ -2016,7 +2017,7 @@ fn add_workflow_transition_evidence_tool_text(request: &Value) -> Result<String,
             ShellError::message("add_workflow_transition_evidence requires source_evidence")
         })
         .and_then(|raw_source_evidence| {
-            parse_workflow_transition_evidence_text(raw_source_evidence)
+            parse_workflow_transition_source_evidence_text(raw_source_evidence)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
     let target_evidence = arguments
@@ -2026,7 +2027,7 @@ fn add_workflow_transition_evidence_tool_text(request: &Value) -> Result<String,
             ShellError::message("add_workflow_transition_evidence requires target_evidence")
         })
         .and_then(|raw_target_evidence| {
-            parse_workflow_transition_evidence_text(raw_target_evidence)
+            parse_workflow_transition_target_evidence_text(raw_target_evidence)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
 
@@ -2184,7 +2185,10 @@ fn add_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
     let scenario_kind = arguments
         .get("kind")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_slice_scenario requires kind"))?;
+        .ok_or_else(|| ShellError::message("add_slice_scenario requires kind"))
+        .and_then(|raw_kind| {
+            parse_scenario_kind(raw_kind).map_err(|error| ShellError::message(error.to_string()))
+        })?;
     let name = arguments
         .get("name")
         .and_then(Value::as_str)
@@ -2218,7 +2222,7 @@ fn add_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
         })?;
 
     let scenario = match scenario_kind {
-        "acceptance" => NewSliceScenario::new(
+        ScenarioKind::Acceptance => NewSliceScenario::new(
             slice_slug,
             ScenarioKind::acceptance(),
             name,
@@ -2226,7 +2230,7 @@ fn add_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
             when,
             then,
         ),
-        "contract" => {
+        ScenarioKind::Contract => {
             let contract_kind = arguments
                 .get("contract_kind")
                 .and_then(Value::as_str)
@@ -2254,11 +2258,6 @@ fn add_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
                 contract_kind,
                 covered_definition,
             )
-        }
-        _ => {
-            return Err(ShellError::message(format!(
-                "invalid scenario kind: {scenario_kind}"
-            )));
         }
     };
     let scenario = apply_optional_scenario_streams(arguments, scenario)?;
@@ -2600,13 +2599,8 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
     let command_errors = parse_optional_command_errors(arguments)?;
 
     let singleton_repeat_behavior = parse_optional_singleton_repeat_behavior(arguments)?;
-    let command_input = NewCommandInput::new(
-        input_name,
+    let command_input_source = match (
         input_source,
-        input_description,
-        CommandInputProvenanceChain::from_hops(provenance_chain),
-    );
-    let command_input = match (
         source_event,
         source_attribute,
         source_payload,
@@ -2615,63 +2609,106 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         source_argument,
         source_field,
     ) {
-        (Some(event), Some(attribute), None, None, None, None, None) => {
-            command_input.with_event_stream_source(event, attribute)
+        (
+            CommandInputSourceKind::EventStreamState,
+            Some(event),
+            Some(attribute),
+            None,
+            None,
+            None,
+            None,
+            None,
+        ) => CommandInputSource::event_stream_state(event, attribute),
+        (
+            CommandInputSourceKind::ExternalPayload,
+            None,
+            None,
+            Some(payload),
+            None,
+            None,
+            None,
+            Some(field),
+        ) => CommandInputSource::external_payload(payload, field),
+        (
+            CommandInputSourceKind::Generated,
+            None,
+            None,
+            None,
+            Some(source),
+            None,
+            None,
+            Some(field),
+        ) => CommandInputSource::generated(source, field),
+        (
+            CommandInputSourceKind::Session,
+            None,
+            None,
+            None,
+            None,
+            Some(session),
+            None,
+            Some(field),
+        ) => CommandInputSource::session(session, field),
+        (
+            CommandInputSourceKind::InvocationArgument,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(argument),
+            Some(field),
+        ) => CommandInputSource::invocation_argument(argument, field),
+        (CommandInputSourceKind::Actor, None, None, None, None, None, None, None) => {
+            CommandInputSource::actor()
         }
-        (None, None, Some(payload), None, None, None, Some(field)) => {
-            command_input.with_external_payload_source(payload, field)
-        }
-        (None, None, None, Some(source), None, None, Some(field)) => {
-            command_input.with_generated_source(source, field)
-        }
-        (None, None, None, None, Some(session), None, Some(field)) => {
-            command_input.with_session_source(session, field)
-        }
-        (None, None, None, None, None, Some(argument), Some(field)) => {
-            command_input.with_invocation_argument_source(argument, field)
-        }
-        (None, None, None, None, None, None, None) => command_input,
-        (Some(_), None, None, None, None, None, None) => {
+        (_, Some(_), None, None, None, None, None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_attribute when source_event is provided",
             ));
         }
-        (None, Some(_), None, None, None, None, None) => {
+        (_, None, Some(_), None, None, None, None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_event when source_attribute is provided",
             ));
         }
-        (None, None, Some(_), None, None, None, None) => {
+        (_, None, None, Some(_), None, None, None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_field when source_payload is provided",
             ));
         }
-        (None, None, None, Some(_), None, None, None) => {
+        (_, None, None, None, Some(_), None, None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_field when source_name is provided",
             ));
         }
-        (None, None, None, None, Some(_), None, None) => {
+        (_, None, None, None, None, Some(_), None, None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_field when source_session is provided",
             ));
         }
-        (None, None, None, None, None, Some(_), None) => {
+        (_, None, None, None, None, None, Some(_), None) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_field when source_argument is provided",
             ));
         }
-        (None, None, None, None, None, None, Some(_)) => {
+        (_, None, None, None, None, None, None, Some(_)) => {
             return Err(ShellError::message(
                 "add_command_definition requires source_payload, source_name, source_session, or source_argument when source_field is provided",
             ));
         }
         _ => {
             return Err(ShellError::message(
-                "add_command_definition accepts one command input source reference at a time",
+                "add_command_definition requires input_source and source reference fields to describe the same command input source",
             ));
         }
     };
+    let command_input = NewCommandInput::new(
+        input_name,
+        command_input_source,
+        input_description,
+        CommandInputProvenanceChain::from_hops(provenance_chain),
+    );
     let command_definition = NewCommandDefinition::new(
         slice_slug,
         command_name,
@@ -3021,7 +3058,7 @@ fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError>
     let generated_source_kind = arguments
         .get("generated_source_kind")
         .and_then(Value::as_str)
-        .map(parse_event_attribute_source_kind)
+        .map(parse_generated_event_attribute_source_kind)
         .transpose()
         .map_err(|error| ShellError::message(error.to_string()))?;
     let provenance_description = arguments
@@ -3121,7 +3158,8 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
     let derivation_scenario = arguments.get("derivation_scenario").and_then(Value::as_str);
     let absence_event = arguments.get("absence_event").and_then(Value::as_str);
     let absence_scenario = arguments.get("absence_scenario").and_then(Value::as_str);
-    let read_model_field = match (
+    let read_model_source = match (
+        field_source_kind,
         source_event,
         source_attribute,
         derivation_rule,
@@ -3130,18 +3168,23 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
         absence_event,
         absence_scenario,
     ) {
-        (Some(raw_source_event), Some(raw_source_attribute), None, None, None, None, None) => {
-            NewReadModelField::new(
-                field_name,
-                field_source_kind,
-                parse_event_name(raw_source_event)
-                    .map_err(|error| ShellError::message(error.to_string()))?,
-                parse_event_attribute_name(raw_source_attribute)
-                    .map_err(|error| ShellError::message(error.to_string()))?,
-                provenance_description,
-            )
-        }
         (
+            ReadModelFieldSourceKind::EventAttribute,
+            Some(raw_source_event),
+            Some(raw_source_attribute),
+            None,
+            None,
+            None,
+            None,
+            None,
+        ) => ReadModelFieldSource::event_attribute(
+            parse_event_name(raw_source_event)
+                .map_err(|error| ShellError::message(error.to_string()))?,
+            parse_event_attribute_name(raw_source_attribute)
+                .map_err(|error| ShellError::message(error.to_string()))?,
+        ),
+        (
+            ReadModelFieldSourceKind::Derivation,
             None,
             None,
             Some(raw_derivation_rule),
@@ -3149,9 +3192,7 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
             Some(raw_derivation_scenario),
             None,
             None,
-        ) => NewReadModelField::new_derivation(
-            field_name,
-            field_source_kind,
+        ) => ReadModelFieldSource::derivation(
             parse_read_model_derivation_rule(raw_derivation_rule)
                 .map_err(|error| ShellError::message(error.to_string()))?,
             ReadModelDerivationSourceFields::from_fields(
@@ -3160,44 +3201,48 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
             ),
             parse_scenario_name(raw_derivation_scenario)
                 .map_err(|error| ShellError::message(error.to_string()))?,
-            provenance_description,
         ),
-        (None, None, None, None, None, Some(raw_absence_event), Some(raw_absence_scenario)) => {
-            NewReadModelField::new_absence_default(
-                field_name,
-                field_source_kind,
-                parse_event_name(raw_absence_event)
-                    .map_err(|error| ShellError::message(error.to_string()))?,
-                parse_scenario_name(raw_absence_scenario)
-                    .map_err(|error| ShellError::message(error.to_string()))?,
-                provenance_description,
-            )
-        }
-        (Some(_), None, _, _, _, _, _) | (None, Some(_), _, _, _, _, _) => {
+        (
+            ReadModelFieldSourceKind::AbsenceDefault,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(raw_absence_event),
+            Some(raw_absence_scenario),
+        ) => ReadModelFieldSource::absence_default(
+            parse_event_name(raw_absence_event)
+                .map_err(|error| ShellError::message(error.to_string()))?,
+            parse_scenario_name(raw_absence_scenario)
+                .map_err(|error| ShellError::message(error.to_string()))?,
+        ),
+        (_, Some(_), None, _, _, _, _, _) | (_, None, Some(_), _, _, _, _, _) => {
             return Err(ShellError::message(
                 "add_read_model_definition requires source_event and source_attribute together",
             ));
         }
-        (_, _, Some(_), None, _, _, _)
-        | (_, _, None, Some(_), _, _, _)
-        | (_, _, Some(_), _, None, _, _)
-        | (_, _, None, _, Some(_), _, _) => {
+        (_, _, _, Some(_), None, _, _, _)
+        | (_, _, _, None, Some(_), _, _, _)
+        | (_, _, _, Some(_), _, None, _, _)
+        | (_, _, _, None, _, Some(_), _, _) => {
             return Err(ShellError::message(
                 "add_read_model_definition requires derivation_rule, derivation_source_fields, and derivation_scenario together",
             ));
         }
-        (_, _, _, _, _, Some(_), None) | (_, _, _, _, _, None, Some(_)) => {
+        (_, _, _, _, _, _, Some(_), None) | (_, _, _, _, _, _, None, Some(_)) => {
             return Err(ShellError::message(
                 "add_read_model_definition requires absence_event and absence_scenario together",
             ));
         }
         _ => {
             return Err(ShellError::message(
-                "add_read_model_definition requires source_event/source_attribute, derivation_rule/derivation_source_fields/derivation_scenario, or absence_event/absence_scenario",
+                "add_read_model_definition requires field_source and source fields to describe the same read model field source",
             ));
         }
     };
-
+    let read_model_field =
+        NewReadModelField::new(field_name, read_model_source, provenance_description);
     let read_model = NewReadModelDefinition::new(slice_slug, read_model_name, read_model_field);
     let read_model = if arguments
         .get("transitive")

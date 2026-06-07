@@ -2,15 +2,21 @@
 
 use crate::core::effect::{ArtifactDigest, FileContents};
 use crate::core::types::{
-    ModelDescription, ModelName, QuintModuleName, SliceKindName, SliceSlug,
-    WorkflowCommandErrorRecord, WorkflowCommandErrorRecords, WorkflowEntryLifecycleStateRecord,
-    WorkflowEntryLifecycleStateRecords, WorkflowModuleData, WorkflowOutcomeRecord,
-    WorkflowOutcomeRecords, WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords,
-    WorkflowSliceDetail, WorkflowTransitionEvidenceRecord, WorkflowTransitionEvidenceRecords,
-    WorkflowTransitionRecord, WorkflowTransitionRecords,
+    BoardLaneId, CommandErrorRecoveryKind, CommandInputSourceKind, EventAttributeSourceKind,
+    ModelDescription, ModelName, NavigationTargetType, QuintModuleName, ReadModelFieldSourceKind,
+    SingletonRepeatBehavior, SliceKindName, SliceSlug, ViewFieldSourceKind,
+    WorkflowCommandErrorRecord, WorkflowCommandErrorRecords, WorkflowEntryLifecycleStateName,
+    WorkflowEntryLifecycleStateRecord, WorkflowEntryLifecycleStateRecords, WorkflowModuleData,
+    WorkflowOutcomeRecord, WorkflowOutcomeRecords, WorkflowOwnedDefinitionRecord,
+    WorkflowOwnedDefinitionRecords, WorkflowSliceDetail, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionEvidenceRecords, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 
-pub fn emit_workflow_module(
+#[cfg(test)]
+#[path = "quint_tests.rs"]
+mod external_tests;
+
+pub(crate) fn emit_workflow_module(
     module_name: QuintModuleName,
     workflow_module: WorkflowModuleData,
 ) -> FileContents {
@@ -31,6 +37,7 @@ pub fn emit_workflow_module(
         workflow_transition_evidence_list(workflow_module.workflow_transition_evidences());
     let workflow_entry_lifecycle_state_list =
         workflow_entry_lifecycle_state_list(workflow_module.workflow_entry_lifecycle_states());
+    let required_entry_lifecycle_state_list = required_entry_lifecycle_state_list();
     let transition_list = transition_list(workflow_module.workflow_transitions().clone());
     let workflow_requires_entry_lifecycle_coverage =
         workflow_module.workflow_requires_entry_lifecycle_coverage();
@@ -62,7 +69,7 @@ pub fn emit_workflow_module(
   val workflowRequiresEntryLifecycleCoverage = {workflow_requires_entry_lifecycle_coverage}
   val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = {workflow_entry_lifecycle_state_list}
   val workflowExitTargets: List[str] = {workflow_exit_target_list}
-  val requiredEntryLifecycleStates: List[str] = ["fresh_uninitialized","initialized_unauthenticated","initialized_authenticated","partially_configured","fully_configured"]
+  val requiredEntryLifecycleStates: List[str] = {required_entry_lifecycle_state_list}
   val workflowIdentityStable = workflowName == {workflow_name_json}
   val workflowSlicesHaveDetails = length(workflowSlices) == length(workflowSliceDetails)
   val workflowSliceDetailsComplete = workflowSlicesHaveDetails
@@ -156,11 +163,12 @@ pub fn emit_workflow_module(
         workflow_transition_evidence_list = workflow_transition_evidence_list,
         workflow_requires_entry_lifecycle_coverage = workflow_requires_entry_lifecycle_coverage,
         workflow_entry_lifecycle_state_list = workflow_entry_lifecycle_state_list,
+        required_entry_lifecycle_state_list = required_entry_lifecycle_state_list,
         workflow_exit_target_list = workflow_exit_target_list,
     ))
 }
 
-pub fn emit_slice_module(
+pub(crate) fn emit_slice_module(
     module_name: QuintModuleName,
     slice_name: ModelName,
     slice_description: ModelDescription,
@@ -168,6 +176,14 @@ pub fn emit_slice_module(
     slice_kind: SliceKindName,
     digest: ArtifactDigest,
 ) -> FileContents {
+    let allowed_command_input_source_kind_list = command_input_source_kind_list();
+    let allowed_recovery_kind_list = command_error_recovery_kind_list();
+    let allowed_singleton_repeat_behavior_list = singleton_repeat_behavior_list();
+    let allowed_navigation_target_type_list = navigation_target_type_list();
+    let stored_event_fact_source_kind_list = event_attribute_source_kind_list();
+    let allowed_read_model_field_source_kind_list = read_model_field_source_kind_list();
+    let allowed_view_field_source_kind_list = view_field_source_kind_list();
+    let canonical_board_lane_list = board_lane_id_list();
     let contents = format!(
         "module {module_name} {{\n  // EMC-DIGEST: {digest}\n  // EMC generated Quint business slice model.\n  type EventModelScenario = {{ name: str, givenSteps: List[str], whenSteps: List[str], thenSteps: List[str] }}\n  type BitLevelDataFlow = {{ datum: str, sourceKind: str, source: str, transformationSemantics: str, target: str, bitEncoding: str }}\n  type CommandInput = {{ name: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str, invocationArgumentSourceName: str, invocationArgumentSourceField: str }}\n  type CommandErrorDefinition = {{ name: str, scenarioName: str, recoveryKind: str }}\n  type CommandDefinition = {{ name: str, inputs: List[CommandInput], emittedEvents: List[str], observedStreams: List[str], errors: List[CommandErrorDefinition], singleton: bool, repeatBehavior: str }}\n  type OutcomeDefinition = {{ label: str, eventSet: List[str], externallyRelevant: bool }}\n  type StreamDefinition = {{ name: str }}\n  type EventAttribute = {{ name: str, sourceKind: str, sourceName: str, sourceField: str, generatedSourceKind: str, provenanceDescription: str }}\n  type EventDefinition = {{ name: str, stream: str, attributes: List[EventAttribute], observed: bool, shared: bool }}\n  type ReadModelField = {{ name: str, sourceKind: str, sourceEvent: str, sourceAttribute: str, derivationRule: str, absenceEvent: str, provenanceDescription: str }}\n  type ReadModelDefinition = {{ name: str, fields: List[ReadModelField] }}\n  type ViewField = {{ name: str, sourceKind: str, sourceReadModel: str, sourceField: str, sketchToken: str, provenanceDescription: str, bitEncoding: str }}\n  type ControlInputProvision = {{ name: str, sourceKind: str, sourceDescription: str, sketchToken: str, visibleToActor: bool, decisionField: bool }}\n  type ControlDefinition = {{ name: str, commandName: str, inputs: List[ControlInputProvision], handledErrors: List[str], recoveryBehavior: str, sketchToken: str }}\n  type ViewDefinition = {{ name: str, readModels: List[str], fields: List[ViewField], controls: List[ControlDefinition], sketchTokens: List[str] }}\n  val sliceName = {slice_name_json}\n  val sliceSlug = {slice_slug_json}\n  val sliceKind = {slice_kind_json}\n  val sliceDescription = {slice_description_json}\n  val sliceCommands: List[str] = []\n  val sliceCommandDefinitions: List[CommandDefinition] = []\n  val sliceReferencedCommands: List[str] = []\n  val sliceOutcomeDefinitions: List[OutcomeDefinition] = []\n  val allowedCommandInputSourceKinds: List[str] = [\"actor\",\"session\",\"generated\",\"external_payload\",\"event_stream_state\",\"invocation_argument\"]\n  val allowedRecoveryKinds: List[str] = [\"retry\",\"stay_on_screen\",\"navigation\",\"explicit_recovery_action\"]\n  val allowedSingletonRepeatBehaviors: List[str] = [\"already_exists_error\",\"idempotent\"]\n  val sliceEvents: List[str] = []\n  val sliceStreams: List[StreamDefinition] = []\n  val sliceEventDefinitions: List[EventDefinition] = []\n  val storedEventFactSourceKinds: List[str] = [\"command_input\",\"external_payload\",\"generated\",\"session\",\"derivation\"]
   val allowedEventAttributeSourceKinds: List[str] = storedEventFactSourceKinds\n  val sliceReadModels: List[str] = []\n  val sliceReadModelDefinitions: List[ReadModelDefinition] = []\n  val allowedReadModelFieldSourceKinds: List[str] = [\"event_attribute\",\"derivation\",\"absence_default\"]\n  val sliceViews: List[str] = []\n  val sliceViewDefinitions: List[ViewDefinition] = []\n  val allowedViewFieldSourceKinds: List[str] = [\"read_model\"]\n  val allowedControlInputSourceKinds: List[str] = [\"actor\",\"session\",\"generated\",\"external_payload\",\"event_stream_state\",\"invocation_argument\"]\n  val sliceAcceptanceScenarios: List[EventModelScenario] = []\n  val sliceContractScenarios: List[EventModelScenario] = []\n  val sliceBitLevelDataFlows: List[BitLevelDataFlow] = []\n  val sliceAcceptanceScenariosHaveGwt = sliceAcceptanceScenarios.select(scenario => scenario.name != \"\" and scenario.givenSteps.length() > 0 and scenario.whenSteps.length() > 0 and scenario.thenSteps.length() > 0).length() == sliceAcceptanceScenarios.length()\n  val sliceContractScenariosHaveGwt = sliceContractScenarios.select(scenario => scenario.name != \"\" and scenario.givenSteps.length() > 0 and scenario.whenSteps.length() > 0 and scenario.thenSteps.length() > 0).length() == sliceContractScenarios.length()\n  val sliceScenariosHaveGwt = sliceAcceptanceScenariosHaveGwt and sliceContractScenariosHaveGwt\n  val sliceScenarioNamesAreUnique = sliceAcceptanceScenarios.select(scenario => sliceAcceptanceScenarios.select(other => other.name == scenario.name).length() + sliceContractScenarios.select(other => other.name == scenario.name).length() == 1).length() == sliceAcceptanceScenarios.length() and sliceContractScenarios.select(scenario => sliceAcceptanceScenarios.select(other => other.name == scenario.name).length() + sliceContractScenarios.select(other => other.name == scenario.name).length() == 1).length() == sliceContractScenarios.length()\n  def definitionNamesAreUnique(names) = names.select(name => names.select(other => other == name).length() == 1).length() == names.length()\n  val sliceOwnedCommandNames: List[str] = sliceCommandDefinitions.foldl([], (names, command) => names.append(command.name))\n  val sliceOwnedEventNames: List[str] = sliceEventDefinitions.foldl([], (names, event) => names.append(event.name))\n  val sliceOwnedStreamNames: List[str] = sliceStreams.foldl([], (names, stream) => names.append(stream.name))\n  val sliceOwnedExternalPayloadNames: List[str] = sliceExternalPayloads.foldl([], (names, payload) => names.append(payload.name))\n  val sliceOwnedReadModelNames: List[str] = sliceReadModelDefinitions.foldl([], (names, readModel) => names.append(readModel.name))\n  val sliceOwnedViewNames: List[str] = sliceViewDefinitions.foldl([], (names, view) => names.append(view.name))\n  val sliceOwnedAutomationNames: List[str] = sliceAutomations.foldl([], (names, automation) => names.append(automation.name))\n  val sliceOwnedTranslationNames: List[str] = sliceTranslations.foldl([], (names, translation) => names.append(translation.name))\n  val sliceOwnedControlNames: List[str] = sliceViewDefinitions.foldl([], (names, view) => names.concat(view.controls.foldl([], (controlNames, control) => controlNames.append(control.name))))\n  val sliceNamedDefinitionsAreUniquelyOwned = definitionNamesAreUnique(sliceCommands) and definitionNamesAreUnique(sliceOwnedCommandNames) and definitionNamesAreUnique(sliceEvents) and definitionNamesAreUnique(sliceOwnedEventNames) and definitionNamesAreUnique(sliceOwnedStreamNames) and definitionNamesAreUnique(sliceOwnedExternalPayloadNames) and definitionNamesAreUnique(sliceReadModels) and definitionNamesAreUnique(sliceOwnedReadModelNames) and definitionNamesAreUnique(sliceViews) and definitionNamesAreUnique(sliceOwnedViewNames) and definitionNamesAreUnique(sliceOwnedAutomationNames) and definitionNamesAreUnique(sliceOwnedTranslationNames) and definitionNamesAreUnique(sliceOwnedControlNames)\n  val commandInputsHaveAllowedSources = sliceCommandDefinitions.select(command => command.inputs.select(input => allowedCommandInputSourceKinds.select(sourceKind => sourceKind == input.sourceKind).length() > 0).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()\n  val commandInputsHaveProvenance = sliceCommandDefinitions.select(command => command.inputs.select(input => input.name != \"\" and input.sourceKind != \"\" and input.sourceDescription != \"\" and input.provenanceChain.length() > 0).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()\n  val commandErrorsAreDeclared = sliceCommandDefinitions.select(command => command.errors.select(error => error.name != \"\" and error.scenarioName != \"\" and error.recoveryKind != \"\").length() == command.errors.length()).length() == sliceCommandDefinitions.length()\n  val commandErrorsHaveAllowedRecovery = sliceCommandDefinitions.select(command => command.errors.select(error => allowedRecoveryKinds.select(recoveryKind => recoveryKind == error.recoveryKind).length() > 0).length() == command.errors.length()).length() == sliceCommandDefinitions.length()\n  def sameOutcomeEventSet(left, right) = left.eventSet.select(eventName => right.eventSet.select(otherEventName => otherEventName == eventName).length() > 0).length() == left.eventSet.length() and right.eventSet.select(eventName => left.eventSet.select(otherEventName => otherEventName == eventName).length() > 0).length() == right.eventSet.length()\n  def eventIsKnownToSlice(eventName) = sliceEvents.select(event => event == eventName).length() > 0 or sliceEventDefinitions.select(event => event.name == eventName and (event.observed or event.shared)).length() > 0\n  val outcomeLabelsAreUnique = sliceOutcomeDefinitions.select(outcome => sliceOutcomeDefinitions.select(other => other.label == outcome.label).length() == 1).length() == sliceOutcomeDefinitions.length()\n  val outcomeEventSetsAreNonEmpty = sliceOutcomeDefinitions.select(outcome => outcome.eventSet.length() > 0).length() == sliceOutcomeDefinitions.length()\n  val outcomeEventSetsAreDistinct = sliceOutcomeDefinitions.select(outcome => sliceOutcomeDefinitions.select(other => outcome.label == other.label or not(sameOutcomeEventSet(outcome, other))).length() == sliceOutcomeDefinitions.length()).length() == sliceOutcomeDefinitions.length()\n  val outcomeEventsAreKnownToSlice = sliceOutcomeDefinitions.select(outcome => outcome.eventSet.select(eventName => eventIsKnownToSlice(eventName)).length() == outcome.eventSet.length()).length() == sliceOutcomeDefinitions.length()\n  val eventsReferenceKnownStreams = sliceEventDefinitions.select(event => sliceStreams.select(stream => stream.name == event.stream).length() > 0).length() == sliceEventDefinitions.length()\n  val eventAttributesHaveAllowedSources = sliceEventDefinitions.select(event => event.attributes.select(attribute => allowedEventAttributeSourceKinds.select(sourceKind => sourceKind == attribute.sourceKind).length() > 0).length() == event.attributes.length()).length() == sliceEventDefinitions.length()\n  val eventAttributesHaveProvenance = sliceEventDefinitions.select(event => event.attributes.select(attribute => attribute.name != \"\" and attribute.sourceKind != \"\" and attribute.sourceName != \"\" and attribute.provenanceDescription != \"\").length() == event.attributes.length()).length() == sliceEventDefinitions.length()\n  val readModelFieldsHaveAllowedSources = sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => allowedReadModelFieldSourceKinds.select(sourceKind => sourceKind == readModelField.sourceKind).length() > 0).length() == readModel.fields.length()).length() == sliceReadModelDefinitions.length()\n  val readModelFieldsHaveProvenance = sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => readModelField.name != \"\" and readModelField.sourceKind != \"\" and readModelField.provenanceDescription != \"\").length() == readModel.fields.length()).length() == sliceReadModelDefinitions.length()\n  def readModelFieldSourceIsComplete(readModelField) = (readModelField.sourceKind == \"event_attribute\" and readModelField.sourceEvent != \"\" and readModelField.sourceAttribute != \"\") or (readModelField.sourceKind == \"derivation\" and readModelField.derivationRule != \"\") or (readModelField.sourceKind == \"absence_default\" and readModelField.absenceEvent != \"\")\n  val readModelFieldSourcesAreComplete = sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => readModelFieldSourceIsComplete(readModelField)).length() == readModel.fields.length()).length() == sliceReadModelDefinitions.length()\n  val viewFieldsHaveAllowedSources = sliceViewDefinitions.select(view => view.fields.select(viewField => allowedViewFieldSourceKinds.select(sourceKind => sourceKind == viewField.sourceKind).length() > 0).length() == view.fields.length()).length() == sliceViewDefinitions.length()\n  val viewFieldsHaveProvenance = sliceViewDefinitions.select(view => view.fields.select(viewField => viewField.name != \"\" and viewField.sourceKind != \"\" and viewField.provenanceDescription != \"\" and viewField.bitEncoding != \"\").length() == view.fields.length()).length() == sliceViewDefinitions.length()\n  val viewFieldSourcesAreComplete = sliceViewDefinitions.select(view => view.fields.select(viewField => viewField.sourceKind == \"read_model\" and viewField.sourceReadModel != \"\" and viewField.sourceField != \"\" and viewField.sketchToken != \"\").length() == view.fields.length()).length() == sliceViewDefinitions.length()\n  val viewFieldsSourceFromUsedReadModels = sliceViewDefinitions.select(view => view.fields.select(viewField => view.readModels.select(readModel => readModel == viewField.sourceReadModel).length() > 0 and sliceReadModels.select(readModel => readModel == viewField.sourceReadModel).length() > 0).length() == view.fields.length()).length() == sliceViewDefinitions.length()\n  val viewControlsHaveSketchTokens = sliceViewDefinitions.select(view => view.controls.select(control => control.name != \"\" and control.commandName != \"\" and control.sketchToken != \"\").length() == view.controls.length()).length() == sliceViewDefinitions.length()\n  val viewControlsReferenceKnownCommands = sliceViewDefinitions.select(view => view.controls.select(control => sliceCommands.select(command => command == control.commandName).length() > 0 or sliceReferencedCommands.select(command => command == control.commandName).length() > 0 or sliceCommandDefinitions.select(command => command.name == control.commandName).length() > 0).length() == view.controls.length()).length() == sliceViewDefinitions.length()\n  val viewControlInputsHaveAllowedSources = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => allowedControlInputSourceKinds.select(sourceKind => sourceKind == input.sourceKind).length() > 0).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()\n  val viewControlInputsHaveProvenance = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => input.name != \"\" and input.sourceKind != \"\" and input.sourceDescription != \"\").length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()\n  val viewControlInputVisibilityIsModeled = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => (input.sourceKind != \"actor\" or input.sketchToken != \"\" or input.visibleToActor) and (not(input.decisionField) or input.sketchToken != \"\" or input.visibleToActor)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()\n  val viewControlsHandleCommandErrors = sliceViewDefinitions.select(view => view.controls.select(control => sliceCommandDefinitions.select(command => command.name != control.commandName or command.errors.select(error => control.handledErrors.select(handledError => handledError == error.name).length() > 0 and control.recoveryBehavior != \"\").length() == command.errors.length()).length() == sliceCommandDefinitions.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()\n  val sliceIdentityStable = sliceName == {slice_name_json}\n  val sliceHasLocallyEmittedEvent = sliceEvents.length() > 0 or sliceEventDefinitions.select(event => not(event.observed) and not(event.shared)).length() > 0
@@ -283,6 +299,63 @@ pub fn emit_slice_module(
         "val viewControlDecisionFieldsAreVisible = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => controlInputDecisionFieldIsVisible(input)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()",
         "val viewControlDecisionFieldsAreVisible = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => controlInputDecisionFieldIsVisible(input)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()\n  def controlInputActorInputIsVisible(input) = input.sourceKind != \"actor\" or input.sketchToken != \"\" or input.visibleToActor\n  val viewControlActorInputsAreVisible = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => controlInputActorInputIsVisible(input)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()",
     );
+    let contents = contents
+        .replace(
+            "val allowedCommandInputSourceKinds: List[str] = [\"actor\",\"session\",\"generated\",\"external_payload\",\"event_stream_state\",\"invocation_argument\"]",
+            &format!(
+                "val allowedCommandInputSourceKinds: List[str] = {allowed_command_input_source_kind_list}"
+            ),
+        )
+        .replace(
+            "val allowedRecoveryKinds: List[str] = [\"retry\",\"stay_on_screen\",\"navigation\",\"explicit_recovery_action\"]",
+            &format!("val allowedRecoveryKinds: List[str] = {allowed_recovery_kind_list}"),
+        )
+        .replace(
+            "val allowedSingletonRepeatBehaviors: List[str] = [\"already_exists_error\",\"idempotent\"]",
+            &format!(
+                "val allowedSingletonRepeatBehaviors: List[str] = {allowed_singleton_repeat_behavior_list}"
+            ),
+        )
+        .replace(
+            "val storedEventFactSourceKinds: List[str] = [\"command_input\",\"external_payload\",\"generated\",\"session\",\"derivation\"]",
+            &format!(
+                "val storedEventFactSourceKinds: List[str] = {stored_event_fact_source_kind_list}"
+            ),
+        )
+        .replace(
+            "val allowedReadModelFieldSourceKinds: List[str] = [\"event_attribute\",\"derivation\",\"absence_default\"]",
+            &format!(
+                "val allowedReadModelFieldSourceKinds: List[str] = {allowed_read_model_field_source_kind_list}"
+            ),
+        )
+        .replace(
+            "val allowedViewFieldSourceKinds: List[str] = [\"read_model\"]",
+            &format!(
+                "val allowedViewFieldSourceKinds: List[str] = {allowed_view_field_source_kind_list}"
+            ),
+        )
+        .replace(
+            "val allowedNavigationTargetTypes: List[str] = [\"modeled_view\",\"local_view_state\",\"external_system\",\"external_workflow\"]",
+            &format!(
+                "val allowedNavigationTargetTypes: List[str] = {allowed_navigation_target_type_list}"
+            ),
+        )
+        .replace(
+            "val canonicalBoardLanes: List[str] = [\"ux\",\"actions\",\"events\"]",
+            &format!("val canonicalBoardLanes: List[str] = {canonical_board_lane_list}"),
+        )
+        .replace(
+            "val boardLanesAreCanonical = canonicalBoardLanes == [\"ux\",\"actions\",\"events\"]",
+            &format!(
+                "val boardLanesAreCanonical = canonicalBoardLanes == {canonical_board_lane_list}"
+            ),
+        )
+        .replace(
+            "val allowedControlInputSourceKinds: List[str] = [\"actor\",\"session\",\"generated\",\"external_payload\",\"event_stream_state\",\"invocation_argument\"]",
+            &format!(
+                "val allowedControlInputSourceKinds: List[str] = {allowed_command_input_source_kind_list}"
+            ),
+        );
     file_contents(contents)
 }
 
@@ -296,6 +369,94 @@ fn quoted(value: &str) -> String {
     serde_json::to_string(value).unwrap_or_else(|error| {
         unreachable!("EMC generated Quint string literal must be valid: {error}");
     })
+}
+
+fn command_input_source_kind_list() -> String {
+    format!(
+        "[{}]",
+        CommandInputSourceKind::ALLOWED
+            .iter()
+            .map(|source_kind| quoted(source_kind.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn command_error_recovery_kind_list() -> String {
+    format!(
+        "[{}]",
+        CommandErrorRecoveryKind::ALLOWED
+            .iter()
+            .map(|recovery_kind| quoted(recovery_kind.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn singleton_repeat_behavior_list() -> String {
+    format!(
+        "[{}]",
+        SingletonRepeatBehavior::ALLOWED
+            .iter()
+            .map(|repeat_behavior| quoted(repeat_behavior.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn navigation_target_type_list() -> String {
+    format!(
+        "[{}]",
+        NavigationTargetType::ALLOWED
+            .iter()
+            .map(|target_type| quoted(target_type.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn event_attribute_source_kind_list() -> String {
+    format!(
+        "[{}]",
+        EventAttributeSourceKind::ALLOWED
+            .iter()
+            .map(|source_kind| quoted(source_kind.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn board_lane_id_list() -> String {
+    format!(
+        "[{}]",
+        BoardLaneId::CANONICAL
+            .iter()
+            .map(|lane| quoted(lane.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn read_model_field_source_kind_list() -> String {
+    format!(
+        "[{}]",
+        ReadModelFieldSourceKind::ALLOWED
+            .iter()
+            .map(|source_kind| quoted(source_kind.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn view_field_source_kind_list() -> String {
+    format!(
+        "[{}]",
+        ViewFieldSourceKind::ALLOWED
+            .iter()
+            .map(|source_kind| quoted(source_kind.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
 }
 
 fn slice_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
@@ -362,6 +523,17 @@ fn workflow_step_relationship_list(workflow_slice_details: &[WorkflowSliceDetail
     )
 }
 
+fn required_entry_lifecycle_state_list() -> String {
+    format!(
+        "[{}]",
+        WorkflowEntryLifecycleStateName::REQUIRED
+            .iter()
+            .map(|state| quoted(state.as_ref()))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn module_name_from_raw(raw: &str) -> String {
     let mut capitalize_next = true;
     raw.chars()
@@ -399,7 +571,7 @@ fn workflow_exit_target_list(workflow_transitions: &[WorkflowTransitionRecord]) 
         "[{}]",
         workflow_transitions
             .iter()
-            .filter(|transition| transition.kind().as_ref().starts_with("workflow_exit:"))
+            .filter(|transition| transition.kind().is_workflow_exit())
             .map(|transition| quoted(transition.target().as_ref()))
             .collect::<Vec<_>>()
             .join(",")

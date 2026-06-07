@@ -1,12 +1,24 @@
 // Copyright 2026 John Wilger
 
 use eventcore::{Command, CommandError, CommandLogic, Event, NewEvents, StreamId, require};
-use serde::{Deserialize, Serialize};
+use serde::de::Error as DeserializeError;
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
 use crate::core::connection::{ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval};
-use crate::core::effect::ArtifactDigest;
-use crate::core::events::EventDraft;
+use crate::core::effect::{
+    ArtifactDigest, ChosenEventId, EventConflictId, ModelContentDigest, ProjectionFingerprint,
+    ReviewEventReference,
+};
+use crate::core::events::{
+    EventDraft, EventDraftType, slice_automation_from_payload,
+    slice_bit_level_data_flow_from_payload, slice_board_connection_from_payload,
+    slice_board_element_from_payload, slice_command_definition_from_payload,
+    slice_event_definition_from_payload, slice_external_payload_from_payload,
+    slice_outcome_from_payload, slice_read_model_from_payload, slice_scenario_from_payload,
+    slice_translation_from_payload, slice_view_from_payload,
+};
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
     NewCommandDefinition, NewEventDefinition, NewExternalPayloadDefinition, NewOutcomeDefinition,
@@ -15,161 +27,167 @@ use crate::core::formal_slice_facts::{
 use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    ModelDescription, ModelName, PayloadContractName, ReviewRuleName, ReviewTimestamp, ReviewerId,
-    SliceSlug, TransitionTriggerName, WorkflowCommandErrorRecord,
-    WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
-    WorkflowSlug, WorkflowTransitionEvidenceRecord,
+    CommandErrorName, CommandName, ModelDescription, ModelName, OutcomeLabelName,
+    PayloadContractName, ReviewRuleName, ReviewTimestamp, ReviewerId, SliceKindName, SliceSlug,
+    StreamName, TransitionTriggerName, WorkflowCommandErrorRecord,
+    WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
+    WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
+    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionKind, WorkflowTransitionSourceEvidenceText,
+    WorkflowTransitionTargetEvidenceText, WorkflowViewRole,
 };
 
-pub fn project_stream_id() -> Result<StreamId, String> {
+pub(crate) fn project_stream_id() -> Result<StreamId, String> {
     StreamId::try_new("project".to_owned()).map_err(|error| error.to_string())
 }
 
-pub fn workflow_stream_id(slug: &str) -> Result<StreamId, String> {
+pub(crate) fn workflow_stream_id(slug: &str) -> Result<StreamId, String> {
     StreamId::try_new(format!("workflow::{slug}")).map_err(|error| error.to_string())
 }
 
-pub fn slice_stream_id(slug: &str) -> Result<StreamId, String> {
+pub(crate) fn slice_stream_id(slug: &str) -> Result<StreamId, String> {
     StreamId::try_new(format!("slice::{slug}")).map_err(|error| error.to_string())
 }
 
-pub fn review_stream_id(workflow: &str) -> Result<StreamId, String> {
+pub(crate) fn review_stream_id(workflow: &str) -> Result<StreamId, String> {
     StreamId::try_new(format!("review::{workflow}")).map_err(|error| error.to_string())
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub enum EmcEvent {
+pub(crate) enum EmcEvent {
     ProjectInitialized {
         stream_id: StreamId,
-        name: String,
+        name: ProjectName,
     },
     WorkflowAdded {
         stream_id: StreamId,
-        slug: String,
-        name: String,
-        description: String,
+        slug: WorkflowSlug,
+        name: ModelName,
+        description: ModelDescription,
     },
     WorkflowUpdated {
         stream_id: StreamId,
-        slug: String,
-        name: String,
-        description: String,
+        slug: WorkflowSlug,
+        name: ModelName,
+        description: ModelDescription,
     },
     WorkflowRemoved {
         stream_id: StreamId,
-        slug: String,
+        slug: WorkflowSlug,
     },
     WorkflowOutcomeAdded {
         stream_id: StreamId,
-        workflow: String,
-        source_slice: String,
-        label: String,
+        workflow: WorkflowSlug,
+        source_slice: WorkflowTransitionEndpoint,
+        label: OutcomeLabelName,
         externally_relevant: bool,
     },
     WorkflowCommandErrorAdded {
         stream_id: StreamId,
-        workflow: String,
-        source_slice: String,
-        command: String,
-        error: String,
+        workflow: WorkflowSlug,
+        source_slice: WorkflowTransitionEndpoint,
+        command: CommandName,
+        error: CommandErrorName,
     },
     WorkflowOwnedDefinitionAdded {
         stream_id: StreamId,
-        workflow: String,
-        source_slice: String,
-        definition_kind: String,
-        definition_name: String,
-        definition_stream: Option<String>,
-        source_provenance: Option<String>,
-        event_participation: Option<String>,
-        view_role: Option<String>,
+        workflow: WorkflowSlug,
+        source_slice: WorkflowTransitionEndpoint,
+        definition_kind: WorkflowOwnedDefinitionKind,
+        definition_name: WorkflowOwnedDefinitionName,
+        definition_stream: Option<StreamName>,
+        source_provenance: Option<ModelDescription>,
+        event_participation: Option<WorkflowEventParticipation>,
+        view_role: Option<WorkflowViewRole>,
     },
     WorkflowTransitionEvidenceAdded {
         stream_id: StreamId,
-        workflow: String,
-        source: String,
-        target: String,
-        via: String,
-        name: String,
-        source_evidence: String,
-        target_evidence: String,
+        workflow: WorkflowSlug,
+        source: WorkflowTransitionEndpoint,
+        target: WorkflowTransitionEndpoint,
+        via: WorkflowTransitionKind,
+        name: TransitionTriggerName,
+        source_evidence: WorkflowTransitionSourceEvidenceText,
+        target_evidence: WorkflowTransitionTargetEvidenceText,
     },
     WorkflowEntryLifecycleCoverageRequired {
         stream_id: StreamId,
-        workflow: String,
+        workflow: WorkflowSlug,
     },
     WorkflowEntryLifecycleStateAdded {
         stream_id: StreamId,
-        workflow: String,
-        state: String,
-        step: String,
-        evidence: String,
+        workflow: WorkflowSlug,
+        state: WorkflowEntryLifecycleStateName,
+        step: WorkflowTransitionEndpoint,
+        evidence: WorkflowEntryLifecycleEvidenceText,
     },
     WorkflowReadinessDeclared {
         stream_id: StreamId,
-        workflow: String,
-        projection_fingerprint: String,
-        model_content_digest: String,
-        verified_at: String,
-        verified_by: String,
-        review_event_id: Option<String>,
+        workflow: WorkflowSlug,
+        projection_fingerprint: ProjectionFingerprint,
+        model_content_digest: ModelContentDigest,
+        verified_at: ReviewTimestamp,
+        verified_by: ReviewerId,
+        #[serde(rename = "review_event_id")]
+        review_event: ReviewEventReference,
     },
     WorkflowConnected {
         stream_id: StreamId,
-        workflow: String,
-        source: String,
-        target_slice: Option<String>,
-        target_workflow: Option<String>,
-        via: String,
-        name: String,
-        payload_contract: Option<String>,
-        reason: Option<String>,
+        workflow: WorkflowSlug,
+        source: SliceSlug,
+        target_slice: Option<SliceSlug>,
+        target_workflow: Option<WorkflowSlug>,
+        via: ConnectionKind,
+        name: TransitionTriggerName,
+        payload_contract: Option<PayloadContractName>,
+        reason: Option<ModelDescription>,
     },
     WorkflowTransitionRemoved {
         stream_id: StreamId,
-        workflow: String,
-        source: String,
-        target_slice: Option<String>,
-        target_workflow: Option<String>,
-        via: String,
-        name: String,
+        workflow: WorkflowSlug,
+        source: SliceSlug,
+        target_slice: Option<SliceSlug>,
+        target_workflow: Option<WorkflowSlug>,
+        via: ConnectionKind,
+        name: TransitionTriggerName,
     },
     SliceAdded {
         stream_id: StreamId,
-        workflow: String,
-        slug: String,
-        name: String,
-        kind: String,
-        description: String,
+        workflow: WorkflowSlug,
+        slug: SliceSlug,
+        name: ModelName,
+        kind: SliceKindName,
+        description: ModelDescription,
     },
     SliceUpdated {
         stream_id: StreamId,
-        slug: String,
-        name: String,
-        kind: String,
-        description: String,
+        slug: SliceSlug,
+        name: ModelName,
+        kind: SliceKindName,
+        description: ModelDescription,
     },
     SliceRemoved {
         stream_id: StreamId,
-        slug: String,
+        slug: SliceSlug,
     },
     SliceFactAdded {
         stream_id: StreamId,
-        exported_event_type: String,
-        payload: Value,
+        #[serde(flatten)]
+        fact: SliceFactEvent,
     },
     ReviewRecorded {
         stream_id: StreamId,
-        workflow: String,
-        model_content_digest: String,
-        reviewer_id: String,
-        reviewed_at: String,
-        categories: Vec<String>,
+        workflow: WorkflowSlug,
+        model_content_digest: ModelContentDigest,
+        reviewer_id: ReviewerId,
+        reviewed_at: ReviewTimestamp,
+        categories: Vec<ReviewRuleName>,
     },
     ConflictResolved {
         stream_id: StreamId,
-        conflict_id: String,
-        chosen_event_id: String,
+        conflict_id: EventConflictId,
+        chosen_event_id: ChosenEventId,
     },
 }
 
@@ -204,17 +222,17 @@ impl Event for EmcEvent {
 }
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
-pub struct WorkflowCommandState {
+pub(crate) struct WorkflowCommandState {
     added: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
-pub struct SliceCommandState {
+pub(crate) struct SliceCommandState {
     added: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
-pub struct ProjectCommandState {
+pub(crate) struct ProjectCommandState {
     initialized: bool,
 }
 
@@ -248,14 +266,14 @@ fn apply_slice_command_state(mut state: SliceCommandState, event: &EmcEvent) -> 
 }
 
 #[derive(Command)]
-pub struct InitializeProjectCommand {
+pub(crate) struct InitializeProjectCommand {
     #[stream]
     project_stream: StreamId,
     name: ProjectName,
 }
 
 impl InitializeProjectCommand {
-    pub fn new(name: String) -> Result<Self, String> {
+    pub(crate) fn new(name: String) -> Result<Self, String> {
         Ok(Self {
             project_stream: project_stream_id()?,
             name: ProjectName::try_new(name).map_err(|error| error.to_string())?,
@@ -280,14 +298,14 @@ impl CommandLogic for InitializeProjectCommand {
         }
         Ok(vec![EmcEvent::ProjectInitialized {
             stream_id: self.project_stream.clone(),
-            name: self.name.as_ref().to_owned(),
+            name: self.name.clone(),
         }]
         .into())
     }
 }
 
 #[derive(Command)]
-pub struct AddWorkflowCommand {
+pub(crate) struct AddWorkflowCommand {
     #[stream]
     workflow_stream: StreamId,
     slug: WorkflowSlug,
@@ -296,14 +314,24 @@ pub struct AddWorkflowCommand {
 }
 
 impl AddWorkflowCommand {
-    pub fn new(slug: String, name: String, description: String) -> Result<Self, String> {
+    pub(crate) fn new(slug: String, name: String, description: String) -> Result<Self, String> {
         let slug = WorkflowSlug::try_new(slug).map_err(|error| error.to_string())?;
+        let name = ModelName::try_new(name).map_err(|error| error.to_string())?;
+        let description =
+            ModelDescription::try_new(description).map_err(|error| error.to_string())?;
+        Self::from_semantic(slug, name, description)
+    }
+
+    pub(crate) fn from_semantic(
+        slug: WorkflowSlug,
+        name: ModelName,
+        description: ModelDescription,
+    ) -> Result<Self, String> {
         Ok(Self {
             workflow_stream: workflow_stream_id(slug.as_ref())?,
             slug,
-            name: ModelName::try_new(name).map_err(|error| error.to_string())?,
-            description: ModelDescription::try_new(description)
-                .map_err(|error| error.to_string())?,
+            name,
+            description,
         })
     }
 }
@@ -320,16 +348,16 @@ impl CommandLogic for AddWorkflowCommand {
         require!(!state.added, "workflow stream has already been added");
         Ok(vec![EmcEvent::WorkflowAdded {
             stream_id: self.workflow_stream.clone(),
-            slug: self.slug.as_ref().to_owned(),
-            name: self.name.as_ref().to_owned(),
-            description: self.description.as_ref().to_owned(),
+            slug: self.slug.clone(),
+            name: self.name.clone(),
+            description: self.description.clone(),
         }]
         .into())
     }
 }
 
 #[derive(Command)]
-pub struct UpdateWorkflowCommand {
+pub(crate) struct UpdateWorkflowCommand {
     #[stream]
     workflow_stream: StreamId,
     slug: WorkflowSlug,
@@ -338,7 +366,7 @@ pub struct UpdateWorkflowCommand {
 }
 
 impl UpdateWorkflowCommand {
-    pub fn new(slug: String, name: String, description: String) -> Result<Self, String> {
+    pub(crate) fn new(slug: String, name: String, description: String) -> Result<Self, String> {
         let slug = WorkflowSlug::try_new(slug).map_err(|error| error.to_string())?;
         Ok(Self {
             workflow_stream: workflow_stream_id(slug.as_ref())?,
@@ -362,23 +390,23 @@ impl CommandLogic for UpdateWorkflowCommand {
         require!(state.added, "workflow stream must exist before update");
         Ok(vec![EmcEvent::WorkflowUpdated {
             stream_id: self.workflow_stream.clone(),
-            slug: self.slug.as_ref().to_owned(),
-            name: self.name.as_ref().to_owned(),
-            description: self.description.as_ref().to_owned(),
+            slug: self.slug.clone(),
+            name: self.name.clone(),
+            description: self.description.clone(),
         }]
         .into())
     }
 }
 
 #[derive(Command)]
-pub struct RemoveWorkflowCommand {
+pub(crate) struct RemoveWorkflowCommand {
     #[stream]
     workflow_stream: StreamId,
     slug: WorkflowSlug,
 }
 
 impl RemoveWorkflowCommand {
-    pub fn new(slug: String) -> Result<Self, String> {
+    pub(crate) fn new(slug: String) -> Result<Self, String> {
         let slug = WorkflowSlug::try_new(slug).map_err(|error| error.to_string())?;
         Ok(Self {
             workflow_stream: workflow_stream_id(slug.as_ref())?,
@@ -399,49 +427,114 @@ impl CommandLogic for RemoveWorkflowCommand {
         require!(state.added, "workflow stream must exist before removal");
         Ok(vec![EmcEvent::WorkflowRemoved {
             stream_id: self.workflow_stream.clone(),
-            slug: self.slug.as_ref().to_owned(),
+            slug: self.slug.clone(),
         }]
         .into())
     }
 }
 
 #[derive(Command)]
-pub struct ConnectWorkflowCommand {
+pub(crate) struct ConnectWorkflowCommand {
     #[stream]
     workflow_stream: StreamId,
     connection: WorkflowConnection,
 }
 
-pub struct ConnectWorkflowInput {
-    pub workflow: String,
-    pub source: String,
-    pub target_slice: Option<String>,
-    pub target_workflow: Option<String>,
-    pub via: String,
-    pub name: String,
-    pub payload_contract: Option<String>,
-    pub reason: Option<String>,
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum ConnectWorkflowInput {
+    Slice {
+        workflow: WorkflowSlug,
+        source: SliceSlug,
+        target: SliceSlug,
+        via: ConnectionKind,
+        name: TransitionTriggerName,
+        payload_contract: Option<PayloadContractName>,
+    },
+    WorkflowExit {
+        workflow: WorkflowSlug,
+        source: SliceSlug,
+        target: WorkflowSlug,
+        via: ConnectionKind,
+        name: TransitionTriggerName,
+        reason: ModelDescription,
+    },
+}
+
+impl ConnectWorkflowInput {
+    pub(crate) fn slice(
+        workflow: WorkflowSlug,
+        source: SliceSlug,
+        target: SliceSlug,
+        via: ConnectionKind,
+        name: TransitionTriggerName,
+        payload_contract: Option<PayloadContractName>,
+    ) -> Self {
+        Self::Slice {
+            workflow,
+            source,
+            target,
+            via,
+            name,
+            payload_contract,
+        }
+    }
+
+    pub(crate) fn workflow_exit(
+        workflow: WorkflowSlug,
+        source: SliceSlug,
+        target: WorkflowSlug,
+        via: ConnectionKind,
+        name: TransitionTriggerName,
+        reason: ModelDescription,
+    ) -> Self {
+        Self::WorkflowExit {
+            workflow,
+            source,
+            target,
+            via,
+            name,
+            reason,
+        }
+    }
 }
 
 impl ConnectWorkflowCommand {
-    pub fn new(input: ConnectWorkflowInput) -> Result<Self, String> {
-        let workflow = WorkflowSlug::try_new(input.workflow).map_err(|error| error.to_string())?;
-        let source = SliceSlug::try_new(input.source).map_err(|error| error.to_string())?;
-        let kind = connection_kind(&input.via)?;
-        let trigger =
-            TransitionTriggerName::try_new(input.name).map_err(|error| error.to_string())?;
-        let connection = workflow_connection_from_input(WorkflowConnectionCommandInput {
-            workflow: workflow.clone(),
-            source,
-            kind,
-            trigger,
-            target_slice: input.target_slice,
-            target_workflow: input.target_workflow,
-            payload_contract: input.payload_contract,
-            reason: input.reason,
-        })?;
+    pub(crate) fn new(input: ConnectWorkflowInput) -> Result<Self, String> {
+        let workflow = match &input {
+            ConnectWorkflowInput::Slice { workflow, .. }
+            | ConnectWorkflowInput::WorkflowExit { workflow, .. } => workflow,
+        };
+        let workflow_stream = workflow_stream_id(workflow.as_ref())?;
+        let connection = match input {
+            ConnectWorkflowInput::Slice {
+                workflow,
+                source,
+                target,
+                via,
+                name,
+                payload_contract,
+            } => match payload_contract {
+                Some(payload_contract) => WorkflowConnection::new_with_payload_contract(
+                    workflow,
+                    source,
+                    target,
+                    via,
+                    name,
+                    payload_contract,
+                ),
+                None => WorkflowConnection::new(workflow, source, target, via, name),
+            },
+            ConnectWorkflowInput::WorkflowExit {
+                workflow,
+                source,
+                target,
+                via,
+                name,
+                reason,
+            } => WorkflowConnection::new_workflow_exit(workflow, source, target, via, name, reason),
+        };
         Ok(Self {
-            workflow_stream: workflow_stream_id(workflow.as_ref())?,
+            workflow_stream,
             connection,
         })
     }
@@ -459,68 +552,103 @@ impl CommandLogic for ConnectWorkflowCommand {
         require!(state.added, "workflow stream must exist before connection");
         Ok(vec![EmcEvent::WorkflowConnected {
             stream_id: self.workflow_stream.clone(),
-            workflow: self.connection.workflow_slug().as_ref().to_owned(),
-            source: self.connection.source().as_ref().to_owned(),
-            target_slice: self
-                .connection
-                .target()
-                .slice_slug()
-                .map(|slug| slug.as_ref().to_owned()),
-            target_workflow: self
-                .connection
-                .target()
-                .workflow_slug()
-                .map(|slug| slug.as_ref().to_owned()),
-            via: self.connection.kind().trigger_kind().to_owned(),
-            name: self.connection.trigger().as_ref().to_owned(),
-            payload_contract: self
-                .connection
-                .payload_contract()
-                .map(|payload_contract| payload_contract.as_ref().to_owned()),
-            reason: self
-                .connection
-                .target()
-                .reason()
-                .map(|reason| reason.as_ref().to_owned()),
+            workflow: self.connection.workflow_slug().clone(),
+            source: self.connection.source().clone(),
+            target_slice: self.connection.target().slice_slug().cloned(),
+            target_workflow: self.connection.target().workflow_slug().cloned(),
+            via: self.connection.kind(),
+            name: self.connection.trigger().clone(),
+            payload_contract: self.connection.payload_contract().cloned(),
+            reason: self.connection.target().reason().cloned(),
         }]
         .into())
     }
 }
 
 #[derive(Command)]
-pub struct RemoveWorkflowTransitionCommand {
+pub(crate) struct RemoveWorkflowTransitionCommand {
     #[stream]
     workflow_stream: StreamId,
     removal: WorkflowTransitionRemoval,
 }
 
-pub struct RemoveWorkflowTransitionInput {
-    pub workflow: String,
-    pub source: String,
-    pub target_slice: Option<String>,
-    pub target_workflow: Option<String>,
-    pub via: String,
-    pub name: String,
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum RemoveWorkflowTransitionInput {
+    Slice {
+        workflow: WorkflowSlug,
+        source: SliceSlug,
+        target: SliceSlug,
+        via: ConnectionKind,
+        name: TransitionTriggerName,
+    },
+    WorkflowExit {
+        workflow: WorkflowSlug,
+        source: SliceSlug,
+        target: WorkflowSlug,
+        via: ConnectionKind,
+        name: TransitionTriggerName,
+    },
+}
+
+impl RemoveWorkflowTransitionInput {
+    pub(crate) fn slice(
+        workflow: WorkflowSlug,
+        source: SliceSlug,
+        target: SliceSlug,
+        via: ConnectionKind,
+        name: TransitionTriggerName,
+    ) -> Self {
+        Self::Slice {
+            workflow,
+            source,
+            target,
+            via,
+            name,
+        }
+    }
+
+    pub(crate) fn workflow_exit(
+        workflow: WorkflowSlug,
+        source: SliceSlug,
+        target: WorkflowSlug,
+        via: ConnectionKind,
+        name: TransitionTriggerName,
+    ) -> Self {
+        Self::WorkflowExit {
+            workflow,
+            source,
+            target,
+            via,
+            name,
+        }
+    }
 }
 
 impl RemoveWorkflowTransitionCommand {
-    pub fn new(input: RemoveWorkflowTransitionInput) -> Result<Self, String> {
-        let workflow = WorkflowSlug::try_new(input.workflow).map_err(|error| error.to_string())?;
-        let source = SliceSlug::try_new(input.source).map_err(|error| error.to_string())?;
-        let kind = connection_kind(&input.via)?;
-        let trigger =
-            TransitionTriggerName::try_new(input.name).map_err(|error| error.to_string())?;
-        let removal =
-            workflow_transition_removal_from_input(WorkflowTransitionRemovalCommandInput {
-                workflow: workflow.clone(),
+    pub(crate) fn new(input: RemoveWorkflowTransitionInput) -> Result<Self, String> {
+        let workflow = match &input {
+            RemoveWorkflowTransitionInput::Slice { workflow, .. }
+            | RemoveWorkflowTransitionInput::WorkflowExit { workflow, .. } => workflow,
+        };
+        let workflow_stream = workflow_stream_id(workflow.as_ref())?;
+        let removal = match input {
+            RemoveWorkflowTransitionInput::Slice {
+                workflow,
                 source,
-                kind,
-                trigger,
-                target_slice: input.target_slice,
-                target_workflow: input.target_workflow,
-            })?;
+                target,
+                via,
+                name,
+            } => WorkflowTransitionRemoval::new(workflow, source, target, via, name),
+            RemoveWorkflowTransitionInput::WorkflowExit {
+                workflow,
+                source,
+                target,
+                via,
+                name,
+            } => WorkflowTransitionRemoval::new_workflow_exit(workflow, source, target, via, name),
+        };
         Ok(Self {
-            workflow_stream: workflow_stream_id(workflow.as_ref())?,
+            workflow_stream,
             removal,
         })
     }
@@ -541,138 +669,25 @@ impl CommandLogic for RemoveWorkflowTransitionCommand {
         );
         Ok(vec![EmcEvent::WorkflowTransitionRemoved {
             stream_id: self.workflow_stream.clone(),
-            workflow: self.removal.workflow_slug().as_ref().to_owned(),
-            source: self.removal.source().as_ref().to_owned(),
-            target_slice: self
-                .removal
-                .target()
-                .slice_slug()
-                .map(|slug| slug.as_ref().to_owned()),
-            target_workflow: self
-                .removal
-                .target()
-                .workflow_slug()
-                .map(|slug| slug.as_ref().to_owned()),
-            via: self.removal.kind().trigger_kind().to_owned(),
-            name: self.removal.trigger().as_ref().to_owned(),
+            workflow: self.removal.workflow_slug().clone(),
+            source: self.removal.source().clone(),
+            target_slice: self.removal.target().slice_slug().cloned(),
+            target_workflow: self.removal.target().workflow_slug().cloned(),
+            via: self.removal.kind(),
+            name: self.removal.trigger().clone(),
         }]
         .into())
     }
 }
 
-struct WorkflowConnectionCommandInput {
-    workflow: WorkflowSlug,
-    source: SliceSlug,
-    kind: ConnectionKind,
-    trigger: TransitionTriggerName,
-    target_slice: Option<String>,
-    target_workflow: Option<String>,
-    payload_contract: Option<String>,
-    reason: Option<String>,
-}
-
-fn workflow_connection_from_input(
-    input: WorkflowConnectionCommandInput,
-) -> Result<WorkflowConnection, String> {
-    match (
-        input.target_slice,
-        input.target_workflow,
-        input.payload_contract,
-        input.reason,
-    ) {
-        (Some(target), None, None, None) => Ok(WorkflowConnection::new(
-            input.workflow,
-            input.source,
-            SliceSlug::try_new(target).map_err(|error| error.to_string())?,
-            input.kind,
-            input.trigger,
-        )),
-        (Some(target), None, Some(payload_contract), None) => {
-            Ok(WorkflowConnection::new_with_payload_contract(
-                input.workflow,
-                input.source,
-                SliceSlug::try_new(target).map_err(|error| error.to_string())?,
-                input.kind,
-                input.trigger,
-                PayloadContractName::try_new(payload_contract)
-                    .map_err(|error| error.to_string())?,
-            ))
-        }
-        (None, Some(target), None, Some(reason)) => Ok(WorkflowConnection::new_workflow_exit(
-            input.workflow,
-            input.source,
-            WorkflowSlug::try_new(target).map_err(|error| error.to_string())?,
-            input.kind,
-            input.trigger,
-            ModelDescription::try_new(reason).map_err(|error| error.to_string())?,
-        )),
-        (Some(_), Some(_), _, _) => {
-            Err("workflow connection cannot target both slice and workflow".to_owned())
-        }
-        (None, None, _, _) => Err("workflow connection target is required".to_owned()),
-        (None, Some(_), Some(_), _) => {
-            Err("workflow exit connection cannot declare a payload contract".to_owned())
-        }
-        (None, Some(_), None, None) => Err("workflow exit connection requires a reason".to_owned()),
-        (Some(_), None, _, Some(_)) => {
-            Err("slice workflow connection cannot declare a workflow exit reason".to_owned())
-        }
-    }
-}
-
-struct WorkflowTransitionRemovalCommandInput {
-    workflow: WorkflowSlug,
-    source: SliceSlug,
-    kind: ConnectionKind,
-    trigger: TransitionTriggerName,
-    target_slice: Option<String>,
-    target_workflow: Option<String>,
-}
-
-fn workflow_transition_removal_from_input(
-    input: WorkflowTransitionRemovalCommandInput,
-) -> Result<WorkflowTransitionRemoval, String> {
-    match (input.target_slice, input.target_workflow) {
-        (Some(target), None) => Ok(WorkflowTransitionRemoval::new(
-            input.workflow,
-            input.source,
-            SliceSlug::try_new(target).map_err(|error| error.to_string())?,
-            input.kind,
-            input.trigger,
-        )),
-        (None, Some(target)) => Ok(WorkflowTransitionRemoval::new_workflow_exit(
-            input.workflow,
-            input.source,
-            WorkflowSlug::try_new(target).map_err(|error| error.to_string())?,
-            input.kind,
-            input.trigger,
-        )),
-        (Some(_), Some(_)) => {
-            Err("workflow transition removal cannot target both slice and workflow".to_owned())
-        }
-        (None, None) => Err("workflow transition removal target is required".to_owned()),
-    }
-}
-
-fn connection_kind(value: &str) -> Result<ConnectionKind, String> {
-    match value {
-        "command" => Ok(ConnectionKind::command()),
-        "event" => Ok(ConnectionKind::event()),
-        "navigation" => Ok(ConnectionKind::navigation()),
-        "external_trigger" => Ok(ConnectionKind::external_trigger()),
-        "outcome" => Ok(ConnectionKind::outcome()),
-        _ => Err(format!("unknown workflow connection kind {value}")),
-    }
-}
-
 #[derive(Command)]
-pub struct AddWorkflowFactCommand {
+pub(crate) struct AddWorkflowFactCommand {
     #[stream]
     workflow_stream: StreamId,
     fact: WorkflowFactInput,
 }
 
-pub enum WorkflowFactInput {
+pub(crate) enum WorkflowFactInput {
     OutcomeAdded {
         workflow: WorkflowSlug,
         outcome: WorkflowOutcomeRecord,
@@ -714,63 +729,57 @@ impl WorkflowFactInput {
         match self {
             Self::OutcomeAdded { workflow, outcome } => EmcEvent::WorkflowOutcomeAdded {
                 stream_id,
-                workflow: workflow.as_ref().to_owned(),
-                source_slice: outcome.source_slice().as_ref().to_owned(),
-                label: outcome.label().as_ref().to_owned(),
+                workflow: workflow.clone(),
+                source_slice: outcome.source_slice().clone(),
+                label: outcome.label().clone(),
                 externally_relevant: outcome.externally_relevant(),
             },
             Self::CommandErrorAdded { workflow, error } => EmcEvent::WorkflowCommandErrorAdded {
                 stream_id,
-                workflow: workflow.as_ref().to_owned(),
-                source_slice: error.source_slice().as_ref().to_owned(),
-                command: error.command_name().as_ref().to_owned(),
-                error: error.error_name().as_ref().to_owned(),
+                workflow: workflow.clone(),
+                source_slice: error.source_slice().clone(),
+                command: error.command_name().clone(),
+                error: error.error_name().clone(),
             },
             Self::OwnedDefinitionAdded {
                 workflow,
                 definition,
             } => EmcEvent::WorkflowOwnedDefinitionAdded {
                 stream_id,
-                workflow: workflow.as_ref().to_owned(),
-                source_slice: definition.source_slice().as_ref().to_owned(),
-                definition_kind: definition.definition_kind().as_ref().to_owned(),
-                definition_name: definition.definition_name().as_ref().to_owned(),
-                definition_stream: definition
-                    .definition_stream()
-                    .map(|stream| stream.as_ref().to_owned()),
-                source_provenance: definition
-                    .source_provenance()
-                    .map(|provenance| provenance.as_ref().to_owned()),
-                event_participation: definition
-                    .event_participation()
-                    .map(|participation| participation.as_ref().to_owned()),
-                view_role: definition.view_role().map(|role| role.as_ref().to_owned()),
+                workflow: workflow.clone(),
+                source_slice: definition.source_slice().clone(),
+                definition_kind: *definition.definition_kind(),
+                definition_name: definition.definition_name().clone(),
+                definition_stream: definition.definition_stream().cloned(),
+                source_provenance: definition.source_provenance().cloned(),
+                event_participation: definition.event_participation().copied(),
+                view_role: definition.view_role().copied(),
             },
             Self::TransitionEvidenceAdded { workflow, evidence } => {
                 EmcEvent::WorkflowTransitionEvidenceAdded {
                     stream_id,
-                    workflow: workflow.as_ref().to_owned(),
-                    source: evidence.source().as_ref().to_owned(),
-                    target: evidence.target().as_ref().to_owned(),
-                    via: evidence.kind().as_ref().to_owned(),
-                    name: evidence.trigger().as_ref().to_owned(),
-                    source_evidence: evidence.source_evidence().as_ref().to_owned(),
-                    target_evidence: evidence.target_evidence().as_ref().to_owned(),
+                    workflow: workflow.clone(),
+                    source: evidence.source().clone(),
+                    target: evidence.target().clone(),
+                    via: *evidence.kind(),
+                    name: evidence.trigger().clone(),
+                    source_evidence: evidence.source_evidence().clone(),
+                    target_evidence: evidence.target_evidence().clone(),
                 }
             }
             Self::EntryLifecycleCoverageRequired { workflow } => {
                 EmcEvent::WorkflowEntryLifecycleCoverageRequired {
                     stream_id,
-                    workflow: workflow.as_ref().to_owned(),
+                    workflow: workflow.clone(),
                 }
             }
             Self::EntryLifecycleStateAdded { workflow, state } => {
                 EmcEvent::WorkflowEntryLifecycleStateAdded {
                     stream_id,
-                    workflow: workflow.as_ref().to_owned(),
-                    state: state.state().as_ref().to_owned(),
-                    step: state.step().as_ref().to_owned(),
-                    evidence: state.evidence().as_ref().to_owned(),
+                    workflow: workflow.clone(),
+                    state: *state.state(),
+                    step: state.step().clone(),
+                    evidence: state.evidence().clone(),
                 }
             }
         }
@@ -778,7 +787,7 @@ impl WorkflowFactInput {
 }
 
 impl AddWorkflowFactCommand {
-    pub fn new(fact: WorkflowFactInput) -> Result<Self, String> {
+    pub(crate) fn new(fact: WorkflowFactInput) -> Result<Self, String> {
         Ok(Self {
             workflow_stream: workflow_stream_id(fact.workflow())?,
             fact,
@@ -801,27 +810,37 @@ impl CommandLogic for AddWorkflowFactCommand {
 }
 
 #[derive(Command)]
-pub struct AddSliceCommand {
+pub(crate) struct AddSliceCommand {
     #[stream]
     slice_stream: StreamId,
     slice: NewSlice,
 }
 
 impl AddSliceCommand {
-    pub fn new(
+    pub(crate) fn new(
         workflow: String,
         slug: String,
         name: String,
         kind: String,
         description: String,
     ) -> Result<Self, String> {
-        let slice = NewSlice::new(
-            WorkflowSlug::try_new(workflow).map_err(|error| error.to_string())?,
-            SliceSlug::try_new(slug).map_err(|error| error.to_string())?,
-            ModelName::try_new(name).map_err(|error| error.to_string())?,
-            ModelDescription::try_new(description).map_err(|error| error.to_string())?,
-            slice_kind(&kind)?,
-        );
+        let workflow = WorkflowSlug::try_new(workflow).map_err(|error| error.to_string())?;
+        let slug = SliceSlug::try_new(slug).map_err(|error| error.to_string())?;
+        let name = ModelName::try_new(name).map_err(|error| error.to_string())?;
+        let description =
+            ModelDescription::try_new(description).map_err(|error| error.to_string())?;
+        let kind = SliceKindName::try_new(kind).map_err(|error| error.to_string())?;
+        Self::from_semantic(workflow, slug, name, kind, description)
+    }
+
+    pub(crate) fn from_semantic(
+        workflow: WorkflowSlug,
+        slug: SliceSlug,
+        name: ModelName,
+        kind: SliceKindName,
+        description: ModelDescription,
+    ) -> Result<Self, String> {
+        let slice = NewSlice::new(workflow, slug, name, description, kind.into());
         Ok(Self {
             slice_stream: slice_stream_id(slice.slug().as_ref())?,
             slice,
@@ -841,18 +860,18 @@ impl CommandLogic for AddSliceCommand {
         require!(!state.added, "slice stream has already been added");
         Ok(vec![EmcEvent::SliceAdded {
             stream_id: self.slice_stream.clone(),
-            workflow: self.slice.workflow_slug().as_ref().to_owned(),
-            slug: self.slice.slug().as_ref().to_owned(),
-            name: self.slice.name().as_ref().to_owned(),
-            kind: self.slice.kind().as_str().to_owned(),
-            description: self.slice.description().as_ref().to_owned(),
+            workflow: self.slice.workflow_slug().clone(),
+            slug: self.slice.slug().clone(),
+            name: self.slice.name().clone(),
+            kind: self.slice.kind().into(),
+            description: self.slice.description().clone(),
         }]
         .into())
     }
 }
 
 #[derive(Command)]
-pub struct UpdateSliceCommand {
+pub(crate) struct UpdateSliceCommand {
     #[stream]
     slice_stream: StreamId,
     slug: SliceSlug,
@@ -862,7 +881,7 @@ pub struct UpdateSliceCommand {
 }
 
 impl UpdateSliceCommand {
-    pub fn new(
+    pub(crate) fn new(
         slug: String,
         name: String,
         kind: String,
@@ -892,24 +911,24 @@ impl CommandLogic for UpdateSliceCommand {
         require!(state.added, "slice stream must exist before update");
         Ok(vec![EmcEvent::SliceUpdated {
             stream_id: self.slice_stream.clone(),
-            slug: self.slug.as_ref().to_owned(),
-            name: self.name.as_ref().to_owned(),
-            kind: self.kind.as_str().to_owned(),
-            description: self.description.as_ref().to_owned(),
+            slug: self.slug.clone(),
+            name: self.name.clone(),
+            kind: self.kind.into(),
+            description: self.description.clone(),
         }]
         .into())
     }
 }
 
 #[derive(Command)]
-pub struct RemoveSliceCommand {
+pub(crate) struct RemoveSliceCommand {
     #[stream]
     slice_stream: StreamId,
     slug: SliceSlug,
 }
 
 impl RemoveSliceCommand {
-    pub fn new(slug: String) -> Result<Self, String> {
+    pub(crate) fn new(slug: String) -> Result<Self, String> {
         let slug = SliceSlug::try_new(slug).map_err(|error| error.to_string())?;
         Ok(Self {
             slice_stream: slice_stream_id(slug.as_ref())?,
@@ -930,7 +949,7 @@ impl CommandLogic for RemoveSliceCommand {
         require!(state.added, "slice stream must exist before removal");
         Ok(vec![EmcEvent::SliceRemoved {
             stream_id: self.slice_stream.clone(),
-            slug: self.slug.as_ref().to_owned(),
+            slug: self.slug.clone(),
         }]
         .into())
     }
@@ -947,14 +966,14 @@ fn slice_kind(value: &str) -> Result<SliceKind, String> {
 }
 
 #[derive(Command)]
-pub struct AddSliceFactCommand {
+pub(crate) struct AddSliceFactCommand {
     #[stream]
     slice_stream: StreamId,
     fact: SliceFactInput,
 }
 
 impl AddSliceFactCommand {
-    pub fn new(fact: SliceFactInput) -> Result<Self, String> {
+    pub(crate) fn new(fact: SliceFactInput) -> Result<Self, String> {
         Ok(Self {
             slice_stream: slice_stream_id(fact.slice_slug().as_ref())?,
             fact,
@@ -972,17 +991,63 @@ impl CommandLogic for AddSliceFactCommand {
 
     fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
         require!(state.added, "slice stream must exist before adding fact");
-        let draft = self.fact.to_event_draft();
         Ok(vec![EmcEvent::SliceFactAdded {
             stream_id: self.slice_stream.clone(),
-            exported_event_type: draft.event_type().to_owned(),
-            payload: draft.payload().clone(),
+            fact: SliceFactEvent::new(self.fact.clone()),
         }]
         .into())
     }
 }
 
-pub enum SliceFactInput {
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceFactEvent {
+    fact: Box<SliceFactInput>,
+}
+
+impl SliceFactEvent {
+    pub(crate) fn new(fact: SliceFactInput) -> Self {
+        Self {
+            fact: Box::new(fact),
+        }
+    }
+}
+
+impl Serialize for SliceFactEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let draft = self.fact.to_event_draft();
+        let mut state = serializer.serialize_struct("SliceFactEvent", 2)?;
+        state.serialize_field("exported_event_type", &draft.event_type())?;
+        state.serialize_field("payload", draft.payload())?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceFactEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct SerializedSliceFactEvent {
+            exported_event_type: EventDraftType,
+            payload: Value,
+        }
+
+        let serialized = SerializedSliceFactEvent::deserialize(deserializer)?;
+        let fact = SliceFactInput::from_event_type_and_payload(
+            serialized.exported_event_type,
+            &serialized.payload,
+        )
+        .map_err(DeserializeError::custom)?;
+        Ok(Self::new(fact))
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum SliceFactInput {
     Scenario(NewSliceScenario),
     Outcome(NewOutcomeDefinition),
     ExternalPayload(NewExternalPayloadDefinition),
@@ -1031,21 +1096,64 @@ impl SliceFactInput {
             Self::BoardConnection(fact) => EventDraft::slice_board_connection_added(fact),
         }
     }
+
+    fn from_event_type_and_payload(
+        event_type: EventDraftType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
+            EventDraftType::SliceScenarioAdded => {
+                slice_scenario_from_payload(payload).map(Self::Scenario)
+            }
+            EventDraftType::SliceOutcomeAdded => {
+                slice_outcome_from_payload(payload).map(Self::Outcome)
+            }
+            EventDraftType::SliceExternalPayloadAdded => {
+                slice_external_payload_from_payload(payload).map(Self::ExternalPayload)
+            }
+            EventDraftType::SliceEventDefinitionAdded => {
+                slice_event_definition_from_payload(payload).map(Self::EventDefinition)
+            }
+            EventDraftType::SliceCommandDefinitionAdded => {
+                slice_command_definition_from_payload(payload).map(Self::CommandDefinition)
+            }
+            EventDraftType::SliceReadModelAdded => {
+                slice_read_model_from_payload(payload).map(Self::ReadModel)
+            }
+            EventDraftType::SliceViewAdded => slice_view_from_payload(payload).map(Self::View),
+            EventDraftType::SliceBitLevelDataFlowAdded => {
+                slice_bit_level_data_flow_from_payload(payload).map(Self::BitLevelDataFlow)
+            }
+            EventDraftType::SliceTranslationAdded => {
+                slice_translation_from_payload(payload).map(Self::Translation)
+            }
+            EventDraftType::SliceAutomationAdded => {
+                slice_automation_from_payload(payload).map(Self::Automation)
+            }
+            EventDraftType::SliceBoardElementAdded => {
+                slice_board_element_from_payload(payload).map(Self::BoardElement)
+            }
+            EventDraftType::SliceBoardConnectionAdded => {
+                slice_board_connection_from_payload(payload).map(Self::BoardConnection)
+            }
+            event_type => Err(format!("unsupported slice fact event type {event_type}")),
+        }
+    }
 }
 
 #[derive(Command)]
-pub struct RecordReviewCommand {
+pub(crate) struct RecordReviewCommand {
     #[stream]
     review_stream: StreamId,
     workflow: WorkflowSlug,
-    model_content_digest: ArtifactDigest,
+    model_content_digest: ModelContentDigest,
     reviewer_id: ReviewerId,
     reviewed_at: ReviewTimestamp,
     categories: Vec<ReviewRuleName>,
 }
 
 impl RecordReviewCommand {
-    pub fn new(
+    pub(crate) fn new(
         workflow: String,
         model_content_digest: String,
         reviewer_id: String,
@@ -1056,8 +1164,9 @@ impl RecordReviewCommand {
         Ok(Self {
             review_stream: review_stream_id(workflow.as_ref())?,
             workflow,
-            model_content_digest: ArtifactDigest::try_new(model_content_digest)
-                .map_err(|error| error.to_string())?,
+            model_content_digest: ModelContentDigest::new(
+                ArtifactDigest::try_new(model_content_digest).map_err(|error| error.to_string())?,
+            ),
             reviewer_id: ReviewerId::try_new(reviewer_id).map_err(|error| error.to_string())?,
             reviewed_at: ReviewTimestamp::try_new(reviewed_at)
                 .map_err(|error| error.to_string())?,
@@ -1081,40 +1190,36 @@ impl CommandLogic for RecordReviewCommand {
     fn handle(&self, _state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
         Ok(vec![EmcEvent::ReviewRecorded {
             stream_id: self.review_stream.clone(),
-            workflow: self.workflow.as_ref().to_owned(),
-            model_content_digest: self.model_content_digest.as_ref().to_owned(),
-            reviewer_id: self.reviewer_id.as_ref().to_owned(),
-            reviewed_at: self.reviewed_at.as_ref().to_owned(),
-            categories: self
-                .categories
-                .iter()
-                .map(|category| category.as_ref().to_owned())
-                .collect(),
+            workflow: self.workflow.clone(),
+            model_content_digest: self.model_content_digest.clone(),
+            reviewer_id: self.reviewer_id.clone(),
+            reviewed_at: self.reviewed_at.clone(),
+            categories: self.categories.clone(),
         }]
         .into())
     }
 }
 
 #[derive(Command)]
-pub struct DeclareWorkflowReadinessCommand {
+pub(crate) struct DeclareWorkflowReadinessCommand {
     #[stream]
     workflow_stream: StreamId,
     workflow: WorkflowSlug,
-    projection_fingerprint: ArtifactDigest,
-    model_content_digest: ArtifactDigest,
+    projection_fingerprint: ProjectionFingerprint,
+    model_content_digest: ModelContentDigest,
     verified_at: ReviewTimestamp,
     verified_by: ReviewerId,
-    review_event_id: Option<ArtifactDigest>,
+    review_event: ReviewEventReference,
 }
 
 impl DeclareWorkflowReadinessCommand {
-    pub fn new(
+    pub(crate) fn new(
         workflow: WorkflowSlug,
-        projection_fingerprint: ArtifactDigest,
-        model_content_digest: ArtifactDigest,
+        projection_fingerprint: ProjectionFingerprint,
+        model_content_digest: ModelContentDigest,
         verified_at: ReviewTimestamp,
         verified_by: ReviewerId,
-        review_event_id: Option<ArtifactDigest>,
+        review_event: ReviewEventReference,
     ) -> Result<Self, String> {
         Ok(Self {
             workflow_stream: workflow_stream_id(workflow.as_ref())?,
@@ -1123,7 +1228,7 @@ impl DeclareWorkflowReadinessCommand {
             model_content_digest,
             verified_at,
             verified_by,
-            review_event_id,
+            review_event,
         })
     }
 }
@@ -1140,35 +1245,35 @@ impl CommandLogic for DeclareWorkflowReadinessCommand {
         require!(state.added, "workflow stream must exist before readiness");
         Ok(vec![EmcEvent::WorkflowReadinessDeclared {
             stream_id: self.workflow_stream.clone(),
-            workflow: self.workflow.as_ref().to_owned(),
-            projection_fingerprint: self.projection_fingerprint.as_ref().to_owned(),
-            model_content_digest: self.model_content_digest.as_ref().to_owned(),
-            verified_at: self.verified_at.as_ref().to_owned(),
-            verified_by: self.verified_by.as_ref().to_owned(),
-            review_event_id: self
-                .review_event_id
-                .as_ref()
-                .map(|event_id| event_id.as_ref().to_owned()),
+            workflow: self.workflow.clone(),
+            projection_fingerprint: self.projection_fingerprint.clone(),
+            model_content_digest: self.model_content_digest.clone(),
+            verified_at: self.verified_at.clone(),
+            verified_by: self.verified_by.clone(),
+            review_event: self.review_event.clone(),
         }]
         .into())
     }
 }
 
 #[derive(Command)]
-pub struct ResolveConflictCommand {
+pub(crate) struct ResolveConflictCommand {
     #[stream]
     project_stream: StreamId,
-    conflict_id: ArtifactDigest,
-    chosen_event_id: ArtifactDigest,
+    conflict_id: EventConflictId,
+    chosen_event_id: ChosenEventId,
 }
 
 impl ResolveConflictCommand {
-    pub fn new(conflict_id: String, chosen_event_id: String) -> Result<Self, String> {
+    pub(crate) fn new(conflict_id: String, chosen_event_id: String) -> Result<Self, String> {
         Ok(Self {
             project_stream: project_stream_id()?,
-            conflict_id: ArtifactDigest::try_new(conflict_id).map_err(|error| error.to_string())?,
-            chosen_event_id: ArtifactDigest::try_new(chosen_event_id)
-                .map_err(|error| error.to_string())?,
+            conflict_id: EventConflictId::new(
+                ArtifactDigest::try_new(conflict_id).map_err(|error| error.to_string())?,
+            ),
+            chosen_event_id: ChosenEventId::new(
+                ArtifactDigest::try_new(chosen_event_id).map_err(|error| error.to_string())?,
+            ),
         })
     }
 }
@@ -1184,8 +1289,8 @@ impl CommandLogic for ResolveConflictCommand {
     fn handle(&self, _state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
         Ok(vec![EmcEvent::ConflictResolved {
             stream_id: self.project_stream.clone(),
-            conflict_id: self.conflict_id.as_ref().to_owned(),
-            chosen_event_id: self.chosen_event_id.as_ref().to_owned(),
+            conflict_id: self.conflict_id.clone(),
+            chosen_event_id: self.chosen_event_id.clone(),
         }]
         .into())
     }

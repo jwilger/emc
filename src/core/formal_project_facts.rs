@@ -18,23 +18,28 @@ use crate::core::types::{
     CommandInputSourceDescription, CommandInputSourceKind, CommandName, ContractKindName,
     ControlName, ControlRecoveryBehavior, CoveredDefinitionName, DataFlowSource,
     DataFlowSourceKind, DataFlowTarget, DatumName, EventAttributeName, EventAttributeSourceField,
-    EventAttributeSourceKind, EventAttributeSourceName, EventName, NavigationTargetName,
-    NavigationTargetType, OutcomeLabelName, PayloadContractName, ProvenanceDescription,
-    ReadModelFieldSourceKind, ReadModelName, ScenarioName, ScenarioStepText, SketchToken,
-    SliceSlug, StreamName, TransformationSemantics, TranslationExternalEventName, TranslationName,
-    ViewFieldName, ViewFieldSourceKind, ViewName, WorkflowSlug,
+    EventAttributeSourceKind, EventAttributeSourceName, EventName,
+    GeneratedEventAttributeSourceKind, NavigationTargetName, NavigationTargetType,
+    OutcomeLabelName, PayloadContractName, ProvenanceDescription, ReadModelFieldSourceKind,
+    ReadModelName, ScenarioName, ScenarioStepText, SketchToken, SliceSlug, StreamName,
+    TransformationSemantics, TranslationExternalEventName, TranslationName, ViewFieldName,
+    ViewFieldSourceKind, ViewName, WorkflowSlug,
 };
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectStream {
+pub(crate) struct NewProjectStream {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     stream: StreamName,
 }
 
 impl NewProjectStream {
-    pub fn new(workflow_slug: WorkflowSlug, slice_slug: SliceSlug, stream: StreamName) -> Self {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        slice_slug: SliceSlug,
+        stream: StreamName,
+    ) -> Self {
         Self {
             workflow_slug,
             slice_slug,
@@ -44,7 +49,7 @@ impl NewProjectStream {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectCommand {
+pub(crate) struct NewProjectCommand {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     command: CommandName,
@@ -53,7 +58,11 @@ pub struct NewProjectCommand {
 }
 
 impl NewProjectCommand {
-    pub fn new(workflow_slug: WorkflowSlug, slice_slug: SliceSlug, command: CommandName) -> Self {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        slice_slug: SliceSlug,
+        command: CommandName,
+    ) -> Self {
         Self {
             workflow_slug,
             slice_slug,
@@ -63,12 +72,15 @@ impl NewProjectCommand {
         }
     }
 
-    pub fn with_input(mut self, input: &NewCommandInput) -> Self {
+    pub(crate) fn with_input(mut self, input: &NewCommandInput) -> Self {
         self.command_inputs = vec![NewProjectCommandInput::from_command_input(&self, input)];
         self
     }
 
-    pub fn from_command(workflow_slug: WorkflowSlug, command: &NewCommandDefinition) -> Self {
+    pub(crate) fn from_command(
+        workflow_slug: WorkflowSlug,
+        command: &NewCommandDefinition,
+    ) -> Self {
         Self::new(
             workflow_slug,
             command.slice_slug().clone(),
@@ -78,7 +90,7 @@ impl NewProjectCommand {
         .with_errors(command.errors().clone())
     }
 
-    pub fn with_errors(mut self, errors: CommandErrorDefinitions) -> Self {
+    pub(crate) fn with_errors(mut self, errors: CommandErrorDefinitions) -> Self {
         self.command_errors = errors
             .as_slice()
             .iter()
@@ -89,7 +101,7 @@ impl NewProjectCommand {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectCommandInput {
+pub(crate) struct NewProjectCommandInput {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     command: CommandName,
@@ -169,7 +181,7 @@ impl NewProjectCommandInput {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectCommandError {
+pub(crate) struct NewProjectCommandError {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     command: CommandName,
@@ -186,13 +198,13 @@ impl NewProjectCommandError {
             command: command.command.clone(),
             error: error.name().clone(),
             scenario: error.scenario_name().clone(),
-            recovery: error.recovery_kind().clone(),
+            recovery: *error.recovery_kind(),
         }
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectDataFlow {
+pub(crate) struct NewProjectDataFlow {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     datum: DatumName,
@@ -204,7 +216,7 @@ pub struct NewProjectDataFlow {
 }
 
 impl NewProjectDataFlow {
-    pub fn from_slice_data_flow(
+    pub(crate) fn from_slice_data_flow(
         workflow_slug: WorkflowSlug,
         data_flow: &NewBitLevelDataFlow,
     ) -> Self {
@@ -212,9 +224,9 @@ impl NewProjectDataFlow {
             workflow_slug,
             slice_slug: data_flow.slice_slug().clone(),
             datum: data_flow.datum().clone(),
-            source_kind: data_flow.source_kind().clone(),
+            source_kind: *data_flow.source_kind(),
             source: data_flow.source().clone(),
-            transformation: data_flow.transformation().clone(),
+            transformation: *data_flow.transformation(),
             target: data_flow.target().clone(),
             bit_encoding: data_flow.bit_encoding().clone(),
         }
@@ -222,7 +234,7 @@ impl NewProjectDataFlow {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectReadModel {
+pub(crate) struct NewProjectReadModel {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     read_model: ReadModelName,
@@ -231,7 +243,7 @@ pub struct NewProjectReadModel {
 }
 
 impl NewProjectReadModel {
-    pub fn new(
+    pub(crate) fn new(
         workflow_slug: WorkflowSlug,
         slice_slug: SliceSlug,
         read_model: ReadModelName,
@@ -245,21 +257,21 @@ impl NewProjectReadModel {
         }
     }
 
-    pub fn with_definition(mut self, read_model: &NewReadModelDefinition) -> Self {
+    pub(crate) fn with_definition(mut self, read_model: &NewReadModelDefinition) -> Self {
         self.read_model_definitions = vec![NewProjectReadModelDefinition::from_read_model(
             &self, read_model,
         )];
         self
     }
 
-    pub fn with_field(mut self, field: &NewReadModelField) -> Self {
+    pub(crate) fn with_field(mut self, field: &NewReadModelField) -> Self {
         self.read_model_fields = vec![NewProjectReadModelField::from_read_model_field(
             &self, field,
         )];
         self
     }
 
-    pub fn from_read_model(
+    pub(crate) fn from_read_model(
         workflow_slug: WorkflowSlug,
         read_model: &NewReadModelDefinition,
     ) -> Self {
@@ -274,7 +286,7 @@ impl NewProjectReadModel {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectReadModelDefinition {
+pub(crate) struct NewProjectReadModelDefinition {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     read_model: ReadModelName,
@@ -310,7 +322,7 @@ impl NewProjectReadModelDefinition {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectReadModelField {
+pub(crate) struct NewProjectReadModelField {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     read_model: ReadModelName,
@@ -333,7 +345,7 @@ impl NewProjectReadModelField {
             slice_slug: read_model.slice_slug.clone(),
             read_model: read_model.read_model.clone(),
             field: field.name().clone(),
-            source_kind: field.source_kind().clone(),
+            source_kind: field.source_kind(),
             source_event: field
                 .source_event()
                 .map(|event| event.as_ref().to_owned())
@@ -370,7 +382,7 @@ impl NewProjectReadModelField {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectView {
+pub(crate) struct NewProjectView {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     view: ViewName,
@@ -380,7 +392,7 @@ pub struct NewProjectView {
 }
 
 impl NewProjectView {
-    pub fn new(workflow_slug: WorkflowSlug, slice_slug: SliceSlug, view: ViewName) -> Self {
+    pub(crate) fn new(workflow_slug: WorkflowSlug, slice_slug: SliceSlug, view: ViewName) -> Self {
         Self {
             workflow_slug,
             slice_slug,
@@ -391,12 +403,12 @@ impl NewProjectView {
         }
     }
 
-    pub fn with_field(mut self, field: &NewViewField) -> Self {
+    pub(crate) fn with_field(mut self, field: &NewViewField) -> Self {
         self.view_fields = vec![NewProjectViewField::from_view_field(&self, field)];
         self
     }
 
-    pub fn from_view(workflow_slug: WorkflowSlug, view: &NewViewDefinition) -> Self {
+    pub(crate) fn from_view(workflow_slug: WorkflowSlug, view: &NewViewDefinition) -> Self {
         let mut project_view = Self::new(
             workflow_slug,
             view.slice_slug().clone(),
@@ -484,15 +496,15 @@ impl NewProjectViewControl {
             control: control.name().clone(),
             command: control.command_name().clone(),
             input: input.name().clone(),
-            input_source_kind: input.source_kind().clone(),
+            input_source_kind: *input.source_kind(),
             input_source_description: input.source_description().clone(),
             input_sketch_token: input.sketch_token().clone(),
             input_visible_to_actor: input.visible_to_actor(),
             input_decision_field: input.decision_field(),
             handled_errors: control.handled_errors().as_slice().to_vec(),
-            recovery_behavior: control.recovery_behavior().clone(),
+            recovery_behavior: *control.recovery_behavior(),
             control_sketch_token: control.sketch_token().clone(),
-            navigation_type: navigation.target_type().clone(),
+            navigation_type: *navigation.target_type(),
             navigation_target: navigation.target_name().clone(),
             external_workflow: navigation
                 .external_workflow_name()
@@ -511,7 +523,7 @@ impl NewProjectViewControl {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectBoardElement {
+pub(crate) struct NewProjectBoardElement {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     element: BoardElementName,
@@ -522,7 +534,7 @@ pub struct NewProjectBoardElement {
 }
 
 impl NewProjectBoardElement {
-    pub fn from_slice_board_element(
+    pub(crate) fn from_slice_board_element(
         workflow_slug: WorkflowSlug,
         element: &NewBoardElement,
     ) -> Self {
@@ -530,8 +542,8 @@ impl NewProjectBoardElement {
             workflow_slug,
             slice_slug: element.slice_slug().clone(),
             element: element.name().clone(),
-            kind: element.kind().clone(),
-            lane: element.lane().clone(),
+            kind: *element.kind(),
+            lane: *element.lane(),
             declared_name: element.declared_name().clone(),
             main_path: element.main_path(),
         }
@@ -539,7 +551,7 @@ impl NewProjectBoardElement {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectBoardConnection {
+pub(crate) struct NewProjectBoardConnection {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     source: BoardConnectionEndpoint,
@@ -549,7 +561,7 @@ pub struct NewProjectBoardConnection {
 }
 
 impl NewProjectBoardConnection {
-    pub fn from_slice_board_connection(
+    pub(crate) fn from_slice_board_connection(
         workflow_slug: WorkflowSlug,
         connection: &NewBoardConnection,
     ) -> Self {
@@ -557,15 +569,15 @@ impl NewProjectBoardConnection {
             workflow_slug,
             slice_slug: connection.slice_slug().clone(),
             source: connection.source().clone(),
-            source_kind: connection.source_kind().clone(),
+            source_kind: *connection.source_kind(),
             target: connection.target().clone(),
-            target_kind: connection.target_kind().clone(),
+            target_kind: *connection.target_kind(),
         }
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectViewField {
+pub(crate) struct NewProjectViewField {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     view: ViewName,
@@ -584,7 +596,7 @@ impl NewProjectViewField {
             slice_slug: view.slice_slug.clone(),
             view: view.view.clone(),
             field: field.name().clone(),
-            source_kind: field.source_kind().clone(),
+            source_kind: *field.source_kind(),
             source_read_model: field.source_read_model().clone(),
             source_field: field.source_field().clone(),
             provenance: field.provenance_description().clone(),
@@ -594,7 +606,7 @@ impl NewProjectViewField {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectAutomation {
+pub(crate) struct NewProjectAutomation {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     automation: AutomationName,
@@ -602,7 +614,7 @@ pub struct NewProjectAutomation {
 }
 
 impl NewProjectAutomation {
-    pub fn new(
+    pub(crate) fn new(
         workflow_slug: WorkflowSlug,
         slice_slug: SliceSlug,
         automation: AutomationName,
@@ -615,7 +627,7 @@ impl NewProjectAutomation {
         }
     }
 
-    pub fn from_automation(
+    pub(crate) fn from_automation(
         workflow_slug: WorkflowSlug,
         automation: &NewAutomationDefinition,
     ) -> Self {
@@ -660,7 +672,7 @@ impl NewProjectAutomationDefinition {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectTranslation {
+pub(crate) struct NewProjectTranslation {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     translation: TranslationName,
@@ -668,7 +680,7 @@ pub struct NewProjectTranslation {
 }
 
 impl NewProjectTranslation {
-    pub fn new(
+    pub(crate) fn new(
         workflow_slug: WorkflowSlug,
         slice_slug: SliceSlug,
         translation: TranslationName,
@@ -681,7 +693,7 @@ impl NewProjectTranslation {
         }
     }
 
-    pub fn from_translation(
+    pub(crate) fn from_translation(
         workflow_slug: WorkflowSlug,
         translation: &NewTranslationDefinition,
     ) -> Self {
@@ -724,7 +736,7 @@ impl NewProjectTranslationDefinition {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectExternalPayload {
+pub(crate) struct NewProjectExternalPayload {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     external_payload: EventAttributeSourceName,
@@ -732,20 +744,7 @@ pub struct NewProjectExternalPayload {
 }
 
 impl NewProjectExternalPayload {
-    pub fn new(
-        workflow_slug: WorkflowSlug,
-        slice_slug: SliceSlug,
-        external_payload: EventAttributeSourceName,
-    ) -> Self {
-        Self {
-            workflow_slug,
-            slice_slug,
-            external_payload,
-            external_payload_field: None,
-        }
-    }
-
-    pub fn from_external_payload(
+    pub(crate) fn from_external_payload(
         workflow_slug: WorkflowSlug,
         external_payload: &NewExternalPayloadDefinition,
     ) -> Self {
@@ -762,7 +761,7 @@ impl NewProjectExternalPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectExternalPayloadField {
+pub(crate) struct NewProjectExternalPayloadField {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     external_payload: EventAttributeSourceName,
@@ -772,7 +771,7 @@ pub struct NewProjectExternalPayloadField {
 }
 
 impl NewProjectExternalPayloadField {
-    pub fn from_external_payload(
+    pub(crate) fn from_external_payload(
         workflow_slug: WorkflowSlug,
         external_payload: &NewExternalPayloadDefinition,
     ) -> Self {
@@ -788,7 +787,7 @@ impl NewProjectExternalPayloadField {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectScenario {
+pub(crate) struct NewProjectScenario {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     scenario_kind: ScenarioKind,
@@ -797,22 +796,10 @@ pub struct NewProjectScenario {
 }
 
 impl NewProjectScenario {
-    pub fn new(
+    pub(crate) fn from_slice_scenario(
         workflow_slug: WorkflowSlug,
-        slice_slug: SliceSlug,
-        scenario_kind: ScenarioKind,
-        scenario: ScenarioName,
+        scenario: &NewSliceScenario,
     ) -> Self {
-        Self {
-            workflow_slug,
-            slice_slug,
-            scenario_kind,
-            scenario,
-            scenario_definition: None,
-        }
-    }
-
-    pub fn from_slice_scenario(workflow_slug: WorkflowSlug, scenario: &NewSliceScenario) -> Self {
         Self {
             workflow_slug: workflow_slug.clone(),
             slice_slug: scenario.slice_slug().clone(),
@@ -827,7 +814,7 @@ impl NewProjectScenario {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectScenarioDefinition {
+pub(crate) struct NewProjectScenarioDefinition {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     scenario_kind: ScenarioKind,
@@ -843,7 +830,10 @@ pub struct NewProjectScenarioDefinition {
 }
 
 impl NewProjectScenarioDefinition {
-    pub fn from_slice_scenario(workflow_slug: WorkflowSlug, scenario: &NewSliceScenario) -> Self {
+    pub(crate) fn from_slice_scenario(
+        workflow_slug: WorkflowSlug,
+        scenario: &NewSliceScenario,
+    ) -> Self {
         Self {
             workflow_slug,
             slice_slug: scenario.slice_slug().clone(),
@@ -854,7 +844,7 @@ impl NewProjectScenarioDefinition {
             then: scenario.then().clone(),
             read_streams: scenario.read_streams().as_slice().to_vec(),
             written_streams: scenario.written_streams().as_slice().to_vec(),
-            contract_kind: scenario.contract_kind().cloned(),
+            contract_kind: scenario.contract_kind().copied(),
             covered_definition: scenario.covered_definition().cloned(),
             error_references: scenario.error_references().as_slice().to_vec(),
         }
@@ -862,7 +852,7 @@ impl NewProjectScenarioDefinition {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectOutcome {
+pub(crate) struct NewProjectOutcome {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     outcome: OutcomeLabelName,
@@ -871,7 +861,7 @@ pub struct NewProjectOutcome {
 }
 
 impl NewProjectOutcome {
-    pub fn new(
+    pub(crate) fn new(
         workflow_slug: WorkflowSlug,
         slice_slug: SliceSlug,
         outcome: OutcomeLabelName,
@@ -889,7 +879,7 @@ impl NewProjectOutcome {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectEvent {
+pub(crate) struct NewProjectEvent {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     event: EventName,
@@ -898,7 +888,7 @@ pub struct NewProjectEvent {
 }
 
 impl NewProjectEvent {
-    pub fn new(
+    pub(crate) fn new(
         workflow_slug: WorkflowSlug,
         slice_slug: SliceSlug,
         event: EventName,
@@ -913,14 +903,14 @@ impl NewProjectEvent {
         }
     }
 
-    pub fn with_attribute(mut self, attribute: &NewEventAttribute) -> Self {
+    pub(crate) fn with_attribute(mut self, attribute: &NewEventAttribute) -> Self {
         self.event_attributes = vec![NewProjectEventAttribute::from_event_attribute(
             &self, attribute,
         )];
         self
     }
 
-    pub fn from_event(workflow_slug: WorkflowSlug, event: &NewEventDefinition) -> Self {
+    pub(crate) fn from_event(workflow_slug: WorkflowSlug, event: &NewEventDefinition) -> Self {
         Self::new(
             workflow_slug,
             event.slice_slug().clone(),
@@ -932,7 +922,7 @@ impl NewProjectEvent {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NewProjectEventAttribute {
+pub(crate) struct NewProjectEventAttribute {
     workflow_slug: WorkflowSlug,
     slice_slug: SliceSlug,
     event: EventName,
@@ -940,7 +930,7 @@ pub struct NewProjectEventAttribute {
     source_kind: EventAttributeSourceKind,
     source_name: EventAttributeSourceName,
     source_field: EventAttributeSourceField,
-    generated_source_kind: Option<EventAttributeSourceKind>,
+    generated_source_kind: Option<GeneratedEventAttributeSourceKind>,
     provenance: ProvenanceDescription,
 }
 
@@ -951,7 +941,7 @@ impl NewProjectEventAttribute {
             slice_slug: event.slice_slug.clone(),
             event: event.event.clone(),
             attribute: attribute.name().clone(),
-            source_kind: attribute.source_kind().clone(),
+            source_kind: *attribute.source_kind(),
             source_name: attribute.source_name().clone(),
             source_field: attribute.source_field().clone(),
             generated_source_kind: attribute.generated_source_kind().cloned(),
@@ -961,35 +951,35 @@ impl NewProjectEventAttribute {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectStream {
+pub(crate) struct ProjectStream {
     workflow_slug: String,
     slice_slug: String,
     stream: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectCommand {
+pub(crate) struct ProjectCommand {
     workflow_slug: String,
     slice_slug: String,
     command: String,
 }
 
 impl ProjectCommand {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn command(&self) -> &str {
+    pub(crate) fn command(&self) -> &str {
         &self.command
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectCommandInput {
+pub(crate) struct ProjectCommandInput {
     workflow_slug: String,
     slice_slug: String,
     command: String,
@@ -1010,77 +1000,77 @@ pub struct ProjectCommandInput {
 }
 
 impl ProjectCommandInput {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn command(&self) -> &str {
+    pub(crate) fn command(&self) -> &str {
         &self.command
     }
 
-    pub fn input(&self) -> &str {
+    pub(crate) fn input(&self) -> &str {
         &self.input
     }
 
-    pub fn source_kind(&self) -> &str {
+    pub(crate) fn source_kind(&self) -> &str {
         &self.source_kind
     }
 
-    pub fn source_description(&self) -> &str {
+    pub(crate) fn source_description(&self) -> &str {
         &self.source_description
     }
 
-    pub fn provenance_chain(&self) -> &[String] {
+    pub(crate) fn provenance_chain(&self) -> &[String] {
         &self.provenance_chain
     }
 
-    pub fn event_stream_source_event(&self) -> &str {
+    pub(crate) fn event_stream_source_event(&self) -> &str {
         &self.event_stream_source_event
     }
 
-    pub fn event_stream_source_attribute(&self) -> &str {
+    pub(crate) fn event_stream_source_attribute(&self) -> &str {
         &self.event_stream_source_attribute
     }
 
-    pub fn external_payload_source_name(&self) -> &str {
+    pub(crate) fn external_payload_source_name(&self) -> &str {
         &self.external_payload_source_name
     }
 
-    pub fn external_payload_source_field(&self) -> &str {
+    pub(crate) fn external_payload_source_field(&self) -> &str {
         &self.external_payload_source_field
     }
 
-    pub fn generated_source_name(&self) -> &str {
+    pub(crate) fn generated_source_name(&self) -> &str {
         &self.generated_source_name
     }
 
-    pub fn generated_source_field(&self) -> &str {
+    pub(crate) fn generated_source_field(&self) -> &str {
         &self.generated_source_field
     }
 
-    pub fn session_source_name(&self) -> &str {
+    pub(crate) fn session_source_name(&self) -> &str {
         &self.session_source_name
     }
 
-    pub fn session_source_field(&self) -> &str {
+    pub(crate) fn session_source_field(&self) -> &str {
         &self.session_source_field
     }
 
-    pub fn invocation_argument_source_name(&self) -> &str {
+    pub(crate) fn invocation_argument_source_name(&self) -> &str {
         &self.invocation_argument_source_name
     }
 
-    pub fn invocation_argument_source_field(&self) -> &str {
+    pub(crate) fn invocation_argument_source_field(&self) -> &str {
         &self.invocation_argument_source_field
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectCommandError {
+pub(crate) struct ProjectCommandError {
     workflow_slug: String,
     slice_slug: String,
     command: String,
@@ -1090,33 +1080,33 @@ pub struct ProjectCommandError {
 }
 
 impl ProjectCommandError {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn command(&self) -> &str {
+    pub(crate) fn command(&self) -> &str {
         &self.command
     }
 
-    pub fn error(&self) -> &str {
+    pub(crate) fn error(&self) -> &str {
         &self.error
     }
 
-    pub fn scenario(&self) -> &str {
+    pub(crate) fn scenario(&self) -> &str {
         &self.scenario
     }
 
-    pub fn recovery(&self) -> &str {
+    pub(crate) fn recovery(&self) -> &str {
         &self.recovery
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectDataFlow {
+pub(crate) struct ProjectDataFlow {
     workflow_slug: String,
     slice_slug: String,
     datum: String,
@@ -1128,62 +1118,62 @@ pub struct ProjectDataFlow {
 }
 
 impl ProjectDataFlow {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn datum(&self) -> &str {
+    pub(crate) fn datum(&self) -> &str {
         &self.datum
     }
 
-    pub fn source(&self) -> &str {
+    pub(crate) fn source(&self) -> &str {
         &self.source
     }
 
-    pub fn source_kind(&self) -> &str {
+    pub(crate) fn source_kind(&self) -> &str {
         &self.source_kind
     }
 
-    pub fn transformation(&self) -> &str {
+    pub(crate) fn transformation(&self) -> &str {
         &self.transformation
     }
 
-    pub fn target(&self) -> &str {
+    pub(crate) fn target(&self) -> &str {
         &self.target
     }
 
-    pub fn bit_encoding(&self) -> &str {
+    pub(crate) fn bit_encoding(&self) -> &str {
         &self.bit_encoding
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectReadModel {
+pub(crate) struct ProjectReadModel {
     workflow_slug: String,
     slice_slug: String,
     read_model: String,
 }
 
 impl ProjectReadModel {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn read_model(&self) -> &str {
+    pub(crate) fn read_model(&self) -> &str {
         &self.read_model
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectReadModelDefinition {
+pub(crate) struct ProjectReadModelDefinition {
     workflow_slug: String,
     slice_slug: String,
     read_model: String,
@@ -1194,37 +1184,37 @@ pub struct ProjectReadModelDefinition {
 }
 
 impl ProjectReadModelDefinition {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn read_model(&self) -> &str {
+    pub(crate) fn read_model(&self) -> &str {
         &self.read_model
     }
 
-    pub fn transitive(&self) -> bool {
+    pub(crate) fn transitive(&self) -> bool {
         self.transitive
     }
 
-    pub fn relationship_fields(&self) -> &[String] {
+    pub(crate) fn relationship_fields(&self) -> &[String] {
         &self.relationship_fields
     }
 
-    pub fn transitive_rule(&self) -> &str {
+    pub(crate) fn transitive_rule(&self) -> &str {
         &self.transitive_rule
     }
 
-    pub fn example_scenario_name(&self) -> &str {
+    pub(crate) fn example_scenario_name(&self) -> &str {
         &self.example_scenario_name
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectReadModelField {
+pub(crate) struct ProjectReadModelField {
     workflow_slug: String,
     slice_slug: String,
     read_model: String,
@@ -1241,82 +1231,82 @@ pub struct ProjectReadModelField {
 }
 
 impl ProjectReadModelField {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn read_model(&self) -> &str {
+    pub(crate) fn read_model(&self) -> &str {
         &self.read_model
     }
 
-    pub fn field(&self) -> &str {
+    pub(crate) fn field(&self) -> &str {
         &self.field
     }
 
-    pub fn source_kind(&self) -> &str {
+    pub(crate) fn source_kind(&self) -> &str {
         &self.source_kind
     }
 
-    pub fn source_event(&self) -> &str {
+    pub(crate) fn source_event(&self) -> &str {
         &self.source_event
     }
 
-    pub fn source_attribute(&self) -> &str {
+    pub(crate) fn source_attribute(&self) -> &str {
         &self.source_attribute
     }
 
-    pub fn derivation_rule(&self) -> &str {
+    pub(crate) fn derivation_rule(&self) -> &str {
         &self.derivation_rule
     }
 
-    pub fn derivation_source_fields(&self) -> &[String] {
+    pub(crate) fn derivation_source_fields(&self) -> &[String] {
         &self.derivation_source_fields
     }
 
-    pub fn absence_event(&self) -> &str {
+    pub(crate) fn absence_event(&self) -> &str {
         &self.absence_event
     }
 
-    pub fn derivation_scenario_name(&self) -> &str {
+    pub(crate) fn derivation_scenario_name(&self) -> &str {
         &self.derivation_scenario_name
     }
 
-    pub fn absence_scenario_name(&self) -> &str {
+    pub(crate) fn absence_scenario_name(&self) -> &str {
         &self.absence_scenario_name
     }
 
-    pub fn provenance(&self) -> &str {
+    pub(crate) fn provenance(&self) -> &str {
         &self.provenance
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectView {
+pub(crate) struct ProjectView {
     workflow_slug: String,
     slice_slug: String,
     view: String,
 }
 
 impl ProjectView {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn view(&self) -> &str {
+    pub(crate) fn view(&self) -> &str {
         &self.view
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectViewDefinition {
+pub(crate) struct ProjectViewDefinition {
     workflow_slug: String,
     slice_slug: String,
     view: String,
@@ -1327,37 +1317,37 @@ pub struct ProjectViewDefinition {
 }
 
 impl ProjectViewDefinition {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn view(&self) -> &str {
+    pub(crate) fn view(&self) -> &str {
         &self.view
     }
 
-    pub fn read_models(&self) -> &[String] {
+    pub(crate) fn read_models(&self) -> &[String] {
         &self.read_models
     }
 
-    pub fn sketch_tokens(&self) -> &[String] {
+    pub(crate) fn sketch_tokens(&self) -> &[String] {
         &self.sketch_tokens
     }
 
-    pub fn local_states(&self) -> &[String] {
+    pub(crate) fn local_states(&self) -> &[String] {
         &self.local_states
     }
 
-    pub fn filters(&self) -> &[String] {
+    pub(crate) fn filters(&self) -> &[String] {
         &self.filters
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectViewControl {
+pub(crate) struct ProjectViewControl {
     workflow_slug: String,
     slice_slug: String,
     view: String,
@@ -1380,85 +1370,85 @@ pub struct ProjectViewControl {
 }
 
 impl ProjectViewControl {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn view(&self) -> &str {
+    pub(crate) fn view(&self) -> &str {
         &self.view
     }
 
-    pub fn control(&self) -> &str {
+    pub(crate) fn control(&self) -> &str {
         &self.control
     }
 
-    pub fn command(&self) -> &str {
+    pub(crate) fn command(&self) -> &str {
         &self.command
     }
 
-    pub fn input(&self) -> &str {
+    pub(crate) fn input(&self) -> &str {
         &self.input
     }
 
-    pub fn input_source_kind(&self) -> &str {
+    pub(crate) fn input_source_kind(&self) -> &str {
         &self.input_source_kind
     }
 
-    pub fn input_source_description(&self) -> &str {
+    pub(crate) fn input_source_description(&self) -> &str {
         &self.input_source_description
     }
 
-    pub fn input_sketch_token(&self) -> &str {
+    pub(crate) fn input_sketch_token(&self) -> &str {
         &self.input_sketch_token
     }
 
-    pub fn input_visible_to_actor(&self) -> bool {
+    pub(crate) fn input_visible_to_actor(&self) -> bool {
         self.input_visible_to_actor
     }
 
-    pub fn input_decision_field(&self) -> bool {
+    pub(crate) fn input_decision_field(&self) -> bool {
         self.input_decision_field
     }
 
-    pub fn handled_errors(&self) -> &[String] {
+    pub(crate) fn handled_errors(&self) -> &[String] {
         &self.handled_errors
     }
 
-    pub fn recovery_behavior(&self) -> &str {
+    pub(crate) fn recovery_behavior(&self) -> &str {
         &self.recovery_behavior
     }
 
-    pub fn control_sketch_token(&self) -> &str {
+    pub(crate) fn control_sketch_token(&self) -> &str {
         &self.control_sketch_token
     }
 
-    pub fn navigation_type(&self) -> &str {
+    pub(crate) fn navigation_type(&self) -> &str {
         &self.navigation_type
     }
 
-    pub fn navigation_target(&self) -> &str {
+    pub(crate) fn navigation_target(&self) -> &str {
         &self.navigation_target
     }
 
-    pub fn external_workflow(&self) -> &str {
+    pub(crate) fn external_workflow(&self) -> &str {
         &self.external_workflow
     }
 
-    pub fn external_system(&self) -> &str {
+    pub(crate) fn external_system(&self) -> &str {
         &self.external_system
     }
 
-    pub fn handoff_contract(&self) -> &str {
+    pub(crate) fn handoff_contract(&self) -> &str {
         &self.handoff_contract
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectBoardElement {
+pub(crate) struct ProjectBoardElement {
     workflow_slug: String,
     slice_slug: String,
     element: String,
@@ -1469,37 +1459,37 @@ pub struct ProjectBoardElement {
 }
 
 impl ProjectBoardElement {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn element(&self) -> &str {
+    pub(crate) fn element(&self) -> &str {
         &self.element
     }
 
-    pub fn kind(&self) -> &str {
+    pub(crate) fn kind(&self) -> &str {
         &self.kind
     }
 
-    pub fn lane(&self) -> &str {
+    pub(crate) fn lane(&self) -> &str {
         &self.lane
     }
 
-    pub fn declared_name(&self) -> &str {
+    pub(crate) fn declared_name(&self) -> &str {
         &self.declared_name
     }
 
-    pub fn main_path(&self) -> bool {
+    pub(crate) fn main_path(&self) -> bool {
         self.main_path
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectBoardConnection {
+pub(crate) struct ProjectBoardConnection {
     workflow_slug: String,
     slice_slug: String,
     source: String,
@@ -1509,33 +1499,33 @@ pub struct ProjectBoardConnection {
 }
 
 impl ProjectBoardConnection {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn source(&self) -> &str {
+    pub(crate) fn source(&self) -> &str {
         &self.source
     }
 
-    pub fn source_kind(&self) -> &str {
+    pub(crate) fn source_kind(&self) -> &str {
         &self.source_kind
     }
 
-    pub fn target(&self) -> &str {
+    pub(crate) fn target(&self) -> &str {
         &self.target
     }
 
-    pub fn target_kind(&self) -> &str {
+    pub(crate) fn target_kind(&self) -> &str {
         &self.target_kind
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectViewField {
+pub(crate) struct ProjectViewField {
     workflow_slug: String,
     slice_slug: String,
     view: String,
@@ -1548,66 +1538,66 @@ pub struct ProjectViewField {
 }
 
 impl ProjectViewField {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn view(&self) -> &str {
+    pub(crate) fn view(&self) -> &str {
         &self.view
     }
 
-    pub fn field(&self) -> &str {
+    pub(crate) fn field(&self) -> &str {
         &self.field
     }
 
-    pub fn source_kind(&self) -> &str {
+    pub(crate) fn source_kind(&self) -> &str {
         &self.source_kind
     }
 
-    pub fn source_read_model(&self) -> &str {
+    pub(crate) fn source_read_model(&self) -> &str {
         &self.source_read_model
     }
 
-    pub fn source_field(&self) -> &str {
+    pub(crate) fn source_field(&self) -> &str {
         &self.source_field
     }
 
-    pub fn provenance(&self) -> &str {
+    pub(crate) fn provenance(&self) -> &str {
         &self.provenance
     }
 
-    pub fn bit_encoding(&self) -> &str {
+    pub(crate) fn bit_encoding(&self) -> &str {
         &self.bit_encoding
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectAutomation {
+pub(crate) struct ProjectAutomation {
     workflow_slug: String,
     slice_slug: String,
     automation: String,
 }
 
 impl ProjectAutomation {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn automation(&self) -> &str {
+    pub(crate) fn automation(&self) -> &str {
         &self.automation
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectAutomationDefinition {
+pub(crate) struct ProjectAutomationDefinition {
     workflow_slug: String,
     slice_slug: String,
     automation: String,
@@ -1618,58 +1608,58 @@ pub struct ProjectAutomationDefinition {
 }
 
 impl ProjectAutomationDefinition {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn automation(&self) -> &str {
+    pub(crate) fn automation(&self) -> &str {
         &self.automation
     }
 
-    pub fn trigger(&self) -> &str {
+    pub(crate) fn trigger(&self) -> &str {
         &self.trigger
     }
 
-    pub fn command(&self) -> &str {
+    pub(crate) fn command(&self) -> &str {
         &self.command
     }
 
-    pub fn handled_errors(&self) -> &[String] {
+    pub(crate) fn handled_errors(&self) -> &[String] {
         &self.handled_errors
     }
 
-    pub fn reaction(&self) -> &str {
+    pub(crate) fn reaction(&self) -> &str {
         &self.reaction
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectTranslation {
+pub(crate) struct ProjectTranslation {
     workflow_slug: String,
     slice_slug: String,
     translation: String,
 }
 
 impl ProjectTranslation {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn translation(&self) -> &str {
+    pub(crate) fn translation(&self) -> &str {
         &self.translation
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectTranslationDefinition {
+pub(crate) struct ProjectTranslationDefinition {
     workflow_slug: String,
     slice_slug: String,
     translation: String,
@@ -1679,54 +1669,54 @@ pub struct ProjectTranslationDefinition {
 }
 
 impl ProjectTranslationDefinition {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn translation(&self) -> &str {
+    pub(crate) fn translation(&self) -> &str {
         &self.translation
     }
 
-    pub fn external_event(&self) -> &str {
+    pub(crate) fn external_event(&self) -> &str {
         &self.external_event
     }
 
-    pub fn payload_contract(&self) -> &str {
+    pub(crate) fn payload_contract(&self) -> &str {
         &self.payload_contract
     }
 
-    pub fn command(&self) -> &str {
+    pub(crate) fn command(&self) -> &str {
         &self.command
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectExternalPayload {
+pub(crate) struct ProjectExternalPayload {
     workflow_slug: String,
     slice_slug: String,
     external_payload: String,
 }
 
 impl ProjectExternalPayload {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn external_payload(&self) -> &str {
+    pub(crate) fn external_payload(&self) -> &str {
         &self.external_payload
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectExternalPayloadField {
+pub(crate) struct ProjectExternalPayloadField {
     workflow_slug: String,
     slice_slug: String,
     external_payload: String,
@@ -1736,33 +1726,33 @@ pub struct ProjectExternalPayloadField {
 }
 
 impl ProjectExternalPayloadField {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn external_payload(&self) -> &str {
+    pub(crate) fn external_payload(&self) -> &str {
         &self.external_payload
     }
 
-    pub fn field(&self) -> &str {
+    pub(crate) fn field(&self) -> &str {
         &self.field
     }
 
-    pub fn provenance(&self) -> &str {
+    pub(crate) fn provenance(&self) -> &str {
         &self.provenance
     }
 
-    pub fn bit_encoding(&self) -> &str {
+    pub(crate) fn bit_encoding(&self) -> &str {
         &self.bit_encoding
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectScenario {
+pub(crate) struct ProjectScenario {
     workflow_slug: String,
     slice_slug: String,
     scenario_kind: String,
@@ -1770,25 +1760,25 @@ pub struct ProjectScenario {
 }
 
 impl ProjectScenario {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn scenario_kind(&self) -> &str {
+    pub(crate) fn scenario_kind(&self) -> &str {
         &self.scenario_kind
     }
 
-    pub fn scenario(&self) -> &str {
+    pub(crate) fn scenario(&self) -> &str {
         &self.scenario
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectScenarioDefinition {
+pub(crate) struct ProjectScenarioDefinition {
     workflow_slug: String,
     slice_slug: String,
     scenario_kind: String,
@@ -1804,57 +1794,57 @@ pub struct ProjectScenarioDefinition {
 }
 
 impl ProjectScenarioDefinition {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn scenario_kind(&self) -> &str {
+    pub(crate) fn scenario_kind(&self) -> &str {
         &self.scenario_kind
     }
 
-    pub fn scenario(&self) -> &str {
+    pub(crate) fn scenario(&self) -> &str {
         &self.scenario
     }
 
-    pub fn given(&self) -> &str {
+    pub(crate) fn given(&self) -> &str {
         &self.given
     }
 
-    pub fn when(&self) -> &str {
+    pub(crate) fn when(&self) -> &str {
         &self.when
     }
 
-    pub fn then(&self) -> &str {
+    pub(crate) fn then(&self) -> &str {
         &self.then
     }
 
-    pub fn read_streams(&self) -> &[String] {
+    pub(crate) fn read_streams(&self) -> &[String] {
         &self.read_streams
     }
 
-    pub fn written_streams(&self) -> &[String] {
+    pub(crate) fn written_streams(&self) -> &[String] {
         &self.written_streams
     }
 
-    pub fn contract_kind(&self) -> &str {
+    pub(crate) fn contract_kind(&self) -> &str {
         &self.contract_kind
     }
 
-    pub fn covered_definition(&self) -> &str {
+    pub(crate) fn covered_definition(&self) -> &str {
         &self.covered_definition
     }
 
-    pub fn error_references(&self) -> &[String] {
+    pub(crate) fn error_references(&self) -> &[String] {
         &self.error_references
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectOutcome {
+pub(crate) struct ProjectOutcome {
     workflow_slug: String,
     slice_slug: String,
     outcome: String,
@@ -1863,29 +1853,29 @@ pub struct ProjectOutcome {
 }
 
 impl ProjectOutcome {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn outcome(&self) -> &str {
+    pub(crate) fn outcome(&self) -> &str {
         &self.outcome
     }
 
-    pub fn events(&self) -> &[String] {
+    pub(crate) fn events(&self) -> &[String] {
         &self.events
     }
 
-    pub fn externally_relevant(&self) -> bool {
+    pub(crate) fn externally_relevant(&self) -> bool {
         self.externally_relevant
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectEvent {
+pub(crate) struct ProjectEvent {
     workflow_slug: String,
     slice_slug: String,
     event: String,
@@ -1893,25 +1883,25 @@ pub struct ProjectEvent {
 }
 
 impl ProjectEvent {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn event(&self) -> &str {
+    pub(crate) fn event(&self) -> &str {
         &self.event
     }
 
-    pub fn stream(&self) -> &str {
+    pub(crate) fn stream(&self) -> &str {
         &self.stream
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct ProjectEventAttribute {
+pub(crate) struct ProjectEventAttribute {
     workflow_slug: String,
     slice_slug: String,
     event: String,
@@ -1924,58 +1914,58 @@ pub struct ProjectEventAttribute {
 }
 
 impl ProjectEventAttribute {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn event(&self) -> &str {
+    pub(crate) fn event(&self) -> &str {
         &self.event
     }
 
-    pub fn attribute(&self) -> &str {
+    pub(crate) fn attribute(&self) -> &str {
         &self.attribute
     }
 
-    pub fn source_kind(&self) -> &str {
+    pub(crate) fn source_kind(&self) -> &str {
         &self.source_kind
     }
 
-    pub fn source_name(&self) -> &str {
+    pub(crate) fn source_name(&self) -> &str {
         &self.source_name
     }
 
-    pub fn source_field(&self) -> &str {
+    pub(crate) fn source_field(&self) -> &str {
         &self.source_field
     }
 
-    pub fn generated_source_kind(&self) -> &str {
+    pub(crate) fn generated_source_kind(&self) -> &str {
         &self.generated_source_kind
     }
 
-    pub fn provenance(&self) -> &str {
+    pub(crate) fn provenance(&self) -> &str {
         &self.provenance
     }
 }
 
 impl ProjectStream {
-    pub fn workflow_slug(&self) -> &str {
+    pub(crate) fn workflow_slug(&self) -> &str {
         &self.workflow_slug
     }
 
-    pub fn slice_slug(&self) -> &str {
+    pub(crate) fn slice_slug(&self) -> &str {
         &self.slice_slug
     }
 
-    pub fn stream(&self) -> &str {
+    pub(crate) fn stream(&self) -> &str {
         &self.stream
     }
 }
 
-pub fn parse_lean_project_streams(
+pub(crate) fn parse_lean_project_streams(
     contents: &FileContents,
 ) -> Result<Vec<ProjectStream>, FormalProjectFactError> {
     stream_entries_from_list(
@@ -1984,13 +1974,13 @@ pub fn parse_lean_project_streams(
     )
 }
 
-pub fn parse_quint_project_streams(
+pub(crate) fn parse_quint_project_streams(
     contents: &FileContents,
 ) -> Result<Vec<ProjectStream>, FormalProjectFactError> {
     stream_entries_from_list(contents.as_ref(), "val modelStreams: List[ModelStream] = ")
 }
 
-pub fn parse_lean_project_scenarios(
+pub(crate) fn parse_lean_project_scenarios(
     contents: &FileContents,
 ) -> Result<Vec<ProjectScenario>, FormalProjectFactError> {
     scenario_entries_from_list(
@@ -1999,7 +1989,7 @@ pub fn parse_lean_project_scenarios(
     )
 }
 
-pub fn parse_quint_project_scenarios(
+pub(crate) fn parse_quint_project_scenarios(
     contents: &FileContents,
 ) -> Result<Vec<ProjectScenario>, FormalProjectFactError> {
     scenario_entries_from_list(
@@ -2008,7 +1998,7 @@ pub fn parse_quint_project_scenarios(
     )
 }
 
-pub fn parse_lean_project_scenario_definitions(
+pub(crate) fn parse_lean_project_scenario_definitions(
     contents: &FileContents,
 ) -> Result<Vec<ProjectScenarioDefinition>, FormalProjectFactError> {
     scenario_definition_entries_from_list(
@@ -2018,7 +2008,7 @@ pub fn parse_lean_project_scenario_definitions(
     )
 }
 
-pub fn parse_quint_project_scenario_definitions(
+pub(crate) fn parse_quint_project_scenario_definitions(
     contents: &FileContents,
 ) -> Result<Vec<ProjectScenarioDefinition>, FormalProjectFactError> {
     scenario_definition_entries_from_list(
@@ -2028,7 +2018,7 @@ pub fn parse_quint_project_scenario_definitions(
     )
 }
 
-pub fn parse_lean_project_data_flows(
+pub(crate) fn parse_lean_project_data_flows(
     contents: &FileContents,
 ) -> Result<Vec<ProjectDataFlow>, FormalProjectFactError> {
     data_flow_entries_from_list(
@@ -2037,7 +2027,7 @@ pub fn parse_lean_project_data_flows(
     )
 }
 
-pub fn parse_quint_project_data_flows(
+pub(crate) fn parse_quint_project_data_flows(
     contents: &FileContents,
 ) -> Result<Vec<ProjectDataFlow>, FormalProjectFactError> {
     data_flow_entries_from_list(
@@ -2046,7 +2036,7 @@ pub fn parse_quint_project_data_flows(
     )
 }
 
-pub fn parse_lean_project_outcomes(
+pub(crate) fn parse_lean_project_outcomes(
     contents: &FileContents,
 ) -> Result<Vec<ProjectOutcome>, FormalProjectFactError> {
     outcome_entries_from_list(
@@ -2055,7 +2045,7 @@ pub fn parse_lean_project_outcomes(
     )
 }
 
-pub fn parse_quint_project_outcomes(
+pub(crate) fn parse_quint_project_outcomes(
     contents: &FileContents,
 ) -> Result<Vec<ProjectOutcome>, FormalProjectFactError> {
     outcome_entries_from_list(
@@ -2064,7 +2054,7 @@ pub fn parse_quint_project_outcomes(
     )
 }
 
-pub fn parse_lean_project_commands(
+pub(crate) fn parse_lean_project_commands(
     contents: &FileContents,
 ) -> Result<Vec<ProjectCommand>, FormalProjectFactError> {
     command_entries_from_list(
@@ -2073,7 +2063,7 @@ pub fn parse_lean_project_commands(
     )
 }
 
-pub fn parse_quint_project_commands(
+pub(crate) fn parse_quint_project_commands(
     contents: &FileContents,
 ) -> Result<Vec<ProjectCommand>, FormalProjectFactError> {
     command_entries_from_list(
@@ -2082,7 +2072,7 @@ pub fn parse_quint_project_commands(
     )
 }
 
-pub fn parse_lean_project_command_inputs(
+pub(crate) fn parse_lean_project_command_inputs(
     contents: &FileContents,
 ) -> Result<Vec<ProjectCommandInput>, FormalProjectFactError> {
     command_input_entries_from_list(
@@ -2091,7 +2081,7 @@ pub fn parse_lean_project_command_inputs(
     )
 }
 
-pub fn parse_quint_project_command_inputs(
+pub(crate) fn parse_quint_project_command_inputs(
     contents: &FileContents,
 ) -> Result<Vec<ProjectCommandInput>, FormalProjectFactError> {
     command_input_entries_from_list(
@@ -2100,7 +2090,7 @@ pub fn parse_quint_project_command_inputs(
     )
 }
 
-pub fn parse_lean_project_command_errors(
+pub(crate) fn parse_lean_project_command_errors(
     contents: &FileContents,
 ) -> Result<Vec<ProjectCommandError>, FormalProjectFactError> {
     command_error_entries_from_list(
@@ -2109,7 +2099,7 @@ pub fn parse_lean_project_command_errors(
     )
 }
 
-pub fn parse_quint_project_command_errors(
+pub(crate) fn parse_quint_project_command_errors(
     contents: &FileContents,
 ) -> Result<Vec<ProjectCommandError>, FormalProjectFactError> {
     command_error_entries_from_list(
@@ -2118,7 +2108,7 @@ pub fn parse_quint_project_command_errors(
     )
 }
 
-pub fn parse_lean_project_read_models(
+pub(crate) fn parse_lean_project_read_models(
     contents: &FileContents,
 ) -> Result<Vec<ProjectReadModel>, FormalProjectFactError> {
     read_model_entries_from_list(
@@ -2127,7 +2117,7 @@ pub fn parse_lean_project_read_models(
     )
 }
 
-pub fn parse_quint_project_read_models(
+pub(crate) fn parse_quint_project_read_models(
     contents: &FileContents,
 ) -> Result<Vec<ProjectReadModel>, FormalProjectFactError> {
     read_model_entries_from_list(
@@ -2136,7 +2126,7 @@ pub fn parse_quint_project_read_models(
     )
 }
 
-pub fn parse_lean_project_read_model_definitions(
+pub(crate) fn parse_lean_project_read_model_definitions(
     contents: &FileContents,
 ) -> Result<Vec<ProjectReadModelDefinition>, FormalProjectFactError> {
     read_model_definition_entries_from_list(
@@ -2145,7 +2135,7 @@ pub fn parse_lean_project_read_model_definitions(
     )
 }
 
-pub fn parse_quint_project_read_model_definitions(
+pub(crate) fn parse_quint_project_read_model_definitions(
     contents: &FileContents,
 ) -> Result<Vec<ProjectReadModelDefinition>, FormalProjectFactError> {
     read_model_definition_entries_from_list(
@@ -2154,7 +2144,7 @@ pub fn parse_quint_project_read_model_definitions(
     )
 }
 
-pub fn parse_lean_project_read_model_fields(
+pub(crate) fn parse_lean_project_read_model_fields(
     contents: &FileContents,
 ) -> Result<Vec<ProjectReadModelField>, FormalProjectFactError> {
     read_model_field_entries_from_list(
@@ -2163,7 +2153,7 @@ pub fn parse_lean_project_read_model_fields(
     )
 }
 
-pub fn parse_quint_project_read_model_fields(
+pub(crate) fn parse_quint_project_read_model_fields(
     contents: &FileContents,
 ) -> Result<Vec<ProjectReadModelField>, FormalProjectFactError> {
     read_model_field_entries_from_list(
@@ -2172,7 +2162,7 @@ pub fn parse_quint_project_read_model_fields(
     )
 }
 
-pub fn parse_lean_project_views(
+pub(crate) fn parse_lean_project_views(
     contents: &FileContents,
 ) -> Result<Vec<ProjectView>, FormalProjectFactError> {
     view_entries_from_list(
@@ -2181,13 +2171,13 @@ pub fn parse_lean_project_views(
     )
 }
 
-pub fn parse_quint_project_views(
+pub(crate) fn parse_quint_project_views(
     contents: &FileContents,
 ) -> Result<Vec<ProjectView>, FormalProjectFactError> {
     view_entries_from_list(contents.as_ref(), "val modelViews: List[ModelView] = ")
 }
 
-pub fn parse_lean_project_view_definitions(
+pub(crate) fn parse_lean_project_view_definitions(
     contents: &FileContents,
 ) -> Result<Vec<ProjectViewDefinition>, FormalProjectFactError> {
     view_definition_entries_from_list(
@@ -2196,7 +2186,7 @@ pub fn parse_lean_project_view_definitions(
     )
 }
 
-pub fn parse_quint_project_view_definitions(
+pub(crate) fn parse_quint_project_view_definitions(
     contents: &FileContents,
 ) -> Result<Vec<ProjectViewDefinition>, FormalProjectFactError> {
     view_definition_entries_from_list(
@@ -2205,7 +2195,7 @@ pub fn parse_quint_project_view_definitions(
     )
 }
 
-pub fn parse_lean_project_view_controls(
+pub(crate) fn parse_lean_project_view_controls(
     contents: &FileContents,
 ) -> Result<Vec<ProjectViewControl>, FormalProjectFactError> {
     view_control_entries_from_list(
@@ -2214,7 +2204,7 @@ pub fn parse_lean_project_view_controls(
     )
 }
 
-pub fn parse_quint_project_view_controls(
+pub(crate) fn parse_quint_project_view_controls(
     contents: &FileContents,
 ) -> Result<Vec<ProjectViewControl>, FormalProjectFactError> {
     view_control_entries_from_list(
@@ -2223,7 +2213,7 @@ pub fn parse_quint_project_view_controls(
     )
 }
 
-pub fn parse_lean_project_board_elements(
+pub(crate) fn parse_lean_project_board_elements(
     contents: &FileContents,
 ) -> Result<Vec<ProjectBoardElement>, FormalProjectFactError> {
     board_element_entries_from_list(
@@ -2232,7 +2222,7 @@ pub fn parse_lean_project_board_elements(
     )
 }
 
-pub fn parse_quint_project_board_elements(
+pub(crate) fn parse_quint_project_board_elements(
     contents: &FileContents,
 ) -> Result<Vec<ProjectBoardElement>, FormalProjectFactError> {
     board_element_entries_from_list(
@@ -2241,7 +2231,7 @@ pub fn parse_quint_project_board_elements(
     )
 }
 
-pub fn parse_lean_project_board_connections(
+pub(crate) fn parse_lean_project_board_connections(
     contents: &FileContents,
 ) -> Result<Vec<ProjectBoardConnection>, FormalProjectFactError> {
     board_connection_entries_from_list(
@@ -2250,7 +2240,7 @@ pub fn parse_lean_project_board_connections(
     )
 }
 
-pub fn parse_quint_project_board_connections(
+pub(crate) fn parse_quint_project_board_connections(
     contents: &FileContents,
 ) -> Result<Vec<ProjectBoardConnection>, FormalProjectFactError> {
     board_connection_entries_from_list(
@@ -2259,7 +2249,7 @@ pub fn parse_quint_project_board_connections(
     )
 }
 
-pub fn parse_lean_project_view_fields(
+pub(crate) fn parse_lean_project_view_fields(
     contents: &FileContents,
 ) -> Result<Vec<ProjectViewField>, FormalProjectFactError> {
     view_field_entries_from_list(
@@ -2268,7 +2258,7 @@ pub fn parse_lean_project_view_fields(
     )
 }
 
-pub fn parse_quint_project_view_fields(
+pub(crate) fn parse_quint_project_view_fields(
     contents: &FileContents,
 ) -> Result<Vec<ProjectViewField>, FormalProjectFactError> {
     view_field_entries_from_list(
@@ -2277,7 +2267,7 @@ pub fn parse_quint_project_view_fields(
     )
 }
 
-pub fn parse_lean_project_automations(
+pub(crate) fn parse_lean_project_automations(
     contents: &FileContents,
 ) -> Result<Vec<ProjectAutomation>, FormalProjectFactError> {
     automation_entries_from_list(
@@ -2286,7 +2276,7 @@ pub fn parse_lean_project_automations(
     )
 }
 
-pub fn parse_quint_project_automations(
+pub(crate) fn parse_quint_project_automations(
     contents: &FileContents,
 ) -> Result<Vec<ProjectAutomation>, FormalProjectFactError> {
     automation_entries_from_list(
@@ -2295,7 +2285,7 @@ pub fn parse_quint_project_automations(
     )
 }
 
-pub fn parse_lean_project_automation_definitions(
+pub(crate) fn parse_lean_project_automation_definitions(
     contents: &FileContents,
 ) -> Result<Vec<ProjectAutomationDefinition>, FormalProjectFactError> {
     automation_definition_entries_from_list(
@@ -2304,7 +2294,7 @@ pub fn parse_lean_project_automation_definitions(
     )
 }
 
-pub fn parse_quint_project_automation_definitions(
+pub(crate) fn parse_quint_project_automation_definitions(
     contents: &FileContents,
 ) -> Result<Vec<ProjectAutomationDefinition>, FormalProjectFactError> {
     automation_definition_entries_from_list(
@@ -2313,7 +2303,7 @@ pub fn parse_quint_project_automation_definitions(
     )
 }
 
-pub fn parse_lean_project_translations(
+pub(crate) fn parse_lean_project_translations(
     contents: &FileContents,
 ) -> Result<Vec<ProjectTranslation>, FormalProjectFactError> {
     translation_entries_from_list(
@@ -2322,7 +2312,7 @@ pub fn parse_lean_project_translations(
     )
 }
 
-pub fn parse_quint_project_translations(
+pub(crate) fn parse_quint_project_translations(
     contents: &FileContents,
 ) -> Result<Vec<ProjectTranslation>, FormalProjectFactError> {
     translation_entries_from_list(
@@ -2331,7 +2321,7 @@ pub fn parse_quint_project_translations(
     )
 }
 
-pub fn parse_lean_project_translation_definitions(
+pub(crate) fn parse_lean_project_translation_definitions(
     contents: &FileContents,
 ) -> Result<Vec<ProjectTranslationDefinition>, FormalProjectFactError> {
     translation_definition_entries_from_list(
@@ -2340,7 +2330,7 @@ pub fn parse_lean_project_translation_definitions(
     )
 }
 
-pub fn parse_quint_project_translation_definitions(
+pub(crate) fn parse_quint_project_translation_definitions(
     contents: &FileContents,
 ) -> Result<Vec<ProjectTranslationDefinition>, FormalProjectFactError> {
     translation_definition_entries_from_list(
@@ -2349,7 +2339,7 @@ pub fn parse_quint_project_translation_definitions(
     )
 }
 
-pub fn parse_lean_project_external_payloads(
+pub(crate) fn parse_lean_project_external_payloads(
     contents: &FileContents,
 ) -> Result<Vec<ProjectExternalPayload>, FormalProjectFactError> {
     external_payload_entries_from_list(
@@ -2358,7 +2348,7 @@ pub fn parse_lean_project_external_payloads(
     )
 }
 
-pub fn parse_quint_project_external_payloads(
+pub(crate) fn parse_quint_project_external_payloads(
     contents: &FileContents,
 ) -> Result<Vec<ProjectExternalPayload>, FormalProjectFactError> {
     external_payload_entries_from_list(
@@ -2367,7 +2357,7 @@ pub fn parse_quint_project_external_payloads(
     )
 }
 
-pub fn parse_lean_project_external_payload_fields(
+pub(crate) fn parse_lean_project_external_payload_fields(
     contents: &FileContents,
 ) -> Result<Vec<ProjectExternalPayloadField>, FormalProjectFactError> {
     external_payload_field_entries_from_list(
@@ -2376,7 +2366,7 @@ pub fn parse_lean_project_external_payload_fields(
     )
 }
 
-pub fn parse_quint_project_external_payload_fields(
+pub(crate) fn parse_quint_project_external_payload_fields(
     contents: &FileContents,
 ) -> Result<Vec<ProjectExternalPayloadField>, FormalProjectFactError> {
     external_payload_field_entries_from_list(
@@ -2385,7 +2375,7 @@ pub fn parse_quint_project_external_payload_fields(
     )
 }
 
-pub fn parse_lean_project_events(
+pub(crate) fn parse_lean_project_events(
     contents: &FileContents,
 ) -> Result<Vec<ProjectEvent>, FormalProjectFactError> {
     event_entries_from_list(
@@ -2394,13 +2384,13 @@ pub fn parse_lean_project_events(
     )
 }
 
-pub fn parse_quint_project_events(
+pub(crate) fn parse_quint_project_events(
     contents: &FileContents,
 ) -> Result<Vec<ProjectEvent>, FormalProjectFactError> {
     event_entries_from_list(contents.as_ref(), "val modelEvents: List[ModelEvent] = ")
 }
 
-pub fn parse_lean_project_event_attributes(
+pub(crate) fn parse_lean_project_event_attributes(
     contents: &FileContents,
 ) -> Result<Vec<ProjectEventAttribute>, FormalProjectFactError> {
     event_attribute_entries_from_list(
@@ -2409,7 +2399,7 @@ pub fn parse_lean_project_event_attributes(
     )
 }
 
-pub fn parse_quint_project_event_attributes(
+pub(crate) fn parse_quint_project_event_attributes(
     contents: &FileContents,
 ) -> Result<Vec<ProjectEventAttribute>, FormalProjectFactError> {
     event_attribute_entries_from_list(
@@ -2418,7 +2408,7 @@ pub fn parse_quint_project_event_attributes(
     )
 }
 
-pub fn add_project_scenario(
+pub(crate) fn add_project_scenario(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -2688,8 +2678,8 @@ pub fn add_project_scenario(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added {} scenario {} to project root",
             scenario.scenario_kind.as_str(),
@@ -2698,7 +2688,7 @@ pub fn add_project_scenario(
     ]))
 }
 
-pub fn add_project_data_flow(
+pub(crate) fn add_project_data_flow(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -2906,8 +2896,8 @@ pub fn add_project_data_flow(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added bit-level data flow {} to project root",
             data_flow.datum.as_ref()
@@ -2915,7 +2905,7 @@ pub fn add_project_data_flow(
     ]))
 }
 
-pub fn add_project_outcome(
+pub(crate) fn add_project_outcome(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -3122,8 +3112,8 @@ pub fn add_project_outcome(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added outcome {} to project root",
             outcome.outcome.as_ref()
@@ -3131,7 +3121,7 @@ pub fn add_project_outcome(
     ]))
 }
 
-pub fn add_project_command(
+pub(crate) fn add_project_command(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -3410,8 +3400,8 @@ pub fn add_project_command(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added command {} to project root",
             command.command.as_ref()
@@ -3419,7 +3409,7 @@ pub fn add_project_command(
     ]))
 }
 
-pub fn add_project_read_model(
+pub(crate) fn add_project_read_model(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -3714,8 +3704,8 @@ pub fn add_project_read_model(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added read model {} to project root",
             read_model.read_model.as_ref()
@@ -3723,7 +3713,7 @@ pub fn add_project_read_model(
     ]))
 }
 
-pub fn add_project_view(
+pub(crate) fn add_project_view(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -4073,8 +4063,8 @@ pub fn add_project_view(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added view {} to project root",
             view.view.as_ref()
@@ -4082,7 +4072,7 @@ pub fn add_project_view(
     ]))
 }
 
-pub fn add_project_board_element(
+pub(crate) fn add_project_board_element(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -4155,8 +4145,8 @@ pub fn add_project_board_element(
     .and_then(|contents| update_quint_digest_from_contents(&contents))?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added board element {} to project root",
             element.element.as_ref()
@@ -4164,7 +4154,7 @@ pub fn add_project_board_element(
     ]))
 }
 
-pub fn add_project_board_connection(
+pub(crate) fn add_project_board_connection(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -4237,8 +4227,8 @@ pub fn add_project_board_connection(
     .and_then(|contents| update_quint_digest_from_contents(&contents))?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added board connection {} -> {} to project root",
             connection.source.as_ref(),
@@ -4247,7 +4237,7 @@ pub fn add_project_board_connection(
     ]))
 }
 
-pub fn add_project_automation(
+pub(crate) fn add_project_automation(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -4506,8 +4496,8 @@ pub fn add_project_automation(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added automation {} to project root",
             automation.automation.as_ref()
@@ -4515,7 +4505,7 @@ pub fn add_project_automation(
     ]))
 }
 
-pub fn add_project_translation(
+pub(crate) fn add_project_translation(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -4778,8 +4768,8 @@ pub fn add_project_translation(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added translation {} to project root",
             translation.translation.as_ref()
@@ -4787,7 +4777,7 @@ pub fn add_project_translation(
     ]))
 }
 
-pub fn add_project_external_payload(
+pub(crate) fn add_project_external_payload(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -5044,8 +5034,8 @@ pub fn add_project_external_payload(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added external payload {} to project root",
             external_payload.external_payload.as_ref()
@@ -5053,7 +5043,7 @@ pub fn add_project_external_payload(
     ]))
 }
 
-pub fn add_project_stream(
+pub(crate) fn add_project_stream(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -5238,8 +5228,8 @@ pub fn add_project_stream(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added stream {} to project root",
             stream.stream.as_ref()
@@ -5247,7 +5237,7 @@ pub fn add_project_stream(
     ]))
 }
 
-pub fn add_project_event(
+pub(crate) fn add_project_event(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -5574,8 +5564,8 @@ pub fn add_project_event(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added event {} to project root",
             event.event.as_ref()
@@ -5584,7 +5574,7 @@ pub fn add_project_event(
 }
 
 #[derive(Debug)]
-pub struct FormalProjectFactError {
+pub(crate) struct FormalProjectFactError {
     message: String,
 }
 
@@ -9247,7 +9237,7 @@ fn lean_event_attribute_record(attribute: &NewProjectEventAttribute) -> String {
             attribute
                 .generated_source_kind
                 .as_ref()
-                .map_or("", EventAttributeSourceKind::as_ref),
+                .map_or("", GeneratedEventAttributeSourceKind::as_ref),
         ),
         quoted(attribute.provenance.as_ref())
     )
@@ -9277,7 +9267,7 @@ fn quint_event_attribute_record(attribute: &NewProjectEventAttribute) -> String 
             attribute
                 .generated_source_kind
                 .as_ref()
-                .map_or("", EventAttributeSourceKind::as_ref),
+                .map_or("", GeneratedEventAttributeSourceKind::as_ref),
         ),
         quoted(attribute.provenance.as_ref())
     )

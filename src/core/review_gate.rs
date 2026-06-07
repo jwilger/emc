@@ -3,9 +3,9 @@
 use crate::core::effect::{Effect, EffectPlan, ProjectPath, ReportLine};
 use crate::core::types::WorkflowSlug;
 
-pub fn review_gate(workflow_slug: WorkflowSlug) -> EffectPlan {
+pub(crate) fn review_gate(workflow_slug: WorkflowSlug) -> EffectPlan {
     EffectPlan::new(vec![
-        Effect::RequireReviewRecord(
+        Effect::require_review_record(
             project_path(format!("reviews/{}.review.json", workflow_slug.as_ref())),
             workflow_slug,
             report_line("workflow review is not clean"),

@@ -10,7 +10,7 @@ use crate::core::types::{LeanModuleName, SliceSlug, WorkflowSlug};
 #[nutype(
     sanitize(trim),
     validate(not_empty),
-    derive(Debug, Clone, Eq, PartialEq, AsRef, Display)
+    derive(Debug, Clone, Eq, PartialEq, AsRef, Display, Serialize, Deserialize)
 )]
 pub struct ProjectName(String);
 
@@ -59,40 +59,40 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
     let project_name_text = project_name.as_ref();
 
     EffectPlan::new(vec![
-        Effect::WriteFileIfMissing(
+        Effect::write_file_if_missing(
             project_path("emc.toml"),
             file_contents(format!(
                 "[project]\nname = \"{project_name_text}\"\nversion = \"{FORMAL_MODEL_VERSION}\"\nlean_module = \"{module_name}\"\nquint_module = \"{module_name}\"\n"
             )),
         ),
         Effect::EnsureDirectory(project_path("model/lean")),
-        Effect::WriteFileIfMissing(
+        Effect::write_file_if_missing(
             project_path("model/lean/lean-toolchain"),
             file_contents("leanprover/lean4:4.29.1\n"),
         ),
-        Effect::WriteFileIfMissing(
+        Effect::write_file_if_missing(
             project_path("model/lean/lakefile.lean"),
             file_contents("import Lake\nopen Lake DSL\npackage EMCModel where\n"),
         ),
-        Effect::WriteFileIfMissing(
+        Effect::write_file_if_missing(
             project_path(format!("model/lean/{module_name}.lean")),
             emit_lean_project_root(&project_name, &[], &[]),
         ),
-        Effect::WriteFileIfMissing(
+        Effect::write_file_if_missing(
             project_path("model/lean/slices/.gitkeep"),
             file_contents("\n"),
         ),
         Effect::EnsureDirectory(project_path("model/quint")),
-        Effect::WriteFileIfMissing(
+        Effect::write_file_if_missing(
             project_path(format!("model/quint/{module_name}.qnt")),
             emit_quint_project_root(&project_name, &[], &[]),
         ),
-        Effect::WriteFileIfMissing(
+        Effect::write_file_if_missing(
             project_path("model/quint/slices/.gitkeep"),
             file_contents("\n"),
         ),
         Effect::EnsureDirectory(project_path("reviews")),
-        Effect::WriteFileIfMissing(project_path("reviews/.gitkeep"), file_contents("\n")),
+        Effect::write_file_if_missing(project_path("reviews/.gitkeep"), file_contents("\n")),
         Effect::EnsureDirectory(project_path("model/events/v1")),
         Effect::ExportEvent(EventDraft::project_initialized(&project_name)),
         Effect::Report(report_line(format!(
@@ -101,18 +101,18 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
     ])
 }
 
-pub fn project_root_effects(
+pub(crate) fn project_root_effects(
     project_name: ProjectName,
     workflow_slugs: &[WorkflowSlug],
     slice_memberships: &[ProjectSliceMembership],
 ) -> [Effect; 2] {
     let module_name = module_name(&project_name);
     [
-        Effect::WriteFile(
+        Effect::write_file(
             project_path(format!("model/lean/{module_name}.lean")),
             emit_lean_project_root(&project_name, workflow_slugs, slice_memberships),
         ),
-        Effect::WriteFile(
+        Effect::write_file(
             project_path(format!("model/quint/{module_name}.qnt")),
             emit_quint_project_root(&project_name, workflow_slugs, slice_memberships),
         ),

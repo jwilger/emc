@@ -11,12 +11,13 @@ use crate::core::types::{
     CommandInputSourceDescription, CommandInputSourceKind, CommandName, ContractKindName,
     ControlName, ControlRecoveryBehavior, CoveredDefinitionName, DataFlowSource,
     DataFlowSourceKind, DataFlowTarget, DatumName, EventAttributeName, EventAttributeSourceField,
-    EventAttributeSourceKind, EventAttributeSourceName, EventName, NavigationTargetName,
-    NavigationTargetType, OutcomeLabelName, PayloadContractName, ProvenanceDescription,
-    ReadModelDerivationRule, ReadModelFieldSourceKind, ReadModelName, ReadModelTransitiveRule,
-    ScenarioName, ScenarioStepText, SingletonRepeatBehavior, SketchToken, SliceSlug,
-    SourceChainHop, StreamName, TransformationSemantics, TranslationExternalEventName,
-    TranslationName, ViewFieldName, ViewFieldSourceKind, ViewName,
+    EventAttributeSourceKind, EventAttributeSourceName, EventName,
+    GeneratedEventAttributeSourceKind, NavigationTargetName, NavigationTargetType,
+    OutcomeLabelName, PayloadContractName, ProvenanceDescription, ReadModelDerivationRule,
+    ReadModelFieldSourceKind, ReadModelName, ReadModelTransitiveRule, ScenarioName,
+    ScenarioStepText, SingletonRepeatBehavior, SketchToken, SliceSlug, SourceChainHop, StreamName,
+    TransformationSemantics, TranslationExternalEventName, TranslationName, ViewFieldName,
+    ViewFieldSourceKind, ViewName,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -34,6 +35,14 @@ impl ScenarioKind {
         Self::Contract
     }
 
+    pub fn try_new(value: String) -> Result<Self, ScenarioKindError> {
+        match value.trim() {
+            "acceptance" => Ok(Self::Acceptance),
+            "contract" => Ok(Self::Contract),
+            _ => Err(ScenarioKindError::new(value)),
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Acceptance => "acceptance",
@@ -41,6 +50,27 @@ impl ScenarioKind {
         }
     }
 }
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ScenarioKindError {
+    message: String,
+}
+
+impl ScenarioKindError {
+    fn new(value: String) -> Self {
+        Self {
+            message: format!("expected a modeled scenario kind, got '{value}'"),
+        }
+    }
+}
+
+impl Display for ScenarioKindError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl Error for ScenarioKindError {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NewSliceScenario {
@@ -250,104 +280,127 @@ impl NewBitLevelDataFlow {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CommandInputEventStreamSource {
+    event: EventName,
+    attribute: EventAttributeName,
+}
+
+impl CommandInputEventStreamSource {
+    fn new(event: EventName, attribute: EventAttributeName) -> Self {
+        Self { event, attribute }
+    }
+
+    pub fn event(&self) -> &EventName {
+        &self.event
+    }
+
+    pub fn attribute(&self) -> &EventAttributeName {
+        &self.attribute
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CommandInputNamedFieldSource {
+    name: EventAttributeSourceName,
+    field: EventAttributeSourceField,
+}
+
+impl CommandInputNamedFieldSource {
+    fn new(name: EventAttributeSourceName, field: EventAttributeSourceField) -> Self {
+        Self { name, field }
+    }
+
+    pub fn name(&self) -> &EventAttributeSourceName {
+        &self.name
+    }
+
+    pub fn field(&self) -> &EventAttributeSourceField {
+        &self.field
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum CommandInputSource {
+    Actor,
+    EventStreamState(CommandInputEventStreamSource),
+    ExternalPayload(CommandInputNamedFieldSource),
+    Generated(CommandInputNamedFieldSource),
+    Session(CommandInputNamedFieldSource),
+    InvocationArgument(CommandInputNamedFieldSource),
+}
+
+impl CommandInputSource {
+    pub fn actor() -> Self {
+        Self::Actor
+    }
+
+    pub fn event_stream_state(event: EventName, attribute: EventAttributeName) -> Self {
+        Self::EventStreamState(CommandInputEventStreamSource::new(event, attribute))
+    }
+
+    pub fn external_payload(
+        payload: EventAttributeSourceName,
+        field: EventAttributeSourceField,
+    ) -> Self {
+        Self::ExternalPayload(CommandInputNamedFieldSource::new(payload, field))
+    }
+
+    pub fn generated(source: EventAttributeSourceName, field: EventAttributeSourceField) -> Self {
+        Self::Generated(CommandInputNamedFieldSource::new(source, field))
+    }
+
+    pub fn session(source: EventAttributeSourceName, field: EventAttributeSourceField) -> Self {
+        Self::Session(CommandInputNamedFieldSource::new(source, field))
+    }
+
+    pub fn invocation_argument(
+        argument: EventAttributeSourceName,
+        field: EventAttributeSourceField,
+    ) -> Self {
+        Self::InvocationArgument(CommandInputNamedFieldSource::new(argument, field))
+    }
+
+    pub fn kind(&self) -> CommandInputSourceKind {
+        match self {
+            Self::Actor => CommandInputSourceKind::Actor,
+            Self::EventStreamState(_) => CommandInputSourceKind::EventStreamState,
+            Self::ExternalPayload(_) => CommandInputSourceKind::ExternalPayload,
+            Self::Generated(_) => CommandInputSourceKind::Generated,
+            Self::Session(_) => CommandInputSourceKind::Session,
+            Self::InvocationArgument(_) => CommandInputSourceKind::InvocationArgument,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NewCommandInput {
     name: DatumName,
-    source_kind: CommandInputSourceKind,
+    source: CommandInputSource,
     source_description: CommandInputSourceDescription,
     provenance_chain: CommandInputProvenanceChain,
-    event_stream_source_event: Option<EventName>,
-    event_stream_source_attribute: Option<EventAttributeName>,
-    external_payload_source_name: Option<EventAttributeSourceName>,
-    external_payload_source_field: Option<EventAttributeSourceField>,
-    generated_source_name: Option<EventAttributeSourceName>,
-    generated_source_field: Option<EventAttributeSourceField>,
-    session_source_name: Option<EventAttributeSourceName>,
-    session_source_field: Option<EventAttributeSourceField>,
-    invocation_argument_source_name: Option<EventAttributeSourceName>,
-    invocation_argument_source_field: Option<EventAttributeSourceField>,
 }
 
 impl NewCommandInput {
     pub fn new(
         name: DatumName,
-        source_kind: CommandInputSourceKind,
+        source: CommandInputSource,
         source_description: CommandInputSourceDescription,
         provenance_chain: CommandInputProvenanceChain,
     ) -> Self {
         Self {
             name,
-            source_kind,
+            source,
             source_description,
             provenance_chain,
-            event_stream_source_event: None,
-            event_stream_source_attribute: None,
-            external_payload_source_name: None,
-            external_payload_source_field: None,
-            generated_source_name: None,
-            generated_source_field: None,
-            session_source_name: None,
-            session_source_field: None,
-            invocation_argument_source_name: None,
-            invocation_argument_source_field: None,
         }
-    }
-
-    pub fn with_event_stream_source(
-        mut self,
-        event: EventName,
-        attribute: EventAttributeName,
-    ) -> Self {
-        self.event_stream_source_event = Some(event);
-        self.event_stream_source_attribute = Some(attribute);
-        self
-    }
-
-    pub fn with_external_payload_source(
-        mut self,
-        payload: EventAttributeSourceName,
-        field: EventAttributeSourceField,
-    ) -> Self {
-        self.external_payload_source_name = Some(payload);
-        self.external_payload_source_field = Some(field);
-        self
-    }
-
-    pub fn with_generated_source(
-        mut self,
-        source: EventAttributeSourceName,
-        field: EventAttributeSourceField,
-    ) -> Self {
-        self.generated_source_name = Some(source);
-        self.generated_source_field = Some(field);
-        self
-    }
-
-    pub fn with_session_source(
-        mut self,
-        source: EventAttributeSourceName,
-        field: EventAttributeSourceField,
-    ) -> Self {
-        self.session_source_name = Some(source);
-        self.session_source_field = Some(field);
-        self
-    }
-
-    pub fn with_invocation_argument_source(
-        mut self,
-        source: EventAttributeSourceName,
-        field: EventAttributeSourceField,
-    ) -> Self {
-        self.invocation_argument_source_name = Some(source);
-        self.invocation_argument_source_field = Some(field);
-        self
     }
 
     pub fn name(&self) -> &DatumName {
         &self.name
     }
 
-    pub fn source_kind(&self) -> &CommandInputSourceKind {
-        &self.source_kind
+    pub fn source_kind(&self) -> CommandInputSourceKind {
+        self.source.kind()
     }
 
     pub fn source_description(&self) -> &CommandInputSourceDescription {
@@ -359,43 +412,73 @@ impl NewCommandInput {
     }
 
     pub fn event_stream_source_event(&self) -> Option<&EventName> {
-        self.event_stream_source_event.as_ref()
+        match &self.source {
+            CommandInputSource::EventStreamState(source) => Some(source.event()),
+            _ => None,
+        }
     }
 
     pub fn event_stream_source_attribute(&self) -> Option<&EventAttributeName> {
-        self.event_stream_source_attribute.as_ref()
+        match &self.source {
+            CommandInputSource::EventStreamState(source) => Some(source.attribute()),
+            _ => None,
+        }
     }
 
     pub fn external_payload_source_name(&self) -> Option<&EventAttributeSourceName> {
-        self.external_payload_source_name.as_ref()
+        match &self.source {
+            CommandInputSource::ExternalPayload(source) => Some(source.name()),
+            _ => None,
+        }
     }
 
     pub fn external_payload_source_field(&self) -> Option<&EventAttributeSourceField> {
-        self.external_payload_source_field.as_ref()
+        match &self.source {
+            CommandInputSource::ExternalPayload(source) => Some(source.field()),
+            _ => None,
+        }
     }
 
     pub fn generated_source_name(&self) -> Option<&EventAttributeSourceName> {
-        self.generated_source_name.as_ref()
+        match &self.source {
+            CommandInputSource::Generated(source) => Some(source.name()),
+            _ => None,
+        }
     }
 
     pub fn generated_source_field(&self) -> Option<&EventAttributeSourceField> {
-        self.generated_source_field.as_ref()
+        match &self.source {
+            CommandInputSource::Generated(source) => Some(source.field()),
+            _ => None,
+        }
     }
 
     pub fn session_source_name(&self) -> Option<&EventAttributeSourceName> {
-        self.session_source_name.as_ref()
+        match &self.source {
+            CommandInputSource::Session(source) => Some(source.name()),
+            _ => None,
+        }
     }
 
     pub fn session_source_field(&self) -> Option<&EventAttributeSourceField> {
-        self.session_source_field.as_ref()
+        match &self.source {
+            CommandInputSource::Session(source) => Some(source.field()),
+            _ => None,
+        }
     }
 
     pub fn invocation_argument_source_name(&self) -> Option<&EventAttributeSourceName> {
-        self.invocation_argument_source_name.as_ref()
+        match &self.source {
+            CommandInputSource::InvocationArgument(source) => Some(source.name()),
+            _ => None,
+        }
     }
 
     pub fn invocation_argument_source_field(&self) -> Option<&EventAttributeSourceField> {
-        self.invocation_argument_source_field.as_ref()
+        match &self.source {
+            CommandInputSource::InvocationArgument(source) => Some(source.field()),
+            _ => None,
+        }
     }
 }
 
@@ -696,7 +779,7 @@ pub struct NewEventAttribute {
     source_kind: EventAttributeSourceKind,
     source_name: EventAttributeSourceName,
     source_field: EventAttributeSourceField,
-    generated_source_kind: Option<EventAttributeSourceKind>,
+    generated_source_kind: Option<GeneratedEventAttributeSourceKind>,
     provenance_description: ProvenanceDescription,
 }
 
@@ -723,7 +806,7 @@ impl NewEventAttribute {
         source_kind: EventAttributeSourceKind,
         source_name: EventAttributeSourceName,
         source_field: EventAttributeSourceField,
-        generated_source_kind: EventAttributeSourceKind,
+        generated_source_kind: GeneratedEventAttributeSourceKind,
         provenance_description: ProvenanceDescription,
     ) -> Self {
         Self {
@@ -752,7 +835,7 @@ impl NewEventAttribute {
         &self.source_field
     }
 
-    pub fn generated_source_kind(&self) -> Option<&EventAttributeSourceKind> {
+    pub fn generated_source_kind(&self) -> Option<&GeneratedEventAttributeSourceKind> {
         self.generated_source_kind.as_ref()
     }
 
@@ -846,80 +929,134 @@ impl NewEventDefinition {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ReadModelEventAttributeSource {
+    event: EventName,
+    attribute: EventAttributeName,
+}
+
+impl ReadModelEventAttributeSource {
+    fn new(event: EventName, attribute: EventAttributeName) -> Self {
+        Self { event, attribute }
+    }
+
+    pub fn event(&self) -> &EventName {
+        &self.event
+    }
+
+    pub fn attribute(&self) -> &EventAttributeName {
+        &self.attribute
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ReadModelDerivationSource {
+    rule: ReadModelDerivationRule,
+    source_fields: ReadModelDerivationSourceFields,
+    scenario_name: ScenarioName,
+}
+
+impl ReadModelDerivationSource {
+    fn new(
+        rule: ReadModelDerivationRule,
+        source_fields: ReadModelDerivationSourceFields,
+        scenario_name: ScenarioName,
+    ) -> Self {
+        Self {
+            rule,
+            source_fields,
+            scenario_name,
+        }
+    }
+
+    pub fn rule(&self) -> &ReadModelDerivationRule {
+        &self.rule
+    }
+
+    pub fn source_fields(&self) -> &ReadModelDerivationSourceFields {
+        &self.source_fields
+    }
+
+    pub fn scenario_name(&self) -> &ScenarioName {
+        &self.scenario_name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ReadModelAbsenceDefaultSource {
+    event: EventName,
+    scenario_name: ScenarioName,
+}
+
+impl ReadModelAbsenceDefaultSource {
+    fn new(event: EventName, scenario_name: ScenarioName) -> Self {
+        Self {
+            event,
+            scenario_name,
+        }
+    }
+
+    pub fn event(&self) -> &EventName {
+        &self.event
+    }
+
+    pub fn scenario_name(&self) -> &ScenarioName {
+        &self.scenario_name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ReadModelFieldSource {
+    EventAttribute(ReadModelEventAttributeSource),
+    Derivation(ReadModelDerivationSource),
+    AbsenceDefault(ReadModelAbsenceDefaultSource),
+}
+
+impl ReadModelFieldSource {
+    pub fn event_attribute(event: EventName, attribute: EventAttributeName) -> Self {
+        Self::EventAttribute(ReadModelEventAttributeSource::new(event, attribute))
+    }
+
+    pub fn derivation(
+        rule: ReadModelDerivationRule,
+        source_fields: ReadModelDerivationSourceFields,
+        scenario_name: ScenarioName,
+    ) -> Self {
+        Self::Derivation(ReadModelDerivationSource::new(
+            rule,
+            source_fields,
+            scenario_name,
+        ))
+    }
+
+    pub fn absence_default(event: EventName, scenario_name: ScenarioName) -> Self {
+        Self::AbsenceDefault(ReadModelAbsenceDefaultSource::new(event, scenario_name))
+    }
+
+    pub fn kind(&self) -> ReadModelFieldSourceKind {
+        match self {
+            Self::EventAttribute(_) => ReadModelFieldSourceKind::EventAttribute,
+            Self::Derivation(_) => ReadModelFieldSourceKind::Derivation,
+            Self::AbsenceDefault(_) => ReadModelFieldSourceKind::AbsenceDefault,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NewReadModelField {
     name: DatumName,
-    source_kind: ReadModelFieldSourceKind,
-    source_event: Option<EventName>,
-    source_attribute: Option<EventAttributeName>,
-    derivation_rule: Option<ReadModelDerivationRule>,
-    derivation_source_fields: ReadModelDerivationSourceFields,
-    absence_event: Option<EventName>,
-    derivation_scenario_name: Option<ScenarioName>,
-    absence_scenario_name: Option<ScenarioName>,
+    source: ReadModelFieldSource,
     provenance_description: ProvenanceDescription,
 }
 
 impl NewReadModelField {
     pub fn new(
         name: DatumName,
-        source_kind: ReadModelFieldSourceKind,
-        source_event: EventName,
-        source_attribute: EventAttributeName,
+        source: ReadModelFieldSource,
         provenance_description: ProvenanceDescription,
     ) -> Self {
         Self {
             name,
-            source_kind,
-            source_event: Some(source_event),
-            source_attribute: Some(source_attribute),
-            derivation_rule: None,
-            derivation_source_fields: ReadModelDerivationSourceFields::empty(),
-            absence_event: None,
-            derivation_scenario_name: None,
-            absence_scenario_name: None,
-            provenance_description,
-        }
-    }
-
-    pub fn new_derivation(
-        name: DatumName,
-        source_kind: ReadModelFieldSourceKind,
-        derivation_rule: ReadModelDerivationRule,
-        derivation_source_fields: ReadModelDerivationSourceFields,
-        derivation_scenario_name: ScenarioName,
-        provenance_description: ProvenanceDescription,
-    ) -> Self {
-        Self {
-            name,
-            source_kind,
-            source_event: None,
-            source_attribute: None,
-            derivation_rule: Some(derivation_rule),
-            derivation_source_fields,
-            absence_event: None,
-            derivation_scenario_name: Some(derivation_scenario_name),
-            absence_scenario_name: None,
-            provenance_description,
-        }
-    }
-
-    pub fn new_absence_default(
-        name: DatumName,
-        source_kind: ReadModelFieldSourceKind,
-        absence_event: EventName,
-        absence_scenario_name: ScenarioName,
-        provenance_description: ProvenanceDescription,
-    ) -> Self {
-        Self {
-            name,
-            source_kind,
-            source_event: None,
-            source_attribute: None,
-            derivation_rule: None,
-            derivation_source_fields: ReadModelDerivationSourceFields::empty(),
-            absence_event: Some(absence_event),
-            derivation_scenario_name: None,
-            absence_scenario_name: Some(absence_scenario_name),
+            source,
             provenance_description,
         }
     }
@@ -928,36 +1065,57 @@ impl NewReadModelField {
         &self.name
     }
 
-    pub fn source_kind(&self) -> &ReadModelFieldSourceKind {
-        &self.source_kind
+    pub fn source_kind(&self) -> ReadModelFieldSourceKind {
+        self.source.kind()
     }
 
     pub fn source_event(&self) -> Option<&EventName> {
-        self.source_event.as_ref()
+        match &self.source {
+            ReadModelFieldSource::EventAttribute(source) => Some(source.event()),
+            _ => None,
+        }
     }
 
     pub fn source_attribute(&self) -> Option<&EventAttributeName> {
-        self.source_attribute.as_ref()
+        match &self.source {
+            ReadModelFieldSource::EventAttribute(source) => Some(source.attribute()),
+            _ => None,
+        }
     }
 
     pub fn derivation_rule(&self) -> Option<&ReadModelDerivationRule> {
-        self.derivation_rule.as_ref()
+        match &self.source {
+            ReadModelFieldSource::Derivation(source) => Some(source.rule()),
+            _ => None,
+        }
     }
 
     pub fn derivation_source_fields(&self) -> &ReadModelDerivationSourceFields {
-        &self.derivation_source_fields
+        match &self.source {
+            ReadModelFieldSource::Derivation(source) => source.source_fields(),
+            _ => &EMPTY_READ_MODEL_DERIVATION_SOURCE_FIELDS,
+        }
     }
 
     pub fn absence_event(&self) -> Option<&EventName> {
-        self.absence_event.as_ref()
+        match &self.source {
+            ReadModelFieldSource::AbsenceDefault(source) => Some(source.event()),
+            _ => None,
+        }
     }
 
     pub fn derivation_scenario_name(&self) -> Option<&ScenarioName> {
-        self.derivation_scenario_name.as_ref()
+        match &self.source {
+            ReadModelFieldSource::Derivation(source) => Some(source.scenario_name()),
+            _ => None,
+        }
     }
 
     pub fn absence_scenario_name(&self) -> Option<&ScenarioName> {
-        self.absence_scenario_name.as_ref()
+        match &self.source {
+            ReadModelFieldSource::AbsenceDefault(source) => Some(source.scenario_name()),
+            _ => None,
+        }
     }
 
     pub fn provenance_description(&self) -> &ProvenanceDescription {
@@ -1057,11 +1215,10 @@ pub struct ReadModelDerivationSourceFields {
     fields: Vec<DatumName>,
 }
 
-impl ReadModelDerivationSourceFields {
-    pub fn empty() -> Self {
-        Self { fields: Vec::new() }
-    }
+static EMPTY_READ_MODEL_DERIVATION_SOURCE_FIELDS: ReadModelDerivationSourceFields =
+    ReadModelDerivationSourceFields { fields: Vec::new() };
 
+impl ReadModelDerivationSourceFields {
     pub fn from_fields(fields: impl IntoIterator<Item = DatumName>) -> Self {
         Self {
             fields: fields.into_iter().collect(),
@@ -1659,7 +1816,7 @@ impl ViewControls {
     }
 }
 
-pub fn add_slice_scenario(
+pub(crate) fn add_slice_scenario(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -1682,8 +1839,8 @@ pub fn add_slice_scenario(
     let quint = append_record(quint_contents.as_ref(), quint_marker, &quint_record)?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added {} scenario {} to slice {}",
             scenario.kind.as_str(),
@@ -1693,7 +1850,7 @@ pub fn add_slice_scenario(
     ]))
 }
 
-pub fn add_event_definition(
+pub(crate) fn add_event_definition(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -1745,8 +1902,8 @@ pub fn add_event_definition(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added event {} to slice {}",
             event.name.as_ref(),
@@ -1755,7 +1912,7 @@ pub fn add_event_definition(
     ]))
 }
 
-pub fn add_outcome_definition(
+pub(crate) fn add_outcome_definition(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -1776,8 +1933,8 @@ pub fn add_outcome_definition(
     )?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added outcome {} to slice {}",
             outcome.label.as_ref(),
@@ -1786,7 +1943,7 @@ pub fn add_outcome_definition(
     ]))
 }
 
-pub fn add_external_payload_definition(
+pub(crate) fn add_external_payload_definition(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -1807,8 +1964,8 @@ pub fn add_external_payload_definition(
     )?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added external payload {} to slice {}",
             external_payload.name.as_ref(),
@@ -1817,7 +1974,7 @@ pub fn add_external_payload_definition(
     ]))
 }
 
-pub fn add_automation_definition(
+pub(crate) fn add_automation_definition(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -1851,8 +2008,8 @@ pub fn add_automation_definition(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added automation {} to slice {}",
             automation.name.as_ref(),
@@ -1861,7 +2018,7 @@ pub fn add_automation_definition(
     ]))
 }
 
-pub fn add_translation_definition(
+pub(crate) fn add_translation_definition(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -1895,8 +2052,8 @@ pub fn add_translation_definition(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added translation {} to slice {}",
             translation.name.as_ref(),
@@ -1905,7 +2062,7 @@ pub fn add_translation_definition(
     ]))
 }
 
-pub fn add_board_element(
+pub(crate) fn add_board_element(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -1924,8 +2081,8 @@ pub fn add_board_element(
     )?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added board element {} to slice {}",
             element.name.as_ref(),
@@ -1934,7 +2091,7 @@ pub fn add_board_element(
     ]))
 }
 
-pub fn add_board_connection(
+pub(crate) fn add_board_connection(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -1953,8 +2110,8 @@ pub fn add_board_connection(
     )?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added board connection {} -> {} to slice {}",
             connection.source.as_ref(),
@@ -1964,7 +2121,7 @@ pub fn add_board_connection(
     ]))
 }
 
-pub fn add_command_definition(
+pub(crate) fn add_command_definition(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -1999,8 +2156,8 @@ pub fn add_command_definition(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added command {} to slice {}",
             command.name.as_ref(),
@@ -2009,7 +2166,7 @@ pub fn add_command_definition(
     ]))
 }
 
-pub fn add_read_model_definition(
+pub(crate) fn add_read_model_definition(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -2043,8 +2200,8 @@ pub fn add_read_model_definition(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added read model {} to slice {}",
             read_model.name.as_ref(),
@@ -2053,7 +2210,7 @@ pub fn add_read_model_definition(
     ]))
 }
 
-pub fn add_view_definition(
+pub(crate) fn add_view_definition(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -2101,8 +2258,8 @@ pub fn add_view_definition(
     })?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added view {} to slice {}",
             view.name.as_ref(),
@@ -2111,7 +2268,7 @@ pub fn add_view_definition(
     ]))
 }
 
-pub fn add_bit_level_data_flow(
+pub(crate) fn add_bit_level_data_flow(
     lean_path: ProjectPath,
     lean_contents: FileContents,
     quint_path: ProjectPath,
@@ -2132,8 +2289,8 @@ pub fn add_bit_level_data_flow(
     )?;
 
     Ok(EffectPlan::new(vec![
-        Effect::WriteFile(lean_path, file_contents(lean)?),
-        Effect::WriteFile(quint_path, file_contents(quint)?),
+        Effect::write_file(lean_path, file_contents(lean)?),
+        Effect::write_file(quint_path, file_contents(quint)?),
         Effect::Report(report_line(format!(
             "added bit-level data flow {} to slice {}",
             data_flow.datum.as_ref(),
@@ -2564,7 +2721,7 @@ fn lean_event_attribute_record(attribute: &NewEventAttribute) -> String {
             attribute
                 .generated_source_kind
                 .as_ref()
-                .map_or("", EventAttributeSourceKind::as_ref),
+                .map_or("", GeneratedEventAttributeSourceKind::as_ref),
         ),
         quoted(attribute.provenance_description.as_ref()),
     )
@@ -2581,7 +2738,7 @@ fn quint_event_attribute_record(attribute: &NewEventAttribute) -> String {
             attribute
                 .generated_source_kind
                 .as_ref()
-                .map_or("", EventAttributeSourceKind::as_ref),
+                .map_or("", GeneratedEventAttributeSourceKind::as_ref),
         ),
         quoted(attribute.provenance_description.as_ref()),
     )
@@ -2635,32 +2792,28 @@ fn lean_read_model_field_record(field: &NewReadModelField) -> String {
     format!(
         "{{ name := {}, sourceKind := {}, sourceEvent := {}, sourceAttribute := {}, derivationRule := {}, derivationSourceFields := [{}], absenceEvent := {}, derivationScenarioName := {}, absenceScenarioName := {}, provenanceDescription := {} }}",
         quoted(field.name.as_ref()),
-        quoted(field.source_kind.as_ref()),
-        quoted(field.source_event.as_ref().map_or("", EventName::as_ref)),
+        quoted(field.source_kind().as_ref()),
+        quoted(field.source_event().map_or("", EventName::as_ref)),
         quoted(
             field
-                .source_attribute
-                .as_ref()
+                .source_attribute()
                 .map_or("", EventAttributeName::as_ref),
         ),
         quoted(
             field
-                .derivation_rule
-                .as_ref()
+                .derivation_rule()
                 .map_or("", ReadModelDerivationRule::as_ref),
         ),
-        lean_list(field.derivation_source_fields.as_slice()),
-        quoted(field.absence_event.as_ref().map_or("", EventName::as_ref)),
+        lean_list(field.derivation_source_fields().as_slice()),
+        quoted(field.absence_event().map_or("", EventName::as_ref)),
         quoted(
             field
-                .derivation_scenario_name
-                .as_ref()
+                .derivation_scenario_name()
                 .map_or("", ScenarioName::as_ref),
         ),
         quoted(
             field
-                .absence_scenario_name
-                .as_ref()
+                .absence_scenario_name()
                 .map_or("", ScenarioName::as_ref),
         ),
         quoted(field.provenance_description.as_ref()),
@@ -2671,32 +2824,28 @@ fn quint_read_model_field_record(field: &NewReadModelField) -> String {
     format!(
         "{{ name: {}, sourceKind: {}, sourceEvent: {}, sourceAttribute: {}, derivationRule: {}, derivationSourceFields: [{}], absenceEvent: {}, derivationScenarioName: {}, absenceScenarioName: {}, provenanceDescription: {} }}",
         quoted(field.name.as_ref()),
-        quoted(field.source_kind.as_ref()),
-        quoted(field.source_event.as_ref().map_or("", EventName::as_ref)),
+        quoted(field.source_kind().as_ref()),
+        quoted(field.source_event().map_or("", EventName::as_ref)),
         quoted(
             field
-                .source_attribute
-                .as_ref()
+                .source_attribute()
                 .map_or("", EventAttributeName::as_ref),
         ),
         quoted(
             field
-                .derivation_rule
-                .as_ref()
+                .derivation_rule()
                 .map_or("", ReadModelDerivationRule::as_ref),
         ),
-        quint_list(field.derivation_source_fields.as_slice()),
-        quoted(field.absence_event.as_ref().map_or("", EventName::as_ref)),
+        quint_list(field.derivation_source_fields().as_slice()),
+        quoted(field.absence_event().map_or("", EventName::as_ref)),
         quoted(
             field
-                .derivation_scenario_name
-                .as_ref()
+                .derivation_scenario_name()
                 .map_or("", ScenarioName::as_ref),
         ),
         quoted(
             field
-                .absence_scenario_name
-                .as_ref()
+                .absence_scenario_name()
                 .map_or("", ScenarioName::as_ref),
         ),
         quoted(field.provenance_description.as_ref()),
@@ -2786,7 +2935,7 @@ fn lean_control_input_record(input: &NewControlInputProvision) -> String {
     format!(
         "{{ name := {}, sourceKind := {}, sourceDescription := {}, sketchToken := {}, visibleToActor := {}, decisionField := {} }}",
         quoted(input.name.as_ref()),
-        quoted(input.source_kind.as_ref()),
+        quoted(input.source_kind().as_ref()),
         quoted(input.source_description.as_ref()),
         quoted(input.sketch_token.as_ref()),
         lean_bool(input.visible_to_actor),
@@ -2798,7 +2947,7 @@ fn quint_control_input_record(input: &NewControlInputProvision) -> String {
     format!(
         "{{ name: {}, sourceKind: {}, sourceDescription: {}, sketchToken: {}, visibleToActor: {}, decisionField: {} }}",
         quoted(input.name.as_ref()),
-        quoted(input.source_kind.as_ref()),
+        quoted(input.source_kind().as_ref()),
         quoted(input.source_description.as_ref()),
         quoted(input.sketch_token.as_ref()),
         lean_bool(input.visible_to_actor),
@@ -2888,67 +3037,57 @@ fn lean_command_input_record(input: &NewCommandInput) -> String {
     format!(
         "{{ name := {}, sourceKind := {}, sourceDescription := {}, provenanceChain := [{}], eventStreamSourceEvent := {}, eventStreamSourceAttribute := {}, externalPayloadSourceName := {}, externalPayloadSourceField := {}, generatedSourceName := {}, generatedSourceField := {}, sessionSourceName := {}, sessionSourceField := {}, invocationArgumentSourceName := {}, invocationArgumentSourceField := {} }}",
         quoted(input.name.as_ref()),
-        quoted(input.source_kind.as_ref()),
+        quoted(input.source_kind().as_ref()),
         quoted(input.source_description.as_ref()),
         lean_list(input.provenance_chain.as_slice()),
         quoted(
             input
-                .event_stream_source_event
-                .as_ref()
+                .event_stream_source_event()
                 .map_or("", EventName::as_ref),
         ),
         quoted(
             input
-                .event_stream_source_attribute
-                .as_ref()
+                .event_stream_source_attribute()
                 .map_or("", EventAttributeName::as_ref),
         ),
         quoted(
             input
-                .external_payload_source_name
-                .as_ref()
+                .external_payload_source_name()
                 .map_or("", EventAttributeSourceName::as_ref),
         ),
         quoted(
             input
-                .external_payload_source_field
-                .as_ref()
+                .external_payload_source_field()
                 .map_or("", EventAttributeSourceField::as_ref),
         ),
         quoted(
             input
-                .generated_source_name
-                .as_ref()
+                .generated_source_name()
                 .map_or("", EventAttributeSourceName::as_ref),
         ),
         quoted(
             input
-                .generated_source_field
-                .as_ref()
+                .generated_source_field()
                 .map_or("", EventAttributeSourceField::as_ref),
         ),
         quoted(
             input
-                .session_source_name
-                .as_ref()
+                .session_source_name()
                 .map_or("", EventAttributeSourceName::as_ref),
         ),
         quoted(
             input
-                .session_source_field
-                .as_ref()
+                .session_source_field()
                 .map_or("", EventAttributeSourceField::as_ref),
         ),
         quoted(
             input
-                .invocation_argument_source_name
-                .as_ref()
+                .invocation_argument_source_name()
                 .map_or("", EventAttributeSourceName::as_ref),
         ),
         quoted(
             input
-                .invocation_argument_source_field
-                .as_ref()
+                .invocation_argument_source_field()
                 .map_or("", EventAttributeSourceField::as_ref),
         ),
     )
@@ -2958,67 +3097,57 @@ fn quint_command_input_record(input: &NewCommandInput) -> String {
     format!(
         "{{ name: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {}, externalPayloadSourceName: {}, externalPayloadSourceField: {}, generatedSourceName: {}, generatedSourceField: {}, sessionSourceName: {}, sessionSourceField: {}, invocationArgumentSourceName: {}, invocationArgumentSourceField: {} }}",
         quoted(input.name.as_ref()),
-        quoted(input.source_kind.as_ref()),
+        quoted(input.source_kind().as_ref()),
         quoted(input.source_description.as_ref()),
         quint_list(input.provenance_chain.as_slice()),
         quoted(
             input
-                .event_stream_source_event
-                .as_ref()
+                .event_stream_source_event()
                 .map_or("", EventName::as_ref),
         ),
         quoted(
             input
-                .event_stream_source_attribute
-                .as_ref()
+                .event_stream_source_attribute()
                 .map_or("", EventAttributeName::as_ref),
         ),
         quoted(
             input
-                .external_payload_source_name
-                .as_ref()
+                .external_payload_source_name()
                 .map_or("", EventAttributeSourceName::as_ref),
         ),
         quoted(
             input
-                .external_payload_source_field
-                .as_ref()
+                .external_payload_source_field()
                 .map_or("", EventAttributeSourceField::as_ref),
         ),
         quoted(
             input
-                .generated_source_name
-                .as_ref()
+                .generated_source_name()
                 .map_or("", EventAttributeSourceName::as_ref),
         ),
         quoted(
             input
-                .generated_source_field
-                .as_ref()
+                .generated_source_field()
                 .map_or("", EventAttributeSourceField::as_ref),
         ),
         quoted(
             input
-                .session_source_name
-                .as_ref()
+                .session_source_name()
                 .map_or("", EventAttributeSourceName::as_ref),
         ),
         quoted(
             input
-                .session_source_field
-                .as_ref()
+                .session_source_field()
                 .map_or("", EventAttributeSourceField::as_ref),
         ),
         quoted(
             input
-                .invocation_argument_source_name
-                .as_ref()
+                .invocation_argument_source_name()
                 .map_or("", EventAttributeSourceName::as_ref),
         ),
         quoted(
             input
-                .invocation_argument_source_field
-                .as_ref()
+                .invocation_argument_source_field()
                 .map_or("", EventAttributeSourceField::as_ref),
         ),
     )

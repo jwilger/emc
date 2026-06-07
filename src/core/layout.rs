@@ -2,8 +2,8 @@
 
 use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest};
 use crate::core::effect::{
-    ArtifactFileExtension, ArtifactMarker, Effect, EffectPlan, FileContents, ProjectPath,
-    ReportLine,
+    ArtifactFileExtension, CanonicalDeclarationMarker, CanonicalDeclarationPrefix, Effect,
+    EffectPlan, FileContents, ProjectPath, ReportLine,
 };
 use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
@@ -24,14 +24,14 @@ use crate::core::types::{
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ModeledWorkflowLayout {
+pub(crate) struct ModeledWorkflowLayout {
     name: ModelName,
     description: ModelDescription,
     slug: WorkflowSlug,
 }
 
 impl ModeledWorkflowLayout {
-    pub fn new(name: ModelName, description: ModelDescription, slug: WorkflowSlug) -> Self {
+    pub(crate) fn new(name: ModelName, description: ModelDescription, slug: WorkflowSlug) -> Self {
         Self {
             name,
             description,
@@ -39,31 +39,31 @@ impl ModeledWorkflowLayout {
         }
     }
 
-    pub fn name(&self) -> &ModelName {
+    pub(crate) fn name(&self) -> &ModelName {
         &self.name
     }
 
-    pub fn description(&self) -> &ModelDescription {
+    pub(crate) fn description(&self) -> &ModelDescription {
         &self.description
     }
 
-    pub fn slug(&self) -> &WorkflowSlug {
+    pub(crate) fn slug(&self) -> &WorkflowSlug {
         &self.slug
     }
 
-    pub fn lean_artifact_path(&self) -> ProjectPath {
+    pub(crate) fn lean_artifact_path(&self) -> ProjectPath {
         let module_name = module_name_from_model(self.name.clone());
         project_path(format!("model/lean/{module_name}.lean"))
     }
 
-    pub fn quint_artifact_path(&self) -> ProjectPath {
+    pub(crate) fn quint_artifact_path(&self) -> ProjectPath {
         let module_name = module_name_from_model(self.name.clone());
         project_path(format!("model/quint/{module_name}.qnt"))
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ModeledWorkflowLayouts {
+pub(crate) struct ModeledWorkflowLayouts {
     workflows: Vec<ModeledWorkflowLayout>,
 }
 
@@ -82,7 +82,7 @@ impl ModeledWorkflowLayouts {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ModeledWorkflowSliceDetails {
+pub(crate) struct ModeledWorkflowSliceDetails {
     slices: Vec<WorkflowSliceDetail>,
 }
 
@@ -93,7 +93,7 @@ impl ModeledWorkflowSliceDetails {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ModeledWorkflowTransitions {
+pub(crate) struct ModeledWorkflowTransitions {
     transitions: Vec<WorkflowTransitionRecord>,
 }
 
@@ -104,7 +104,7 @@ impl ModeledWorkflowTransitions {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ModeledProjectRootInventories {
+pub(crate) struct ModeledProjectRootInventories {
     scenarios: Vec<ProjectScenario>,
     scenario_definitions: Vec<ProjectScenarioDefinition>,
     data_flows: Vec<ProjectDataFlow>,
@@ -192,7 +192,7 @@ impl ModeledProjectRootInventories {
     }
 }
 
-pub fn check_project(
+pub(crate) fn check_project(
     project_name: ProjectName,
     formal_workflows: FormalWorkflowGraphs,
     project_inventories: ModeledProjectRootInventories,
@@ -269,25 +269,25 @@ pub fn check_project(
                 Effect::RequireFile(project_path("model/lean/slices/.gitkeep")),
                 Effect::RequireFile(project_path(format!("model/quint/{module_name}.qnt"))),
                 Effect::RequireFile(project_path("model/quint/slices/.gitkeep")),
-                Effect::RequireOnlyModeledArtifacts(
+                Effect::require_only_modeled_artifacts(
                     project_path("model/lean"),
                     artifact_file_extension(".lean"),
                     lean_artifact_paths,
                     report_line("Lean model artifact drift"),
                 ),
-                Effect::RequireOnlyModeledArtifacts(
+                Effect::require_only_modeled_artifacts(
                     project_path("model/quint"),
                     artifact_file_extension(".qnt"),
                     quint_artifact_paths,
                     report_line("Quint model artifact drift"),
                 ),
-                Effect::RequireOnlyModeledArtifacts(
+                Effect::require_only_modeled_artifacts(
                     project_path("model/lean/slices"),
                     artifact_file_extension(".lean"),
                     lean_slice_artifact_paths,
                     report_line("Lean slice artifact drift"),
                 ),
-                Effect::RequireOnlyModeledArtifacts(
+                Effect::require_only_modeled_artifacts(
                     project_path("model/quint/slices"),
                     artifact_file_extension(".qnt"),
                     quint_slice_artifact_paths,
@@ -489,2405 +489,2439 @@ fn project_root_effects(
     let lean_config_message =
         report_line(format!("Lean project config drift for {project_name_text}"));
     let quint_message = report_line(format!("Quint project root drift for {project_name_text}"));
-    let quint_module_close_marker = artifact_marker("}");
+    let quint_module_close_prefix = canonical_declaration_prefix("}");
+    let quint_module_close_marker = canonical_declaration_marker("}");
 
     vec![
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             manifest_path.clone(),
-            artifact_marker("name ="),
-            artifact_marker(format!("name = {}", json_string(project_name_text))),
+            canonical_declaration_prefix("name ="),
+            canonical_declaration_marker(format!("name = {}", json_string(project_name_text))),
             manifest_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             manifest_path.clone(),
-            artifact_marker("version ="),
-            artifact_marker(format!("version = {}", json_string(model_version))),
+            canonical_declaration_prefix("version ="),
+            canonical_declaration_marker(format!("version = {}", json_string(model_version))),
             manifest_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             manifest_path.clone(),
-            artifact_marker("lean_module ="),
-            artifact_marker(format!("lean_module = \"{module_name}\"")),
+            canonical_declaration_prefix("lean_module ="),
+            canonical_declaration_marker(format!("lean_module = \"{module_name}\"")),
             manifest_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             manifest_path,
-            artifact_marker("quint_module ="),
-            artifact_marker(format!("quint_module = \"{module_name}\"")),
+            canonical_declaration_prefix("quint_module ="),
+            canonical_declaration_marker(format!("quint_module = \"{module_name}\"")),
             manifest_message,
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lakefile_path.clone(),
-            artifact_marker("import Lake"),
-            artifact_marker("import Lake"),
+            canonical_declaration_prefix("import Lake"),
+            canonical_declaration_marker("import Lake"),
             lean_config_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lakefile_path.clone(),
-            artifact_marker("open Lake"),
-            artifact_marker("open Lake DSL"),
+            canonical_declaration_prefix("open Lake"),
+            canonical_declaration_marker("open Lake DSL"),
             lean_config_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lakefile_path,
-            artifact_marker("package "),
-            artifact_marker("package EMCModel where"),
+            canonical_declaration_prefix("package "),
+            canonical_declaration_marker("package EMCModel where"),
             lean_config_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_toolchain_path,
-            artifact_marker("leanprover/lean4:"),
-            artifact_marker("leanprover/lean4:4.29.1"),
+            canonical_declaration_prefix("leanprover/lean4:"),
+            canonical_declaration_marker("leanprover/lean4:4.29.1"),
             lean_config_message,
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("namespace "),
-            artifact_marker(format!("namespace {module_name}")),
+            canonical_declaration_prefix("namespace "),
+            canonical_declaration_marker(format!("namespace {module_name}")),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelVersion :="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelVersion :="),
+            canonical_declaration_marker(format!(
                 "def modelVersion := {}",
                 json_string(model_version)
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelName :="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelName :="),
+            canonical_declaration_marker(format!(
                 "def modelName := {}",
                 json_string(project_name_text)
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDigest :="),
-            artifact_marker(format!("def modelDigest := {}", json_string(&model_digest))),
+            canonical_declaration_prefix("def modelDigest :="),
+            canonical_declaration_marker(format!(
+                "def modelDigest := {}",
+                json_string(&model_digest)
+            )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelWorkflows :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelWorkflows :"),
+            canonical_declaration_marker(format!(
                 "def modelWorkflows : List String := {workflow_slug_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelSlices :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelSlices :"),
+            canonical_declaration_marker(format!(
                 "def modelSlices : List (String × String) := {lean_model_slice_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelSliceModules :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelSliceModules :"),
+            canonical_declaration_marker(format!(
                 "def modelSliceModules : List (String × String × String) := {lean_model_slice_module_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelSliceBelongsToDeclaredWorkflow"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelSliceBelongsToDeclaredWorkflow"),
+            canonical_declaration_marker(
                 "def modelSliceBelongsToDeclaredWorkflow (slice : String × String) : Bool := modelWorkflows.any (fun workflow => workflow == slice.1)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelSliceHasModule"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelSliceHasModule"),
+            canonical_declaration_marker(
                 "def modelSliceHasModule (slice : String × String) : Bool := modelSliceModules.any (fun sliceModule => sliceModule.1 == slice.1 && sliceModule.2.1 == slice.2 && sliceModule.2.2.isEmpty == false)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelSliceModuleBelongsToDeclaredSlice"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelSliceModuleBelongsToDeclaredSlice"),
+            canonical_declaration_marker(
                 "def modelSliceModuleBelongsToDeclaredSlice (sliceModule : String × String × String) : Bool := sliceModule.2.2.isEmpty == false && modelSlices.any (fun slice => slice.1 == sliceModule.1 && slice.2 == sliceModule.2.1)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelWorkflowSlicesHaveModules"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelWorkflowSlicesHaveModules"),
+            canonical_declaration_marker(
                 "def modelWorkflowSlicesHaveModules (workflow : String) : Bool := modelSlices.all (fun slice => slice.1 != workflow || modelSliceHasModule slice)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelWorkflowHasCompositionStructure"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelWorkflowHasCompositionStructure"),
+            canonical_declaration_marker(
                 "def modelWorkflowHasCompositionStructure (workflow : String) : Bool := modelWorkflowSlicesHaveModules workflow",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelScenarios :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelScenarios :"),
+            canonical_declaration_marker(format!(
                 "def modelScenarios : List (String × String × String × String) := {lean_model_scenario_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelScenarioDefinitions :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelScenarioDefinitions :"),
+            canonical_declaration_marker(format!(
                 "def modelScenarioDefinitions : List (String × String × String × String × String × String × String × List String × List String × String × String × List String) := {lean_model_scenario_definition_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlows :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelDataFlows :"),
+            canonical_declaration_marker(format!(
                 "def modelDataFlows : List (String × String × String × String × String × String × String × String) := {lean_model_data_flow_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelOutcomes :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelOutcomes :"),
+            canonical_declaration_marker(format!(
                 "def modelOutcomes : List (String × String × String × List String × Bool) := {lean_model_outcome_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelCommandErrors :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelCommandErrors :"),
+            canonical_declaration_marker(format!(
                 "def modelCommandErrors : List (String × String × String × String × String × String) := {lean_model_command_error_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelCommands :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelCommands :"),
+            canonical_declaration_marker(format!(
                 "def modelCommands : List (String × String × String) := {lean_model_command_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelCommandInputs :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelCommandInputs :"),
+            canonical_declaration_marker(format!(
                 "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) := {lean_model_command_input_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelReadModels :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelReadModels :"),
+            canonical_declaration_marker(format!(
                 "def modelReadModels : List (String × String × String) := {lean_model_read_model_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelReadModelDefinitions :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelReadModelDefinitions :"),
+            canonical_declaration_marker(format!(
                 "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := {lean_model_read_model_definition_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelReadModelFields :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelReadModelFields :"),
+            canonical_declaration_marker(format!(
                 "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := {lean_model_read_model_field_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelViews :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelViews :"),
+            canonical_declaration_marker(format!(
                 "def modelViews : List (String × String × String) := {lean_model_view_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelViewDefinitions :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelViewDefinitions :"),
+            canonical_declaration_marker(format!(
                 "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := {lean_model_view_definition_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelViewControls :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelViewControls :"),
+            canonical_declaration_marker(format!(
                 "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := {lean_model_view_control_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelBoardElements :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelBoardElements :"),
+            canonical_declaration_marker(format!(
                 "def modelBoardElements : List (String × String × String × String × String × String × Bool) := {lean_model_board_element_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelBoardConnections :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelBoardConnections :"),
+            canonical_declaration_marker(format!(
                 "def modelBoardConnections : List (String × String × String × String × String × String) := {lean_model_board_connection_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelViewFields :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelViewFields :"),
+            canonical_declaration_marker(format!(
                 "def modelViewFields : List (String × String × String × String × String × String × String × String × String) := {lean_model_view_field_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelAutomations :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelAutomations :"),
+            canonical_declaration_marker(format!(
                 "def modelAutomations : List (String × String × String) := {lean_model_automation_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelAutomationDefinitions :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelAutomationDefinitions :"),
+            canonical_declaration_marker(format!(
                 "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := {lean_model_automation_definition_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelTranslations :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelTranslations :"),
+            canonical_declaration_marker(format!(
                 "def modelTranslations : List (String × String × String) := {lean_model_translation_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelTranslationDefinitions :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelTranslationDefinitions :"),
+            canonical_declaration_marker(format!(
                 "def modelTranslationDefinitions : List (String × String × String × String × String × String) := {lean_model_translation_definition_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelExternalPayloads :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelExternalPayloads :"),
+            canonical_declaration_marker(format!(
                 "def modelExternalPayloads : List (String × String × String) := {lean_model_external_payload_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelExternalPayloadFields :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelExternalPayloadFields :"),
+            canonical_declaration_marker(format!(
                 "def modelExternalPayloadFields : List (String × String × String × String × String × String) := {lean_model_external_payload_field_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelStreams :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelStreams :"),
+            canonical_declaration_marker(format!(
                 "def modelStreams : List (String × String × String) := {lean_model_stream_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelEvents :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelEvents :"),
+            canonical_declaration_marker(format!(
                 "def modelEvents : List (String × String × String × String) := {lean_model_event_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelEventAttributes :"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("def modelEventAttributes :"),
+            canonical_declaration_marker(format!(
                 "def modelEventAttributes : List (String × String × String × String × String × String × String × String × String) := {lean_model_event_attribute_list}"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelScenarioDefinitionHasGwt"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelScenarioDefinitionHasGwt"),
+            canonical_declaration_marker(
                 "def modelScenarioDefinitionHasGwt (scenario : String × String × String × String × String × String × String × List String × List String × String × String × List String) : Bool := scenario.2.2.2.2.1.isEmpty == false && scenario.2.2.2.2.2.1.isEmpty == false && scenario.2.2.2.2.2.2.1.isEmpty == false",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelScenarioKindIsFirstClass"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelScenarioKindIsFirstClass"),
+            canonical_declaration_marker(
                 "def modelScenarioKindIsFirstClass (scenario : String × String × String × String × String × String × String × List String × List String × String × String × List String) : Bool := scenario.2.2.1 == \"acceptance\" || scenario.2.2.1 == \"contract\"",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowIsBitComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDataFlowIsBitComplete"),
+            canonical_declaration_marker(
                 "def modelDataFlowIsBitComplete (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, datum, sourceKind, source, transformation, target, bitEncoding) := dataFlow; datum.isEmpty == false && sourceKind.isEmpty == false && source.isEmpty == false && transformation.isEmpty == false && target.isEmpty == false && bitEncoding.isEmpty == false",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowCoversDatumTarget"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDataFlowCoversDatumTarget"),
+            canonical_declaration_marker(
                 "def modelDataFlowCoversDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) : Bool := modelDataFlows.any (fun dataFlow => let (flowWorkflow, flowSlice, flowDatum, _, _, _, flowTarget, _) := dataFlow; flowWorkflow == workflow && flowSlice == slice && flowDatum == datum && flowTarget == target && modelDataFlowIsBitComplete dataFlow)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowBitEncodingMatchesDatumTarget"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDataFlowBitEncodingMatchesDatumTarget"),
+            canonical_declaration_marker(
                 "def modelDataFlowBitEncodingMatchesDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) (bitEncoding : String) : Bool := modelDataFlows.any (fun dataFlow => let (flowWorkflow, flowSlice, flowDatum, _, _, _, flowTarget, flowBitEncoding) := dataFlow; flowWorkflow == workflow && flowSlice == slice && flowDatum == datum && flowTarget == target && flowBitEncoding == bitEncoding && modelDataFlowIsBitComplete dataFlow)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowSourceBitEncodingMatchesModeledSource"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDataFlowSourceBitEncodingMatchesModeledSource"),
+            canonical_declaration_marker(
                 "def modelDataFlowSourceBitEncodingMatchesModeledSource (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, datum, _, source, _, _, bitEncoding) := dataFlow; (modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source) == false) || modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, sourceBitEncoding) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && sourceBitEncoding == bitEncoding && modelDataFlowIsBitComplete sourceFlow)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowHasModeledTransformationSemantics"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDataFlowHasModeledTransformationSemantics"),
+            canonical_declaration_marker(
                 "def modelDataFlowHasModeledTransformationSemantics (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, transformation, _, _) := dataFlow; transformation == \"identity\" || transformation == \"projection\" || transformation == \"derivation\" || transformation == \"default\" || transformation == \"absence\" || transformation == \"transformation\"",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowHasModeledSourceKind"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDataFlowHasModeledSourceKind"),
+            canonical_declaration_marker(
                 "def modelDataFlowHasModeledSourceKind (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, sourceKind, source, _, _, _) := dataFlow; (sourceKind == \"original\" && source.isEmpty == false) || (sourceKind == \"modeled_target\" && source.isEmpty == false)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowModeledSourceResolves"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDataFlowModeledSourceResolves"),
+            canonical_declaration_marker(
                 "def modelDataFlowModeledSourceResolves (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, datum, sourceKind, source, _, _, _) := dataFlow; sourceKind != \"modeled_target\" || modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && modelDataFlowIsBitComplete sourceFlow)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelSameDataFlowTarget"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelSameDataFlowTarget"),
+            canonical_declaration_marker(
                 "def modelSameDataFlowTarget (left : String × String × String × String × String × String × String × String) (right : String × String × String × String × String × String × String × String) : Bool := let (leftWorkflow, leftSlice, leftDatum, _, _, _, leftTarget, _) := left; let (rightWorkflow, rightSlice, rightDatum, _, _, _, rightTarget, _) := right; leftWorkflow == rightWorkflow && leftSlice == rightSlice && leftDatum == rightDatum && leftTarget == rightTarget",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowTargetsFromReachable"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDataFlowTargetsFromReachable"),
+            canonical_declaration_marker(
                 "def modelDataFlowTargetsFromReachable (reachable : List (String × String × String × String × String × String × String × String)) : List (String × String × String × String × String × String × String × String) := modelDataFlows.filter (fun dataFlow => let (workflow, slice, datum, sourceKind, source, _, _, _) := dataFlow; sourceKind == \"modeled_target\" && reachable.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && modelDataFlowIsBitComplete sourceFlow))",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowsReachableFromOriginalsAfterFuel"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDataFlowsReachableFromOriginalsAfterFuel"),
+            canonical_declaration_marker(
                 "def modelDataFlowsReachableFromOriginalsAfterFuel : Nat -> List (String × String × String × String × String × String × String × String) -> List (String × String × String × String × String × String × String × String)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowsReachableFromOriginals :"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDataFlowsReachableFromOriginals :"),
+            canonical_declaration_marker(
                 "def modelDataFlowsReachableFromOriginals : List (String × String × String × String × String × String × String × String) := modelDataFlowsReachableFromOriginalsAfterFuel modelDataFlows.length (modelDataFlows.filter (fun dataFlow => let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" && modelDataFlowIsBitComplete dataFlow))",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowHasOriginalSourceChain"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDataFlowHasOriginalSourceChain"),
+            canonical_declaration_marker(
                 "def modelDataFlowHasOriginalSourceChain (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" || modelDataFlowsReachableFromOriginals.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowTargetsFromBitPreservingReachable"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDataFlowTargetsFromBitPreservingReachable"),
+            canonical_declaration_marker(
                 "def modelDataFlowTargetsFromBitPreservingReachable (reachable : List (String × String × String × String × String × String × String × String)) : List (String × String × String × String × String × String × String × String) := modelDataFlows.filter (fun dataFlow => let (workflow, slice, datum, sourceKind, source, _, _, bitEncoding) := dataFlow; sourceKind == \"modeled_target\" && reachable.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, sourceBitEncoding) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && sourceBitEncoding == bitEncoding && modelDataFlowIsBitComplete sourceFlow))",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel"),
-            artifact_marker(
+            canonical_declaration_prefix(
+                "def modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel",
+            ),
+            canonical_declaration_marker(
                 "def modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel : Nat -> List (String × String × String × String × String × String × String × String) -> List (String × String × String × String × String × String × String × String)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowsReachableFromOriginalsWithPreservedBits :"),
-            artifact_marker(
+            canonical_declaration_prefix(
+                "def modelDataFlowsReachableFromOriginalsWithPreservedBits :",
+            ),
+            canonical_declaration_marker(
                 "def modelDataFlowsReachableFromOriginalsWithPreservedBits : List (String × String × String × String × String × String × String × String) := modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel modelDataFlows.length (modelDataFlows.filter (fun dataFlow => let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" && modelDataFlowIsBitComplete dataFlow))",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDataFlowHasBitPreservingOriginalSourceChain"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDataFlowHasBitPreservingOriginalSourceChain"),
+            canonical_declaration_marker(
                 "def modelDataFlowHasBitPreservingOriginalSourceChain (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" || modelDataFlowsReachableFromOriginalsWithPreservedBits.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelCommandInputHasModeledDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelCommandInputHasModeledDataFlow"),
+            canonical_declaration_marker(
                 "def modelCommandInputHasModeledDataFlow (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetCommand, datum, _, _, _, _, _, _, _, _, _, _, _, _, _) := input; modelDataFlowCoversDatumTarget workflow slice datum targetCommand",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelEventAttributeHasModeledDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelEventAttributeHasModeledDataFlow"),
+            canonical_declaration_marker(
                 "def modelEventAttributeHasModeledDataFlow (eventAttribute : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetEvent, datum, _, _, _, _, _) := eventAttribute; modelDataFlowCoversDatumTarget workflow slice datum targetEvent",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelReadModelFieldHasModeledDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelReadModelFieldHasModeledDataFlow"),
+            canonical_declaration_marker(
                 "def modelReadModelFieldHasModeledDataFlow (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := let (workflow, slice, targetReadModel, datum, _, _, _, _, _, _, _, _, _) := field; modelDataFlowCoversDatumTarget workflow slice datum targetReadModel",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelViewFieldHasModeledDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelViewFieldHasModeledDataFlow"),
+            canonical_declaration_marker(
                 "def modelViewFieldHasModeledDataFlow (field : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetView, datum, _, _, _, _, _) := field; modelDataFlowCoversDatumTarget workflow slice datum targetView",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelViewFieldBitEncodingMatchesDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelViewFieldBitEncodingMatchesDataFlow"),
+            canonical_declaration_marker(
                 "def modelViewFieldBitEncodingMatchesDataFlow (field : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetView, datum, _, _, _, _, bitEncoding) := field; modelDataFlowBitEncodingMatchesDatumTarget workflow slice datum targetView bitEncoding",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelExternalPayloadFieldHasModeledDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelExternalPayloadFieldHasModeledDataFlow"),
+            canonical_declaration_marker(
                 "def modelExternalPayloadFieldHasModeledDataFlow (field : String × String × String × String × String × String) : Bool := let (workflow, slice, targetPayload, datum, _, _) := field; modelDataFlowCoversDatumTarget workflow slice datum targetPayload",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelExternalPayloadFieldBitEncodingMatchesDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelExternalPayloadFieldBitEncodingMatchesDataFlow"),
+            canonical_declaration_marker(
                 "def modelExternalPayloadFieldBitEncodingMatchesDataFlow (field : String × String × String × String × String × String) : Bool := let (workflow, slice, targetPayload, datum, _, bitEncoding) := field; modelDataFlowBitEncodingMatchesDatumTarget workflow slice datum targetPayload bitEncoding",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelMeaningfulDataHasModeledDataFlows"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelMeaningfulDataHasModeledDataFlows"),
+            canonical_declaration_marker(
                 "def modelMeaningfulDataHasModeledDataFlows : Bool := modelCommandInputs.all modelCommandInputHasModeledDataFlow && modelEventAttributes.all modelEventAttributeHasModeledDataFlow && modelReadModelFields.all modelReadModelFieldHasModeledDataFlow && modelViewFields.all modelViewFieldHasModeledDataFlow && modelExternalPayloadFields.all modelExternalPayloadFieldHasModeledDataFlow",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelCommandInputHasProvenance"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelCommandInputHasProvenance"),
+            canonical_declaration_marker(
                 "def modelCommandInputHasProvenance (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, sourceDescription, provenanceChain, _, _, _, _, _, _, _, _, _, _) := input; sourceDescription.isEmpty == false && provenanceChain.isEmpty == false",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelCommandInputTracesToInvocationSource"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelCommandInputTracesToInvocationSource"),
+            canonical_declaration_marker(
                 "def modelCommandInputTracesToInvocationSource (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, sourceKind, _, _, eventStreamSourceEvent, eventStreamSourceAttribute, externalPayloadSourceName, externalPayloadSourceField, generatedSourceName, generatedSourceField, sessionSourceName, sessionSourceField, invocationArgumentSourceName, invocationArgumentSourceField) := input; sourceKind == \"actor\" || (sourceKind == \"event_stream_state\" && eventStreamSourceEvent.isEmpty == false && eventStreamSourceAttribute.isEmpty == false) || (sourceKind == \"external_payload\" && externalPayloadSourceName.isEmpty == false && externalPayloadSourceField.isEmpty == false) || (sourceKind == \"generated\" && generatedSourceName.isEmpty == false && generatedSourceField.isEmpty == false) || (sourceKind == \"session\" && sessionSourceName.isEmpty == false && sessionSourceField.isEmpty == false) || (sourceKind == \"invocation_argument\" && invocationArgumentSourceName.isEmpty == false && invocationArgumentSourceField.isEmpty == false)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelEventAttributeSourceIsComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelEventAttributeSourceIsComplete"),
+            canonical_declaration_marker(
                 "def modelEventAttributeSourceIsComplete (eventAttribute : String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, sourceKind, sourceName, sourceField, generatedSourceKind, provenance) := eventAttribute; provenance.isEmpty == false && ((sourceKind == \"command_input\" && sourceName.isEmpty == false && sourceField.isEmpty == false) || (sourceKind == \"external_payload\" && sourceName.isEmpty == false && sourceField.isEmpty == false) || (sourceKind == \"generated\" && sourceName.isEmpty == false && generatedSourceKind.isEmpty == false) || (sourceKind == \"session\" && sourceName.isEmpty == false) || (sourceKind == \"derivation\" && sourceName.isEmpty == false && sourceField.isEmpty == false))",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelReadModelFieldSourceIsComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelReadModelFieldSourceIsComplete"),
+            canonical_declaration_marker(
                 "def modelReadModelFieldSourceIsComplete (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := (field.2.2.2.2.1 == \"event_attribute\" && field.2.2.2.2.2.1.isEmpty == false && field.2.2.2.2.2.2.1.isEmpty == false) || (field.2.2.2.2.1 == \"derivation\" && field.2.2.2.2.2.2.2.1.isEmpty == false && field.2.2.2.2.2.2.2.2.1.isEmpty == false) || (field.2.2.2.2.1 == \"absence_default\" && field.2.2.2.2.2.2.2.2.2.1.isEmpty == false)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelViewFieldSourceIsComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelViewFieldSourceIsComplete"),
+            canonical_declaration_marker(
                 "def modelViewFieldSourceIsComplete (field : String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, sourceKind, sourceReadModel, sourceField, provenance, bitEncoding) := field; sourceKind == \"read_model\" && sourceReadModel.isEmpty == false && sourceField.isEmpty == false && provenance.isEmpty == false && bitEncoding.isEmpty == false",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelReadModelFieldTracesToOriginalProvenance"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelReadModelFieldTracesToOriginalProvenance"),
+            canonical_declaration_marker(
                 "def modelReadModelFieldTracesToOriginalProvenance (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := let (workflow, slice, _, _, sourceKind, sourceEvent, sourceAttribute, derivationRule, derivationSourceFields, absenceEvent, _, _, provenance) := field; provenance.isEmpty == false && ((sourceKind == \"event_attribute\" && modelEventAttributes.any (fun eventAttribute => eventAttribute.1 == workflow && eventAttribute.2.1 == slice && eventAttribute.2.2.1 == sourceEvent && eventAttribute.2.2.2.1 == sourceAttribute && modelEventAttributeSourceIsComplete eventAttribute)) || (sourceKind == \"derivation\" && derivationRule.isEmpty == false && derivationSourceFields.isEmpty == false) || (sourceKind == \"absence_default\" && absenceEvent.isEmpty == false))",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelViewFieldReadModelFieldSourceResolves"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelViewFieldReadModelFieldSourceResolves"),
+            canonical_declaration_marker(
                 "def modelViewFieldReadModelFieldSourceResolves (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldSourceIsComplete viewField && modelReadModelFields.any (fun readModelField => readModelField.1 == workflow && readModelField.2.1 == slice && readModelField.2.2.1 == sourceReadModel && readModelField.2.2.2.1 == sourceField && modelReadModelFieldSourceIsComplete readModelField)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelDisplayedDatumTracesToOriginalProvenance"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelDisplayedDatumTracesToOriginalProvenance"),
+            canonical_declaration_marker(
                 "def modelDisplayedDatumTracesToOriginalProvenance (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldReadModelFieldSourceResolves viewField && modelReadModelFields.any (fun readModelField => readModelField.1 == workflow && readModelField.2.1 == slice && readModelField.2.2.1 == sourceReadModel && readModelField.2.2.2.1 == sourceField && modelReadModelFieldTracesToOriginalProvenance readModelField)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelExternalPayloadFieldHasProvenance"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelExternalPayloadFieldHasProvenance"),
+            canonical_declaration_marker(
                 "def modelExternalPayloadFieldHasProvenance (field : String × String × String × String × String × String) : Bool := let (_, _, _, _, provenance, bitEncoding) := field; provenance.isEmpty == false && bitEncoding.isEmpty == false",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelControlProvidesCommandInput"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelControlProvidesCommandInput"),
+            canonical_declaration_marker(
                 "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := control.1 == input.1 && control.2.2.2.2.1 == input.2.2.1 && control.2.2.2.2.2.1 == input.2.2.2.1",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelViewControlProvidesEveryCommandInput"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelViewControlProvidesEveryCommandInput"),
+            canonical_declaration_marker(
                 "def modelViewControlProvidesEveryCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) : Bool := modelCommandInputs.all (fun input => input.1 != control.1 || input.2.2.1 != control.2.2.2.2.1 || modelViewControls.any (fun providedInput => providedInput.1 == control.1 && providedInput.2.1 == control.2.1 && providedInput.2.2.1 == control.2.2.1 && providedInput.2.2.2.1 == control.2.2.2.1 && providedInput.2.2.2.2.1 == control.2.2.2.2.1 && modelControlProvidesCommandInput providedInput input))",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelOutcomeBranchIsModeled"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelOutcomeBranchIsModeled"),
+            canonical_declaration_marker(
                 "def modelOutcomeBranchIsModeled (outcome : String × String × String × List String × Bool) : Bool := let (_, _, outcomeName, events, _) := outcome; outcomeName.isEmpty == false && events.isEmpty == false",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelCommandErrorRecoveryIsModeled"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelCommandErrorRecoveryIsModeled"),
+            canonical_declaration_marker(
                 "def modelCommandErrorRecoveryIsModeled (commandError : String × String × String × String × String × String) : Bool := let (_, _, command, error, scenario, recovery) := commandError; command.isEmpty == false && error.isEmpty == false && scenario.isEmpty == false && recovery.isEmpty == false",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelViewControlNavigationTargetIsModeled"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelViewControlNavigationTargetIsModeled"),
+            canonical_declaration_marker(
                 "def modelViewControlNavigationTargetIsModeled (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, _, _, _, _, _, _, _, _, _, navigationType, navigationTarget, externalWorkflow, externalSystem, handoffContract) := control; navigationType.isEmpty || ((navigationType == \"modeled_view\" || navigationType == \"local_view_state\") && navigationTarget.isEmpty == false) || (navigationType == \"external_workflow\" && externalWorkflow.isEmpty == false) || (navigationType == \"external_system\" && externalSystem.isEmpty == false && handoffContract.isEmpty == false)",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelExternalBoundaryContractIsModeled"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelExternalBoundaryContractIsModeled"),
+            canonical_declaration_marker(
                 "def modelExternalBoundaryContractIsModeled (translation : String × String × String × String × String × String) : Bool := let (_, _, translationName, externalEvent, payloadContract, command) := translation; translationName.isEmpty == false && externalEvent.isEmpty == false && payloadContract.isEmpty == false && command.isEmpty == false",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("def modelWorkflowBehaviorSurfaceIsComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("def modelWorkflowBehaviorSurfaceIsComplete"),
+            canonical_declaration_marker(
                 "def modelWorkflowBehaviorSurfaceIsComplete : Bool := modelOutcomes.all modelOutcomeBranchIsModeled && modelCommandErrors.all modelCommandErrorRecoveryIsModeled && modelViewControls.all modelViewControlNavigationTargetIsModeled && modelTranslationDefinitions.all modelExternalBoundaryContractIsModeled",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelIdentityIsStable"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelIdentityIsStable"),
+            canonical_declaration_marker(format!(
                 "theorem modelIdentityIsStable : modelName = {} := rfl",
                 json_string(project_name_text)
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelVersionIsStable"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelVersionIsStable"),
+            canonical_declaration_marker(format!(
                 "theorem modelVersionIsStable : modelVersion = {} := rfl",
                 json_string(model_version)
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelDigestIsStable"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelDigestIsStable"),
+            canonical_declaration_marker(format!(
                 "theorem modelDigestIsStable : modelDigest = {} := rfl",
                 json_string(&model_digest)
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelWorkflowsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelWorkflowsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelWorkflowsAreDeclared : modelWorkflows.length = {workflow_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelSlicesAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelSlicesAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelSlicesAreDeclared : modelSlices.length = {slice_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelSliceModulesAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelSliceModulesAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelSliceModulesAreDeclared : modelSliceModules.length = {slice_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelWorkflowCompositionStructureComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelWorkflowCompositionStructureComplete"),
+            canonical_declaration_marker(
                 "theorem modelWorkflowCompositionStructureComplete : (modelSlices.all modelSliceBelongsToDeclaredWorkflow && modelSlices.all modelSliceHasModule && modelSliceModules.all modelSliceModuleBelongsToDeclaredSlice && modelWorkflows.all modelWorkflowHasCompositionStructure) = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelWorkflowBehaviorSurfaceIsCompleteIsStable"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelWorkflowBehaviorSurfaceIsCompleteIsStable"),
+            canonical_declaration_marker(
                 "theorem modelWorkflowBehaviorSurfaceIsCompleteIsStable : modelWorkflowBehaviorSurfaceIsComplete = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelScenariosAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelScenariosAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelScenariosAreDeclared : modelScenarios.length = {scenario_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelScenarioDefinitionsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelScenarioDefinitionsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelScenarioDefinitionsAreDeclared : modelScenarioDefinitions.length = {scenario_definition_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelScenarioDefinitionsHaveGwt"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelScenarioDefinitionsHaveGwt"),
+            canonical_declaration_marker(
                 "theorem modelScenarioDefinitionsHaveGwt : modelScenarioDefinitions.all modelScenarioDefinitionHasGwt = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelScenarioKindsAreFirstClass"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelScenarioKindsAreFirstClass"),
+            canonical_declaration_marker(
                 "theorem modelScenarioKindsAreFirstClass : modelScenarioDefinitions.all modelScenarioKindIsFirstClass = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelDataFlowsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelDataFlowsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelDataFlowsAreDeclared : modelDataFlows.length = {data_flow_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelDataFlowsAreBitComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelDataFlowsAreBitComplete"),
+            canonical_declaration_marker(
                 "theorem modelDataFlowsAreBitComplete : modelDataFlows.all modelDataFlowIsBitComplete = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelDataFlowSourceKindsAreModeled"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelDataFlowSourceKindsAreModeled"),
+            canonical_declaration_marker(
                 "theorem modelDataFlowSourceKindsAreModeled : modelDataFlows.all modelDataFlowHasModeledSourceKind = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelDataFlowModeledSourcesResolve"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelDataFlowModeledSourcesResolve"),
+            canonical_declaration_marker(
                 "theorem modelDataFlowModeledSourcesResolve : modelDataFlows.all modelDataFlowModeledSourceResolves = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelDataFlowSourceChainsReachOriginals"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelDataFlowSourceChainsReachOriginals"),
+            canonical_declaration_marker(
                 "theorem modelDataFlowSourceChainsReachOriginals : modelDataFlows.all modelDataFlowHasOriginalSourceChain = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelDataFlowSourceChainsPreserveBitEncodingSemantics"),
-            artifact_marker(
+            canonical_declaration_prefix(
+                "theorem modelDataFlowSourceChainsPreserveBitEncodingSemantics",
+            ),
+            canonical_declaration_marker(
                 "theorem modelDataFlowSourceChainsPreserveBitEncodingSemantics : modelDataFlows.all modelDataFlowHasBitPreservingOriginalSourceChain = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelDataFlowTransformationsAreModeled"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelDataFlowTransformationsAreModeled"),
+            canonical_declaration_marker(
                 "theorem modelDataFlowTransformationsAreModeled : modelDataFlows.all modelDataFlowHasModeledTransformationSemantics = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelMeaningfulDataFlowsAreCovered"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelMeaningfulDataFlowsAreCovered"),
+            canonical_declaration_marker(
                 "theorem modelMeaningfulDataFlowsAreCovered : modelMeaningfulDataHasModeledDataFlows = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelDataFlowSourceBitEncodingsMatchModeledSources"),
-            artifact_marker(
+            canonical_declaration_prefix(
+                "theorem modelDataFlowSourceBitEncodingsMatchModeledSources",
+            ),
+            canonical_declaration_marker(
                 "theorem modelDataFlowSourceBitEncodingsMatchModeledSources : modelDataFlows.all modelDataFlowSourceBitEncodingMatchesModeledSource = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelViewFieldBitEncodingsMatchDataFlows"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelViewFieldBitEncodingsMatchDataFlows"),
+            canonical_declaration_marker(
                 "theorem modelViewFieldBitEncodingsMatchDataFlows : modelViewFields.all modelViewFieldBitEncodingMatchesDataFlow = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelExternalPayloadFieldBitEncodingsMatchDataFlows"),
-            artifact_marker(
+            canonical_declaration_prefix(
+                "theorem modelExternalPayloadFieldBitEncodingsMatchDataFlows",
+            ),
+            canonical_declaration_marker(
                 "theorem modelExternalPayloadFieldBitEncodingsMatchDataFlows : modelExternalPayloadFields.all modelExternalPayloadFieldBitEncodingMatchesDataFlow = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelOutcomesAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelOutcomesAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelOutcomesAreDeclared : modelOutcomes.length = {outcome_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelCommandErrorsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelCommandErrorsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelCommandErrorsAreDeclared : modelCommandErrors.length = {command_error_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelCommandsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelCommandsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelCommandsAreDeclared : modelCommands.length = {command_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelCommandInputsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelCommandInputsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelCommandInputsAreDeclared : modelCommandInputs.length = {command_input_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelCommandInputsHaveProvenance"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelCommandInputsHaveProvenance"),
+            canonical_declaration_marker(
                 "theorem modelCommandInputsHaveProvenance : modelCommandInputs.all modelCommandInputHasProvenance = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelCommandInputsTraceToInvocationSources"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelCommandInputsTraceToInvocationSources"),
+            canonical_declaration_marker(
                 "theorem modelCommandInputsTraceToInvocationSources : modelCommandInputs.all modelCommandInputTracesToInvocationSource = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelEventAttributeSourcesAreComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelEventAttributeSourcesAreComplete"),
+            canonical_declaration_marker(
                 "theorem modelEventAttributeSourcesAreComplete : modelEventAttributes.all modelEventAttributeSourceIsComplete = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelReadModelsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelReadModelsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelReadModelsAreDeclared : modelReadModels.length = {read_model_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelReadModelDefinitionsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelReadModelDefinitionsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelReadModelDefinitionsAreDeclared : modelReadModelDefinitions.length = {read_model_definition_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelReadModelFieldsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelReadModelFieldsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelReadModelFieldsAreDeclared : modelReadModelFields.length = {read_model_field_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelReadModelFieldSourcesAreComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelReadModelFieldSourcesAreComplete"),
+            canonical_declaration_marker(
                 "theorem modelReadModelFieldSourcesAreComplete : modelReadModelFields.all modelReadModelFieldSourceIsComplete = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelViewFieldSourcesAreComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelViewFieldSourcesAreComplete"),
+            canonical_declaration_marker(
                 "theorem modelViewFieldSourcesAreComplete : modelViewFields.all modelViewFieldSourceIsComplete = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelViewFieldReadModelFieldSourcesResolve"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelViewFieldReadModelFieldSourcesResolve"),
+            canonical_declaration_marker(
                 "theorem modelViewFieldReadModelFieldSourcesResolve : modelViewFields.all modelViewFieldReadModelFieldSourceResolves = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelDisplayedDataTraceToOriginalProvenance"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelDisplayedDataTraceToOriginalProvenance"),
+            canonical_declaration_marker(
                 "theorem modelDisplayedDataTraceToOriginalProvenance : modelViewFields.all modelDisplayedDatumTracesToOriginalProvenance = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelViewsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelViewsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelViewsAreDeclared : modelViews.length = {view_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelViewDefinitionsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelViewDefinitionsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelViewDefinitionsAreDeclared : modelViewDefinitions.length = {view_definition_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelViewControlsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelViewControlsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelViewControlsAreDeclared : modelViewControls.length = {view_control_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelViewControlsProvideCommandInputs"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelViewControlsProvideCommandInputs"),
+            canonical_declaration_marker(
                 "theorem modelViewControlsProvideCommandInputs : modelViewControls.all modelViewControlProvidesEveryCommandInput = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelBoardElementsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelBoardElementsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelBoardElementsAreDeclared : modelBoardElements.length = {board_element_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelBoardConnectionsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelBoardConnectionsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelBoardConnectionsAreDeclared : modelBoardConnections.length = {board_connection_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelViewFieldsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelViewFieldsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelViewFieldsAreDeclared : modelViewFields.length = {view_field_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelAutomationsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelAutomationsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelAutomationsAreDeclared : modelAutomations.length = {automation_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelAutomationDefinitionsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelAutomationDefinitionsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelAutomationDefinitionsAreDeclared : modelAutomationDefinitions.length = {automation_definition_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelTranslationsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelTranslationsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelTranslationsAreDeclared : modelTranslations.length = {translation_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelTranslationDefinitionsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelTranslationDefinitionsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelTranslationDefinitionsAreDeclared : modelTranslationDefinitions.length = {translation_definition_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelExternalPayloadsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelExternalPayloadsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelExternalPayloadsAreDeclared : modelExternalPayloads.length = {external_payload_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelExternalPayloadFieldsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelExternalPayloadFieldsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelExternalPayloadFieldsAreDeclared : modelExternalPayloadFields.length = {external_payload_field_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelExternalPayloadFieldsHaveProvenance"),
-            artifact_marker(
+            canonical_declaration_prefix("theorem modelExternalPayloadFieldsHaveProvenance"),
+            canonical_declaration_marker(
                 "theorem modelExternalPayloadFieldsHaveProvenance : modelExternalPayloadFields.all modelExternalPayloadFieldHasProvenance = true := rfl",
             ),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelStreamsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelStreamsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelStreamsAreDeclared : modelStreams.length = {stream_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelEventsAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelEventsAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelEventsAreDeclared : modelEvents.length = {event_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
-            artifact_marker("theorem modelEventAttributesAreDeclared"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("theorem modelEventAttributesAreDeclared"),
+            canonical_declaration_marker(format!(
                 "theorem modelEventAttributesAreDeclared : modelEventAttributes.length = {event_attribute_count} := rfl"
             )),
             lean_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path,
-            artifact_marker("end "),
-            artifact_marker(format!("end {module_name}")),
+            canonical_declaration_prefix("end "),
+            canonical_declaration_marker(format!("end {module_name}")),
             lean_message,
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("module "),
-            artifact_marker(format!("module {module_name} {{")),
+            canonical_declaration_prefix("module "),
+            canonical_declaration_marker(format!("module {module_name} {{")),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelSlice ="),
-            artifact_marker("  type ModelSlice = { workflow: str, slice: str }"),
+            canonical_declaration_prefix("  type ModelSlice ="),
+            canonical_declaration_marker("  type ModelSlice = { workflow: str, slice: str }"),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelSliceModule ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelSliceModule ="),
+            canonical_declaration_marker(
                 "  type ModelSliceModule = { workflow: str, slice: str, formalModule: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelScenario ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelScenario ="),
+            canonical_declaration_marker(
                 "  type ModelScenario = { workflow: str, slice: str, scenarioKind: str, scenario: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelScenarioDefinition ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelScenarioDefinition ="),
+            canonical_declaration_marker(
                 "  type ModelScenarioDefinition = { workflow: str, slice: str, scenarioKind: str, scenario: str, given: str, when: str, then: str, readStreams: List[str], writtenStreams: List[str], contractKind: str, coveredDefinition: str, errorReferences: List[str] }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelDataFlow ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelDataFlow ="),
+            canonical_declaration_marker(
                 "  type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: str, source: str, transformation: str, target: str, bitEncoding: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelOutcome ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelOutcome ="),
+            canonical_declaration_marker(
                 "  type ModelOutcome = { workflow: str, slice: str, outcome: str, events: List[str], externallyRelevant: bool }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelCommandError ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelCommandError ="),
+            canonical_declaration_marker(
                 "  type ModelCommandError = { workflow: str, slice: str, command: str, error: str, scenario: str, recovery: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelCommand ="),
-            artifact_marker("  type ModelCommand = { workflow: str, slice: str, command: str }"),
+            canonical_declaration_prefix("  type ModelCommand ="),
+            canonical_declaration_marker(
+                "  type ModelCommand = { workflow: str, slice: str, command: str }",
+            ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelCommandInput ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelCommandInput ="),
+            canonical_declaration_marker(
                 "  type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str, invocationArgumentSourceName: str, invocationArgumentSourceField: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelReadModel ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelReadModel ="),
+            canonical_declaration_marker(
                 "  type ModelReadModel = { workflow: str, slice: str, readModel: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelReadModelDefinition ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelReadModelDefinition ="),
+            canonical_declaration_marker(
                 "  type ModelReadModelDefinition = { workflow: str, slice: str, readModel: str, transitive: bool, relationshipFields: List[str], transitiveRule: str, exampleScenarioName: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelReadModelField ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelReadModelField ="),
+            canonical_declaration_marker(
                 "  type ModelReadModelField = { workflow: str, slice: str, readModel: str, field: str, sourceKind: str, sourceEvent: str, sourceAttribute: str, derivationRule: str, derivationSourceFields: List[str], absenceEvent: str, derivationScenarioName: str, absenceScenarioName: str, provenance: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelView ="),
-            artifact_marker("  type ModelView = { workflow: str, slice: str, view: str }"),
+            canonical_declaration_prefix("  type ModelView ="),
+            canonical_declaration_marker(
+                "  type ModelView = { workflow: str, slice: str, view: str }",
+            ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelViewDefinition ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelViewDefinition ="),
+            canonical_declaration_marker(
                 "  type ModelViewDefinition = { workflow: str, slice: str, view: str, readModels: List[str], sketchTokens: List[str], localStates: List[str], filters: List[str] }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelViewControl ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelViewControl ="),
+            canonical_declaration_marker(
                 "  type ModelViewControl = { workflow: str, slice: str, view: str, control: str, command: str, input: str, inputSourceKind: str, inputSourceDescription: str, inputSketchToken: str, inputVisibleToActor: bool, inputDecisionField: bool, handledErrors: List[str], recoveryBehavior: str, controlSketchToken: str, navigationType: str, navigationTarget: str, externalWorkflow: str, externalSystem: str, handoffContract: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelBoardElement ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelBoardElement ="),
+            canonical_declaration_marker(
                 "  type ModelBoardElement = { workflow: str, slice: str, element: str, kind: str, lane: str, declaredName: str, mainPath: bool }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelBoardConnection ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelBoardConnection ="),
+            canonical_declaration_marker(
                 "  type ModelBoardConnection = { workflow: str, slice: str, source: str, sourceKind: str, target: str, targetKind: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelViewField ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelViewField ="),
+            canonical_declaration_marker(
                 "  type ModelViewField = { workflow: str, slice: str, view: str, field: str, sourceKind: str, sourceReadModel: str, sourceField: str, provenance: str, bitEncoding: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelAutomation ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelAutomation ="),
+            canonical_declaration_marker(
                 "  type ModelAutomation = { workflow: str, slice: str, automation: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelAutomationDefinition ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelAutomationDefinition ="),
+            canonical_declaration_marker(
                 "  type ModelAutomationDefinition = { workflow: str, slice: str, automation: str, trigger: str, command: str, handledErrors: List[str], reaction: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelTranslation ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelTranslation ="),
+            canonical_declaration_marker(
                 "  type ModelTranslation = { workflow: str, slice: str, translation: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelTranslationDefinition ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelTranslationDefinition ="),
+            canonical_declaration_marker(
                 "  type ModelTranslationDefinition = { workflow: str, slice: str, translation: str, externalEvent: str, payloadContract: str, command: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelExternalPayload ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelExternalPayload ="),
+            canonical_declaration_marker(
                 "  type ModelExternalPayload = { workflow: str, slice: str, externalPayload: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelExternalPayloadField ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelExternalPayloadField ="),
+            canonical_declaration_marker(
                 "  type ModelExternalPayloadField = { workflow: str, slice: str, externalPayload: str, field: str, provenance: str, bitEncoding: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelStream ="),
-            artifact_marker("  type ModelStream = { workflow: str, slice: str, stream: str }"),
+            canonical_declaration_prefix("  type ModelStream ="),
+            canonical_declaration_marker(
+                "  type ModelStream = { workflow: str, slice: str, stream: str }",
+            ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelEvent ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelEvent ="),
+            canonical_declaration_marker(
                 "  type ModelEvent = { workflow: str, slice: str, event: str, stream: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  type ModelEventAttribute ="),
-            artifact_marker(
+            canonical_declaration_prefix("  type ModelEventAttribute ="),
+            canonical_declaration_marker(
                 "  type ModelEventAttribute = { workflow: str, slice: str, event: str, attribute: str, sourceKind: str, sourceName: str, sourceField: str, generatedSourceKind: str, provenance: str }",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelVersion ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelVersion ="),
+            canonical_declaration_marker(format!(
                 "  val modelVersion = {}",
                 json_string(model_version)
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelName ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelName ="),
+            canonical_declaration_marker(format!(
                 "  val modelName = {}",
                 json_string(project_name_text)
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDigest ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelDigest ="),
+            canonical_declaration_marker(format!(
                 "  val modelDigest = {}",
                 json_string(&model_digest)
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelWorkflows:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelWorkflows:"),
+            canonical_declaration_marker(format!(
                 "  val modelWorkflows: List[str] = {workflow_slug_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelSlices:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelSlices:"),
+            canonical_declaration_marker(format!(
                 "  val modelSlices: List[ModelSlice] = {quint_model_slice_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelSliceModules:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelSliceModules:"),
+            canonical_declaration_marker(format!(
                 "  val modelSliceModules: List[ModelSliceModule] = {quint_model_slice_module_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelScenarios:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelScenarios:"),
+            canonical_declaration_marker(format!(
                 "  val modelScenarios: List[ModelScenario] = {quint_model_scenario_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelScenarioDefinitions:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelScenarioDefinitions:"),
+            canonical_declaration_marker(format!(
                 "  val modelScenarioDefinitions: List[ModelScenarioDefinition] = {quint_model_scenario_definition_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDataFlows:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelDataFlows:"),
+            canonical_declaration_marker(format!(
                 "  val modelDataFlows: List[ModelDataFlow] = {quint_model_data_flow_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDataFlowCount ="),
-            artifact_marker(format!("  val modelDataFlowCount = {data_flow_count}")),
+            canonical_declaration_prefix("  val modelDataFlowCount ="),
+            canonical_declaration_marker(format!("  val modelDataFlowCount = {data_flow_count}")),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelOutcomes:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelOutcomes:"),
+            canonical_declaration_marker(format!(
                 "  val modelOutcomes: List[ModelOutcome] = {quint_model_outcome_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelCommandErrors:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelCommandErrors:"),
+            canonical_declaration_marker(format!(
                 "  val modelCommandErrors: List[ModelCommandError] = {quint_model_command_error_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelCommands:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelCommands:"),
+            canonical_declaration_marker(format!(
                 "  val modelCommands: List[ModelCommand] = {quint_model_command_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelCommandInputs:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelCommandInputs:"),
+            canonical_declaration_marker(format!(
                 "  val modelCommandInputs: List[ModelCommandInput] = {quint_model_command_input_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelReadModels:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelReadModels:"),
+            canonical_declaration_marker(format!(
                 "  val modelReadModels: List[ModelReadModel] = {quint_model_read_model_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelReadModelDefinitions:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelReadModelDefinitions:"),
+            canonical_declaration_marker(format!(
                 "  val modelReadModelDefinitions: List[ModelReadModelDefinition] = {quint_model_read_model_definition_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelReadModelFields:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelReadModelFields:"),
+            canonical_declaration_marker(format!(
                 "  val modelReadModelFields: List[ModelReadModelField] = {quint_model_read_model_field_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelViews:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelViews:"),
+            canonical_declaration_marker(format!(
                 "  val modelViews: List[ModelView] = {quint_model_view_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelViewDefinitions:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelViewDefinitions:"),
+            canonical_declaration_marker(format!(
                 "  val modelViewDefinitions: List[ModelViewDefinition] = {quint_model_view_definition_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelViewControls:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelViewControls:"),
+            canonical_declaration_marker(format!(
                 "  val modelViewControls: List[ModelViewControl] = {quint_model_view_control_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelBoardElements:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelBoardElements:"),
+            canonical_declaration_marker(format!(
                 "  val modelBoardElements: List[ModelBoardElement] = {quint_model_board_element_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelBoardConnections:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelBoardConnections:"),
+            canonical_declaration_marker(format!(
                 "  val modelBoardConnections: List[ModelBoardConnection] = {quint_model_board_connection_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelViewFields:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelViewFields:"),
+            canonical_declaration_marker(format!(
                 "  val modelViewFields: List[ModelViewField] = {quint_model_view_field_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelAutomations:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelAutomations:"),
+            canonical_declaration_marker(format!(
                 "  val modelAutomations: List[ModelAutomation] = {quint_model_automation_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelAutomationDefinitions:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelAutomationDefinitions:"),
+            canonical_declaration_marker(format!(
                 "  val modelAutomationDefinitions: List[ModelAutomationDefinition] = {quint_model_automation_definition_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelTranslations:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelTranslations:"),
+            canonical_declaration_marker(format!(
                 "  val modelTranslations: List[ModelTranslation] = {quint_model_translation_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelTranslationDefinitions:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelTranslationDefinitions:"),
+            canonical_declaration_marker(format!(
                 "  val modelTranslationDefinitions: List[ModelTranslationDefinition] = {quint_model_translation_definition_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelExternalPayloads:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelExternalPayloads:"),
+            canonical_declaration_marker(format!(
                 "  val modelExternalPayloads: List[ModelExternalPayload] = {quint_model_external_payload_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelExternalPayloadFields:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelExternalPayloadFields:"),
+            canonical_declaration_marker(format!(
                 "  val modelExternalPayloadFields: List[ModelExternalPayloadField] = {quint_model_external_payload_field_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelStreams:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelStreams:"),
+            canonical_declaration_marker(format!(
                 "  val modelStreams: List[ModelStream] = {quint_model_stream_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelEvents:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelEvents:"),
+            canonical_declaration_marker(format!(
                 "  val modelEvents: List[ModelEvent] = {quint_model_event_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelEventAttributes:"),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelEventAttributes:"),
+            canonical_declaration_marker(format!(
                 "  val modelEventAttributes: List[ModelEventAttribute] = {quint_model_event_attribute_list}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelIdentityStable ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelIdentityStable ="),
+            canonical_declaration_marker(format!(
                 "  val modelIdentityStable = modelName == {}",
                 json_string(project_name_text)
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelVersionStable ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelVersionStable ="),
+            canonical_declaration_marker(format!(
                 "  val modelVersionStable = modelVersion == {}",
                 json_string(model_version)
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDigestStable ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelDigestStable ="),
+            canonical_declaration_marker(format!(
                 "  val modelDigestStable = modelDigest == {}",
                 json_string(&model_digest)
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelWorkflowsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelWorkflowsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelWorkflowsAreDeclared = modelWorkflows.length() == {workflow_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelSlicesAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelSlicesAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelSlicesAreDeclared = modelSlices.length() == {slice_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelSliceModulesAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelSliceModulesAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelSliceModulesAreDeclared = modelSliceModules.length() == {slice_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelSliceBelongsToDeclaredWorkflow"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelSliceBelongsToDeclaredWorkflow"),
+            canonical_declaration_marker(
                 "  def modelSliceBelongsToDeclaredWorkflow(modelSlice) = modelWorkflows.select(workflow => workflow == modelSlice.workflow).length() > 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelSliceHasModule"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelSliceHasModule"),
+            canonical_declaration_marker(
                 "  def modelSliceHasModule(modelSlice) = modelSliceModules.select(sliceModule => sliceModule.workflow == modelSlice.workflow and sliceModule.slice == modelSlice.slice and sliceModule.formalModule != \"\").length() > 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelSliceModuleBelongsToDeclaredSlice"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelSliceModuleBelongsToDeclaredSlice"),
+            canonical_declaration_marker(
                 "  def modelSliceModuleBelongsToDeclaredSlice(sliceModule) = sliceModule.formalModule != \"\" and modelSlices.select(modelSlice => modelSlice.workflow == sliceModule.workflow and modelSlice.slice == sliceModule.slice).length() > 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelWorkflowSlicesHaveModules"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelWorkflowSlicesHaveModules"),
+            canonical_declaration_marker(
                 "  def modelWorkflowSlicesHaveModules(workflow) = modelSlices.select(modelSlice => modelSlice.workflow == workflow and not(modelSliceHasModule(modelSlice))).length() == 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelWorkflowHasCompositionStructure"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelWorkflowHasCompositionStructure"),
+            canonical_declaration_marker(
                 "  def modelWorkflowHasCompositionStructure(workflow) = modelWorkflowSlicesHaveModules(workflow)",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelWorkflowCompositionStructureComplete ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelWorkflowCompositionStructureComplete ="),
+            canonical_declaration_marker(
                 "  val modelWorkflowCompositionStructureComplete = modelSlices.select(modelSlice => modelSliceBelongsToDeclaredWorkflow(modelSlice)).length() == modelSlices.length() and modelSlices.select(modelSlice => modelSliceHasModule(modelSlice)).length() == modelSlices.length() and modelSliceModules.select(sliceModule => modelSliceModuleBelongsToDeclaredSlice(sliceModule)).length() == modelSliceModules.length() and modelWorkflows.select(workflow => modelWorkflowHasCompositionStructure(workflow)).length() == modelWorkflows.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelScenariosAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelScenariosAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelScenariosAreDeclared = modelScenarios.length() == {scenario_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelScenarioDefinitionsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelScenarioDefinitionsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelScenarioDefinitionsAreDeclared = modelScenarioDefinitions.length() == {scenario_definition_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelScenarioDefinitionHasGwt"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelScenarioDefinitionHasGwt"),
+            canonical_declaration_marker(
                 "  def modelScenarioDefinitionHasGwt(scenario) = scenario.given != \"\" and scenario.when != \"\" and scenario.then != \"\"",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelScenarioKindIsFirstClass"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelScenarioKindIsFirstClass"),
+            canonical_declaration_marker(
                 "  def modelScenarioKindIsFirstClass(scenario) = scenario.scenarioKind == \"acceptance\" or scenario.scenarioKind == \"contract\"",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelScenarioDefinitionsHaveGwt ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelScenarioDefinitionsHaveGwt ="),
+            canonical_declaration_marker(
                 "  val modelScenarioDefinitionsHaveGwt = modelScenarioDefinitions.select(scenario => modelScenarioDefinitionHasGwt(scenario)).length() == modelScenarioDefinitions.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelScenarioKindsAreFirstClass ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelScenarioKindsAreFirstClass ="),
+            canonical_declaration_marker(
                 "  val modelScenarioKindsAreFirstClass = modelScenarioDefinitions.select(scenario => modelScenarioKindIsFirstClass(scenario)).length() == modelScenarioDefinitions.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowIsBitComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelDataFlowIsBitComplete"),
+            canonical_declaration_marker(
                 "  def modelDataFlowIsBitComplete(dataFlow) = dataFlow.datum != \"\" and dataFlow.sourceKind != \"\" and dataFlow.source != \"\" and dataFlow.transformation != \"\" and dataFlow.target != \"\" and dataFlow.bitEncoding != \"\"",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowCoversDatumTarget"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelDataFlowCoversDatumTarget"),
+            canonical_declaration_marker(
                 "  def modelDataFlowCoversDatumTarget(workflow, sliceName, datum, target) = modelDataFlows.select(dataFlow => dataFlow.workflow == workflow and dataFlow.slice == sliceName and dataFlow.datum == datum and dataFlow.target == target and modelDataFlowIsBitComplete(dataFlow)).length() > 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowBitEncodingMatchesDatumTarget"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelDataFlowBitEncodingMatchesDatumTarget"),
+            canonical_declaration_marker(
                 "  def modelDataFlowBitEncodingMatchesDatumTarget(workflow, sliceName, datum, target, bitEncoding) = modelDataFlows.select(dataFlow => dataFlow.workflow == workflow and dataFlow.slice == sliceName and dataFlow.datum == datum and dataFlow.target == target and dataFlow.bitEncoding == bitEncoding and modelDataFlowIsBitComplete(dataFlow)).length() > 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowSourceBitEncodingMatchesModeledSource"),
-            artifact_marker(
+            canonical_declaration_prefix(
+                "  def modelDataFlowSourceBitEncodingMatchesModeledSource",
+            ),
+            canonical_declaration_marker(
                 "  def modelDataFlowSourceBitEncodingMatchesModeledSource(dataFlow) = modelDataFlows.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source).length() == 0 or modelDataFlows.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and sourceFlow.bitEncoding == dataFlow.bitEncoding and modelDataFlowIsBitComplete(sourceFlow)).length() > 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowHasModeledTransformationSemantics"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelDataFlowHasModeledTransformationSemantics"),
+            canonical_declaration_marker(
                 "  def modelDataFlowHasModeledTransformationSemantics(dataFlow) = dataFlow.transformation == \"identity\" or dataFlow.transformation == \"projection\" or dataFlow.transformation == \"derivation\" or dataFlow.transformation == \"default\" or dataFlow.transformation == \"absence\" or dataFlow.transformation == \"transformation\"",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowHasModeledSourceKind"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelDataFlowHasModeledSourceKind"),
+            canonical_declaration_marker(
                 "  def modelDataFlowHasModeledSourceKind(dataFlow) = (dataFlow.sourceKind == \"original\" and dataFlow.source != \"\") or (dataFlow.sourceKind == \"modeled_target\" and dataFlow.source != \"\")",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowModeledSourceResolves"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelDataFlowModeledSourceResolves"),
+            canonical_declaration_marker(
                 "  def modelDataFlowModeledSourceResolves(dataFlow) = dataFlow.sourceKind != \"modeled_target\" or modelDataFlows.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and modelDataFlowIsBitComplete(sourceFlow)).length() > 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelSameDataFlowTarget"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelSameDataFlowTarget"),
+            canonical_declaration_marker(
                 "  def modelSameDataFlowTarget(left, right) = left.workflow == right.workflow and left.slice == right.slice and left.datum == right.datum and left.target == right.target",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowTargetsFromReachable"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelDataFlowTargetsFromReachable"),
+            canonical_declaration_marker(
                 "  def modelDataFlowTargetsFromReachable(reachable) = modelDataFlows.select(dataFlow => dataFlow.sourceKind == \"modeled_target\" and reachable.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and modelDataFlowIsBitComplete(sourceFlow)).length() > 0)",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowsReachableFromOriginalsAfterFuel"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelDataFlowsReachableFromOriginalsAfterFuel"),
+            canonical_declaration_marker(
                 "  def modelDataFlowsReachableFromOriginalsAfterFuel(fuel, reachable) = range(0, fuel).foldl(reachable, (currentReachable, _) => currentReachable.concat(modelDataFlowTargetsFromReachable(currentReachable)))",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDataFlowsReachableFromOriginals ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelDataFlowsReachableFromOriginals ="),
+            canonical_declaration_marker(
                 "  val modelDataFlowsReachableFromOriginals = modelDataFlowsReachableFromOriginalsAfterFuel(modelDataFlowCount, modelDataFlows.select(dataFlow => dataFlow.sourceKind == \"original\" and modelDataFlowIsBitComplete(dataFlow)))",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowHasOriginalSourceChain"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelDataFlowHasOriginalSourceChain"),
+            canonical_declaration_marker(
                 "  def modelDataFlowHasOriginalSourceChain(dataFlow) = dataFlow.sourceKind == \"original\" or modelDataFlowsReachableFromOriginals.select(reachableFlow => modelSameDataFlowTarget(reachableFlow, dataFlow)).length() > 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowTargetsFromBitPreservingReachable"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelDataFlowTargetsFromBitPreservingReachable"),
+            canonical_declaration_marker(
                 "  def modelDataFlowTargetsFromBitPreservingReachable(reachable) = modelDataFlows.select(dataFlow => dataFlow.sourceKind == \"modeled_target\" and reachable.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and sourceFlow.bitEncoding == dataFlow.bitEncoding and modelDataFlowIsBitComplete(sourceFlow)).length() > 0)",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel"),
-            artifact_marker(
+            canonical_declaration_prefix(
+                "  def modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel",
+            ),
+            canonical_declaration_marker(
                 "  def modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel(fuel, reachable) = range(0, fuel).foldl(reachable, (currentReachable, _) => currentReachable.concat(modelDataFlowTargetsFromBitPreservingReachable(currentReachable)))",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDataFlowsReachableFromOriginalsWithPreservedBits"),
-            artifact_marker(
+            canonical_declaration_prefix(
+                "  val modelDataFlowsReachableFromOriginalsWithPreservedBits",
+            ),
+            canonical_declaration_marker(
                 "  val modelDataFlowsReachableFromOriginalsWithPreservedBits = modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel(modelDataFlowCount, modelDataFlows.select(dataFlow => dataFlow.sourceKind == \"original\" and modelDataFlowIsBitComplete(dataFlow)))",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDataFlowHasBitPreservingOriginalSourceChain"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelDataFlowHasBitPreservingOriginalSourceChain"),
+            canonical_declaration_marker(
                 "  def modelDataFlowHasBitPreservingOriginalSourceChain(dataFlow) = dataFlow.sourceKind == \"original\" or modelDataFlowsReachableFromOriginalsWithPreservedBits.select(reachableFlow => modelSameDataFlowTarget(reachableFlow, dataFlow)).length() > 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelCommandInputHasModeledDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelCommandInputHasModeledDataFlow"),
+            canonical_declaration_marker(
                 "  def modelCommandInputHasModeledDataFlow(input) = modelDataFlowCoversDatumTarget(input.workflow, input.slice, input.input, input.command)",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelEventAttributeHasModeledDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelEventAttributeHasModeledDataFlow"),
+            canonical_declaration_marker(
                 "  def modelEventAttributeHasModeledDataFlow(eventAttr) = modelDataFlowCoversDatumTarget(eventAttr.workflow, eventAttr.slice, eventAttr.attribute, eventAttr.event)",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelReadModelFieldHasModeledDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelReadModelFieldHasModeledDataFlow"),
+            canonical_declaration_marker(
                 "  def modelReadModelFieldHasModeledDataFlow(readModelField) = modelDataFlowCoversDatumTarget(readModelField.workflow, readModelField.slice, readModelField.field, readModelField.readModel)",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelViewFieldHasModeledDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelViewFieldHasModeledDataFlow"),
+            canonical_declaration_marker(
                 "  def modelViewFieldHasModeledDataFlow(viewField) = modelDataFlowCoversDatumTarget(viewField.workflow, viewField.slice, viewField.field, viewField.view)",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelViewFieldBitEncodingMatchesDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelViewFieldBitEncodingMatchesDataFlow"),
+            canonical_declaration_marker(
                 "  def modelViewFieldBitEncodingMatchesDataFlow(viewField) = modelDataFlowBitEncodingMatchesDatumTarget(viewField.workflow, viewField.slice, viewField.field, viewField.view, viewField.bitEncoding)",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelExternalPayloadFieldHasModeledDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelExternalPayloadFieldHasModeledDataFlow"),
+            canonical_declaration_marker(
                 "  def modelExternalPayloadFieldHasModeledDataFlow(externalPayloadField) = modelDataFlowCoversDatumTarget(externalPayloadField.workflow, externalPayloadField.slice, externalPayloadField.field, externalPayloadField.externalPayload)",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelExternalPayloadFieldBitEncodingMatchesDataFlow"),
-            artifact_marker(
+            canonical_declaration_prefix(
+                "  def modelExternalPayloadFieldBitEncodingMatchesDataFlow",
+            ),
+            canonical_declaration_marker(
                 "  def modelExternalPayloadFieldBitEncodingMatchesDataFlow(externalPayloadField) = modelDataFlowBitEncodingMatchesDatumTarget(externalPayloadField.workflow, externalPayloadField.slice, externalPayloadField.field, externalPayloadField.externalPayload, externalPayloadField.bitEncoding)",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDataFlowsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelDataFlowsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelDataFlowsAreDeclared = modelDataFlows.length() == {data_flow_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDataFlowsAreBitComplete ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelDataFlowsAreBitComplete ="),
+            canonical_declaration_marker(
                 "  val modelDataFlowsAreBitComplete = modelDataFlows.select(dataFlow => modelDataFlowIsBitComplete(dataFlow)).length() == modelDataFlows.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDataFlowSourceKindsAreModeled ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelDataFlowSourceKindsAreModeled ="),
+            canonical_declaration_marker(
                 "  val modelDataFlowSourceKindsAreModeled = modelDataFlows.select(dataFlow => modelDataFlowHasModeledSourceKind(dataFlow)).length() == modelDataFlows.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDataFlowModeledSourcesResolve ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelDataFlowModeledSourcesResolve ="),
+            canonical_declaration_marker(
                 "  val modelDataFlowModeledSourcesResolve = modelDataFlows.select(dataFlow => modelDataFlowModeledSourceResolves(dataFlow)).length() == modelDataFlows.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDataFlowSourceChainsReachOriginals ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelDataFlowSourceChainsReachOriginals ="),
+            canonical_declaration_marker(
                 "  val modelDataFlowSourceChainsReachOriginals = modelDataFlows.select(dataFlow => modelDataFlowHasOriginalSourceChain(dataFlow)).length() == modelDataFlows.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDataFlowSourceChainsPreserveBitEncodingSemantics ="),
-            artifact_marker(
+            canonical_declaration_prefix(
+                "  val modelDataFlowSourceChainsPreserveBitEncodingSemantics =",
+            ),
+            canonical_declaration_marker(
                 "  val modelDataFlowSourceChainsPreserveBitEncodingSemantics = modelDataFlows.select(dataFlow => modelDataFlowHasBitPreservingOriginalSourceChain(dataFlow)).length() == modelDataFlows.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDataFlowTransformationsAreModeled ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelDataFlowTransformationsAreModeled ="),
+            canonical_declaration_marker(
                 "  val modelDataFlowTransformationsAreModeled = modelDataFlows.select(dataFlow => modelDataFlowHasModeledTransformationSemantics(dataFlow)).length() == modelDataFlows.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelMeaningfulDataHasModeledDataFlows ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelMeaningfulDataHasModeledDataFlows ="),
+            canonical_declaration_marker(
                 "  val modelMeaningfulDataHasModeledDataFlows = modelCommandInputs.select(input => modelCommandInputHasModeledDataFlow(input)).length() == modelCommandInputs.length() and modelEventAttributes.select(eventAttr => modelEventAttributeHasModeledDataFlow(eventAttr)).length() == modelEventAttributes.length() and modelReadModelFields.select(readModelField => modelReadModelFieldHasModeledDataFlow(readModelField)).length() == modelReadModelFields.length() and modelViewFields.select(viewField => modelViewFieldHasModeledDataFlow(viewField)).length() == modelViewFields.length() and modelExternalPayloadFields.select(externalPayloadField => modelExternalPayloadFieldHasModeledDataFlow(externalPayloadField)).length() == modelExternalPayloadFields.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelMeaningfulDataFlowsAreCovered ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelMeaningfulDataFlowsAreCovered ="),
+            canonical_declaration_marker(
                 "  val modelMeaningfulDataFlowsAreCovered = modelMeaningfulDataHasModeledDataFlows",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDataFlowSourceBitEncodingsMatchModeledSources ="),
-            artifact_marker(
+            canonical_declaration_prefix(
+                "  val modelDataFlowSourceBitEncodingsMatchModeledSources =",
+            ),
+            canonical_declaration_marker(
                 "  val modelDataFlowSourceBitEncodingsMatchModeledSources = modelDataFlows.select(dataFlow => modelDataFlowSourceBitEncodingMatchesModeledSource(dataFlow)).length() == modelDataFlows.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelViewFieldBitEncodingsMatchDataFlows ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelViewFieldBitEncodingsMatchDataFlows ="),
+            canonical_declaration_marker(
                 "  val modelViewFieldBitEncodingsMatchDataFlows = modelViewFields.select(viewField => modelViewFieldBitEncodingMatchesDataFlow(viewField)).length() == modelViewFields.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelExternalPayloadFieldBitEncodingsMatchDataFlows ="),
-            artifact_marker(
+            canonical_declaration_prefix(
+                "  val modelExternalPayloadFieldBitEncodingsMatchDataFlows =",
+            ),
+            canonical_declaration_marker(
                 "  val modelExternalPayloadFieldBitEncodingsMatchDataFlows = modelExternalPayloadFields.select(externalPayloadField => modelExternalPayloadFieldBitEncodingMatchesDataFlow(externalPayloadField)).length() == modelExternalPayloadFields.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelOutcomesAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelOutcomesAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelOutcomesAreDeclared = modelOutcomes.length() == {outcome_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelCommandErrorsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelCommandErrorsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelCommandErrorsAreDeclared = modelCommandErrors.length() == {command_error_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelCommandsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelCommandsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelCommandsAreDeclared = modelCommands.length() == {command_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelCommandInputsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelCommandInputsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelCommandInputsAreDeclared = modelCommandInputs.length() == {command_input_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelCommandInputHasProvenance"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelCommandInputHasProvenance"),
+            canonical_declaration_marker(
                 "  def modelCommandInputHasProvenance(input) = input.sourceDescription != \"\" and input.provenanceChain.length() > 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelCommandInputTracesToInvocationSource"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelCommandInputTracesToInvocationSource"),
+            canonical_declaration_marker(
                 "  def modelCommandInputTracesToInvocationSource(input) = input.sourceKind == \"actor\" or (input.sourceKind == \"event_stream_state\" and input.eventStreamSourceEvent != \"\" and input.eventStreamSourceAttribute != \"\") or (input.sourceKind == \"external_payload\" and input.externalPayloadSourceName != \"\" and input.externalPayloadSourceField != \"\") or (input.sourceKind == \"generated\" and input.generatedSourceName != \"\" and input.generatedSourceField != \"\") or (input.sourceKind == \"session\" and input.sessionSourceName != \"\" and input.sessionSourceField != \"\") or (input.sourceKind == \"invocation_argument\" and input.invocationArgumentSourceName != \"\" and input.invocationArgumentSourceField != \"\")",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelCommandInputsHaveProvenance ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelCommandInputsHaveProvenance ="),
+            canonical_declaration_marker(
                 "  val modelCommandInputsHaveProvenance = modelCommandInputs.select(input => modelCommandInputHasProvenance(input)).length() == modelCommandInputs.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelCommandInputsTraceToInvocationSources ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelCommandInputsTraceToInvocationSources ="),
+            canonical_declaration_marker(
                 "  val modelCommandInputsTraceToInvocationSources = modelCommandInputs.select(input => modelCommandInputTracesToInvocationSource(input)).length() == modelCommandInputs.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelEventAttributeSourceIsComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelEventAttributeSourceIsComplete"),
+            canonical_declaration_marker(
                 "  def modelEventAttributeSourceIsComplete(eventAttr) = eventAttr.provenance != \"\" and ((eventAttr.sourceKind == \"command_input\" and eventAttr.sourceName != \"\" and eventAttr.sourceField != \"\") or (eventAttr.sourceKind == \"external_payload\" and eventAttr.sourceName != \"\" and eventAttr.sourceField != \"\") or (eventAttr.sourceKind == \"generated\" and eventAttr.sourceName != \"\" and eventAttr.generatedSourceKind != \"\") or (eventAttr.sourceKind == \"session\" and eventAttr.sourceName != \"\") or (eventAttr.sourceKind == \"derivation\" and eventAttr.sourceName != \"\" and eventAttr.sourceField != \"\"))",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelEventAttributeSourcesAreComplete ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelEventAttributeSourcesAreComplete ="),
+            canonical_declaration_marker(
                 "  val modelEventAttributeSourcesAreComplete = modelEventAttributes.select(eventAttr => modelEventAttributeSourceIsComplete(eventAttr)).length() == modelEventAttributes.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelReadModelFieldSourceIsComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelReadModelFieldSourceIsComplete"),
+            canonical_declaration_marker(
                 "  def modelReadModelFieldSourceIsComplete(readModelField) = (readModelField.sourceKind == \"event_attribute\" and readModelField.sourceEvent != \"\" and readModelField.sourceAttribute != \"\") or (readModelField.sourceKind == \"derivation\" and readModelField.derivationRule != \"\" and readModelField.derivationSourceFields.length() > 0) or (readModelField.sourceKind == \"absence_default\" and readModelField.absenceEvent != \"\")",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelReadModelFieldTracesToOriginalProvenance"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelReadModelFieldTracesToOriginalProvenance"),
+            canonical_declaration_marker(
                 "  def modelReadModelFieldTracesToOriginalProvenance(readModelField) = readModelField.provenance != \"\" and ((readModelField.sourceKind == \"event_attribute\" and modelEventAttributes.select(eventAttr => eventAttr.workflow == readModelField.workflow and eventAttr.slice == readModelField.slice and eventAttr.event == readModelField.sourceEvent and eventAttr.attribute == readModelField.sourceAttribute and modelEventAttributeSourceIsComplete(eventAttr)).length() > 0) or (readModelField.sourceKind == \"derivation\" and readModelField.derivationRule != \"\" and readModelField.derivationSourceFields.length() > 0) or (readModelField.sourceKind == \"absence_default\" and readModelField.absenceEvent != \"\"))",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelReadModelsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelReadModelsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelReadModelsAreDeclared = modelReadModels.length() == {read_model_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelReadModelDefinitionsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelReadModelDefinitionsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelReadModelDefinitionsAreDeclared = modelReadModelDefinitions.length() == {read_model_definition_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelReadModelFieldSourcesAreComplete ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelReadModelFieldSourcesAreComplete ="),
+            canonical_declaration_marker(
                 "  val modelReadModelFieldSourcesAreComplete = modelReadModelFields.select(readModelField => modelReadModelFieldSourceIsComplete(readModelField)).length() == modelReadModelFields.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelViewFieldSourceIsComplete"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelViewFieldSourceIsComplete"),
+            canonical_declaration_marker(
                 "  def modelViewFieldSourceIsComplete(viewField) = viewField.sourceKind == \"read_model\" and viewField.sourceReadModel != \"\" and viewField.sourceField != \"\" and viewField.provenance != \"\" and viewField.bitEncoding != \"\"",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelViewFieldReadModelFieldSourceResolves"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelViewFieldReadModelFieldSourceResolves"),
+            canonical_declaration_marker(
                 "  def modelViewFieldReadModelFieldSourceResolves(viewField) = modelViewFieldSourceIsComplete(viewField) and modelReadModelFields.select(readModelField => readModelField.workflow == viewField.workflow and readModelField.slice == viewField.slice and readModelField.readModel == viewField.sourceReadModel and readModelField.field == viewField.sourceField and modelReadModelFieldSourceIsComplete(readModelField)).length() > 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelViewFieldReadModelFieldSourcesResolve ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelViewFieldReadModelFieldSourcesResolve ="),
+            canonical_declaration_marker(
                 "  val modelViewFieldReadModelFieldSourcesResolve = modelViewFields.select(viewField => modelViewFieldReadModelFieldSourceResolves(viewField)).length() == modelViewFields.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelDisplayedDatumTracesToOriginalProvenance"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelDisplayedDatumTracesToOriginalProvenance"),
+            canonical_declaration_marker(
                 "  def modelDisplayedDatumTracesToOriginalProvenance(viewField) = modelViewFieldReadModelFieldSourceResolves(viewField) and modelReadModelFields.select(readModelField => readModelField.workflow == viewField.workflow and readModelField.slice == viewField.slice and readModelField.readModel == viewField.sourceReadModel and readModelField.field == viewField.sourceField and modelReadModelFieldTracesToOriginalProvenance(readModelField)).length() > 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelDisplayedDataTraceToOriginalProvenance ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelDisplayedDataTraceToOriginalProvenance ="),
+            canonical_declaration_marker(
                 "  val modelDisplayedDataTraceToOriginalProvenance = modelViewFields.select(viewField => modelDisplayedDatumTracesToOriginalProvenance(viewField)).length() == modelViewFields.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelViewFieldSourcesAreComplete ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelViewFieldSourcesAreComplete ="),
+            canonical_declaration_marker(
                 "  val modelViewFieldSourcesAreComplete = modelViewFields.select(viewField => modelViewFieldSourceIsComplete(viewField)).length() == modelViewFields.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelExternalPayloadFieldHasProvenance"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelExternalPayloadFieldHasProvenance"),
+            canonical_declaration_marker(
                 "  def modelExternalPayloadFieldHasProvenance(externalPayloadField) = externalPayloadField.provenance != \"\" and externalPayloadField.bitEncoding != \"\"",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelExternalPayloadFieldsHaveProvenance ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelExternalPayloadFieldsHaveProvenance ="),
+            canonical_declaration_marker(
                 "  val modelExternalPayloadFieldsHaveProvenance = modelExternalPayloadFields.select(externalPayloadField => modelExternalPayloadFieldHasProvenance(externalPayloadField)).length() == modelExternalPayloadFields.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelReadModelFieldsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelReadModelFieldsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelReadModelFieldsAreDeclared = modelReadModelFields.length() == {read_model_field_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelViewsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelViewsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelViewsAreDeclared = modelViews.length() == {view_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelViewDefinitionsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelViewDefinitionsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelViewDefinitionsAreDeclared = modelViewDefinitions.length() == {view_definition_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelViewControlsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelViewControlsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelViewControlsAreDeclared = modelViewControls.length() == {view_control_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelControlProvidesCommandInput"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelControlProvidesCommandInput"),
+            canonical_declaration_marker(
                 "  def modelControlProvidesCommandInput(control, input) = control.workflow == input.workflow and control.command == input.command and control.input == input.input",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelViewControlProvidesEveryCommandInput"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelViewControlProvidesEveryCommandInput"),
+            canonical_declaration_marker(
                 "  def modelViewControlProvidesEveryCommandInput(control) = modelCommandInputs.select(input => input.workflow != control.workflow or input.command != control.command or modelViewControls.select(providedInput => providedInput.workflow == control.workflow and providedInput.slice == control.slice and providedInput.view == control.view and providedInput.control == control.control and providedInput.command == control.command and modelControlProvidesCommandInput(providedInput, input)).length() > 0).length() == modelCommandInputs.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelViewControlsProvideCommandInputs ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelViewControlsProvideCommandInputs ="),
+            canonical_declaration_marker(
                 "  val modelViewControlsProvideCommandInputs = modelViewControls.select(control => modelViewControlProvidesEveryCommandInput(control)).length() == modelViewControls.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelOutcomeBranchIsModeled"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelOutcomeBranchIsModeled"),
+            canonical_declaration_marker(
                 "  def modelOutcomeBranchIsModeled(outcome) = outcome.outcome != \"\" and outcome.events.length() > 0",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelCommandErrorRecoveryIsModeled"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelCommandErrorRecoveryIsModeled"),
+            canonical_declaration_marker(
                 "  def modelCommandErrorRecoveryIsModeled(commandError) = commandError.command != \"\" and commandError.error != \"\" and commandError.scenario != \"\" and commandError.recovery != \"\"",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelViewControlNavigationTargetIsModeled"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelViewControlNavigationTargetIsModeled"),
+            canonical_declaration_marker(
                 "  def modelViewControlNavigationTargetIsModeled(control) = control.navigationType == \"\" or ((control.navigationType == \"modeled_view\" or control.navigationType == \"local_view_state\") and control.navigationTarget != \"\") or (control.navigationType == \"external_workflow\" and control.externalWorkflow != \"\") or (control.navigationType == \"external_system\" and control.externalSystem != \"\" and control.handoffContract != \"\")",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  def modelExternalBoundaryContractIsModeled"),
-            artifact_marker(
+            canonical_declaration_prefix("  def modelExternalBoundaryContractIsModeled"),
+            canonical_declaration_marker(
                 "  def modelExternalBoundaryContractIsModeled(translation) = translation.translation != \"\" and translation.externalEvent != \"\" and translation.payloadContract != \"\" and translation.command != \"\"",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelWorkflowBehaviorSurfaceIsComplete ="),
-            artifact_marker(
+            canonical_declaration_prefix("  val modelWorkflowBehaviorSurfaceIsComplete ="),
+            canonical_declaration_marker(
                 "  val modelWorkflowBehaviorSurfaceIsComplete = modelOutcomes.select(outcome => modelOutcomeBranchIsModeled(outcome)).length() == modelOutcomes.length() and modelCommandErrors.select(commandError => modelCommandErrorRecoveryIsModeled(commandError)).length() == modelCommandErrors.length() and modelViewControls.select(control => modelViewControlNavigationTargetIsModeled(control)).length() == modelViewControls.length() and modelTranslationDefinitions.select(translation => modelExternalBoundaryContractIsModeled(translation)).length() == modelTranslationDefinitions.length()",
             ),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelBoardElementsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelBoardElementsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelBoardElementsAreDeclared = modelBoardElements.length() == {board_element_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelBoardConnectionsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelBoardConnectionsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelBoardConnectionsAreDeclared = modelBoardConnections.length() == {board_connection_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelViewFieldsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelViewFieldsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelViewFieldsAreDeclared = modelViewFields.length() == {view_field_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelAutomationsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelAutomationsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelAutomationsAreDeclared = modelAutomations.length() == {automation_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelAutomationDefinitionsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelAutomationDefinitionsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelAutomationDefinitionsAreDeclared = modelAutomationDefinitions.length() == {automation_definition_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelTranslationsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelTranslationsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelTranslationsAreDeclared = modelTranslations.length() == {translation_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelTranslationDefinitionsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelTranslationDefinitionsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelTranslationDefinitionsAreDeclared = modelTranslationDefinitions.length() == {translation_definition_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelExternalPayloadsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelExternalPayloadsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelExternalPayloadsAreDeclared = modelExternalPayloads.length() == {external_payload_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelExternalPayloadFieldsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelExternalPayloadFieldsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelExternalPayloadFieldsAreDeclared = modelExternalPayloadFields.length() == {external_payload_field_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelStreamsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelStreamsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelStreamsAreDeclared = modelStreams.length() == {stream_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelEventsAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelEventsAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelEventsAreDeclared = modelEvents.length() == {event_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            artifact_marker("  val modelEventAttributesAreDeclared ="),
-            artifact_marker(format!(
+            canonical_declaration_prefix("  val modelEventAttributesAreDeclared ="),
+            canonical_declaration_marker(format!(
                 "  val modelEventAttributesAreDeclared = modelEventAttributes.length() == {event_attribute_count}"
             )),
             quint_message.clone(),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path,
-            quint_module_close_marker.clone(),
+            quint_module_close_prefix,
             quint_module_close_marker,
             quint_message,
         ),
@@ -2905,7 +2939,7 @@ fn modeled_artifact_paths<const N: usize>(
         .collect()
 }
 
-pub fn list_workflows(modeled_workflows: ModeledWorkflowLayouts) -> EffectPlan {
+pub(crate) fn list_workflows(modeled_workflows: ModeledWorkflowLayouts) -> EffectPlan {
     EffectPlan::new(
         modeled_workflows
             .into_inner()
@@ -2915,7 +2949,7 @@ pub fn list_workflows(modeled_workflows: ModeledWorkflowLayouts) -> EffectPlan {
     )
 }
 
-pub fn list_slices(modeled_slices: ModeledWorkflowSliceDetails) -> EffectPlan {
+pub(crate) fn list_slices(modeled_slices: ModeledWorkflowSliceDetails) -> EffectPlan {
     EffectPlan::new(
         modeled_slices
             .slices
@@ -2925,7 +2959,7 @@ pub fn list_slices(modeled_slices: ModeledWorkflowSliceDetails) -> EffectPlan {
     )
 }
 
-pub fn list_transitions(modeled_transitions: ModeledWorkflowTransitions) -> EffectPlan {
+pub(crate) fn list_transitions(modeled_transitions: ModeledWorkflowTransitions) -> EffectPlan {
     EffectPlan::new(
         modeled_transitions
             .transitions
@@ -2943,46 +2977,46 @@ pub fn list_transitions(modeled_transitions: ModeledWorkflowTransitions) -> Effe
     )
 }
 
-pub fn show_workflow(workflow_document: FileContents) -> EffectPlan {
+pub(crate) fn show_workflow(workflow_document: FileContents) -> EffectPlan {
     show_document(workflow_document)
 }
 
-pub fn show_document(document: FileContents) -> EffectPlan {
+pub(crate) fn show_document(document: FileContents) -> EffectPlan {
     EffectPlan::new(vec![Effect::ReportDocument(document)])
 }
 
 fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let workflow_name = workflow.name().as_ref().to_owned();
-    let lean_name_marker = artifact_marker(format!(
+    let lean_name_marker = canonical_declaration_marker(format!(
         "def workflowName := {}",
         json_string(workflow.name().as_ref())
     ));
-    let lean_name_prefix = artifact_marker("def workflowName :=");
-    let lean_slug_marker = artifact_marker(format!(
+    let lean_name_prefix = canonical_declaration_prefix("def workflowName :=");
+    let lean_slug_marker = canonical_declaration_marker(format!(
         "def workflowSlug := {}",
         json_string(workflow.slug().as_ref())
     ));
-    let lean_slug_prefix = artifact_marker("def workflowSlug :=");
-    let lean_description_marker = artifact_marker(format!(
+    let lean_slug_prefix = canonical_declaration_prefix("def workflowSlug :=");
+    let lean_description_marker = canonical_declaration_marker(format!(
         "def workflowDescription := {}",
         json_string(workflow.description().as_ref())
     ));
-    let lean_description_prefix = artifact_marker("def workflowDescription :=");
-    let quint_name_marker = artifact_marker(format!(
+    let lean_description_prefix = canonical_declaration_prefix("def workflowDescription :=");
+    let quint_name_marker = canonical_declaration_marker(format!(
         "val workflowName = {}",
         json_string(workflow.name().as_ref())
     ));
-    let quint_name_prefix = artifact_marker("val workflowName =");
-    let quint_slug_marker = artifact_marker(format!(
+    let quint_name_prefix = canonical_declaration_prefix("val workflowName =");
+    let quint_slug_marker = canonical_declaration_marker(format!(
         "val workflowSlug = {}",
         json_string(workflow.slug().as_ref())
     ));
-    let quint_slug_prefix = artifact_marker("val workflowSlug =");
-    let quint_description_marker = artifact_marker(format!(
+    let quint_slug_prefix = canonical_declaration_prefix("val workflowSlug =");
+    let quint_description_marker = canonical_declaration_marker(format!(
         "val workflowDescription = {}",
         json_string(workflow.description().as_ref())
     ));
-    let quint_description_prefix = artifact_marker("val workflowDescription =");
+    let quint_description_prefix = canonical_declaration_prefix("val workflowDescription =");
     let lean_slice_marker = lean_workflow_slice_marker(workflow);
     let lean_slice_detail_marker = lean_workflow_slice_detail_marker(workflow);
     let lean_slice_module_marker = lean_workflow_slice_module_marker(workflow);
@@ -2993,86 +3027,97 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let quint_slice_module_marker = quint_workflow_slice_module_marker(workflow);
     let quint_transition_marker = quint_workflow_transition_marker(workflow);
     let quint_exit_target_marker = quint_workflow_exit_target_marker(workflow);
-    let lean_slice_prefix = artifact_marker("def workflowSlices : List String :=");
-    let lean_slice_detail_prefix =
-        artifact_marker("def workflowSliceDetails : List (String × String × String × String) :=");
+    let lean_slice_prefix = canonical_declaration_prefix("def workflowSlices : List String :=");
+    let lean_slice_detail_prefix = canonical_declaration_prefix(
+        "def workflowSliceDetails : List (String × String × String × String) :=",
+    );
     let lean_slice_module_prefix =
-        artifact_marker("def workflowSliceModules : List (String × String) :=");
+        canonical_declaration_prefix("def workflowSliceModules : List (String × String) :=");
     let lean_transition_prefix =
-        artifact_marker("def workflowTransitions : List WorkflowTransition :=");
-    let lean_exit_target_prefix = artifact_marker("def workflowExitTargets : List String :=");
-    let quint_slice_prefix = artifact_marker("val workflowSlices:");
-    let quint_slice_detail_prefix = artifact_marker("val workflowSliceDetails:");
-    let quint_slice_module_prefix = artifact_marker("val workflowSliceModules:");
-    let quint_transition_prefix = artifact_marker("val workflowTransitions:");
-    let quint_exit_target_prefix = artifact_marker("val workflowExitTargets:");
-    let lean_identity_invariant_marker = artifact_marker(format!(
+        canonical_declaration_prefix("def workflowTransitions : List WorkflowTransition :=");
+    let lean_exit_target_prefix =
+        canonical_declaration_prefix("def workflowExitTargets : List String :=");
+    let quint_slice_prefix = canonical_declaration_prefix("val workflowSlices:");
+    let quint_slice_detail_prefix = canonical_declaration_prefix("val workflowSliceDetails:");
+    let quint_slice_module_prefix = canonical_declaration_prefix("val workflowSliceModules:");
+    let quint_transition_prefix = canonical_declaration_prefix("val workflowTransitions:");
+    let quint_exit_target_prefix = canonical_declaration_prefix("val workflowExitTargets:");
+    let lean_identity_invariant_marker = canonical_declaration_marker(format!(
         "theorem workflowIdentityIsStable : workflowName = {} := rfl",
         json_string(workflow.name().as_ref())
     ));
-    let lean_identity_invariant_prefix = artifact_marker("theorem workflowIdentityIsStable :");
-    let lean_slice_detail_invariant_marker = artifact_marker(
+    let lean_identity_invariant_prefix =
+        canonical_declaration_prefix("theorem workflowIdentityIsStable :");
+    let lean_slice_detail_invariant_marker = canonical_declaration_marker(
         "theorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails.length := rfl",
     );
-    let lean_slice_detail_invariant_prefix = artifact_marker("theorem workflowSlicesHaveDetails :");
-    let lean_slice_module_invariant_marker = artifact_marker(
+    let lean_slice_detail_invariant_prefix =
+        canonical_declaration_prefix("theorem workflowSlicesHaveDetails :");
+    let lean_slice_module_invariant_marker = canonical_declaration_marker(
         "theorem workflowSlicesHaveModuleReferences : workflowSlices.length = workflowSliceModules.length := rfl",
     );
     let lean_slice_module_invariant_prefix =
-        artifact_marker("theorem workflowSlicesHaveModuleReferences :");
-    let lean_transition_invariant_marker = artifact_marker(
+        canonical_declaration_prefix("theorem workflowSlicesHaveModuleReferences :");
+    let lean_transition_invariant_marker = canonical_declaration_marker(
         "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl",
     );
     let lean_transition_invariant_prefix =
-        artifact_marker("theorem workflowTransitionsAreStructured :");
-    let lean_transition_source_resolution_marker = artifact_marker(
+        canonical_declaration_prefix("theorem workflowTransitionsAreStructured :");
+    let lean_transition_source_resolution_marker = canonical_declaration_marker(
         "theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSlices.contains transition.source) = true := rfl",
     );
     let lean_transition_source_resolution_prefix =
-        artifact_marker("theorem workflowTransitionSourcesResolve :");
-    let lean_transition_target_resolution_marker = artifact_marker(
+        canonical_declaration_prefix("theorem workflowTransitionSourcesResolve :");
+    let lean_transition_target_resolution_marker = canonical_declaration_marker(
         "theorem workflowTransitionTargetsResolve : workflowTransitions.all (fun transition => workflowSlices.contains transition.target || workflowExitTargets.contains transition.target) = true := rfl",
     );
     let lean_transition_target_resolution_prefix =
-        artifact_marker("theorem workflowTransitionTargetsResolve :");
-    let quint_identity_invariant_marker = artifact_marker(format!(
+        canonical_declaration_prefix("theorem workflowTransitionTargetsResolve :");
+    let quint_identity_invariant_marker = canonical_declaration_marker(format!(
         "val workflowIdentityStable = workflowName == {}",
         json_string(workflow.name().as_ref())
     ));
-    let quint_identity_invariant_prefix = artifact_marker("val workflowIdentityStable =");
-    let quint_slice_detail_invariant_marker = artifact_marker(
+    let quint_identity_invariant_prefix =
+        canonical_declaration_prefix("val workflowIdentityStable =");
+    let quint_slice_detail_invariant_marker = canonical_declaration_marker(
         "val workflowSlicesHaveDetails = length(workflowSlices) == length(workflowSliceDetails)",
     );
-    let quint_slice_detail_invariant_prefix = artifact_marker("val workflowSlicesHaveDetails =");
-    let quint_slice_detail_complete_marker =
-        artifact_marker("val workflowSliceDetailsComplete = workflowSlicesHaveDetails");
-    let quint_slice_detail_complete_prefix = artifact_marker("val workflowSliceDetailsComplete =");
-    let quint_slice_module_complete_marker = artifact_marker(
+    let quint_slice_detail_invariant_prefix =
+        canonical_declaration_prefix("val workflowSlicesHaveDetails =");
+    let quint_slice_detail_complete_marker = canonical_declaration_marker(
+        "val workflowSliceDetailsComplete = workflowSlicesHaveDetails",
+    );
+    let quint_slice_detail_complete_prefix =
+        canonical_declaration_prefix("val workflowSliceDetailsComplete =");
+    let quint_slice_module_complete_marker = canonical_declaration_marker(
         "val workflowSliceModulesComplete = workflowSlices.length() == workflowSliceModules.length()",
     );
-    let quint_slice_module_complete_prefix = artifact_marker("val workflowSliceModulesComplete =");
-    let quint_transition_invariant_marker = artifact_marker(
+    let quint_slice_module_complete_prefix =
+        canonical_declaration_prefix("val workflowSliceModulesComplete =");
+    let quint_transition_invariant_marker = canonical_declaration_marker(
         "val workflowTransitionsStructured = workflowTransitions.select(transition => transition.source != \"\" and transition.target != \"\" and transition.kind != \"\" and transition.trigger != \"\").length() == workflowTransitions.length()",
     );
-    let quint_transition_invariant_prefix = artifact_marker("val workflowTransitionsStructured =");
-    let quint_transition_source_resolution_marker = artifact_marker(
+    let quint_transition_invariant_prefix =
+        canonical_declaration_prefix("val workflowTransitionsStructured =");
+    let quint_transition_source_resolution_marker = canonical_declaration_marker(
         "val workflowTransitionSourcesResolve = workflowTransitions.select(transition => workflowSlices.select(step => step == transition.source).length() > 0).length() == workflowTransitions.length()",
     );
     let quint_transition_source_resolution_prefix =
-        artifact_marker("val workflowTransitionSourcesResolve =");
-    let quint_transition_target_resolution_marker = artifact_marker(
+        canonical_declaration_prefix("val workflowTransitionSourcesResolve =");
+    let quint_transition_target_resolution_marker = canonical_declaration_marker(
         "val workflowTransitionTargetsResolve = workflowTransitions.select(transition => workflowSlices.select(step => step == transition.target).length() > 0 or workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() > 0).length() == workflowTransitions.length()",
     );
     let quint_transition_target_resolution_prefix =
-        artifact_marker("val workflowTransitionTargetsResolve =");
+        canonical_declaration_prefix("val workflowTransitionTargetsResolve =");
     let module_name = module_name_from_model(workflow.name().clone());
-    let lean_module_marker = artifact_marker(format!("namespace {module_name}"));
-    let lean_module_prefix = artifact_marker("namespace ");
-    let lean_module_end_marker = artifact_marker(format!("end {module_name}"));
-    let lean_module_end_prefix = artifact_marker("end ");
-    let quint_module_marker = artifact_marker(format!("module {module_name} {{"));
-    let quint_module_prefix = artifact_marker("module ");
-    let quint_module_close_marker = artifact_marker("}");
+    let lean_module_marker = canonical_declaration_marker(format!("namespace {module_name}"));
+    let lean_module_prefix = canonical_declaration_prefix("namespace ");
+    let lean_module_end_marker = canonical_declaration_marker(format!("end {module_name}"));
+    let lean_module_end_prefix = canonical_declaration_prefix("end ");
+    let quint_module_marker = canonical_declaration_marker(format!("module {module_name} {{"));
+    let quint_module_prefix = canonical_declaration_prefix("module ");
+    let quint_module_close_prefix = canonical_declaration_prefix("}");
+    let quint_module_close_marker = canonical_declaration_marker("}");
     let lean_path = project_path(format!("model/lean/{module_name}.lean"));
     let quint_path = project_path(format!("model/quint/{module_name}.qnt"));
     let digest = artifact_digest(WorkflowArtifactDigestInput {
@@ -3092,7 +3137,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let workflow_effects = vec![
         Effect::RequireFile(lean_path.clone()),
         Effect::RequireFile(quint_path.clone()),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_module_prefix,
             lean_module_marker,
@@ -3100,7 +3145,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow module drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_module_end_prefix,
             lean_module_end_marker,
@@ -3108,7 +3153,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow module drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_module_prefix,
             quint_module_marker,
@@ -3116,15 +3161,15 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow module drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
-            quint_module_close_marker.clone(),
+            quint_module_close_prefix,
             quint_module_close_marker,
             report_line(format!(
                 "Quint workflow module drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_name_prefix,
             lean_name_marker,
@@ -3132,7 +3177,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow field drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_slug_prefix,
             lean_slug_marker,
@@ -3140,7 +3185,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow field drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_description_prefix,
             lean_description_marker,
@@ -3148,7 +3193,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow field drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_name_prefix,
             quint_name_marker,
@@ -3156,7 +3201,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow field drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_slug_prefix,
             quint_slug_marker,
@@ -3164,7 +3209,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow field drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_description_prefix,
             quint_description_marker,
@@ -3172,7 +3217,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow field drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_slice_prefix,
             lean_slice_marker,
@@ -3180,7 +3225,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow slice drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_slice_detail_prefix,
             lean_slice_detail_marker,
@@ -3188,7 +3233,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow slice detail drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_slice_module_prefix,
             lean_slice_module_marker,
@@ -3196,7 +3241,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow slice module drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_slice_prefix,
             quint_slice_marker,
@@ -3204,7 +3249,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow slice drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_slice_detail_prefix,
             quint_slice_detail_marker,
@@ -3212,7 +3257,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow slice detail drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_slice_module_prefix,
             quint_slice_module_marker,
@@ -3220,7 +3265,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow slice module drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_transition_prefix,
             lean_transition_marker,
@@ -3228,7 +3273,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow transition drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_exit_target_prefix,
             lean_exit_target_marker,
@@ -3236,7 +3281,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow transition drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_transition_prefix,
             quint_transition_marker,
@@ -3244,7 +3289,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow transition drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_exit_target_prefix,
             quint_exit_target_marker,
@@ -3252,7 +3297,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow transition drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_identity_invariant_prefix,
             lean_identity_invariant_marker,
@@ -3260,7 +3305,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_identity_invariant_prefix,
             quint_identity_invariant_marker,
@@ -3268,7 +3313,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_slice_detail_invariant_prefix,
             lean_slice_detail_invariant_marker,
@@ -3276,7 +3321,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_slice_module_invariant_prefix,
             lean_slice_module_invariant_marker,
@@ -3284,7 +3329,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_slice_detail_invariant_prefix,
             quint_slice_detail_invariant_marker,
@@ -3292,7 +3337,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_slice_detail_complete_prefix,
             quint_slice_detail_complete_marker,
@@ -3300,7 +3345,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_slice_module_complete_prefix,
             quint_slice_module_complete_marker,
@@ -3308,7 +3353,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_transition_invariant_prefix,
             lean_transition_invariant_marker,
@@ -3316,7 +3361,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_transition_invariant_prefix,
             quint_transition_invariant_marker,
@@ -3324,7 +3369,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_transition_source_resolution_prefix,
             lean_transition_source_resolution_marker,
@@ -3332,7 +3377,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_transition_target_resolution_prefix,
             lean_transition_target_resolution_marker,
@@ -3340,7 +3385,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_transition_source_resolution_prefix,
             quint_transition_source_resolution_marker,
@@ -3348,7 +3393,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireCanonicalDeclaration(
+        Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_transition_target_resolution_prefix,
             quint_transition_target_resolution_marker,
@@ -3356,14 +3401,14 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow invariant drift for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireDigest(
+        Effect::require_digest(
             lean_path,
             digest.clone(),
             report_line(format!(
                 "artifact digest mismatch for workflow {workflow_name}"
             )),
         ),
-        Effect::RequireDigest(
+        Effect::require_digest(
             quint_path,
             digest,
             report_line(format!(
@@ -3389,35 +3434,35 @@ fn formal_slice_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
             let slice_digest = slice_artifact_digest(
                 slice.name().clone(),
                 slice.slug().clone(),
-                slice.kind().clone(),
+                *slice.kind(),
                 slice.description().clone(),
             );
             let lean_slice_path = project_path(format!("model/lean/slices/{module_name}.lean"));
             let quint_slice_path = project_path(format!("model/quint/slices/{module_name}.qnt"));
 
             [
-                Effect::RequireFileContentsWithAuthoredFormalFacts(
+                Effect::require_file_contents_with_authored_formal_facts(
                     lean_slice_path,
                     emit_lean_slice_module(
                         lean_module_name(module_name.clone()),
                         slice.name().clone(),
                         slice.description().clone(),
                         slice.slug().clone(),
-                        slice.kind().clone(),
+                        *slice.kind(),
                         slice_digest.clone(),
                     ),
                     report_line(format!(
                         "Lean slice artifact drift for workflow {workflow_name}"
                     )),
                 ),
-                Effect::RequireFileContentsWithAuthoredFormalFacts(
+                Effect::require_file_contents_with_authored_formal_facts(
                     quint_slice_path,
                     emit_quint_slice_module(
                         quint_module_name(module_name),
                         slice.name().clone(),
                         slice.description().clone(),
                         slice.slug().clone(),
-                        slice.kind().clone(),
+                        *slice.kind(),
                         slice_digest,
                     ),
                     report_line(format!(
@@ -3429,8 +3474,8 @@ fn formal_slice_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
         .collect()
 }
 
-fn lean_workflow_slice_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
-    artifact_marker(format!(
+fn lean_workflow_slice_marker(workflow: &FormalWorkflowGraph) -> CanonicalDeclarationMarker {
+    canonical_declaration_marker(format!(
         "def workflowSlices : List String := [{}]",
         workflow
             .slice_details()
@@ -3442,8 +3487,8 @@ fn lean_workflow_slice_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker 
     ))
 }
 
-fn lean_workflow_slice_detail_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
-    artifact_marker(format!(
+fn lean_workflow_slice_detail_marker(workflow: &FormalWorkflowGraph) -> CanonicalDeclarationMarker {
+    canonical_declaration_marker(format!(
         "def workflowSliceDetails : List (String × String × String × String) := [{}]",
         workflow
             .slice_details()
@@ -3463,8 +3508,8 @@ fn lean_workflow_slice_detail_marker(workflow: &FormalWorkflowGraph) -> Artifact
     ))
 }
 
-fn lean_workflow_slice_module_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
-    artifact_marker(format!(
+fn lean_workflow_slice_module_marker(workflow: &FormalWorkflowGraph) -> CanonicalDeclarationMarker {
+    canonical_declaration_marker(format!(
         "def workflowSliceModules : List (String × String) := [{}]",
         workflow
             .slice_details()
@@ -3482,8 +3527,8 @@ fn lean_workflow_slice_module_marker(workflow: &FormalWorkflowGraph) -> Artifact
     ))
 }
 
-fn lean_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
-    artifact_marker(format!(
+fn lean_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> CanonicalDeclarationMarker {
+    canonical_declaration_marker(format!(
         "def workflowTransitions : List WorkflowTransition := [{}]",
         workflow
             .transitions()
@@ -3513,15 +3558,15 @@ fn lean_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> ArtifactMa
     ))
 }
 
-fn lean_workflow_exit_target_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
-    artifact_marker(format!(
+fn lean_workflow_exit_target_marker(workflow: &FormalWorkflowGraph) -> CanonicalDeclarationMarker {
+    canonical_declaration_marker(format!(
         "def workflowExitTargets : List String := [{}]",
         workflow_exit_targets(workflow).join(",")
     ))
 }
 
-fn quint_workflow_slice_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
-    artifact_marker(format!(
+fn quint_workflow_slice_marker(workflow: &FormalWorkflowGraph) -> CanonicalDeclarationMarker {
+    canonical_declaration_marker(format!(
         "val workflowSlices: List[str] = [{}]",
         workflow
             .slice_details()
@@ -3533,8 +3578,10 @@ fn quint_workflow_slice_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker
     ))
 }
 
-fn quint_workflow_slice_detail_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
-    artifact_marker(format!(
+fn quint_workflow_slice_detail_marker(
+    workflow: &FormalWorkflowGraph,
+) -> CanonicalDeclarationMarker {
+    canonical_declaration_marker(format!(
         "val workflowSliceDetails: List[WorkflowSliceDetail] = [{}]",
         workflow
             .slice_details()
@@ -3554,8 +3601,10 @@ fn quint_workflow_slice_detail_marker(workflow: &FormalWorkflowGraph) -> Artifac
     ))
 }
 
-fn quint_workflow_slice_module_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
-    artifact_marker(format!(
+fn quint_workflow_slice_module_marker(
+    workflow: &FormalWorkflowGraph,
+) -> CanonicalDeclarationMarker {
+    canonical_declaration_marker(format!(
         "val workflowSliceModules: List[WorkflowSliceModule] = [{}]",
         workflow
             .slice_details()
@@ -3573,8 +3622,8 @@ fn quint_workflow_slice_module_marker(workflow: &FormalWorkflowGraph) -> Artifac
     ))
 }
 
-fn quint_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
-    artifact_marker(format!(
+fn quint_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> CanonicalDeclarationMarker {
+    canonical_declaration_marker(format!(
         "val workflowTransitions: List[WorkflowTransition] = [{}]",
         workflow
             .transitions()
@@ -3604,8 +3653,8 @@ fn quint_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> ArtifactM
     ))
 }
 
-fn quint_workflow_exit_target_marker(workflow: &FormalWorkflowGraph) -> ArtifactMarker {
-    artifact_marker(format!(
+fn quint_workflow_exit_target_marker(workflow: &FormalWorkflowGraph) -> CanonicalDeclarationMarker {
+    canonical_declaration_marker(format!(
         "val workflowExitTargets: List[str] = [{}]",
         workflow_exit_targets(workflow).join(",")
     ))
@@ -3616,7 +3665,7 @@ fn workflow_exit_targets(workflow: &FormalWorkflowGraph) -> Vec<String> {
         .transitions()
         .as_slice()
         .iter()
-        .filter(|transition| transition.kind().as_ref().starts_with("workflow_exit:"))
+        .filter(|transition| transition.kind().is_workflow_exit())
         .map(|transition| json_string(transition.target().as_ref()))
         .collect()
 }
@@ -6113,8 +6162,14 @@ fn report_line(value: impl Into<String>) -> ReportLine {
     })
 }
 
-fn artifact_marker(value: impl Into<String>) -> ArtifactMarker {
-    ArtifactMarker::try_new(value.into()).unwrap_or_else(|error| {
+fn canonical_declaration_prefix(value: impl Into<String>) -> CanonicalDeclarationPrefix {
+    CanonicalDeclarationPrefix::try_new(value.into()).unwrap_or_else(|error| {
+        unreachable!("EMC static canonical declaration prefix must be valid: {error}");
+    })
+}
+
+fn canonical_declaration_marker(value: impl Into<String>) -> CanonicalDeclarationMarker {
+    CanonicalDeclarationMarker::try_new(value.into()).unwrap_or_else(|error| {
         unreachable!("EMC static artifact marker must be valid: {error}");
     })
 }

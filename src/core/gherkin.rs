@@ -10,7 +10,7 @@ pub enum GherkinSuite {
     ReviewGate,
 }
 
-pub fn list_gherkin_features(suite: GherkinSuite) -> EffectPlan {
+pub(crate) fn list_gherkin_features(suite: GherkinSuite) -> EffectPlan {
     EffectPlan::new(
         suite
             .feature_paths()
@@ -20,11 +20,11 @@ pub fn list_gherkin_features(suite: GherkinSuite) -> EffectPlan {
     )
 }
 
-pub fn run_gherkin_suite(suite: GherkinSuite) -> EffectPlan {
+pub(crate) fn run_gherkin_suite(suite: GherkinSuite) -> EffectPlan {
     EffectPlan::new(vec![run_suite_effect(suite)])
 }
 
-pub fn run_all_gherkin_suites() -> EffectPlan {
+pub(crate) fn run_all_gherkin_suites() -> EffectPlan {
     EffectPlan::new(
         GherkinSuite::all()
             .into_iter()
@@ -65,7 +65,7 @@ impl GherkinSuite {
 
     fn scenario_count(&self) -> usize {
         match self {
-            Self::Meta => 3,
+            Self::Meta => 2,
             Self::ReviewGate => 9,
         }
     }
@@ -111,4 +111,66 @@ fn report_line(value: impl Into<String>) -> ReportLine {
     ReportLine::try_new(value.into()).unwrap_or_else(|error| {
         unreachable!("EMC static feature report line must be valid: {error}");
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_all_executes_every_configured_suite() -> Result<(), String> {
+        let plan = run_all_gherkin_suites();
+        let commands = plan
+            .effects()
+            .iter()
+            .map(run_process_command)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        assert_eq!(
+            commands,
+            vec![
+                "cargo test --test review_gate",
+                "cargo test --test cucumber_runner_config",
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn meta_suite_reports_configured_feature_scenario_count() -> Result<(), String> {
+        let plan = run_gherkin_suite(GherkinSuite::Meta);
+        let effect = plan
+            .effects()
+            .iter()
+            .next()
+            .ok_or_else(|| "expected meta suite process effect".to_owned())?;
+
+        match effect {
+            Effect::RunProcess(invocation) => {
+                assert_eq!(
+                    invocation.success().as_ref(),
+                    "meta Gherkin suite passed; attempted 2 configured meta scenarios"
+                );
+                Ok(())
+            }
+            _ => Err("expected a run-process effect".to_owned()),
+        }
+    }
+
+    fn run_process_command(effect: &Effect) -> Result<String, String> {
+        match effect {
+            Effect::RunProcess(invocation) => Ok(format!(
+                "{} {}",
+                invocation.program().as_ref(),
+                invocation
+                    .arguments()
+                    .iter()
+                    .map(|argument| argument.as_ref())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )),
+            _ => Err("expected a run-process effect".to_owned()),
+        }
+    }
 }

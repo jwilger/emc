@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::connection::ConnectionKind;
-use crate::core::effect::ProjectPath;
+use crate::core::formal_slice_facts::ScenarioKind;
 use crate::core::gherkin::GherkinSuite;
 use crate::core::project::ProjectName;
 use crate::core::slice::SliceKind;
@@ -15,21 +15,24 @@ use crate::core::types::{
     CommandInputSourceDescription, CommandInputSourceKind, CommandName, ContractKindName,
     ControlName, ControlRecoveryBehavior, CoveredDefinitionName, DataFlowSource,
     DataFlowSourceKind, DataFlowTarget, DatumName, EventAttributeName, EventAttributeSourceField,
-    EventAttributeSourceKind, EventAttributeSourceName, EventName, LeanModuleName,
-    ModelDescription, ModelDigest, ModelName, NavigationTargetName, NavigationTargetType,
-    OutcomeLabelName, PayloadContractName, ProvenanceDescription, QuintModuleName,
+    EventAttributeSourceKind, EventAttributeSourceName, EventName,
+    GeneratedEventAttributeSourceKind, ModelDescription, ModelName, NavigationTargetName,
+    NavigationTargetType, OutcomeLabelName, PayloadContractName, ProvenanceDescription,
     ReadModelDerivationRule, ReadModelFieldSourceKind, ReadModelName, ReadModelTransitiveRule,
     ReviewTimestamp, ReviewerId, ScenarioName, ScenarioStepText, SingletonRepeatBehavior,
     SketchToken, SliceSlug, SourceChainHop, StreamName, TransformationSemantics,
     TransitionTriggerName, TranslationExternalEventName, TranslationName, ViewFieldName,
     ViewFieldSourceKind, ViewName, WorkflowEntryLifecycleEvidenceText,
     WorkflowEntryLifecycleStateName, WorkflowEventParticipation, WorkflowOwnedDefinitionKind,
-    WorkflowOwnedDefinitionName, WorkflowSlug, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceText, WorkflowTransitionKind, WorkflowViewRole,
+    WorkflowOwnedDefinitionName, WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionKind,
+    WorkflowTransitionSourceEvidenceText, WorkflowTransitionTargetEvidenceText, WorkflowViewRole,
 };
 
+#[cfg(test)]
+use crate::core::types::{LeanModuleName, ModelDigest, QuintModuleName};
+
 #[derive(Debug)]
-pub struct BoundaryParseError {
+pub(crate) struct BoundaryParseError {
     message: String,
 }
 
@@ -49,17 +52,17 @@ impl Display for BoundaryParseError {
 
 impl Error for BoundaryParseError {}
 
-pub fn parse_model_name(raw: &str) -> Result<ModelName, BoundaryParseError> {
+pub(crate) fn parse_model_name(raw: &str) -> Result<ModelName, BoundaryParseError> {
     ModelName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid model name: {error}")))
 }
 
-pub fn parse_model_description(raw: &str) -> Result<ModelDescription, BoundaryParseError> {
+pub(crate) fn parse_model_description(raw: &str) -> Result<ModelDescription, BoundaryParseError> {
     ModelDescription::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid model description: {error}")))
 }
 
-pub fn parse_gherkin_suite(raw: &str) -> Result<GherkinSuite, BoundaryParseError> {
+pub(crate) fn parse_gherkin_suite(raw: &str) -> Result<GherkinSuite, BoundaryParseError> {
     match raw {
         "meta" => Ok(GherkinSuite::Meta),
         "review-gate" => Ok(GherkinSuite::ReviewGate),
@@ -69,20 +72,12 @@ pub fn parse_gherkin_suite(raw: &str) -> Result<GherkinSuite, BoundaryParseError
     }
 }
 
-pub fn parse_project_name(raw: &str) -> Result<ProjectName, BoundaryParseError> {
+pub(crate) fn parse_project_name(raw: &str) -> Result<ProjectName, BoundaryParseError> {
     ProjectName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid project name: {error}")))
 }
 
-pub fn parse_project_path(raw: &str) -> Result<ProjectPath, BoundaryParseError> {
-    ProjectPath::try_new(raw.to_owned()).map_err(|_error| {
-        BoundaryParseError::new(
-            "invalid project path: expected a relative path inside the project without parent-directory traversal",
-        )
-    })
-}
-
-pub fn parse_project_manifest_name(raw: &str) -> Result<ProjectName, BoundaryParseError> {
+pub(crate) fn parse_project_manifest_name(raw: &str) -> Result<ProjectName, BoundaryParseError> {
     raw.lines()
         .find_map(|line| line.trim().strip_prefix("name = "))
         .and_then(quoted_value)
@@ -90,17 +85,17 @@ pub fn parse_project_manifest_name(raw: &str) -> Result<ProjectName, BoundaryPar
         .and_then(parse_project_name)
 }
 
-pub fn parse_workflow_slug(raw: &str) -> Result<WorkflowSlug, BoundaryParseError> {
+pub(crate) fn parse_workflow_slug(raw: &str) -> Result<WorkflowSlug, BoundaryParseError> {
     WorkflowSlug::try_new(slugify(raw))
         .map_err(|error| BoundaryParseError::new(format!("invalid workflow slug: {error}")))
 }
 
-pub fn parse_slice_slug(raw: &str) -> Result<SliceSlug, BoundaryParseError> {
+pub(crate) fn parse_slice_slug(raw: &str) -> Result<SliceSlug, BoundaryParseError> {
     SliceSlug::try_new(slugify(raw))
         .map_err(|error| BoundaryParseError::new(format!("invalid slice slug: {error}")))
 }
 
-pub fn parse_slice_kind(raw: &str) -> Result<SliceKind, BoundaryParseError> {
+pub(crate) fn parse_slice_kind(raw: &str) -> Result<SliceKind, BoundaryParseError> {
     match raw.trim() {
         "state_view" => Ok(SliceKind::state_view()),
         "state_change" => Ok(SliceKind::state_change()),
@@ -112,7 +107,7 @@ pub fn parse_slice_kind(raw: &str) -> Result<SliceKind, BoundaryParseError> {
     }
 }
 
-pub fn parse_connection_kind(raw: &str) -> Result<ConnectionKind, BoundaryParseError> {
+pub(crate) fn parse_connection_kind(raw: &str) -> Result<ConnectionKind, BoundaryParseError> {
     match raw.trim() {
         "command" => Ok(ConnectionKind::command()),
         "event" => Ok(ConnectionKind::event()),
@@ -125,7 +120,7 @@ pub fn parse_connection_kind(raw: &str) -> Result<ConnectionKind, BoundaryParseE
     }
 }
 
-pub fn parse_transition_trigger_name(
+pub(crate) fn parse_transition_trigger_name(
     raw: &str,
 ) -> Result<TransitionTriggerName, BoundaryParseError> {
     TransitionTriggerName::try_new(raw.to_owned()).map_err(|error| {
@@ -133,17 +128,19 @@ pub fn parse_transition_trigger_name(
     })
 }
 
-pub fn parse_payload_contract_name(raw: &str) -> Result<PayloadContractName, BoundaryParseError> {
+pub(crate) fn parse_payload_contract_name(
+    raw: &str,
+) -> Result<PayloadContractName, BoundaryParseError> {
     PayloadContractName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid payload contract name: {error}")))
 }
 
-pub fn parse_translation_name(raw: &str) -> Result<TranslationName, BoundaryParseError> {
+pub(crate) fn parse_translation_name(raw: &str) -> Result<TranslationName, BoundaryParseError> {
     TranslationName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid translation name: {error}")))
 }
 
-pub fn parse_translation_external_event_name(
+pub(crate) fn parse_translation_external_event_name(
     raw: &str,
 ) -> Result<TranslationExternalEventName, BoundaryParseError> {
     TranslationExternalEventName::try_new(raw.to_owned()).map_err(|error| {
@@ -151,39 +148,44 @@ pub fn parse_translation_external_event_name(
     })
 }
 
-pub fn parse_outcome_label_name(raw: &str) -> Result<OutcomeLabelName, BoundaryParseError> {
+pub(crate) fn parse_outcome_label_name(raw: &str) -> Result<OutcomeLabelName, BoundaryParseError> {
     OutcomeLabelName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid outcome label: {error}")))
 }
 
-pub fn parse_scenario_name(raw: &str) -> Result<ScenarioName, BoundaryParseError> {
+pub(crate) fn parse_scenario_name(raw: &str) -> Result<ScenarioName, BoundaryParseError> {
     ScenarioName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid scenario name: {error}")))
 }
 
-pub fn parse_scenario_step_text(raw: &str) -> Result<ScenarioStepText, BoundaryParseError> {
+pub(crate) fn parse_scenario_step_text(raw: &str) -> Result<ScenarioStepText, BoundaryParseError> {
     ScenarioStepText::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid scenario step text: {error}")))
 }
 
-pub fn parse_contract_kind_name(raw: &str) -> Result<ContractKindName, BoundaryParseError> {
+pub(crate) fn parse_scenario_kind(raw: &str) -> Result<ScenarioKind, BoundaryParseError> {
+    ScenarioKind::try_new(raw.to_owned())
+        .map_err(|error| BoundaryParseError::new(format!("invalid scenario kind: {error}")))
+}
+
+pub(crate) fn parse_contract_kind_name(raw: &str) -> Result<ContractKindName, BoundaryParseError> {
     ContractKindName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid contract kind: {error}")))
 }
 
-pub fn parse_covered_definition_name(
+pub(crate) fn parse_covered_definition_name(
     raw: &str,
 ) -> Result<CoveredDefinitionName, BoundaryParseError> {
     CoveredDefinitionName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid covered definition: {error}")))
 }
 
-pub fn parse_datum_name(raw: &str) -> Result<DatumName, BoundaryParseError> {
+pub(crate) fn parse_datum_name(raw: &str) -> Result<DatumName, BoundaryParseError> {
     DatumName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid datum name: {error}")))
 }
 
-pub fn parse_datum_names(raw: &str) -> Result<Vec<DatumName>, BoundaryParseError> {
+pub(crate) fn parse_datum_names(raw: &str) -> Result<Vec<DatumName>, BoundaryParseError> {
     parse_comma_separated(raw, "datum names")?
         .into_iter()
         .map(|name| {
@@ -193,17 +195,19 @@ pub fn parse_datum_names(raw: &str) -> Result<Vec<DatumName>, BoundaryParseError
         .collect()
 }
 
-pub fn parse_data_flow_source(raw: &str) -> Result<DataFlowSource, BoundaryParseError> {
+pub(crate) fn parse_data_flow_source(raw: &str) -> Result<DataFlowSource, BoundaryParseError> {
     DataFlowSource::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid data-flow source: {error}")))
 }
 
-pub fn parse_data_flow_source_kind(raw: &str) -> Result<DataFlowSourceKind, BoundaryParseError> {
+pub(crate) fn parse_data_flow_source_kind(
+    raw: &str,
+) -> Result<DataFlowSourceKind, BoundaryParseError> {
     DataFlowSourceKind::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid data-flow source kind: {error}")))
 }
 
-pub fn parse_transformation_semantics(
+pub(crate) fn parse_transformation_semantics(
     raw: &str,
 ) -> Result<TransformationSemantics, BoundaryParseError> {
     TransformationSemantics::try_new(raw.to_owned()).map_err(|error| {
@@ -211,32 +215,34 @@ pub fn parse_transformation_semantics(
     })
 }
 
-pub fn parse_data_flow_target(raw: &str) -> Result<DataFlowTarget, BoundaryParseError> {
+pub(crate) fn parse_data_flow_target(raw: &str) -> Result<DataFlowTarget, BoundaryParseError> {
     DataFlowTarget::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid data-flow target: {error}")))
 }
 
-pub fn parse_bit_encoding_semantics(raw: &str) -> Result<BitEncodingSemantics, BoundaryParseError> {
+pub(crate) fn parse_bit_encoding_semantics(
+    raw: &str,
+) -> Result<BitEncodingSemantics, BoundaryParseError> {
     BitEncodingSemantics::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid bit encoding: {error}")))
 }
 
-pub fn parse_board_element_name(raw: &str) -> Result<BoardElementName, BoundaryParseError> {
+pub(crate) fn parse_board_element_name(raw: &str) -> Result<BoardElementName, BoundaryParseError> {
     BoardElementName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid board element name: {error}")))
 }
 
-pub fn parse_board_element_kind(raw: &str) -> Result<BoardElementKind, BoundaryParseError> {
+pub(crate) fn parse_board_element_kind(raw: &str) -> Result<BoardElementKind, BoundaryParseError> {
     BoardElementKind::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid board element kind: {error}")))
 }
 
-pub fn parse_board_lane_id(raw: &str) -> Result<BoardLaneId, BoundaryParseError> {
+pub(crate) fn parse_board_lane_id(raw: &str) -> Result<BoardLaneId, BoundaryParseError> {
     BoardLaneId::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid board lane id: {error}")))
 }
 
-pub fn parse_board_element_declared_name(
+pub(crate) fn parse_board_element_declared_name(
     raw: &str,
 ) -> Result<BoardElementDeclaredName, BoundaryParseError> {
     BoardElementDeclaredName::try_new(raw.to_owned()).map_err(|error| {
@@ -244,7 +250,7 @@ pub fn parse_board_element_declared_name(
     })
 }
 
-pub fn parse_board_connection_endpoint(
+pub(crate) fn parse_board_connection_endpoint(
     raw: &str,
 ) -> Result<BoardConnectionEndpoint, BoundaryParseError> {
     BoardConnectionEndpoint::try_new(raw.to_owned()).map_err(|error| {
@@ -252,7 +258,7 @@ pub fn parse_board_connection_endpoint(
     })
 }
 
-pub fn parse_board_connection_endpoint_kind(
+pub(crate) fn parse_board_connection_endpoint_kind(
     raw: &str,
 ) -> Result<BoardConnectionEndpointKind, BoundaryParseError> {
     BoardConnectionEndpointKind::try_new(raw.to_owned()).map_err(|error| {
@@ -260,17 +266,19 @@ pub fn parse_board_connection_endpoint_kind(
     })
 }
 
-pub fn parse_command_name(raw: &str) -> Result<CommandName, BoundaryParseError> {
+pub(crate) fn parse_command_name(raw: &str) -> Result<CommandName, BoundaryParseError> {
     CommandName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid command name: {error}")))
 }
 
-pub fn parse_command_error_name(raw: &str) -> Result<CommandErrorName, BoundaryParseError> {
+pub(crate) fn parse_command_error_name(raw: &str) -> Result<CommandErrorName, BoundaryParseError> {
     CommandErrorName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid command error: {error}")))
 }
 
-pub fn parse_command_error_names(raw: &str) -> Result<Vec<CommandErrorName>, BoundaryParseError> {
+pub(crate) fn parse_command_error_names(
+    raw: &str,
+) -> Result<Vec<CommandErrorName>, BoundaryParseError> {
     parse_comma_separated(raw, "command error names")?
         .into_iter()
         .map(|name| {
@@ -280,7 +288,7 @@ pub fn parse_command_error_names(raw: &str) -> Result<Vec<CommandErrorName>, Bou
         .collect()
 }
 
-pub fn parse_command_error_recovery_kind(
+pub(crate) fn parse_command_error_recovery_kind(
     raw: &str,
 ) -> Result<CommandErrorRecoveryKind, BoundaryParseError> {
     CommandErrorRecoveryKind::try_new(raw.to_owned()).map_err(|error| {
@@ -288,7 +296,7 @@ pub fn parse_command_error_recovery_kind(
     })
 }
 
-pub fn parse_singleton_repeat_behavior(
+pub(crate) fn parse_singleton_repeat_behavior(
     raw: &str,
 ) -> Result<SingletonRepeatBehavior, BoundaryParseError> {
     SingletonRepeatBehavior::try_new(raw.to_owned()).map_err(|error| {
@@ -296,12 +304,12 @@ pub fn parse_singleton_repeat_behavior(
     })
 }
 
-pub fn parse_automation_name(raw: &str) -> Result<AutomationName, BoundaryParseError> {
+pub(crate) fn parse_automation_name(raw: &str) -> Result<AutomationName, BoundaryParseError> {
     AutomationName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid automation name: {error}")))
 }
 
-pub fn parse_automation_trigger_name(
+pub(crate) fn parse_automation_trigger_name(
     raw: &str,
 ) -> Result<AutomationTriggerName, BoundaryParseError> {
     AutomationTriggerName::try_new(raw.to_owned()).map_err(|error| {
@@ -309,7 +317,7 @@ pub fn parse_automation_trigger_name(
     })
 }
 
-pub fn parse_automation_reaction_description(
+pub(crate) fn parse_automation_reaction_description(
     raw: &str,
 ) -> Result<AutomationReactionDescription, BoundaryParseError> {
     AutomationReactionDescription::try_new(raw.to_owned()).map_err(|error| {
@@ -317,12 +325,12 @@ pub fn parse_automation_reaction_description(
     })
 }
 
-pub fn parse_control_name(raw: &str) -> Result<ControlName, BoundaryParseError> {
+pub(crate) fn parse_control_name(raw: &str) -> Result<ControlName, BoundaryParseError> {
     ControlName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid control name: {error}")))
 }
 
-pub fn parse_control_recovery_behavior(
+pub(crate) fn parse_control_recovery_behavior(
     raw: &str,
 ) -> Result<ControlRecoveryBehavior, BoundaryParseError> {
     ControlRecoveryBehavior::try_new(raw.to_owned()).map_err(|error| {
@@ -330,19 +338,23 @@ pub fn parse_control_recovery_behavior(
     })
 }
 
-pub fn parse_navigation_target_type(raw: &str) -> Result<NavigationTargetType, BoundaryParseError> {
+pub(crate) fn parse_navigation_target_type(
+    raw: &str,
+) -> Result<NavigationTargetType, BoundaryParseError> {
     NavigationTargetType::try_new(raw.to_owned()).map_err(|error| {
         BoundaryParseError::new(format!("invalid navigation target type: {error}"))
     })
 }
 
-pub fn parse_navigation_target_name(raw: &str) -> Result<NavigationTargetName, BoundaryParseError> {
+pub(crate) fn parse_navigation_target_name(
+    raw: &str,
+) -> Result<NavigationTargetName, BoundaryParseError> {
     NavigationTargetName::try_new(raw.to_owned()).map_err(|error| {
         BoundaryParseError::new(format!("invalid navigation target name: {error}"))
     })
 }
 
-pub fn parse_navigation_target_names(
+pub(crate) fn parse_navigation_target_names(
     raw: &str,
 ) -> Result<Vec<NavigationTargetName>, BoundaryParseError> {
     parse_comma_separated(raw, "navigation target names")?
@@ -355,14 +367,14 @@ pub fn parse_navigation_target_names(
         .collect()
 }
 
-pub fn parse_command_input_source_kind(
+pub(crate) fn parse_command_input_source_kind(
     raw: &str,
 ) -> Result<CommandInputSourceKind, BoundaryParseError> {
     CommandInputSourceKind::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid command input source: {error}")))
 }
 
-pub fn parse_command_input_source_description(
+pub(crate) fn parse_command_input_source_description(
     raw: &str,
 ) -> Result<CommandInputSourceDescription, BoundaryParseError> {
     CommandInputSourceDescription::try_new(raw.to_owned()).map_err(|error| {
@@ -370,7 +382,7 @@ pub fn parse_command_input_source_description(
     })
 }
 
-pub fn parse_event_names(raw: &str) -> Result<Vec<EventName>, BoundaryParseError> {
+pub(crate) fn parse_event_names(raw: &str) -> Result<Vec<EventName>, BoundaryParseError> {
     parse_comma_separated(raw, "event names")?
         .into_iter()
         .map(|name| {
@@ -380,17 +392,17 @@ pub fn parse_event_names(raw: &str) -> Result<Vec<EventName>, BoundaryParseError
         .collect()
 }
 
-pub fn parse_event_name(raw: &str) -> Result<EventName, BoundaryParseError> {
+pub(crate) fn parse_event_name(raw: &str) -> Result<EventName, BoundaryParseError> {
     EventName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid event name: {error}")))
 }
 
-pub fn parse_stream_name(raw: &str) -> Result<StreamName, BoundaryParseError> {
+pub(crate) fn parse_stream_name(raw: &str) -> Result<StreamName, BoundaryParseError> {
     StreamName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid stream name: {error}")))
 }
 
-pub fn parse_stream_names(raw: &str) -> Result<Vec<StreamName>, BoundaryParseError> {
+pub(crate) fn parse_stream_names(raw: &str) -> Result<Vec<StreamName>, BoundaryParseError> {
     parse_comma_separated(raw, "stream names")?
         .into_iter()
         .map(|name| {
@@ -400,12 +412,14 @@ pub fn parse_stream_names(raw: &str) -> Result<Vec<StreamName>, BoundaryParseErr
         .collect()
 }
 
-pub fn parse_event_attribute_name(raw: &str) -> Result<EventAttributeName, BoundaryParseError> {
+pub(crate) fn parse_event_attribute_name(
+    raw: &str,
+) -> Result<EventAttributeName, BoundaryParseError> {
     EventAttributeName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid event attribute: {error}")))
 }
 
-pub fn parse_event_attribute_source_kind(
+pub(crate) fn parse_event_attribute_source_kind(
     raw: &str,
 ) -> Result<EventAttributeSourceKind, BoundaryParseError> {
     EventAttributeSourceKind::try_new(raw.to_owned()).map_err(|error| {
@@ -413,7 +427,17 @@ pub fn parse_event_attribute_source_kind(
     })
 }
 
-pub fn parse_event_attribute_source_name(
+pub(crate) fn parse_generated_event_attribute_source_kind(
+    raw: &str,
+) -> Result<GeneratedEventAttributeSourceKind, BoundaryParseError> {
+    GeneratedEventAttributeSourceKind::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!(
+            "invalid generated event attribute source kind: {error}"
+        ))
+    })
+}
+
+pub(crate) fn parse_event_attribute_source_name(
     raw: &str,
 ) -> Result<EventAttributeSourceName, BoundaryParseError> {
     EventAttributeSourceName::try_new(raw.to_owned()).map_err(|error| {
@@ -421,7 +445,7 @@ pub fn parse_event_attribute_source_name(
     })
 }
 
-pub fn parse_event_attribute_source_field(
+pub(crate) fn parse_event_attribute_source_field(
     raw: &str,
 ) -> Result<EventAttributeSourceField, BoundaryParseError> {
     EventAttributeSourceField::try_new(raw.to_owned()).map_err(|error| {
@@ -429,19 +453,19 @@ pub fn parse_event_attribute_source_field(
     })
 }
 
-pub fn parse_provenance_description(
+pub(crate) fn parse_provenance_description(
     raw: &str,
 ) -> Result<ProvenanceDescription, BoundaryParseError> {
     ProvenanceDescription::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid provenance: {error}")))
 }
 
-pub fn parse_read_model_name(raw: &str) -> Result<ReadModelName, BoundaryParseError> {
+pub(crate) fn parse_read_model_name(raw: &str) -> Result<ReadModelName, BoundaryParseError> {
     ReadModelName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid read model name: {error}")))
 }
 
-pub fn parse_read_model_field_source_kind(
+pub(crate) fn parse_read_model_field_source_kind(
     raw: &str,
 ) -> Result<ReadModelFieldSourceKind, BoundaryParseError> {
     ReadModelFieldSourceKind::try_new(raw.to_owned()).map_err(|error| {
@@ -449,7 +473,7 @@ pub fn parse_read_model_field_source_kind(
     })
 }
 
-pub fn parse_read_model_derivation_rule(
+pub(crate) fn parse_read_model_derivation_rule(
     raw: &str,
 ) -> Result<ReadModelDerivationRule, BoundaryParseError> {
     ReadModelDerivationRule::try_new(raw.to_owned()).map_err(|error| {
@@ -457,7 +481,7 @@ pub fn parse_read_model_derivation_rule(
     })
 }
 
-pub fn parse_read_model_transitive_rule(
+pub(crate) fn parse_read_model_transitive_rule(
     raw: &str,
 ) -> Result<ReadModelTransitiveRule, BoundaryParseError> {
     ReadModelTransitiveRule::try_new(raw.to_owned()).map_err(|error| {
@@ -465,28 +489,32 @@ pub fn parse_read_model_transitive_rule(
     })
 }
 
-pub fn parse_view_name(raw: &str) -> Result<ViewName, BoundaryParseError> {
+pub(crate) fn parse_view_name(raw: &str) -> Result<ViewName, BoundaryParseError> {
     ViewName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid view name: {error}")))
 }
 
-pub fn parse_view_field_name(raw: &str) -> Result<ViewFieldName, BoundaryParseError> {
+pub(crate) fn parse_view_field_name(raw: &str) -> Result<ViewFieldName, BoundaryParseError> {
     ViewFieldName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid view field name: {error}")))
 }
 
-pub fn parse_view_field_source_kind(raw: &str) -> Result<ViewFieldSourceKind, BoundaryParseError> {
+pub(crate) fn parse_view_field_source_kind(
+    raw: &str,
+) -> Result<ViewFieldSourceKind, BoundaryParseError> {
     ViewFieldSourceKind::try_new(raw.to_owned()).map_err(|error| {
         BoundaryParseError::new(format!("invalid view field source kind: {error}"))
     })
 }
 
-pub fn parse_sketch_token(raw: &str) -> Result<SketchToken, BoundaryParseError> {
+pub(crate) fn parse_sketch_token(raw: &str) -> Result<SketchToken, BoundaryParseError> {
     SketchToken::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid sketch token: {error}")))
 }
 
-pub fn parse_source_chain_hops(raw: &str) -> Result<Vec<SourceChainHop>, BoundaryParseError> {
+pub(crate) fn parse_source_chain_hops(
+    raw: &str,
+) -> Result<Vec<SourceChainHop>, BoundaryParseError> {
     parse_comma_separated(raw, "source chain hops")?
         .into_iter()
         .map(|hop| {
@@ -497,7 +525,7 @@ pub fn parse_source_chain_hops(raw: &str) -> Result<Vec<SourceChainHop>, Boundar
         .collect()
 }
 
-pub fn parse_workflow_transition_endpoint(
+pub(crate) fn parse_workflow_transition_endpoint(
     raw: &str,
 ) -> Result<WorkflowTransitionEndpoint, BoundaryParseError> {
     WorkflowTransitionEndpoint::try_new(raw.to_owned()).map_err(|error| {
@@ -505,7 +533,7 @@ pub fn parse_workflow_transition_endpoint(
     })
 }
 
-pub fn parse_workflow_transition_kind(
+pub(crate) fn parse_workflow_transition_kind(
     raw: &str,
 ) -> Result<WorkflowTransitionKind, BoundaryParseError> {
     WorkflowTransitionKind::try_new(raw.to_owned()).map_err(|error| {
@@ -513,15 +541,27 @@ pub fn parse_workflow_transition_kind(
     })
 }
 
-pub fn parse_workflow_transition_evidence_text(
+pub(crate) fn parse_workflow_transition_source_evidence_text(
     raw: &str,
-) -> Result<WorkflowTransitionEvidenceText, BoundaryParseError> {
-    WorkflowTransitionEvidenceText::try_new(raw.to_owned()).map_err(|error| {
-        BoundaryParseError::new(format!("invalid workflow transition evidence: {error}"))
+) -> Result<WorkflowTransitionSourceEvidenceText, BoundaryParseError> {
+    WorkflowTransitionSourceEvidenceText::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!(
+            "invalid workflow transition source evidence: {error}"
+        ))
     })
 }
 
-pub fn parse_workflow_entry_lifecycle_state_name(
+pub(crate) fn parse_workflow_transition_target_evidence_text(
+    raw: &str,
+) -> Result<WorkflowTransitionTargetEvidenceText, BoundaryParseError> {
+    WorkflowTransitionTargetEvidenceText::try_new(raw.to_owned()).map_err(|error| {
+        BoundaryParseError::new(format!(
+            "invalid workflow transition target evidence: {error}"
+        ))
+    })
+}
+
+pub(crate) fn parse_workflow_entry_lifecycle_state_name(
     raw: &str,
 ) -> Result<WorkflowEntryLifecycleStateName, BoundaryParseError> {
     WorkflowEntryLifecycleStateName::try_new(raw.to_owned()).map_err(|error| {
@@ -531,7 +571,7 @@ pub fn parse_workflow_entry_lifecycle_state_name(
     })
 }
 
-pub fn parse_workflow_entry_lifecycle_evidence_text(
+pub(crate) fn parse_workflow_entry_lifecycle_evidence_text(
     raw: &str,
 ) -> Result<WorkflowEntryLifecycleEvidenceText, BoundaryParseError> {
     WorkflowEntryLifecycleEvidenceText::try_new(raw.to_owned()).map_err(|error| {
@@ -541,7 +581,7 @@ pub fn parse_workflow_entry_lifecycle_evidence_text(
     })
 }
 
-pub fn parse_workflow_owned_definition_kind(
+pub(crate) fn parse_workflow_owned_definition_kind(
     raw: &str,
 ) -> Result<WorkflowOwnedDefinitionKind, BoundaryParseError> {
     WorkflowOwnedDefinitionKind::try_new(raw.to_owned()).map_err(|error| {
@@ -549,7 +589,7 @@ pub fn parse_workflow_owned_definition_kind(
     })
 }
 
-pub fn parse_workflow_owned_definition_name(
+pub(crate) fn parse_workflow_owned_definition_name(
     raw: &str,
 ) -> Result<WorkflowOwnedDefinitionName, BoundaryParseError> {
     WorkflowOwnedDefinitionName::try_new(raw.to_owned()).map_err(|error| {
@@ -557,7 +597,7 @@ pub fn parse_workflow_owned_definition_name(
     })
 }
 
-pub fn parse_workflow_event_participation(
+pub(crate) fn parse_workflow_event_participation(
     raw: &str,
 ) -> Result<WorkflowEventParticipation, BoundaryParseError> {
     WorkflowEventParticipation::try_new(raw.to_owned()).map_err(|error| {
@@ -565,32 +605,35 @@ pub fn parse_workflow_event_participation(
     })
 }
 
-pub fn parse_workflow_view_role(raw: &str) -> Result<WorkflowViewRole, BoundaryParseError> {
+pub(crate) fn parse_workflow_view_role(raw: &str) -> Result<WorkflowViewRole, BoundaryParseError> {
     WorkflowViewRole::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid workflow view role: {error}")))
 }
 
-pub fn parse_lean_module_name(raw: &str) -> Result<LeanModuleName, BoundaryParseError> {
+#[cfg(test)]
+pub(crate) fn parse_lean_module_name(raw: &str) -> Result<LeanModuleName, BoundaryParseError> {
     LeanModuleName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid Lean module name: {error}")))
 }
 
-pub fn parse_quint_module_name(raw: &str) -> Result<QuintModuleName, BoundaryParseError> {
+#[cfg(test)]
+pub(crate) fn parse_quint_module_name(raw: &str) -> Result<QuintModuleName, BoundaryParseError> {
     QuintModuleName::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid Quint module name: {error}")))
 }
 
-pub fn parse_model_digest(raw: &str) -> Result<ModelDigest, BoundaryParseError> {
+#[cfg(test)]
+pub(crate) fn parse_model_digest(raw: &str) -> Result<ModelDigest, BoundaryParseError> {
     ModelDigest::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid model digest: {error}")))
 }
 
-pub fn parse_reviewer_id(raw: &str) -> Result<ReviewerId, BoundaryParseError> {
+pub(crate) fn parse_reviewer_id(raw: &str) -> Result<ReviewerId, BoundaryParseError> {
     ReviewerId::try_new(raw.to_owned())
         .map_err(|error| BoundaryParseError::new(format!("invalid reviewer id: {error}")))
 }
 
-pub fn parse_review_timestamp(raw: &str) -> Result<ReviewTimestamp, BoundaryParseError> {
+pub(crate) fn parse_review_timestamp(raw: &str) -> Result<ReviewTimestamp, BoundaryParseError> {
     ReviewTimestamp::try_new(raw.to_owned()).map_err(|_error| {
         BoundaryParseError::new(
             "invalid review timestamp: expected UTC millisecond timestamp like 2026-06-03T12:00:00.000Z",
