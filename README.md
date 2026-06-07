@@ -27,7 +27,9 @@ through EMC operations that emit Lean4 and Quint. A model is acceptable only whe
 ## Current Status
 
 EMC has a Rust CLI, MCP stdio and HTTP entrypoints, review-gate checks, Lean4
-and Quint artifact emission, strict lint guardrails, and package smoke tests.
+and Quint artifact emission, exported event replay for project/workflow/slice,
+slice-fact, review, conflict-resolution, and workflow-readiness events, strict
+lint guardrails, and package smoke tests.
 The formal metamodel encodes the current rule inventory in
 [docs/event-model/formal-modeling-rules.md](https://git.johnwilger.com/Slipstream/emc/src/branch/main/docs/event-model/formal-modeling-rules.md).
 
@@ -177,6 +179,11 @@ development shell provide those tools.
 ```text
 emc.toml
 model/
+  events/
+    .lock
+    projection.fingerprint
+    v1/
+      <event-id>.json
   lean/
     lakefile.lean
     lean-toolchain
@@ -189,6 +196,24 @@ reviews/
 ```
 
 EMC-managed model artifacts live under `model/lean` and `model/quint`.
+Mutating project, workflow, slice, slice-fact, conflict-resolution, and
+clean-review operations export domain events under `model/events/v1`.
+`emc check` can rebuild `emc.toml`, generated Lean4 and Quint artifacts, and
+review records from those exported events. The projection fingerprint records
+the event set used for the latest rebuild.
+
+`emc verify` runs Lean4/Lake and Quint against the current projected event
+frontier. After successful verification, EMC appends workflow-scoped
+`WorkflowReadinessDeclared` events recording the verified projection
+fingerprint, formal model content digest, verifier identity, timestamp, and
+optional review event reference. If the exported event frontier changes during
+verification, readiness is not appended and `emc verify` must be retried.
+
+EMC also initializes an operational SQLite event-store cache outside the
+repository at `$XDG_STATE_HOME/emc/projects/<sha256-realpath>/events.sqlite3`.
+Set `EMC_EVENT_STORE_PATH` to override that location. The exported JSON events
+are the repository-tracked interchange format; the SQLite path is an
+operational cache location.
 
 ## CLI commands
 
@@ -199,6 +224,7 @@ emc init --name <project-name>
 emc list workflows
 emc list slices
 emc list transitions
+emc list conflicts
 emc show workflow <workflow-slug>
 emc show workflow --slug <workflow-slug>
 emc show slice <slice-slug>
@@ -216,6 +242,7 @@ emc connect workflow --workflow <workflow-slug> --from <slice-slug> --to <slice-
 emc connect workflow --workflow <workflow-slug> --from <slice-slug> --to-workflow <workflow-slug> --via outcome --name <outcome-name> --reason <rationale>
 emc remove transition --workflow <workflow-slug> --from <slice-slug> --to <slice-slug> --via <kind> --name <trigger-name>
 emc remove transition --workflow <workflow-slug> --from <slice-slug> --to-workflow <workflow-slug> --via outcome --name <outcome-name>
+emc resolve conflict --id <conflict-id> --choose-event <event-id>
 emc review gate --workflow <workflow-slug>
 emc review record --workflow <workflow-slug> --reviewer <reviewer-id> --reviewed-at <timestamp>
 emc check
@@ -275,6 +302,8 @@ remove_slice
 remove_workflow
 connect_workflow
 remove_transition
+list_conflicts
+resolve_conflict
 ```
 
 `show_workflow` and `show_slice` return the Lean4 and Quint artifacts for the

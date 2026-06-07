@@ -12,6 +12,7 @@ use crate::core::emit::quint::{
     emit_slice_module as emit_quint_slice_module,
     emit_workflow_module as emit_quint_workflow_module,
 };
+use crate::core::events::EventDraft;
 use crate::core::formal_graph::FormalWorkflowGraph;
 use crate::core::project::{ProjectName, ProjectSliceMembership, project_root_effects};
 use crate::core::types::{
@@ -47,7 +48,7 @@ impl SliceKind {
         Self::Automation
     }
 
-    fn as_ref(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::StateView => "state_view",
             Self::StateChange => "state_change",
@@ -85,6 +86,22 @@ impl NewSlice {
 
     pub fn workflow_slug(&self) -> &WorkflowSlug {
         &self.workflow_slug
+    }
+
+    pub fn slug(&self) -> &SliceSlug {
+        &self.slug
+    }
+
+    pub fn name(&self) -> &ModelName {
+        &self.name
+    }
+
+    pub fn description(&self) -> &ModelDescription {
+        &self.description
+    }
+
+    pub fn kind(&self) -> SliceKind {
+        self.kind
     }
 }
 
@@ -247,6 +264,7 @@ pub fn add_slice(
                         .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
                     ),
                 ),
+                Effect::ExportEvent(EventDraft::slice_added(&new_slice)),
                 Effect::Report(report_line(format!("added slice {slice_name}"))),
             ])
             .collect(),
@@ -642,6 +660,7 @@ pub fn remove_slice(
                         .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
                     ),
                 ),
+                Effect::ExportEvent(EventDraft::slice_removed(&removed_slice)),
             ],
             vec![Effect::Report(report_line(format!(
                 "removed slice {}",
@@ -738,7 +757,7 @@ fn updated_slice_plan(
                         quint_module_name(slice_module_name),
                         updated_slice.name().clone(),
                         updated_slice.description().clone(),
-                        slice_slug,
+                        slice_slug.clone(),
                         updated_slice.kind().clone(),
                         slice_digest,
                     ),
@@ -793,6 +812,7 @@ fn updated_slice_plan(
                         .with_entry_lifecycle_states(workflow.workflow_entry_lifecycle_states),
                     ),
                 ),
+                Effect::ExportEvent(EventDraft::slice_updated(&updated_slice)),
                 Effect::Report(report_line(format!(
                     "updated slice {}",
                     updated_slice.name().as_ref()
@@ -889,7 +909,7 @@ fn reject_updated_slice_module_collision(
 }
 
 fn slice_kind_name(kind: SliceKind) -> SliceKindName {
-    SliceKindName::try_new(kind.as_ref().to_owned())
+    SliceKindName::try_new(kind.as_str().to_owned())
         .unwrap_or_else(|error| unreachable!("EMC generated slice kind must be valid: {error}"))
 }
 

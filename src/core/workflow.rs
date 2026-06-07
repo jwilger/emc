@@ -7,6 +7,7 @@ use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest};
 use crate::core::effect::{Effect, EffectPlan, ProjectPath, ReportLine};
 use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
+use crate::core::events::EventDraft;
 use crate::core::formal_graph::FormalWorkflowGraph;
 use crate::core::layout::{ModeledWorkflowLayout, ModeledWorkflowLayouts};
 use crate::core::project::{
@@ -35,6 +36,18 @@ impl NewWorkflow {
             description,
             slug,
         }
+    }
+
+    pub fn name(&self) -> &ModelName {
+        &self.name
+    }
+
+    pub fn description(&self) -> &ModelDescription {
+        &self.description
+    }
+
+    pub fn slug(&self) -> &WorkflowSlug {
+        &self.slug
     }
 }
 
@@ -278,9 +291,10 @@ pub fn remove_workflow(
         ))),
     ])
     .chain(remove_slice_effects)
-    .chain([Effect::Report(report_line(format!(
-        "removed workflow {workflow_name}"
-    )))])
+    .chain([
+        Effect::ExportEvent(EventDraft::workflow_removed(&slug)),
+        Effect::Report(report_line(format!("removed workflow {workflow_name}"))),
+    ])
     .collect::<Vec<_>>();
 
     Ok(EffectPlan::new(effects))
@@ -367,6 +381,7 @@ fn workflow_effect_plan(
                     ),
                 ),
             ),
+            Effect::ExportEvent(EventDraft::workflow_added(&workflow)),
             Effect::Report(report_line(format!("added workflow {workflow_name}"))),
         ])
         .collect(),
@@ -482,6 +497,7 @@ fn update_workflow_effect_plan(
     EffectPlan::new(
         cleanup_effects
             .chain([
+                Effect::ExportEvent(EventDraft::workflow_updated(&workflow)),
                 Effect::WriteFile(
                     project_path(format!("model/lean/{module_name}.lean")),
                     emit_lean_workflow_module(

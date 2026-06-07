@@ -46,7 +46,7 @@ impl ConnectionKind {
         Self::Outcome
     }
 
-    fn trigger_kind(self) -> &'static str {
+    pub(crate) fn trigger_kind(self) -> &'static str {
         match self {
             Self::Command => "command",
             Self::Event => "event",
@@ -67,10 +67,31 @@ pub enum WorkflowConnectionTarget {
 }
 
 impl WorkflowConnectionTarget {
-    fn as_ref(&self) -> &str {
+    pub(crate) fn as_ref(&self) -> &str {
         match self {
             Self::Slice(slug) => slug.as_ref(),
             Self::Workflow { slug, reason: _ } => slug.as_ref(),
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> Option<&SliceSlug> {
+        match self {
+            Self::Slice(slug) => Some(slug),
+            Self::Workflow { slug: _, reason: _ } => None,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> Option<&WorkflowSlug> {
+        match self {
+            Self::Slice(_) => None,
+            Self::Workflow { slug, reason: _ } => Some(slug),
+        }
+    }
+
+    pub(crate) fn reason(&self) -> Option<&ModelDescription> {
+        match self {
+            Self::Slice(_) => None,
+            Self::Workflow { slug: _, reason } => Some(reason),
         }
     }
 }
@@ -145,6 +166,26 @@ impl WorkflowConnection {
     pub fn workflow_slug(&self) -> &WorkflowSlug {
         &self.workflow_slug
     }
+
+    pub fn source(&self) -> &SliceSlug {
+        &self.source
+    }
+
+    pub fn target(&self) -> &WorkflowConnectionTarget {
+        &self.target
+    }
+
+    pub fn kind(&self) -> ConnectionKind {
+        self.kind
+    }
+
+    pub fn trigger(&self) -> &TransitionTriggerName {
+        &self.trigger
+    }
+
+    pub fn payload_contract(&self) -> Option<&PayloadContractName> {
+        self.payload_contract.as_ref()
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -154,10 +195,24 @@ pub enum WorkflowTransitionRemovalTarget {
 }
 
 impl WorkflowTransitionRemovalTarget {
-    fn as_ref(&self) -> &str {
+    pub(crate) fn as_ref(&self) -> &str {
         match self {
             Self::Slice(slug) => slug.as_ref(),
             Self::Workflow(slug) => slug.as_ref(),
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> Option<&SliceSlug> {
+        match self {
+            Self::Slice(slug) => Some(slug),
+            Self::Workflow(_) => None,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> Option<&WorkflowSlug> {
+        match self {
+            Self::Slice(_) => None,
+            Self::Workflow(slug) => Some(slug),
         }
     }
 }
@@ -206,6 +261,22 @@ impl WorkflowTransitionRemoval {
 
     pub fn workflow_slug(&self) -> &WorkflowSlug {
         &self.workflow_slug
+    }
+
+    pub fn source(&self) -> &SliceSlug {
+        &self.source
+    }
+
+    pub fn target(&self) -> &WorkflowTransitionRemovalTarget {
+        &self.target
+    }
+
+    pub fn kind(&self) -> ConnectionKind {
+        self.kind
+    }
+
+    pub fn trigger(&self) -> &TransitionTriggerName {
+        &self.trigger
     }
 }
 

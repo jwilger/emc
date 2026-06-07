@@ -12,6 +12,15 @@ output, logs, and other products of executing EMC behavior. It is not acceptable
 for tests to enforce architecture, packaging, CI, or maintainer guidance by
 reading repository source/config files and matching strings.
 
+Primitive and structural types are permitted only at I/O boundaries. Within the
+core domain, command, effect, runtime, projector, and verification logic, use
+semantic data types instead of raw `String`, `Vec<String>`, `Option<String>`,
+tuples used as records, or untyped structural payloads such as
+`serde_json::Value`. Parse external input into semantic types immediately at the
+boundary, keep those types through internal logic, and serialize primitives only
+when writing external formats such as JSON event files, process arguments, file
+contents, or command output.
+
 Work one major change at a time. Do not start another major task while a PR for
 the current task is still waiting on CI, review, approval, merge, or local
 cleanup.

@@ -15,6 +15,7 @@ const SUPPORTED_MCP_PROTOCOL_VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "
 
 use crate::command;
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
+use crate::core::effect::ArtifactDigest;
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain,
     CommandObservedStreams, EmittedEventNames, NewAutomationDefinition, NewBitLevelDataFlow,
@@ -385,6 +386,32 @@ fn tools_list_result() -> Result<Value, ShellError> {
             schema_object(json!({
                     "type": "object",
                     "properties": {},
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "list_conflicts",
+            "List unresolved exported event conflicts.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "resolve_conflict",
+            "Resolve an exported event conflict by choosing one event.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string"
+                        },
+                        "choose_event": {
+                            "type": "string"
+                        }
+                    },
+                    "required": ["id", "choose_event"],
                     "additionalProperties": false
             })),
         ),
@@ -1384,6 +1411,14 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
             id,
             list_transitions_tool_text(),
         ))),
+        "list_conflicts" => Ok(Some(tool_call_result_response(
+            id,
+            list_conflicts_tool_text(),
+        ))),
+        "resolve_conflict" => Ok(Some(tool_call_result_response(
+            id,
+            resolve_conflict_tool_text(request),
+        ))),
         "show_workflow" => Ok(Some(tool_call_result_response(
             id,
             show_workflow_tool_text(request),
@@ -1561,6 +1596,35 @@ fn list_slices_tool_text() -> Result<String, ShellError> {
 
 fn list_transitions_tool_text() -> Result<String, ShellError> {
     interpret_collect_reports(command::list_transitions()).map(|reports| reports.join("\n"))
+}
+
+fn list_conflicts_tool_text() -> Result<String, ShellError> {
+    interpret_collect_reports(command::list_conflicts()).map(|reports| reports.join("\n"))
+}
+
+fn resolve_conflict_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("resolve_conflict requires arguments"))?;
+    let conflict_id = arguments
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("resolve_conflict requires id"))?;
+    let chosen_event_id = arguments
+        .get("choose_event")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("resolve_conflict requires choose_event"))?;
+    interpret_collect_reports(command::resolve_conflict(
+        parse_artifact_digest("conflict id", conflict_id)?,
+        parse_artifact_digest("chosen event id", chosen_event_id)?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn parse_artifact_digest(label: &str, value: &str) -> Result<ArtifactDigest, ShellError> {
+    ArtifactDigest::try_new(value.to_owned())
+        .map_err(|error| ShellError::message(format!("invalid {label}: {error}")))
 }
 
 fn show_workflow_tool_text(request: &Value) -> Result<String, ShellError> {

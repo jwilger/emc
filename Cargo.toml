@@ -13,10 +13,16 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 clap = { version = "4.6.1", features = ["std", "help", "usage", "error-context", "suggestions"] }
-nutype = { version = "0.7.0", features = ["serde"] }
+eventcore = { version = "0.8.0", features = ["sqlite"] }
+eventcore-sqlite = "0.8.0"
+fs4 = "1.1.0"
+hex = "0.4.3"
+nutype = { version = "0.6.2", features = ["serde"] }
 rmcp = { version = "1.7.0", default-features = false }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+sha2 = "0.11.0"
+tokio = { version = "1.48.0", features = ["rt"] }
 
 [dev-dependencies]
 assert_cmd = "2.1.1"
@@ -31,17 +37,18 @@ tempfile = "3.23.0"
 #
 # If a third-party macro emits an `allow`, the only permitted project-wide
 # exception is changing that exact lint from `forbid` to `deny`; never downgrade
-# a containing group such as `clippy::all`, `clippy::cargo`, or
-# `clippy::restriction`.
+# a containing group such as `clippy::all` or `clippy::restriction`.
+# `clippy::cargo` is capped at `deny` so the exact `multiple_crate_versions`
+# exception below can permit eventcore-sqlite's adapter dependency graph.
 [lints.clippy]
 # Generated from `clippy-driver -W help` by `scripts/sync-clippy-lints.mjs`.
 # Keep every current `clippy::all` member enumerated exactly rather than
 # setting `clippy::all = "forbid"`; group-level `forbid` conflicts with
 # third-party macro `allow` attributes and emits `forbidden_lint_groups`,
 # a future-incompat warning that `-D warnings` intentionally does not catch.
-cargo = { level = "forbid", priority = -1 }
+cargo = { level = "deny", priority = -1 }
 # Exact restriction-lint opt-ins remain listed here with the same policy.
-absolute_paths = "forbid"
+absolute_paths = "deny"
 absurd_extreme_comparisons = "forbid"
 allow_attributes = "forbid"
 almost_complete_range = "forbid"
@@ -312,6 +319,7 @@ module_inception = "forbid"
 modulo_one = "forbid"
 multi_assignments = "forbid"
 multiple_bound_locations = "forbid"
+multiple_crate_versions = "allow"
 must_use_unit = "forbid"
 mut_from_ref = "forbid"
 mut_mutex_lock = "forbid"
@@ -525,7 +533,7 @@ unwrap_or_default = "forbid"
 unwrap_used = "forbid"
 upper_case_acronyms = "forbid"
 useless_asref = "forbid"
-useless_attribute = "forbid"
+useless_attribute = "deny"
 useless_borrows_in_formatting = "forbid"
 useless_concat = "forbid"
 useless_conversion = "forbid"

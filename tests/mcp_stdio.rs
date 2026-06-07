@@ -3,7 +3,9 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
+    use std::fs;
     use std::io::{BufRead, BufReader, Write};
+    use std::path::PathBuf;
     use std::process::{Command as ProcessCommand, Stdio};
     use std::sync::mpsc;
     use std::thread;
@@ -364,6 +366,61 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn mcp_stdio_exposes_list_conflicts_tool() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        create_concurrent_slice_update_conflict(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(list_conflicts_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"list_conflicts\""))
+            .stdout(predicate::str::contains(
+                "conflict slice::capture-ticket SliceUpdated capture-ticket",
+            ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let chosen_event_id = create_concurrent_slice_update_conflict(&temp_dir)?;
+        let conflict_output = Command::cargo_bin("emc")?
+            .args(["list", "conflicts"])
+            .current_dir(temp_dir.path())
+            .output()?;
+        let conflict_stdout = String::from_utf8(conflict_output.stdout)?;
+        let conflict_id = conflict_stdout
+            .split(" id ")
+            .nth(1)
+            .and_then(|suffix| suffix.split_whitespace().next())
+            .ok_or("conflict id must be reported")?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(resolve_conflict_mcp_requests(conflict_id, &chosen_event_id))
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"resolve_conflict\""))
+            .stdout(predicate::str::contains(format!(
+                "resolved conflict {conflict_id}"
+            )));
+
+        Command::cargo_bin("emc")?
+            .args(["list", "conflicts"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("no event conflicts"));
+
+        Ok(())
+    }
+
     fn mcp_requests() -> &'static str {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
@@ -395,6 +452,116 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_transitions\",\"arguments\":{}}}\n",
         )
+    }
+
+    fn list_conflicts_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_conflicts\",\"arguments\":{}}}\n",
+        )
+    }
+
+    fn resolve_conflict_mcp_requests(conflict_id: &str, chosen_event_id: &str) -> String {
+        format!(
+            "{}{}{}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            format_args!(
+                "{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{{\"name\":\"resolve_conflict\",\"arguments\":{{\"id\":\"{conflict_id}\",\"choose_event\":\"{chosen_event_id}\"}}}}}}"
+            )
+        )
+    }
+
+    fn create_concurrent_slice_update_conflict(
+        temp_dir: &TempDir,
+    ) -> Result<String, Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor enters repair ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "slice",
+                "--slug",
+                "capture-ticket",
+                "--description",
+                "First merged branch description.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let event_dir = temp_dir.path().join("model/events/v1");
+        let mut update_event = exported_events(event_dir.clone())?
+            .into_iter()
+            .find(|event| event["type"] == "SliceUpdated")
+            .ok_or("slice update event must exist")?;
+        let original_event_id = update_event["event_id"]
+            .as_str()
+            .ok_or("slice update event_id must be a string")?
+            .to_owned();
+        let conflicting_event_id = format!("{original_event_id}-conflicting");
+        update_event["event_id"] = Value::String(conflicting_event_id.clone());
+        update_event["command_id"] = Value::String(conflicting_event_id.clone());
+        update_event["payload"]["description"] =
+            Value::String("Second merged branch description.".to_owned());
+        fs::write(
+            event_dir.join(format!("{conflicting_event_id}.json")),
+            serde_json::to_string_pretty(&update_event)?,
+        )?;
+
+        Ok(original_event_id)
+    }
+
+    fn exported_events(path: PathBuf) -> Result<Vec<Value>, Box<dyn Error>> {
+        let mut event_paths = fs::read_dir(path)?
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<Result<Vec<_>, _>>()?;
+        event_paths.sort();
+
+        event_paths
+            .into_iter()
+            .map(|path| {
+                let contents = fs::read_to_string(path)?;
+                let event = serde_json::from_str::<Value>(&contents)?;
+                Ok(event)
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()
     }
 
     fn initialize_request() -> &'static str {

@@ -4,6 +4,11 @@
 set -eu
 
 NIX_BIN_DIR="/nix/var/nix/profiles/default/bin"
+LOCK_FILE="/tmp/emc-install-nix.lock"
+
+if [ "${EMC_INSTALL_NIX_LOCKED:-}" != "1" ]; then
+  exec env EMC_INSTALL_NIX_LOCKED=1 flock "$LOCK_FILE" "$0" "$@"
+fi
 
 if [ -x "$NIX_BIN_DIR/nix" ]; then
   echo "Nix already present at $NIX_BIN_DIR (volume cache hit)"

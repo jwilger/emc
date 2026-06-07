@@ -22,6 +22,8 @@ mod tests {
             .stdout(predicate::str::contains("list workflows"))
             .stdout(predicate::str::contains("show workflow"))
             .stdout(predicate::str::contains("show slice"))
+            .stdout(predicate::str::contains("list conflicts"))
+            .stdout(predicate::str::contains("resolve conflict"))
             .stdout(predicate::str::contains("verify"))
             .stdout(predicate::str::contains("check"))
             .stdout(predicate::str::contains("gherkin list"))

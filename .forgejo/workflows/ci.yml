@@ -28,6 +28,8 @@ jobs:
       - name: Run Rust checks and tests
         run: |
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          export XDG_STATE_HOME="${RUNNER_TEMP:-/tmp}/emc-state"
+          mkdir -p "$XDG_STATE_HOME"
           nix develop --command just copyright-headers
           nix develop --command just fmt
           nix develop --command just clippy

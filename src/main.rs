@@ -6,6 +6,7 @@ use std::process::ExitCode;
 use clap::{Arg, Command as ClapCommand};
 use emc::command;
 use emc::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
+use emc::core::effect::ArtifactDigest;
 use emc::core::formal_slice_facts::{
     CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain,
     CommandObservedStreams, EmittedEventNames, NewAutomationDefinition, NewBitLevelDataFlow,
@@ -141,6 +142,7 @@ enum Command {
         name: ProjectName,
     },
     ListSlices,
+    ListConflicts,
     ListTransitions,
     ListWorkflows,
     RequireWorkflowEntryLifecycleCoverage {
@@ -169,6 +171,10 @@ enum Command {
     },
     RemoveWorkflow {
         slug: WorkflowSlug,
+    },
+    ResolveConflict {
+        conflict_id: String,
+        chosen_event_id: String,
     },
     ShowSlice {
         slug: SliceSlug,
@@ -277,6 +283,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::GherkinRun { suite } => interpret(command::gherkin_run(suite)),
         Command::Help => print_help(),
         Command::Init { name } => interpret(command::init(name)),
+        Command::ListConflicts => interpret(command::list_conflicts()),
         Command::ListSlices => interpret(command::list_slices()),
         Command::ListTransitions => interpret(command::list_transitions()),
         Command::ListWorkflows => interpret(command::list_workflows()),
@@ -299,6 +306,13 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::RemoveSlice { slug } => interpret(command::remove_slice(slug)),
         Command::RemoveTransition { removal } => interpret(command::remove_transition(removal)),
         Command::RemoveWorkflow { slug } => interpret(command::remove_workflow(slug)),
+        Command::ResolveConflict {
+            conflict_id,
+            chosen_event_id,
+        } => interpret(command::resolve_conflict(
+            parse_artifact_digest("conflict id", conflict_id)?,
+            parse_artifact_digest("chosen event id", chosen_event_id)?,
+        )),
         Command::ShowSlice { slug } => interpret(command::show_slice(slug)),
         Command::ShowWorkflow { slug } => interpret(command::show_workflow(slug)),
         Command::UpdateSliceDescription { slug, description } => {
@@ -318,6 +332,11 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         }
         Command::Verify => interpret(command::verify()),
     }
+}
+
+fn parse_artifact_digest(label: &str, value: String) -> Result<ArtifactDigest, ShellError> {
+    ArtifactDigest::try_new(value)
+        .map_err(|error| ShellError::message(format!("invalid {label}: {error}")))
 }
 
 fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
@@ -3607,6 +3626,9 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         [command, subject] if command == "list" && subject == "workflows" => Ok(Cli {
             command: Command::ListWorkflows,
         }),
+        [command, subject] if command == "list" && subject == "conflicts" => Ok(Cli {
+            command: Command::ListConflicts,
+        }),
         [command, subject] if command == "list" && subject == "slices" => Ok(Cli {
             command: Command::ListSlices,
         }),
@@ -3621,6 +3643,25 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                     command: Command::RemoveSlice { slug },
                 })
                 .map_err(|error| ShellError::message(error.to_string()))
+        }
+        [
+            command,
+            subject,
+            id_flag,
+            conflict_id,
+            choose_event_flag,
+            chosen_event_id,
+        ] if command == "resolve"
+            && subject == "conflict"
+            && id_flag == "--id"
+            && choose_event_flag == "--choose-event" =>
+        {
+            Ok(Cli {
+                command: Command::ResolveConflict {
+                    conflict_id: conflict_id.to_owned(),
+                    chosen_event_id: chosen_event_id.to_owned(),
+                },
+            })
         }
         [command, subject, slug_flag, slug]
             if command == "remove" && subject == "workflow" && slug_flag == "--slug" =>
@@ -4212,10 +4253,12 @@ fn help_command() -> ClapCommand {
   emc list workflows
   emc list slices
   emc list transitions
+  emc list conflicts
   emc show workflow <workflow>
   emc show workflow --slug <workflow>
   emc show slice <slice>
   emc show slice --slug <slice>
+  emc resolve conflict --id <conflict-id> --choose-event <event-id>
   emc verify
   emc check
   emc gherkin list --suite <suite>

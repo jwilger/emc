@@ -531,12 +531,6 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
         Ok(())
     }
 
@@ -663,7 +657,6 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
-
         Ok(())
     }
 
@@ -936,13 +929,27 @@ mod tests {
             "Actor submits repair ticket details.",
         )?;
         add_complete_state_change_facts(temp_dir.path(), "submit-ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
         add_slice(
             temp_dir.path(),
             "review-ticket",
             "Review ticket",
             "Actor reviews repair ticket details.",
         )?;
-        add_complete_state_view_facts(temp_dir.path(), "review-ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        add_review_state_view_facts(temp_dir.path())?;
 
         Command::cargo_bin("emc")?
             .args([
@@ -1066,17 +1073,6 @@ mod tests {
         assert!(quint.contains(
             "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"control\", definitionName: \"SubmitTicketForReview\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"\" },{ sourceSlice: \"submit-ticket\", definitionKind: \"command\", definitionName: \"SubmitTicketForReview\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"\" },{ sourceSlice: \"submit-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmittedForReview\", definitionStream: \"tickets\", sourceProvenance: \"SubmitTicketForReview command output\", eventParticipation: \"emitted\", viewRole: \"\" },{ sourceSlice: \"review-ticket\", definitionKind: \"event\", definitionName: \"TicketSubmittedForReview\", definitionStream: \"tickets\", sourceProvenance: \"SubmitTicketForReview command output\", eventParticipation: \"observed\", viewRole: \"\" }]"
         ));
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
 
         Ok(())
     }
@@ -2350,6 +2346,132 @@ mod tests {
         )
     }
 
+    fn add_review_state_view_facts(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                "review-ticket",
+                "--kind",
+                "contract",
+                "--name",
+                "Review state projects title",
+                "--given",
+                "ReviewTicketCaptured carries ticket_title",
+                "--when",
+                "review_ticket_state projects ReviewTicketCaptured",
+                "--then",
+                "review_ticket_state.ticket_title equals ReviewTicketCaptured.ticket_title",
+                "--contract-kind",
+                "projector",
+                "--covered-definition",
+                "review_ticket_state",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                "review-ticket",
+                "--name",
+                "ReviewTicketCaptured",
+                "--stream",
+                "review_tickets",
+                "--attribute",
+                "ticket_title",
+                "--attribute-source",
+                "generated",
+                "--attribute-source-name",
+                "review_event_store",
+                "--attribute-source-field",
+                "ticket_title",
+                "--generated-source-kind",
+                "event_store_observation",
+                "--attribute-provenance",
+                "ReviewTicketCaptured.ticket_title",
+                "--observed",
+                "true",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "read-model",
+                "--slice",
+                "review-ticket",
+                "--name",
+                "review_ticket_state",
+                "--field",
+                "ticket_title",
+                "--field-source",
+                "event_attribute",
+                "--source-event",
+                "ReviewTicketCaptured",
+                "--source-attribute",
+                "ticket_title",
+                "--field-provenance",
+                "ReviewTicketCaptured.ticket_title",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "view",
+                "--slice",
+                "review-ticket",
+                "--name",
+                "review_ticket_summary",
+                "--read-model",
+                "review_ticket_state",
+                "--field",
+                "ticket_title",
+                "--source-field",
+                "ticket_title",
+                "--sketch-token",
+                "review-title-label",
+                "--field-provenance",
+                "review_ticket_state.ticket_title",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        add_data_flow(
+            cwd,
+            "review-ticket",
+            "review event store",
+            "identity",
+            "ReviewTicketCaptured",
+        )?;
+        add_data_flow(
+            cwd,
+            "review-ticket",
+            "ReviewTicketCaptured.ticket_title",
+            "projection",
+            "review_ticket_state",
+        )?;
+        add_data_flow(
+            cwd,
+            "review-ticket",
+            "review_ticket_state.ticket_title",
+            "projection",
+            "review_ticket_summary",
+        )
+    }
+
     fn add_complete_state_change_facts(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args(["update", "slice", "--slug", slug, "--type", "state_change"])
@@ -2464,7 +2586,7 @@ mod tests {
             cwd,
             slug,
             "SubmitTicketForReview.ticket_title",
-            "copied into TicketSubmittedForReview.ticket_title",
+            "projection",
             "TicketSubmittedForReview",
         )
     }

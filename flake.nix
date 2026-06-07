@@ -147,6 +147,8 @@
           ''
             workdir="$(mktemp -d)"
             cd "$workdir"
+            export XDG_STATE_HOME="$workdir/state"
+            mkdir -p "$XDG_STATE_HOME"
 
             ${package}/bin/emc init --name "Package Smoke"
             ${package}/bin/emc check

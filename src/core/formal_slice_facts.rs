@@ -498,8 +498,20 @@ impl NewCommandDefinition {
         &self.input
     }
 
+    pub fn emitted_events(&self) -> &EmittedEventNames {
+        &self.emitted_events
+    }
+
+    pub fn observed_streams(&self) -> &CommandObservedStreams {
+        &self.observed_streams
+    }
+
     pub fn errors(&self) -> &CommandErrorDefinitions {
         &self.errors
+    }
+
+    pub fn singleton_repeat_behavior(&self) -> Option<&SingletonRepeatBehavior> {
+        self.singleton_repeat_behavior.as_ref()
     }
 }
 
@@ -822,6 +834,14 @@ impl NewEventDefinition {
 
     pub fn attribute(&self) -> &NewEventAttribute {
         &self.attribute
+    }
+
+    pub fn observed(&self) -> bool {
+        self.observed
+    }
+
+    pub fn shared(&self) -> bool {
+        self.shared
     }
 }
 
