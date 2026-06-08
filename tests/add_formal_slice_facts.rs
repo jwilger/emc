@@ -4246,7 +4246,7 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelViews : List (String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"ticket_summary\")]"
+                "def modelViews : List ModelView := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", view := \"ticket_summary\" }]"
             ),
             "Lean project root must carry the authored view inventory"
         );
@@ -4256,7 +4256,7 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := [(\"open-ticket\", \"capture-ticket\", \"ticket_summary\", [\"ticket_state\"], [\"title-label\"], [], [])]"
+                "def modelViewDefinitions : List ModelViewDefinition := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", view := \"ticket_summary\", readModels := [\"ticket_state\"], sketchTokens := [\"title-label\"], localStates := [], filters := [] }]"
             ),
             "Lean project root must carry authored view read model and sketch token definitions"
         );
@@ -4268,7 +4268,7 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelViewFields : List (String × String × String × String × String × String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"ticket_summary\", \"ticket_title\", \"read_model\", \"ticket_state\", \"ticket_title\", \"ticket_state.ticket_title\", \"UTF-8 string\")]"
+                "def modelViewFields : List ModelViewField := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", view := \"ticket_summary\", field := \"ticket_title\", sourceKind := \"read_model\", sourceReadModel := \"ticket_state\", sourceField := \"ticket_title\", provenance := \"ticket_state.ticket_title\", bitEncoding := \"UTF-8 string\" }]"
             ),
             "Lean project root must carry displayed datum source, provenance, and bit encoding"
         );
@@ -4458,7 +4458,7 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"ticket_summary\", \"submit-ticket\", \"CaptureTicket\", \"ticket_title\", \"actor\", \"title field on the intake form\", \"title-input\", true, true, [\"DuplicateTicket\"], \"retry\", \"submit-button\", \"modeled_view\", \"ticket_summary\", \"\", \"\", \"\")]"
+                "def modelViewControls : List ModelViewControl := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", view := \"ticket_summary\", control := \"submit-ticket\", command := \"CaptureTicket\", input := \"ticket_title\", inputSourceKind := \"actor\", inputSourceDescription := \"title field on the intake form\", inputSketchToken := \"title-input\", inputVisibleToActor := true, inputDecisionField := true, handledErrors := [\"DuplicateTicket\"], recoveryBehavior := \"retry\", controlSketchToken := \"submit-button\", navigationType := \"modeled_view\", navigationTarget := \"ticket_summary\", externalWorkflow := \"\", externalSystem := \"\", handoffContract := \"\" }]"
             ),
             "Lean project root must inventory authored control input, error handling, and navigation"
         );
@@ -4610,7 +4610,7 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := [(\"open-ticket\", \"capture-ticket\", \"ticket_summary\", [\"ticket_state\"], [\"title-label\"], [\"details-expanded\"], [\"open-only\"])]"
+                "def modelViewDefinitions : List ModelViewDefinition := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", view := \"ticket_summary\", readModels := [\"ticket_state\"], sketchTokens := [\"title-label\"], localStates := [\"details-expanded\"], filters := [\"open-only\"] }]"
             ),
             "Lean project root must inventory authored local view state and filter declarations"
         );

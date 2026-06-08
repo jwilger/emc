@@ -2162,10 +2162,7 @@ pub(crate) fn parse_quint_project_read_model_fields(
 pub(crate) fn parse_lean_project_views(
     contents: &FileContents,
 ) -> Result<Vec<ProjectView>, FormalProjectFactError> {
-    view_entries_from_list(
-        contents.as_ref(),
-        "def modelViews : List (String × String × String) := ",
-    )
+    view_entries_from_list(contents.as_ref(), "def modelViews : List ModelView := ")
 }
 
 pub(crate) fn parse_quint_project_views(
@@ -2179,7 +2176,7 @@ pub(crate) fn parse_lean_project_view_definitions(
 ) -> Result<Vec<ProjectViewDefinition>, FormalProjectFactError> {
     view_definition_entries_from_list(
         contents.as_ref(),
-        "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := ",
+        "def modelViewDefinitions : List ModelViewDefinition := ",
     )
 }
 
@@ -2197,7 +2194,7 @@ pub(crate) fn parse_lean_project_view_controls(
 ) -> Result<Vec<ProjectViewControl>, FormalProjectFactError> {
     view_control_entries_from_list(
         contents.as_ref(),
-        "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := ",
+        "def modelViewControls : List ModelViewControl := ",
     )
 }
 
@@ -2251,7 +2248,7 @@ pub(crate) fn parse_lean_project_view_fields(
 ) -> Result<Vec<ProjectViewField>, FormalProjectFactError> {
     view_field_entries_from_list(
         contents.as_ref(),
-        "def modelViewFields : List (String × String × String × String × String × String × String × String × String) := ",
+        "def modelViewFields : List ModelViewField := ",
     )
 }
 
@@ -3756,14 +3753,14 @@ pub(crate) fn add_project_view(
         .collect::<Vec<_>>();
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelViews : List (String × String × String) := ",
+        "def modelViews : List ModelView := ",
         &lean_record,
     )
     .and_then(|contents| {
         if let Some(record) = lean_definition_record.as_ref() {
             append_record_if_missing(
                 &contents,
-                "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := ",
+                "def modelViewDefinitions : List ModelViewDefinition := ",
                 record,
             )
         } else {
@@ -3776,7 +3773,7 @@ pub(crate) fn add_project_view(
             .try_fold(contents, |contents, record| {
                 append_record_if_missing(
                     &contents,
-                    "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := ",
+                    "def modelViewControls : List ModelViewControl := ",
                     record,
                 )
             })
@@ -3787,7 +3784,7 @@ pub(crate) fn add_project_view(
             .try_fold(contents, |contents, record| {
                 append_record_if_missing(
                     &contents,
-                    "def modelViewFields : List (String × String × String × String × String × String × String × String × String) := ",
+                    "def modelViewFields : List ModelViewField := ",
                     record,
                 )
             })
@@ -3795,19 +3792,19 @@ pub(crate) fn add_project_view(
     .and_then(|contents| {
         let views = view_entries_from_list(
             &contents,
-            "def modelViews : List (String × String × String) := ",
+            "def modelViews : List ModelView := ",
         )?;
         let view_definitions = view_definition_entries_from_list(
             &contents,
-            "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := ",
+            "def modelViewDefinitions : List ModelViewDefinition := ",
         )?;
         let view_controls = view_control_entries_from_list(
             &contents,
-            "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := ",
+            "def modelViewControls : List ModelViewControl := ",
         )?;
         let view_fields = view_field_entries_from_list(
             &contents,
-            "def modelViewFields : List (String × String × String × String × String × String × String × String × String) := ",
+            "def modelViewFields : List ModelViewField := ",
         )?;
         replace_declaration(
             &contents,
@@ -5305,19 +5302,19 @@ pub(crate) fn add_project_event(
         )?;
         let views = view_entries_from_list(
             &contents,
-            "def modelViews : List (String × String × String) := ",
+            "def modelViews : List ModelView := ",
         )?;
         let view_definitions = view_definition_entries_from_list(
             &contents,
-            "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := ",
+            "def modelViewDefinitions : List ModelViewDefinition := ",
         )?;
         let view_controls = view_control_entries_from_list(
             &contents,
-            "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := ",
+            "def modelViewControls : List ModelViewControl := ",
         )?;
         let view_fields = view_field_entries_from_list(
             &contents,
-            "def modelViewFields : List (String × String × String × String × String × String × String × String × String) := ",
+            "def modelViewFields : List ModelViewField := ",
         )?;
         let automations = automation_entries_from_list(
             &contents,
@@ -5857,11 +5854,7 @@ fn parse_quint_project_read_model_fields_from_contents_or_empty(
 }
 
 fn parse_lean_project_views_from_contents_or_empty(contents: &str) -> Vec<ProjectView> {
-    view_entries_from_list(
-        contents,
-        "def modelViews : List (String × String × String) := ",
-    )
-    .unwrap_or_default()
+    view_entries_from_list(contents, "def modelViews : List ModelView := ").unwrap_or_default()
 }
 
 fn parse_quint_project_views_from_contents_or_empty(contents: &str) -> Vec<ProjectView> {
@@ -5873,7 +5866,7 @@ fn parse_lean_project_view_definitions_from_contents_or_empty(
 ) -> Vec<ProjectViewDefinition> {
     view_definition_entries_from_list(
         contents,
-        "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := ",
+        "def modelViewDefinitions : List ModelViewDefinition := ",
     )
     .unwrap_or_default()
 }
@@ -5893,7 +5886,7 @@ fn parse_lean_project_view_controls_from_contents_or_empty(
 ) -> Vec<ProjectViewControl> {
     view_control_entries_from_list(
         contents,
-        "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := ",
+        "def modelViewControls : List ModelViewControl := ",
     )
     .unwrap_or_default()
 }
@@ -5946,11 +5939,8 @@ fn parse_quint_project_board_connections_from_contents_or_empty(
 }
 
 fn parse_lean_project_view_fields_from_contents_or_empty(contents: &str) -> Vec<ProjectViewField> {
-    view_field_entries_from_list(
-        contents,
-        "def modelViewFields : List (String × String × String × String × String × String × String × String × String) := ",
-    )
-    .unwrap_or_default()
+    view_field_entries_from_list(contents, "def modelViewFields : List ModelViewField := ")
+        .unwrap_or_default()
 }
 
 fn parse_quint_project_view_fields_from_contents_or_empty(contents: &str) -> Vec<ProjectViewField> {
@@ -7156,10 +7146,7 @@ fn string_lists(record: &str) -> Result<Vec<Vec<String>>, FormalProjectFactError
         .into_iter()
         .filter_map(|field| {
             let value = if uses_named_fields {
-                field
-                    .split_once(':')
-                    .map(|(_name, value)| value.trim())
-                    .unwrap_or(field.trim())
+                record_field_value(&field).unwrap_or(field.trim())
             } else {
                 field.trim()
             };
@@ -8596,7 +8583,7 @@ fn quint_read_model_field_record(field: &NewProjectReadModelField) -> String {
 
 fn lean_view_record(view: &NewProjectView) -> String {
     format!(
-        "({}, {}, {})",
+        "{{ workflow := {}, slice := {}, view := {} }}",
         quoted(view.workflow_slug.as_ref()),
         quoted(view.slice_slug.as_ref()),
         quoted(view.view.as_ref())
@@ -8615,7 +8602,7 @@ fn lean_view_definition_record(definition: &NewProjectViewDefinition) -> String 
         .map(|token| token.as_ref().to_owned())
         .collect::<Vec<_>>();
     format!(
-        "({}, {}, {}, [{}], [{}], [{}], [{}])",
+        "{{ workflow := {}, slice := {}, view := {}, readModels := [{}], sketchTokens := [{}], localStates := [{}], filters := [{}] }}",
         quoted(definition.workflow_slug.as_ref()),
         quoted(definition.slice_slug.as_ref()),
         quoted(definition.view.as_ref()),
@@ -8665,7 +8652,7 @@ fn lean_view_control_record(control: &NewProjectViewControl) -> String {
         .map(|error| error.as_ref().to_owned())
         .collect::<Vec<_>>();
     format!(
-        "({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {}, {}, {}, {})",
+        "{{ workflow := {}, slice := {}, view := {}, control := {}, command := {}, input := {}, inputSourceKind := {}, inputSourceDescription := {}, inputSketchToken := {}, inputVisibleToActor := {}, inputDecisionField := {}, handledErrors := [{}], recoveryBehavior := {}, controlSketchToken := {}, navigationType := {}, navigationTarget := {}, externalWorkflow := {}, externalSystem := {}, handoffContract := {} }}",
         quoted(control.workflow_slug.as_ref()),
         quoted(control.slice_slug.as_ref()),
         quoted(control.view.as_ref()),
@@ -8864,7 +8851,7 @@ fn quint_project_board_connection_list(connections: &[ProjectBoardConnection]) -
 
 fn lean_view_field_record(field: &NewProjectViewField) -> String {
     format!(
-        "({}, {}, {}, {}, {}, {}, {}, {}, {})",
+        "{{ workflow := {}, slice := {}, view := {}, field := {}, sourceKind := {}, sourceReadModel := {}, sourceField := {}, provenance := {}, bitEncoding := {} }}",
         quoted(field.workflow_slug.as_ref()),
         quoted(field.slice_slug.as_ref()),
         quoted(field.view.as_ref()),
