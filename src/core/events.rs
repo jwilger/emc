@@ -1561,6 +1561,53 @@ impl SliceTranslationAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceAutomationAddedEventPayload {
+    automation: NewAutomationDefinition,
+}
+
+impl SliceAutomationAddedEventPayload {
+    fn from_automation(automation: &NewAutomationDefinition) -> Self {
+        Self {
+            automation: automation.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            automation: NewAutomationDefinition::new(
+                slice_slug(required_str(payload, "slice")?)?,
+                automation_name(required_str(payload, "name")?)?,
+                automation_trigger_name(required_str(payload, "trigger")?)?,
+                command_name(required_str(payload, "command")?)?,
+                command_error_names(required_string_array(payload, "handled_errors")?)?,
+                automation_reaction_description(required_str(payload, "reaction")?)?,
+            ),
+        })
+    }
+
+    fn into_automation(self) -> NewAutomationDefinition {
+        self.automation
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slice": self.automation.slice_slug().as_ref(),
+            "name": self.automation.name().as_ref(),
+            "trigger": self.automation.trigger_name().as_ref(),
+            "command": self.automation.command_name().as_ref(),
+            "handled_errors": self
+                .automation
+                .handled_errors()
+                .as_slice()
+                .iter()
+                .map(|error| error.as_ref())
+                .collect::<Vec<_>>(),
+            "reaction": self.automation.reaction_description().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowConnectedEventPayload {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
@@ -2392,7 +2439,9 @@ impl ExportedEventBody {
             Self::SliceTranslationAdded { translation } => {
                 SliceTranslationAddedEventPayload::from_translation(translation).to_json_value()
             }
-            Self::SliceAutomationAdded { automation } => slice_automation_payload(automation),
+            Self::SliceAutomationAdded { automation } => {
+                SliceAutomationAddedEventPayload::from_automation(automation).to_json_value()
+            }
             Self::SliceBoardElementAdded { element } => slice_board_element_payload(element),
             Self::SliceBoardConnectionAdded { connection } => {
                 slice_board_connection_payload(connection)
@@ -2556,7 +2605,8 @@ impl ExportedEventBody {
                     .into_translation(),
             }),
             ExportedEventType::SliceAutomationAdded => Ok(Self::SliceAutomationAdded {
-                automation: slice_automation_from_payload(payload)?,
+                automation: SliceAutomationAddedEventPayload::from_json_value(payload)?
+                    .into_automation(),
             }),
             ExportedEventType::SliceBoardElementAdded => Ok(Self::SliceBoardElementAdded {
                 element: slice_board_element_from_payload(payload)?,
@@ -3063,22 +3113,6 @@ impl ExportedEventFrontier for ExportedEventHeader {
     fn frontier_event_type(&self) -> ExportedEventType {
         self.event_type
     }
-}
-
-fn slice_automation_payload(automation: &NewAutomationDefinition) -> Value {
-    json!({
-        "slice": automation.slice_slug().as_ref(),
-        "name": automation.name().as_ref(),
-        "trigger": automation.trigger_name().as_ref(),
-        "command": automation.command_name().as_ref(),
-        "handled_errors": automation
-            .handled_errors()
-            .as_slice()
-            .iter()
-            .map(|error| error.as_ref())
-            .collect::<Vec<_>>(),
-        "reaction": automation.reaction_description().as_ref(),
-    })
 }
 
 fn slice_board_element_payload(element: &NewBoardElement) -> Value {
@@ -4637,19 +4671,6 @@ fn workflow_transition_kind_from_connection(
     workflow_transition_kind(&raw_kind)
 }
 
-pub(crate) fn slice_automation_from_payload(
-    payload: &Value,
-) -> Result<NewAutomationDefinition, String> {
-    Ok(NewAutomationDefinition::new(
-        slice_slug(required_str(payload, "slice")?)?,
-        automation_name(required_str(payload, "name")?)?,
-        automation_trigger_name(required_str(payload, "trigger")?)?,
-        command_name(required_str(payload, "command")?)?,
-        command_error_names(required_string_array(payload, "handled_errors")?)?,
-        automation_reaction_description(required_str(payload, "reaction")?)?,
-    ))
-}
-
 pub(crate) fn slice_board_element_from_payload(payload: &Value) -> Result<NewBoardElement, String> {
     Ok(NewBoardElement::new(
         slice_slug(required_str(payload, "slice")?)?,
@@ -5356,6 +5377,43 @@ mod tests {
         assert_eq!(
             SliceTranslationAddedEventPayload::from_json_value(&json)?.into_translation(),
             translation
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_automation_added_event_payload_round_trips_trigger_command_errors_and_reaction()
+    -> Result<(), String> {
+        let automation = NewAutomationDefinition::new(
+            slice_slug("capture-ticket")?,
+            automation_name("assign_duplicate_ticket")?,
+            automation_trigger_name("DuplicateTicketDetected")?,
+            command_name("AssignTicket")?,
+            CommandErrorNames::from_names([
+                command_error_name("MissingAssignee")?,
+                command_error_name("AssigneeUnavailable")?,
+            ]),
+            automation_reaction_description("route duplicate tickets to manual assignment")?,
+        );
+
+        let payload = SliceAutomationAddedEventPayload::from_automation(&automation);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "slice": "capture-ticket",
+                "name": "assign_duplicate_ticket",
+                "trigger": "DuplicateTicketDetected",
+                "command": "AssignTicket",
+                "handled_errors": ["MissingAssignee", "AssigneeUnavailable"],
+                "reaction": "route duplicate tickets to manual assignment",
+            })
+        );
+        assert_eq!(
+            SliceAutomationAddedEventPayload::from_json_value(&json)?.into_automation(),
+            automation
         );
 
         Ok(())
