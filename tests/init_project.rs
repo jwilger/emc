@@ -382,7 +382,29 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelExternalPayloadFieldHasProvenance (field : String × String × String × String × String × String) : Bool := let (_, _, _, _, provenance, bitEncoding) := field; provenance.isEmpty == false && bitEncoding.isEmpty == false"
+                "structure ModelExternalPayload where\n  workflow : String\n  slice : String\n  externalPayload : String"
+            ),
+            "Lean project root must type external payload inventory entries as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelExternalPayloads : List ModelExternalPayload := []"),
+            "Lean project root must initialize external payloads as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelExternalPayloadField where\n  workflow : String\n  slice : String\n  externalPayload : String\n  field : String\n  provenance : String\n  bitEncoding : String"
+            ),
+            "Lean project root must type external payload fields as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelExternalPayloadFields : List ModelExternalPayloadField := []"),
+            "Lean project root must initialize external payload fields as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelExternalPayloadFieldHasProvenance (field : ModelExternalPayloadField) : Bool := field.provenance.isEmpty == false && field.bitEncoding.isEmpty == false"
             ),
             "Lean project root must encode external payload field provenance and bit semantics"
         );
@@ -430,7 +452,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelExternalPayloadFieldBitEncodingMatchesDataFlow (field : String × String × String × String × String × String) : Bool := let (workflow, slice, targetPayload, datum, _, bitEncoding) := field; modelDataFlowBitEncodingMatchesDatumTarget workflow slice datum targetPayload bitEncoding"
+                "def modelExternalPayloadFieldBitEncodingMatchesDataFlow (field : ModelExternalPayloadField) : Bool := modelDataFlowBitEncodingMatchesDatumTarget field.workflow field.slice field.field field.externalPayload field.bitEncoding"
             ),
             "Lean project root must compare external payload field bit semantics with its data-flow row"
         );

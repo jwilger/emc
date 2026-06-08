@@ -2443,7 +2443,7 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelExternalPayloads : List (String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"intake_webhook\")]"
+                "def modelExternalPayloads : List ModelExternalPayload := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", externalPayload := \"intake_webhook\" }]"
             ),
             "Lean project root must inventory authored external payload contracts"
         );
@@ -2455,7 +2455,7 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelExternalPayloadFields : List (String × String × String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"intake_webhook\", \"ticket_title\", \"intake_webhook.ticket_title supplied by the external ticket intake system\", \"UTF-8 string\")]"
+                "def modelExternalPayloadFields : List ModelExternalPayloadField := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", externalPayload := \"intake_webhook\", field := \"ticket_title\", provenance := \"intake_webhook.ticket_title supplied by the external ticket intake system\", bitEncoding := \"UTF-8 string\" }]"
             ),
             "Lean project root must inventory authored external payload field provenance and bit encoding"
         );

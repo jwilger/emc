@@ -852,6 +852,18 @@ fn project_root_effects(
         ),
         Effect::require_canonical_declaration(
             lean_path.clone(),
+            canonical_declaration_prefix("structure ModelExternalPayload where"),
+            canonical_declaration_marker("structure ModelExternalPayload where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelExternalPayloadField where"),
+            canonical_declaration_marker("structure ModelExternalPayloadField where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
             canonical_declaration_prefix("structure ModelStream where"),
             canonical_declaration_marker("structure ModelStream where"),
             lean_message.clone(),
@@ -1038,7 +1050,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelExternalPayloads :"),
             canonical_declaration_marker(format!(
-                "def modelExternalPayloads : List (String × String × String) := {lean_model_external_payload_list}"
+                "def modelExternalPayloads : List ModelExternalPayload := {lean_model_external_payload_list}"
             )),
             lean_message.clone(),
         ),
@@ -1046,7 +1058,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelExternalPayloadFields :"),
             canonical_declaration_marker(format!(
-                "def modelExternalPayloadFields : List (String × String × String × String × String × String) := {lean_model_external_payload_field_list}"
+                "def modelExternalPayloadFields : List ModelExternalPayloadField := {lean_model_external_payload_field_list}"
             )),
             lean_message.clone(),
         ),
@@ -1266,7 +1278,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelExternalPayloadFieldHasModeledDataFlow"),
             canonical_declaration_marker(
-                "def modelExternalPayloadFieldHasModeledDataFlow (field : String × String × String × String × String × String) : Bool := let (workflow, slice, targetPayload, datum, _, _) := field; modelDataFlowCoversDatumTarget workflow slice datum targetPayload",
+                "def modelExternalPayloadFieldHasModeledDataFlow (field : ModelExternalPayloadField) : Bool := modelDataFlowCoversDatumTarget field.workflow field.slice field.field field.externalPayload",
             ),
             lean_message.clone(),
         ),
@@ -1274,7 +1286,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelExternalPayloadFieldBitEncodingMatchesDataFlow"),
             canonical_declaration_marker(
-                "def modelExternalPayloadFieldBitEncodingMatchesDataFlow (field : String × String × String × String × String × String) : Bool := let (workflow, slice, targetPayload, datum, _, bitEncoding) := field; modelDataFlowBitEncodingMatchesDatumTarget workflow slice datum targetPayload bitEncoding",
+                "def modelExternalPayloadFieldBitEncodingMatchesDataFlow (field : ModelExternalPayloadField) : Bool := modelDataFlowBitEncodingMatchesDatumTarget field.workflow field.slice field.field field.externalPayload field.bitEncoding",
             ),
             lean_message.clone(),
         ),
@@ -1354,7 +1366,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelExternalPayloadFieldHasProvenance"),
             canonical_declaration_marker(
-                "def modelExternalPayloadFieldHasProvenance (field : String × String × String × String × String × String) : Bool := let (_, _, _, _, provenance, bitEncoding) := field; provenance.isEmpty == false && bitEncoding.isEmpty == false",
+                "def modelExternalPayloadFieldHasProvenance (field : ModelExternalPayloadField) : Bool := field.provenance.isEmpty == false && field.bitEncoding.isEmpty == false",
             ),
             lean_message.clone(),
         ),
@@ -5268,7 +5280,7 @@ fn lean_model_external_payload_list(
             .into_iter()
             .map(|(workflow_slug, slice_slug, external_payload)| {
                 format!(
-                    "({}, {}, {})",
+                    "{{ workflow := {}, slice := {}, externalPayload := {} }}",
                     json_string(workflow_slug),
                     json_string(slice_slug),
                     json_string(external_payload)
@@ -5321,7 +5333,7 @@ fn lean_model_external_payload_field_list(
             .into_iter()
             .map(|field| {
                 format!(
-                    "({}, {}, {}, {}, {}, {})",
+                    "{{ workflow := {}, slice := {}, externalPayload := {}, field := {}, provenance := {}, bitEncoding := {} }}",
                     json_string(field.workflow_slug()),
                     json_string(field.slice_slug()),
                     json_string(field.external_payload()),
