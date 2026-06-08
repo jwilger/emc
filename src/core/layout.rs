@@ -1034,7 +1034,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelTranslations :"),
             canonical_declaration_marker(format!(
-                "def modelTranslations : List (String × String × String) := {lean_model_translation_list}"
+                "def modelTranslations : List ModelTranslation := {lean_model_translation_list}"
             )),
             lean_message.clone(),
         ),
@@ -1042,7 +1042,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelTranslationDefinitions :"),
             canonical_declaration_marker(format!(
-                "def modelTranslationDefinitions : List (String × String × String × String × String × String) := {lean_model_translation_definition_list}"
+                "def modelTranslationDefinitions : List ModelTranslationDefinition := {lean_model_translation_definition_list}"
             )),
             lean_message.clone(),
         ),
@@ -1414,7 +1414,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelExternalBoundaryContractIsModeled"),
             canonical_declaration_marker(
-                "def modelExternalBoundaryContractIsModeled (translation : String × String × String × String × String × String) : Bool := let (_, _, translationName, externalEvent, payloadContract, command) := translation; translationName.isEmpty == false && externalEvent.isEmpty == false && payloadContract.isEmpty == false && command.isEmpty == false",
+                "def modelExternalBoundaryContractIsModeled (translation : ModelTranslationDefinition) : Bool := translation.translation.isEmpty == false && translation.externalEvent.isEmpty == false && translation.payloadContract.isEmpty == false && translation.command.isEmpty == false",
             ),
             lean_message.clone(),
         ),
@@ -5139,7 +5139,7 @@ fn lean_model_translation_list(project_translations: &[ProjectTranslation]) -> S
             .into_iter()
             .map(|(workflow_slug, slice_slug, translation)| {
                 format!(
-                    "({}, {}, {})",
+                    "{{ workflow := {}, slice := {}, translation := {} }}",
                     json_string(workflow_slug),
                     json_string(slice_slug),
                     json_string(translation)
@@ -5208,7 +5208,7 @@ fn lean_model_translation_definition_list(definitions: &[ProjectTranslationDefin
                     command,
                 )| {
                     format!(
-                        "({}, {}, {}, {}, {}, {})",
+                        "{{ workflow := {}, slice := {}, translation := {}, externalEvent := {}, payloadContract := {}, command := {} }}",
                         json_string(workflow_slug),
                         json_string(slice_slug),
                         json_string(translation),

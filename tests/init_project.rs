@@ -223,6 +223,29 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelTranslation where\n  workflow : String\n  slice : String\n  translation : String"
+            ),
+            "Lean project root must type translations as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelTranslations : List ModelTranslation := []"),
+            "Lean project root must initialize translations as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelTranslationDefinition where\n  workflow : String\n  slice : String\n  translation : String\n  externalEvent : String\n  payloadContract : String\n  command : String"
+            ),
+            "Lean project root must type translation definitions as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelTranslationDefinitions : List ModelTranslationDefinition := []",
+            ),
+            "Lean project root must initialize translation definitions as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
                 "structure ModelStream where\n  workflow : String\n  slice : String\n  stream : String"
             ),
             "Lean project root must type event streams as named records"
@@ -265,6 +288,12 @@ mod tests {
                 "def modelViewControlNavigationTargetIsModeled (control : ModelViewControl) : Bool := control.navigationType.isEmpty || ((control.navigationType == \"modeled_view\" || control.navigationType == \"local_view_state\") && control.navigationTarget.isEmpty == false) || (control.navigationType == \"external_workflow\" && control.externalWorkflow.isEmpty == false) || (control.navigationType == \"external_system\" && control.externalSystem.isEmpty == false && control.handoffContract.isEmpty == false)"
             ),
             "Lean project root must check view-control navigation through named fields"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelExternalBoundaryContractIsModeled (translation : ModelTranslationDefinition) : Bool := translation.translation.isEmpty == false && translation.externalEvent.isEmpty == false && translation.payloadContract.isEmpty == false && translation.command.isEmpty == false"
+            ),
+            "Lean project root must check external-boundary translations through named fields"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(

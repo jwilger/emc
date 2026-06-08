@@ -5276,13 +5276,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelTranslations : List (String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"intake-webhook-translator\")]"
+                "def modelTranslations : List ModelTranslation := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", translation := \"intake-webhook-translator\" }]"
             ),
             "Lean project root must inventory authored translations"
         );
         assert!(
             lean_root.contains(
-                "def modelTranslationDefinitions : List (String × String × String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"intake-webhook-translator\", \"intake_webhook_received\", \"intake_webhook\", \"CaptureTicket\")]"
+                "def modelTranslationDefinitions : List ModelTranslationDefinition := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", translation := \"intake-webhook-translator\", externalEvent := \"intake_webhook_received\", payloadContract := \"intake_webhook\", command := \"CaptureTicket\" }]"
             ),
             "Lean project root must carry authored translation definitions"
         );
