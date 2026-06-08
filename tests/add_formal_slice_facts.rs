@@ -3555,7 +3555,9 @@ mod tests {
         let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
         assert!(
-            lean.contains("def sliceReadModels : List String := [\"ticket_state\"]"),
+            lean.contains(
+                "def sliceReadModels : List SliceReadModelReference := [{ name := \"ticket_state\" }]"
+            ),
             "Lean slice artifact must carry the authored read model name"
         );
         assert!(
@@ -3565,7 +3567,9 @@ mod tests {
             "Lean slice artifact must carry the authored read model field source and provenance"
         );
         assert!(
-            quint.contains("val sliceReadModels: List[str] = [\"ticket_state\"]"),
+            quint.contains(
+                "val sliceReadModels: List[SliceReadModelReference] = [{ name: \"ticket_state\" }]"
+            ),
             "Quint slice artifact must carry the authored read model name"
         );
         assert!(

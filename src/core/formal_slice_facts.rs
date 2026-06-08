@@ -2176,11 +2176,12 @@ pub(crate) fn add_read_model_definition(
     quint_contents: FileContents,
     read_model: NewReadModelDefinition,
 ) -> Result<EffectPlan, FormalSliceFactError> {
-    let read_model_name = quoted(read_model.name.as_ref());
+    let lean_read_model_reference = lean_read_model_reference_record(read_model.name.as_ref());
+    let quint_read_model_reference = quint_read_model_reference_record(read_model.name.as_ref());
     let lean = append_record(
         lean_contents.as_ref(),
-        "def sliceReadModels : List String := ",
-        &read_model_name,
+        "def sliceReadModels : List SliceReadModelReference := ",
+        &lean_read_model_reference,
     )
     .and_then(|contents| {
         append_record(
@@ -2191,8 +2192,8 @@ pub(crate) fn add_read_model_definition(
     })?;
     let quint = append_record(
         quint_contents.as_ref(),
-        "val sliceReadModels: List[str] = ",
-        &read_model_name,
+        "val sliceReadModels: List[SliceReadModelReference] = ",
+        &quint_read_model_reference,
     )
     .and_then(|contents| {
         append_record(
@@ -2681,6 +2682,14 @@ fn lean_command_reference_record(command_name: &str) -> String {
 
 fn quint_command_reference_record(command_name: &str) -> String {
     format!("{{ name: {} }}", quoted(command_name))
+}
+
+fn lean_read_model_reference_record(read_model_name: &str) -> String {
+    format!("{{ name := {} }}", quoted(read_model_name))
+}
+
+fn quint_read_model_reference_record(read_model_name: &str) -> String {
+    format!("{{ name: {} }}", quoted(read_model_name))
 }
 
 fn lean_external_payload_definition_record(
