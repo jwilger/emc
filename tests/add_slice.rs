@@ -121,7 +121,9 @@ mod tests {
             "Quint slice artifact must represent the business slice description"
         );
         assert!(
-            lean.contains("def workflowSlices : List String := [\"capture-ticket\"]"),
+            lean.contains(
+                "def workflowSlices : List WorkflowSlice := [{ slug := \"capture-ticket\" }]"
+            ),
             "Lean artifact must represent the workflow's business slices"
         );
         assert!(
@@ -143,7 +145,9 @@ mod tests {
             "Lean artifact must prove every workflow slice has a composed formal module reference"
         );
         assert!(
-            quint.contains("val workflowSlices: List[str] = [\"capture-ticket\"]"),
+            quint.contains(
+                "val workflowSlices: List[WorkflowSlice] = [{ slug: \"capture-ticket\" }]"
+            ),
             "Quint artifact must represent the workflow's business slices"
         );
         assert!(

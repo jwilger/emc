@@ -2347,8 +2347,9 @@ mod tests {
             "slice artifact must preserve punctuation when rebuilt from exported events"
         );
         assert!(
-            fs::read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?
-                .contains("val workflowSlices: List[str] = [\"capture-ticket\"]"),
+            fs::read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?.contains(
+                "val workflowSlices: List[WorkflowSlice] = [{ slug: \"capture-ticket\" }]"
+            ),
             "workflow artifact must be rebuilt with projected slice membership"
         );
 
@@ -2466,7 +2467,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?
-                .contains("def workflowSlices : List String := []"),
+                .contains("def workflowSlices : List WorkflowSlice := []"),
             "workflow projection must rebuild without removed slice membership"
         );
         assert!(

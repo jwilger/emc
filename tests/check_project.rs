@@ -983,7 +983,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/lean/OpenTicket.lean"),
-            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\ndef workflowSlices : List String := []\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
+            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\nstructure WorkflowSlice where\n  slug : String\n\ndef workflowSlices : List WorkflowSlice := []\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"navigation\", trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
         )?;
 
         Command::cargo_bin("emc")?
@@ -1005,7 +1005,9 @@ mod tests {
         create_connected_workflow(&temp_dir)?;
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let mut lean = read_to_string(&lean_path)?;
-        lean.push_str("\ndef workflowSlices : List String := [\"stale-slice\"]\n");
+        lean.push_str(
+            "\ndef workflowSlices : List WorkflowSlice := [{ slug := \"stale-slice\" }]\n",
+        );
         write(lean_path, lean)?;
 
         Command::cargo_bin("emc")?
@@ -1344,7 +1346,7 @@ mod tests {
         create_connected_workflow(&temp_dir)?;
         let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
         let mut quint = read_to_string(&quint_path)?;
-        quint.push_str("  val workflowSlices: List[str] = [\"stale-slice\"]\n");
+        quint.push_str("  val workflowSlices: List[WorkflowSlice] = [{ slug: \"stale-slice\" }]\n");
         write(quint_path, quint)?;
 
         Command::cargo_bin("emc")?

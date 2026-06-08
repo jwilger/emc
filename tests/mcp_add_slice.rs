@@ -53,11 +53,15 @@ mod tests {
             "slice artifact must preserve the MCP-created slice description"
         );
         assert!(
-            lean.contains("def workflowSlices : List String := [\"capture-ticket\"]"),
+            lean.contains(
+                "def workflowSlices : List WorkflowSlice := [{ slug := \"capture-ticket\" }]"
+            ),
             "Lean artifact must represent the MCP-created workflow slice"
         );
         assert!(
-            quint.contains("val workflowSlices: List[str] = [\"capture-ticket\"]"),
+            quint.contains(
+                "val workflowSlices: List[WorkflowSlice] = [{ slug: \"capture-ticket\" }]"
+            ),
             "Quint artifact must represent the MCP-created workflow slice"
         );
 

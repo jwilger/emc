@@ -44,6 +44,7 @@ pub(crate) fn emit_workflow_module(
     file_contents(format!(
         r#"module {module_name} {{
   // EMC-DIGEST: {digest}
+  type WorkflowSlice = {{ slug: str }}
   type WorkflowSliceDetail = {{ slug: str, name: str, kind: str, description: str }}
   type WorkflowSliceModule = {{ slice: str, formalModule: str }}
   type WorkflowStepRelationship = {{ step: str, relationship: str }}
@@ -56,7 +57,8 @@ pub(crate) fn emit_workflow_module(
   val workflowName = {workflow_name_json}
   val workflowSlug = {workflow_slug_json}
   val workflowDescription = {workflow_description_json}
-  val workflowSlices: List[str] = {slice_list}
+  val workflowSlices: List[WorkflowSlice] = {slice_list}
+  val workflowSliceSlugs: List[str] = workflowSlices.foldl([], (slugs, workflowSlice) => slugs.append(workflowSlice.slug))
   val workflowSliceDetails: List[WorkflowSliceDetail] = {slice_detail_list}
   val workflowSliceModules: List[WorkflowSliceModule] = {slice_module_list}
   val allowedWorkflowStepRelationships: List[str] = ["entry","main","branch","alternate","async_lifecycle","supporting"]
@@ -75,16 +77,16 @@ pub(crate) fn emit_workflow_module(
   val workflowSliceDetailsComplete = workflowSlicesHaveDetails
   val workflowSliceModulesComplete = workflowSlices.length() == workflowSliceModules.length()
   val workflowTransitionsStructured = workflowTransitions.select(transition => transition.source != "" and transition.target != "" and transition.kind != "" and transition.trigger != "").length() == workflowTransitions.length()
-  val workflowTransitionSourcesResolve = workflowTransitions.select(transition => workflowSlices.select(step => step == transition.source).length() > 0).length() == workflowTransitions.length()
-  val workflowTransitionTargetsResolve = workflowTransitions.select(transition => workflowSlices.select(step => step == transition.target).length() > 0 or workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() > 0).length() == workflowTransitions.length()
-  def workflowStepRelationshipIsAllowed(step) = workflowSlices.select(workflowSlice => workflowSlice == step.step).length() > 0 and allowedWorkflowStepRelationships.select(relationship => relationship == step.relationship).length() > 0
+  val workflowTransitionSourcesResolve = workflowTransitions.select(transition => workflowSliceSlugs.select(step => step == transition.source).length() > 0).length() == workflowTransitions.length()
+  val workflowTransitionTargetsResolve = workflowTransitions.select(transition => workflowSliceSlugs.select(step => step == transition.target).length() > 0 or workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() > 0).length() == workflowTransitions.length()
+  def workflowStepRelationshipIsAllowed(step) = workflowSliceSlugs.select(workflowSlice => workflowSlice == step.step).length() > 0 and allowedWorkflowStepRelationships.select(relationship => relationship == step.relationship).length() > 0
   val workflowStepRelationshipsAreAllowed = workflowStepRelationships.select(step => workflowStepRelationshipIsAllowed(step)).length() == workflowStepRelationships.length()
-  val workflowStepSlugsAreUnique = workflowSlices.select(step => workflowSlices.select(other => other == step).length() == 1).length() == workflowSlices.length()
+  val workflowStepSlugsAreUnique = workflowSliceSlugs.select(step => workflowSliceSlugs.select(other => other == step).length() == 1).length() == workflowSliceSlugs.length()
   val workflowHasExactlyOneEntryStep = workflowStepRelationships.select(step => step.relationship == "entry").length() == 1
   def workflowMainStepHasIncomingTransition(step) = step.relationship != "main" or workflowTransitions.select(transition => transition.target == step.step).length() > 0
   val workflowMainStepsHaveIncomingReachability = workflowStepRelationships.select(step => workflowMainStepHasIncomingTransition(step)).length() == workflowStepRelationships.length()
   val workflowEntrySteps: List[str] = workflowStepRelationships.select(step => step.relationship == "entry").foldl([], (entrySteps, step) => entrySteps.append(step.step))
-  def workflowTargetsFromReachable(reachable) = workflowTransitions.select(transition => reachable.select(step => step == transition.source).length() > 0 and workflowSlices.select(step => step == transition.target).length() > 0).foldl([], (targets, transition) => targets.append(transition.target))
+  def workflowTargetsFromReachable(reachable) = workflowTransitions.select(transition => reachable.select(step => step == transition.source).length() > 0 and workflowSliceSlugs.select(step => step == transition.target).length() > 0).foldl([], (targets, transition) => targets.append(transition.target))
   def workflowReachableStepsAfterFuel(fuel, reachable) = range(0, fuel).foldl(reachable, (currentReachable, _) => currentReachable.concat(workflowTargetsFromReachable(currentReachable)))
   val workflowReachableStepsFromEntry = workflowReachableStepsAfterFuel({workflow_slice_count}, workflowEntrySteps)
   def workflowStepIsReachableFromEntry(step) = step.relationship == "supporting" or step.relationship == "async_lifecycle" or workflowReachableStepsFromEntry.select(reachableStep => reachableStep == step.step).length() > 0
@@ -97,9 +99,9 @@ pub(crate) fn emit_workflow_module(
   val workflowExitsNameTargetsAndRationale = workflowTransitions.select(transition => workflowTransitionExitHasRationale(transition)).length() == workflowTransitions.length()
   def workflowOutcomeHandledByTransition(outcome) = not(outcome.externallyRelevant) or workflowTransitions.select(transition => transition.source == outcome.sourceSlice and transition.kind == "outcome" and transition.trigger == outcome.label).length() > 0
   val workflowExternallyRelevantOutcomesHandled = workflowOutcomes.select(outcome => workflowOutcomeHandledByTransition(outcome)).length() == workflowOutcomes.length()
-  def workflowOutcomeSourceResolves(outcome) = workflowSlices.select(step => step == outcome.sourceSlice).length() > 0
+  def workflowOutcomeSourceResolves(outcome) = workflowSliceSlugs.select(step => step == outcome.sourceSlice).length() > 0
   val workflowOutcomesSourceResolve = workflowOutcomes.select(outcome => workflowOutcomeSourceResolves(outcome)).length() == workflowOutcomes.length()
-  def workflowCommandErrorSourceResolves(error) = workflowSlices.select(step => step == error.sourceSlice).length() > 0
+  def workflowCommandErrorSourceResolves(error) = workflowSliceSlugs.select(step => step == error.sourceSlice).length() > 0
   val workflowCommandErrorsSourceResolve = workflowCommandErrors.select(error => workflowCommandErrorSourceResolves(error)).length() == workflowCommandErrors.length()
   val workflowTransitionsDoNotUseCommandErrorsAsOutcomes = workflowTransitions.select(transition => transition.kind != "outcome" or workflowCommandErrors.select(error => error.sourceSlice == transition.source and error.errorName == transition.trigger).length() == 0).length() == workflowTransitions.length()
   def workflowNonEventDefinitionOwnedOnce(definition) = definition.definitionKind == "event" or workflowOwnedDefinitions.select(other => other.definitionKind == definition.definitionKind and other.definitionName == definition.definitionName).length() == 1
@@ -139,7 +141,7 @@ pub(crate) fn emit_workflow_module(
   def workflowTransitionEvidenceMatches(transition, evidence) = evidence.source == transition.source and evidence.target == transition.target and evidence.kind == transition.kind and evidence.trigger == transition.trigger and evidence.sourceEvidence != "" and evidence.targetEvidence != ""
   def workflowTransitionHasRequiredEvidence(transition) = not(workflowTransitionRequiresEvidence(transition)) or workflowTransitionEvidences.select(evidence => workflowTransitionEvidenceMatches(transition, evidence)).length() > 0
   val workflowTransitionsHaveRequiredEvidence = workflowTransitions.select(transition => workflowTransitionHasRequiredEvidence(transition)).length() == workflowTransitions.length()
-  def workflowEntryLifecycleStateCovered(state) = workflowEntryLifecycleStates.select(coverage => coverage.state == state and workflowSlices.select(step => step == coverage.step).length() > 0 and coverage.evidence != "").length() > 0
+  def workflowEntryLifecycleStateCovered(state) = workflowEntryLifecycleStates.select(coverage => coverage.state == state and workflowSliceSlugs.select(step => step == coverage.step).length() > 0 and coverage.evidence != "").length() > 0
   val workflowEntryLifecycleStatesCoverRequiredStates = not(workflowRequiresEntryLifecycleCoverage) or requiredEntryLifecycleStates.select(state => workflowEntryLifecycleStateCovered(state)).length() == requiredEntryLifecycleStates.length()
   var modelState: int
   action init = modelState' = 0
@@ -464,7 +466,7 @@ fn slice_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
         "[{}]",
         workflow_slice_details
             .iter()
-            .map(|slice| quoted(slice.slug().as_ref()))
+            .map(|slice| format!("{{ slug: {} }}", quoted(slice.slug().as_ref())))
             .collect::<Vec<_>>()
             .join(",")
     )
