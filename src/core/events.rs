@@ -1173,6 +1173,11 @@ impl ExportedEvent {
         })
     }
 
+    pub(crate) fn from_json_str(contents: &str) -> Result<Self, String> {
+        let value = serde_json::from_str::<Value>(contents).map_err(|error| error.to_string())?;
+        Self::from_json_value(&value)
+    }
+
     #[cfg(test)]
     pub(crate) fn from_json_for_test(value: &Value) -> Result<Self, String> {
         Self::from_json_value(value)
@@ -1213,6 +1218,10 @@ impl ExportedEvent {
             "type": self.event_type().as_ref(),
             "payload": self.payload_json(),
         })
+    }
+
+    pub(crate) fn to_json_string(&self) -> Result<String, String> {
+        serde_json::to_string(&self.to_json_value()).map_err(|error| error.to_string())
     }
 }
 
@@ -1966,8 +1975,7 @@ fn exported_event_headers_in_topological_order(
 
 fn read_event_file(path: &Path) -> Result<ExportedEvent, String> {
     let contents = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    let value = serde_json::from_str::<Value>(&contents).map_err(|error| error.to_string())?;
-    ExportedEvent::from_json_value(&value)
+    ExportedEvent::from_json_str(&contents)
 }
 
 fn read_event_header_file(path: &Path) -> Result<ExportedEventHeader, String> {

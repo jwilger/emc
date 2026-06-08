@@ -4,11 +4,13 @@
 mod tests {
     use std::error::Error;
     use std::ffi::OsString;
+    use std::fs;
     use std::path::Path;
 
     use super::super::{
         execute_eventcore_command_for_exported_event_at_path_for_test,
-        sqlite_event_store_path_with_env,
+        migrate_eventcore_sqlite_store, sqlite_event_store_path_with_env,
+        sync_exported_events_into_sqlite,
     };
     use crate::core::connection::{ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval};
     use crate::core::effect::{
@@ -74,6 +76,56 @@ mod tests {
         })?;
 
         assert_eq!(path, override_path);
+
+        Ok(())
+    }
+
+    #[test]
+    fn sqlite_sync_rejects_exported_event_json_that_does_not_match_the_typed_body()
+    -> Result<(), Box<dyn Error>> {
+        let project = TempDir::new()?;
+        let store_dir = TempDir::new()?;
+        let sqlite_path = store_dir.path().join("events.sqlite3");
+        let event_dir = project.path().join("model/events/v1");
+        fs::create_dir_all(&event_dir)?;
+        fs::write(
+            event_dir.join("workflow-added.json"),
+            r#"{
+                "schema_version": "emc.events.v1",
+                "event_id": "workflow-added-1",
+                "command_id": "workflow-added-1",
+                "command_ordinal": 0,
+                "stream_id": "workflow::open-ticket",
+                "parents": [],
+                "type": "WorkflowAdded",
+                "payload": {
+                    "name": "Open ticket",
+                    "description": "Actor opens a repair ticket."
+                }
+            }"#,
+        )?;
+        migrate_eventcore_sqlite_store(&sqlite_path)?;
+
+        let error = match sync_exported_events_into_sqlite(project.path(), &sqlite_path) {
+            Ok(()) => {
+                return Err("runtime sync must parse exported event JSON into typed bodies".into());
+            }
+            Err(error) => error,
+        };
+
+        assert!(
+            error.contains("missing string field slug"),
+            "typed import should reject WorkflowAdded payloads without slugs, got: {error}"
+        );
+        let conn = rusqlite::Connection::open(sqlite_path)?;
+        let cached_event_count: usize =
+            conn.query_row("SELECT count(*) FROM eventcore_events", [], |row| {
+                row.get(0)
+            })?;
+        assert_eq!(
+            cached_event_count, 0,
+            "invalid exported events must not be cached as raw JSON"
+        );
 
         Ok(())
     }

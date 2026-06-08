@@ -10,7 +10,6 @@ use eventcore::{RetryPolicy, execute};
 use eventcore_sqlite::rusqlite::params;
 use eventcore_sqlite::{SqliteConfig, SqliteEventStore, rusqlite};
 use fs4::FileExt;
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tokio::runtime::Builder;
 
@@ -21,7 +20,7 @@ use crate::core::event_commands::{
     RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput, UpdateSliceCommand,
     UpdateWorkflowCommand, WorkflowFactInput,
 };
-use crate::core::events::{EventDraft, EventDraftBody, EventDraftType};
+use crate::core::events::{EventDraft, EventDraftBody, EventDraftType, ExportedEvent};
 use crate::core::types::{ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSlug};
 
 const EVENT_EXPORT_DIRECTORY: &str = "model/events/v1";
@@ -526,18 +525,15 @@ struct WorkflowAddedPrerequisite {
 }
 
 impl WorkflowAddedPrerequisite {
-    fn from_exported_event(event: &Value) -> Result<Self, String> {
-        Ok(Self {
-            slug: WorkflowSlug::try_new(required_json_payload_str(event, "slug")?)
-                .map_err(|error| error.to_string())?,
-            name: ModelName::try_new(required_json_payload_str(event, "name")?)
-                .map_err(|error| error.to_string())?,
-            description: ModelDescription::try_new(required_json_payload_str(
-                event,
-                "description",
-            )?)
-            .map_err(|error| error.to_string())?,
-        })
+    fn from_exported_event(event: &ExportedEvent) -> Result<Self, String> {
+        match event.body() {
+            EventDraftBody::WorkflowAdded { workflow } => Ok(Self {
+                slug: workflow.slug().clone(),
+                name: workflow.name().clone(),
+                description: workflow.description().clone(),
+            }),
+            _ => Err("expected exported WorkflowAdded event".to_owned()),
+        }
     }
 }
 
@@ -551,22 +547,17 @@ struct SliceAddedPrerequisite {
 }
 
 impl SliceAddedPrerequisite {
-    fn from_exported_event(event: &Value) -> Result<Self, String> {
-        Ok(Self {
-            workflow: WorkflowSlug::try_new(required_json_payload_str(event, "workflow")?)
-                .map_err(|error| error.to_string())?,
-            slug: SliceSlug::try_new(required_json_payload_str(event, "slug")?)
-                .map_err(|error| error.to_string())?,
-            name: ModelName::try_new(required_json_payload_str(event, "name")?)
-                .map_err(|error| error.to_string())?,
-            kind: SliceKindName::try_new(required_json_payload_str(event, "kind")?)
-                .map_err(|error| error.to_string())?,
-            description: ModelDescription::try_new(required_json_payload_str(
-                event,
-                "description",
-            )?)
-            .map_err(|error| error.to_string())?,
-        })
+    fn from_exported_event(event: &ExportedEvent) -> Result<Self, String> {
+        match event.body() {
+            EventDraftBody::SliceAdded { slice } => Ok(Self {
+                workflow: slice.workflow_slug().clone(),
+                slug: slice.slug().clone(),
+                name: slice.name().clone(),
+                kind: SliceKindName::from(slice.kind()),
+                description: slice.description().clone(),
+            }),
+            _ => Err("expected exported SliceAdded event".to_owned()),
+        }
     }
 }
 
@@ -581,9 +572,9 @@ fn workflow_added_payload(
             continue;
         }
         let contents = fs::read_to_string(path).map_err(|error| error.to_string())?;
-        let event: Value = serde_json::from_str(&contents).map_err(|error| error.to_string())?;
-        if required_event_str(&event, "stream_id") == stream_id
-            && required_event_str(&event, "type") == "WorkflowAdded"
+        let event = ExportedEvent::from_json_str(&contents)?;
+        if event.stream_id().as_ref() == stream_id
+            && matches!(event.body(), EventDraftBody::WorkflowAdded { .. })
         {
             return WorkflowAddedPrerequisite::from_exported_event(&event);
         }
@@ -602,23 +593,14 @@ fn slice_added_payload(
             continue;
         }
         let contents = fs::read_to_string(path).map_err(|error| error.to_string())?;
-        let event: Value = serde_json::from_str(&contents).map_err(|error| error.to_string())?;
-        if required_event_str(&event, "stream_id") == stream_id
-            && required_event_str(&event, "type") == "SliceAdded"
+        let event = ExportedEvent::from_json_str(&contents)?;
+        if event.stream_id().as_ref() == stream_id
+            && matches!(event.body(), EventDraftBody::SliceAdded { .. })
         {
             return SliceAddedPrerequisite::from_exported_event(&event);
         }
     }
     Err(format!("{stream_id} requires exported SliceAdded event"))
-}
-
-fn required_json_payload_str(event: &Value, field: &str) -> Result<String, String> {
-    event
-        .get("payload")
-        .and_then(|payload| payload.get(field))
-        .and_then(Value::as_str)
-        .map(str::to_owned)
-        .ok_or_else(|| format!("exported event payload requires {field}"))
 }
 
 fn migrate_eventcore_sqlite_store(sqlite_path: &Path) -> Result<SqliteEventStore, String> {
@@ -652,25 +634,20 @@ fn sync_exported_events_into_sqlite(project_root: &Path, sqlite_path: &Path) -> 
                 return Ok(None);
             }
             let contents = fs::read_to_string(path).map_err(|error| error.to_string())?;
-            let event: Value =
-                serde_json::from_str(&contents).map_err(|error| error.to_string())?;
+            let event = ExportedEvent::from_json_str(&contents)?;
             Ok(Some(event))
         })
         .filter_map(Result::transpose)
         .collect::<Result<Vec<_>, String>>()?;
-    events.sort_by(|left, right| {
-        required_event_str(left, "event_id").cmp(&required_event_str(right, "event_id"))
-    });
+    events.sort_by(|left, right| left.event_id().cmp(right.event_id()));
 
     let mut conn = rusqlite::Connection::open(sqlite_path).map_err(|error| error.to_string())?;
     let eventcore_streams = existing_eventcore_streams(&conn).map_err(|error| error.to_string())?;
     let mut stream_versions = existing_stream_versions(&conn).map_err(|error| error.to_string())?;
     let tx = conn.transaction().map_err(|error| error.to_string())?;
     for event in events {
-        let stream_id = required_event_str(&event, "stream_id");
-        if eventcore_streams.contains_key(&stream_id)
-            && event_type_is_backed_by_eventcore(&required_event_str(&event, "type"))
-        {
+        let stream_id = event.stream_id().as_ref().to_owned();
+        if eventcore_streams.contains_key(&stream_id) {
             continue;
         }
         let version = stream_versions.entry(stream_id.clone()).or_insert(0);
@@ -680,20 +657,16 @@ fn sync_exported_events_into_sqlite(project_root: &Path, sqlite_path: &Path) -> 
              (event_id, stream_id, stream_version, event_type, event_data, metadata)
              VALUES (?1, ?2, ?3, ?4, ?5, '{}')",
             params![
-                required_event_str(&event, "event_id"),
+                event.event_id(),
                 stream_id,
                 *version,
-                required_event_str(&event, "type"),
-                event.to_string(),
+                event.event_type().as_ref(),
+                event.to_json_string()?,
             ],
         )
         .map_err(|error| error.to_string())?;
     }
     tx.commit().map_err(|error| error.to_string())
-}
-
-fn event_type_is_backed_by_eventcore(event_type: &str) -> bool {
-    EventDraftType::try_new(event_type.to_owned()).is_ok()
 }
 
 fn existing_eventcore_streams(
@@ -718,14 +691,6 @@ fn existing_stream_versions(
         .collect()
 }
 
-fn required_event_str(event: &Value, field: &str) -> String {
-    event
-        .get(field)
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned()
-}
-
 fn project_realpath_hash(project_root: &Path) -> Result<String, String> {
     let canonical = fs::canonicalize(project_root).map_err(|error| error.to_string())?;
     Ok(hex::encode(Sha256::digest(
@@ -735,20 +700,28 @@ fn project_realpath_hash(project_root: &Path) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
-
     use super::*;
 
     #[test]
     fn workflow_added_prerequisite_parses_exported_payload_into_semantic_fields()
     -> Result<(), String> {
-        let event = json!({
-            "payload": {
-                "slug": "open-ticket",
-                "name": "Open ticket",
-                "description": "Actor opens a repair ticket."
+        let event = ExportedEvent::from_json_str(
+            r#"{
+                "schema_version": "emc.events.v1",
+                "event_id": "workflow-added-1",
+                "command_id": "workflow-added-1",
+                "command_ordinal": 0,
+                "stream_id": "workflow::open-ticket",
+                "parents": [],
+                "type": "WorkflowAdded",
+                "payload": {
+                    "slug": "open-ticket",
+                    "name": "Open ticket",
+                    "description": "Actor opens a repair ticket."
+                }
             }
-        });
+        "#,
+        )?;
 
         let prerequisite = WorkflowAddedPrerequisite::from_exported_event(&event)?;
 
@@ -765,15 +738,25 @@ mod tests {
     #[test]
     fn slice_added_prerequisite_parses_exported_payload_into_semantic_fields() -> Result<(), String>
     {
-        let event = json!({
-            "payload": {
-                "workflow": "open-ticket",
-                "slug": "capture-ticket",
-                "name": "Capture ticket",
-                "kind": "state_view",
-                "description": "Actor captures repair ticket details."
+        let event = ExportedEvent::from_json_str(
+            r#"{
+                "schema_version": "emc.events.v1",
+                "event_id": "slice-added-1",
+                "command_id": "slice-added-1",
+                "command_ordinal": 0,
+                "stream_id": "slice::capture-ticket",
+                "parents": [],
+                "type": "SliceAdded",
+                "payload": {
+                    "workflow": "open-ticket",
+                    "slug": "capture-ticket",
+                    "name": "Capture ticket",
+                    "kind": "state_view",
+                    "description": "Actor captures repair ticket details."
+                }
             }
-        });
+        "#,
+        )?;
 
         let prerequisite = SliceAddedPrerequisite::from_exported_event(&event)?;
 
@@ -791,19 +774,29 @@ mod tests {
 
     #[test]
     fn slice_added_prerequisite_rejects_unmodeled_slice_kinds() {
-        let event = json!({
-            "payload": {
-                "workflow": "open-ticket",
-                "slug": "capture-ticket",
-                "name": "Capture ticket",
-                "kind": "screen",
-                "description": "Actor captures repair ticket details."
+        let event = ExportedEvent::from_json_str(
+            r#"{
+                "schema_version": "emc.events.v1",
+                "event_id": "slice-added-1",
+                "command_id": "slice-added-1",
+                "command_ordinal": 0,
+                "stream_id": "slice::capture-ticket",
+                "parents": [],
+                "type": "SliceAdded",
+                "payload": {
+                    "workflow": "open-ticket",
+                    "slug": "capture-ticket",
+                    "name": "Capture ticket",
+                    "kind": "screen",
+                    "description": "Actor captures repair ticket details."
+                }
             }
-        });
+        }"#,
+        );
 
         assert!(
-            SliceAddedPrerequisite::from_exported_event(&event).is_err(),
-            "unmodeled exported slice kinds must not enter runtime repair payloads"
+            event.is_err(),
+            "unmodeled exported slice kinds must not enter runtime repair events"
         );
     }
 }
