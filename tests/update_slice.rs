@@ -224,13 +224,13 @@ mod tests {
         let workflow_quint = read_to_string(temp_dir.path().join("model/quint/IntakeVisit.qnt"))?;
         assert!(
             workflow_lean.contains(
-                "{ source := \"triage-intake\", target := \"schedule-visit\", kind := \"navigation\", trigger := \"schedule-visit-screen\", rationale := \"\", payloadContract := \"\" }"
+                "{ source := \"triage-intake\", target := \"schedule-visit\", kind := WorkflowTransitionKind.navigation, trigger := \"schedule-visit-screen\", rationale := \"\", payloadContract := \"\" }"
             ),
             "slice rename must preserve outgoing workflow transitions"
         );
         assert!(
             workflow_quint.contains(
-                "{ source: \"triage-intake\", target: \"schedule-visit\", kind: \"navigation\", trigger: \"schedule-visit-screen\", rationale: \"\", payloadContract: \"\" }"
+                "{ source: \"triage-intake\", target: \"schedule-visit\", kind: Navigation, trigger: \"schedule-visit-screen\", rationale: \"\", payloadContract: \"\" }"
             ),
             "slice rename must preserve outgoing workflow transitions"
         );

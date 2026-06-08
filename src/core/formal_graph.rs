@@ -401,19 +401,43 @@ fn slice_details_with_relationships(
 }
 
 fn parse_transitions(value: &str) -> Result<Vec<WorkflowTransitionRecord>, FormalGraphError> {
-    quoted_string_groups(value, 6)?
-        .chunks_exact(6)
-        .map(|chunk| {
-            transition_record_from_formal_fields(
-                &chunk[0],
-                &chunk[1],
-                &chunk[2],
-                &chunk[3],
-                Some(&chunk[4]),
-                Some(&chunk[5]),
-            )
-        })
-        .collect()
+    let kinds = parse_workflow_transition_kind_field_values(value)?;
+    let strings = parse_quoted_strings(value)?;
+    if strings.len() == kinds.len() * 5 {
+        strings
+            .chunks_exact(5)
+            .zip(kinds)
+            .map(|(chunk, kind)| {
+                transition_record_from_formal_fields(
+                    &chunk[0],
+                    &chunk[1],
+                    kind.as_ref(),
+                    &chunk[2],
+                    Some(&chunk[3]),
+                    Some(&chunk[4]),
+                )
+            })
+            .collect()
+    } else if strings.len() == kinds.len() * 6 {
+        strings
+            .chunks_exact(6)
+            .zip(kinds)
+            .map(|(chunk, kind)| {
+                transition_record_from_formal_fields(
+                    &chunk[0],
+                    &chunk[1],
+                    kind.as_ref(),
+                    &chunk[3],
+                    Some(&chunk[4]),
+                    Some(&chunk[5]),
+                )
+            })
+            .collect()
+    } else {
+        Err(FormalGraphError::new(
+            "formal workflow transition declarations must contain a kind plus source, target, trigger, rationale, and payload contract fields",
+        ))
+    }
 }
 
 fn parse_workflow_outcomes(value: &str) -> Result<Vec<WorkflowOutcomeRecord>, FormalGraphError> {
@@ -521,19 +545,43 @@ fn parse_workflow_owned_definitions(
 fn parse_workflow_transition_evidences(
     value: &str,
 ) -> Result<Vec<WorkflowTransitionEvidenceRecord>, FormalGraphError> {
-    quoted_string_groups(value, 6)?
-        .chunks_exact(6)
-        .map(|chunk| {
-            Ok(WorkflowTransitionEvidenceRecord::new(
-                transition_endpoint(&chunk[0])?,
-                transition_endpoint(&chunk[1])?,
-                workflow_transition_kind(&chunk[2])?,
-                transition_trigger_name(&chunk[3])?,
-                workflow_transition_source_evidence_text(&chunk[4])?,
-                workflow_transition_target_evidence_text(&chunk[5])?,
-            ))
-        })
-        .collect()
+    let kinds = parse_workflow_transition_kind_field_values(value)?;
+    let strings = parse_quoted_strings(value)?;
+    if strings.len() == kinds.len() * 5 {
+        strings
+            .chunks_exact(5)
+            .zip(kinds)
+            .map(|(chunk, kind)| {
+                Ok(WorkflowTransitionEvidenceRecord::new(
+                    transition_endpoint(&chunk[0])?,
+                    transition_endpoint(&chunk[1])?,
+                    kind,
+                    transition_trigger_name(&chunk[2])?,
+                    workflow_transition_source_evidence_text(&chunk[3])?,
+                    workflow_transition_target_evidence_text(&chunk[4])?,
+                ))
+            })
+            .collect()
+    } else if strings.len() == kinds.len() * 6 {
+        strings
+            .chunks_exact(6)
+            .zip(kinds)
+            .map(|(chunk, kind)| {
+                Ok(WorkflowTransitionEvidenceRecord::new(
+                    transition_endpoint(&chunk[0])?,
+                    transition_endpoint(&chunk[1])?,
+                    kind,
+                    transition_trigger_name(&chunk[3])?,
+                    workflow_transition_source_evidence_text(&chunk[4])?,
+                    workflow_transition_target_evidence_text(&chunk[5])?,
+                ))
+            })
+            .collect()
+    } else {
+        Err(FormalGraphError::new(
+            "formal workflow transition evidence declarations must contain a kind plus source, target, trigger, source evidence, and target evidence fields",
+        ))
+    }
 }
 
 fn parse_workflow_entry_lifecycle_states(
@@ -583,6 +631,103 @@ fn transition_record_from_formal_fields(
         )),
         (None, None) => Ok(WorkflowTransitionRecord::new(source, target, kind, trigger)),
     }
+}
+
+fn parse_workflow_transition_kind_field_values(
+    value: &str,
+) -> Result<Vec<WorkflowTransitionKind>, FormalGraphError> {
+    let mut kinds = Vec::new();
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut index = 0;
+    while index < value.len() {
+        let rest = &value[index..];
+        let character = rest
+            .chars()
+            .next()
+            .ok_or_else(|| FormalGraphError::new("formal transition kind scan failed"))?;
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+            index += character.len_utf8();
+        } else if character == '"' {
+            in_string = true;
+            index += character.len_utf8();
+        } else if rest.starts_with("kind :=") || rest.starts_with("kind:") {
+            kinds.push(parse_workflow_transition_kind_field_value(
+                &rest["kind".len()..],
+            )?);
+            index += "kind".len();
+        } else {
+            index += character.len_utf8();
+        }
+    }
+    Ok(kinds)
+}
+
+fn parse_workflow_transition_kind_field_value(
+    after_name: &str,
+) -> Result<WorkflowTransitionKind, FormalGraphError> {
+    let after_separator = after_name
+        .trim_start()
+        .strip_prefix(":=")
+        .or_else(|| after_name.trim_start().strip_prefix(':'))
+        .ok_or_else(|| {
+            FormalGraphError::new("formal workflow transition kind field is missing a separator")
+        })?
+        .trim_start();
+    let raw_value = if after_separator.starts_with('"') {
+        parse_quoted_strings(after_separator)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                FormalGraphError::new("formal workflow transition kind field is missing a value")
+            })?
+    } else {
+        after_separator
+            .split([',', '}', ']'])
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_owned()
+    };
+    workflow_transition_kind_from_formal_value(&raw_value)
+}
+
+fn workflow_transition_kind_from_formal_value(
+    value: &str,
+) -> Result<WorkflowTransitionKind, FormalGraphError> {
+    let artifact_value = value
+        .trim()
+        .strip_prefix("WorkflowTransitionKind.")
+        .unwrap_or(value.trim());
+    let semantic_value = match artifact_value {
+        "Command" | "command" => "command",
+        "Event" | "event" => "event",
+        "Navigation" | "navigation" => "navigation",
+        "ExternalTrigger" | "externalTrigger" | "external_trigger" => "external_trigger",
+        "Outcome" | "outcome" => "outcome",
+        "WorkflowExitCommand" | "workflowExitCommand" | "workflow_exit:command" => {
+            "workflow_exit:command"
+        }
+        "WorkflowExitEvent" | "workflowExitEvent" | "workflow_exit:event" => "workflow_exit:event",
+        "WorkflowExitNavigation" | "workflowExitNavigation" | "workflow_exit:navigation" => {
+            "workflow_exit:navigation"
+        }
+        "WorkflowExitExternalTrigger"
+        | "workflowExitExternalTrigger"
+        | "workflow_exit:external_trigger" => "workflow_exit:external_trigger",
+        "WorkflowExitOutcome" | "workflowExitOutcome" | "workflow_exit:outcome" => {
+            "workflow_exit:outcome"
+        }
+        _ => artifact_value,
+    };
+    workflow_transition_kind(semantic_value)
 }
 
 fn quoted_string_groups(value: &str, group_size: usize) -> Result<Vec<String>, FormalGraphError> {
