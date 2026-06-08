@@ -1845,28 +1845,26 @@ pub(crate) fn list_stale_workflow_readiness() -> Result<EffectPlan, String> {
 }
 
 pub(crate) fn resolve_event_conflict(
-    conflict_id: String,
-    chosen_event_id: String,
+    conflict_id: EventConflictId,
+    chosen_event_id: ChosenEventId,
 ) -> Result<EffectPlan, String> {
     let path = Path::new(EVENT_EXPORT_DIRECTORY);
     if !path.exists() {
-        return Err(format!("unknown event conflict {conflict_id}"));
+        return Err(format!("unknown event conflict {}", conflict_id.as_ref()));
     }
 
     let conflict = event_conflicts(path)?
         .into_iter()
-        .find(|conflict| conflict.id == conflict_id)
-        .ok_or_else(|| format!("unknown event conflict {conflict_id}"))?;
-    let chosen_exported_event_id = ExportedEventId::try_new(chosen_event_id)?;
+        .find(|conflict| conflict.id == conflict_id.as_ref())
+        .ok_or_else(|| format!("unknown event conflict {}", conflict_id.as_ref()))?;
+    let chosen_exported_event_id = ExportedEventId::try_new(chosen_event_id.as_ref().to_owned())?;
     if !conflict.event_ids.contains(&chosen_exported_event_id) {
         return Err(format!(
-            "event {} is not part of conflict {conflict_id}",
-            chosen_exported_event_id.as_ref()
+            "event {} is not part of conflict {}",
+            chosen_exported_event_id.as_ref(),
+            conflict_id.as_ref()
         ));
     }
-    let conflict_id = EventConflictId::new(artifact_digest_from_str(&conflict_id)?);
-    let chosen_event_id =
-        ChosenEventId::new(artifact_digest_from_str(chosen_exported_event_id.as_ref())?);
 
     Ok(EffectPlan::new(vec![
         Effect::ExportEvent(EventDraft::conflict_resolved(

@@ -1155,8 +1155,8 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
         }
         Effect::ResolveEventConflict(resolution) => {
             let plan = resolve_event_conflict(
-                resolution.conflict_id().as_ref().to_owned(),
-                resolution.chosen_event_id().as_ref().to_owned(),
+                resolution.conflict_id().clone(),
+                resolution.chosen_event_id().clone(),
             )
             .map_err(ShellError::message)?;
             plan.effects()

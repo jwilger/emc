@@ -2673,6 +2673,52 @@ mod tests {
     }
 
     #[test]
+    fn resolve_conflict_rejects_empty_identity_arguments() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let conflict = create_concurrent_slice_update_conflict(&temp_dir)?;
+        let output = Command::cargo_bin("emc")?
+            .args(["list", "conflicts"])
+            .current_dir(temp_dir.path())
+            .output()?;
+        let stdout = String::from_utf8(output.stdout)?;
+        let conflict_id = stdout
+            .split(" id ")
+            .nth(1)
+            .and_then(|suffix| suffix.split_whitespace().next())
+            .ok_or("conflict id must be reported")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "resolve",
+                "conflict",
+                "--id",
+                "",
+                "--choose-event",
+                &conflict.original_event_id,
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(contains("invalid event conflict id"));
+
+        Command::cargo_bin("emc")?
+            .args([
+                "resolve",
+                "conflict",
+                "--id",
+                conflict_id,
+                "--choose-event",
+                "",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(contains("invalid chosen event id"));
+
+        Ok(())
+    }
+
+    #[test]
     fn mutations_fail_while_exported_event_conflicts_are_unresolved() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;

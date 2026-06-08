@@ -2,11 +2,11 @@
 
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::effect::{
-    ArtifactDigest, ChosenEventId, CleanReviewEffect, Effect, EffectPlan, EventConflictId,
-    EventConflictResolution, SliceDescriptionUpdateEffect, SliceKindUpdateEffect,
-    SliceNameUpdateEffect, WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect,
-    WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
-    WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    ChosenEventId, CleanReviewEffect, Effect, EffectPlan, EventConflictId, EventConflictResolution,
+    SliceDescriptionUpdateEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
+    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
+    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
+    WorkflowTransitionEvidenceEffect,
 };
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
@@ -154,14 +154,11 @@ pub(crate) fn remove_workflow(slug: WorkflowSlug) -> EffectPlan {
 }
 
 pub(crate) fn resolve_conflict(
-    conflict_id: ArtifactDigest,
-    chosen_event_id: ArtifactDigest,
+    conflict_id: EventConflictId,
+    chosen_event_id: ChosenEventId,
 ) -> EffectPlan {
     EffectPlan::new(vec![Effect::ResolveEventConflict(
-        EventConflictResolution::new(
-            EventConflictId::new(conflict_id),
-            ChosenEventId::new(chosen_event_id),
-        ),
+        EventConflictResolution::new(conflict_id, chosen_event_id),
     )])
 }
 
