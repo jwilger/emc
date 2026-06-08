@@ -1110,7 +1110,7 @@ pub(crate) struct ProjectDataFlow {
     workflow_slug: String,
     slice_slug: String,
     datum: String,
-    source_kind: String,
+    source_kind: DataFlowSourceKind,
     source: String,
     transformation: String,
     target: String,
@@ -1134,8 +1134,8 @@ impl ProjectDataFlow {
         &self.source
     }
 
-    pub(crate) fn source_kind(&self) -> &str {
-        &self.source_kind
+    pub(crate) fn source_kind(&self) -> DataFlowSourceKind {
+        self.source_kind
     }
 
     pub(crate) fn transformation(&self) -> &str {
@@ -6336,28 +6336,54 @@ fn data_flow_entries_from_list(
     let mut data_flows = split_top_level_records(list)?
         .into_iter()
         .map(|record| {
-            let strings = quoted_strings(&record)?;
-            if strings.len() < 8 {
-                Err(FormalProjectFactError::new(
+            let values = record_values(&record)?;
+            match values.as_slice() {
+                [
+                    workflow_slug,
+                    slice_slug,
+                    datum,
+                    source_kind,
+                    source,
+                    transformation,
+                    target,
+                    bit_encoding,
+                ] => Ok(ProjectDataFlow {
+                    workflow_slug: single_quoted_string(workflow_slug)?,
+                    slice_slug: single_quoted_string(slice_slug)?,
+                    datum: single_quoted_string(datum)?,
+                    source_kind: data_flow_source_kind_value(source_kind)?,
+                    source: single_quoted_string(source)?,
+                    transformation: single_quoted_string(transformation)?,
+                    target: single_quoted_string(target)?,
+                    bit_encoding: single_quoted_string(bit_encoding)?,
+                }),
+                _ => Err(FormalProjectFactError::new(
                     "formal project data-flow record is malformed",
-                ))
-            } else {
-                Ok(ProjectDataFlow {
-                    workflow_slug: strings[0].clone(),
-                    slice_slug: strings[1].clone(),
-                    datum: strings[2].clone(),
-                    source_kind: strings[3].clone(),
-                    source: strings[4].clone(),
-                    transformation: strings[5].clone(),
-                    target: strings[6].clone(),
-                    bit_encoding: strings[7].clone(),
-                })
+                )),
             }
         })
         .collect::<Result<Vec<_>, FormalProjectFactError>>()?;
     data_flows.sort();
     data_flows.dedup();
     Ok(data_flows)
+}
+
+fn data_flow_source_kind_value(value: &str) -> Result<DataFlowSourceKind, FormalProjectFactError> {
+    let trimmed = value.trim();
+    if trimmed.starts_with('"') {
+        return DataFlowSourceKind::try_new(single_quoted_string(trimmed)?)
+            .map_err(|error| FormalProjectFactError::new(error.to_string()));
+    }
+
+    match trimmed {
+        "ModelDataFlowSourceKind.original" | "Original" => Ok(DataFlowSourceKind::Original),
+        "ModelDataFlowSourceKind.modeledTarget" | "ModeledTarget" => {
+            Ok(DataFlowSourceKind::ModeledTarget)
+        }
+        _ => Err(FormalProjectFactError::new(
+            "formal project data-flow source kind is malformed",
+        )),
+    }
 }
 
 fn outcome_entries_from_list(
@@ -8145,7 +8171,7 @@ fn lean_data_flow_record(data_flow: &NewProjectDataFlow) -> String {
         quoted(data_flow.workflow_slug.as_ref()),
         quoted(data_flow.slice_slug.as_ref()),
         quoted(data_flow.datum.as_ref()),
-        quoted(data_flow.source_kind.as_ref()),
+        lean_project_data_flow_source_kind(data_flow.source_kind),
         quoted(data_flow.source.as_ref()),
         quoted(data_flow.transformation.as_ref()),
         quoted(data_flow.target.as_ref()),
@@ -8159,7 +8185,7 @@ fn quint_data_flow_record(data_flow: &NewProjectDataFlow) -> String {
         quoted(data_flow.workflow_slug.as_ref()),
         quoted(data_flow.slice_slug.as_ref()),
         quoted(data_flow.datum.as_ref()),
-        quoted(data_flow.source_kind.as_ref()),
+        quint_project_data_flow_source_kind(data_flow.source_kind),
         quoted(data_flow.source.as_ref()),
         quoted(data_flow.transformation.as_ref()),
         quoted(data_flow.target.as_ref()),
@@ -8413,7 +8439,7 @@ fn lean_project_data_flow_list(project_data_flows: &[ProjectDataFlow]) -> String
                     quoted(data_flow.workflow_slug()),
                     quoted(data_flow.slice_slug()),
                     quoted(data_flow.datum()),
-                    quoted(data_flow.source_kind()),
+                    lean_project_data_flow_source_kind(data_flow.source_kind()),
                     quoted(data_flow.source()),
                     quoted(data_flow.transformation()),
                     quoted(data_flow.target()),
@@ -8438,7 +8464,7 @@ fn quint_project_data_flow_list(project_data_flows: &[ProjectDataFlow]) -> Strin
                     quoted(data_flow.workflow_slug()),
                     quoted(data_flow.slice_slug()),
                     quoted(data_flow.datum()),
-                    quoted(data_flow.source_kind()),
+                    quint_project_data_flow_source_kind(data_flow.source_kind()),
                     quoted(data_flow.source()),
                     quoted(data_flow.transformation()),
                     quoted(data_flow.target()),
@@ -8448,6 +8474,20 @@ fn quint_project_data_flow_list(project_data_flows: &[ProjectDataFlow]) -> Strin
             .collect::<Vec<_>>()
             .join(",")
     )
+}
+
+fn lean_project_data_flow_source_kind(source_kind: DataFlowSourceKind) -> &'static str {
+    match source_kind {
+        DataFlowSourceKind::Original => "ModelDataFlowSourceKind.original",
+        DataFlowSourceKind::ModeledTarget => "ModelDataFlowSourceKind.modeledTarget",
+    }
+}
+
+fn quint_project_data_flow_source_kind(source_kind: DataFlowSourceKind) -> &'static str {
+    match source_kind {
+        DataFlowSourceKind::Original => "Original",
+        DataFlowSourceKind::ModeledTarget => "ModeledTarget",
+    }
 }
 
 fn lean_project_outcome_list(project_outcomes: &[ProjectOutcome]) -> String {

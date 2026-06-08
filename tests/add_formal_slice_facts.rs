@@ -218,21 +218,21 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "structure ModelDataFlow where\n  workflow : String\n  slice : String\n  datum : String\n  sourceKind : String\n  source : String\n  transformation : String\n  target : String\n  bitEncoding : String"
+                "inductive ModelDataFlowSourceKind where\n  | original\n  | modeledTarget\nderiving BEq, DecidableEq, Repr\n\nstructure ModelDataFlow where\n  workflow : String\n  slice : String\n  datum : String\n  sourceKind : ModelDataFlowSourceKind\n  source : String\n  transformation : String\n  target : String\n  bitEncoding : String"
             ),
-            "Lean project root must type authored bit-level data flows as named records"
+            "Lean project root must type authored bit-level data-flow source kinds as closed semantic values"
         );
         assert!(
             lean_root.contains(
-                "def modelDataFlows : List ModelDataFlow := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", datum := \"ticket_title\", sourceKind := \"original\", source := \"actor input title field\", transformation := \"identity\", target := \"Capture ticket.ticket_title\", bitEncoding := \"UTF-8 string\" }]"
+                "def modelDataFlows : List ModelDataFlow := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", datum := \"ticket_title\", sourceKind := ModelDataFlowSourceKind.original, source := \"actor input title field\", transformation := \"identity\", target := \"Capture ticket.ticket_title\", bitEncoding := \"UTF-8 string\" }]"
             ),
-            "Lean project root must inventory authored bit-level data flows as named records"
+            "Lean project root must inventory authored bit-level data-flow source kinds as enum constructors"
         );
         assert!(
             lean_root.contains(
-                "def modelDataFlowIsBitComplete (dataFlow : ModelDataFlow) : Bool := dataFlow.datum.isEmpty == false && dataFlow.sourceKind.isEmpty == false && dataFlow.source.isEmpty == false && dataFlow.transformation.isEmpty == false && dataFlow.target.isEmpty == false && dataFlow.bitEncoding.isEmpty == false"
+                "def modelDataFlowIsBitComplete (dataFlow : ModelDataFlow) : Bool := dataFlow.datum.isEmpty == false && dataFlow.source.isEmpty == false && dataFlow.transformation.isEmpty == false && dataFlow.target.isEmpty == false && dataFlow.bitEncoding.isEmpty == false"
             ),
-            "Lean project root must prove bit-level data-flow completeness through named fields"
+            "Lean project root must prove bit-level data-flow completeness without revalidating enum source kinds as strings"
         );
         assert!(
             lean_root
@@ -241,15 +241,15 @@ mod tests {
         );
         assert!(
             quint_root.contains(
-                "type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: str, source: str, transformation: str, target: str, bitEncoding: str }"
+                "type ModelDataFlowSourceKind = Original | ModeledTarget\n  type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: ModelDataFlowSourceKind, source: str, transformation: str, target: str, bitEncoding: str }"
             ),
-            "Quint project root must type authored bit-level data-flow inventory entries"
+            "Quint project root must type authored bit-level data-flow source kinds as closed semantic values"
         );
         assert!(
             quint_root.contains(
-                "val modelDataFlows: List[ModelDataFlow] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", datum: \"ticket_title\", sourceKind: \"original\", source: \"actor input title field\", transformation: \"identity\", target: \"Capture ticket.ticket_title\", bitEncoding: \"UTF-8 string\" }]"
+                "val modelDataFlows: List[ModelDataFlow] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", datum: \"ticket_title\", sourceKind: Original, source: \"actor input title field\", transformation: \"identity\", target: \"Capture ticket.ticket_title\", bitEncoding: \"UTF-8 string\" }]"
             ),
-            "Quint project root must inventory authored bit-level data flows"
+            "Quint project root must inventory authored bit-level data-flow source kinds as enum constructors"
         );
         assert!(
             quint_root.contains("val modelDataFlowsAreDeclared = modelDataFlows.length() == 1"),

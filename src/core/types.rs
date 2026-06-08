@@ -444,7 +444,7 @@ pub struct DatumName(String);
 )]
 pub struct DataFlowSource(String);
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub enum DataFlowSourceKind {
     Original,
     ModeledTarget,
