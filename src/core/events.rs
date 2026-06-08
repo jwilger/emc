@@ -839,6 +839,174 @@ impl WorkflowTransitionRemovedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowOutcomeEventPayload {
+    workflow: WorkflowSlug,
+    outcome: WorkflowOutcomeRecord,
+}
+
+impl WorkflowOutcomeEventPayload {
+    fn from_parts(workflow: &WorkflowSlug, outcome: &WorkflowOutcomeRecord) -> Self {
+        Self {
+            workflow: workflow.clone(),
+            outcome: outcome.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            workflow: workflow_slug(required_str(payload, "workflow")?)?,
+            outcome: WorkflowOutcomeRecord::new(
+                workflow_transition_endpoint(required_str(payload, "source_slice")?)?,
+                outcome_label_name(required_str(payload, "label")?)?,
+                required_bool(payload, "externally_relevant")?,
+            ),
+        })
+    }
+
+    fn into_parts(self) -> (WorkflowSlug, WorkflowOutcomeRecord) {
+        (self.workflow, self.outcome)
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "workflow": self.workflow.as_ref(),
+            "source_slice": self.outcome.source_slice().as_ref(),
+            "label": self.outcome.label().as_ref(),
+            "externally_relevant": self.outcome.externally_relevant(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowCommandErrorEventPayload {
+    workflow: WorkflowSlug,
+    error: WorkflowCommandErrorRecord,
+}
+
+impl WorkflowCommandErrorEventPayload {
+    fn from_parts(workflow: &WorkflowSlug, error: &WorkflowCommandErrorRecord) -> Self {
+        Self {
+            workflow: workflow.clone(),
+            error: error.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            workflow: workflow_slug(required_str(payload, "workflow")?)?,
+            error: WorkflowCommandErrorRecord::new(
+                workflow_transition_endpoint(required_str(payload, "source_slice")?)?,
+                command_name(required_str(payload, "command")?)?,
+                command_error_name(required_str(payload, "error")?)?,
+            ),
+        })
+    }
+
+    fn into_parts(self) -> (WorkflowSlug, WorkflowCommandErrorRecord) {
+        (self.workflow, self.error)
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "workflow": self.workflow.as_ref(),
+            "source_slice": self.error.source_slice().as_ref(),
+            "command": self.error.command_name().as_ref(),
+            "error": self.error.error_name().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowTransitionEvidenceEventPayload {
+    workflow: WorkflowSlug,
+    evidence: WorkflowTransitionEvidenceRecord,
+}
+
+impl WorkflowTransitionEvidenceEventPayload {
+    fn from_parts(workflow: &WorkflowSlug, evidence: &WorkflowTransitionEvidenceRecord) -> Self {
+        Self {
+            workflow: workflow.clone(),
+            evidence: evidence.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            workflow: workflow_slug(required_str(payload, "workflow")?)?,
+            evidence: WorkflowTransitionEvidenceRecord::new(
+                workflow_transition_endpoint(required_str(payload, "from")?)?,
+                workflow_transition_endpoint(required_str(payload, "to")?)?,
+                workflow_transition_kind(required_str(payload, "via")?)?,
+                transition_trigger_name(required_str(payload, "name")?)?,
+                workflow_transition_source_evidence_text(required_str(
+                    payload,
+                    "source_evidence",
+                )?)?,
+                workflow_transition_target_evidence_text(required_str(
+                    payload,
+                    "target_evidence",
+                )?)?,
+            ),
+        })
+    }
+
+    fn into_parts(self) -> (WorkflowSlug, WorkflowTransitionEvidenceRecord) {
+        (self.workflow, self.evidence)
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "workflow": self.workflow.as_ref(),
+            "from": self.evidence.source().as_ref(),
+            "to": self.evidence.target().as_ref(),
+            "via": self.evidence.kind().as_ref(),
+            "name": self.evidence.trigger().as_ref(),
+            "source_evidence": self.evidence.source_evidence().as_ref(),
+            "target_evidence": self.evidence.target_evidence().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowEntryLifecycleStateEventPayload {
+    workflow: WorkflowSlug,
+    coverage: WorkflowEntryLifecycleStateRecord,
+}
+
+impl WorkflowEntryLifecycleStateEventPayload {
+    fn from_parts(workflow: &WorkflowSlug, coverage: &WorkflowEntryLifecycleStateRecord) -> Self {
+        Self {
+            workflow: workflow.clone(),
+            coverage: coverage.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            workflow: workflow_slug(required_str(payload, "workflow")?)?,
+            coverage: WorkflowEntryLifecycleStateRecord::new(
+                workflow_entry_lifecycle_state_name(required_str(payload, "state")?)?,
+                workflow_transition_endpoint(required_str(payload, "step")?)?,
+                workflow_entry_lifecycle_evidence_text(required_str(payload, "evidence")?)?,
+            ),
+        })
+    }
+
+    fn into_parts(self) -> (WorkflowSlug, WorkflowEntryLifecycleStateRecord) {
+        (self.workflow, self.coverage)
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "workflow": self.workflow.as_ref(),
+            "state": self.coverage.state().as_ref(),
+            "step": self.coverage.step().as_ref(),
+            "evidence": self.coverage.evidence().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum ExportedEventBody {
     ProjectInitialized {
         name: ProjectName,
@@ -1002,18 +1170,12 @@ impl ExportedEventBody {
                 WorkflowEventPayload::from_workflow(workflow).to_json_value()
             }
             Self::WorkflowRemoved { slug } => json!({ "slug": slug.as_ref() }),
-            Self::WorkflowOutcomeAdded { workflow, outcome } => json!({
-                "workflow": workflow.as_ref(),
-                "source_slice": outcome.source_slice().as_ref(),
-                "label": outcome.label().as_ref(),
-                "externally_relevant": outcome.externally_relevant(),
-            }),
-            Self::WorkflowCommandErrorAdded { workflow, error } => json!({
-                "workflow": workflow.as_ref(),
-                "source_slice": error.source_slice().as_ref(),
-                "command": error.command_name().as_ref(),
-                "error": error.error_name().as_ref(),
-            }),
+            Self::WorkflowOutcomeAdded { workflow, outcome } => {
+                WorkflowOutcomeEventPayload::from_parts(workflow, outcome).to_json_value()
+            }
+            Self::WorkflowCommandErrorAdded { workflow, error } => {
+                WorkflowCommandErrorEventPayload::from_parts(workflow, error).to_json_value()
+            }
             Self::WorkflowOwnedDefinitionAdded {
                 workflow,
                 definition,
@@ -1031,24 +1193,17 @@ impl ExportedEventBody {
                     .map(|participation| participation.as_ref()),
                 "view_role": definition.view_role().map(|role| role.as_ref()),
             }),
-            Self::WorkflowTransitionEvidenceAdded { workflow, evidence } => json!({
-                "workflow": workflow.as_ref(),
-                "from": evidence.source().as_ref(),
-                "to": evidence.target().as_ref(),
-                "via": evidence.kind().as_ref(),
-                "name": evidence.trigger().as_ref(),
-                "source_evidence": evidence.source_evidence().as_ref(),
-                "target_evidence": evidence.target_evidence().as_ref(),
-            }),
+            Self::WorkflowTransitionEvidenceAdded { workflow, evidence } => {
+                WorkflowTransitionEvidenceEventPayload::from_parts(workflow, evidence)
+                    .to_json_value()
+            }
             Self::WorkflowEntryLifecycleCoverageRequired { workflow } => {
                 json!({ "workflow": workflow.as_ref() })
             }
-            Self::WorkflowEntryLifecycleStateAdded { workflow, coverage } => json!({
-                "workflow": workflow.as_ref(),
-                "state": coverage.state().as_ref(),
-                "step": coverage.step().as_ref(),
-                "evidence": coverage.evidence().as_ref(),
-            }),
+            Self::WorkflowEntryLifecycleStateAdded { workflow, coverage } => {
+                WorkflowEntryLifecycleStateEventPayload::from_parts(workflow, coverage)
+                    .to_json_value()
+            }
             Self::WorkflowReadinessDeclared {
                 workflow,
                 projection_fingerprint,
@@ -1159,14 +1314,16 @@ impl ExportedEventBody {
             ExportedEventType::WorkflowRemoved => Ok(Self::WorkflowRemoved {
                 slug: workflow_slug(required_str(payload, "slug")?)?,
             }),
-            ExportedEventType::WorkflowOutcomeAdded => Ok(Self::WorkflowOutcomeAdded {
-                workflow: workflow_slug(required_str(payload, "workflow")?)?,
-                outcome: workflow_outcome_from_payload(payload)?,
-            }),
-            ExportedEventType::WorkflowCommandErrorAdded => Ok(Self::WorkflowCommandErrorAdded {
-                workflow: workflow_slug(required_str(payload, "workflow")?)?,
-                error: workflow_command_error_from_payload(payload)?,
-            }),
+            ExportedEventType::WorkflowOutcomeAdded => {
+                let (workflow, outcome) =
+                    WorkflowOutcomeEventPayload::from_json_value(payload)?.into_parts();
+                Ok(Self::WorkflowOutcomeAdded { workflow, outcome })
+            }
+            ExportedEventType::WorkflowCommandErrorAdded => {
+                let (workflow, error) =
+                    WorkflowCommandErrorEventPayload::from_json_value(payload)?.into_parts();
+                Ok(Self::WorkflowCommandErrorAdded { workflow, error })
+            }
             ExportedEventType::WorkflowOwnedDefinitionAdded => {
                 Ok(Self::WorkflowOwnedDefinitionAdded {
                     workflow: workflow_slug(required_str(payload, "workflow")?)?,
@@ -1174,10 +1331,9 @@ impl ExportedEventBody {
                 })
             }
             ExportedEventType::WorkflowTransitionEvidenceAdded => {
-                Ok(Self::WorkflowTransitionEvidenceAdded {
-                    workflow: workflow_slug(required_str(payload, "workflow")?)?,
-                    evidence: workflow_transition_evidence_from_payload(payload)?,
-                })
+                let (workflow, evidence) =
+                    WorkflowTransitionEvidenceEventPayload::from_json_value(payload)?.into_parts();
+                Ok(Self::WorkflowTransitionEvidenceAdded { workflow, evidence })
             }
             ExportedEventType::WorkflowEntryLifecycleCoverageRequired => {
                 Ok(Self::WorkflowEntryLifecycleCoverageRequired {
@@ -1185,10 +1341,9 @@ impl ExportedEventBody {
                 })
             }
             ExportedEventType::WorkflowEntryLifecycleStateAdded => {
-                Ok(Self::WorkflowEntryLifecycleStateAdded {
-                    workflow: workflow_slug(required_str(payload, "workflow")?)?,
-                    coverage: workflow_entry_lifecycle_state_from_payload(payload)?,
-                })
+                let (workflow, coverage) =
+                    WorkflowEntryLifecycleStateEventPayload::from_json_value(payload)?.into_parts();
+                Ok(Self::WorkflowEntryLifecycleStateAdded { workflow, coverage })
             }
             ExportedEventType::WorkflowReadinessDeclared => Ok(Self::WorkflowReadinessDeclared {
                 workflow: workflow_slug(required_str(payload, "workflow")?)?,
@@ -3654,14 +3809,6 @@ fn workflow_transition_kind_from_connection(
     workflow_transition_kind(&raw_kind)
 }
 
-fn workflow_outcome_from_payload(payload: &Value) -> Result<WorkflowOutcomeRecord, String> {
-    Ok(WorkflowOutcomeRecord::new(
-        workflow_transition_endpoint(required_str(payload, "source_slice")?)?,
-        outcome_label_name(required_str(payload, "label")?)?,
-        required_bool(payload, "externally_relevant")?,
-    ))
-}
-
 pub(crate) fn slice_outcome_from_payload(payload: &Value) -> Result<NewOutcomeDefinition, String> {
     Ok(NewOutcomeDefinition::new(
         slice_slug(required_str(payload, "slice")?)?,
@@ -4187,16 +4334,6 @@ pub(crate) fn slice_board_connection_from_payload(
     ))
 }
 
-fn workflow_command_error_from_payload(
-    payload: &Value,
-) -> Result<WorkflowCommandErrorRecord, String> {
-    Ok(WorkflowCommandErrorRecord::new(
-        workflow_transition_endpoint(required_str(payload, "source_slice")?)?,
-        command_name(required_str(payload, "command")?)?,
-        command_error_name(required_str(payload, "error")?)?,
-    ))
-}
-
 fn workflow_owned_definition_from_payload(
     payload: &Value,
 ) -> Result<WorkflowOwnedDefinitionRecord, String> {
@@ -4257,29 +4394,6 @@ fn workflow_owned_definition_from_payload(
         ),
         _ => Err("WorkflowOwnedDefinitionAdded has incompatible optional fields".to_owned()),
     }
-}
-
-fn workflow_transition_evidence_from_payload(
-    payload: &Value,
-) -> Result<WorkflowTransitionEvidenceRecord, String> {
-    Ok(WorkflowTransitionEvidenceRecord::new(
-        workflow_transition_endpoint(required_str(payload, "from")?)?,
-        workflow_transition_endpoint(required_str(payload, "to")?)?,
-        workflow_transition_kind(required_str(payload, "via")?)?,
-        transition_trigger_name(required_str(payload, "name")?)?,
-        workflow_transition_source_evidence_text(required_str(payload, "source_evidence")?)?,
-        workflow_transition_target_evidence_text(required_str(payload, "target_evidence")?)?,
-    ))
-}
-
-fn workflow_entry_lifecycle_state_from_payload(
-    payload: &Value,
-) -> Result<WorkflowEntryLifecycleStateRecord, String> {
-    Ok(WorkflowEntryLifecycleStateRecord::new(
-        workflow_entry_lifecycle_state_name(required_str(payload, "state")?)?,
-        workflow_transition_endpoint(required_str(payload, "step")?)?,
-        workflow_entry_lifecycle_evidence_text(required_str(payload, "evidence")?)?,
-    ))
 }
 
 fn same_transition(left: &WorkflowTransitionRecord, right: &WorkflowTransitionRecord) -> bool {
@@ -4862,6 +4976,111 @@ mod tests {
         assert_eq!(
             WorkflowTransitionRemovedEventPayload::from_json_value(&json)?.into_removal(),
             removal
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn workflow_fact_event_payloads_round_trip_between_semantic_records_and_json_boundary()
+    -> Result<(), String> {
+        let workflow = workflow_slug("open-ticket")?;
+        let outcome = WorkflowOutcomeRecord::new(
+            workflow_transition_endpoint("capture-ticket")?,
+            outcome_label_name("ticket_captured")?,
+            true,
+        );
+        let command_error = WorkflowCommandErrorRecord::new(
+            workflow_transition_endpoint("capture-ticket")?,
+            command_name("CaptureTicket")?,
+            command_error_name("DuplicateTicket")?,
+        );
+        let transition_evidence = WorkflowTransitionEvidenceRecord::new(
+            workflow_transition_endpoint("capture-ticket")?,
+            workflow_transition_endpoint("review-ticket")?,
+            workflow_transition_kind("navigation")?,
+            transition_trigger_name("review-ticket-screen")?,
+            workflow_transition_source_evidence_text("capture-ticket submits valid details")?,
+            workflow_transition_target_evidence_text("review-ticket receives ticket details")?,
+        );
+        let lifecycle_state = WorkflowEntryLifecycleStateRecord::new(
+            workflow_entry_lifecycle_state_name("fresh_uninitialized")?,
+            workflow_transition_endpoint("capture-ticket")?,
+            workflow_entry_lifecycle_evidence_text(
+                "capture-ticket distinguishes first arrival before initialization",
+            )?,
+        );
+
+        let outcome_payload = WorkflowOutcomeEventPayload::from_parts(&workflow, &outcome);
+        let outcome_json = outcome_payload.to_json_value();
+        assert_eq!(
+            outcome_json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "source_slice": "capture-ticket",
+                "label": "ticket_captured",
+                "externally_relevant": true,
+            })
+        );
+        assert_eq!(
+            WorkflowOutcomeEventPayload::from_json_value(&outcome_json)?.into_parts(),
+            (workflow.clone(), outcome)
+        );
+
+        let command_error_payload =
+            WorkflowCommandErrorEventPayload::from_parts(&workflow, &command_error);
+        let command_error_json = command_error_payload.to_json_value();
+        assert_eq!(
+            command_error_json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "source_slice": "capture-ticket",
+                "command": "CaptureTicket",
+                "error": "DuplicateTicket",
+            })
+        );
+        assert_eq!(
+            WorkflowCommandErrorEventPayload::from_json_value(&command_error_json)?.into_parts(),
+            (workflow.clone(), command_error)
+        );
+
+        let transition_evidence_payload =
+            WorkflowTransitionEvidenceEventPayload::from_parts(&workflow, &transition_evidence);
+        let transition_evidence_json = transition_evidence_payload.to_json_value();
+        assert_eq!(
+            transition_evidence_json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "from": "capture-ticket",
+                "to": "review-ticket",
+                "via": "navigation",
+                "name": "review-ticket-screen",
+                "source_evidence": "capture-ticket submits valid details",
+                "target_evidence": "review-ticket receives ticket details",
+            })
+        );
+        assert_eq!(
+            WorkflowTransitionEvidenceEventPayload::from_json_value(&transition_evidence_json)?
+                .into_parts(),
+            (workflow.clone(), transition_evidence)
+        );
+
+        let lifecycle_state_payload =
+            WorkflowEntryLifecycleStateEventPayload::from_parts(&workflow, &lifecycle_state);
+        let lifecycle_state_json = lifecycle_state_payload.to_json_value();
+        assert_eq!(
+            lifecycle_state_json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "state": "fresh_uninitialized",
+                "step": "capture-ticket",
+                "evidence": "capture-ticket distinguishes first arrival before initialization",
+            })
+        );
+        assert_eq!(
+            WorkflowEntryLifecycleStateEventPayload::from_json_value(&lifecycle_state_json)?
+                .into_parts(),
+            (workflow, lifecycle_state)
         );
 
         Ok(())
