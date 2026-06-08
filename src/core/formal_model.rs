@@ -339,6 +339,10 @@ pub(crate) fn lean_board_record_structures() -> &'static str {
     "structure ModelBoardElement where\n  workflow : String\n  slice : String\n  element : String\n  kind : String\n  lane : String\n  declaredName : String\n  mainPath : Bool\n\nstructure ModelBoardConnection where\n  workflow : String\n  slice : String\n  source : String\n  sourceKind : String\n  target : String\n  targetKind : String"
 }
 
+pub(crate) fn lean_automation_record_structures() -> &'static str {
+    "structure ModelAutomation where\n  workflow : String\n  slice : String\n  automation : String\n\nstructure ModelAutomationDefinition where\n  workflow : String\n  slice : String\n  automation : String\n  trigger : String\n  command : String\n  handledErrors : List String\n  reaction : String"
+}
+
 pub(crate) fn lean_translation_record_structures() -> &'static str {
     "structure ModelTranslation where\n  workflow : String\n  slice : String\n  translation : String\n\nstructure ModelTranslationDefinition where\n  workflow : String\n  slice : String\n  translation : String\n  externalEvent : String\n  payloadContract : String\n  command : String"
 }
