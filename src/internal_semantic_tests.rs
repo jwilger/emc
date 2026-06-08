@@ -923,7 +923,7 @@ mod tests {
     }
 
     #[test]
-    fn exported_event_json_rejects_empty_identity_terms() -> Result<(), Box<dyn Error>> {
+    fn exported_event_json_rejects_invalid_metadata_terms() -> Result<(), Box<dyn Error>> {
         let valid_event = serde_json::json!({
             "schema_version": "emc.events.v1",
             "event_id": "workflow-added-1",
@@ -965,7 +965,7 @@ mod tests {
             "command id errors should name the invalid metadata field, got: {empty_command_id_error}"
         );
 
-        let mut empty_parent = valid_event;
+        let mut empty_parent = valid_event.clone();
         empty_parent["parents"] = serde_json::json!([""]);
         let empty_parent_error = match ExportedEvent::from_json_for_test(&empty_parent) {
             Ok(_) => return Err("empty parent ids must not enter exported event frontiers".into()),
@@ -975,6 +975,18 @@ mod tests {
             empty_parent_error.contains("parents")
                 && empty_parent_error.contains("exported event JSON"),
             "parent id errors should name the invalid metadata field, got: {empty_parent_error}"
+        );
+
+        let mut invalid_stream_id = valid_event;
+        invalid_stream_id["stream_id"] = serde_json::json!("artifact::open-ticket");
+        let invalid_stream_id_error = match ExportedEvent::from_json_for_test(&invalid_stream_id) {
+            Ok(_) => return Err("invalid stream ids must not enter exported event metadata".into()),
+            Err(error) => error,
+        };
+        assert!(
+            invalid_stream_id_error.contains("stream_id")
+                && invalid_stream_id_error.contains("exported event JSON"),
+            "stream id errors should name the invalid metadata field, got: {invalid_stream_id_error}"
         );
 
         Ok(())
