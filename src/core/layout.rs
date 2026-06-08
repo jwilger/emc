@@ -726,8 +726,8 @@ fn project_root_effects(
         ),
         Effect::require_canonical_declaration(
             lean_path.clone(),
-            canonical_declaration_prefix("  bitEncoding : String"),
-            canonical_declaration_marker("  bitEncoding : String"),
+            canonical_declaration_prefix("  transformation : String"),
+            canonical_declaration_marker("  transformation : String"),
             lean_message.clone(),
         ),
         Effect::require_canonical_declaration(
@@ -794,6 +794,42 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("  absenceScenarioName : String"),
             canonical_declaration_marker("  absenceScenarioName : String"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelView where"),
+            canonical_declaration_marker("structure ModelView where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelViewDefinition where"),
+            canonical_declaration_marker("structure ModelViewDefinition where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelViewControl where"),
+            canonical_declaration_marker("structure ModelViewControl where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  handoffContract : String"),
+            canonical_declaration_marker("  handoffContract : String"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelViewField where"),
+            canonical_declaration_marker("structure ModelViewField where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  sourceReadModel : String"),
+            canonical_declaration_marker("  sourceReadModel : String"),
             lean_message.clone(),
         ),
         Effect::require_canonical_declaration(
@@ -904,7 +940,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViews :"),
             canonical_declaration_marker(format!(
-                "def modelViews : List (String × String × String) := {lean_model_view_list}"
+                "def modelViews : List ModelView := {lean_model_view_list}"
             )),
             lean_message.clone(),
         ),
@@ -912,7 +948,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViewDefinitions :"),
             canonical_declaration_marker(format!(
-                "def modelViewDefinitions : List (String × String × String × List String × List String × List String × List String) := {lean_model_view_definition_list}"
+                "def modelViewDefinitions : List ModelViewDefinition := {lean_model_view_definition_list}"
             )),
             lean_message.clone(),
         ),
@@ -920,7 +956,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViewControls :"),
             canonical_declaration_marker(format!(
-                "def modelViewControls : List (String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) := {lean_model_view_control_list}"
+                "def modelViewControls : List ModelViewControl := {lean_model_view_control_list}"
             )),
             lean_message.clone(),
         ),
@@ -944,7 +980,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViewFields :"),
             canonical_declaration_marker(format!(
-                "def modelViewFields : List (String × String × String × String × String × String × String × String × String) := {lean_model_view_field_list}"
+                "def modelViewFields : List ModelViewField := {lean_model_view_field_list}"
             )),
             lean_message.clone(),
         ),
@@ -1196,7 +1232,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViewFieldHasModeledDataFlow"),
             canonical_declaration_marker(
-                "def modelViewFieldHasModeledDataFlow (field : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetView, datum, _, _, _, _, _) := field; modelDataFlowCoversDatumTarget workflow slice datum targetView",
+                "def modelViewFieldHasModeledDataFlow (field : ModelViewField) : Bool := modelDataFlowCoversDatumTarget field.workflow field.slice field.field field.view",
             ),
             lean_message.clone(),
         ),
@@ -1204,7 +1240,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViewFieldBitEncodingMatchesDataFlow"),
             canonical_declaration_marker(
-                "def modelViewFieldBitEncodingMatchesDataFlow (field : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetView, datum, _, _, _, _, bitEncoding) := field; modelDataFlowBitEncodingMatchesDatumTarget workflow slice datum targetView bitEncoding",
+                "def modelViewFieldBitEncodingMatchesDataFlow (field : ModelViewField) : Bool := modelDataFlowBitEncodingMatchesDatumTarget field.workflow field.slice field.field field.view field.bitEncoding",
             ),
             lean_message.clone(),
         ),
@@ -1268,7 +1304,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViewFieldSourceIsComplete"),
             canonical_declaration_marker(
-                "def modelViewFieldSourceIsComplete (field : String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, sourceKind, sourceReadModel, sourceField, provenance, bitEncoding) := field; sourceKind == \"read_model\" && sourceReadModel.isEmpty == false && sourceField.isEmpty == false && provenance.isEmpty == false && bitEncoding.isEmpty == false",
+                "def modelViewFieldSourceIsComplete (field : ModelViewField) : Bool := field.sourceKind == \"read_model\" && field.sourceReadModel.isEmpty == false && field.sourceField.isEmpty == false && field.provenance.isEmpty == false && field.bitEncoding.isEmpty == false",
             ),
             lean_message.clone(),
         ),
@@ -1284,7 +1320,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViewFieldReadModelFieldSourceResolves"),
             canonical_declaration_marker(
-                "def modelViewFieldReadModelFieldSourceResolves (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldSourceIsComplete viewField && modelReadModelFields.any (fun readModelField => readModelField.workflow == workflow && readModelField.slice == slice && readModelField.readModel == sourceReadModel && readModelField.field == sourceField && modelReadModelFieldSourceIsComplete readModelField)",
+                "def modelViewFieldReadModelFieldSourceResolves (viewField : ModelViewField) : Bool := modelViewFieldSourceIsComplete viewField && modelReadModelFields.any (fun readModelField => readModelField.workflow == viewField.workflow && readModelField.slice == viewField.slice && readModelField.readModel == viewField.sourceReadModel && readModelField.field == viewField.sourceField && modelReadModelFieldSourceIsComplete readModelField)",
             ),
             lean_message.clone(),
         ),
@@ -1292,7 +1328,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDisplayedDatumTracesToOriginalProvenance"),
             canonical_declaration_marker(
-                "def modelDisplayedDatumTracesToOriginalProvenance (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldReadModelFieldSourceResolves viewField && modelReadModelFields.any (fun readModelField => readModelField.workflow == workflow && readModelField.slice == slice && readModelField.readModel == sourceReadModel && readModelField.field == sourceField && modelReadModelFieldTracesToOriginalProvenance readModelField)",
+                "def modelDisplayedDatumTracesToOriginalProvenance (viewField : ModelViewField) : Bool := modelViewFieldReadModelFieldSourceResolves viewField && modelReadModelFields.any (fun readModelField => readModelField.workflow == viewField.workflow && readModelField.slice == viewField.slice && readModelField.readModel == viewField.sourceReadModel && readModelField.field == viewField.sourceField && modelReadModelFieldTracesToOriginalProvenance readModelField)",
             ),
             lean_message.clone(),
         ),
@@ -1308,7 +1344,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelControlProvidesCommandInput"),
             canonical_declaration_marker(
-                "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : ModelCommandInput) : Bool := control.1 == input.workflow && control.2.2.2.2.1 == input.command && control.2.2.2.2.2.1 == input.input",
+                "def modelControlProvidesCommandInput (control : ModelViewControl) (input : ModelCommandInput) : Bool := control.workflow == input.workflow && control.command == input.command && control.input == input.input",
             ),
             lean_message.clone(),
         ),
@@ -1316,7 +1352,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViewControlProvidesEveryCommandInput"),
             canonical_declaration_marker(
-                "def modelViewControlProvidesEveryCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) : Bool := modelCommandInputs.all (fun input => input.workflow != control.1 || input.command != control.2.2.2.2.1 || modelViewControls.any (fun providedInput => providedInput.1 == control.1 && providedInput.2.1 == control.2.1 && providedInput.2.2.1 == control.2.2.1 && providedInput.2.2.2.1 == control.2.2.2.1 && providedInput.2.2.2.2.1 == control.2.2.2.2.1 && modelControlProvidesCommandInput providedInput input))",
+                "def modelViewControlProvidesEveryCommandInput (control : ModelViewControl) : Bool := modelCommandInputs.all (fun input => input.workflow != control.workflow || input.command != control.command || modelViewControls.any (fun providedInput => providedInput.workflow == control.workflow && providedInput.slice == control.slice && providedInput.view == control.view && providedInput.control == control.control && providedInput.command == control.command && modelControlProvidesCommandInput providedInput input))",
             ),
             lean_message.clone(),
         ),
@@ -1340,7 +1376,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViewControlNavigationTargetIsModeled"),
             canonical_declaration_marker(
-                "def modelViewControlNavigationTargetIsModeled (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, _, _, _, _, _, _, _, _, _, navigationType, navigationTarget, externalWorkflow, externalSystem, handoffContract) := control; navigationType.isEmpty || ((navigationType == \"modeled_view\" || navigationType == \"local_view_state\") && navigationTarget.isEmpty == false) || (navigationType == \"external_workflow\" && externalWorkflow.isEmpty == false) || (navigationType == \"external_system\" && externalSystem.isEmpty == false && handoffContract.isEmpty == false)",
+                "def modelViewControlNavigationTargetIsModeled (control : ModelViewControl) : Bool := control.navigationType.isEmpty || ((control.navigationType == \"modeled_view\" || control.navigationType == \"local_view_state\") && control.navigationTarget.isEmpty == false) || (control.navigationType == \"external_workflow\" && control.externalWorkflow.isEmpty == false) || (control.navigationType == \"external_system\" && control.externalSystem.isEmpty == false && control.handoffContract.isEmpty == false)",
             ),
             lean_message.clone(),
         ),
@@ -4591,7 +4627,7 @@ fn lean_model_view_list(project_views: &[ProjectView]) -> String {
             .into_iter()
             .map(|(workflow_slug, slice_slug, view)| {
                 format!(
-                    "({}, {}, {})",
+                    "{{ workflow := {}, slice := {}, view := {} }}",
                     json_string(workflow_slug),
                     json_string(slice_slug),
                     json_string(view)
@@ -4634,7 +4670,7 @@ fn lean_model_view_definition_list(project_view_definitions: &[ProjectViewDefini
             .into_iter()
             .map(|definition| {
                 format!(
-                    "({}, {}, {}, [{}], [{}], [{}], [{}])",
+                    "{{ workflow := {}, slice := {}, view := {}, readModels := [{}], sketchTokens := [{}], localStates := [{}], filters := [{}] }}",
                     json_string(definition.workflow_slug()),
                     json_string(definition.slice_slug()),
                     json_string(definition.view()),
@@ -4682,7 +4718,7 @@ fn lean_model_view_control_list(project_view_controls: &[ProjectViewControl]) ->
             .into_iter()
             .map(|control| {
                 format!(
-                    "({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {}, {}, {}, {})",
+                    "{{ workflow := {}, slice := {}, view := {}, control := {}, command := {}, input := {}, inputSourceKind := {}, inputSourceDescription := {}, inputSketchToken := {}, inputVisibleToActor := {}, inputDecisionField := {}, handledErrors := [{}], recoveryBehavior := {}, controlSketchToken := {}, navigationType := {}, navigationTarget := {}, externalWorkflow := {}, externalSystem := {}, handoffContract := {} }}",
                     json_string(control.workflow_slug()),
                     json_string(control.slice_slug()),
                     json_string(control.view()),
@@ -4878,7 +4914,7 @@ fn lean_model_view_field_list(project_view_fields: &[ProjectViewField]) -> Strin
                     bit_encoding,
                 )| {
                     format!(
-                        "({}, {}, {}, {}, {}, {}, {}, {}, {})",
+                        "{{ workflow := {}, slice := {}, view := {}, field := {}, sourceKind := {}, sourceReadModel := {}, sourceField := {}, provenance := {}, bitEncoding := {} }}",
                         json_string(workflow_slug),
                         json_string(slice_slug),
                         json_string(view),
