@@ -680,6 +680,10 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
             "structure ReadModelDefinition where\n  name : String\n  fields : List ReadModelField\n  transitive : Bool\n  relationshipFields : List String\n  transitiveRule : String\n  exampleScenarioName : String\n\nstructure SliceReadModelReference where\n  name : String\n\nstructure ViewField where",
         )
         .replace(
+            "structure ViewDefinition where\n  name : String\n  readModels : List String\n  fields : List ViewField\n  controls : List ControlDefinition\n  sketchTokens : List String\n  localStates : List String\n  filters : List String\n\nstructure AutomationDefinition where",
+            "structure ViewDefinition where\n  name : String\n  readModels : List String\n  fields : List ViewField\n  controls : List ControlDefinition\n  sketchTokens : List String\n  localStates : List String\n  filters : List String\n\nstructure SliceViewReference where\n  name : String\n\nstructure AutomationDefinition where",
+        )
+        .replace(
             "def sliceCommands : List String := []\n\ndef sliceCommandDefinitions : List CommandDefinition := []",
             "def sliceCommands : List SliceCommandReference := []\n\ndef sliceCommandNames : List String := sliceCommands.map (fun commandRef => commandRef.name)\n\ndef sliceCommandDefinitions : List CommandDefinition := []",
         )
@@ -696,6 +700,10 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
             "def sliceReadModels : List SliceReadModelReference := []\n\ndef sliceReadModelNames : List String := sliceReadModels.map (fun readModelRef => readModelRef.name)\n\ndef sliceReadModelDefinitions : List ReadModelDefinition := []",
         )
         .replace(
+            "def sliceViews : List String := []\n\ndef sliceViewDefinitions : List ViewDefinition := []",
+            "def sliceViews : List SliceViewReference := []\n\ndef sliceViewNames : List String := sliceViews.map (fun viewRef => viewRef.name)\n\ndef sliceViewDefinitions : List ViewDefinition := []",
+        )
+        .replace(
             "definitionNamesAreUnique sliceCommands",
             "definitionNamesAreUnique sliceCommandNames",
         )
@@ -707,6 +715,10 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
             "definitionNamesAreUnique sliceReadModels",
             "definitionNamesAreUnique sliceReadModelNames",
         )
+        .replace(
+            "definitionNamesAreUnique sliceViews",
+            "definitionNamesAreUnique sliceViewNames",
+        )
         .replace("sliceCommands.contains ", "sliceCommandNames.contains ")
         .replace(
             "sliceReferencedCommands.contains ",
@@ -716,6 +728,7 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
             "sliceReadModels.contains ",
             "sliceReadModelNames.contains ",
         )
+        .replace("sliceViews.contains ", "sliceViewNames.contains ")
         .replace(
             "def eventIsKnownToSlice (eventName : String) : Bool := sliceEvents.contains eventName || sliceEventDefinitions.any (fun event => event.name == eventName && (event.observed || event.shared))",
             "def eventIsKnownToSlice (eventName : String) : Bool := sliceEventNames.contains eventName || sliceEventDefinitions.any (fun event => event.name == eventName && (event.observed || event.shared))",

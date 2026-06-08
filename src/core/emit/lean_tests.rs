@@ -919,6 +919,10 @@ mod tests {
             lean.contains("structure SliceReadModelReference where\n  name : String"),
             "Lean slice artifacts must represent referenced read model names as typed records"
         );
+        assert!(
+            lean.contains("structure SliceViewReference where\n  name : String"),
+            "Lean slice artifacts must represent referenced view names as typed records"
+        );
         assert!(lean.contains("def sliceCommands : List SliceCommandReference := []"));
         assert!(lean.contains(
             "def sliceCommandNames : List String := sliceCommands.map (fun commandRef => commandRef.name)"
@@ -986,7 +990,10 @@ mod tests {
             ),
             "Lean slice artifacts must enumerate read model field sources without command"
         );
-        assert!(lean.contains("def sliceViews : List String := []"));
+        assert!(lean.contains("def sliceViews : List SliceViewReference := []"));
+        assert!(lean.contains(
+            "def sliceViewNames : List String := sliceViews.map (fun viewRef => viewRef.name)"
+        ));
         assert!(lean.contains("def sliceViewDefinitions : List ViewDefinition := []"));
         assert!(
             lean.contains("def allowedViewFieldSourceKinds : List String := [\"read_model\"]"),
@@ -1057,7 +1064,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def sliceNamedDefinitionsAreUniquelyOwned : Bool := definitionNamesAreUnique sliceCommandNames && definitionNamesAreUnique sliceOwnedCommandNames && definitionNamesAreUnique sliceEventNames && definitionNamesAreUnique sliceOwnedEventNames && definitionNamesAreUnique sliceOwnedStreamNames && definitionNamesAreUnique sliceOwnedExternalPayloadNames && definitionNamesAreUnique sliceReadModelNames && definitionNamesAreUnique sliceOwnedReadModelNames && definitionNamesAreUnique sliceViews && definitionNamesAreUnique sliceOwnedViewNames && definitionNamesAreUnique sliceOwnedAutomationNames && definitionNamesAreUnique sliceOwnedTranslationNames && definitionNamesAreUnique sliceOwnedControlNames"
+                "def sliceNamedDefinitionsAreUniquelyOwned : Bool := definitionNamesAreUnique sliceCommandNames && definitionNamesAreUnique sliceOwnedCommandNames && definitionNamesAreUnique sliceEventNames && definitionNamesAreUnique sliceOwnedEventNames && definitionNamesAreUnique sliceOwnedStreamNames && definitionNamesAreUnique sliceOwnedExternalPayloadNames && definitionNamesAreUnique sliceReadModelNames && definitionNamesAreUnique sliceOwnedReadModelNames && definitionNamesAreUnique sliceViewNames && definitionNamesAreUnique sliceOwnedViewNames && definitionNamesAreUnique sliceOwnedAutomationNames && definitionNamesAreUnique sliceOwnedTranslationNames && definitionNamesAreUnique sliceOwnedControlNames"
             ),
             "Lean slice artifacts must expose owned-definition uniqueness as a proof obligation"
         );
@@ -1453,7 +1460,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def boardElementReferencesDeclaration (element : BoardElement) : Bool := (element.kind == \"view\" && (sliceViews.contains element.declaredName || sliceViewDefinitions.any (fun view => view.name == element.declaredName))) || (element.kind == \"automation\" && sliceAutomations.any (fun automation => automation.name == element.declaredName)) || (element.kind == \"external_event\" && sliceEventDefinitions.any (fun event => event.name == element.declaredName && event.observed)) || (element.kind == \"command\" && (sliceCommandNames.contains element.declaredName || sliceReferencedCommandNames.contains element.declaredName || sliceCommandDefinitions.any (fun command => command.name == element.declaredName))) || (element.kind == \"read_model\" && (sliceReadModelNames.contains element.declaredName || sliceReadModelDefinitions.any (fun readModel => readModel.name == element.declaredName))) || (element.kind == \"event\" && (sliceEventNames.contains element.declaredName || sliceEventDefinitions.any (fun event => event.name == element.declaredName && (event.observed || event.shared))))"
+                "def boardElementReferencesDeclaration (element : BoardElement) : Bool := (element.kind == \"view\" && (sliceViewNames.contains element.declaredName || sliceViewDefinitions.any (fun view => view.name == element.declaredName))) || (element.kind == \"automation\" && sliceAutomations.any (fun automation => automation.name == element.declaredName)) || (element.kind == \"external_event\" && sliceEventDefinitions.any (fun event => event.name == element.declaredName && event.observed)) || (element.kind == \"command\" && (sliceCommandNames.contains element.declaredName || sliceReferencedCommandNames.contains element.declaredName || sliceCommandDefinitions.any (fun command => command.name == element.declaredName))) || (element.kind == \"read_model\" && (sliceReadModelNames.contains element.declaredName || sliceReadModelDefinitions.any (fun readModel => readModel.name == element.declaredName))) || (element.kind == \"event\" && (sliceEventNames.contains element.declaredName || sliceEventDefinitions.any (fun event => event.name == element.declaredName && (event.observed || event.shared))))"
             ),
             "Lean slice artifacts must require board elements to reference real declarations"
         );
@@ -2077,7 +2084,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def navigationModeledViewTargetsExistingView (target : NavigationTarget) : Bool := target.targetType != \"modeled_view\" || (target.targetName.isEmpty == false && sliceViews.contains target.targetName)"
+                "def navigationModeledViewTargetsExistingView (target : NavigationTarget) : Bool := target.targetType != \"modeled_view\" || (target.targetName.isEmpty == false && sliceViewNames.contains target.targetName)"
             ),
             "Lean slice artifacts must require modeled-view navigation to target existing composed views"
         );
@@ -2101,7 +2108,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def navigationTargetIsComplete (view : ViewDefinition) (target : NavigationTarget) : Bool := (target.targetType.isEmpty && target.targetName.isEmpty && target.externalWorkflowName.isEmpty && target.externalSystemName.isEmpty && target.handoffContract.isEmpty) || (target.targetType == \"modeled_view\" && target.targetName.isEmpty == false && sliceViews.contains target.targetName) || (target.targetType == \"local_view_state\" && localViewStateNavigationTargetResolves view target) || (target.targetType == \"external_workflow\" && navigationExternalWorkflowTargetsNamed target) || (target.targetType == \"external_system\" && navigationExternalSystemTargetsHaveContracts target)"
+                "def navigationTargetIsComplete (view : ViewDefinition) (target : NavigationTarget) : Bool := (target.targetType.isEmpty && target.targetName.isEmpty && target.externalWorkflowName.isEmpty && target.externalSystemName.isEmpty && target.handoffContract.isEmpty) || (target.targetType == \"modeled_view\" && target.targetName.isEmpty == false && sliceViewNames.contains target.targetName) || (target.targetType == \"local_view_state\" && localViewStateNavigationTargetResolves view target) || (target.targetType == \"external_workflow\" && navigationExternalWorkflowTargetsNamed target) || (target.targetType == \"external_system\" && navigationExternalSystemTargetsHaveContracts target)"
             ),
             "Lean slice artifacts must require navigation targets to be complete for their target type"
         );

@@ -492,6 +492,10 @@ mod tests {
             quint.contains("type SliceReadModelReference = { name: str }"),
             "Quint slice artifacts must represent referenced read model names as typed records"
         );
+        assert!(
+            quint.contains("type SliceViewReference = { name: str }"),
+            "Quint slice artifacts must represent referenced view names as typed records"
+        );
         assert!(quint.contains("val sliceCommands: List[SliceCommandReference] = []"));
         assert!(quint.contains(
             "val sliceCommandNames: List[str] = sliceCommands.foldl([], (names, commandRef) => names.append(commandRef.name))"
@@ -539,7 +543,10 @@ mod tests {
         assert!(quint.contains(
             "val allowedReadModelFieldSourceKinds: List[str] = [\"event_attribute\",\"derivation\",\"absence_default\"]"
         ));
-        assert!(quint.contains("val sliceViews: List[str] = []"));
+        assert!(quint.contains("val sliceViews: List[SliceViewReference] = []"));
+        assert!(quint.contains(
+            "val sliceViewNames: List[str] = sliceViews.foldl([], (names, viewRef) => names.append(viewRef.name))"
+        ));
         assert!(quint.contains("val sliceViewDefinitions: List[ViewDefinition] = []"));
         assert!(quint.contains("val allowedViewFieldSourceKinds: List[str] = [\"read_model\"]"));
         assert!(quint.contains(
@@ -573,7 +580,7 @@ mod tests {
             "val sliceOwnedControlNames: List[str] = sliceViewDefinitions.foldl([], (names, view) => names.concat(view.controls.foldl([], (controlNames, control) => controlNames.append(control.name))))"
         ));
         assert!(quint.contains(
-            "val sliceNamedDefinitionsAreUniquelyOwned = definitionNamesAreUnique(sliceCommandNames) and definitionNamesAreUnique(sliceOwnedCommandNames) and definitionNamesAreUnique(sliceEventNames) and definitionNamesAreUnique(sliceOwnedEventNames) and definitionNamesAreUnique(sliceOwnedStreamNames) and definitionNamesAreUnique(sliceOwnedExternalPayloadNames) and definitionNamesAreUnique(sliceReadModelNames) and definitionNamesAreUnique(sliceOwnedReadModelNames) and definitionNamesAreUnique(sliceViews) and definitionNamesAreUnique(sliceOwnedViewNames) and definitionNamesAreUnique(sliceOwnedAutomationNames) and definitionNamesAreUnique(sliceOwnedTranslationNames) and definitionNamesAreUnique(sliceOwnedControlNames)"
+            "val sliceNamedDefinitionsAreUniquelyOwned = definitionNamesAreUnique(sliceCommandNames) and definitionNamesAreUnique(sliceOwnedCommandNames) and definitionNamesAreUnique(sliceEventNames) and definitionNamesAreUnique(sliceOwnedEventNames) and definitionNamesAreUnique(sliceOwnedStreamNames) and definitionNamesAreUnique(sliceOwnedExternalPayloadNames) and definitionNamesAreUnique(sliceReadModelNames) and definitionNamesAreUnique(sliceOwnedReadModelNames) and definitionNamesAreUnique(sliceViewNames) and definitionNamesAreUnique(sliceOwnedViewNames) and definitionNamesAreUnique(sliceOwnedAutomationNames) and definitionNamesAreUnique(sliceOwnedTranslationNames) and definitionNamesAreUnique(sliceOwnedControlNames)"
         ));
         assert!(quint.contains(
             "def scenarioStreamResolves(streamName) = sliceStreams.select(stream => stream.name == streamName).length() > 0"
@@ -771,7 +778,7 @@ mod tests {
             "def boardElementLaneMatchesKind(element) = (element.kind == \"view\" and element.lane == \"ux\") or (element.kind == \"automation\" and element.lane == \"ux\") or (element.kind == \"external_event\" and element.lane == \"ux\") or (element.kind == \"command\" and element.lane == \"actions\") or (element.kind == \"read_model\" and element.lane == \"actions\") or (element.kind == \"event\" and element.lane == \"events\")"
         ));
         assert!(quint.contains(
-            "def boardElementReferencesDeclaration(element) = (element.kind == \"view\" and (sliceViews.select(viewName => viewName == element.declaredName).length() > 0 or sliceViewDefinitions.select(view => view.name == element.declaredName).length() > 0)) or (element.kind == \"automation\" and sliceAutomations.select(automation => automation.name == element.declaredName).length() > 0) or (element.kind == \"external_event\" and sliceEventDefinitions.select(event => event.name == element.declaredName and event.observed).length() > 0) or (element.kind == \"command\" and (sliceCommandNames.select(commandName => commandName == element.declaredName).length() > 0 or sliceReferencedCommandNames.select(commandName => commandName == element.declaredName).length() > 0 or sliceCommandDefinitions.select(command => command.name == element.declaredName).length() > 0)) or (element.kind == \"read_model\" and (sliceReadModelNames.select(readModelName => readModelName == element.declaredName).length() > 0 or sliceReadModelDefinitions.select(readModel => readModel.name == element.declaredName).length() > 0)) or (element.kind == \"event\" and (sliceEventNames.select(eventName => eventName == element.declaredName).length() > 0 or sliceEventDefinitions.select(event => event.name == element.declaredName and (event.observed or event.shared)).length() > 0))"
+            "def boardElementReferencesDeclaration(element) = (element.kind == \"view\" and (sliceViewNames.select(viewName => viewName == element.declaredName).length() > 0 or sliceViewDefinitions.select(view => view.name == element.declaredName).length() > 0)) or (element.kind == \"automation\" and sliceAutomations.select(automation => automation.name == element.declaredName).length() > 0) or (element.kind == \"external_event\" and sliceEventDefinitions.select(event => event.name == element.declaredName and event.observed).length() > 0) or (element.kind == \"command\" and (sliceCommandNames.select(commandName => commandName == element.declaredName).length() > 0 or sliceReferencedCommandNames.select(commandName => commandName == element.declaredName).length() > 0 or sliceCommandDefinitions.select(command => command.name == element.declaredName).length() > 0)) or (element.kind == \"read_model\" and (sliceReadModelNames.select(readModelName => readModelName == element.declaredName).length() > 0 or sliceReadModelDefinitions.select(readModel => readModel.name == element.declaredName).length() > 0)) or (element.kind == \"event\" and (sliceEventNames.select(eventName => eventName == element.declaredName).length() > 0 or sliceEventDefinitions.select(event => event.name == element.declaredName and (event.observed or event.shared)).length() > 0))"
         ));
         assert!(quint.contains(
             "def automationBoardElementIsDeclaredAutomation(element) = element.kind != \"automation\" or sliceAutomations.select(automation => automation.name == element.declaredName).length() > 0"
@@ -1145,7 +1152,7 @@ mod tests {
             "def navigationControlDeclaresType(target) = not(navigationTargetHasPayload(target)) or target.targetType != \"\""
         ));
         assert!(quint.contains(
-            "def navigationModeledViewTargetsExistingView(target) = target.targetType != \"modeled_view\" or (target.targetName != \"\" and sliceViews.select(viewName => viewName == target.targetName).length() > 0)"
+            "def navigationModeledViewTargetsExistingView(target) = target.targetType != \"modeled_view\" or (target.targetName != \"\" and sliceViewNames.select(viewName => viewName == target.targetName).length() > 0)"
         ));
         assert!(quint.contains(
             "def localViewStateNavigationTargetResolves(view, target) = target.targetType != \"local_view_state\" or (target.targetName != \"\" and (view.localStates.select(localState => localState == target.targetName).length() > 0 or view.filters.select(viewFilter => viewFilter == target.targetName).length() > 0))"
@@ -1157,7 +1164,7 @@ mod tests {
             "def navigationExternalSystemTargetsHaveContracts(target) = target.targetType != \"external_system\" or (target.externalSystemName != \"\" and target.handoffContract != \"\")"
         ));
         assert!(quint.contains(
-            "def navigationTargetIsComplete(view, target) = (target.targetType == \"\" and target.targetName == \"\" and target.externalWorkflowName == \"\" and target.externalSystemName == \"\" and target.handoffContract == \"\") or (target.targetType == \"modeled_view\" and target.targetName != \"\" and sliceViews.select(viewName => viewName == target.targetName).length() > 0) or (target.targetType == \"local_view_state\" and localViewStateNavigationTargetResolves(view, target)) or (target.targetType == \"external_workflow\" and navigationExternalWorkflowTargetsNamed(target)) or (target.targetType == \"external_system\" and navigationExternalSystemTargetsHaveContracts(target))"
+            "def navigationTargetIsComplete(view, target) = (target.targetType == \"\" and target.targetName == \"\" and target.externalWorkflowName == \"\" and target.externalSystemName == \"\" and target.handoffContract == \"\") or (target.targetType == \"modeled_view\" and target.targetName != \"\" and sliceViewNames.select(viewName => viewName == target.targetName).length() > 0) or (target.targetType == \"local_view_state\" and localViewStateNavigationTargetResolves(view, target)) or (target.targetType == \"external_workflow\" and navigationExternalWorkflowTargetsNamed(target)) or (target.targetType == \"external_system\" and navigationExternalSystemTargetsHaveContracts(target))"
         ));
         assert!(quint.contains(
             "val viewControlNavigationTypesAreModeled = sliceViewDefinitions.select(view => view.controls.select(control => navigationTargetTypeIsModeled(control.navigation)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
