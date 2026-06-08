@@ -327,6 +327,10 @@ pub(crate) fn lean_command_input_record_structure() -> &'static str {
     "structure ModelCommandInput where\n  workflow : String\n  slice : String\n  command : String\n  input : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
 }
 
+pub(crate) fn lean_read_model_record_structures() -> &'static str {
+    "structure ModelReadModel where\n  workflow : String\n  slice : String\n  readModel : String\n\nstructure ModelReadModelDefinition where\n  workflow : String\n  slice : String\n  readModel : String\n  transitive : Bool\n  relationshipFields : List String\n  transitiveRule : String\n  exampleScenarioName : String\n\nstructure ModelReadModelField where\n  workflow : String\n  slice : String\n  readModel : String\n  field : String\n  sourceKind : String\n  sourceEvent : String\n  sourceAttribute : String\n  derivationRule : String\n  derivationSourceFields : List String\n  absenceEvent : String\n  derivationScenarioName : String\n  absenceScenarioName : String\n  provenance : String"
+}
+
 pub(crate) fn lean_event_inventory_record_structures() -> &'static str {
     "structure ModelStream where\n  workflow : String\n  slice : String\n  stream : String\n\nstructure ModelEvent where\n  workflow : String\n  slice : String\n  event : String\n  stream : String\n\nstructure ModelEventAttribute where\n  workflow : String\n  slice : String\n  event : String\n  attributeName : String\n  sourceKind : String\n  sourceName : String\n  sourceField : String\n  generatedSourceKind : String\n  provenance : String"
 }
