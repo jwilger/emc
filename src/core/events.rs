@@ -11,7 +11,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 
-use crate::core::connection::{ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval};
+use crate::core::connection::{
+    ConnectionKind, WorkflowConnection, WorkflowConnectionTarget, WorkflowTransitionRemoval,
+    WorkflowTransitionRemovalTarget,
+};
 use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest};
 use crate::core::effect::{
     ArtifactDigest, ChosenEventId, Effect, EffectPlan, EventConflictId, FileContents,
@@ -589,6 +592,253 @@ impl SliceUpdatedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowConnectedEventPayload {
+    workflow_slug: WorkflowSlug,
+    source: SliceSlug,
+    target: WorkflowConnectedEventTarget,
+    kind: ConnectionKind,
+    trigger: TransitionTriggerName,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+enum WorkflowConnectedEventTarget {
+    Slice {
+        slug: SliceSlug,
+        payload_contract: Option<PayloadContractName>,
+    },
+    WorkflowExit {
+        slug: WorkflowSlug,
+        reason: ModelDescription,
+    },
+}
+
+impl WorkflowConnectedEventPayload {
+    fn from_connection(connection: &WorkflowConnection) -> Self {
+        let target = match connection.target() {
+            WorkflowConnectionTarget::Slice(slug) => WorkflowConnectedEventTarget::Slice {
+                slug: slug.clone(),
+                payload_contract: connection.payload_contract().cloned(),
+            },
+            WorkflowConnectionTarget::Workflow { slug, reason } => {
+                WorkflowConnectedEventTarget::WorkflowExit {
+                    slug: slug.clone(),
+                    reason: reason.clone(),
+                }
+            }
+        };
+        Self {
+            workflow_slug: connection.workflow_slug().clone(),
+            source: connection.source().clone(),
+            target,
+            kind: connection.kind(),
+            trigger: connection.trigger().clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        let workflow = workflow_slug(required_str(payload, "workflow")?)?;
+        let source = slice_slug(required_str(payload, "from")?)?;
+        let target_slice = optional_str(payload, "to")?.map(slice_slug).transpose()?;
+        let target_workflow = optional_str(payload, "to_workflow")?
+            .map(workflow_slug)
+            .transpose()?;
+        let kind = connection_kind(required_str(payload, "via")?)?;
+        let trigger = transition_trigger_name(required_str(payload, "name")?)?;
+        let payload_contract = optional_str(payload, "payload_contract")?
+            .map(payload_contract_name)
+            .transpose()?;
+        let reason = optional_str(payload, "reason")?
+            .map(model_description)
+            .transpose()?;
+
+        let target = match (target_slice, target_workflow, payload_contract, reason) {
+            (Some(slug), None, payload_contract, None) => WorkflowConnectedEventTarget::Slice {
+                slug,
+                payload_contract,
+            },
+            (None, Some(slug), None, Some(reason)) => {
+                WorkflowConnectedEventTarget::WorkflowExit { slug, reason }
+            }
+            _ => return Err("WorkflowConnected has incompatible target fields".to_owned()),
+        };
+
+        Ok(Self {
+            workflow_slug: workflow,
+            source,
+            target,
+            kind,
+            trigger,
+        })
+    }
+
+    fn into_connection(self) -> WorkflowConnection {
+        match self.target {
+            WorkflowConnectedEventTarget::Slice {
+                slug,
+                payload_contract: None,
+            } => WorkflowConnection::new(
+                self.workflow_slug,
+                self.source,
+                slug,
+                self.kind,
+                self.trigger,
+            ),
+            WorkflowConnectedEventTarget::Slice {
+                slug,
+                payload_contract: Some(payload_contract),
+            } => WorkflowConnection::new_with_payload_contract(
+                self.workflow_slug,
+                self.source,
+                slug,
+                self.kind,
+                self.trigger,
+                payload_contract,
+            ),
+            WorkflowConnectedEventTarget::WorkflowExit { slug, reason } => {
+                WorkflowConnection::new_workflow_exit(
+                    self.workflow_slug,
+                    self.source,
+                    slug,
+                    self.kind,
+                    self.trigger,
+                    reason,
+                )
+            }
+        }
+    }
+
+    fn to_json_value(&self) -> Value {
+        let (to, to_workflow, payload_contract, reason): (
+            Option<&str>,
+            Option<&str>,
+            Option<&str>,
+            Option<&str>,
+        ) = match &self.target {
+            WorkflowConnectedEventTarget::Slice {
+                slug,
+                payload_contract,
+            } => (
+                Some(slug.as_ref()),
+                None,
+                payload_contract.as_ref().map(|contract| contract.as_ref()),
+                None,
+            ),
+            WorkflowConnectedEventTarget::WorkflowExit { slug, reason } => {
+                (None, Some(slug.as_ref()), None, Some(reason.as_ref()))
+            }
+        };
+
+        json!({
+            "workflow": self.workflow_slug.as_ref(),
+            "from": self.source.as_ref(),
+            "to": to,
+            "to_workflow": to_workflow,
+            "via": self.kind.trigger_kind(),
+            "name": self.trigger.as_ref(),
+            "payload_contract": payload_contract,
+            "reason": reason,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowTransitionRemovedEventPayload {
+    workflow_slug: WorkflowSlug,
+    source: SliceSlug,
+    target: WorkflowTransitionRemovedEventTarget,
+    kind: ConnectionKind,
+    trigger: TransitionTriggerName,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+enum WorkflowTransitionRemovedEventTarget {
+    Slice(SliceSlug),
+    WorkflowExit(WorkflowSlug),
+}
+
+impl WorkflowTransitionRemovedEventPayload {
+    fn from_removal(removal: &WorkflowTransitionRemoval) -> Self {
+        let target = match removal.target() {
+            WorkflowTransitionRemovalTarget::Slice(slug) => {
+                WorkflowTransitionRemovedEventTarget::Slice(slug.clone())
+            }
+            WorkflowTransitionRemovalTarget::Workflow(slug) => {
+                WorkflowTransitionRemovedEventTarget::WorkflowExit(slug.clone())
+            }
+        };
+        Self {
+            workflow_slug: removal.workflow_slug().clone(),
+            source: removal.source().clone(),
+            target,
+            kind: removal.kind(),
+            trigger: removal.trigger().clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        let workflow = workflow_slug(required_str(payload, "workflow")?)?;
+        let source = slice_slug(required_str(payload, "from")?)?;
+        let target_slice = optional_str(payload, "to")?.map(slice_slug).transpose()?;
+        let target_workflow = optional_str(payload, "to_workflow")?
+            .map(workflow_slug)
+            .transpose()?;
+        let kind = connection_kind(required_str(payload, "via")?)?;
+        let trigger = transition_trigger_name(required_str(payload, "name")?)?;
+
+        let target = match (target_slice, target_workflow) {
+            (Some(slug), None) => WorkflowTransitionRemovedEventTarget::Slice(slug),
+            (None, Some(slug)) => WorkflowTransitionRemovedEventTarget::WorkflowExit(slug),
+            _ => return Err("WorkflowTransitionRemoved has incompatible target fields".to_owned()),
+        };
+
+        Ok(Self {
+            workflow_slug: workflow,
+            source,
+            target,
+            kind,
+            trigger,
+        })
+    }
+
+    fn into_removal(self) -> WorkflowTransitionRemoval {
+        match self.target {
+            WorkflowTransitionRemovedEventTarget::Slice(slug) => WorkflowTransitionRemoval::new(
+                self.workflow_slug,
+                self.source,
+                slug,
+                self.kind,
+                self.trigger,
+            ),
+            WorkflowTransitionRemovedEventTarget::WorkflowExit(slug) => {
+                WorkflowTransitionRemoval::new_workflow_exit(
+                    self.workflow_slug,
+                    self.source,
+                    slug,
+                    self.kind,
+                    self.trigger,
+                )
+            }
+        }
+    }
+
+    fn to_json_value(&self) -> Value {
+        let (to, to_workflow): (Option<&str>, Option<&str>) = match &self.target {
+            WorkflowTransitionRemovedEventTarget::Slice(slug) => (Some(slug.as_ref()), None),
+            WorkflowTransitionRemovedEventTarget::WorkflowExit(slug) => (None, Some(slug.as_ref())),
+        };
+
+        json!({
+            "workflow": self.workflow_slug.as_ref(),
+            "from": self.source.as_ref(),
+            "to": to,
+            "to_workflow": to_workflow,
+            "via": self.kind.trigger_kind(),
+            "name": self.trigger.as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum ExportedEventBody {
     ProjectInitialized {
         name: ProjectName,
@@ -816,27 +1066,12 @@ impl ExportedEventBody {
                     .as_review_event_id()
                     .map(|event_id| event_id.as_ref()),
             }),
-            Self::WorkflowConnected { connection } => json!({
-                "workflow": connection.workflow_slug().as_ref(),
-                "from": connection.source().as_ref(),
-                "to": connection.target().slice_slug().map(|target| target.as_ref()),
-                "to_workflow": connection
-                    .target()
-                    .workflow_slug()
-                    .map(|target| target.as_ref()),
-                "via": connection.kind().trigger_kind(),
-                "name": connection.trigger().as_ref(),
-                "payload_contract": connection.payload_contract().map(|contract| contract.as_ref()),
-                "reason": connection.target().reason().map(|reason| reason.as_ref()),
-            }),
-            Self::WorkflowTransitionRemoved { removal } => json!({
-                "workflow": removal.workflow_slug().as_ref(),
-                "from": removal.source().as_ref(),
-                "to": removal.target().slice_slug().map(|target| target.as_ref()),
-                "to_workflow": removal.target().workflow_slug().map(|target| target.as_ref()),
-                "via": removal.kind().trigger_kind(),
-                "name": removal.trigger().as_ref(),
-            }),
+            Self::WorkflowConnected { connection } => {
+                WorkflowConnectedEventPayload::from_connection(connection).to_json_value()
+            }
+            Self::WorkflowTransitionRemoved { removal } => {
+                WorkflowTransitionRemovedEventPayload::from_removal(removal).to_json_value()
+            }
             Self::SliceAdded { slice } => SliceAddedEventPayload::from_slice(slice).to_json_value(),
             Self::SliceUpdated { slice } => {
                 SliceUpdatedEventPayload::from_slice_detail(slice).to_json_value()
@@ -964,10 +1199,12 @@ impl ExportedEventBody {
                 review_event: review_event_reference_from_payload(payload)?,
             }),
             ExportedEventType::WorkflowConnected => Ok(Self::WorkflowConnected {
-                connection: workflow_connection_from_payload(payload)?,
+                connection: WorkflowConnectedEventPayload::from_json_value(payload)?
+                    .into_connection(),
             }),
             ExportedEventType::WorkflowTransitionRemoved => Ok(Self::WorkflowTransitionRemoved {
-                removal: workflow_transition_removal_from_payload(payload)?,
+                removal: WorkflowTransitionRemovedEventPayload::from_json_value(payload)?
+                    .into_removal(),
             }),
             ExportedEventType::SliceAdded => Ok(Self::SliceAdded {
                 slice: SliceAddedEventPayload::from_json_value(payload)?.into_slice(),
@@ -3354,66 +3591,6 @@ fn review_rule_names_from_payload(payload: &Value) -> Result<Vec<ReviewRuleName>
         .collect()
 }
 
-fn workflow_connection_from_payload(payload: &Value) -> Result<WorkflowConnection, String> {
-    let workflow = workflow_slug(required_str(payload, "workflow")?)?;
-    let source = slice_slug(required_str(payload, "from")?)?;
-    let target_slice = optional_str(payload, "to")?.map(slice_slug).transpose()?;
-    let target_workflow = optional_str(payload, "to_workflow")?
-        .map(workflow_slug)
-        .transpose()?;
-    let kind = connection_kind(required_str(payload, "via")?)?;
-    let trigger = transition_trigger_name(required_str(payload, "name")?)?;
-    let payload_contract = optional_str(payload, "payload_contract")?
-        .map(payload_contract_name)
-        .transpose()?;
-    let reason = optional_str(payload, "reason")?
-        .map(model_description)
-        .transpose()?;
-
-    match (target_slice, target_workflow, payload_contract, reason) {
-        (Some(target), None, None, None) => Ok(WorkflowConnection::new(
-            workflow, source, target, kind, trigger,
-        )),
-        (Some(target), None, Some(payload_contract), None) => {
-            Ok(WorkflowConnection::new_with_payload_contract(
-                workflow,
-                source,
-                target,
-                kind,
-                trigger,
-                payload_contract,
-            ))
-        }
-        (None, Some(target), None, Some(reason)) => Ok(WorkflowConnection::new_workflow_exit(
-            workflow, source, target, kind, trigger, reason,
-        )),
-        _ => Err("WorkflowConnected has incompatible target fields".to_owned()),
-    }
-}
-
-fn workflow_transition_removal_from_payload(
-    payload: &Value,
-) -> Result<WorkflowTransitionRemoval, String> {
-    let workflow = workflow_slug(required_str(payload, "workflow")?)?;
-    let source = slice_slug(required_str(payload, "from")?)?;
-    let target_slice = optional_str(payload, "to")?.map(slice_slug).transpose()?;
-    let target_workflow = optional_str(payload, "to_workflow")?
-        .map(workflow_slug)
-        .transpose()?;
-    let kind = connection_kind(required_str(payload, "via")?)?;
-    let trigger = transition_trigger_name(required_str(payload, "name")?)?;
-
-    match (target_slice, target_workflow) {
-        (Some(target), None) => Ok(WorkflowTransitionRemoval::new(
-            workflow, source, target, kind, trigger,
-        )),
-        (None, Some(target)) => Ok(WorkflowTransitionRemoval::new_workflow_exit(
-            workflow, source, target, kind, trigger,
-        )),
-        _ => Err("WorkflowTransitionRemoved has incompatible target fields".to_owned()),
-    }
-}
-
 fn workflow_transition_record_from_connection(
     connection: &WorkflowConnection,
 ) -> Result<WorkflowTransitionRecord, String> {
@@ -4559,6 +4736,132 @@ mod tests {
         assert_eq!(
             SliceUpdatedEventPayload::from_json_value(&json)?.into_slice_detail(),
             slice
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn workflow_connected_event_payload_round_trips_slice_target_with_payload_contract()
+    -> Result<(), String> {
+        let connection = WorkflowConnection::new_with_payload_contract(
+            workflow_slug("open-ticket")?,
+            slice_slug("capture-ticket")?,
+            slice_slug("review-ticket")?,
+            ConnectionKind::navigation(),
+            transition_trigger_name("review-ticket-screen")?,
+            payload_contract_name("ReviewTicketPayload")?,
+        );
+
+        let payload = WorkflowConnectedEventPayload::from_connection(&connection);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "from": "capture-ticket",
+                "to": "review-ticket",
+                "to_workflow": null,
+                "via": "navigation",
+                "name": "review-ticket-screen",
+                "payload_contract": "ReviewTicketPayload",
+                "reason": null,
+            })
+        );
+        assert_eq!(
+            WorkflowConnectedEventPayload::from_json_value(&json)?.into_connection(),
+            connection
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn workflow_connected_event_payload_round_trips_workflow_exit_target() -> Result<(), String> {
+        let connection = WorkflowConnection::new_workflow_exit(
+            workflow_slug("open-ticket")?,
+            slice_slug("capture-ticket")?,
+            workflow_slug("close-ticket")?,
+            ConnectionKind::outcome(),
+            transition_trigger_name("ticket-closed")?,
+            model_description("Resolved tickets continue in the close-ticket workflow.")?,
+        );
+
+        let payload = WorkflowConnectedEventPayload::from_connection(&connection);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "from": "capture-ticket",
+                "to": null,
+                "to_workflow": "close-ticket",
+                "via": "outcome",
+                "name": "ticket-closed",
+                "payload_contract": null,
+                "reason": "Resolved tickets continue in the close-ticket workflow.",
+            })
+        );
+        assert_eq!(
+            WorkflowConnectedEventPayload::from_json_value(&json)?.into_connection(),
+            connection
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn workflow_connected_event_payload_rejects_mixed_transition_targets() -> Result<(), String> {
+        let json = serde_json::json!({
+            "workflow": "open-ticket",
+            "from": "capture-ticket",
+            "to": "review-ticket",
+            "to_workflow": "close-ticket",
+            "via": "navigation",
+            "name": "review-ticket-screen",
+            "payload_contract": null,
+            "reason": "Only workflow exits may carry reasons.",
+        });
+
+        let error = match WorkflowConnectedEventPayload::from_json_value(&json) {
+            Ok(_) => return Err("mixed slice and workflow targets must be rejected".to_owned()),
+            Err(error) => error,
+        };
+        assert_eq!(error, "WorkflowConnected has incompatible target fields");
+
+        Ok(())
+    }
+
+    #[test]
+    fn workflow_transition_removed_event_payload_round_trips_workflow_exit_target()
+    -> Result<(), String> {
+        let removal = WorkflowTransitionRemoval::new_workflow_exit(
+            workflow_slug("open-ticket")?,
+            slice_slug("capture-ticket")?,
+            workflow_slug("close-ticket")?,
+            ConnectionKind::outcome(),
+            transition_trigger_name("ticket-closed")?,
+        );
+
+        let payload = WorkflowTransitionRemovedEventPayload::from_removal(&removal);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "from": "capture-ticket",
+                "to": null,
+                "to_workflow": "close-ticket",
+                "via": "outcome",
+                "name": "ticket-closed",
+            })
+        );
+        assert_eq!(
+            WorkflowTransitionRemovedEventPayload::from_json_value(&json)?.into_removal(),
+            removal
         );
 
         Ok(())
