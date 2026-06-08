@@ -767,6 +767,28 @@ impl ExportedEventBody {
         }
     }
 
+    pub(crate) fn tagged_json_value(&self) -> Value {
+        let mut body = Map::new();
+        body.insert(self.event_type().as_ref().to_owned(), self.payload_json());
+        Value::Object(body)
+    }
+
+    pub(crate) fn from_tagged_json_value(value: &Value) -> Result<Self, String> {
+        let object = value
+            .as_object()
+            .ok_or_else(|| "expected exported event body object".to_owned())?;
+        let mut entries = object.iter();
+        let (event_type, payload) = entries
+            .next()
+            .ok_or_else(|| "expected exported event body event type".to_owned())?;
+        if entries.next().is_some() {
+            return Err("expected exported event body with exactly one event type".to_owned());
+        }
+        let event_type =
+            ExportedEventType::try_new(event_type.clone()).map_err(|error| error.to_string())?;
+        Self::from_event_type_and_payload(event_type, payload)
+    }
+
     pub(crate) fn from_event_type_and_payload(
         event_type: ExportedEventType,
         payload: &Value,
