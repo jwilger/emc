@@ -3568,7 +3568,7 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelReadModels : List (String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"ticket_state\")]"
+                "def modelReadModels : List ModelReadModel := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", readModel := \"ticket_state\" }]"
             ),
             "Lean project root must carry the authored read model inventory"
         );
@@ -3579,7 +3579,7 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"ticket_state\", \"ticket_title\", \"event_attribute\", \"TicketCaptured\", \"ticket_title\", \"\", [], \"\", \"\", \"\", \"TicketCaptured.ticket_title\")]"
+                "def modelReadModelFields : List ModelReadModelField := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", readModel := \"ticket_state\", field := \"ticket_title\", sourceKind := \"event_attribute\", sourceEvent := \"TicketCaptured\", sourceAttribute := \"ticket_title\", derivationRule := \"\", derivationSourceFields := [], absenceEvent := \"\", derivationScenarioName := \"\", absenceScenarioName := \"\", provenance := \"TicketCaptured.ticket_title\" }]"
             ),
             "Lean project root must carry read model field source, scenario, absence, and provenance facts"
         );
@@ -3992,7 +3992,7 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"ticket_hierarchy\", true, [\"parent_ticket_id\",\"child_ticket_id\"], \"walk TicketLinked parent_ticket_id edges until root\", \"Ticket hierarchy includes grandchild\")]"
+                "def modelReadModelDefinitions : List ModelReadModelDefinition := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", readModel := \"ticket_hierarchy\", transitive := true, relationshipFields := [\"parent_ticket_id\",\"child_ticket_id\"], transitiveRule := \"walk TicketLinked parent_ticket_id edges until root\", exampleScenarioName := \"Ticket hierarchy includes grandchild\" }]"
             ),
             "Lean project root must carry transitive read-model relationship, rule, and example semantics"
         );

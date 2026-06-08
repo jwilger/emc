@@ -124,6 +124,39 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelReadModel where\n  workflow : String\n  slice : String\n  readModel : String"
+            ),
+            "Lean project root must type read models as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelReadModels : List ModelReadModel := []"),
+            "Lean project root must initialize read models as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelReadModelDefinition where\n  workflow : String\n  slice : String\n  readModel : String\n  transitive : Bool\n  relationshipFields : List String\n  transitiveRule : String\n  exampleScenarioName : String"
+            ),
+            "Lean project root must type read-model definitions as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelReadModelDefinitions : List ModelReadModelDefinition := []"),
+            "Lean project root must initialize read-model definitions as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelReadModelField where\n  workflow : String\n  slice : String\n  readModel : String\n  field : String\n  sourceKind : String\n  sourceEvent : String\n  sourceAttribute : String\n  derivationRule : String\n  derivationSourceFields : List String\n  absenceEvent : String\n  derivationScenarioName : String\n  absenceScenarioName : String\n  provenance : String"
+            ),
+            "Lean project root must type read-model fields as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelReadModelFields : List ModelReadModelField := []"),
+            "Lean project root must initialize read-model fields as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
                 "structure ModelStream where\n  workflow : String\n  slice : String\n  stream : String"
             ),
             "Lean project root must type event streams as named records"
@@ -235,7 +268,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelReadModelFieldSourceIsComplete (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := (field.2.2.2.2.1 == \"event_attribute\" && field.2.2.2.2.2.1.isEmpty == false && field.2.2.2.2.2.2.1.isEmpty == false) || (field.2.2.2.2.1 == \"derivation\" && field.2.2.2.2.2.2.2.1.isEmpty == false && field.2.2.2.2.2.2.2.2.1.isEmpty == false) || (field.2.2.2.2.1 == \"absence_default\" && field.2.2.2.2.2.2.2.2.2.1.isEmpty == false)"
+                "def modelReadModelFieldSourceIsComplete (field : ModelReadModelField) : Bool := (field.sourceKind == \"event_attribute\" && field.sourceEvent.isEmpty == false && field.sourceAttribute.isEmpty == false) || (field.sourceKind == \"derivation\" && field.derivationRule.isEmpty == false && field.derivationSourceFields.isEmpty == false) || (field.sourceKind == \"absence_default\" && field.absenceEvent.isEmpty == false)"
             ),
             "Lean project root must encode read-model field source completeness"
         );
@@ -259,13 +292,13 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelViewFieldReadModelFieldSourceResolves (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldSourceIsComplete viewField && modelReadModelFields.any (fun readModelField => readModelField.1 == workflow && readModelField.2.1 == slice && readModelField.2.2.1 == sourceReadModel && readModelField.2.2.2.1 == sourceField && modelReadModelFieldSourceIsComplete readModelField)"
+                "def modelViewFieldReadModelFieldSourceResolves (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldSourceIsComplete viewField && modelReadModelFields.any (fun readModelField => readModelField.workflow == workflow && readModelField.slice == slice && readModelField.readModel == sourceReadModel && readModelField.field == sourceField && modelReadModelFieldSourceIsComplete readModelField)"
             ),
             "Lean project root must resolve displayed data through declared read-model fields"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelDisplayedDatumTracesToOriginalProvenance (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldReadModelFieldSourceResolves viewField && modelReadModelFields.any (fun readModelField => readModelField.1 == workflow && readModelField.2.1 == slice && readModelField.2.2.1 == sourceReadModel && readModelField.2.2.2.1 == sourceField && modelReadModelFieldTracesToOriginalProvenance readModelField)"
+                "def modelDisplayedDatumTracesToOriginalProvenance (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldReadModelFieldSourceResolves viewField && modelReadModelFields.any (fun readModelField => readModelField.workflow == workflow && readModelField.slice == slice && readModelField.readModel == sourceReadModel && readModelField.field == sourceField && modelReadModelFieldTracesToOriginalProvenance readModelField)"
             ),
             "Lean project root must trace displayed data through read-model fields to original provenance"
         );

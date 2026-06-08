@@ -2110,7 +2110,7 @@ pub(crate) fn parse_lean_project_read_models(
 ) -> Result<Vec<ProjectReadModel>, FormalProjectFactError> {
     read_model_entries_from_list(
         contents.as_ref(),
-        "def modelReadModels : List (String × String × String) := ",
+        "def modelReadModels : List ModelReadModel := ",
     )
 }
 
@@ -2128,7 +2128,7 @@ pub(crate) fn parse_lean_project_read_model_definitions(
 ) -> Result<Vec<ProjectReadModelDefinition>, FormalProjectFactError> {
     read_model_definition_entries_from_list(
         contents.as_ref(),
-        "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := ",
+        "def modelReadModelDefinitions : List ModelReadModelDefinition := ",
     )
 }
 
@@ -2146,7 +2146,7 @@ pub(crate) fn parse_lean_project_read_model_fields(
 ) -> Result<Vec<ProjectReadModelField>, FormalProjectFactError> {
     read_model_field_entries_from_list(
         contents.as_ref(),
-        "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := ",
+        "def modelReadModelFields : List ModelReadModelField := ",
     )
 }
 
@@ -3444,7 +3444,7 @@ pub(crate) fn add_project_read_model(
         .collect::<Vec<_>>();
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelReadModels : List (String × String × String) := ",
+        "def modelReadModels : List ModelReadModel := ",
         &lean_record,
     )
     .and_then(|contents| {
@@ -3453,7 +3453,7 @@ pub(crate) fn add_project_read_model(
             .try_fold(contents, |contents, record| {
                 append_record_if_missing(
                     &contents,
-                    "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := ",
+                    "def modelReadModelDefinitions : List ModelReadModelDefinition := ",
                     record,
                 )
             })
@@ -3464,7 +3464,7 @@ pub(crate) fn add_project_read_model(
             .try_fold(contents, |contents, record| {
                 append_record_if_missing(
                     &contents,
-                    "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := ",
+                    "def modelReadModelFields : List ModelReadModelField := ",
                     record,
                 )
             })
@@ -3472,15 +3472,15 @@ pub(crate) fn add_project_read_model(
     .and_then(|contents| {
         let read_models = read_model_entries_from_list(
             &contents,
-            "def modelReadModels : List (String × String × String) := ",
+            "def modelReadModels : List ModelReadModel := ",
         )?;
         let read_model_definitions = read_model_definition_entries_from_list(
             &contents,
-            "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := ",
+            "def modelReadModelDefinitions : List ModelReadModelDefinition := ",
         )?;
         let read_model_fields = read_model_field_entries_from_list(
             &contents,
-            "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := ",
+            "def modelReadModelFields : List ModelReadModelField := ",
         )?;
         replace_declaration(
             &contents,
@@ -5293,15 +5293,15 @@ pub(crate) fn add_project_event(
         )?;
         let read_models = read_model_entries_from_list(
             &contents,
-            "def modelReadModels : List (String × String × String) := ",
+            "def modelReadModels : List ModelReadModel := ",
         )?;
         let read_model_definitions = read_model_definition_entries_from_list(
             &contents,
-            "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := ",
+            "def modelReadModelDefinitions : List ModelReadModelDefinition := ",
         )?;
         let read_model_fields = read_model_field_entries_from_list(
             &contents,
-            "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := ",
+            "def modelReadModelFields : List ModelReadModelField := ",
         )?;
         let views = view_entries_from_list(
             &contents,
@@ -5807,11 +5807,8 @@ fn parse_quint_project_command_errors_from_contents_or_empty(
 }
 
 fn parse_lean_project_read_models_from_contents_or_empty(contents: &str) -> Vec<ProjectReadModel> {
-    read_model_entries_from_list(
-        contents,
-        "def modelReadModels : List (String × String × String) := ",
-    )
-    .unwrap_or_default()
+    read_model_entries_from_list(contents, "def modelReadModels : List ModelReadModel := ")
+        .unwrap_or_default()
 }
 
 fn parse_quint_project_read_models_from_contents_or_empty(contents: &str) -> Vec<ProjectReadModel> {
@@ -5824,7 +5821,7 @@ fn parse_lean_project_read_model_definitions_from_contents_or_empty(
 ) -> Vec<ProjectReadModelDefinition> {
     read_model_definition_entries_from_list(
         contents,
-        "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := ",
+        "def modelReadModelDefinitions : List ModelReadModelDefinition := ",
     )
     .unwrap_or_default()
 }
@@ -5844,7 +5841,7 @@ fn parse_lean_project_read_model_fields_from_contents_or_empty(
 ) -> Vec<ProjectReadModelField> {
     read_model_field_entries_from_list(
         contents,
-        "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := ",
+        "def modelReadModelFields : List ModelReadModelField := ",
     )
     .unwrap_or_default()
 }
@@ -6468,9 +6465,15 @@ fn read_model_definition_entries_from_list(
 }
 
 fn record_read_model_definition_transitive(record: &str) -> Result<bool, FormalProjectFactError> {
-    if record.contains(", true,") || record.contains("transitive: true") {
+    if record.contains(", true,")
+        || record.contains("transitive: true")
+        || record.contains("transitive := true")
+    {
         Ok(true)
-    } else if record.contains(", false,") || record.contains("transitive: false") {
+    } else if record.contains(", false,")
+        || record.contains("transitive: false")
+        || record.contains("transitive := false")
+    {
         Ok(false)
     } else {
         Err(FormalProjectFactError::new(
@@ -8511,7 +8514,7 @@ fn quint_project_outcome_list(project_outcomes: &[ProjectOutcome]) -> String {
 
 fn lean_read_model_record(read_model: &NewProjectReadModel) -> String {
     format!(
-        "({}, {}, {})",
+        "{{ workflow := {}, slice := {}, readModel := {} }}",
         quoted(read_model.workflow_slug.as_ref()),
         quoted(read_model.slice_slug.as_ref()),
         quoted(read_model.read_model.as_ref())
@@ -8529,7 +8532,7 @@ fn quint_read_model_record(read_model: &NewProjectReadModel) -> String {
 
 fn lean_read_model_definition_record(definition: &NewProjectReadModelDefinition) -> String {
     format!(
-        "({}, {}, {}, {}, [{}], {}, {})",
+        "{{ workflow := {}, slice := {}, readModel := {}, transitive := {}, relationshipFields := [{}], transitiveRule := {}, exampleScenarioName := {} }}",
         quoted(definition.workflow_slug.as_ref()),
         quoted(definition.slice_slug.as_ref()),
         quoted(definition.read_model.as_ref()),
@@ -8555,7 +8558,7 @@ fn quint_read_model_definition_record(definition: &NewProjectReadModelDefinition
 
 fn lean_read_model_field_record(field: &NewProjectReadModelField) -> String {
     format!(
-        "({}, {}, {}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {})",
+        "{{ workflow := {}, slice := {}, readModel := {}, field := {}, sourceKind := {}, sourceEvent := {}, sourceAttribute := {}, derivationRule := {}, derivationSourceFields := [{}], absenceEvent := {}, derivationScenarioName := {}, absenceScenarioName := {}, provenance := {} }}",
         quoted(field.workflow_slug.as_ref()),
         quoted(field.slice_slug.as_ref()),
         quoted(field.read_model.as_ref()),

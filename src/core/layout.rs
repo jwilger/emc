@@ -774,6 +774,30 @@ fn project_root_effects(
         ),
         Effect::require_canonical_declaration(
             lean_path.clone(),
+            canonical_declaration_prefix("structure ModelReadModel where"),
+            canonical_declaration_marker("structure ModelReadModel where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelReadModelDefinition where"),
+            canonical_declaration_marker("structure ModelReadModelDefinition where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelReadModelField where"),
+            canonical_declaration_marker("structure ModelReadModelField where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  absenceScenarioName : String"),
+            canonical_declaration_marker("  absenceScenarioName : String"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
             canonical_declaration_prefix("structure ModelStream where"),
             canonical_declaration_marker("structure ModelStream where"),
             lean_message.clone(),
@@ -856,7 +880,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelReadModels :"),
             canonical_declaration_marker(format!(
-                "def modelReadModels : List (String × String × String) := {lean_model_read_model_list}"
+                "def modelReadModels : List ModelReadModel := {lean_model_read_model_list}"
             )),
             lean_message.clone(),
         ),
@@ -864,7 +888,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelReadModelDefinitions :"),
             canonical_declaration_marker(format!(
-                "def modelReadModelDefinitions : List (String × String × String × Bool × List String × String × String) := {lean_model_read_model_definition_list}"
+                "def modelReadModelDefinitions : List ModelReadModelDefinition := {lean_model_read_model_definition_list}"
             )),
             lean_message.clone(),
         ),
@@ -872,7 +896,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelReadModelFields :"),
             canonical_declaration_marker(format!(
-                "def modelReadModelFields : List (String × String × String × String × String × String × String × String × List String × String × String × String × String) := {lean_model_read_model_field_list}"
+                "def modelReadModelFields : List ModelReadModelField := {lean_model_read_model_field_list}"
             )),
             lean_message.clone(),
         ),
@@ -1164,7 +1188,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelReadModelFieldHasModeledDataFlow"),
             canonical_declaration_marker(
-                "def modelReadModelFieldHasModeledDataFlow (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := let (workflow, slice, targetReadModel, datum, _, _, _, _, _, _, _, _, _) := field; modelDataFlowCoversDatumTarget workflow slice datum targetReadModel",
+                "def modelReadModelFieldHasModeledDataFlow (field : ModelReadModelField) : Bool := modelDataFlowCoversDatumTarget field.workflow field.slice field.field field.readModel",
             ),
             lean_message.clone(),
         ),
@@ -1236,7 +1260,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelReadModelFieldSourceIsComplete"),
             canonical_declaration_marker(
-                "def modelReadModelFieldSourceIsComplete (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := (field.2.2.2.2.1 == \"event_attribute\" && field.2.2.2.2.2.1.isEmpty == false && field.2.2.2.2.2.2.1.isEmpty == false) || (field.2.2.2.2.1 == \"derivation\" && field.2.2.2.2.2.2.2.1.isEmpty == false && field.2.2.2.2.2.2.2.2.1.isEmpty == false) || (field.2.2.2.2.1 == \"absence_default\" && field.2.2.2.2.2.2.2.2.2.1.isEmpty == false)",
+                "def modelReadModelFieldSourceIsComplete (field : ModelReadModelField) : Bool := (field.sourceKind == \"event_attribute\" && field.sourceEvent.isEmpty == false && field.sourceAttribute.isEmpty == false) || (field.sourceKind == \"derivation\" && field.derivationRule.isEmpty == false && field.derivationSourceFields.isEmpty == false) || (field.sourceKind == \"absence_default\" && field.absenceEvent.isEmpty == false)",
             ),
             lean_message.clone(),
         ),
@@ -1252,7 +1276,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelReadModelFieldTracesToOriginalProvenance"),
             canonical_declaration_marker(
-                "def modelReadModelFieldTracesToOriginalProvenance (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := let (workflow, slice, _, _, sourceKind, sourceEvent, sourceAttribute, derivationRule, derivationSourceFields, absenceEvent, _, _, provenance) := field; provenance.isEmpty == false && ((sourceKind == \"event_attribute\" && modelEventAttributes.any (fun eventAttribute => eventAttribute.workflow == workflow && eventAttribute.slice == slice && eventAttribute.event == sourceEvent && eventAttribute.attributeName == sourceAttribute && modelEventAttributeSourceIsComplete eventAttribute)) || (sourceKind == \"derivation\" && derivationRule.isEmpty == false && derivationSourceFields.isEmpty == false) || (sourceKind == \"absence_default\" && absenceEvent.isEmpty == false))",
+                "def modelReadModelFieldTracesToOriginalProvenance (field : ModelReadModelField) : Bool := field.provenance.isEmpty == false && ((field.sourceKind == \"event_attribute\" && modelEventAttributes.any (fun eventAttribute => eventAttribute.workflow == field.workflow && eventAttribute.slice == field.slice && eventAttribute.event == field.sourceEvent && eventAttribute.attributeName == field.sourceAttribute && modelEventAttributeSourceIsComplete eventAttribute)) || (field.sourceKind == \"derivation\" && field.derivationRule.isEmpty == false && field.derivationSourceFields.isEmpty == false) || (field.sourceKind == \"absence_default\" && field.absenceEvent.isEmpty == false))",
             ),
             lean_message.clone(),
         ),
@@ -1260,7 +1284,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViewFieldReadModelFieldSourceResolves"),
             canonical_declaration_marker(
-                "def modelViewFieldReadModelFieldSourceResolves (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldSourceIsComplete viewField && modelReadModelFields.any (fun readModelField => readModelField.1 == workflow && readModelField.2.1 == slice && readModelField.2.2.1 == sourceReadModel && readModelField.2.2.2.1 == sourceField && modelReadModelFieldSourceIsComplete readModelField)",
+                "def modelViewFieldReadModelFieldSourceResolves (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldSourceIsComplete viewField && modelReadModelFields.any (fun readModelField => readModelField.workflow == workflow && readModelField.slice == slice && readModelField.readModel == sourceReadModel && readModelField.field == sourceField && modelReadModelFieldSourceIsComplete readModelField)",
             ),
             lean_message.clone(),
         ),
@@ -1268,7 +1292,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDisplayedDatumTracesToOriginalProvenance"),
             canonical_declaration_marker(
-                "def modelDisplayedDatumTracesToOriginalProvenance (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldReadModelFieldSourceResolves viewField && modelReadModelFields.any (fun readModelField => readModelField.1 == workflow && readModelField.2.1 == slice && readModelField.2.2.1 == sourceReadModel && readModelField.2.2.2.1 == sourceField && modelReadModelFieldTracesToOriginalProvenance readModelField)",
+                "def modelDisplayedDatumTracesToOriginalProvenance (viewField : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, _, _, _, sourceReadModel, sourceField, _, _) := viewField; modelViewFieldReadModelFieldSourceResolves viewField && modelReadModelFields.any (fun readModelField => readModelField.workflow == workflow && readModelField.slice == slice && readModelField.readModel == sourceReadModel && readModelField.field == sourceField && modelReadModelFieldTracesToOriginalProvenance readModelField)",
             ),
             lean_message.clone(),
         ),
@@ -4273,7 +4297,7 @@ fn lean_model_read_model_list(project_read_models: &[ProjectReadModel]) -> Strin
             .into_iter()
             .map(|(workflow_slug, slice_slug, read_model)| {
                 format!(
-                    "({}, {}, {})",
+                    "{{ workflow := {}, slice := {}, readModel := {} }}",
                     json_string(workflow_slug),
                     json_string(slice_slug),
                     json_string(read_model)
@@ -4346,7 +4370,7 @@ fn lean_model_read_model_definition_list(
                     example_scenario_name,
                 )| {
                     format!(
-                        "({}, {}, {}, {}, [{}], {}, {})",
+                        "{{ workflow := {}, slice := {}, readModel := {}, transitive := {}, relationshipFields := [{}], transitiveRule := {}, exampleScenarioName := {} }}",
                         json_string(workflow_slug),
                         json_string(slice_slug),
                         json_string(read_model),
@@ -4460,7 +4484,7 @@ fn lean_model_read_model_field_list(project_read_model_fields: &[ProjectReadMode
                     provenance,
                 )| {
                     format!(
-                        "({}, {}, {}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {})",
+                        "{{ workflow := {}, slice := {}, readModel := {}, field := {}, sourceKind := {}, sourceEvent := {}, sourceAttribute := {}, derivationRule := {}, derivationSourceFields := [{}], absenceEvent := {}, derivationScenarioName := {}, absenceScenarioName := {}, provenance := {} }}",
                         json_string(workflow_slug),
                         json_string(slice_slug),
                         json_string(read_model),
