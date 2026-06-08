@@ -335,6 +335,10 @@ pub(crate) fn lean_view_record_structures() -> &'static str {
     "structure ModelView where\n  workflow : String\n  slice : String\n  view : String\n\nstructure ModelViewDefinition where\n  workflow : String\n  slice : String\n  view : String\n  readModels : List String\n  sketchTokens : List String\n  localStates : List String\n  filters : List String\n\nstructure ModelViewControl where\n  workflow : String\n  slice : String\n  view : String\n  control : String\n  command : String\n  input : String\n  inputSourceKind : String\n  inputSourceDescription : String\n  inputSketchToken : String\n  inputVisibleToActor : Bool\n  inputDecisionField : Bool\n  handledErrors : List String\n  recoveryBehavior : String\n  controlSketchToken : String\n  navigationType : String\n  navigationTarget : String\n  externalWorkflow : String\n  externalSystem : String\n  handoffContract : String\n\nstructure ModelViewField where\n  workflow : String\n  slice : String\n  view : String\n  field : String\n  sourceKind : String\n  sourceReadModel : String\n  sourceField : String\n  provenance : String\n  bitEncoding : String"
 }
 
+pub(crate) fn lean_board_record_structures() -> &'static str {
+    "structure ModelBoardElement where\n  workflow : String\n  slice : String\n  element : String\n  kind : String\n  lane : String\n  declaredName : String\n  mainPath : Bool\n\nstructure ModelBoardConnection where\n  workflow : String\n  slice : String\n  source : String\n  sourceKind : String\n  target : String\n  targetKind : String"
+}
+
 pub(crate) fn lean_event_inventory_record_structures() -> &'static str {
     "structure ModelStream where\n  workflow : String\n  slice : String\n  stream : String\n\nstructure ModelEvent where\n  workflow : String\n  slice : String\n  event : String\n  stream : String\n\nstructure ModelEventAttribute where\n  workflow : String\n  slice : String\n  event : String\n  attributeName : String\n  sourceKind : String\n  sourceName : String\n  sourceField : String\n  generatedSourceKind : String\n  provenance : String"
 }

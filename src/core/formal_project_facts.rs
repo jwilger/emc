@@ -2212,7 +2212,7 @@ pub(crate) fn parse_lean_project_board_elements(
 ) -> Result<Vec<ProjectBoardElement>, FormalProjectFactError> {
     board_element_entries_from_list(
         contents.as_ref(),
-        "def modelBoardElements : List (String × String × String × String × String × String × Bool) := ",
+        "def modelBoardElements : List ModelBoardElement := ",
     )
 }
 
@@ -2230,7 +2230,7 @@ pub(crate) fn parse_lean_project_board_connections(
 ) -> Result<Vec<ProjectBoardConnection>, FormalProjectFactError> {
     board_connection_entries_from_list(
         contents.as_ref(),
-        "def modelBoardConnections : List (String × String × String × String × String × String) := ",
+        "def modelBoardConnections : List ModelBoardConnection := ",
     )
 }
 
@@ -4084,19 +4084,19 @@ pub(crate) fn add_project_board_element(
     let quint_record = quint_board_element_record(&element);
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelBoardElements : List (String × String × String × String × String × String × Bool) := ",
+        "def modelBoardElements : List ModelBoardElement := ",
         &lean_record,
     )
     .and_then(|contents| {
         let board_elements = board_element_entries_from_list(
             &contents,
-            "def modelBoardElements : List (String × String × String × String × String × String × Bool) := ",
+            "def modelBoardElements : List ModelBoardElement := ",
         )?;
         replace_declaration(
             &contents,
             "def modelBoardElements :",
             &format!(
-                "def modelBoardElements : List (String × String × String × String × String × String × Bool) := {}",
+                "def modelBoardElements : List ModelBoardElement := {}",
                 lean_project_board_element_list(&board_elements)
             ),
         )
@@ -4111,9 +4111,7 @@ pub(crate) fn add_project_board_element(
             )
         })
     })
-    .and_then(|contents| {
-        update_lean_digest_from_contents(&contents)
-    })?;
+    .and_then(|contents| update_lean_digest_from_contents(&contents))?;
     let quint = append_record_if_missing(
         quint_contents.as_ref(),
         "val modelBoardElements: List[ModelBoardElement] = ",
@@ -4166,19 +4164,19 @@ pub(crate) fn add_project_board_connection(
     let quint_record = quint_board_connection_record(&connection);
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelBoardConnections : List (String × String × String × String × String × String) := ",
+        "def modelBoardConnections : List ModelBoardConnection := ",
         &lean_record,
     )
     .and_then(|contents| {
         let board_connections = board_connection_entries_from_list(
             &contents,
-            "def modelBoardConnections : List (String × String × String × String × String × String) := ",
+            "def modelBoardConnections : List ModelBoardConnection := ",
         )?;
         replace_declaration(
             &contents,
             "def modelBoardConnections :",
             &format!(
-                "def modelBoardConnections : List (String × String × String × String × String × String) := {}",
+                "def modelBoardConnections : List ModelBoardConnection := {}",
                 lean_project_board_connection_list(&board_connections)
             ),
         )
@@ -5354,11 +5352,11 @@ pub(crate) fn add_project_event(
         )?;
         let board_elements = board_element_entries_from_list(
             &contents,
-            "def modelBoardElements : List (String × String × String × String × String × String × Bool) := ",
+            "def modelBoardElements : List ModelBoardElement := ",
         )?;
         let board_connections = board_connection_entries_from_list(
             &contents,
-            "def modelBoardConnections : List (String × String × String × String × String × String) := ",
+            "def modelBoardConnections : List ModelBoardConnection := ",
         )?;
         replace_declaration(
             &contents,
@@ -5903,7 +5901,7 @@ fn parse_lean_project_board_elements_from_contents_or_empty(
 ) -> Vec<ProjectBoardElement> {
     board_element_entries_from_list(
         contents,
-        "def modelBoardElements : List (String × String × String × String × String × String × Bool) := ",
+        "def modelBoardElements : List ModelBoardElement := ",
     )
     .unwrap_or_default()
 }
@@ -5923,7 +5921,7 @@ fn parse_lean_project_board_connections_from_contents_or_empty(
 ) -> Vec<ProjectBoardConnection> {
     board_connection_entries_from_list(
         contents,
-        "def modelBoardConnections : List (String × String × String × String × String × String) := ",
+        "def modelBoardConnections : List ModelBoardConnection := ",
     )
     .unwrap_or_default()
 }
@@ -8707,7 +8705,7 @@ fn quint_view_control_record(control: &NewProjectViewControl) -> String {
 
 fn lean_board_element_record(element: &NewProjectBoardElement) -> String {
     format!(
-        "({}, {}, {}, {}, {}, {}, {})",
+        "{{ workflow := {}, slice := {}, element := {}, kind := {}, lane := {}, declaredName := {}, mainPath := {} }}",
         quoted(element.workflow_slug.as_ref()),
         quoted(element.slice_slug.as_ref()),
         quoted(element.element.as_ref()),
@@ -8733,7 +8731,7 @@ fn quint_board_element_record(element: &NewProjectBoardElement) -> String {
 
 fn lean_board_connection_record(connection: &NewProjectBoardConnection) -> String {
     format!(
-        "({}, {}, {}, {}, {}, {})",
+        "{{ workflow := {}, slice := {}, source := {}, sourceKind := {}, target := {}, targetKind := {} }}",
         quoted(connection.workflow_slug.as_ref()),
         quoted(connection.slice_slug.as_ref()),
         quoted(connection.source.as_ref()),
@@ -8764,7 +8762,7 @@ fn lean_project_board_element_list(elements: &[ProjectBoardElement]) -> String {
             .into_iter()
             .map(|element| {
                 format!(
-                    "({}, {}, {}, {}, {}, {}, {})",
+                    "{{ workflow := {}, slice := {}, element := {}, kind := {}, lane := {}, declaredName := {}, mainPath := {} }}",
                     quoted(&element.workflow_slug),
                     quoted(&element.slice_slug),
                     quoted(&element.element),
@@ -8812,7 +8810,7 @@ fn lean_project_board_connection_list(connections: &[ProjectBoardConnection]) ->
             .into_iter()
             .map(|connection| {
                 format!(
-                    "({}, {}, {}, {}, {}, {})",
+                    "{{ workflow := {}, slice := {}, source := {}, sourceKind := {}, target := {}, targetKind := {} }}",
                     quoted(&connection.workflow_slug),
                     quoted(&connection.slice_slug),
                     quoted(&connection.source),

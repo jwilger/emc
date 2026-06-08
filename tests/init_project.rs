@@ -190,6 +190,28 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelBoardElement where\n  workflow : String\n  slice : String\n  element : String\n  kind : String\n  lane : String\n  declaredName : String\n  mainPath : Bool"
+            ),
+            "Lean project root must type board elements as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelBoardElements : List ModelBoardElement := []"),
+            "Lean project root must initialize board elements as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelBoardConnection where\n  workflow : String\n  slice : String\n  source : String\n  sourceKind : String\n  target : String\n  targetKind : String"
+            ),
+            "Lean project root must type board connections as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelBoardConnections : List ModelBoardConnection := []"),
+            "Lean project root must initialize board connections as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
                 "structure ModelViewField where\n  workflow : String\n  slice : String\n  view : String\n  field : String\n  sourceKind : String\n  sourceReadModel : String\n  sourceField : String\n  provenance : String\n  bitEncoding : String"
             ),
             "Lean project root must type view fields as named records"

@@ -5555,13 +5555,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelBoardElements : List (String × String × String × String × String × String × Bool) := [(\"open-ticket\", \"capture-ticket\", \"CaptureTicket\", \"command\", \"actions\", \"CaptureTicket\", true),(\"open-ticket\", \"capture-ticket\", \"TicketCaptured\", \"event\", \"events\", \"TicketCaptured\", true)]"
+                "def modelBoardElements : List ModelBoardElement := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", element := \"CaptureTicket\", kind := \"command\", lane := \"actions\", declaredName := \"CaptureTicket\", mainPath := true },{ workflow := \"open-ticket\", slice := \"capture-ticket\", element := \"TicketCaptured\", kind := \"event\", lane := \"events\", declaredName := \"TicketCaptured\", mainPath := true }]"
             ),
             "Lean project root must inventory authored board elements"
         );
         assert!(
             lean_root.contains(
-                "def modelBoardConnections : List (String × String × String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"CaptureTicket\", \"command\", \"TicketCaptured\", \"event\"),(\"open-ticket\", \"capture-ticket\", \"actor-submit\", \"workflow_trigger\", \"CaptureTicket\", \"command\")]"
+                "def modelBoardConnections : List ModelBoardConnection := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", source := \"CaptureTicket\", sourceKind := \"command\", target := \"TicketCaptured\", targetKind := \"event\" },{ workflow := \"open-ticket\", slice := \"capture-ticket\", source := \"actor-submit\", sourceKind := \"workflow_trigger\", target := \"CaptureTicket\", targetKind := \"command\" }]"
             ),
             "Lean project root must inventory authored board connections"
         );
