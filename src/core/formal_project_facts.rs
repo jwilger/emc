@@ -2338,7 +2338,7 @@ pub(crate) fn parse_lean_project_external_payloads(
 ) -> Result<Vec<ProjectExternalPayload>, FormalProjectFactError> {
     external_payload_entries_from_list(
         contents.as_ref(),
-        "def modelExternalPayloads : List (String × String × String) := ",
+        "def modelExternalPayloads : List ModelExternalPayload := ",
     )
 }
 
@@ -2356,7 +2356,7 @@ pub(crate) fn parse_lean_project_external_payload_fields(
 ) -> Result<Vec<ProjectExternalPayloadField>, FormalProjectFactError> {
     external_payload_field_entries_from_list(
         contents.as_ref(),
-        "def modelExternalPayloadFields : List (String × String × String × String × String × String) := ",
+        "def modelExternalPayloadFields : List ModelExternalPayloadField := ",
     )
 }
 
@@ -4795,14 +4795,14 @@ pub(crate) fn add_project_external_payload(
         .map(quint_external_payload_field_record);
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelExternalPayloads : List (String × String × String) := ",
+        "def modelExternalPayloads : List ModelExternalPayload := ",
         &lean_record,
     )
     .and_then(|contents| {
         let contents = if let Some(record) = &lean_field_record {
             append_record_if_missing(
                 &contents,
-                "def modelExternalPayloadFields : List (String × String × String × String × String × String) := ",
+                "def modelExternalPayloadFields : List ModelExternalPayloadField := ",
                 record,
             )?
         } else {
@@ -4810,7 +4810,7 @@ pub(crate) fn add_project_external_payload(
         };
         let external_payloads = external_payload_entries_from_list(
             &contents,
-            "def modelExternalPayloads : List (String × String × String) := ",
+            "def modelExternalPayloads : List ModelExternalPayload := ",
         )?;
         let external_payload_fields =
             parse_lean_project_external_payload_fields_from_contents_or_empty(&contents);
@@ -4827,7 +4827,7 @@ pub(crate) fn add_project_external_payload(
                 &contents,
                 "def modelExternalPayloadFields :",
                 &format!(
-                    "def modelExternalPayloadFields : List (String × String × String × String × String × String) := {}",
+                    "def modelExternalPayloadFields : List ModelExternalPayloadField := {}",
                     lean_external_payload_field_list(&external_payload_fields)
                 ),
             )
@@ -5332,11 +5332,11 @@ pub(crate) fn add_project_event(
         )?;
         let external_payloads = external_payload_entries_from_list(
             &contents,
-            "def modelExternalPayloads : List (String × String × String) := ",
+            "def modelExternalPayloads : List ModelExternalPayload := ",
         )?;
         let external_payload_fields = external_payload_field_entries_from_list(
             &contents,
-            "def modelExternalPayloadFields : List (String × String × String × String × String × String) := ",
+            "def modelExternalPayloadFields : List ModelExternalPayloadField := ",
         )?;
         let streams = stream_entries_from_list(
             &contents,
@@ -6023,7 +6023,7 @@ fn parse_lean_project_external_payloads_from_contents_or_empty(
 ) -> Vec<ProjectExternalPayload> {
     external_payload_entries_from_list(
         contents,
-        "def modelExternalPayloads : List (String × String × String) := ",
+        "def modelExternalPayloads : List ModelExternalPayload := ",
     )
     .unwrap_or_default()
 }
@@ -6882,7 +6882,7 @@ fn parse_lean_project_external_payload_fields_from_contents_or_empty(
 ) -> Vec<ProjectExternalPayloadField> {
     external_payload_field_entries_from_list(
         contents,
-        "def modelExternalPayloadFields : List (String × String × String × String × String × String) := ",
+        "def modelExternalPayloadFields : List ModelExternalPayloadField := ",
     )
     .unwrap_or_default()
 }
@@ -9068,7 +9068,7 @@ fn quint_translation_definition_list(definitions: &[ProjectTranslationDefinition
 
 fn lean_external_payload_record(external_payload: &NewProjectExternalPayload) -> String {
     format!(
-        "({}, {}, {})",
+        "{{ workflow := {}, slice := {}, externalPayload := {} }}",
         quoted(external_payload.workflow_slug.as_ref()),
         quoted(external_payload.slice_slug.as_ref()),
         quoted(external_payload.external_payload.as_ref())
@@ -9086,7 +9086,7 @@ fn quint_external_payload_record(external_payload: &NewProjectExternalPayload) -
 
 fn lean_external_payload_field_record(field: &NewProjectExternalPayloadField) -> String {
     format!(
-        "({}, {}, {}, {}, {}, {})",
+        "{{ workflow := {}, slice := {}, externalPayload := {}, field := {}, provenance := {}, bitEncoding := {} }}",
         quoted(field.workflow_slug.as_ref()),
         quoted(field.slice_slug.as_ref()),
         quoted(field.external_payload.as_ref()),
@@ -9117,7 +9117,7 @@ fn lean_external_payload_field_list(fields: &[ProjectExternalPayloadField]) -> S
             .into_iter()
             .map(|field| {
                 format!(
-                    "({}, {}, {}, {}, {}, {})",
+                    "{{ workflow := {}, slice := {}, externalPayload := {}, field := {}, provenance := {}, bitEncoding := {} }}",
                     quoted(field.workflow_slug()),
                     quoted(field.slice_slug()),
                     quoted(field.external_payload()),
