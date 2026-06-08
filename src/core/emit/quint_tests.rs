@@ -480,6 +480,10 @@ mod tests {
         assert!(quint.contains(
             "type BoardConnection = { source: str, sourceKind: str, target: str, targetKind: str }"
         ));
+        assert!(
+            quint.contains("type SliceEventReference = { name: str }"),
+            "Quint slice artifacts must represent referenced event names as typed records"
+        );
         assert!(quint.contains("val sliceCommands: List[str] = []"));
         assert!(quint.contains("val sliceCommandDefinitions: List[CommandDefinition] = []"));
         assert!(quint.contains("val sliceAutomations: List[AutomationDefinition] = []"));
@@ -500,7 +504,10 @@ mod tests {
         assert!(quint.contains(
             "val allowedSingletonRepeatBehaviors: List[str] = [\"already_exists_error\",\"idempotent\"]"
         ));
-        assert!(quint.contains("val sliceEvents: List[str] = []"));
+        assert!(quint.contains("val sliceEvents: List[SliceEventReference] = []"));
+        assert!(quint.contains(
+            "val sliceEventNames: List[str] = sliceEvents.foldl([], (names, eventRef) => names.append(eventRef.name))"
+        ));
         assert!(quint.contains("val sliceStreams: List[StreamDefinition] = []"));
         assert!(quint.contains("val sliceExternalPayloads: List[ExternalPayloadDefinition] = []"));
         assert!(quint.contains("val sliceEventDefinitions: List[EventDefinition] = []"));
@@ -549,7 +556,7 @@ mod tests {
             "val sliceOwnedControlNames: List[str] = sliceViewDefinitions.foldl([], (names, view) => names.concat(view.controls.foldl([], (controlNames, control) => controlNames.append(control.name))))"
         ));
         assert!(quint.contains(
-            "val sliceNamedDefinitionsAreUniquelyOwned = definitionNamesAreUnique(sliceCommands) and definitionNamesAreUnique(sliceOwnedCommandNames) and definitionNamesAreUnique(sliceEvents) and definitionNamesAreUnique(sliceOwnedEventNames) and definitionNamesAreUnique(sliceOwnedStreamNames) and definitionNamesAreUnique(sliceOwnedExternalPayloadNames) and definitionNamesAreUnique(sliceReadModels) and definitionNamesAreUnique(sliceOwnedReadModelNames) and definitionNamesAreUnique(sliceViews) and definitionNamesAreUnique(sliceOwnedViewNames) and definitionNamesAreUnique(sliceOwnedAutomationNames) and definitionNamesAreUnique(sliceOwnedTranslationNames) and definitionNamesAreUnique(sliceOwnedControlNames)"
+            "val sliceNamedDefinitionsAreUniquelyOwned = definitionNamesAreUnique(sliceCommands) and definitionNamesAreUnique(sliceOwnedCommandNames) and definitionNamesAreUnique(sliceEventNames) and definitionNamesAreUnique(sliceOwnedEventNames) and definitionNamesAreUnique(sliceOwnedStreamNames) and definitionNamesAreUnique(sliceOwnedExternalPayloadNames) and definitionNamesAreUnique(sliceReadModels) and definitionNamesAreUnique(sliceOwnedReadModelNames) and definitionNamesAreUnique(sliceViews) and definitionNamesAreUnique(sliceOwnedViewNames) and definitionNamesAreUnique(sliceOwnedAutomationNames) and definitionNamesAreUnique(sliceOwnedTranslationNames) and definitionNamesAreUnique(sliceOwnedControlNames)"
         ));
         assert!(quint.contains(
             "def scenarioStreamResolves(streamName) = sliceStreams.select(stream => stream.name == streamName).length() > 0"
@@ -747,7 +754,7 @@ mod tests {
             "def boardElementLaneMatchesKind(element) = (element.kind == \"view\" and element.lane == \"ux\") or (element.kind == \"automation\" and element.lane == \"ux\") or (element.kind == \"external_event\" and element.lane == \"ux\") or (element.kind == \"command\" and element.lane == \"actions\") or (element.kind == \"read_model\" and element.lane == \"actions\") or (element.kind == \"event\" and element.lane == \"events\")"
         ));
         assert!(quint.contains(
-            "def boardElementReferencesDeclaration(element) = (element.kind == \"view\" and (sliceViews.select(viewName => viewName == element.declaredName).length() > 0 or sliceViewDefinitions.select(view => view.name == element.declaredName).length() > 0)) or (element.kind == \"automation\" and sliceAutomations.select(automation => automation.name == element.declaredName).length() > 0) or (element.kind == \"external_event\" and sliceEventDefinitions.select(event => event.name == element.declaredName and event.observed).length() > 0) or (element.kind == \"command\" and (sliceCommands.select(command => command == element.declaredName).length() > 0 or sliceReferencedCommands.select(command => command == element.declaredName).length() > 0 or sliceCommandDefinitions.select(command => command.name == element.declaredName).length() > 0)) or (element.kind == \"read_model\" and (sliceReadModels.select(readModel => readModel == element.declaredName).length() > 0 or sliceReadModelDefinitions.select(readModel => readModel.name == element.declaredName).length() > 0)) or (element.kind == \"event\" and (sliceEvents.select(eventName => eventName == element.declaredName).length() > 0 or sliceEventDefinitions.select(event => event.name == element.declaredName and (event.observed or event.shared)).length() > 0))"
+            "def boardElementReferencesDeclaration(element) = (element.kind == \"view\" and (sliceViews.select(viewName => viewName == element.declaredName).length() > 0 or sliceViewDefinitions.select(view => view.name == element.declaredName).length() > 0)) or (element.kind == \"automation\" and sliceAutomations.select(automation => automation.name == element.declaredName).length() > 0) or (element.kind == \"external_event\" and sliceEventDefinitions.select(event => event.name == element.declaredName and event.observed).length() > 0) or (element.kind == \"command\" and (sliceCommands.select(command => command == element.declaredName).length() > 0 or sliceReferencedCommands.select(command => command == element.declaredName).length() > 0 or sliceCommandDefinitions.select(command => command.name == element.declaredName).length() > 0)) or (element.kind == \"read_model\" and (sliceReadModels.select(readModel => readModel == element.declaredName).length() > 0 or sliceReadModelDefinitions.select(readModel => readModel.name == element.declaredName).length() > 0)) or (element.kind == \"event\" and (sliceEventNames.select(eventName => eventName == element.declaredName).length() > 0 or sliceEventDefinitions.select(event => event.name == element.declaredName and (event.observed or event.shared)).length() > 0))"
         ));
         assert!(quint.contains(
             "def automationBoardElementIsDeclaredAutomation(element) = element.kind != \"automation\" or sliceAutomations.select(automation => automation.name == element.declaredName).length() > 0"
@@ -834,7 +841,7 @@ mod tests {
             "val eventsReferenceKnownStreams = sliceEventDefinitions.select(event => sliceStreams.select(stream => stream.name == event.stream).length() > 0).length() == sliceEventDefinitions.length()"
         ));
         assert!(quint.contains(
-            "def commandEmittedEventIsKnown(eventName) = sliceEvents.select(event => event == eventName).length() > 0 or sliceEventDefinitions.select(event => event.name == eventName).length() > 0"
+            "def commandEmittedEventIsKnown(eventName) = sliceEventNames.select(eventNameRef => eventNameRef == eventName).length() > 0 or sliceEventDefinitions.select(event => event.name == eventName).length() > 0"
         ));
         assert!(quint.contains(
             "def eventProducedByCommand(event) = event.observed or event.shared or sliceCommandDefinitions.select(command => command.emittedEvents.select(eventName => eventName == event.name).length() > 0).length() > 0"
