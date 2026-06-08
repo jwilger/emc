@@ -592,6 +592,102 @@ impl SliceUpdatedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceScenarioAddedEventPayload {
+    scenario: NewSliceScenario,
+}
+
+impl SliceScenarioAddedEventPayload {
+    fn from_scenario(scenario: &NewSliceScenario) -> Self {
+        Self {
+            scenario: scenario.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        let kind = scenario_kind(required_str(payload, "kind")?)?;
+        let slice_slug = slice_slug(required_str(payload, "slice")?)?;
+        let name = scenario_name(required_str(payload, "name")?)?;
+        let given = scenario_step_text(required_str(payload, "given")?)?;
+        let when = scenario_step_text(required_str(payload, "when")?)?;
+        let then = scenario_step_text(required_str(payload, "then")?)?;
+        let scenario = match (
+            kind,
+            optional_str(payload, "contract_kind")?,
+            optional_str(payload, "covered_definition")?,
+        ) {
+            (ScenarioKind::Acceptance, None, None) => {
+                NewSliceScenario::new(slice_slug, kind, name, given, when, then)
+            }
+            (ScenarioKind::Contract, Some(contract_kind), Some(covered_definition)) => {
+                NewSliceScenario::new_contract(
+                    slice_slug,
+                    name,
+                    given,
+                    when,
+                    then,
+                    contract_kind_name(contract_kind)?,
+                    covered_definition_name(covered_definition)?,
+                )
+            }
+            _ => return Err("SliceScenarioAdded has incompatible scenario kind fields".to_owned()),
+        };
+
+        Ok(Self {
+            scenario: scenario
+                .with_streams(
+                    scenario_stream_names(required_string_array(payload, "read_streams")?)?,
+                    scenario_stream_names(required_string_array(payload, "written_streams")?)?,
+                )
+                .with_error_references(command_error_names(required_string_array(
+                    payload,
+                    "error_references",
+                )?)?),
+        })
+    }
+
+    fn into_scenario(self) -> NewSliceScenario {
+        self.scenario
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slice": self.scenario.slice_slug().as_ref(),
+            "kind": self.scenario.kind().as_str(),
+            "name": self.scenario.name().as_ref(),
+            "given": self.scenario.given().as_ref(),
+            "when": self.scenario.when().as_ref(),
+            "then": self.scenario.then().as_ref(),
+            "read_streams": self
+                .scenario
+                .read_streams()
+                .as_slice()
+                .iter()
+                .map(|stream| stream.as_ref())
+                .collect::<Vec<_>>(),
+            "written_streams": self
+                .scenario
+                .written_streams()
+                .as_slice()
+                .iter()
+                .map(|stream| stream.as_ref())
+                .collect::<Vec<_>>(),
+            "contract_kind": self.scenario.contract_kind().map(|kind| kind.as_ref()),
+            "covered_definition": self
+                .scenario
+                .covered_definition()
+                .map(|definition| definition.as_ref()),
+            "error_references": self
+                .scenario
+                .error_references()
+                .as_slice()
+                .iter()
+                .map(|error| error.as_ref())
+                .collect::<Vec<_>>(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowConnectedEventPayload {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
@@ -1395,7 +1491,9 @@ impl ExportedEventBody {
                 SliceUpdatedEventPayload::from_slice_detail(slice).to_json_value()
             }
             Self::SliceRemoved { slug } => json!({ "slug": slug.as_ref() }),
-            Self::SliceScenarioAdded { scenario } => slice_scenario_payload(scenario),
+            Self::SliceScenarioAdded { scenario } => {
+                SliceScenarioAddedEventPayload::from_scenario(scenario).to_json_value()
+            }
             Self::SliceOutcomeAdded { outcome } => slice_outcome_payload(outcome),
             Self::SliceExternalPayloadAdded { external_payload } => {
                 slice_external_payload_payload(external_payload)
@@ -1539,7 +1637,7 @@ impl ExportedEventBody {
                 slug: slice_slug(required_str(payload, "slug")?)?,
             }),
             ExportedEventType::SliceScenarioAdded => Ok(Self::SliceScenarioAdded {
-                scenario: slice_scenario_from_payload(payload)?,
+                scenario: SliceScenarioAddedEventPayload::from_json_value(payload)?.into_scenario(),
             }),
             ExportedEventType::SliceOutcomeAdded => Ok(Self::SliceOutcomeAdded {
                 outcome: slice_outcome_from_payload(payload)?,
@@ -2075,39 +2173,6 @@ impl ExportedEventFrontier for ExportedEventHeader {
     fn frontier_event_type(&self) -> ExportedEventType {
         self.event_type
     }
-}
-
-fn slice_scenario_payload(scenario: &NewSliceScenario) -> Value {
-    json!({
-        "slice": scenario.slice_slug().as_ref(),
-        "kind": scenario.kind().as_str(),
-        "name": scenario.name().as_ref(),
-        "given": scenario.given().as_ref(),
-        "when": scenario.when().as_ref(),
-        "then": scenario.then().as_ref(),
-        "read_streams": scenario
-            .read_streams()
-            .as_slice()
-            .iter()
-            .map(|stream| stream.as_ref())
-            .collect::<Vec<_>>(),
-        "written_streams": scenario
-            .written_streams()
-            .as_slice()
-            .iter()
-            .map(|stream| stream.as_ref())
-            .collect::<Vec<_>>(),
-        "contract_kind": scenario.contract_kind().map(|kind| kind.as_ref()),
-        "covered_definition": scenario
-            .covered_definition()
-            .map(|definition| definition.as_ref()),
-        "error_references": scenario
-            .error_references()
-            .as_slice()
-            .iter()
-            .map(|error| error.as_ref())
-            .collect::<Vec<_>>(),
-    })
 }
 
 fn slice_outcome_payload(outcome: &NewOutcomeDefinition) -> Value {
@@ -3971,46 +4036,6 @@ pub(crate) fn slice_outcome_from_payload(payload: &Value) -> Result<NewOutcomeDe
     ))
 }
 
-pub(crate) fn slice_scenario_from_payload(payload: &Value) -> Result<NewSliceScenario, String> {
-    let kind = scenario_kind(required_str(payload, "kind")?)?;
-    let slice_slug = slice_slug(required_str(payload, "slice")?)?;
-    let name = scenario_name(required_str(payload, "name")?)?;
-    let given = scenario_step_text(required_str(payload, "given")?)?;
-    let when = scenario_step_text(required_str(payload, "when")?)?;
-    let then = scenario_step_text(required_str(payload, "then")?)?;
-    let scenario = match (
-        kind,
-        optional_str(payload, "contract_kind")?,
-        optional_str(payload, "covered_definition")?,
-    ) {
-        (ScenarioKind::Acceptance, None, None) => {
-            NewSliceScenario::new(slice_slug, kind, name, given, when, then)
-        }
-        (ScenarioKind::Contract, Some(contract_kind), Some(covered_definition)) => {
-            NewSliceScenario::new_contract(
-                slice_slug,
-                name,
-                given,
-                when,
-                then,
-                contract_kind_name(contract_kind)?,
-                covered_definition_name(covered_definition)?,
-            )
-        }
-        _ => return Err("SliceScenarioAdded has incompatible scenario kind fields".to_owned()),
-    };
-
-    Ok(scenario
-        .with_streams(
-            scenario_stream_names(required_string_array(payload, "read_streams")?)?,
-            scenario_stream_names(required_string_array(payload, "written_streams")?)?,
-        )
-        .with_error_references(command_error_names(required_string_array(
-            payload,
-            "error_references",
-        )?)?))
-}
-
 pub(crate) fn slice_external_payload_from_payload(
     payload: &Value,
 ) -> Result<NewExternalPayloadDefinition, String> {
@@ -4936,6 +4961,104 @@ mod tests {
         assert_eq!(
             SliceUpdatedEventPayload::from_json_value(&json)?.into_slice_detail(),
             slice
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_scenario_added_event_payload_preserves_scenario_kind_shape() -> Result<(), String> {
+        let acceptance = NewSliceScenario::new(
+            slice_slug("capture-ticket")?,
+            ScenarioKind::acceptance(),
+            scenario_name("Actor captures ticket")?,
+            scenario_step_text("ticket intake screen is open")?,
+            scenario_step_text("the actor submits ticket details")?,
+            scenario_step_text("the ticket details are visible for review")?,
+        )
+        .with_streams(
+            ScenarioStreamNames::from_streams([stream_name("ticket-events")?]),
+            ScenarioStreamNames::from_streams([stream_name("ticket-events")?]),
+        );
+        let contract = NewSliceScenario::new_contract(
+            slice_slug("capture-ticket")?,
+            scenario_name("Duplicate ticket is rejected")?,
+            scenario_step_text("tickets stream already contains duplicate title")?,
+            scenario_step_text("CaptureTicket handles the duplicate title")?,
+            scenario_step_text("DuplicateTicket is returned")?,
+            contract_kind_name("command")?,
+            covered_definition_name("CaptureTicket")?,
+        )
+        .with_error_references(CommandErrorNames::from_names([command_error_name(
+            "DuplicateTicket",
+        )?]));
+
+        let acceptance_payload = SliceScenarioAddedEventPayload::from_scenario(&acceptance);
+        let acceptance_json = acceptance_payload.to_json_value();
+        assert_eq!(
+            acceptance_json,
+            serde_json::json!({
+                "slice": "capture-ticket",
+                "kind": "acceptance",
+                "name": "Actor captures ticket",
+                "given": "ticket intake screen is open",
+                "when": "the actor submits ticket details",
+                "then": "the ticket details are visible for review",
+                "read_streams": ["ticket-events"],
+                "written_streams": ["ticket-events"],
+                "contract_kind": null,
+                "covered_definition": null,
+                "error_references": [],
+            })
+        );
+        assert_eq!(
+            SliceScenarioAddedEventPayload::from_json_value(&acceptance_json)?.into_scenario(),
+            acceptance
+        );
+
+        let contract_payload = SliceScenarioAddedEventPayload::from_scenario(&contract);
+        let contract_json = contract_payload.to_json_value();
+        assert_eq!(
+            contract_json,
+            serde_json::json!({
+                "slice": "capture-ticket",
+                "kind": "contract",
+                "name": "Duplicate ticket is rejected",
+                "given": "tickets stream already contains duplicate title",
+                "when": "CaptureTicket handles the duplicate title",
+                "then": "DuplicateTicket is returned",
+                "read_streams": [],
+                "written_streams": [],
+                "contract_kind": "command",
+                "covered_definition": "CaptureTicket",
+                "error_references": ["DuplicateTicket"],
+            })
+        );
+        assert_eq!(
+            SliceScenarioAddedEventPayload::from_json_value(&contract_json)?.into_scenario(),
+            contract
+        );
+
+        let incompatible_json = serde_json::json!({
+            "slice": "capture-ticket",
+            "kind": "acceptance",
+            "name": "Actor captures ticket",
+            "given": "ticket intake screen is open",
+            "when": "the actor submits ticket details",
+            "then": "the ticket details are visible for review",
+            "read_streams": [],
+            "written_streams": [],
+            "contract_kind": "command",
+            "covered_definition": "CaptureTicket",
+            "error_references": [],
+        });
+        let error = match SliceScenarioAddedEventPayload::from_json_value(&incompatible_json) {
+            Ok(_) => return Err("acceptance scenario with contract fields must fail".to_owned()),
+            Err(error) => error,
+        };
+        assert_eq!(
+            error,
+            "SliceScenarioAdded has incompatible scenario kind fields"
         );
 
         Ok(())
