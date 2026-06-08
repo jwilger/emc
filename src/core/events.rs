@@ -1688,6 +1688,77 @@ impl SliceBoardConnectionAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct ReviewRecordedEventPayload {
+    workflow_slug: WorkflowSlug,
+    model_content_digest: ModelContentDigest,
+    reviewer_id: ReviewerId,
+    reviewed_at: ReviewTimestamp,
+    categories: Vec<ReviewRuleName>,
+}
+
+impl ReviewRecordedEventPayload {
+    fn from_parts(
+        workflow_slug: &WorkflowSlug,
+        model_content_digest: &ModelContentDigest,
+        reviewer_id: &ReviewerId,
+        reviewed_at: &ReviewTimestamp,
+        categories: &[ReviewRuleName],
+    ) -> Self {
+        Self {
+            workflow_slug: workflow_slug.clone(),
+            model_content_digest: model_content_digest.clone(),
+            reviewer_id: reviewer_id.clone(),
+            reviewed_at: reviewed_at.clone(),
+            categories: categories.to_vec(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            workflow_slug: workflow_slug(required_str(payload, "workflow")?)?,
+            model_content_digest: ModelContentDigest::new(artifact_digest_from_str(required_str(
+                payload,
+                "model_content_digest",
+            )?)?),
+            reviewer_id: reviewer_id(required_str(payload, "reviewer_id")?)?,
+            reviewed_at: review_timestamp(required_str(payload, "reviewed_at")?)?,
+            categories: Self::categories_from_json_value(payload)?,
+        })
+    }
+
+    fn categories_from_json_value(payload: &Value) -> Result<Vec<ReviewRuleName>, String> {
+        required_string_array(payload, "categories")?
+            .into_iter()
+            .map(|category| ReviewRuleName::try_new(category).map_err(|error| error.to_string()))
+            .collect()
+    }
+
+    fn into_body(self) -> ExportedEventBody {
+        ExportedEventBody::ReviewRecorded {
+            workflow_slug: self.workflow_slug,
+            model_content_digest: self.model_content_digest,
+            reviewer_id: self.reviewer_id,
+            reviewed_at: self.reviewed_at,
+            categories: self.categories,
+        }
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "workflow": self.workflow_slug.as_ref(),
+            "model_content_digest": self.model_content_digest.as_ref(),
+            "reviewer_id": self.reviewer_id.as_ref(),
+            "reviewed_at": self.reviewed_at.as_ref(),
+            "categories": self
+                .categories
+                .iter()
+                .map(ReviewRuleName::as_ref)
+                .collect::<Vec<_>>(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowConnectedEventPayload {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
@@ -2534,13 +2605,14 @@ impl ExportedEventBody {
                 reviewer_id,
                 reviewed_at,
                 categories,
-            } => json!({
-                "workflow": workflow_slug.as_ref(),
-                "model_content_digest": model_content_digest.as_ref(),
-                "reviewer_id": reviewer_id.as_ref(),
-                "reviewed_at": reviewed_at.as_ref(),
-                "categories": categories.iter().map(ReviewRuleName::as_ref).collect::<Vec<_>>(),
-            }),
+            } => ReviewRecordedEventPayload::from_parts(
+                workflow_slug,
+                model_content_digest,
+                reviewer_id,
+                reviewed_at,
+                categories,
+            )
+            .to_json_value(),
             Self::ConflictResolved {
                 conflict_id,
                 chosen_event_id,
@@ -2698,15 +2770,9 @@ impl ExportedEventBody {
                 connection: SliceBoardConnectionAddedEventPayload::from_json_value(payload)?
                     .into_connection(),
             }),
-            ExportedEventType::ReviewRecorded => Ok(Self::ReviewRecorded {
-                workflow_slug: workflow_slug(required_str(payload, "workflow")?)?,
-                model_content_digest: ModelContentDigest::new(artifact_digest_from_str(
-                    required_str(payload, "model_content_digest")?,
-                )?),
-                reviewer_id: reviewer_id(required_str(payload, "reviewer_id")?)?,
-                reviewed_at: review_timestamp(required_str(payload, "reviewed_at")?)?,
-                categories: review_rule_names_from_payload(payload)?,
-            }),
+            ExportedEventType::ReviewRecorded => {
+                Ok(ReviewRecordedEventPayload::from_json_value(payload)?.into_body())
+            }
             ExportedEventType::ConflictResolved => Ok(Self::ConflictResolved {
                 conflict_id: EventConflictId::new(artifact_digest_from_str(required_str(
                     payload,
@@ -4664,13 +4730,6 @@ fn required_exported_command_id(event: &Value, field: &str) -> Result<ExportedCo
     })
 }
 
-fn review_rule_names_from_payload(payload: &Value) -> Result<Vec<ReviewRuleName>, String> {
-    required_string_array(payload, "categories")?
-        .into_iter()
-        .map(|category| ReviewRuleName::try_new(category).map_err(|error| error.to_string()))
-        .collect()
-}
-
 fn workflow_transition_record_from_connection(
     connection: &WorkflowConnection,
 ) -> Result<WorkflowTransitionRecord, String> {
@@ -5521,6 +5580,43 @@ mod tests {
             SliceBoardConnectionAddedEventPayload::from_json_value(&json)?.into_connection(),
             connection
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn review_recorded_event_payload_round_trips_review_metadata_and_categories()
+    -> Result<(), String> {
+        let payload = ReviewRecordedEventPayload::from_parts(
+            &workflow_slug("open-ticket")?,
+            &ModelContentDigest::new(artifact_digest_from_str(
+                "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            )?),
+            &reviewer_id("event-model-reviewer")?,
+            &review_timestamp("2026-06-03T00:00:00.000Z")?,
+            &[
+                ReviewRuleName::LifecycleEntry,
+                ReviewRuleName::BoardConnections,
+                ReviewRuleName::ScenarioCoverage,
+            ],
+        );
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "model_content_digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "reviewer_id": "event-model-reviewer",
+                "reviewed_at": "2026-06-03T00:00:00.000Z",
+                "categories": [
+                    "lifecycle-entry",
+                    "board-connections",
+                    "scenario-coverage",
+                ],
+            })
+        );
+        assert_eq!(ReviewRecordedEventPayload::from_json_value(&json)?, payload);
 
         Ok(())
     }
