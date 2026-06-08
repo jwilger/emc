@@ -1127,6 +1127,173 @@ impl SliceCommandDefinitionAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceReadModelAddedEventPayload {
+    read_model: NewReadModelDefinition,
+}
+
+impl SliceReadModelAddedEventPayload {
+    fn from_read_model(read_model: &NewReadModelDefinition) -> Self {
+        Self {
+            read_model: read_model.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        let field = Self::read_model_field_from_json_value(required_object(payload, "field")?)?;
+        let mut read_model = NewReadModelDefinition::new(
+            slice_slug(required_str(payload, "slice")?)?,
+            read_model_name(required_str(payload, "name")?)?,
+            field,
+        );
+
+        match (
+            required_bool(payload, "transitive")?,
+            required_string_array(payload, "relationship_fields")?,
+            optional_str(payload, "transitive_rule")?,
+            optional_str(payload, "example_scenario")?,
+        ) {
+            (false, relationship_fields, None, None) if relationship_fields.is_empty() => {}
+            (true, relationship_fields, Some(transitive_rule), Some(example_scenario)) => {
+                read_model = read_model.with_transitive_semantics(
+                    ReadModelRelationshipFields::from_fields(
+                        relationship_fields
+                            .into_iter()
+                            .map(|field| datum_name(&field))
+                            .collect::<Result<Vec<_>, _>>()?,
+                    ),
+                    read_model_transitive_rule(transitive_rule)?,
+                    scenario_name(example_scenario)?,
+                );
+            }
+            _ => {
+                return Err("SliceReadModelAdded has incompatible transitive fields".to_owned());
+            }
+        }
+
+        Ok(Self { read_model })
+    }
+
+    fn into_read_model(self) -> NewReadModelDefinition {
+        self.read_model
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slice": self.read_model.slice_slug().as_ref(),
+            "name": self.read_model.name().as_ref(),
+            "field": Self::read_model_field_to_json_value(self.read_model.field()),
+            "transitive": self.read_model.transitive(),
+            "relationship_fields": self
+                .read_model
+                .relationship_fields()
+                .as_slice()
+                .iter()
+                .map(|field| field.as_ref())
+                .collect::<Vec<_>>(),
+            "transitive_rule": self
+                .read_model
+                .transitive_rule()
+                .map(|rule| rule.as_ref()),
+            "example_scenario": self
+                .read_model
+                .example_scenario_name()
+                .map(|scenario| scenario.as_ref()),
+        })
+    }
+
+    fn read_model_field_from_json_value(payload: &Value) -> Result<NewReadModelField, String> {
+        let name = datum_name(required_str(payload, "name")?)?;
+        let source_kind = read_model_field_source_kind(required_str(payload, "source_kind")?)?;
+        let provenance = provenance_description(required_str(payload, "provenance")?)?;
+        let source = match (
+            source_kind,
+            optional_str(payload, "source_event")?,
+            optional_str(payload, "source_attribute")?,
+            optional_str(payload, "derivation_rule")?,
+            required_string_array(payload, "derivation_source_fields")?,
+            optional_str(payload, "absence_event")?,
+            optional_str(payload, "derivation_scenario")?,
+            optional_str(payload, "absence_scenario")?,
+        ) {
+            (
+                ReadModelFieldSourceKind::EventAttribute,
+                Some(source_event),
+                Some(source_attribute),
+                None,
+                derivation_source_fields,
+                None,
+                None,
+                None,
+            ) if derivation_source_fields.is_empty() => ReadModelFieldSource::event_attribute(
+                event_name(source_event)?,
+                event_attribute_name(source_attribute)?,
+            ),
+            (
+                ReadModelFieldSourceKind::Derivation,
+                None,
+                None,
+                Some(derivation_rule),
+                derivation_source_fields,
+                None,
+                Some(derivation_scenario),
+                None,
+            ) => ReadModelFieldSource::derivation(
+                read_model_derivation_rule(derivation_rule)?,
+                ReadModelDerivationSourceFields::from_fields(
+                    derivation_source_fields
+                        .into_iter()
+                        .map(|field| datum_name(&field))
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+                scenario_name(derivation_scenario)?,
+            ),
+            (
+                ReadModelFieldSourceKind::AbsenceDefault,
+                None,
+                None,
+                None,
+                derivation_source_fields,
+                Some(absence_event),
+                None,
+                Some(absence_scenario),
+            ) if derivation_source_fields.is_empty() => ReadModelFieldSource::absence_default(
+                event_name(absence_event)?,
+                scenario_name(absence_scenario)?,
+            ),
+            _ => return Err("SliceReadModelAdded has incompatible field source fields".to_owned()),
+        };
+
+        Ok(NewReadModelField::new(name, source, provenance))
+    }
+
+    fn read_model_field_to_json_value(field: &NewReadModelField) -> Value {
+        json!({
+            "name": field.name().as_ref(),
+            "source_kind": field.source_kind().as_ref(),
+            "source_event": field.source_event().map(|event| event.as_ref()),
+            "source_attribute": field
+                .source_attribute()
+                .map(|attribute| attribute.as_ref()),
+            "derivation_rule": field.derivation_rule().map(|rule| rule.as_ref()),
+            "derivation_source_fields": field
+                .derivation_source_fields()
+                .as_slice()
+                .iter()
+                .map(|field| field.as_ref())
+                .collect::<Vec<_>>(),
+            "absence_event": field.absence_event().map(|event| event.as_ref()),
+            "derivation_scenario": field
+                .derivation_scenario_name()
+                .map(|scenario| scenario.as_ref()),
+            "absence_scenario": field
+                .absence_scenario_name()
+                .map(|scenario| scenario.as_ref()),
+            "provenance": field.provenance_description().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowConnectedEventPayload {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
@@ -1946,7 +2113,9 @@ impl ExportedEventBody {
             Self::SliceCommandDefinitionAdded { command } => {
                 SliceCommandDefinitionAddedEventPayload::from_command(command).to_json_value()
             }
-            Self::SliceReadModelAdded { read_model } => slice_read_model_payload(read_model),
+            Self::SliceReadModelAdded { read_model } => {
+                SliceReadModelAddedEventPayload::from_read_model(read_model).to_json_value()
+            }
             Self::SliceViewAdded { view } => slice_view_payload(view),
             Self::SliceBitLevelDataFlowAdded { data_flow } => {
                 slice_bit_level_data_flow_payload(data_flow)
@@ -2101,7 +2270,8 @@ impl ExportedEventBody {
                 })
             }
             ExportedEventType::SliceReadModelAdded => Ok(Self::SliceReadModelAdded {
-                read_model: slice_read_model_from_payload(payload)?,
+                read_model: SliceReadModelAddedEventPayload::from_json_value(payload)?
+                    .into_read_model(),
             }),
             ExportedEventType::SliceViewAdded => Ok(Self::SliceViewAdded {
                 view: slice_view_from_payload(payload)?,
@@ -2622,27 +2792,6 @@ impl ExportedEventFrontier for ExportedEventHeader {
     }
 }
 
-fn slice_read_model_payload(read_model: &NewReadModelDefinition) -> Value {
-    json!({
-        "slice": read_model.slice_slug().as_ref(),
-        "name": read_model.name().as_ref(),
-        "field": read_model_field_payload(read_model.field()),
-        "transitive": read_model.transitive(),
-        "relationship_fields": read_model
-            .relationship_fields()
-            .as_slice()
-            .iter()
-            .map(|field| field.as_ref())
-            .collect::<Vec<_>>(),
-        "transitive_rule": read_model
-            .transitive_rule()
-            .map(|rule| rule.as_ref()),
-        "example_scenario": read_model
-            .example_scenario_name()
-            .map(|scenario| scenario.as_ref()),
-    })
-}
-
 fn slice_view_payload(view: &NewViewDefinition) -> Value {
     json!({
         "slice": view.slice_slug().as_ref(),
@@ -2725,32 +2874,6 @@ fn slice_board_connection_payload(connection: &NewBoardConnection) -> Value {
         "source_kind": connection.source_kind().as_ref(),
         "target": connection.target().as_ref(),
         "target_kind": connection.target_kind().as_ref(),
-    })
-}
-
-fn read_model_field_payload(field: &NewReadModelField) -> Value {
-    json!({
-        "name": field.name().as_ref(),
-        "source_kind": field.source_kind().as_ref(),
-        "source_event": field.source_event().map(|event| event.as_ref()),
-        "source_attribute": field
-            .source_attribute()
-            .map(|attribute| attribute.as_ref()),
-        "derivation_rule": field.derivation_rule().map(|rule| rule.as_ref()),
-        "derivation_source_fields": field
-            .derivation_source_fields()
-            .as_slice()
-            .iter()
-            .map(|field| field.as_ref())
-            .collect::<Vec<_>>(),
-        "absence_event": field.absence_event().map(|event| event.as_ref()),
-        "derivation_scenario": field
-            .derivation_scenario_name()
-            .map(|scenario| scenario.as_ref()),
-        "absence_scenario": field
-            .absence_scenario_name()
-            .map(|scenario| scenario.as_ref()),
-        "provenance": field.provenance_description().as_ref(),
     })
 }
 
@@ -4345,108 +4468,6 @@ fn workflow_transition_kind_from_connection(
     workflow_transition_kind(&raw_kind)
 }
 
-pub(crate) fn slice_read_model_from_payload(
-    payload: &Value,
-) -> Result<NewReadModelDefinition, String> {
-    let field = read_model_field_from_payload(required_object(payload, "field")?)?;
-    let mut read_model = NewReadModelDefinition::new(
-        slice_slug(required_str(payload, "slice")?)?,
-        read_model_name(required_str(payload, "name")?)?,
-        field,
-    );
-
-    match (
-        required_bool(payload, "transitive")?,
-        required_string_array(payload, "relationship_fields")?,
-        optional_str(payload, "transitive_rule")?,
-        optional_str(payload, "example_scenario")?,
-    ) {
-        (false, relationship_fields, None, None) if relationship_fields.is_empty() => {}
-        (true, relationship_fields, Some(transitive_rule), Some(example_scenario)) => {
-            read_model = read_model.with_transitive_semantics(
-                ReadModelRelationshipFields::from_fields(
-                    relationship_fields
-                        .into_iter()
-                        .map(|field| datum_name(&field))
-                        .collect::<Result<Vec<_>, _>>()?,
-                ),
-                read_model_transitive_rule(transitive_rule)?,
-                scenario_name(example_scenario)?,
-            );
-        }
-        _ => {
-            return Err("SliceReadModelAdded has incompatible transitive fields".to_owned());
-        }
-    }
-
-    Ok(read_model)
-}
-
-fn read_model_field_from_payload(payload: &Value) -> Result<NewReadModelField, String> {
-    let name = datum_name(required_str(payload, "name")?)?;
-    let source_kind = read_model_field_source_kind(required_str(payload, "source_kind")?)?;
-    let provenance = provenance_description(required_str(payload, "provenance")?)?;
-    let source = match (
-        source_kind,
-        optional_str(payload, "source_event")?,
-        optional_str(payload, "source_attribute")?,
-        optional_str(payload, "derivation_rule")?,
-        required_string_array(payload, "derivation_source_fields")?,
-        optional_str(payload, "absence_event")?,
-        optional_str(payload, "derivation_scenario")?,
-        optional_str(payload, "absence_scenario")?,
-    ) {
-        (
-            ReadModelFieldSourceKind::EventAttribute,
-            Some(source_event),
-            Some(source_attribute),
-            None,
-            derivation_source_fields,
-            None,
-            None,
-            None,
-        ) if derivation_source_fields.is_empty() => ReadModelFieldSource::event_attribute(
-            event_name(source_event)?,
-            event_attribute_name(source_attribute)?,
-        ),
-        (
-            ReadModelFieldSourceKind::Derivation,
-            None,
-            None,
-            Some(derivation_rule),
-            derivation_source_fields,
-            None,
-            Some(derivation_scenario),
-            None,
-        ) => ReadModelFieldSource::derivation(
-            read_model_derivation_rule(derivation_rule)?,
-            ReadModelDerivationSourceFields::from_fields(
-                derivation_source_fields
-                    .into_iter()
-                    .map(|field| datum_name(&field))
-                    .collect::<Result<Vec<_>, _>>()?,
-            ),
-            scenario_name(derivation_scenario)?,
-        ),
-        (
-            ReadModelFieldSourceKind::AbsenceDefault,
-            None,
-            None,
-            None,
-            derivation_source_fields,
-            Some(absence_event),
-            None,
-            Some(absence_scenario),
-        ) if derivation_source_fields.is_empty() => ReadModelFieldSource::absence_default(
-            event_name(absence_event)?,
-            scenario_name(absence_scenario)?,
-        ),
-        _ => return Err("SliceReadModelAdded has incompatible field source fields".to_owned()),
-    };
-
-    Ok(NewReadModelField::new(name, source, provenance))
-}
-
 pub(crate) fn slice_bit_level_data_flow_from_payload(
     payload: &Value,
 ) -> Result<NewBitLevelDataFlow, String> {
@@ -5048,6 +5069,68 @@ mod tests {
         assert_eq!(
             SliceUpdatedEventPayload::from_json_value(&json)?.into_slice_detail(),
             slice
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_read_model_added_event_payload_round_trips_derivation_and_transitive_semantics()
+    -> Result<(), String> {
+        let read_model = NewReadModelDefinition::new(
+            slice_slug("capture-ticket")?,
+            read_model_name("ticket_state")?,
+            NewReadModelField::new(
+                datum_name("status_summary")?,
+                ReadModelFieldSource::derivation(
+                    read_model_derivation_rule("combine status and priority")?,
+                    ReadModelDerivationSourceFields::from_fields([
+                        datum_name("status")?,
+                        datum_name("priority")?,
+                    ]),
+                    scenario_name("Ticket summary is derived")?,
+                ),
+                provenance_description("TicketCaptured.status + TicketPrioritized.priority")?,
+            ),
+        )
+        .with_transitive_semantics(
+            ReadModelRelationshipFields::from_fields([
+                datum_name("ticket_id")?,
+                datum_name("customer_id")?,
+            ]),
+            read_model_transitive_rule("ticket lineage follows customer ownership")?,
+            scenario_name("Merged duplicate tickets are visible")?,
+        );
+
+        let payload = SliceReadModelAddedEventPayload::from_read_model(&read_model);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "slice": "capture-ticket",
+                "name": "ticket_state",
+                "field": {
+                    "name": "status_summary",
+                    "source_kind": "derivation",
+                    "source_event": null,
+                    "source_attribute": null,
+                    "derivation_rule": "combine status and priority",
+                    "derivation_source_fields": ["status", "priority"],
+                    "absence_event": null,
+                    "derivation_scenario": "Ticket summary is derived",
+                    "absence_scenario": null,
+                    "provenance": "TicketCaptured.status + TicketPrioritized.priority",
+                },
+                "transitive": true,
+                "relationship_fields": ["ticket_id", "customer_id"],
+                "transitive_rule": "ticket lineage follows customer ownership",
+                "example_scenario": "Merged duplicate tickets are visible",
+            })
+        );
+        assert_eq!(
+            SliceReadModelAddedEventPayload::from_json_value(&json)?.into_read_model(),
+            read_model
         );
 
         Ok(())
