@@ -1118,6 +1118,71 @@ impl WorkflowEntryLifecycleStateEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowReadinessDeclaredEventPayload {
+    workflow: WorkflowSlug,
+    projection_fingerprint: ProjectionFingerprint,
+    model_content_digest: ModelContentDigest,
+    verified_at: ReviewTimestamp,
+    verified_by: ReviewerId,
+    review_event: ReviewEventReference,
+}
+
+impl WorkflowReadinessDeclaredEventPayload {
+    fn from_parts(
+        workflow: &WorkflowSlug,
+        projection_fingerprint: &ProjectionFingerprint,
+        model_content_digest: &ModelContentDigest,
+        verified_at: &ReviewTimestamp,
+        verified_by: &ReviewerId,
+        review_event: &ReviewEventReference,
+    ) -> Self {
+        Self {
+            workflow: workflow.clone(),
+            projection_fingerprint: projection_fingerprint.clone(),
+            model_content_digest: model_content_digest.clone(),
+            verified_at: verified_at.clone(),
+            verified_by: verified_by.clone(),
+            review_event: review_event.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        let review_event_id = optional_str(payload, "review_event_id")?
+            .map(artifact_digest_from_str)
+            .transpose()?
+            .map(ReviewEventId::new);
+
+        Ok(Self {
+            workflow: workflow_slug(required_str(payload, "workflow")?)?,
+            projection_fingerprint: ProjectionFingerprint::new(artifact_digest_from_str(
+                required_str(payload, "projection_fingerprint")?,
+            )?),
+            model_content_digest: ModelContentDigest::new(artifact_digest_from_str(required_str(
+                payload,
+                "model_content_digest",
+            )?)?),
+            verified_at: review_timestamp(required_str(payload, "verified_at")?)?,
+            verified_by: reviewer_id(required_str(payload, "verified_by")?)?,
+            review_event: ReviewEventReference::from_optional(review_event_id),
+        })
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "workflow": self.workflow.as_ref(),
+            "projection_fingerprint": self.projection_fingerprint.as_ref(),
+            "model_content_digest": self.model_content_digest.as_ref(),
+            "verified_at": self.verified_at.as_ref(),
+            "verified_by": self.verified_by.as_ref(),
+            "review_event_id": self
+                .review_event
+                .as_review_event_id()
+                .map(|event_id| event_id.as_ref()),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum ExportedEventBody {
     ProjectInitialized {
         name: ProjectName,
@@ -1310,16 +1375,15 @@ impl ExportedEventBody {
                 verified_at,
                 verified_by,
                 review_event,
-            } => json!({
-                "workflow": workflow.as_ref(),
-                "projection_fingerprint": projection_fingerprint.as_ref(),
-                "model_content_digest": model_content_digest.as_ref(),
-                "verified_at": verified_at.as_ref(),
-                "verified_by": verified_by.as_ref(),
-                "review_event_id": review_event
-                    .as_review_event_id()
-                    .map(|event_id| event_id.as_ref()),
-            }),
+            } => WorkflowReadinessDeclaredEventPayload::from_parts(
+                workflow,
+                projection_fingerprint,
+                model_content_digest,
+                verified_at,
+                verified_by,
+                review_event,
+            )
+            .to_json_value(),
             Self::WorkflowConnected { connection } => {
                 WorkflowConnectedEventPayload::from_connection(connection).to_json_value()
             }
@@ -1446,14 +1510,17 @@ impl ExportedEventBody {
                     WorkflowEntryLifecycleStateEventPayload::from_json_value(payload)?.into_parts();
                 Ok(Self::WorkflowEntryLifecycleStateAdded { workflow, coverage })
             }
-            ExportedEventType::WorkflowReadinessDeclared => Ok(Self::WorkflowReadinessDeclared {
-                workflow: workflow_slug(required_str(payload, "workflow")?)?,
-                projection_fingerprint: projection_fingerprint_from_payload(payload)?,
-                model_content_digest: model_content_digest_from_payload(payload)?,
-                verified_at: review_timestamp(required_str(payload, "verified_at")?)?,
-                verified_by: reviewer_id(required_str(payload, "verified_by")?)?,
-                review_event: review_event_reference_from_payload(payload)?,
-            }),
+            ExportedEventType::WorkflowReadinessDeclared => {
+                let readiness = WorkflowReadinessDeclaredEventPayload::from_json_value(payload)?;
+                Ok(Self::WorkflowReadinessDeclared {
+                    workflow: readiness.workflow,
+                    projection_fingerprint: readiness.projection_fingerprint,
+                    model_content_digest: readiness.model_content_digest,
+                    verified_at: readiness.verified_at,
+                    verified_by: readiness.verified_by,
+                    review_event: readiness.review_event,
+                })
+            }
             ExportedEventType::WorkflowConnected => Ok(Self::WorkflowConnected {
                 connection: WorkflowConnectedEventPayload::from_json_value(payload)?
                     .into_connection(),
@@ -3820,26 +3887,6 @@ fn required_exported_command_id(event: &Value, field: &str) -> Result<ExportedCo
     })
 }
 
-fn projection_fingerprint_from_payload(payload: &Value) -> Result<ProjectionFingerprint, String> {
-    Ok(ProjectionFingerprint::new(artifact_digest_from_str(
-        required_str(payload, "projection_fingerprint")?,
-    )?))
-}
-
-fn model_content_digest_from_payload(payload: &Value) -> Result<ModelContentDigest, String> {
-    Ok(ModelContentDigest::new(artifact_digest_from_str(
-        required_str(payload, "model_content_digest")?,
-    )?))
-}
-
-fn review_event_reference_from_payload(payload: &Value) -> Result<ReviewEventReference, String> {
-    let review_event_id = optional_str(payload, "review_event_id")?
-        .map(artifact_digest_from_str)
-        .transpose()?
-        .map(ReviewEventId::new);
-    Ok(ReviewEventReference::from_optional(review_event_id))
-}
-
 fn review_rule_names_from_payload(payload: &Value) -> Result<Vec<ReviewRuleName>, String> {
     required_string_array(payload, "categories")?
         .into_iter()
@@ -5129,6 +5176,74 @@ mod tests {
         assert_eq!(
             error,
             "WorkflowOwnedDefinitionAdded has incompatible optional fields"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn workflow_readiness_declared_event_payload_round_trips_review_reference() -> Result<(), String>
+    {
+        let workflow = workflow_slug("open-ticket")?;
+        let projection_fingerprint =
+            ProjectionFingerprint::new(artifact_digest_from_str("projection-fingerprint")?);
+        let model_content_digest =
+            ModelContentDigest::new(artifact_digest_from_str("model-content-digest")?);
+        let verified_at = review_timestamp("2026-06-08T15:00:00.000Z")?;
+        let verified_by = reviewer_id("auto-review")?;
+        let recorded_review = ReviewEventReference::from_optional(Some(ReviewEventId::new(
+            artifact_digest_from_str("review-event-digest")?,
+        )));
+        let unrecorded_review = ReviewEventReference::unrecorded();
+
+        let recorded_payload = WorkflowReadinessDeclaredEventPayload::from_parts(
+            &workflow,
+            &projection_fingerprint,
+            &model_content_digest,
+            &verified_at,
+            &verified_by,
+            &recorded_review,
+        );
+        let recorded_json = recorded_payload.to_json_value();
+        assert_eq!(
+            recorded_json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "projection_fingerprint": "projection-fingerprint",
+                "model_content_digest": "model-content-digest",
+                "verified_at": "2026-06-08T15:00:00.000Z",
+                "verified_by": "auto-review",
+                "review_event_id": "review-event-digest",
+            })
+        );
+        assert_eq!(
+            WorkflowReadinessDeclaredEventPayload::from_json_value(&recorded_json)?,
+            recorded_payload
+        );
+
+        let unrecorded_payload = WorkflowReadinessDeclaredEventPayload::from_parts(
+            &workflow,
+            &projection_fingerprint,
+            &model_content_digest,
+            &verified_at,
+            &verified_by,
+            &unrecorded_review,
+        );
+        let unrecorded_json = unrecorded_payload.to_json_value();
+        assert_eq!(
+            unrecorded_json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "projection_fingerprint": "projection-fingerprint",
+                "model_content_digest": "model-content-digest",
+                "verified_at": "2026-06-08T15:00:00.000Z",
+                "verified_by": "auto-review",
+                "review_event_id": null,
+            })
+        );
+        assert_eq!(
+            WorkflowReadinessDeclaredEventPayload::from_json_value(&unrecorded_json)?,
+            unrecorded_payload
         );
 
         Ok(())
