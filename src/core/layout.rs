@@ -822,6 +822,24 @@ fn project_root_effects(
         ),
         Effect::require_canonical_declaration(
             lean_path.clone(),
+            canonical_declaration_prefix("structure ModelBoardElement where"),
+            canonical_declaration_marker("structure ModelBoardElement where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  mainPath : Bool"),
+            canonical_declaration_marker("  mainPath : Bool"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelBoardConnection where"),
+            canonical_declaration_marker("structure ModelBoardConnection where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
             canonical_declaration_prefix("structure ModelViewField where"),
             canonical_declaration_marker("structure ModelViewField where"),
             lean_message.clone(),
@@ -964,7 +982,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelBoardElements :"),
             canonical_declaration_marker(format!(
-                "def modelBoardElements : List (String × String × String × String × String × String × Bool) := {lean_model_board_element_list}"
+                "def modelBoardElements : List ModelBoardElement := {lean_model_board_element_list}"
             )),
             lean_message.clone(),
         ),
@@ -972,7 +990,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelBoardConnections :"),
             canonical_declaration_marker(format!(
-                "def modelBoardConnections : List (String × String × String × String × String × String) := {lean_model_board_connection_list}"
+                "def modelBoardConnections : List ModelBoardConnection := {lean_model_board_connection_list}"
             )),
             lean_message.clone(),
         ),
@@ -4790,7 +4808,7 @@ fn lean_model_board_element_list(project_board_elements: &[ProjectBoardElement])
             .into_iter()
             .map(|element| {
                 format!(
-                    "({}, {}, {}, {}, {}, {}, {})",
+                    "{{ workflow := {}, slice := {}, element := {}, kind := {}, lane := {}, declaredName := {}, mainPath := {} }}",
                     json_string(element.workflow_slug()),
                     json_string(element.slice_slug()),
                     json_string(element.element()),
@@ -4840,7 +4858,7 @@ fn lean_model_board_connection_list(
             .into_iter()
             .map(|connection| {
                 format!(
-                    "({}, {}, {}, {}, {}, {})",
+                    "{{ workflow := {}, slice := {}, source := {}, sourceKind := {}, target := {}, targetKind := {} }}",
                     json_string(connection.workflow_slug()),
                     json_string(connection.slice_slug()),
                     json_string(connection.source()),
