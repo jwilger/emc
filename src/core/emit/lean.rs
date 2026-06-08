@@ -668,16 +668,37 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
         );
     let contents = contents
         .replace(
+            "structure CommandDefinition where\n  name : String\n  inputs : List CommandInput\n  emittedEvents : List String\n  observedStreams : List String\n  errors : List CommandErrorDefinition\n  singleton : Bool\n  repeatBehavior : String\n\nstructure OutcomeDefinition where",
+            "structure CommandDefinition where\n  name : String\n  inputs : List CommandInput\n  emittedEvents : List String\n  observedStreams : List String\n  errors : List CommandErrorDefinition\n  singleton : Bool\n  repeatBehavior : String\n\nstructure SliceCommandReference where\n  name : String\n\nstructure OutcomeDefinition where",
+        )
+        .replace(
             "structure StreamDefinition where\n  name : String\n\nstructure EventAttribute where",
             "structure StreamDefinition where\n  name : String\n\nstructure SliceEventReference where\n  name : String\n\nstructure EventAttribute where",
+        )
+        .replace(
+            "def sliceCommands : List String := []\n\ndef sliceCommandDefinitions : List CommandDefinition := []",
+            "def sliceCommands : List SliceCommandReference := []\n\ndef sliceCommandNames : List String := sliceCommands.map (fun commandRef => commandRef.name)\n\ndef sliceCommandDefinitions : List CommandDefinition := []",
+        )
+        .replace(
+            "def sliceReferencedCommands : List String := []\n\ndef sliceOutcomeDefinitions : List OutcomeDefinition := []",
+            "def sliceReferencedCommands : List SliceCommandReference := []\n\ndef sliceReferencedCommandNames : List String := sliceReferencedCommands.map (fun commandRef => commandRef.name)\n\ndef sliceOutcomeDefinitions : List OutcomeDefinition := []",
         )
         .replace(
             "def sliceEvents : List String := []\n\ndef sliceStreams : List StreamDefinition := []",
             "def sliceEvents : List SliceEventReference := []\n\ndef sliceEventNames : List String := sliceEvents.map (fun eventRef => eventRef.name)\n\ndef sliceStreams : List StreamDefinition := []",
         )
         .replace(
+            "definitionNamesAreUnique sliceCommands",
+            "definitionNamesAreUnique sliceCommandNames",
+        )
+        .replace(
             "definitionNamesAreUnique sliceEvents",
             "definitionNamesAreUnique sliceEventNames",
+        )
+        .replace("sliceCommands.contains ", "sliceCommandNames.contains ")
+        .replace(
+            "sliceReferencedCommands.contains ",
+            "sliceReferencedCommandNames.contains ",
         )
         .replace(
             "def eventIsKnownToSlice (eventName : String) : Bool := sliceEvents.contains eventName || sliceEventDefinitions.any (fun event => event.name == eventName && (event.observed || event.shared))",

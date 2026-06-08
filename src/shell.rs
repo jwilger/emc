@@ -2222,9 +2222,9 @@ fn require_file_contents_with_authored_formal_facts(
 
 fn normalize_authored_formal_fact_lists(contents: &str) -> String {
     const MARKERS: &[&str] = &[
-        "def sliceCommands : List String := ",
+        "def sliceCommands : List SliceCommandReference := ",
         "def sliceCommandDefinitions : List CommandDefinition := ",
-        "def sliceReferencedCommands : List String := ",
+        "def sliceReferencedCommands : List SliceCommandReference := ",
         "def sliceAutomations : List AutomationDefinition := ",
         "def sliceTranslations : List TranslationDefinition := ",
         "def sliceBoardElements : List BoardElement := ",
@@ -2241,9 +2241,9 @@ fn normalize_authored_formal_fact_lists(contents: &str) -> String {
         "def sliceAcceptanceScenarios : List EventModelScenario := ",
         "def sliceContractScenarios : List EventModelScenario := ",
         "def sliceBitLevelDataFlows : List BitLevelDataFlow := ",
-        "val sliceCommands: List[str] = ",
+        "val sliceCommands: List[SliceCommandReference] = ",
         "val sliceCommandDefinitions: List[CommandDefinition] = ",
-        "val sliceReferencedCommands: List[str] = ",
+        "val sliceReferencedCommands: List[SliceCommandReference] = ",
         "val sliceAutomations: List[AutomationDefinition] = ",
         "val sliceTranslations: List[TranslationDefinition] = ",
         "val sliceBoardElements: List[BoardElement] = ",
@@ -2298,9 +2298,9 @@ fn write_formal_slice_artifact_preserving_authored_facts(
 
 fn preserve_authored_formal_fact_lists(existing: &str, generated: &str) -> String {
     const MARKERS: &[&str] = &[
-        "def sliceCommands : List String := ",
+        "def sliceCommands : List SliceCommandReference := ",
         "def sliceCommandDefinitions : List CommandDefinition := ",
-        "def sliceReferencedCommands : List String := ",
+        "def sliceReferencedCommands : List SliceCommandReference := ",
         "def sliceAutomations : List AutomationDefinition := ",
         "def sliceTranslations : List TranslationDefinition := ",
         "def sliceBoardElements : List BoardElement := ",
@@ -2317,9 +2317,9 @@ fn preserve_authored_formal_fact_lists(existing: &str, generated: &str) -> Strin
         "def sliceAcceptanceScenarios : List EventModelScenario := ",
         "def sliceContractScenarios : List EventModelScenario := ",
         "def sliceBitLevelDataFlows : List BitLevelDataFlow := ",
-        "val sliceCommands: List[str] = ",
+        "val sliceCommands: List[SliceCommandReference] = ",
         "val sliceCommandDefinitions: List[CommandDefinition] = ",
-        "val sliceReferencedCommands: List[str] = ",
+        "val sliceReferencedCommands: List[SliceCommandReference] = ",
         "val sliceAutomations: List[AutomationDefinition] = ",
         "val sliceTranslations: List[TranslationDefinition] = ",
         "val sliceBoardElements: List[BoardElement] = ",

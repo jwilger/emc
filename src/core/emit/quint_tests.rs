@@ -484,7 +484,14 @@ mod tests {
             quint.contains("type SliceEventReference = { name: str }"),
             "Quint slice artifacts must represent referenced event names as typed records"
         );
-        assert!(quint.contains("val sliceCommands: List[str] = []"));
+        assert!(
+            quint.contains("type SliceCommandReference = { name: str }"),
+            "Quint slice artifacts must represent referenced command names as typed records"
+        );
+        assert!(quint.contains("val sliceCommands: List[SliceCommandReference] = []"));
+        assert!(quint.contains(
+            "val sliceCommandNames: List[str] = sliceCommands.foldl([], (names, commandRef) => names.append(commandRef.name))"
+        ));
         assert!(quint.contains("val sliceCommandDefinitions: List[CommandDefinition] = []"));
         assert!(quint.contains("val sliceAutomations: List[AutomationDefinition] = []"));
         assert!(quint.contains("val sliceTranslations: List[TranslationDefinition] = []"));
@@ -493,7 +500,10 @@ mod tests {
         );
         assert!(quint.contains("val sliceBoardElements: List[BoardElement] = []"));
         assert!(quint.contains("val sliceBoardConnections: List[BoardConnection] = []"));
-        assert!(quint.contains("val sliceReferencedCommands: List[str] = []"));
+        assert!(quint.contains("val sliceReferencedCommands: List[SliceCommandReference] = []"));
+        assert!(quint.contains(
+            "val sliceReferencedCommandNames: List[str] = sliceReferencedCommands.foldl([], (names, commandRef) => names.append(commandRef.name))"
+        ));
         assert!(quint.contains("val sliceOutcomeDefinitions: List[OutcomeDefinition] = []"));
         assert!(quint.contains(
             "val allowedCommandInputSourceKinds: List[str] = [\"actor\",\"session\",\"generated\",\"external_payload\",\"event_stream_state\",\"invocation_argument\"]"
@@ -556,7 +566,7 @@ mod tests {
             "val sliceOwnedControlNames: List[str] = sliceViewDefinitions.foldl([], (names, view) => names.concat(view.controls.foldl([], (controlNames, control) => controlNames.append(control.name))))"
         ));
         assert!(quint.contains(
-            "val sliceNamedDefinitionsAreUniquelyOwned = definitionNamesAreUnique(sliceCommands) and definitionNamesAreUnique(sliceOwnedCommandNames) and definitionNamesAreUnique(sliceEventNames) and definitionNamesAreUnique(sliceOwnedEventNames) and definitionNamesAreUnique(sliceOwnedStreamNames) and definitionNamesAreUnique(sliceOwnedExternalPayloadNames) and definitionNamesAreUnique(sliceReadModels) and definitionNamesAreUnique(sliceOwnedReadModelNames) and definitionNamesAreUnique(sliceViews) and definitionNamesAreUnique(sliceOwnedViewNames) and definitionNamesAreUnique(sliceOwnedAutomationNames) and definitionNamesAreUnique(sliceOwnedTranslationNames) and definitionNamesAreUnique(sliceOwnedControlNames)"
+            "val sliceNamedDefinitionsAreUniquelyOwned = definitionNamesAreUnique(sliceCommandNames) and definitionNamesAreUnique(sliceOwnedCommandNames) and definitionNamesAreUnique(sliceEventNames) and definitionNamesAreUnique(sliceOwnedEventNames) and definitionNamesAreUnique(sliceOwnedStreamNames) and definitionNamesAreUnique(sliceOwnedExternalPayloadNames) and definitionNamesAreUnique(sliceReadModels) and definitionNamesAreUnique(sliceOwnedReadModelNames) and definitionNamesAreUnique(sliceViews) and definitionNamesAreUnique(sliceOwnedViewNames) and definitionNamesAreUnique(sliceOwnedAutomationNames) and definitionNamesAreUnique(sliceOwnedTranslationNames) and definitionNamesAreUnique(sliceOwnedControlNames)"
         ));
         assert!(quint.contains(
             "def scenarioStreamResolves(streamName) = sliceStreams.select(stream => stream.name == streamName).length() > 0"
@@ -598,7 +608,7 @@ mod tests {
             "val stateViewReadModelsHaveProjectorContracts = sliceKind != \"state_view\" or sliceReadModelDefinitions.select(readModel => readModelHasProjectorContract(readModel)).length() == sliceReadModelDefinitions.length()"
         ));
         assert!(quint.contains(
-            "def contractScenarioTargetsKnownDefinition(scenario) = (scenario.contractKind == \"projector\" and (sliceReadModels.select(readModel => readModel == scenario.coveredDefinition).length() > 0 or sliceReadModelDefinitions.select(readModel => readModel.name == scenario.coveredDefinition).length() > 0)) or (scenario.contractKind == \"command\" and (sliceCommands.select(command => command == scenario.coveredDefinition).length() > 0 or sliceCommandDefinitions.select(command => command.name == scenario.coveredDefinition).length() > 0)) or (scenario.contractKind == \"automation\" and sliceAutomations.select(automation => automation.name == scenario.coveredDefinition).length() > 0) or (scenario.contractKind == \"translation\" and sliceTranslations.select(translation => translation.name == scenario.coveredDefinition).length() > 0) or (scenario.contractKind == \"derivation\" and scenario.coveredDefinition != \"\" and sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => readModelField.sourceKind == \"derivation\" and readModelField.derivationScenarioName == scenario.name).length() > 0).length() > 0) or (scenario.contractKind == \"absence\" and scenario.coveredDefinition != \"\" and sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => readModelField.sourceKind == \"absence_default\" and readModelField.absenceScenarioName == scenario.name).length() > 0).length() > 0) or (scenario.contractKind == \"transitive\" and sliceReadModelDefinitions.select(readModel => readModel.transitive and readModel.name == scenario.coveredDefinition and readModel.exampleScenarioName == scenario.name).length() > 0)"
+            "def contractScenarioTargetsKnownDefinition(scenario) = (scenario.contractKind == \"projector\" and (sliceReadModels.select(readModel => readModel == scenario.coveredDefinition).length() > 0 or sliceReadModelDefinitions.select(readModel => readModel.name == scenario.coveredDefinition).length() > 0)) or (scenario.contractKind == \"command\" and (sliceCommandNames.select(commandName => commandName == scenario.coveredDefinition).length() > 0 or sliceCommandDefinitions.select(command => command.name == scenario.coveredDefinition).length() > 0)) or (scenario.contractKind == \"automation\" and sliceAutomations.select(automation => automation.name == scenario.coveredDefinition).length() > 0) or (scenario.contractKind == \"translation\" and sliceTranslations.select(translation => translation.name == scenario.coveredDefinition).length() > 0) or (scenario.contractKind == \"derivation\" and scenario.coveredDefinition != \"\" and sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => readModelField.sourceKind == \"derivation\" and readModelField.derivationScenarioName == scenario.name).length() > 0).length() > 0) or (scenario.contractKind == \"absence\" and scenario.coveredDefinition != \"\" and sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => readModelField.sourceKind == \"absence_default\" and readModelField.absenceScenarioName == scenario.name).length() > 0).length() > 0) or (scenario.contractKind == \"transitive\" and sliceReadModelDefinitions.select(readModel => readModel.transitive and readModel.name == scenario.coveredDefinition and readModel.exampleScenarioName == scenario.name).length() > 0)"
         ));
         assert!(quint.contains(
             "val contractScenariosTargetKnownDefinitions = sliceContractScenarios.select(scenario => contractScenarioTargetsKnownDefinition(scenario)).length() == sliceContractScenarios.length()"
@@ -709,7 +719,7 @@ mod tests {
             "def automationHasTrigger(automation) = automation.name != \"\" and automation.triggerName != \"\" and automation.reactionDescription != \"\""
         ));
         assert!(quint.contains(
-            "def automationIssuesKnownCommand(automation) = sliceCommands.select(command => command == automation.commandName).length() > 0 or sliceReferencedCommands.select(command => command == automation.commandName).length() > 0 or sliceCommandDefinitions.select(command => command.name == automation.commandName).length() > 0"
+            "def automationIssuesKnownCommand(automation) = sliceCommandNames.select(commandName => commandName == automation.commandName).length() > 0 or sliceReferencedCommandNames.select(commandName => commandName == automation.commandName).length() > 0 or sliceCommandDefinitions.select(command => command.name == automation.commandName).length() > 0"
         ));
         assert!(quint.contains(
             "def automationHandlesCommandErrors(automation, command) = command.name != automation.commandName or command.errors.select(error => automation.handledErrors.select(handledError => handledError == error.name).length() > 0).length() == command.errors.length()"
@@ -736,7 +746,7 @@ mod tests {
             "val externalBoundariesHavePayloadContractsAndFieldProvenance = sliceTranslations.select(translation => externalBoundaryHasPayloadContractAndFieldProvenance(translation)).length() == sliceTranslations.length()"
         ));
         assert!(quint.contains(
-            "def translationTargetsKnownCommand(translation) = sliceCommands.select(command => command == translation.commandName).length() > 0 or sliceReferencedCommands.select(command => command == translation.commandName).length() > 0 or sliceCommandDefinitions.select(command => command.name == translation.commandName).length() > 0"
+            "def translationTargetsKnownCommand(translation) = sliceCommandNames.select(commandName => commandName == translation.commandName).length() > 0 or sliceReferencedCommandNames.select(commandName => commandName == translation.commandName).length() > 0 or sliceCommandDefinitions.select(command => command.name == translation.commandName).length() > 0"
         ));
         assert!(quint.contains(
             "def translationReferencesObservedExternalEvent(translation) = sliceEventDefinitions.select(event => event.name == translation.externalEventName and event.observed).length() > 0"
@@ -754,7 +764,7 @@ mod tests {
             "def boardElementLaneMatchesKind(element) = (element.kind == \"view\" and element.lane == \"ux\") or (element.kind == \"automation\" and element.lane == \"ux\") or (element.kind == \"external_event\" and element.lane == \"ux\") or (element.kind == \"command\" and element.lane == \"actions\") or (element.kind == \"read_model\" and element.lane == \"actions\") or (element.kind == \"event\" and element.lane == \"events\")"
         ));
         assert!(quint.contains(
-            "def boardElementReferencesDeclaration(element) = (element.kind == \"view\" and (sliceViews.select(viewName => viewName == element.declaredName).length() > 0 or sliceViewDefinitions.select(view => view.name == element.declaredName).length() > 0)) or (element.kind == \"automation\" and sliceAutomations.select(automation => automation.name == element.declaredName).length() > 0) or (element.kind == \"external_event\" and sliceEventDefinitions.select(event => event.name == element.declaredName and event.observed).length() > 0) or (element.kind == \"command\" and (sliceCommands.select(command => command == element.declaredName).length() > 0 or sliceReferencedCommands.select(command => command == element.declaredName).length() > 0 or sliceCommandDefinitions.select(command => command.name == element.declaredName).length() > 0)) or (element.kind == \"read_model\" and (sliceReadModels.select(readModel => readModel == element.declaredName).length() > 0 or sliceReadModelDefinitions.select(readModel => readModel.name == element.declaredName).length() > 0)) or (element.kind == \"event\" and (sliceEventNames.select(eventName => eventName == element.declaredName).length() > 0 or sliceEventDefinitions.select(event => event.name == element.declaredName and (event.observed or event.shared)).length() > 0))"
+            "def boardElementReferencesDeclaration(element) = (element.kind == \"view\" and (sliceViews.select(viewName => viewName == element.declaredName).length() > 0 or sliceViewDefinitions.select(view => view.name == element.declaredName).length() > 0)) or (element.kind == \"automation\" and sliceAutomations.select(automation => automation.name == element.declaredName).length() > 0) or (element.kind == \"external_event\" and sliceEventDefinitions.select(event => event.name == element.declaredName and event.observed).length() > 0) or (element.kind == \"command\" and (sliceCommandNames.select(commandName => commandName == element.declaredName).length() > 0 or sliceReferencedCommandNames.select(commandName => commandName == element.declaredName).length() > 0 or sliceCommandDefinitions.select(command => command.name == element.declaredName).length() > 0)) or (element.kind == \"read_model\" and (sliceReadModels.select(readModel => readModel == element.declaredName).length() > 0 or sliceReadModelDefinitions.select(readModel => readModel.name == element.declaredName).length() > 0)) or (element.kind == \"event\" and (sliceEventNames.select(eventName => eventName == element.declaredName).length() > 0 or sliceEventDefinitions.select(event => event.name == element.declaredName and (event.observed or event.shared)).length() > 0))"
         ));
         assert!(quint.contains(
             "def automationBoardElementIsDeclaredAutomation(element) = element.kind != \"automation\" or sliceAutomations.select(automation => automation.name == element.declaredName).length() > 0"
@@ -1009,7 +1019,7 @@ mod tests {
             "val viewControlsAppearInSketch = sliceViewDefinitions.select(view => view.controls.select(control => controlAppearsInSketch(view, control)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
-            "val viewControlsReferenceKnownCommands = sliceViewDefinitions.select(view => view.controls.select(control => sliceCommands.select(command => command == control.commandName).length() > 0 or sliceReferencedCommands.select(command => command == control.commandName).length() > 0 or sliceCommandDefinitions.select(command => command.name == control.commandName).length() > 0).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
+            "val viewControlsReferenceKnownCommands = sliceViewDefinitions.select(view => view.controls.select(control => sliceCommandNames.select(commandName => commandName == control.commandName).length() > 0 or sliceReferencedCommandNames.select(commandName => commandName == control.commandName).length() > 0 or sliceCommandDefinitions.select(command => command.name == control.commandName).length() > 0).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
             "def controlProvidesCommandInput(control, input) = control.inputs.select(providedInput => providedInput.name == input.name).length() > 0"

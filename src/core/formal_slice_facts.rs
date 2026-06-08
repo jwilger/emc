@@ -1982,11 +1982,12 @@ pub(crate) fn add_automation_definition(
     quint_contents: FileContents,
     automation: NewAutomationDefinition,
 ) -> Result<EffectPlan, FormalSliceFactError> {
-    let command_name = quoted(automation.command_name.as_ref());
+    let lean_command_reference = lean_command_reference_record(automation.command_name.as_ref());
+    let quint_command_reference = quint_command_reference_record(automation.command_name.as_ref());
     let lean = append_record(
         lean_contents.as_ref(),
-        "def sliceReferencedCommands : List String := ",
-        &command_name,
+        "def sliceReferencedCommands : List SliceCommandReference := ",
+        &lean_command_reference,
     )
     .and_then(|contents| {
         append_record(
@@ -1997,8 +1998,8 @@ pub(crate) fn add_automation_definition(
     })?;
     let quint = append_record(
         quint_contents.as_ref(),
-        "val sliceReferencedCommands: List[str] = ",
-        &command_name,
+        "val sliceReferencedCommands: List[SliceCommandReference] = ",
+        &quint_command_reference,
     )
     .and_then(|contents| {
         append_record(
@@ -2026,11 +2027,12 @@ pub(crate) fn add_translation_definition(
     quint_contents: FileContents,
     translation: NewTranslationDefinition,
 ) -> Result<EffectPlan, FormalSliceFactError> {
-    let command_name = quoted(translation.command_name.as_ref());
+    let lean_command_reference = lean_command_reference_record(translation.command_name.as_ref());
+    let quint_command_reference = quint_command_reference_record(translation.command_name.as_ref());
     let lean = append_record(
         lean_contents.as_ref(),
-        "def sliceReferencedCommands : List String := ",
-        &command_name,
+        "def sliceReferencedCommands : List SliceCommandReference := ",
+        &lean_command_reference,
     )
     .and_then(|contents| {
         append_record(
@@ -2041,8 +2043,8 @@ pub(crate) fn add_translation_definition(
     })?;
     let quint = append_record(
         quint_contents.as_ref(),
-        "val sliceReferencedCommands: List[str] = ",
-        &command_name,
+        "val sliceReferencedCommands: List[SliceCommandReference] = ",
+        &quint_command_reference,
     )
     .and_then(|contents| {
         append_record(
@@ -2129,12 +2131,12 @@ pub(crate) fn add_command_definition(
     quint_contents: FileContents,
     command: NewCommandDefinition,
 ) -> Result<EffectPlan, FormalSliceFactError> {
-    let lean_command_name = quoted(command.name.as_ref());
-    let quint_command_name = lean_command_name.clone();
+    let lean_command_reference = lean_command_reference_record(command.name.as_ref());
+    let quint_command_reference = quint_command_reference_record(command.name.as_ref());
     let lean = append_record(
         lean_contents.as_ref(),
-        "def sliceCommands : List String := ",
-        &lean_command_name,
+        "def sliceCommands : List SliceCommandReference := ",
+        &lean_command_reference,
     )
     .and_then(|contents| {
         append_record(
@@ -2145,8 +2147,8 @@ pub(crate) fn add_command_definition(
     })?;
     let quint = append_record(
         quint_contents.as_ref(),
-        "val sliceCommands: List[str] = ",
-        &quint_command_name,
+        "val sliceCommands: List[SliceCommandReference] = ",
+        &quint_command_reference,
     )
     .and_then(|contents| {
         append_record(
@@ -2227,8 +2229,8 @@ pub(crate) fn add_view_definition(
     .and_then(|contents| {
         append_records(
             &contents,
-            "def sliceReferencedCommands : List String := ",
-            &view_referenced_command_records(&view),
+            "def sliceReferencedCommands : List SliceCommandReference := ",
+            &lean_view_referenced_command_records(&view),
         )
     })
     .and_then(|contents| {
@@ -2246,8 +2248,8 @@ pub(crate) fn add_view_definition(
     .and_then(|contents| {
         append_records(
             &contents,
-            "val sliceReferencedCommands: List[str] = ",
-            &view_referenced_command_records(&view),
+            "val sliceReferencedCommands: List[SliceCommandReference] = ",
+            &quint_view_referenced_command_records(&view),
         )
     })
     .and_then(|contents| {
@@ -2673,6 +2675,14 @@ fn quint_event_reference_record(event_name: &str) -> String {
     format!("{{ name: {} }}", quoted(event_name))
 }
 
+fn lean_command_reference_record(command_name: &str) -> String {
+    format!("{{ name := {} }}", quoted(command_name))
+}
+
+fn quint_command_reference_record(command_name: &str) -> String {
+    format!("{{ name: {} }}", quoted(command_name))
+}
+
 fn lean_external_payload_definition_record(
     external_payload: &NewExternalPayloadDefinition,
 ) -> String {
@@ -2897,11 +2907,19 @@ fn quint_view_definition_record(view: &NewViewDefinition) -> String {
     )
 }
 
-fn view_referenced_command_records(view: &NewViewDefinition) -> Vec<String> {
+fn lean_view_referenced_command_records(view: &NewViewDefinition) -> Vec<String> {
     view.controls
         .as_slice()
         .iter()
-        .map(|control| quoted(control.command_name.as_ref()))
+        .map(|control| lean_command_reference_record(control.command_name.as_ref()))
+        .collect()
+}
+
+fn quint_view_referenced_command_records(view: &NewViewDefinition) -> Vec<String> {
+    view.controls
+        .as_slice()
+        .iter()
+        .map(|control| quint_command_reference_record(control.command_name.as_ref()))
         .collect()
 }
 
