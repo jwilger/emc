@@ -223,6 +223,28 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelAutomation where\n  workflow : String\n  slice : String\n  automation : String"
+            ),
+            "Lean project root must type automations as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelAutomations : List ModelAutomation := []"),
+            "Lean project root must initialize automations as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelAutomationDefinition where\n  workflow : String\n  slice : String\n  automation : String\n  trigger : String\n  command : String\n  handledErrors : List String\n  reaction : String"
+            ),
+            "Lean project root must type automation definitions as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelAutomationDefinitions : List ModelAutomationDefinition := []"),
+            "Lean project root must initialize automation definitions as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
                 "structure ModelTranslation where\n  workflow : String\n  slice : String\n  translation : String"
             ),
             "Lean project root must type translations as named records"

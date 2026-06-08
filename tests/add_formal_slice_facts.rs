@@ -5027,13 +5027,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelAutomations : List (String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"title-deduplicator\")]"
+                "def modelAutomations : List ModelAutomation := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", automation := \"title-deduplicator\" }]"
             ),
             "Lean project root must carry the authored automation inventory"
         );
         assert!(
             lean_root.contains(
-                "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := [(\"open-ticket\", \"capture-ticket\", \"title-deduplicator\", \"TicketCaptured\", \"CaptureTicket\", [\"DuplicateTicket\"], \"deduplicates captured titles by reissuing CaptureTicket when needed\")]"
+                "def modelAutomationDefinitions : List ModelAutomationDefinition := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", automation := \"title-deduplicator\", trigger := \"TicketCaptured\", command := \"CaptureTicket\", handledErrors := [\"DuplicateTicket\"], reaction := \"deduplicates captured titles by reissuing CaptureTicket when needed\" }]"
             ),
             "Lean project root must carry authored automation definitions"
         );

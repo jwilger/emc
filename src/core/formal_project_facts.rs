@@ -2266,7 +2266,7 @@ pub(crate) fn parse_lean_project_automations(
 ) -> Result<Vec<ProjectAutomation>, FormalProjectFactError> {
     automation_entries_from_list(
         contents.as_ref(),
-        "def modelAutomations : List (String × String × String) := ",
+        "def modelAutomations : List ModelAutomation := ",
     )
 }
 
@@ -2284,7 +2284,7 @@ pub(crate) fn parse_lean_project_automation_definitions(
 ) -> Result<Vec<ProjectAutomationDefinition>, FormalProjectFactError> {
     automation_definition_entries_from_list(
         contents.as_ref(),
-        "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := ",
+        "def modelAutomationDefinitions : List ModelAutomationDefinition := ",
     )
 }
 
@@ -4255,14 +4255,14 @@ pub(crate) fn add_project_automation(
         .map(quint_automation_definition_record);
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelAutomations : List (String × String × String) := ",
+        "def modelAutomations : List ModelAutomation := ",
         &lean_record,
     )
     .and_then(|contents| {
         if let Some(record) = lean_definition_record.as_deref() {
             append_record_if_missing(
                 &contents,
-                "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := ",
+                "def modelAutomationDefinitions : List ModelAutomationDefinition := ",
                 record,
             )
         } else {
@@ -4272,11 +4272,11 @@ pub(crate) fn add_project_automation(
     .and_then(|contents| {
         let automations = automation_entries_from_list(
             &contents,
-            "def modelAutomations : List (String × String × String) := ",
+            "def modelAutomations : List ModelAutomation := ",
         )?;
         let automation_definitions = automation_definition_entries_from_list(
             &contents,
-            "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := ",
+            "def modelAutomationDefinitions : List ModelAutomationDefinition := ",
         )?;
         replace_declaration(
             &contents,
@@ -4291,7 +4291,7 @@ pub(crate) fn add_project_automation(
                 &contents,
                 "def modelAutomationDefinitions :",
                 &format!(
-                    "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := {}",
+                    "def modelAutomationDefinitions : List ModelAutomationDefinition := {}",
                     lean_automation_definition_list(&automation_definitions)
                 ),
             )
@@ -5316,11 +5316,11 @@ pub(crate) fn add_project_event(
         )?;
         let automations = automation_entries_from_list(
             &contents,
-            "def modelAutomations : List (String × String × String) := ",
+            "def modelAutomations : List ModelAutomation := ",
         )?;
         let automation_definitions = automation_definition_entries_from_list(
             &contents,
-            "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := ",
+            "def modelAutomationDefinitions : List ModelAutomationDefinition := ",
         )?;
         let translations = translation_entries_from_list(
             &contents,
@@ -5947,11 +5947,8 @@ fn parse_quint_project_view_fields_from_contents_or_empty(contents: &str) -> Vec
 }
 
 fn parse_lean_project_automations_from_contents_or_empty(contents: &str) -> Vec<ProjectAutomation> {
-    automation_entries_from_list(
-        contents,
-        "def modelAutomations : List (String × String × String) := ",
-    )
-    .unwrap_or_default()
+    automation_entries_from_list(contents, "def modelAutomations : List ModelAutomation := ")
+        .unwrap_or_default()
 }
 
 fn parse_quint_project_automations_from_contents_or_empty(
@@ -5966,7 +5963,7 @@ fn parse_lean_project_automation_definitions_from_contents_or_empty(
 ) -> Vec<ProjectAutomationDefinition> {
     automation_definition_entries_from_list(
         contents,
-        "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := ",
+        "def modelAutomationDefinitions : List ModelAutomationDefinition := ",
     )
     .unwrap_or_default()
 }
@@ -8879,7 +8876,7 @@ fn quint_view_field_record(field: &NewProjectViewField) -> String {
 
 fn lean_automation_record(automation: &NewProjectAutomation) -> String {
     format!(
-        "({}, {}, {})",
+        "{{ workflow := {}, slice := {}, automation := {} }}",
         quoted(automation.workflow_slug.as_ref()),
         quoted(automation.slice_slug.as_ref()),
         quoted(automation.automation.as_ref())
@@ -8898,7 +8895,7 @@ fn quint_automation_record(automation: &NewProjectAutomation) -> String {
 fn lean_automation_definition_record(definition: &NewProjectAutomationDefinition) -> String {
     let handled_errors = command_error_name_strings(definition.handled_errors.as_slice());
     format!(
-        "({}, {}, {}, {}, {}, [{}], {})",
+        "{{ workflow := {}, slice := {}, automation := {}, trigger := {}, command := {}, handledErrors := [{}], reaction := {} }}",
         quoted(definition.workflow_slug.as_ref()),
         quoted(definition.slice_slug.as_ref()),
         quoted(definition.automation.as_ref()),
@@ -8939,7 +8936,7 @@ fn lean_automation_definition_list(definitions: &[ProjectAutomationDefinition]) 
             .into_iter()
             .map(|definition| {
                 format!(
-                    "({}, {}, {}, {}, {}, [{}], {})",
+                    "{{ workflow := {}, slice := {}, automation := {}, trigger := {}, command := {}, handledErrors := [{}], reaction := {} }}",
                     quoted(&definition.workflow_slug),
                     quoted(&definition.slice_slug),
                     quoted(&definition.automation),

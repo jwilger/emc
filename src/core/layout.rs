@@ -1018,7 +1018,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelAutomations :"),
             canonical_declaration_marker(format!(
-                "def modelAutomations : List (String × String × String) := {lean_model_automation_list}"
+                "def modelAutomations : List ModelAutomation := {lean_model_automation_list}"
             )),
             lean_message.clone(),
         ),
@@ -1026,7 +1026,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelAutomationDefinitions :"),
             canonical_declaration_marker(format!(
-                "def modelAutomationDefinitions : List (String × String × String × String × String × List String × String) := {lean_model_automation_definition_list}"
+                "def modelAutomationDefinitions : List ModelAutomationDefinition := {lean_model_automation_definition_list}"
             )),
             lean_message.clone(),
         ),
@@ -5033,7 +5033,7 @@ fn lean_model_automation_list(project_automations: &[ProjectAutomation]) -> Stri
             .into_iter()
             .map(|(workflow_slug, slice_slug, automation)| {
                 format!(
-                    "({}, {}, {})",
+                    "{{ workflow := {}, slice := {}, automation := {} }}",
                     json_string(workflow_slug),
                     json_string(slice_slug),
                     json_string(automation)
@@ -5082,7 +5082,7 @@ fn lean_model_automation_definition_list(definitions: &[ProjectAutomationDefinit
             .into_iter()
             .map(|definition| {
                 format!(
-                    "({}, {}, {}, {}, {}, [{}], {})",
+                    "{{ workflow := {}, slice := {}, automation := {}, trigger := {}, command := {}, handledErrors := [{}], reaction := {} }}",
                     json_string(definition.workflow_slug()),
                     json_string(definition.slice_slug()),
                     json_string(definition.automation()),
