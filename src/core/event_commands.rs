@@ -10,14 +10,7 @@ use crate::core::connection::{ConnectionKind, WorkflowConnection, WorkflowTransi
 use crate::core::effect::{
     ChosenEventId, EventConflictId, ModelContentDigest, ProjectionFingerprint, ReviewEventReference,
 };
-use crate::core::events::{
-    EventDraft, ExportedEventBody, ExportedEventType, slice_automation_from_payload,
-    slice_bit_level_data_flow_from_payload, slice_board_connection_from_payload,
-    slice_board_element_from_payload, slice_command_definition_from_payload,
-    slice_event_definition_from_payload, slice_external_payload_from_payload,
-    slice_outcome_from_payload, slice_read_model_from_payload, slice_scenario_from_payload,
-    slice_translation_from_payload, slice_view_from_payload,
-};
+use crate::core::events::{EventDraft, ExportedEventBody, ExportedEventType};
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
     NewCommandDefinition, NewEventDefinition, NewExternalPayloadDefinition, NewOutcomeDefinition,
@@ -817,12 +810,17 @@ impl Serialize for SliceFactEvent {
         S: Serializer,
     {
         let draft = self.fact.to_event_draft();
-        let payload = draft.payload_json();
-        let mut state = serializer.serialize_struct("SliceFactEvent", 2)?;
-        state.serialize_field("exported_event_type", &draft.event_type())?;
-        state.serialize_field("payload", &payload)?;
+        let mut state = serializer.serialize_struct("SliceFactEvent", 1)?;
+        state.serialize_field("body", &draft.body().tagged_json_value())?;
         state.end()
     }
+}
+
+#[derive(Deserialize)]
+struct SerializedSliceFactEvent {
+    body: Option<Value>,
+    exported_event_type: Option<ExportedEventType>,
+    payload: Option<Value>,
 }
 
 impl<'de> Deserialize<'de> for SliceFactEvent {
@@ -830,19 +828,28 @@ impl<'de> Deserialize<'de> for SliceFactEvent {
     where
         D: Deserializer<'de>,
     {
-        #[derive(Deserialize)]
-        struct SerializedSliceFactEvent {
-            exported_event_type: ExportedEventType,
-            payload: Value,
-        }
-
         let serialized = SerializedSliceFactEvent::deserialize(deserializer)?;
-        let fact = SliceFactInput::from_event_type_and_payload(
-            serialized.exported_event_type,
-            &serialized.payload,
-        )
-        .map_err(DeserializeError::custom)?;
+        let body = serialized.event_body().map_err(DeserializeError::custom)?;
+        let fact = SliceFactInput::from_event_body(&body).map_err(DeserializeError::custom)?;
         Ok(Self::new(fact))
+    }
+}
+
+impl SerializedSliceFactEvent {
+    fn event_body(self) -> Result<ExportedEventBody, String> {
+        match (self.body, self.exported_event_type, self.payload) {
+            (Some(body), None, None) => ExportedEventBody::from_tagged_json_value(&body),
+            (None, Some(event_type), Some(payload)) => {
+                ExportedEventBody::from_event_type_and_payload(event_type, &payload)
+            }
+            (Some(_), Some(_), _) | (Some(_), _, Some(_)) => Err(
+                "slice fact event must use either body or legacy exported_event_type/payload"
+                    .to_owned(),
+            ),
+            (None, Some(_), None) => Err("missing slice fact payload".to_owned()),
+            (None, None, Some(_)) => Err("missing slice fact exported event type".to_owned()),
+            (None, None, None) => Err("missing slice fact event body".to_owned()),
+        }
     }
 }
 
@@ -894,49 +901,6 @@ impl SliceFactInput {
             Self::Automation(fact) => EventDraft::slice_automation_added(fact),
             Self::BoardElement(fact) => EventDraft::slice_board_element_added(fact),
             Self::BoardConnection(fact) => EventDraft::slice_board_connection_added(fact),
-        }
-    }
-
-    fn from_event_type_and_payload(
-        event_type: ExportedEventType,
-        payload: &Value,
-    ) -> Result<Self, String> {
-        match event_type {
-            ExportedEventType::SliceScenarioAdded => {
-                slice_scenario_from_payload(payload).map(Self::Scenario)
-            }
-            ExportedEventType::SliceOutcomeAdded => {
-                slice_outcome_from_payload(payload).map(Self::Outcome)
-            }
-            ExportedEventType::SliceExternalPayloadAdded => {
-                slice_external_payload_from_payload(payload).map(Self::ExternalPayload)
-            }
-            ExportedEventType::SliceEventDefinitionAdded => {
-                slice_event_definition_from_payload(payload).map(Self::EventDefinition)
-            }
-            ExportedEventType::SliceCommandDefinitionAdded => {
-                slice_command_definition_from_payload(payload).map(Self::CommandDefinition)
-            }
-            ExportedEventType::SliceReadModelAdded => {
-                slice_read_model_from_payload(payload).map(Self::ReadModel)
-            }
-            ExportedEventType::SliceViewAdded => slice_view_from_payload(payload).map(Self::View),
-            ExportedEventType::SliceBitLevelDataFlowAdded => {
-                slice_bit_level_data_flow_from_payload(payload).map(Self::BitLevelDataFlow)
-            }
-            ExportedEventType::SliceTranslationAdded => {
-                slice_translation_from_payload(payload).map(Self::Translation)
-            }
-            ExportedEventType::SliceAutomationAdded => {
-                slice_automation_from_payload(payload).map(Self::Automation)
-            }
-            ExportedEventType::SliceBoardElementAdded => {
-                slice_board_element_from_payload(payload).map(Self::BoardElement)
-            }
-            ExportedEventType::SliceBoardConnectionAdded => {
-                slice_board_connection_from_payload(payload).map(Self::BoardConnection)
-            }
-            event_type => Err(format!("unsupported slice fact event type {event_type}")),
         }
     }
 

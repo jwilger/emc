@@ -1440,12 +1440,13 @@ mod tests {
             serde_json::json!({
                 "SliceFactAdded": {
                     "stream_id": "slice::capture-ticket",
-                    "exported_event_type": "SliceOutcomeAdded",
-                    "payload": {
-                        "slice": "capture-ticket",
-                        "label": "ticket-captured",
-                        "events": ["TicketCaptured"],
-                        "externally_relevant": true
+                    "body": {
+                        "SliceOutcomeAdded": {
+                            "slice": "capture-ticket",
+                            "label": "ticket-captured",
+                            "events": ["TicketCaptured"],
+                            "externally_relevant": true
+                        }
                     }
                 }
             })
@@ -1453,6 +1454,21 @@ mod tests {
         let round_trip: EmcEvent = serde_json::from_value(serialized)?;
 
         assert_eq!(round_trip, event);
+
+        let legacy_round_trip: EmcEvent = serde_json::from_value(serde_json::json!({
+            "SliceFactAdded": {
+                "stream_id": "slice::capture-ticket",
+                "exported_event_type": "SliceOutcomeAdded",
+                "payload": {
+                    "slice": "capture-ticket",
+                    "label": "ticket-captured",
+                    "events": ["TicketCaptured"],
+                    "externally_relevant": true
+                }
+            }
+        }))?;
+
+        assert_eq!(legacy_round_trip, event);
 
         Ok(())
     }
