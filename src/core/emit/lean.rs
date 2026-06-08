@@ -666,6 +666,31 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
                 "def allowedControlInputSourceKinds : List String := {allowed_command_input_source_kind_list}"
             ),
         );
+    let contents = contents
+        .replace(
+            "structure StreamDefinition where\n  name : String\n\nstructure EventAttribute where",
+            "structure StreamDefinition where\n  name : String\n\nstructure SliceEventReference where\n  name : String\n\nstructure EventAttribute where",
+        )
+        .replace(
+            "def sliceEvents : List String := []\n\ndef sliceStreams : List StreamDefinition := []",
+            "def sliceEvents : List SliceEventReference := []\n\ndef sliceEventNames : List String := sliceEvents.map (fun eventRef => eventRef.name)\n\ndef sliceStreams : List StreamDefinition := []",
+        )
+        .replace(
+            "definitionNamesAreUnique sliceEvents",
+            "definitionNamesAreUnique sliceEventNames",
+        )
+        .replace(
+            "def eventIsKnownToSlice (eventName : String) : Bool := sliceEvents.contains eventName || sliceEventDefinitions.any (fun event => event.name == eventName && (event.observed || event.shared))",
+            "def eventIsKnownToSlice (eventName : String) : Bool := sliceEventNames.contains eventName || sliceEventDefinitions.any (fun event => event.name == eventName && (event.observed || event.shared))",
+        )
+        .replace(
+            "sliceEvents.contains element.declaredName",
+            "sliceEventNames.contains element.declaredName",
+        )
+        .replace(
+            "def commandEmittedEventIsKnown (eventName : String) : Bool := sliceEvents.contains eventName || sliceEventDefinitions.any (fun event => event.name == eventName)",
+            "def commandEmittedEventIsKnown (eventName : String) : Bool := sliceEventNames.contains eventName || sliceEventDefinitions.any (fun event => event.name == eventName)",
+        );
     file_contents(contents)
 }
 

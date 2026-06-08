@@ -3081,7 +3081,9 @@ mod tests {
         let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
         assert!(
-            lean.contains("def sliceEvents : List String := [\"TicketCaptured\"]"),
+            lean.contains(
+                "def sliceEvents : List SliceEventReference := [{ name := \"TicketCaptured\" }]"
+            ),
             "Lean slice artifact must carry the authored event name"
         );
         assert!(
@@ -3095,7 +3097,9 @@ mod tests {
             "Lean slice artifact must carry the authored event definition"
         );
         assert!(
-            quint.contains("val sliceEvents: List[str] = [\"TicketCaptured\"]"),
+            quint.contains(
+                "val sliceEvents: List[SliceEventReference] = [{ name: \"TicketCaptured\" }]"
+            ),
             "Quint slice artifact must carry the authored event name"
         );
         assert!(

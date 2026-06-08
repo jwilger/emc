@@ -358,6 +358,31 @@ pub(crate) fn emit_slice_module(
                 "val allowedControlInputSourceKinds: List[str] = {allowed_command_input_source_kind_list}"
             ),
         );
+    let contents = contents
+        .replace(
+            "type StreamDefinition = { name: str }\n  type EventAttribute",
+            "type StreamDefinition = { name: str }\n  type SliceEventReference = { name: str }\n  type EventAttribute",
+        )
+        .replace(
+            "val sliceEvents: List[str] = []\n  val sliceStreams: List[StreamDefinition] = []",
+            "val sliceEvents: List[SliceEventReference] = []\n  val sliceEventNames: List[str] = sliceEvents.foldl([], (names, eventRef) => names.append(eventRef.name))\n  val sliceStreams: List[StreamDefinition] = []",
+        )
+        .replace(
+            "definitionNamesAreUnique(sliceEvents)",
+            "definitionNamesAreUnique(sliceEventNames)",
+        )
+        .replace(
+            "def eventIsKnownToSlice(eventName) = sliceEvents.select(event => event == eventName).length() > 0 or sliceEventDefinitions.select(event => event.name == eventName and (event.observed or event.shared)).length() > 0",
+            "def eventIsKnownToSlice(eventName) = sliceEventNames.select(eventNameRef => eventNameRef == eventName).length() > 0 or sliceEventDefinitions.select(event => event.name == eventName and (event.observed or event.shared)).length() > 0",
+        )
+        .replace(
+            "sliceEvents.select(eventName => eventName == element.declaredName).length() > 0",
+            "sliceEventNames.select(eventName => eventName == element.declaredName).length() > 0",
+        )
+        .replace(
+            "def commandEmittedEventIsKnown(eventName) = sliceEvents.select(event => event == eventName).length() > 0 or sliceEventDefinitions.select(event => event.name == eventName).length() > 0",
+            "def commandEmittedEventIsKnown(eventName) = sliceEventNames.select(eventNameRef => eventNameRef == eventName).length() > 0 or sliceEventDefinitions.select(event => event.name == eventName).length() > 0",
+        );
     file_contents(contents)
 }
 

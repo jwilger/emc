@@ -1857,15 +1857,16 @@ pub(crate) fn add_event_definition(
     quint_contents: FileContents,
     event: NewEventDefinition,
 ) -> Result<EffectPlan, FormalSliceFactError> {
-    let event_name = quoted(event.name.as_ref());
+    let lean_event_reference = lean_event_reference_record(event.name.as_ref());
+    let quint_event_reference = quint_event_reference_record(event.name.as_ref());
     let lean_stream_record = lean_stream_record(event.stream.as_ref());
     let quint_stream_record = quint_stream_record(event.stream.as_ref());
     let lean_event_record = lean_event_definition_record(&event);
     let quint_event_record = quint_event_definition_record(&event);
     let lean = append_record(
         lean_contents.as_ref(),
-        "def sliceEvents : List String := ",
-        &event_name,
+        "def sliceEvents : List SliceEventReference := ",
+        &lean_event_reference,
     )
     .and_then(|contents| {
         append_record_if_missing(
@@ -1883,8 +1884,8 @@ pub(crate) fn add_event_definition(
     })?;
     let quint = append_record(
         quint_contents.as_ref(),
-        "val sliceEvents: List[str] = ",
-        &event_name,
+        "val sliceEvents: List[SliceEventReference] = ",
+        &quint_event_reference,
     )
     .and_then(|contents| {
         append_record_if_missing(
@@ -2662,6 +2663,14 @@ fn lean_stream_record(stream: &str) -> String {
 
 fn quint_stream_record(stream: &str) -> String {
     format!("{{ name: {} }}", quoted(stream))
+}
+
+fn lean_event_reference_record(event_name: &str) -> String {
+    format!("{{ name := {} }}", quoted(event_name))
+}
+
+fn quint_event_reference_record(event_name: &str) -> String {
+    format!("{{ name: {} }}", quoted(event_name))
 }
 
 fn lean_external_payload_definition_record(

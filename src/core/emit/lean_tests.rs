@@ -907,6 +907,10 @@ mod tests {
             ),
             "Lean slice artifacts must represent board connections as formal causal edges"
         );
+        assert!(
+            lean.contains("structure SliceEventReference where\n  name : String"),
+            "Lean slice artifacts must represent referenced event names as typed records"
+        );
         assert!(lean.contains("def sliceCommands : List String := []"));
         assert!(lean.contains("def sliceCommandDefinitions : List CommandDefinition := []"));
         assert!(lean.contains("def sliceAutomations : List AutomationDefinition := []"));
@@ -938,7 +942,10 @@ mod tests {
             ),
             "Lean slice artifacts must enumerate modeled singleton repeat behaviors"
         );
-        assert!(lean.contains("def sliceEvents : List String := []"));
+        assert!(lean.contains("def sliceEvents : List SliceEventReference := []"));
+        assert!(lean.contains(
+            "def sliceEventNames : List String := sliceEvents.map (fun eventRef => eventRef.name)"
+        ));
         assert!(lean.contains("def sliceStreams : List StreamDefinition := []"));
         assert!(lean.contains("def sliceExternalPayloads : List ExternalPayloadDefinition := []"));
         assert!(lean.contains("def sliceEventDefinitions : List EventDefinition := []"));
@@ -1033,7 +1040,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def sliceNamedDefinitionsAreUniquelyOwned : Bool := definitionNamesAreUnique sliceCommands && definitionNamesAreUnique sliceOwnedCommandNames && definitionNamesAreUnique sliceEvents && definitionNamesAreUnique sliceOwnedEventNames && definitionNamesAreUnique sliceOwnedStreamNames && definitionNamesAreUnique sliceOwnedExternalPayloadNames && definitionNamesAreUnique sliceReadModels && definitionNamesAreUnique sliceOwnedReadModelNames && definitionNamesAreUnique sliceViews && definitionNamesAreUnique sliceOwnedViewNames && definitionNamesAreUnique sliceOwnedAutomationNames && definitionNamesAreUnique sliceOwnedTranslationNames && definitionNamesAreUnique sliceOwnedControlNames"
+                "def sliceNamedDefinitionsAreUniquelyOwned : Bool := definitionNamesAreUnique sliceCommands && definitionNamesAreUnique sliceOwnedCommandNames && definitionNamesAreUnique sliceEventNames && definitionNamesAreUnique sliceOwnedEventNames && definitionNamesAreUnique sliceOwnedStreamNames && definitionNamesAreUnique sliceOwnedExternalPayloadNames && definitionNamesAreUnique sliceReadModels && definitionNamesAreUnique sliceOwnedReadModelNames && definitionNamesAreUnique sliceViews && definitionNamesAreUnique sliceOwnedViewNames && definitionNamesAreUnique sliceOwnedAutomationNames && definitionNamesAreUnique sliceOwnedTranslationNames && definitionNamesAreUnique sliceOwnedControlNames"
             ),
             "Lean slice artifacts must expose owned-definition uniqueness as a proof obligation"
         );
@@ -1429,7 +1436,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def boardElementReferencesDeclaration (element : BoardElement) : Bool := (element.kind == \"view\" && (sliceViews.contains element.declaredName || sliceViewDefinitions.any (fun view => view.name == element.declaredName))) || (element.kind == \"automation\" && sliceAutomations.any (fun automation => automation.name == element.declaredName)) || (element.kind == \"external_event\" && sliceEventDefinitions.any (fun event => event.name == element.declaredName && event.observed)) || (element.kind == \"command\" && (sliceCommands.contains element.declaredName || sliceReferencedCommands.contains element.declaredName || sliceCommandDefinitions.any (fun command => command.name == element.declaredName))) || (element.kind == \"read_model\" && (sliceReadModels.contains element.declaredName || sliceReadModelDefinitions.any (fun readModel => readModel.name == element.declaredName))) || (element.kind == \"event\" && (sliceEvents.contains element.declaredName || sliceEventDefinitions.any (fun event => event.name == element.declaredName && (event.observed || event.shared))))"
+                "def boardElementReferencesDeclaration (element : BoardElement) : Bool := (element.kind == \"view\" && (sliceViews.contains element.declaredName || sliceViewDefinitions.any (fun view => view.name == element.declaredName))) || (element.kind == \"automation\" && sliceAutomations.any (fun automation => automation.name == element.declaredName)) || (element.kind == \"external_event\" && sliceEventDefinitions.any (fun event => event.name == element.declaredName && event.observed)) || (element.kind == \"command\" && (sliceCommands.contains element.declaredName || sliceReferencedCommands.contains element.declaredName || sliceCommandDefinitions.any (fun command => command.name == element.declaredName))) || (element.kind == \"read_model\" && (sliceReadModels.contains element.declaredName || sliceReadModelDefinitions.any (fun readModel => readModel.name == element.declaredName))) || (element.kind == \"event\" && (sliceEventNames.contains element.declaredName || sliceEventDefinitions.any (fun event => event.name == element.declaredName && (event.observed || event.shared))))"
             ),
             "Lean slice artifacts must require board elements to reference real declarations"
         );
@@ -1615,7 +1622,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def commandEmittedEventIsKnown (eventName : String) : Bool := sliceEvents.contains eventName || sliceEventDefinitions.any (fun event => event.name == eventName)"
+                "def commandEmittedEventIsKnown (eventName : String) : Bool := sliceEventNames.contains eventName || sliceEventDefinitions.any (fun event => event.name == eventName)"
             ),
             "Lean slice artifacts must require command-emitted events to resolve to modeled events"
         );
