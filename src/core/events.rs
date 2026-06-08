@@ -1649,6 +1649,45 @@ impl SliceBoardElementAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceBoardConnectionAddedEventPayload {
+    connection: NewBoardConnection,
+}
+
+impl SliceBoardConnectionAddedEventPayload {
+    fn from_connection(connection: &NewBoardConnection) -> Self {
+        Self {
+            connection: connection.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            connection: NewBoardConnection::new(
+                slice_slug(required_str(payload, "slice")?)?,
+                board_connection_endpoint(required_str(payload, "source")?)?,
+                board_connection_endpoint_kind(required_str(payload, "source_kind")?)?,
+                board_connection_endpoint(required_str(payload, "target")?)?,
+                board_connection_endpoint_kind(required_str(payload, "target_kind")?)?,
+            ),
+        })
+    }
+
+    fn into_connection(self) -> NewBoardConnection {
+        self.connection
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slice": self.connection.slice_slug().as_ref(),
+            "source": self.connection.source().as_ref(),
+            "source_kind": self.connection.source_kind().as_ref(),
+            "target": self.connection.target().as_ref(),
+            "target_kind": self.connection.target_kind().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowConnectedEventPayload {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
@@ -2487,7 +2526,7 @@ impl ExportedEventBody {
                 SliceBoardElementAddedEventPayload::from_element(element).to_json_value()
             }
             Self::SliceBoardConnectionAdded { connection } => {
-                slice_board_connection_payload(connection)
+                SliceBoardConnectionAddedEventPayload::from_connection(connection).to_json_value()
             }
             Self::ReviewRecorded {
                 workflow_slug,
@@ -2656,7 +2695,8 @@ impl ExportedEventBody {
                     .into_element(),
             }),
             ExportedEventType::SliceBoardConnectionAdded => Ok(Self::SliceBoardConnectionAdded {
-                connection: slice_board_connection_from_payload(payload)?,
+                connection: SliceBoardConnectionAddedEventPayload::from_json_value(payload)?
+                    .into_connection(),
             }),
             ExportedEventType::ReviewRecorded => Ok(Self::ReviewRecorded {
                 workflow_slug: workflow_slug(required_str(payload, "workflow")?)?,
@@ -3157,16 +3197,6 @@ impl ExportedEventFrontier for ExportedEventHeader {
     fn frontier_event_type(&self) -> ExportedEventType {
         self.event_type
     }
-}
-
-fn slice_board_connection_payload(connection: &NewBoardConnection) -> Value {
-    json!({
-        "slice": connection.slice_slug().as_ref(),
-        "source": connection.source().as_ref(),
-        "source_kind": connection.source_kind().as_ref(),
-        "target": connection.target().as_ref(),
-        "target_kind": connection.target_kind().as_ref(),
-    })
 }
 
 pub(crate) fn export_event_file_contents(
@@ -4704,18 +4734,6 @@ fn workflow_transition_kind_from_connection(
     workflow_transition_kind(&raw_kind)
 }
 
-pub(crate) fn slice_board_connection_from_payload(
-    payload: &Value,
-) -> Result<NewBoardConnection, String> {
-    Ok(NewBoardConnection::new(
-        slice_slug(required_str(payload, "slice")?)?,
-        board_connection_endpoint(required_str(payload, "source")?)?,
-        board_connection_endpoint_kind(required_str(payload, "source_kind")?)?,
-        board_connection_endpoint(required_str(payload, "target")?)?,
-        board_connection_endpoint_kind(required_str(payload, "target_kind")?)?,
-    ))
-}
-
 fn same_transition(left: &WorkflowTransitionRecord, right: &WorkflowTransitionRecord) -> bool {
     left.source().as_ref() == right.source().as_ref()
         && left.target().as_ref() == right.target().as_ref()
@@ -5470,6 +5488,38 @@ mod tests {
         assert_eq!(
             SliceBoardElementAddedEventPayload::from_json_value(&json)?.into_element(),
             element
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_board_connection_added_event_payload_round_trips_endpoints_and_kinds()
+    -> Result<(), String> {
+        let connection = NewBoardConnection::new(
+            slice_slug("capture-ticket")?,
+            board_connection_endpoint("actor-submit")?,
+            board_connection_endpoint_kind("workflow_trigger")?,
+            board_connection_endpoint("CaptureTicket")?,
+            board_connection_endpoint_kind("command")?,
+        );
+
+        let payload = SliceBoardConnectionAddedEventPayload::from_connection(&connection);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "slice": "capture-ticket",
+                "source": "actor-submit",
+                "source_kind": "workflow_trigger",
+                "target": "CaptureTicket",
+                "target_kind": "command",
+            })
+        );
+        assert_eq!(
+            SliceBoardConnectionAddedEventPayload::from_json_value(&json)?.into_connection(),
+            connection
         );
 
         Ok(())
