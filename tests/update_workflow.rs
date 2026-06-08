@@ -425,7 +425,7 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Actor enters repair ticket details.\")]"
+                "def workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := \"state_view\", description := \"Actor enters repair ticket details.\" }]"
             ),
             "Lean update must preserve composed slice details"
         );
