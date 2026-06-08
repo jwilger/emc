@@ -809,10 +809,43 @@ impl Serialize for SliceFactEvent {
     where
         S: Serializer,
     {
-        let draft = self.fact.to_event_draft();
+        let body = SliceFactEventBody::from_slice_fact(self.fact.as_ref());
         let mut state = serializer.serialize_struct("SliceFactEvent", 1)?;
-        state.serialize_field("body", &draft.body().tagged_json_value())?;
+        state.serialize_field("body", &body.to_json_value())?;
         state.end()
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceFactEventBody {
+    body: ExportedEventBody,
+}
+
+impl SliceFactEventBody {
+    fn from_slice_fact(fact: &SliceFactInput) -> Self {
+        Self {
+            body: fact.to_event_body(),
+        }
+    }
+
+    fn from_tagged_json_value(value: &Value) -> Result<Self, String> {
+        Ok(Self {
+            body: ExportedEventBody::from_tagged_json_value(value)?,
+        })
+    }
+
+    fn from_legacy_payload(event_type: ExportedEventType, payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            body: ExportedEventBody::from_event_type_and_payload(event_type, payload)?,
+        })
+    }
+
+    fn into_slice_fact(self) -> Result<SliceFactInput, String> {
+        SliceFactInput::from_event_body(&self.body)
+    }
+
+    fn to_json_value(&self) -> Value {
+        self.body.tagged_json_value()
     }
 }
 
@@ -829,18 +862,20 @@ impl<'de> Deserialize<'de> for SliceFactEvent {
         D: Deserializer<'de>,
     {
         let serialized = SerializedSliceFactEvent::deserialize(deserializer)?;
-        let body = serialized.event_body().map_err(DeserializeError::custom)?;
-        let fact = SliceFactInput::from_event_body(&body).map_err(DeserializeError::custom)?;
+        let body = serialized
+            .slice_fact_body()
+            .map_err(DeserializeError::custom)?;
+        let fact = body.into_slice_fact().map_err(DeserializeError::custom)?;
         Ok(Self::new(fact))
     }
 }
 
 impl SerializedSliceFactEvent {
-    fn event_body(self) -> Result<ExportedEventBody, String> {
+    fn slice_fact_body(self) -> Result<SliceFactEventBody, String> {
         match (self.body, self.exported_event_type, self.payload) {
-            (Some(body), None, None) => ExportedEventBody::from_tagged_json_value(&body),
+            (Some(body), None, None) => SliceFactEventBody::from_tagged_json_value(&body),
             (None, Some(event_type), Some(payload)) => {
-                ExportedEventBody::from_event_type_and_payload(event_type, &payload)
+                SliceFactEventBody::from_legacy_payload(event_type, &payload)
             }
             (Some(_), Some(_), _) | (Some(_), _, Some(_)) => Err(
                 "slice fact event must use either body or legacy exported_event_type/payload"
@@ -904,6 +939,10 @@ impl SliceFactInput {
         }
     }
 
+    fn to_event_body(&self) -> ExportedEventBody {
+        self.to_event_draft().body().clone()
+    }
+
     pub(crate) fn from_event_body(body: &ExportedEventBody) -> Result<Self, String> {
         match body {
             ExportedEventBody::SliceScenarioAdded { scenario } => {
@@ -943,6 +982,89 @@ impl SliceFactInput {
                 body.event_type()
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fmt::Display;
+
+    use serde_json::json;
+
+    use super::*;
+    use crate::core::types::{
+        BoardElementDeclaredName, BoardElementKind, BoardElementName, BoardLaneId,
+    };
+
+    #[test]
+    fn slice_fact_event_body_round_trips_current_tagged_json() -> Result<(), String> {
+        let fact = board_element_fact()?;
+        let body = SliceFactEventBody::from_slice_fact(&fact);
+
+        let serialized = body.to_json_value();
+
+        assert_eq!(
+            serialized,
+            json!({
+                "SliceBoardElementAdded": {
+                    "slice": "capture-ticket",
+                    "name": "CaptureTicket",
+                    "kind": "command",
+                    "lane": "actions",
+                    "declared_name": "CaptureTicket",
+                    "main_path": true
+                }
+            })
+        );
+        assert_eq!(
+            SliceFactEventBody::from_tagged_json_value(&serialized)?.into_slice_fact()?,
+            fact
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_fact_event_body_reads_legacy_event_type_and_payload() -> Result<(), String> {
+        let legacy_payload = json!({
+            "slice": "capture-ticket",
+            "name": "CaptureTicket",
+            "kind": "command",
+            "lane": "actions",
+            "declared_name": "CaptureTicket",
+            "main_path": true
+        });
+
+        let decoded = SliceFactEventBody::from_legacy_payload(
+            ExportedEventType::SliceBoardElementAdded,
+            &legacy_payload,
+        )?
+        .into_slice_fact()?;
+
+        assert_eq!(decoded, board_element_fact()?);
+
+        Ok(())
+    }
+
+    fn board_element_fact() -> Result<SliceFactInput, String> {
+        Ok(SliceFactInput::BoardElement(NewBoardElement::new(
+            semantic("capture-ticket", SliceSlug::try_new)?,
+            semantic("CaptureTicket", BoardElementName::try_new)?,
+            semantic("command", BoardElementKind::try_new)?,
+            semantic("actions", BoardLaneId::try_new)?,
+            semantic("CaptureTicket", BoardElementDeclaredName::try_new)?,
+            true,
+        )))
+    }
+
+    fn semantic<T, Error>(
+        value: &str,
+        parse: impl FnOnce(String) -> Result<T, Error>,
+    ) -> Result<T, String>
+    where
+        Error: Display,
+    {
+        parse(value.to_owned()).map_err(|error| error.to_string())
     }
 }
 
