@@ -1522,6 +1522,45 @@ impl SliceBitLevelDataFlowAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceTranslationAddedEventPayload {
+    translation: NewTranslationDefinition,
+}
+
+impl SliceTranslationAddedEventPayload {
+    fn from_translation(translation: &NewTranslationDefinition) -> Self {
+        Self {
+            translation: translation.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            translation: NewTranslationDefinition::new(
+                slice_slug(required_str(payload, "slice")?)?,
+                translation_name(required_str(payload, "name")?)?,
+                translation_external_event_name(required_str(payload, "external_event")?)?,
+                payload_contract_name(required_str(payload, "payload_contract")?)?,
+                command_name(required_str(payload, "command")?)?,
+            ),
+        })
+    }
+
+    fn into_translation(self) -> NewTranslationDefinition {
+        self.translation
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slice": self.translation.slice_slug().as_ref(),
+            "name": self.translation.name().as_ref(),
+            "external_event": self.translation.external_event_name().as_ref(),
+            "payload_contract": self.translation.payload_contract_name().as_ref(),
+            "command": self.translation.command_name().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowConnectedEventPayload {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
@@ -2350,7 +2389,9 @@ impl ExportedEventBody {
             Self::SliceBitLevelDataFlowAdded { data_flow } => {
                 SliceBitLevelDataFlowAddedEventPayload::from_data_flow(data_flow).to_json_value()
             }
-            Self::SliceTranslationAdded { translation } => slice_translation_payload(translation),
+            Self::SliceTranslationAdded { translation } => {
+                SliceTranslationAddedEventPayload::from_translation(translation).to_json_value()
+            }
             Self::SliceAutomationAdded { automation } => slice_automation_payload(automation),
             Self::SliceBoardElementAdded { element } => slice_board_element_payload(element),
             Self::SliceBoardConnectionAdded { connection } => {
@@ -2511,7 +2552,8 @@ impl ExportedEventBody {
                     .into_data_flow(),
             }),
             ExportedEventType::SliceTranslationAdded => Ok(Self::SliceTranslationAdded {
-                translation: slice_translation_from_payload(payload)?,
+                translation: SliceTranslationAddedEventPayload::from_json_value(payload)?
+                    .into_translation(),
             }),
             ExportedEventType::SliceAutomationAdded => Ok(Self::SliceAutomationAdded {
                 automation: slice_automation_from_payload(payload)?,
@@ -3021,16 +3063,6 @@ impl ExportedEventFrontier for ExportedEventHeader {
     fn frontier_event_type(&self) -> ExportedEventType {
         self.event_type
     }
-}
-
-fn slice_translation_payload(translation: &NewTranslationDefinition) -> Value {
-    json!({
-        "slice": translation.slice_slug().as_ref(),
-        "name": translation.name().as_ref(),
-        "external_event": translation.external_event_name().as_ref(),
-        "payload_contract": translation.payload_contract_name().as_ref(),
-        "command": translation.command_name().as_ref(),
-    })
 }
 
 fn slice_automation_payload(automation: &NewAutomationDefinition) -> Value {
@@ -4605,18 +4637,6 @@ fn workflow_transition_kind_from_connection(
     workflow_transition_kind(&raw_kind)
 }
 
-pub(crate) fn slice_translation_from_payload(
-    payload: &Value,
-) -> Result<NewTranslationDefinition, String> {
-    Ok(NewTranslationDefinition::new(
-        slice_slug(required_str(payload, "slice")?)?,
-        translation_name(required_str(payload, "name")?)?,
-        translation_external_event_name(required_str(payload, "external_event")?)?,
-        payload_contract_name(required_str(payload, "payload_contract")?)?,
-        command_name(required_str(payload, "command")?)?,
-    ))
-}
-
 pub(crate) fn slice_automation_from_payload(
     payload: &Value,
 ) -> Result<NewAutomationDefinition, String> {
@@ -5304,6 +5324,38 @@ mod tests {
         assert_eq!(
             SliceBitLevelDataFlowAddedEventPayload::from_json_value(&json)?.into_data_flow(),
             data_flow
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_translation_added_event_payload_round_trips_external_event_contract_and_command()
+    -> Result<(), String> {
+        let translation = NewTranslationDefinition::new(
+            slice_slug("capture-ticket")?,
+            translation_name("capture_ticket_from_webhook")?,
+            translation_external_event_name("TicketWebhookReceived")?,
+            payload_contract_name("TicketWebhookPayload")?,
+            command_name("CaptureTicket")?,
+        );
+
+        let payload = SliceTranslationAddedEventPayload::from_translation(&translation);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "slice": "capture-ticket",
+                "name": "capture_ticket_from_webhook",
+                "external_event": "TicketWebhookReceived",
+                "payload_contract": "TicketWebhookPayload",
+                "command": "CaptureTicket",
+            })
+        );
+        assert_eq!(
+            SliceTranslationAddedEventPayload::from_json_value(&json)?.into_translation(),
+            translation
         );
 
         Ok(())
