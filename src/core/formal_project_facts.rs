@@ -7241,7 +7241,7 @@ fn update_lean_digest(
             contents,
             "def modelName := ",
             "def modelVersion := ",
-            "def modelWorkflows : List String := ",
+            "def modelWorkflows : List ModelWorkflow := ",
             "def modelSliceModules : List ModelSliceModule := ",
         )?,
         &inventories,

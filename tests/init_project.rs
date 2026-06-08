@@ -71,10 +71,26 @@ mod tests {
             "Lean project root must prove project model identity"
         );
         assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("structure ModelWorkflow where\n  workflow : String"),
+            "Lean project root must type workflows as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelWorkflows : List ModelWorkflow := []"),
+            "Lean project root must initialize the workflow inventory as named records"
+        );
+        assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelSliceBelongsToDeclaredWorkflow (slice : ModelSlice) : Bool := modelWorkflows.any (fun workflow => workflow == slice.workflow)"
+                "def modelSliceBelongsToDeclaredWorkflow (slice : ModelSlice) : Bool := modelWorkflows.any (fun workflow => workflow.workflow == slice.workflow)"
             ),
             "Lean project root must encode workflow composition slice membership"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelWorkflowSlicesHaveModules (workflow : ModelWorkflow) : Bool := modelSlices.all (fun slice => slice.workflow != workflow.workflow || modelSliceHasModule slice)"
+            ),
+            "Lean project root must check workflow composition through named workflow fields"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
