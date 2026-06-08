@@ -2605,6 +2605,21 @@ mod tests {
     }
 
     #[test]
+    fn list_conflicts_ignores_concurrent_semantic_duplicates() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        create_concurrent_duplicate_slice_update(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args(["list", "conflicts"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(contains("no event conflicts"));
+
+        Ok(())
+    }
+
+    #[test]
     fn resolve_conflict_appends_resolution_event_and_clears_conflict() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;
@@ -3950,6 +3965,19 @@ mod tests {
     fn create_concurrent_slice_update_conflict(
         temp_dir: &TempDir,
     ) -> Result<CreatedConflict, Box<dyn Error>> {
+        create_concurrent_slice_update_branch(temp_dir, Some("Second merged branch description."))
+    }
+
+    fn create_concurrent_duplicate_slice_update(
+        temp_dir: &TempDir,
+    ) -> Result<CreatedConflict, Box<dyn Error>> {
+        create_concurrent_slice_update_branch(temp_dir, None)
+    }
+
+    fn create_concurrent_slice_update_branch(
+        temp_dir: &TempDir,
+        conflicting_description: Option<&str>,
+    ) -> Result<CreatedConflict, Box<dyn Error>> {
         create_project_with_workflow_and_slice(temp_dir)?;
 
         Command::cargo_bin("emc")?
@@ -3977,8 +4005,9 @@ mod tests {
         let conflicting_event_id = format!("{original_event_id}-conflicting");
         update_event["event_id"] = Value::String(conflicting_event_id.clone());
         update_event["command_id"] = Value::String(conflicting_event_id.clone());
-        update_event["payload"]["description"] =
-            Value::String("Second merged branch description.".to_owned());
+        if let Some(description) = conflicting_description {
+            update_event["payload"]["description"] = Value::String(description.to_owned());
+        }
         fs::write(
             event_dir.join(format!("{conflicting_event_id}.json")),
             serde_json::to_string_pretty(&update_event)?,
