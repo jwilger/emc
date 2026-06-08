@@ -2302,7 +2302,7 @@ pub(crate) fn parse_lean_project_translations(
 ) -> Result<Vec<ProjectTranslation>, FormalProjectFactError> {
     translation_entries_from_list(
         contents.as_ref(),
-        "def modelTranslations : List (String × String × String) := ",
+        "def modelTranslations : List ModelTranslation := ",
     )
 }
 
@@ -2320,7 +2320,7 @@ pub(crate) fn parse_lean_project_translation_definitions(
 ) -> Result<Vec<ProjectTranslationDefinition>, FormalProjectFactError> {
     translation_definition_entries_from_list(
         contents.as_ref(),
-        "def modelTranslationDefinitions : List (String × String × String × String × String × String) := ",
+        "def modelTranslationDefinitions : List ModelTranslationDefinition := ",
     )
 }
 
@@ -4523,14 +4523,14 @@ pub(crate) fn add_project_translation(
         .map(quint_translation_definition_record);
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelTranslations : List (String × String × String) := ",
+        "def modelTranslations : List ModelTranslation := ",
         &lean_record,
     )
     .and_then(|contents| {
         if let Some(record) = lean_definition_record.as_deref() {
             append_record_if_missing(
                 &contents,
-                "def modelTranslationDefinitions : List (String × String × String × String × String × String) := ",
+                "def modelTranslationDefinitions : List ModelTranslationDefinition := ",
                 record,
             )
         } else {
@@ -4540,11 +4540,11 @@ pub(crate) fn add_project_translation(
     .and_then(|contents| {
         let translations = translation_entries_from_list(
             &contents,
-            "def modelTranslations : List (String × String × String) := ",
+            "def modelTranslations : List ModelTranslation := ",
         )?;
         let translation_definitions = translation_definition_entries_from_list(
             &contents,
-            "def modelTranslationDefinitions : List (String × String × String × String × String × String) := ",
+            "def modelTranslationDefinitions : List ModelTranslationDefinition := ",
         )?;
         replace_declaration(
             &contents,
@@ -4559,7 +4559,7 @@ pub(crate) fn add_project_translation(
                 &contents,
                 "def modelTranslationDefinitions :",
                 &format!(
-                    "def modelTranslationDefinitions : List (String × String × String × String × String × String) := {}",
+                    "def modelTranslationDefinitions : List ModelTranslationDefinition := {}",
                     lean_translation_definition_list(&translation_definitions)
                 ),
             )
@@ -5324,11 +5324,11 @@ pub(crate) fn add_project_event(
         )?;
         let translations = translation_entries_from_list(
             &contents,
-            "def modelTranslations : List (String × String × String) := ",
+            "def modelTranslations : List ModelTranslation := ",
         )?;
         let translation_definitions = translation_definition_entries_from_list(
             &contents,
-            "def modelTranslationDefinitions : List (String × String × String × String × String × String) := ",
+            "def modelTranslationDefinitions : List ModelTranslationDefinition := ",
         )?;
         let external_payloads = external_payload_entries_from_list(
             &contents,
@@ -5986,7 +5986,7 @@ fn parse_lean_project_translations_from_contents_or_empty(
 ) -> Vec<ProjectTranslation> {
     translation_entries_from_list(
         contents,
-        "def modelTranslations : List (String × String × String) := ",
+        "def modelTranslations : List ModelTranslation := ",
     )
     .unwrap_or_default()
 }
@@ -6003,7 +6003,7 @@ fn parse_lean_project_translation_definitions_from_contents_or_empty(
 ) -> Vec<ProjectTranslationDefinition> {
     translation_definition_entries_from_list(
         contents,
-        "def modelTranslationDefinitions : List (String × String × String × String × String × String) := ",
+        "def modelTranslationDefinitions : List ModelTranslationDefinition := ",
     )
     .unwrap_or_default()
 }
@@ -8980,7 +8980,7 @@ fn quint_automation_definition_list(definitions: &[ProjectAutomationDefinition])
 
 fn lean_translation_record(translation: &NewProjectTranslation) -> String {
     format!(
-        "({}, {}, {})",
+        "{{ workflow := {}, slice := {}, translation := {} }}",
         quoted(translation.workflow_slug.as_ref()),
         quoted(translation.slice_slug.as_ref()),
         quoted(translation.translation.as_ref())
@@ -8998,7 +8998,7 @@ fn quint_translation_record(translation: &NewProjectTranslation) -> String {
 
 fn lean_translation_definition_record(definition: &NewProjectTranslationDefinition) -> String {
     format!(
-        "({}, {}, {}, {}, {}, {})",
+        "{{ workflow := {}, slice := {}, translation := {}, externalEvent := {}, payloadContract := {}, command := {} }}",
         quoted(definition.workflow_slug.as_ref()),
         quoted(definition.slice_slug.as_ref()),
         quoted(definition.translation.as_ref()),
@@ -9029,7 +9029,7 @@ fn lean_translation_definition_list(definitions: &[ProjectTranslationDefinition]
             .into_iter()
             .map(|definition| {
                 format!(
-                    "({}, {}, {}, {}, {}, {})",
+                    "{{ workflow := {}, slice := {}, translation := {}, externalEvent := {}, payloadContract := {}, command := {} }}",
                     quoted(&definition.workflow_slug),
                     quoted(&definition.slice_slug),
                     quoted(&definition.translation),
