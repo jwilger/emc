@@ -431,7 +431,7 @@ mod tests {
             "type CommandErrorDefinition = { name: str, scenarioName: str, recoveryKind: str }"
         ));
         assert!(quint.contains(
-            "type CommandDefinition = { name: str, inputs: List[CommandInput], emittedEvents: List[str], observedStreams: List[str], errors: List[CommandErrorDefinition], singleton: bool, repeatBehavior: str }"
+            "type CommandDefinition = { name: str, inputs: List[CommandInput], emittedEvents: List[SliceEventReference], observedStreams: List[str], errors: List[CommandErrorDefinition], singleton: bool, repeatBehavior: str }"
         ));
         assert!(quint.contains(
             "type OutcomeDefinition = { label: str, eventSet: List[str], externallyRelevant: bool }"
@@ -796,7 +796,7 @@ mod tests {
             "def boardConnectionHasAllowedShape(connection) = (connection.sourceKind == \"view\" and connection.targetKind == \"command\") or (connection.sourceKind == \"automation\" and connection.targetKind == \"command\") or (connection.sourceKind == \"external_event\" and connection.targetKind == \"command\") or (connection.sourceKind == \"workflow_trigger\" and connection.targetKind == \"command\") or (connection.sourceKind == \"command\" and connection.targetKind == \"event\") or (connection.sourceKind == \"event\" and connection.targetKind == \"read_model\") or (connection.sourceKind == \"read_model\" and connection.targetKind == \"view\")"
         ));
         assert!(quint.contains(
-            "def commandEventBoardEdgeMatchesEmission(connection) = connection.sourceKind != \"command\" or connection.targetKind != \"event\" or sliceCommandDefinitions.select(command => command.name == connection.source and command.emittedEvents.select(eventName => eventName == connection.target).length() > 0).length() > 0"
+            "def commandEventBoardEdgeMatchesEmission(connection) = connection.sourceKind != \"command\" or connection.targetKind != \"event\" or sliceCommandDefinitions.select(command => command.name == connection.source and commandEmittedEventNames(command).select(eventName => eventName == connection.target).length() > 0).length() > 0"
         ));
         assert!(quint.contains(
             "val commandEventBoardEdgesMatchEmissions = sliceBoardConnections.select(connection => commandEventBoardEdgeMatchesEmission(connection)).length() == sliceBoardConnections.length()"
@@ -868,10 +868,13 @@ mod tests {
             "def commandEmittedEventIsKnown(eventName) = sliceEventNames.select(eventNameRef => eventNameRef == eventName).length() > 0 or sliceEventDefinitions.select(event => event.name == eventName).length() > 0"
         ));
         assert!(quint.contains(
-            "def eventProducedByCommand(event) = event.observed or event.shared or sliceCommandDefinitions.select(command => command.emittedEvents.select(eventName => eventName == event.name).length() > 0).length() > 0"
+            "def commandEmittedEventNames(command) = command.emittedEvents.foldl([], (names, eventRef) => names.append(eventRef.name))"
         ));
         assert!(quint.contains(
-            "val commandEmittedEventsAreKnown = sliceCommandDefinitions.select(command => command.emittedEvents.select(eventName => commandEmittedEventIsKnown(eventName)).length() == command.emittedEvents.length()).length() == sliceCommandDefinitions.length()"
+            "def eventProducedByCommand(event) = event.observed or event.shared or sliceCommandDefinitions.select(command => commandEmittedEventNames(command).select(eventName => eventName == event.name).length() > 0).length() > 0"
+        ));
+        assert!(quint.contains(
+            "val commandEmittedEventsAreKnown = sliceCommandDefinitions.select(command => commandEmittedEventNames(command).select(eventName => commandEmittedEventIsKnown(eventName)).length() == commandEmittedEventNames(command).length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(
             "val locallyEmittedEventsAreProducedByCommands = sliceEventDefinitions.select(event => eventProducedByCommand(event)).length() == sliceEventDefinitions.length()"
@@ -892,7 +895,7 @@ mod tests {
             "def externalPayloadFieldHasBitLevelFlow(payload, payloadField) = bitLevelFlowCoversTarget(payload.name, payloadField.name)"
         ));
         assert!(quint.contains(
-            "def commandInputReferencesAttributeSource(event, attribute, command) = command.emittedEvents.select(eventName => eventName == event.name).length() > 0 and command.inputs.select(input => input.name == attribute.sourceName).length() > 0"
+            "def commandInputReferencesAttributeSource(event, attribute, command) = commandEmittedEventNames(command).select(eventName => eventName == event.name).length() > 0 and command.inputs.select(input => input.name == attribute.sourceName).length() > 0"
         ));
         assert!(quint.contains(
             "def externalPayloadFieldIsDeclared(attribute) = sliceExternalPayloads.select(payload => payload.name == attribute.sourceName and payload.fields.select(payloadField => payloadField.name == attribute.sourceField).length() > 0).length() > 0"

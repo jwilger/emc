@@ -669,11 +669,7 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
     let contents = contents
         .replace(
             "structure CommandDefinition where\n  name : String\n  inputs : List CommandInput\n  emittedEvents : List String\n  observedStreams : List String\n  errors : List CommandErrorDefinition\n  singleton : Bool\n  repeatBehavior : String\n\nstructure OutcomeDefinition where",
-            "structure CommandDefinition where\n  name : String\n  inputs : List CommandInput\n  emittedEvents : List String\n  observedStreams : List String\n  errors : List CommandErrorDefinition\n  singleton : Bool\n  repeatBehavior : String\n\nstructure SliceCommandReference where\n  name : String\n\nstructure OutcomeDefinition where",
-        )
-        .replace(
-            "structure StreamDefinition where\n  name : String\n\nstructure EventAttribute where",
-            "structure StreamDefinition where\n  name : String\n\nstructure SliceEventReference where\n  name : String\n\nstructure EventAttribute where",
+            "structure SliceEventReference where\n  name : String\n\nstructure CommandDefinition where\n  name : String\n  inputs : List CommandInput\n  emittedEvents : List SliceEventReference\n  observedStreams : List String\n  errors : List CommandErrorDefinition\n  singleton : Bool\n  repeatBehavior : String\n\nstructure SliceCommandReference where\n  name : String\n\nstructure OutcomeDefinition where",
         )
         .replace(
             "structure ReadModelDefinition where\n  name : String\n  fields : List ReadModelField\n  transitive : Bool\n  relationshipFields : List String\n  transitiveRule : String\n  exampleScenarioName : String\n\nstructure ViewField where",
@@ -729,6 +725,18 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
             "sliceReadModelNames.contains ",
         )
         .replace("sliceViews.contains ", "sliceViewNames.contains ")
+        .replace(
+            "def automationHasTrigger (automation : AutomationDefinition) : Bool :=",
+            "def commandEmittedEventNames (command : CommandDefinition) : List String := command.emittedEvents.map (fun eventRef => eventRef.name)\n\ndef automationHasTrigger (automation : AutomationDefinition) : Bool :=",
+        )
+        .replace(
+            "command.emittedEvents.contains ",
+            "(commandEmittedEventNames command).contains ",
+        )
+        .replace(
+            "command.emittedEvents.all commandEmittedEventIsKnown",
+            "(commandEmittedEventNames command).all commandEmittedEventIsKnown",
+        )
         .replace(
             "def eventIsKnownToSlice (eventName : String) : Bool := sliceEvents.contains eventName || sliceEventDefinitions.any (fun event => event.name == eventName && (event.observed || event.shared))",
             "def eventIsKnownToSlice (eventName : String) : Bool := sliceEventNames.contains eventName || sliceEventDefinitions.any (fun event => event.name == eventName && (event.observed || event.shared))",

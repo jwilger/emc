@@ -809,7 +809,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure CommandDefinition where\n  name : String\n  inputs : List CommandInput\n  emittedEvents : List String\n  observedStreams : List String\n  errors : List CommandErrorDefinition\n  singleton : Bool\n  repeatBehavior : String"
+                "structure CommandDefinition where\n  name : String\n  inputs : List CommandInput\n  emittedEvents : List SliceEventReference\n  observedStreams : List String\n  errors : List CommandErrorDefinition\n  singleton : Bool\n  repeatBehavior : String"
             ),
             "Lean slice artifacts must represent commands in terms of inputs, emitted events, stream-derived state, declared errors, and singleton repeat behavior"
         );
@@ -1496,7 +1496,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def commandEventBoardEdgeMatchesEmission (connection : BoardConnection) : Bool := connection.sourceKind != \"command\" || connection.targetKind != \"event\" || sliceCommandDefinitions.any (fun command => command.name == connection.source && command.emittedEvents.contains connection.target)"
+                "def commandEventBoardEdgeMatchesEmission (connection : BoardConnection) : Bool := connection.sourceKind != \"command\" || connection.targetKind != \"event\" || sliceCommandDefinitions.any (fun command => command.name == connection.source && (commandEmittedEventNames command).contains connection.target)"
             ),
             "Lean slice artifacts must require command-to-event board edges to match command emissions"
         );
@@ -1652,13 +1652,19 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def eventProducedByCommand (event : EventDefinition) : Bool := event.observed || event.shared || sliceCommandDefinitions.any (fun command => command.emittedEvents.contains event.name)"
+                "def commandEmittedEventNames (command : CommandDefinition) : List String := command.emittedEvents.map (fun eventRef => eventRef.name)"
+            ),
+            "Lean slice artifacts must project typed command-emitted event references to names"
+        );
+        assert!(
+            lean.contains(
+                "def eventProducedByCommand (event : EventDefinition) : Bool := event.observed || event.shared || sliceCommandDefinitions.any (fun command => (commandEmittedEventNames command).contains event.name)"
             ),
             "Lean slice artifacts must require local events to be produced by commands unless observed or shared"
         );
         assert!(
             lean.contains(
-                "def commandInputReferencesAttributeSource (event : EventDefinition) (eventAttribute : EventAttribute) (command : CommandDefinition) : Bool := command.emittedEvents.contains event.name && command.inputs.any (fun input => input.name == eventAttribute.sourceName)"
+                "def commandInputReferencesAttributeSource (event : EventDefinition) (eventAttribute : EventAttribute) (command : CommandDefinition) : Bool := (commandEmittedEventNames command).contains event.name && command.inputs.any (fun input => input.name == eventAttribute.sourceName)"
             ),
             "Lean slice artifacts must connect command-sourced event attributes to inputs of commands that emit the event"
         );
@@ -1706,7 +1712,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def commandEmittedEventsAreKnown : Bool := sliceCommandDefinitions.all (fun command => command.emittedEvents.all commandEmittedEventIsKnown)"
+                "def commandEmittedEventsAreKnown : Bool := sliceCommandDefinitions.all (fun command => (commandEmittedEventNames command).all commandEmittedEventIsKnown)"
             ),
             "Lean slice artifacts must prove command-emitted event names resolve"
         );

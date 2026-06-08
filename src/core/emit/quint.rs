@@ -361,11 +361,7 @@ pub(crate) fn emit_slice_module(
     let contents = contents
         .replace(
             "type CommandDefinition = { name: str, inputs: List[CommandInput], emittedEvents: List[str], observedStreams: List[str], errors: List[CommandErrorDefinition], singleton: bool, repeatBehavior: str }\n  type OutcomeDefinition",
-            "type CommandDefinition = { name: str, inputs: List[CommandInput], emittedEvents: List[str], observedStreams: List[str], errors: List[CommandErrorDefinition], singleton: bool, repeatBehavior: str }\n  type SliceCommandReference = { name: str }\n  type OutcomeDefinition",
-        )
-        .replace(
-            "type StreamDefinition = { name: str }\n  type EventAttribute",
-            "type StreamDefinition = { name: str }\n  type SliceEventReference = { name: str }\n  type EventAttribute",
+            "type SliceEventReference = { name: str }\n  type CommandDefinition = { name: str, inputs: List[CommandInput], emittedEvents: List[SliceEventReference], observedStreams: List[str], errors: List[CommandErrorDefinition], singleton: bool, repeatBehavior: str }\n  type SliceCommandReference = { name: str }\n  type OutcomeDefinition",
         )
         .replace(
             "type ReadModelDefinition = { name: str, fields: List[ReadModelField], transitive: bool, relationshipFields: List[str], transitiveRule: str, exampleScenarioName: str }\n  type ViewField",
@@ -426,6 +422,18 @@ pub(crate) fn emit_slice_module(
         .replace(
             "sliceViews.select(viewName => viewName == ",
             "sliceViewNames.select(viewName => viewName == ",
+        )
+        .replace(
+            "def automationHasTrigger(automation) =",
+            "def commandEmittedEventNames(command) = command.emittedEvents.foldl([], (names, eventRef) => names.append(eventRef.name))\n  def automationHasTrigger(automation) =",
+        )
+        .replace(
+            "command.emittedEvents.select(eventName => eventName == ",
+            "commandEmittedEventNames(command).select(eventName => eventName == ",
+        )
+        .replace(
+            "command.emittedEvents.select(eventName => commandEmittedEventIsKnown(eventName)).length() == command.emittedEvents.length()",
+            "commandEmittedEventNames(command).select(eventName => commandEmittedEventIsKnown(eventName)).length() == commandEmittedEventNames(command).length()",
         )
         .replace(
             "def eventIsKnownToSlice(eventName) = sliceEvents.select(event => event == eventName).length() > 0 or sliceEventDefinitions.select(event => event.name == eventName and (event.observed or event.shared)).length() > 0",
