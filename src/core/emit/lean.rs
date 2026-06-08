@@ -676,6 +676,10 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
             "structure StreamDefinition where\n  name : String\n\nstructure SliceEventReference where\n  name : String\n\nstructure EventAttribute where",
         )
         .replace(
+            "structure ReadModelDefinition where\n  name : String\n  fields : List ReadModelField\n  transitive : Bool\n  relationshipFields : List String\n  transitiveRule : String\n  exampleScenarioName : String\n\nstructure ViewField where",
+            "structure ReadModelDefinition where\n  name : String\n  fields : List ReadModelField\n  transitive : Bool\n  relationshipFields : List String\n  transitiveRule : String\n  exampleScenarioName : String\n\nstructure SliceReadModelReference where\n  name : String\n\nstructure ViewField where",
+        )
+        .replace(
             "def sliceCommands : List String := []\n\ndef sliceCommandDefinitions : List CommandDefinition := []",
             "def sliceCommands : List SliceCommandReference := []\n\ndef sliceCommandNames : List String := sliceCommands.map (fun commandRef => commandRef.name)\n\ndef sliceCommandDefinitions : List CommandDefinition := []",
         )
@@ -688,6 +692,10 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
             "def sliceEvents : List SliceEventReference := []\n\ndef sliceEventNames : List String := sliceEvents.map (fun eventRef => eventRef.name)\n\ndef sliceStreams : List StreamDefinition := []",
         )
         .replace(
+            "def sliceReadModels : List String := []\n\ndef sliceReadModelDefinitions : List ReadModelDefinition := []",
+            "def sliceReadModels : List SliceReadModelReference := []\n\ndef sliceReadModelNames : List String := sliceReadModels.map (fun readModelRef => readModelRef.name)\n\ndef sliceReadModelDefinitions : List ReadModelDefinition := []",
+        )
+        .replace(
             "definitionNamesAreUnique sliceCommands",
             "definitionNamesAreUnique sliceCommandNames",
         )
@@ -695,10 +703,18 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
             "definitionNamesAreUnique sliceEvents",
             "definitionNamesAreUnique sliceEventNames",
         )
+        .replace(
+            "definitionNamesAreUnique sliceReadModels",
+            "definitionNamesAreUnique sliceReadModelNames",
+        )
         .replace("sliceCommands.contains ", "sliceCommandNames.contains ")
         .replace(
             "sliceReferencedCommands.contains ",
             "sliceReferencedCommandNames.contains ",
+        )
+        .replace(
+            "sliceReadModels.contains ",
+            "sliceReadModelNames.contains ",
         )
         .replace(
             "def eventIsKnownToSlice (eventName : String) : Bool := sliceEvents.contains eventName || sliceEventDefinitions.any (fun event => event.name == eventName && (event.observed || event.shared))",

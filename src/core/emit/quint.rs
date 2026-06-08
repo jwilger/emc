@@ -368,6 +368,10 @@ pub(crate) fn emit_slice_module(
             "type StreamDefinition = { name: str }\n  type SliceEventReference = { name: str }\n  type EventAttribute",
         )
         .replace(
+            "type ReadModelDefinition = { name: str, fields: List[ReadModelField], transitive: bool, relationshipFields: List[str], transitiveRule: str, exampleScenarioName: str }\n  type ViewField",
+            "type ReadModelDefinition = { name: str, fields: List[ReadModelField], transitive: bool, relationshipFields: List[str], transitiveRule: str, exampleScenarioName: str }\n  type SliceReadModelReference = { name: str }\n  type ViewField",
+        )
+        .replace(
             "val sliceCommands: List[str] = []\n  val sliceCommandDefinitions: List[CommandDefinition] = []",
             "val sliceCommands: List[SliceCommandReference] = []\n  val sliceCommandNames: List[str] = sliceCommands.foldl([], (names, commandRef) => names.append(commandRef.name))\n  val sliceCommandDefinitions: List[CommandDefinition] = []",
         )
@@ -380,6 +384,10 @@ pub(crate) fn emit_slice_module(
             "val sliceEvents: List[SliceEventReference] = []\n  val sliceEventNames: List[str] = sliceEvents.foldl([], (names, eventRef) => names.append(eventRef.name))\n  val sliceStreams: List[StreamDefinition] = []",
         )
         .replace(
+            "val sliceReadModels: List[str] = []\n  val sliceReadModelDefinitions: List[ReadModelDefinition] = []",
+            "val sliceReadModels: List[SliceReadModelReference] = []\n  val sliceReadModelNames: List[str] = sliceReadModels.foldl([], (names, readModelRef) => names.append(readModelRef.name))\n  val sliceReadModelDefinitions: List[ReadModelDefinition] = []",
+        )
+        .replace(
             "definitionNamesAreUnique(sliceCommands)",
             "definitionNamesAreUnique(sliceCommandNames)",
         )
@@ -388,12 +396,20 @@ pub(crate) fn emit_slice_module(
             "definitionNamesAreUnique(sliceEventNames)",
         )
         .replace(
+            "definitionNamesAreUnique(sliceReadModels)",
+            "definitionNamesAreUnique(sliceReadModelNames)",
+        )
+        .replace(
             "sliceCommands.select(command => command == ",
             "sliceCommandNames.select(commandName => commandName == ",
         )
         .replace(
             "sliceReferencedCommands.select(command => command == ",
             "sliceReferencedCommandNames.select(commandName => commandName == ",
+        )
+        .replace(
+            "sliceReadModels.select(readModel => readModel == ",
+            "sliceReadModelNames.select(readModelName => readModelName == ",
         )
         .replace(
             "def eventIsKnownToSlice(eventName) = sliceEvents.select(event => event == eventName).length() > 0 or sliceEventDefinitions.select(event => event.name == eventName and (event.observed or event.shared)).length() > 0",
