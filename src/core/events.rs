@@ -736,6 +736,45 @@ impl SliceOutcomeAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceExternalPayloadAddedEventPayload {
+    external_payload: NewExternalPayloadDefinition,
+}
+
+impl SliceExternalPayloadAddedEventPayload {
+    fn from_external_payload(external_payload: &NewExternalPayloadDefinition) -> Self {
+        Self {
+            external_payload: external_payload.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            external_payload: NewExternalPayloadDefinition::new(
+                slice_slug(required_str(payload, "slice")?)?,
+                event_attribute_source_name(required_str(payload, "name")?)?,
+                event_attribute_source_field(required_str(payload, "field")?)?,
+                provenance_description(required_str(payload, "field_provenance")?)?,
+                bit_encoding_semantics(required_str(payload, "bit_encoding")?)?,
+            ),
+        })
+    }
+
+    fn into_external_payload(self) -> NewExternalPayloadDefinition {
+        self.external_payload
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slice": self.external_payload.slice_slug().as_ref(),
+            "name": self.external_payload.name().as_ref(),
+            "field": self.external_payload.field().as_ref(),
+            "field_provenance": self.external_payload.field_provenance().as_ref(),
+            "bit_encoding": self.external_payload.bit_encoding().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowConnectedEventPayload {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
@@ -1546,7 +1585,8 @@ impl ExportedEventBody {
                 SliceOutcomeAddedEventPayload::from_outcome(outcome).to_json_value()
             }
             Self::SliceExternalPayloadAdded { external_payload } => {
-                slice_external_payload_payload(external_payload)
+                SliceExternalPayloadAddedEventPayload::from_external_payload(external_payload)
+                    .to_json_value()
             }
             Self::SliceEventDefinitionAdded { event } => slice_event_definition_payload(event),
             Self::SliceCommandDefinitionAdded { command } => {
@@ -1693,7 +1733,8 @@ impl ExportedEventBody {
                 outcome: SliceOutcomeAddedEventPayload::from_json_value(payload)?.into_outcome(),
             }),
             ExportedEventType::SliceExternalPayloadAdded => Ok(Self::SliceExternalPayloadAdded {
-                external_payload: slice_external_payload_from_payload(payload)?,
+                external_payload: SliceExternalPayloadAddedEventPayload::from_json_value(payload)?
+                    .into_external_payload(),
             }),
             ExportedEventType::SliceEventDefinitionAdded => Ok(Self::SliceEventDefinitionAdded {
                 event: slice_event_definition_from_payload(payload)?,
@@ -2223,16 +2264,6 @@ impl ExportedEventFrontier for ExportedEventHeader {
     fn frontier_event_type(&self) -> ExportedEventType {
         self.event_type
     }
-}
-
-fn slice_external_payload_payload(external_payload: &NewExternalPayloadDefinition) -> Value {
-    json!({
-        "slice": external_payload.slice_slug().as_ref(),
-        "name": external_payload.name().as_ref(),
-        "field": external_payload.field().as_ref(),
-        "field_provenance": external_payload.field_provenance().as_ref(),
-        "bit_encoding": external_payload.bit_encoding().as_ref(),
-    })
 }
 
 fn slice_event_definition_payload(event: &NewEventDefinition) -> Value {
@@ -4058,18 +4089,6 @@ fn workflow_transition_kind_from_connection(
     workflow_transition_kind(&raw_kind)
 }
 
-pub(crate) fn slice_external_payload_from_payload(
-    payload: &Value,
-) -> Result<NewExternalPayloadDefinition, String> {
-    Ok(NewExternalPayloadDefinition::new(
-        slice_slug(required_str(payload, "slice")?)?,
-        event_attribute_source_name(required_str(payload, "name")?)?,
-        event_attribute_source_field(required_str(payload, "field")?)?,
-        provenance_description(required_str(payload, "field_provenance")?)?,
-        bit_encoding_semantics(required_str(payload, "bit_encoding")?)?,
-    ))
-}
-
 pub(crate) fn slice_event_definition_from_payload(
     payload: &Value,
 ) -> Result<NewEventDefinition, String> {
@@ -5114,6 +5133,39 @@ mod tests {
         assert_eq!(
             SliceOutcomeAddedEventPayload::from_json_value(&json)?.into_outcome(),
             outcome
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_external_payload_added_event_payload_round_trips_between_semantic_payload_and_json_boundary()
+    -> Result<(), String> {
+        let external_payload = NewExternalPayloadDefinition::new(
+            slice_slug("capture-ticket")?,
+            event_attribute_source_name("TicketForm")?,
+            event_attribute_source_field("title")?,
+            provenance_description("Submitted by the ticket intake form.")?,
+            bit_encoding_semantics("utf8")?,
+        );
+
+        let payload =
+            SliceExternalPayloadAddedEventPayload::from_external_payload(&external_payload);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "slice": "capture-ticket",
+                "name": "TicketForm",
+                "field": "title",
+                "field_provenance": "Submitted by the ticket intake form.",
+                "bit_encoding": "utf8",
+            })
+        );
+        assert_eq!(
+            SliceExternalPayloadAddedEventPayload::from_json_value(&json)?.into_external_payload(),
+            external_payload
         );
 
         Ok(())
