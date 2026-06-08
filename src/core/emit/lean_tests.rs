@@ -911,7 +911,14 @@ mod tests {
             lean.contains("structure SliceEventReference where\n  name : String"),
             "Lean slice artifacts must represent referenced event names as typed records"
         );
-        assert!(lean.contains("def sliceCommands : List String := []"));
+        assert!(
+            lean.contains("structure SliceCommandReference where\n  name : String"),
+            "Lean slice artifacts must represent referenced command names as typed records"
+        );
+        assert!(lean.contains("def sliceCommands : List SliceCommandReference := []"));
+        assert!(lean.contains(
+            "def sliceCommandNames : List String := sliceCommands.map (fun commandRef => commandRef.name)"
+        ));
         assert!(lean.contains("def sliceCommandDefinitions : List CommandDefinition := []"));
         assert!(lean.contains("def sliceAutomations : List AutomationDefinition := []"));
         assert!(lean.contains("def sliceTranslations : List TranslationDefinition := []"));
@@ -922,7 +929,10 @@ mod tests {
         );
         assert!(lean.contains("def sliceBoardElements : List BoardElement := []"));
         assert!(lean.contains("def sliceBoardConnections : List BoardConnection := []"));
-        assert!(lean.contains("def sliceReferencedCommands : List String := []"));
+        assert!(lean.contains("def sliceReferencedCommands : List SliceCommandReference := []"));
+        assert!(lean.contains(
+            "def sliceReferencedCommandNames : List String := sliceReferencedCommands.map (fun commandRef => commandRef.name)"
+        ));
         assert!(lean.contains("def sliceOutcomeDefinitions : List OutcomeDefinition := []"));
         assert!(
             lean.contains(
@@ -1040,7 +1050,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def sliceNamedDefinitionsAreUniquelyOwned : Bool := definitionNamesAreUnique sliceCommands && definitionNamesAreUnique sliceOwnedCommandNames && definitionNamesAreUnique sliceEventNames && definitionNamesAreUnique sliceOwnedEventNames && definitionNamesAreUnique sliceOwnedStreamNames && definitionNamesAreUnique sliceOwnedExternalPayloadNames && definitionNamesAreUnique sliceReadModels && definitionNamesAreUnique sliceOwnedReadModelNames && definitionNamesAreUnique sliceViews && definitionNamesAreUnique sliceOwnedViewNames && definitionNamesAreUnique sliceOwnedAutomationNames && definitionNamesAreUnique sliceOwnedTranslationNames && definitionNamesAreUnique sliceOwnedControlNames"
+                "def sliceNamedDefinitionsAreUniquelyOwned : Bool := definitionNamesAreUnique sliceCommandNames && definitionNamesAreUnique sliceOwnedCommandNames && definitionNamesAreUnique sliceEventNames && definitionNamesAreUnique sliceOwnedEventNames && definitionNamesAreUnique sliceOwnedStreamNames && definitionNamesAreUnique sliceOwnedExternalPayloadNames && definitionNamesAreUnique sliceReadModels && definitionNamesAreUnique sliceOwnedReadModelNames && definitionNamesAreUnique sliceViews && definitionNamesAreUnique sliceOwnedViewNames && definitionNamesAreUnique sliceOwnedAutomationNames && definitionNamesAreUnique sliceOwnedTranslationNames && definitionNamesAreUnique sliceOwnedControlNames"
             ),
             "Lean slice artifacts must expose owned-definition uniqueness as a proof obligation"
         );
@@ -1100,7 +1110,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def contractScenarioTargetsKnownDefinition (scenario : EventModelScenario) : Bool := (scenario.contractKind == \"projector\" && (sliceReadModels.contains scenario.coveredDefinition || sliceReadModelDefinitions.any (fun readModel => readModel.name == scenario.coveredDefinition))) || (scenario.contractKind == \"command\" && (sliceCommands.contains scenario.coveredDefinition || sliceCommandDefinitions.any (fun command => command.name == scenario.coveredDefinition))) || (scenario.contractKind == \"automation\" && sliceAutomations.any (fun automation => automation.name == scenario.coveredDefinition)) || (scenario.contractKind == \"translation\" && sliceTranslations.any (fun translation => translation.name == scenario.coveredDefinition)) || (scenario.contractKind == \"derivation\" && scenario.coveredDefinition.isEmpty == false && sliceReadModelDefinitions.any (fun readModel => readModel.fields.any (fun field => field.sourceKind == \"derivation\" && field.derivationScenarioName == scenario.name))) || (scenario.contractKind == \"absence\" && scenario.coveredDefinition.isEmpty == false && sliceReadModelDefinitions.any (fun readModel => readModel.fields.any (fun field => field.sourceKind == \"absence_default\" && field.absenceScenarioName == scenario.name))) || (scenario.contractKind == \"transitive\" && sliceReadModelDefinitions.any (fun readModel => readModel.transitive && readModel.name == scenario.coveredDefinition && readModel.exampleScenarioName == scenario.name))"
+                "def contractScenarioTargetsKnownDefinition (scenario : EventModelScenario) : Bool := (scenario.contractKind == \"projector\" && (sliceReadModels.contains scenario.coveredDefinition || sliceReadModelDefinitions.any (fun readModel => readModel.name == scenario.coveredDefinition))) || (scenario.contractKind == \"command\" && (sliceCommandNames.contains scenario.coveredDefinition || sliceCommandDefinitions.any (fun command => command.name == scenario.coveredDefinition))) || (scenario.contractKind == \"automation\" && sliceAutomations.any (fun automation => automation.name == scenario.coveredDefinition)) || (scenario.contractKind == \"translation\" && sliceTranslations.any (fun translation => translation.name == scenario.coveredDefinition)) || (scenario.contractKind == \"derivation\" && scenario.coveredDefinition.isEmpty == false && sliceReadModelDefinitions.any (fun readModel => readModel.fields.any (fun field => field.sourceKind == \"derivation\" && field.derivationScenarioName == scenario.name))) || (scenario.contractKind == \"absence\" && scenario.coveredDefinition.isEmpty == false && sliceReadModelDefinitions.any (fun readModel => readModel.fields.any (fun field => field.sourceKind == \"absence_default\" && field.absenceScenarioName == scenario.name))) || (scenario.contractKind == \"transitive\" && sliceReadModelDefinitions.any (fun readModel => readModel.transitive && readModel.name == scenario.coveredDefinition && readModel.exampleScenarioName == scenario.name))"
             ),
             "Lean slice artifacts must resolve contract scenario targets to modeled definitions"
         );
@@ -1346,7 +1356,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def automationIssuesKnownCommand (automation : AutomationDefinition) : Bool := sliceCommands.contains automation.commandName || sliceReferencedCommands.contains automation.commandName || sliceCommandDefinitions.any (fun command => command.name == automation.commandName)"
+                "def automationIssuesKnownCommand (automation : AutomationDefinition) : Bool := sliceCommandNames.contains automation.commandName || sliceReferencedCommandNames.contains automation.commandName || sliceCommandDefinitions.any (fun command => command.name == automation.commandName)"
             ),
             "Lean slice artifacts must require automations to issue known commands"
         );
@@ -1400,7 +1410,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def translationTargetsKnownCommand (translation : TranslationDefinition) : Bool := sliceCommands.contains translation.commandName || sliceReferencedCommands.contains translation.commandName || sliceCommandDefinitions.any (fun command => command.name == translation.commandName)"
+                "def translationTargetsKnownCommand (translation : TranslationDefinition) : Bool := sliceCommandNames.contains translation.commandName || sliceReferencedCommandNames.contains translation.commandName || sliceCommandDefinitions.any (fun command => command.name == translation.commandName)"
             ),
             "Lean slice artifacts must require translations to target known commands"
         );
@@ -1436,7 +1446,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def boardElementReferencesDeclaration (element : BoardElement) : Bool := (element.kind == \"view\" && (sliceViews.contains element.declaredName || sliceViewDefinitions.any (fun view => view.name == element.declaredName))) || (element.kind == \"automation\" && sliceAutomations.any (fun automation => automation.name == element.declaredName)) || (element.kind == \"external_event\" && sliceEventDefinitions.any (fun event => event.name == element.declaredName && event.observed)) || (element.kind == \"command\" && (sliceCommands.contains element.declaredName || sliceReferencedCommands.contains element.declaredName || sliceCommandDefinitions.any (fun command => command.name == element.declaredName))) || (element.kind == \"read_model\" && (sliceReadModels.contains element.declaredName || sliceReadModelDefinitions.any (fun readModel => readModel.name == element.declaredName))) || (element.kind == \"event\" && (sliceEventNames.contains element.declaredName || sliceEventDefinitions.any (fun event => event.name == element.declaredName && (event.observed || event.shared))))"
+                "def boardElementReferencesDeclaration (element : BoardElement) : Bool := (element.kind == \"view\" && (sliceViews.contains element.declaredName || sliceViewDefinitions.any (fun view => view.name == element.declaredName))) || (element.kind == \"automation\" && sliceAutomations.any (fun automation => automation.name == element.declaredName)) || (element.kind == \"external_event\" && sliceEventDefinitions.any (fun event => event.name == element.declaredName && event.observed)) || (element.kind == \"command\" && (sliceCommandNames.contains element.declaredName || sliceReferencedCommandNames.contains element.declaredName || sliceCommandDefinitions.any (fun command => command.name == element.declaredName))) || (element.kind == \"read_model\" && (sliceReadModels.contains element.declaredName || sliceReadModelDefinitions.any (fun readModel => readModel.name == element.declaredName))) || (element.kind == \"event\" && (sliceEventNames.contains element.declaredName || sliceEventDefinitions.any (fun event => event.name == element.declaredName && (event.observed || event.shared))))"
             ),
             "Lean slice artifacts must require board elements to reference real declarations"
         );
@@ -2024,7 +2034,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def controlReferencesKnownCommand (control : ControlDefinition) : Bool := sliceCommands.contains control.commandName || sliceReferencedCommands.contains control.commandName || sliceCommandDefinitions.any (fun command => command.name == control.commandName)"
+                "def controlReferencesKnownCommand (control : ControlDefinition) : Bool := sliceCommandNames.contains control.commandName || sliceReferencedCommandNames.contains control.commandName || sliceCommandDefinitions.any (fun command => command.name == control.commandName)"
             ),
             "Lean slice artifacts must require controls to reference known commands"
         );

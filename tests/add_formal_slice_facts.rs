@@ -766,7 +766,9 @@ mod tests {
         let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
         let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
         assert!(
-            lean.contains("def sliceCommands : List String := [\"CaptureTicket\"]"),
+            lean.contains(
+                "def sliceCommands : List SliceCommandReference := [{ name := \"CaptureTicket\" }]"
+            ),
             "Lean slice artifact must carry the authored command name"
         );
         assert!(
@@ -776,7 +778,9 @@ mod tests {
             "Lean slice artifact must carry the authored command definition"
         );
         assert!(
-            quint.contains("val sliceCommands: List[str] = [\"CaptureTicket\"]"),
+            quint.contains(
+                "val sliceCommands: List[SliceCommandReference] = [{ name: \"CaptureTicket\" }]"
+            ),
             "Quint slice artifact must carry the authored command name"
         );
         assert!(
@@ -4437,7 +4441,9 @@ mod tests {
         let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
         assert!(
-            lean.contains("def sliceReferencedCommands : List String := [\"CaptureTicket\"]"),
+            lean.contains(
+                "def sliceReferencedCommands : List SliceCommandReference := [{ name := \"CaptureTicket\" }]"
+            ),
             "Lean slice artifact must carry cross-slice command references for controls"
         );
         assert!(
@@ -4451,7 +4457,9 @@ mod tests {
             "Lean slice artifact must map field, control, and actor input sketch tokens"
         );
         assert!(
-            quint.contains("val sliceReferencedCommands: List[str] = [\"CaptureTicket\"]"),
+            quint.contains(
+                "val sliceReferencedCommands: List[SliceCommandReference] = [{ name: \"CaptureTicket\" }]"
+            ),
             "Quint slice artifact must carry cross-slice command references for controls"
         );
         assert!(
@@ -5010,7 +5018,9 @@ mod tests {
         let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
         assert!(
-            lean.contains("def sliceReferencedCommands : List String := [\"CaptureTicket\"]"),
+            lean.contains(
+                "def sliceReferencedCommands : List SliceCommandReference := [{ name := \"CaptureTicket\" }]"
+            ),
             "Lean slice artifact must record commands issued by authored automations"
         );
         assert!(
@@ -5020,7 +5030,9 @@ mod tests {
             "Lean slice artifact must carry authored automation definitions"
         );
         assert!(
-            quint.contains("val sliceReferencedCommands: List[str] = [\"CaptureTicket\"]"),
+            quint.contains(
+                "val sliceReferencedCommands: List[SliceCommandReference] = [{ name: \"CaptureTicket\" }]"
+            ),
             "Quint slice artifact must record commands issued by authored automations"
         );
         assert!(
@@ -5259,7 +5271,9 @@ mod tests {
         let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
         assert!(
-            lean.contains("def sliceReferencedCommands : List String := [\"CaptureTicket\"]"),
+            lean.contains(
+                "def sliceReferencedCommands : List SliceCommandReference := [{ name := \"CaptureTicket\" }]"
+            ),
             "Lean slice artifact must record commands targeted by authored translations"
         );
         assert!(
@@ -5269,7 +5283,9 @@ mod tests {
             "Lean slice artifact must carry authored translation definitions"
         );
         assert!(
-            quint.contains("val sliceReferencedCommands: List[str] = [\"CaptureTicket\"]"),
+            quint.contains(
+                "val sliceReferencedCommands: List[SliceCommandReference] = [{ name: \"CaptureTicket\" }]"
+            ),
             "Quint slice artifact must record commands targeted by authored translations"
         );
         assert!(

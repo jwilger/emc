@@ -360,16 +360,40 @@ pub(crate) fn emit_slice_module(
         );
     let contents = contents
         .replace(
+            "type CommandDefinition = { name: str, inputs: List[CommandInput], emittedEvents: List[str], observedStreams: List[str], errors: List[CommandErrorDefinition], singleton: bool, repeatBehavior: str }\n  type OutcomeDefinition",
+            "type CommandDefinition = { name: str, inputs: List[CommandInput], emittedEvents: List[str], observedStreams: List[str], errors: List[CommandErrorDefinition], singleton: bool, repeatBehavior: str }\n  type SliceCommandReference = { name: str }\n  type OutcomeDefinition",
+        )
+        .replace(
             "type StreamDefinition = { name: str }\n  type EventAttribute",
             "type StreamDefinition = { name: str }\n  type SliceEventReference = { name: str }\n  type EventAttribute",
+        )
+        .replace(
+            "val sliceCommands: List[str] = []\n  val sliceCommandDefinitions: List[CommandDefinition] = []",
+            "val sliceCommands: List[SliceCommandReference] = []\n  val sliceCommandNames: List[str] = sliceCommands.foldl([], (names, commandRef) => names.append(commandRef.name))\n  val sliceCommandDefinitions: List[CommandDefinition] = []",
+        )
+        .replace(
+            "val sliceReferencedCommands: List[str] = []\n  val sliceOutcomeDefinitions: List[OutcomeDefinition] = []",
+            "val sliceReferencedCommands: List[SliceCommandReference] = []\n  val sliceReferencedCommandNames: List[str] = sliceReferencedCommands.foldl([], (names, commandRef) => names.append(commandRef.name))\n  val sliceOutcomeDefinitions: List[OutcomeDefinition] = []",
         )
         .replace(
             "val sliceEvents: List[str] = []\n  val sliceStreams: List[StreamDefinition] = []",
             "val sliceEvents: List[SliceEventReference] = []\n  val sliceEventNames: List[str] = sliceEvents.foldl([], (names, eventRef) => names.append(eventRef.name))\n  val sliceStreams: List[StreamDefinition] = []",
         )
         .replace(
+            "definitionNamesAreUnique(sliceCommands)",
+            "definitionNamesAreUnique(sliceCommandNames)",
+        )
+        .replace(
             "definitionNamesAreUnique(sliceEvents)",
             "definitionNamesAreUnique(sliceEventNames)",
+        )
+        .replace(
+            "sliceCommands.select(command => command == ",
+            "sliceCommandNames.select(commandName => commandName == ",
+        )
+        .replace(
+            "sliceReferencedCommands.select(command => command == ",
+            "sliceReferencedCommandNames.select(commandName => commandName == ",
         )
         .replace(
             "def eventIsKnownToSlice(eventName) = sliceEvents.select(event => event == eventName).length() > 0 or sliceEventDefinitions.select(event => event.name == eventName and (event.observed or event.shared)).length() > 0",
