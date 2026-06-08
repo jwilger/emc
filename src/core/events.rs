@@ -1479,6 +1479,49 @@ impl SliceViewAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceBitLevelDataFlowAddedEventPayload {
+    data_flow: NewBitLevelDataFlow,
+}
+
+impl SliceBitLevelDataFlowAddedEventPayload {
+    fn from_data_flow(data_flow: &NewBitLevelDataFlow) -> Self {
+        Self {
+            data_flow: data_flow.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            data_flow: NewBitLevelDataFlow::new(
+                slice_slug(required_str(payload, "slice")?)?,
+                datum_name(required_str(payload, "datum")?)?,
+                data_flow_source_kind(required_str(payload, "source_kind")?)?,
+                data_flow_source(required_str(payload, "source")?)?,
+                transformation_semantics(required_str(payload, "transformation")?)?,
+                data_flow_target(required_str(payload, "target")?)?,
+                bit_encoding_semantics(required_str(payload, "bit_encoding")?)?,
+            ),
+        })
+    }
+
+    fn into_data_flow(self) -> NewBitLevelDataFlow {
+        self.data_flow
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slice": self.data_flow.slice_slug().as_ref(),
+            "datum": self.data_flow.datum().as_ref(),
+            "source": self.data_flow.source().as_ref(),
+            "source_kind": self.data_flow.source_kind().as_ref(),
+            "transformation": self.data_flow.transformation().as_ref(),
+            "target": self.data_flow.target().as_ref(),
+            "bit_encoding": self.data_flow.bit_encoding().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowConnectedEventPayload {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
@@ -2305,7 +2348,7 @@ impl ExportedEventBody {
                 SliceViewAddedEventPayload::from_view(view).to_json_value()
             }
             Self::SliceBitLevelDataFlowAdded { data_flow } => {
-                slice_bit_level_data_flow_payload(data_flow)
+                SliceBitLevelDataFlowAddedEventPayload::from_data_flow(data_flow).to_json_value()
             }
             Self::SliceTranslationAdded { translation } => slice_translation_payload(translation),
             Self::SliceAutomationAdded { automation } => slice_automation_payload(automation),
@@ -2464,7 +2507,8 @@ impl ExportedEventBody {
                 view: SliceViewAddedEventPayload::from_json_value(payload)?.into_view(),
             }),
             ExportedEventType::SliceBitLevelDataFlowAdded => Ok(Self::SliceBitLevelDataFlowAdded {
-                data_flow: slice_bit_level_data_flow_from_payload(payload)?,
+                data_flow: SliceBitLevelDataFlowAddedEventPayload::from_json_value(payload)?
+                    .into_data_flow(),
             }),
             ExportedEventType::SliceTranslationAdded => Ok(Self::SliceTranslationAdded {
                 translation: slice_translation_from_payload(payload)?,
@@ -2977,18 +3021,6 @@ impl ExportedEventFrontier for ExportedEventHeader {
     fn frontier_event_type(&self) -> ExportedEventType {
         self.event_type
     }
-}
-
-fn slice_bit_level_data_flow_payload(data_flow: &NewBitLevelDataFlow) -> Value {
-    json!({
-        "slice": data_flow.slice_slug().as_ref(),
-        "datum": data_flow.datum().as_ref(),
-        "source": data_flow.source().as_ref(),
-        "source_kind": data_flow.source_kind().as_ref(),
-        "transformation": data_flow.transformation().as_ref(),
-        "target": data_flow.target().as_ref(),
-        "bit_encoding": data_flow.bit_encoding().as_ref(),
-    })
 }
 
 fn slice_translation_payload(translation: &NewTranslationDefinition) -> Value {
@@ -4573,20 +4605,6 @@ fn workflow_transition_kind_from_connection(
     workflow_transition_kind(&raw_kind)
 }
 
-pub(crate) fn slice_bit_level_data_flow_from_payload(
-    payload: &Value,
-) -> Result<NewBitLevelDataFlow, String> {
-    Ok(NewBitLevelDataFlow::new(
-        slice_slug(required_str(payload, "slice")?)?,
-        datum_name(required_str(payload, "datum")?)?,
-        data_flow_source_kind(required_str(payload, "source_kind")?)?,
-        data_flow_source(required_str(payload, "source")?)?,
-        transformation_semantics(required_str(payload, "transformation")?)?,
-        data_flow_target(required_str(payload, "target")?)?,
-        bit_encoding_semantics(required_str(payload, "bit_encoding")?)?,
-    ))
-}
-
 pub(crate) fn slice_translation_from_payload(
     payload: &Value,
 ) -> Result<NewTranslationDefinition, String> {
@@ -5250,6 +5268,42 @@ mod tests {
         assert_eq!(
             SliceViewAddedEventPayload::from_json_value(&json)?.into_view(),
             view
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_bit_level_data_flow_added_event_payload_round_trips_semantic_data_flow()
+    -> Result<(), String> {
+        let data_flow = NewBitLevelDataFlow::new(
+            slice_slug("capture-ticket")?,
+            datum_name("ticket_id")?,
+            data_flow_source_kind("modeled_target")?,
+            data_flow_source("TicketCaptured.ticket_id")?,
+            transformation_semantics("projection")?,
+            data_flow_target("ticket_summary.ticket_id")?,
+            bit_encoding_semantics("UUID as UTF-8 string")?,
+        );
+
+        let payload = SliceBitLevelDataFlowAddedEventPayload::from_data_flow(&data_flow);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "slice": "capture-ticket",
+                "datum": "ticket_id",
+                "source_kind": "modeled_target",
+                "source": "TicketCaptured.ticket_id",
+                "transformation": "projection",
+                "target": "ticket_summary.ticket_id",
+                "bit_encoding": "UUID as UTF-8 string",
+            })
+        );
+        assert_eq!(
+            SliceBitLevelDataFlowAddedEventPayload::from_json_value(&json)?.into_data_flow(),
+            data_flow
         );
 
         Ok(())
