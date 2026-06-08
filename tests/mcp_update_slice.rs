@@ -314,11 +314,11 @@ mod tests {
         let workflow_quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
         assert!(
-            workflow_lean.contains("def workflowSlices : List String := []"),
+            workflow_lean.contains("def workflowSlices : List WorkflowSlice := []"),
             "workflow Lean artifact must remove the MCP-removed slice"
         );
         assert!(
-            workflow_quint.contains("val workflowSlices: List[str] = []"),
+            workflow_quint.contains("val workflowSlices: List[WorkflowSlice] = []"),
             "workflow Quint artifact must remove the MCP-removed slice"
         );
         assert!(

@@ -128,9 +128,15 @@ mod tests {
         assert!(quint.contains(
             "type WorkflowEntryLifecycleState = { state: str, step: str, evidence: str }"
         ));
+        assert!(quint.contains("type WorkflowSlice = { slug: str }"));
         assert!(
             quint
-                .contains("val workflowSlices: List[str] = [\"capture-ticket\",\"review-ticket\"]")
+                .contains("val workflowSlices: List[WorkflowSlice] = [{ slug: \"capture-ticket\" },{ slug: \"review-ticket\" }]")
+        );
+        assert!(
+            quint.contains(
+                "val workflowSliceSlugs: List[str] = workflowSlices.foldl([], (slugs, workflowSlice) => slugs.append(workflowSlice.slug))"
+            )
         );
         assert!(
             quint.contains(
@@ -192,7 +198,7 @@ mod tests {
             "Quint workflow artifacts must expose allowed step relationships as an invariant"
         );
         assert!(
-            quint.contains("val workflowStepSlugsAreUnique = workflowSlices.select(step => workflowSlices.select(other => other == step).length() == 1).length() == workflowSlices.length()"),
+            quint.contains("val workflowStepSlugsAreUnique = workflowSliceSlugs.select(step => workflowSliceSlugs.select(other => other == step).length() == 1).length() == workflowSliceSlugs.length()"),
             "Quint workflow artifacts must verify workflow step slugs are unique"
         );
         assert!(
@@ -233,13 +239,13 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val workflowTransitionSourcesResolve = workflowTransitions.select(transition => workflowSlices.select(step => step == transition.source).length() > 0).length() == workflowTransitions.length()"
+                "val workflowTransitionSourcesResolve = workflowTransitions.select(transition => workflowSliceSlugs.select(step => step == transition.source).length() > 0).length() == workflowTransitions.length()"
             ),
             "Quint workflow artifacts must verify transition sources are composed workflow steps"
         );
         assert!(
             quint.contains(
-                "val workflowTransitionTargetsResolve = workflowTransitions.select(transition => workflowSlices.select(step => step == transition.target).length() > 0 or workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() > 0).length() == workflowTransitions.length()"
+                "val workflowTransitionTargetsResolve = workflowTransitions.select(transition => workflowSliceSlugs.select(step => step == transition.target).length() > 0 or workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() > 0).length() == workflowTransitions.length()"
             ),
             "Quint workflow artifacts must verify transition targets are composed steps or explicit workflow exits"
         );
@@ -274,13 +280,13 @@ mod tests {
             "val workflowExternallyRelevantOutcomesHandled = workflowOutcomes.select(outcome => workflowOutcomeHandledByTransition(outcome)).length() == workflowOutcomes.length()"
         ));
         assert!(quint.contains(
-            "def workflowOutcomeSourceResolves(outcome) = workflowSlices.select(step => step == outcome.sourceSlice).length() > 0"
+            "def workflowOutcomeSourceResolves(outcome) = workflowSliceSlugs.select(step => step == outcome.sourceSlice).length() > 0"
         ));
         assert!(quint.contains(
             "val workflowOutcomesSourceResolve = workflowOutcomes.select(outcome => workflowOutcomeSourceResolves(outcome)).length() == workflowOutcomes.length()"
         ));
         assert!(quint.contains(
-            "def workflowCommandErrorSourceResolves(error) = workflowSlices.select(step => step == error.sourceSlice).length() > 0"
+            "def workflowCommandErrorSourceResolves(error) = workflowSliceSlugs.select(step => step == error.sourceSlice).length() > 0"
         ));
         assert!(quint.contains(
             "val workflowCommandErrorsSourceResolve = workflowCommandErrors.select(error => workflowCommandErrorSourceResolves(error)).length() == workflowCommandErrors.length()"

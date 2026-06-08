@@ -110,8 +110,12 @@ mod tests {
         assert!(lean.contains("def workflowName := \"Open ticket\""));
         assert!(lean.contains("def workflowSlug := \"open-ticket\""));
         assert!(lean.contains("def workflowDescription := \"Actor opens a repair ticket.\""));
+        assert!(lean.contains("structure WorkflowSlice where\n  slug : String"));
         assert!(lean.contains(
-            "def workflowSlices : List String := [\"capture-ticket\",\"review-ticket\"]"
+            "def workflowSlices : List WorkflowSlice := [{ slug := \"capture-ticket\" },{ slug := \"review-ticket\" }]"
+        ));
+        assert!(lean.contains(
+            "def workflowSliceSlugs : List String := workflowSlices.map (fun slice => slice.slug)"
         ));
         assert!(
             lean.contains(
@@ -228,13 +232,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowStepSlugCount (slug : String) : Nat := (workflowSlices.filter (fun step => step == slug)).length"
+                "def workflowStepSlugCount (slug : String) : Nat := (workflowSliceSlugs.filter (fun step => step == slug)).length"
             ),
             "Lean workflow artifacts must count step slugs for uniqueness proofs"
         );
         assert!(
             lean.contains(
-                "def workflowStepSlugsAreUnique : Bool := workflowSlices.all (fun step => workflowStepSlugCount step == 1)"
+                "def workflowStepSlugsAreUnique : Bool := workflowSliceSlugs.all (fun step => workflowStepSlugCount step == 1)"
             ),
             "Lean workflow artifacts must prove workflow step slugs are unique"
         );
@@ -302,13 +306,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSlices.contains transition.source) = true := rfl"
+                "theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.source) = true := rfl"
             ),
             "Lean artifact must prove transition sources are composed workflow steps"
         );
         assert!(
             lean.contains(
-                "theorem workflowTransitionTargetsResolve : workflowTransitions.all (fun transition => workflowSlices.contains transition.target || workflowExitTargets.contains transition.target) = true := rfl"
+                "theorem workflowTransitionTargetsResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.target || workflowExitTargets.contains transition.target) = true := rfl"
             ),
             "Lean artifact must prove transition targets are composed steps or explicit workflow exits"
         );
@@ -386,7 +390,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowOutcomeSourceResolves (outcome : WorkflowOutcome) : Bool := workflowSlices.contains outcome.sourceSlice"
+                "def workflowOutcomeSourceResolves (outcome : WorkflowOutcome) : Bool := workflowSliceSlugs.contains outcome.sourceSlice"
             ),
             "Lean workflow artifacts must require workflow outcome facts to source from composed workflow steps"
         );
@@ -398,7 +402,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowCommandErrorSourceResolves (error : WorkflowCommandError) : Bool := workflowSlices.contains error.sourceSlice"
+                "def workflowCommandErrorSourceResolves (error : WorkflowCommandError) : Bool := workflowSliceSlugs.contains error.sourceSlice"
             ),
             "Lean workflow artifacts must require workflow command-error facts to source from composed workflow steps"
         );
@@ -746,7 +750,7 @@ mod tests {
         );
         let lean = module.as_ref();
 
-        assert!(lean.contains("def workflowSlices : List String := []"));
+        assert!(lean.contains("def workflowSlices : List WorkflowSlice := []"));
         assert!(lean.contains("def workflowSliceDetails : List WorkflowSliceDetail := []"));
         assert!(lean.contains("def workflowTransitions : List WorkflowTransition := []"));
 

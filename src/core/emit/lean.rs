@@ -51,7 +51,12 @@ def workflowSlug := {workflow_slug_json}
 
 def workflowDescription := {workflow_description_json}
 
-def workflowSlices : List String := {slice_list}
+structure WorkflowSlice where
+  slug : String
+
+def workflowSlices : List WorkflowSlice := {slice_list}
+
+def workflowSliceSlugs : List String := workflowSlices.map (fun slice => slice.slug)
 
 structure WorkflowSliceDetail where
   slug : String
@@ -133,13 +138,13 @@ structure WorkflowStepRelationship where
 
 def workflowStepRelationships : List WorkflowStepRelationship := {workflow_step_relationship_list}
 
-def workflowStepRelationshipIsAllowed (step : WorkflowStepRelationship) : Bool := workflowSlices.contains step.step && allowedWorkflowStepRelationships.contains step.relationship
+def workflowStepRelationshipIsAllowed (step : WorkflowStepRelationship) : Bool := workflowSliceSlugs.contains step.step && allowedWorkflowStepRelationships.contains step.relationship
 
 def workflowStepRelationshipsAreAllowed : Bool := workflowStepRelationships.all workflowStepRelationshipIsAllowed
 
-def workflowStepSlugCount (slug : String) : Nat := (workflowSlices.filter (fun step => step == slug)).length
+def workflowStepSlugCount (slug : String) : Nat := (workflowSliceSlugs.filter (fun step => step == slug)).length
 
-def workflowStepSlugsAreUnique : Bool := workflowSlices.all (fun step => workflowStepSlugCount step == 1)
+def workflowStepSlugsAreUnique : Bool := workflowSliceSlugs.all (fun step => workflowStepSlugCount step == 1)
 
 def workflowEntryStepCount : Nat := (workflowStepRelationships.filter (fun step => step.relationship == "entry")).length
 
@@ -151,7 +156,7 @@ def workflowMainStepsHaveIncomingReachability : Bool := workflowStepRelationship
 
 def workflowEntrySteps : List String := (workflowStepRelationships.filter (fun step => step.relationship == "entry")).map (fun step => step.step)
 
-def workflowTargetsFromReachable (reachable : List String) : List String := (workflowTransitions.filter (fun transition => reachable.contains transition.source && workflowSlices.contains transition.target)).map (fun transition => transition.target)
+def workflowTargetsFromReachable (reachable : List String) : List String := (workflowTransitions.filter (fun transition => reachable.contains transition.source && workflowSliceSlugs.contains transition.target)).map (fun transition => transition.target)
 
 def workflowReachableStepsAfterFuel : Nat -> List String -> List String
   | Nat.zero, reachable => reachable
@@ -179,11 +184,11 @@ def workflowOutcomeHandledByTransition (outcome : WorkflowOutcome) : Bool := out
 
 def workflowExternallyRelevantOutcomesHandled : Bool := workflowOutcomes.all workflowOutcomeHandledByTransition
 
-def workflowOutcomeSourceResolves (outcome : WorkflowOutcome) : Bool := workflowSlices.contains outcome.sourceSlice
+def workflowOutcomeSourceResolves (outcome : WorkflowOutcome) : Bool := workflowSliceSlugs.contains outcome.sourceSlice
 
 def workflowOutcomesSourceResolve : Bool := workflowOutcomes.all workflowOutcomeSourceResolves
 
-def workflowCommandErrorSourceResolves (error : WorkflowCommandError) : Bool := workflowSlices.contains error.sourceSlice
+def workflowCommandErrorSourceResolves (error : WorkflowCommandError) : Bool := workflowSliceSlugs.contains error.sourceSlice
 
 def workflowCommandErrorsSourceResolve : Bool := workflowCommandErrors.all workflowCommandErrorSourceResolves
 
@@ -265,7 +270,7 @@ def workflowTransitionHasRequiredEvidence (transition : WorkflowTransition) : Bo
 
 def workflowTransitionsHaveRequiredEvidence : Bool := workflowTransitions.all workflowTransitionHasRequiredEvidence
 
-def workflowEntryLifecycleStateCovered (state : String) : Bool := workflowEntryLifecycleStates.any (fun coverage => coverage.state == state && workflowSlices.contains coverage.step && coverage.evidence.isEmpty == false)
+def workflowEntryLifecycleStateCovered (state : String) : Bool := workflowEntryLifecycleStates.any (fun coverage => coverage.state == state && workflowSliceSlugs.contains coverage.step && coverage.evidence.isEmpty == false)
 
 def workflowEntryLifecycleStatesCoverRequiredStates : Bool := workflowRequiresEntryLifecycleCoverage == false || requiredEntryLifecycleStates.all workflowEntryLifecycleStateCovered
 
@@ -277,9 +282,9 @@ theorem workflowSlicesHaveModuleReferences : workflowSlices.length = workflowSli
 
 theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl
 
-theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSlices.contains transition.source) = true := rfl
+theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.source) = true := rfl
 
-theorem workflowTransitionTargetsResolve : workflowTransitions.all (fun transition => workflowSlices.contains transition.target || workflowExitTargets.contains transition.target) = true := rfl
+theorem workflowTransitionTargetsResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.target || workflowExitTargets.contains transition.target) = true := rfl
 
 theorem workflowStepRelationshipsAreAllowedIsStable : workflowStepRelationshipsAreAllowed = true := rfl
 
@@ -769,7 +774,7 @@ fn slice_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
         "[{}]",
         workflow_slice_details
             .iter()
-            .map(|slice| quoted(slice.slug().as_ref()))
+            .map(|slice| format!("{{ slug := {} }}", quoted(slice.slug().as_ref())))
             .collect::<Vec<_>>()
             .join(",")
     )

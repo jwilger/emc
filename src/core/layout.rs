@@ -3284,7 +3284,8 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let quint_slice_module_marker = quint_workflow_slice_module_marker(workflow);
     let quint_transition_marker = quint_workflow_transition_marker(workflow);
     let quint_exit_target_marker = quint_workflow_exit_target_marker(workflow);
-    let lean_slice_prefix = canonical_declaration_prefix("def workflowSlices : List String :=");
+    let lean_slice_prefix =
+        canonical_declaration_prefix("def workflowSlices : List WorkflowSlice :=");
     let lean_slice_detail_prefix =
         canonical_declaration_prefix("def workflowSliceDetails : List WorkflowSliceDetail :=");
     let lean_slice_module_prefix =
@@ -3320,12 +3321,12 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let lean_transition_invariant_prefix =
         canonical_declaration_prefix("theorem workflowTransitionsAreStructured :");
     let lean_transition_source_resolution_marker = canonical_declaration_marker(
-        "theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSlices.contains transition.source) = true := rfl",
+        "theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.source) = true := rfl",
     );
     let lean_transition_source_resolution_prefix =
         canonical_declaration_prefix("theorem workflowTransitionSourcesResolve :");
     let lean_transition_target_resolution_marker = canonical_declaration_marker(
-        "theorem workflowTransitionTargetsResolve : workflowTransitions.all (fun transition => workflowSlices.contains transition.target || workflowExitTargets.contains transition.target) = true := rfl",
+        "theorem workflowTransitionTargetsResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.target || workflowExitTargets.contains transition.target) = true := rfl",
     );
     let lean_transition_target_resolution_prefix =
         canonical_declaration_prefix("theorem workflowTransitionTargetsResolve :");
@@ -3356,12 +3357,12 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let quint_transition_invariant_prefix =
         canonical_declaration_prefix("val workflowTransitionsStructured =");
     let quint_transition_source_resolution_marker = canonical_declaration_marker(
-        "val workflowTransitionSourcesResolve = workflowTransitions.select(transition => workflowSlices.select(step => step == transition.source).length() > 0).length() == workflowTransitions.length()",
+        "val workflowTransitionSourcesResolve = workflowTransitions.select(transition => workflowSliceSlugs.select(step => step == transition.source).length() > 0).length() == workflowTransitions.length()",
     );
     let quint_transition_source_resolution_prefix =
         canonical_declaration_prefix("val workflowTransitionSourcesResolve =");
     let quint_transition_target_resolution_marker = canonical_declaration_marker(
-        "val workflowTransitionTargetsResolve = workflowTransitions.select(transition => workflowSlices.select(step => step == transition.target).length() > 0 or workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() > 0).length() == workflowTransitions.length()",
+        "val workflowTransitionTargetsResolve = workflowTransitions.select(transition => workflowSliceSlugs.select(step => step == transition.target).length() > 0 or workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() > 0).length() == workflowTransitions.length()",
     );
     let quint_transition_target_resolution_prefix =
         canonical_declaration_prefix("val workflowTransitionTargetsResolve =");
@@ -3732,12 +3733,12 @@ fn formal_slice_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
 
 fn lean_workflow_slice_marker(workflow: &FormalWorkflowGraph) -> CanonicalDeclarationMarker {
     canonical_declaration_marker(format!(
-        "def workflowSlices : List String := [{}]",
+        "def workflowSlices : List WorkflowSlice := [{}]",
         workflow
             .slice_details()
             .as_slice()
             .iter()
-            .map(|slice| json_string(slice.slug().as_ref()))
+            .map(|slice| format!("{{ slug := {} }}", json_string(slice.slug().as_ref())))
             .collect::<Vec<_>>()
             .join(",")
     ))
@@ -3823,12 +3824,12 @@ fn lean_workflow_exit_target_marker(workflow: &FormalWorkflowGraph) -> Canonical
 
 fn quint_workflow_slice_marker(workflow: &FormalWorkflowGraph) -> CanonicalDeclarationMarker {
     canonical_declaration_marker(format!(
-        "val workflowSlices: List[str] = [{}]",
+        "val workflowSlices: List[WorkflowSlice] = [{}]",
         workflow
             .slice_details()
             .as_slice()
             .iter()
-            .map(|slice| json_string(slice.slug().as_ref()))
+            .map(|slice| format!("{{ slug: {} }}", json_string(slice.slug().as_ref())))
             .collect::<Vec<_>>()
             .join(",")
     ))

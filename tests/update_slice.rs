@@ -408,7 +408,9 @@ mod tests {
         let workflow_quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
         assert!(
-            workflow_lean.contains("def workflowSlices : List String := [\"capture-ticket\"]"),
+            workflow_lean.contains(
+                "def workflowSlices : List WorkflowSlice := [{ slug := \"capture-ticket\" }]"
+            ),
             "workflow Lean artifact must keep only remaining slices"
         );
         assert!(
@@ -416,7 +418,9 @@ mod tests {
             "workflow Lean artifact must remove transitions involving the slice"
         );
         assert!(
-            workflow_quint.contains("val workflowSlices: List[str] = [\"capture-ticket\"]"),
+            workflow_quint.contains(
+                "val workflowSlices: List[WorkflowSlice] = [{ slug: \"capture-ticket\" }]"
+            ),
             "workflow Quint artifact must keep only remaining slices"
         );
         assert!(
