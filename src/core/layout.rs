@@ -3162,11 +3162,10 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let quint_transition_marker = quint_workflow_transition_marker(workflow);
     let quint_exit_target_marker = quint_workflow_exit_target_marker(workflow);
     let lean_slice_prefix = canonical_declaration_prefix("def workflowSlices : List String :=");
-    let lean_slice_detail_prefix = canonical_declaration_prefix(
-        "def workflowSliceDetails : List (String × String × String × String) :=",
-    );
+    let lean_slice_detail_prefix =
+        canonical_declaration_prefix("def workflowSliceDetails : List WorkflowSliceDetail :=");
     let lean_slice_module_prefix =
-        canonical_declaration_prefix("def workflowSliceModules : List (String × String) :=");
+        canonical_declaration_prefix("def workflowSliceModules : List WorkflowSliceModule :=");
     let lean_transition_prefix =
         canonical_declaration_prefix("def workflowTransitions : List WorkflowTransition :=");
     let lean_exit_target_prefix =
@@ -3623,14 +3622,14 @@ fn lean_workflow_slice_marker(workflow: &FormalWorkflowGraph) -> CanonicalDeclar
 
 fn lean_workflow_slice_detail_marker(workflow: &FormalWorkflowGraph) -> CanonicalDeclarationMarker {
     canonical_declaration_marker(format!(
-        "def workflowSliceDetails : List (String × String × String × String) := [{}]",
+        "def workflowSliceDetails : List WorkflowSliceDetail := [{}]",
         workflow
             .slice_details()
             .as_slice()
             .iter()
             .map(|slice| {
                 format!(
-                    "({}, {}, {}, {})",
+                    "{{ slug := {}, name := {}, kind := {}, description := {} }}",
                     json_string(slice.slug().as_ref()),
                     json_string(slice.name().as_ref()),
                     json_string(slice.kind().as_ref()),
@@ -3644,14 +3643,14 @@ fn lean_workflow_slice_detail_marker(workflow: &FormalWorkflowGraph) -> Canonica
 
 fn lean_workflow_slice_module_marker(workflow: &FormalWorkflowGraph) -> CanonicalDeclarationMarker {
     canonical_declaration_marker(format!(
-        "def workflowSliceModules : List (String × String) := [{}]",
+        "def workflowSliceModules : List WorkflowSliceModule := [{}]",
         workflow
             .slice_details()
             .as_slice()
             .iter()
             .map(|slice| {
                 format!(
-                    "({}, {})",
+                    "{{ slice := {}, formalModule := {} }}",
                     json_string(slice.slug().as_ref()),
                     json_string(&module_name_from_model(slice.name().clone()))
                 )

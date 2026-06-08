@@ -53,9 +53,19 @@ def workflowDescription := {workflow_description_json}
 
 def workflowSlices : List String := {slice_list}
 
-def workflowSliceDetails : List (String × String × String × String) := {slice_detail_list}
+structure WorkflowSliceDetail where
+  slug : String
+  name : String
+  kind : String
+  description : String
 
-def workflowSliceModules : List (String × String) := {slice_module_list}
+structure WorkflowSliceModule where
+  slice : String
+  formalModule : String
+
+def workflowSliceDetails : List WorkflowSliceDetail := {slice_detail_list}
+
+def workflowSliceModules : List WorkflowSliceModule := {slice_module_list}
 
 structure WorkflowTransition where
   source : String
@@ -117,9 +127,13 @@ def requiredEntryLifecycleStates : List String := {required_entry_lifecycle_stat
 
 def allowedWorkflowStepRelationships : List String := ["entry","main","branch","alternate","async_lifecycle","supporting"]
 
-def workflowStepRelationships : List (String × String) := {workflow_step_relationship_list}
+structure WorkflowStepRelationship where
+  step : String
+  relationship : String
 
-def workflowStepRelationshipIsAllowed (step : String × String) : Bool := workflowSlices.contains step.1 && allowedWorkflowStepRelationships.contains step.2
+def workflowStepRelationships : List WorkflowStepRelationship := {workflow_step_relationship_list}
+
+def workflowStepRelationshipIsAllowed (step : WorkflowStepRelationship) : Bool := workflowSlices.contains step.step && allowedWorkflowStepRelationships.contains step.relationship
 
 def workflowStepRelationshipsAreAllowed : Bool := workflowStepRelationships.all workflowStepRelationshipIsAllowed
 
@@ -127,15 +141,15 @@ def workflowStepSlugCount (slug : String) : Nat := (workflowSlices.filter (fun s
 
 def workflowStepSlugsAreUnique : Bool := workflowSlices.all (fun step => workflowStepSlugCount step == 1)
 
-def workflowEntryStepCount : Nat := (workflowStepRelationships.filter (fun step => step.2 == "entry")).length
+def workflowEntryStepCount : Nat := (workflowStepRelationships.filter (fun step => step.relationship == "entry")).length
 
 def workflowHasExactlyOneEntryStep : Bool := workflowEntryStepCount == 1
 
-def workflowMainStepHasIncomingTransition (step : String × String) : Bool := step.2 != "main" || workflowTransitions.any (fun transition => transition.target == step.1)
+def workflowMainStepHasIncomingTransition (step : WorkflowStepRelationship) : Bool := step.relationship != "main" || workflowTransitions.any (fun transition => transition.target == step.step)
 
 def workflowMainStepsHaveIncomingReachability : Bool := workflowStepRelationships.all workflowMainStepHasIncomingTransition
 
-def workflowEntrySteps : List String := (workflowStepRelationships.filter (fun step => step.2 == "entry")).map (fun step => step.1)
+def workflowEntrySteps : List String := (workflowStepRelationships.filter (fun step => step.relationship == "entry")).map (fun step => step.step)
 
 def workflowTargetsFromReachable (reachable : List String) : List String := (workflowTransitions.filter (fun transition => reachable.contains transition.source && workflowSlices.contains transition.target)).map (fun transition => transition.target)
 
@@ -145,11 +159,11 @@ def workflowReachableStepsAfterFuel : Nat -> List String -> List String
 
 def workflowReachableStepsFromEntry : List String := workflowReachableStepsAfterFuel workflowSlices.length workflowEntrySteps
 
-def workflowStepIsReachableFromEntry (step : String × String) : Bool := step.2 == "supporting" || step.2 == "async_lifecycle" || workflowReachableStepsFromEntry.contains step.1
+def workflowStepIsReachableFromEntry (step : WorkflowStepRelationship) : Bool := step.relationship == "supporting" || step.relationship == "async_lifecycle" || workflowReachableStepsFromEntry.contains step.step
 
 def workflowNonSupportingStepsReachableFromEntry : Bool := workflowStepRelationships.all workflowStepIsReachableFromEntry
 
-def workflowBranchOrAlternateStepHasTriggerOrRationale (step : String × String) : Bool := (step.2 != "branch" && step.2 != "alternate") || workflowTransitions.any (fun transition => transition.target == step.1 && (transition.trigger.isEmpty == false || transition.rationale.isEmpty == false))
+def workflowBranchOrAlternateStepHasTriggerOrRationale (step : WorkflowStepRelationship) : Bool := (step.relationship != "branch" && step.relationship != "alternate") || workflowTransitions.any (fun transition => transition.target == step.step && (transition.trigger.isEmpty == false || transition.rationale.isEmpty == false))
 
 def workflowBranchAndAlternateStepsHaveTriggerOrRationale : Bool := workflowStepRelationships.all workflowBranchOrAlternateStepHasTriggerOrRationale
 
@@ -191,7 +205,7 @@ def workflowOnlyEventsMayBeSharedAcrossSlices : Bool := workflowNonEventDefiniti
 
 def workflowOwnsDefinition (sourceSlice : String) (definitionKind : String) (definitionName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == definitionKind && definition.definitionName == definitionName)
 
-def workflowSliceHasKind (slice : String) (kind : String) : Bool := workflowSliceDetails.any (fun detail => detail.1 == slice && detail.2.2.1 == kind)
+def workflowSliceHasKind (slice : String) (kind : String) : Bool := workflowSliceDetails.any (fun detail => detail.slug == slice && detail.kind == kind)
 
 def workflowEventParticipationIsModeled (definition : WorkflowOwnedDefinition) : Bool := definition.eventParticipation == "emitted" || definition.eventParticipation == "observed"
 
@@ -768,7 +782,7 @@ fn slice_detail_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
             .iter()
             .map(|slice| {
                 format!(
-                    "({}, {}, {}, {})",
+                    "{{ slug := {}, name := {}, kind := {}, description := {} }}",
                     quoted(slice.slug().as_ref()),
                     quoted(slice.name().as_ref()),
                     quoted(slice.kind().as_ref()),
@@ -787,7 +801,7 @@ fn slice_module_list(workflow_slice_details: &[WorkflowSliceDetail]) -> String {
             .iter()
             .map(|slice| {
                 format!(
-                    "({}, {})",
+                    "{{ slice := {}, formalModule := {} }}",
                     quoted(slice.slug().as_ref()),
                     quoted(&module_name_from_raw(slice.name().as_ref()))
                 )
@@ -804,7 +818,7 @@ fn workflow_step_relationship_list(workflow_slice_details: &[WorkflowSliceDetail
             .iter()
             .map(|slice| {
                 format!(
-                    "({}, {})",
+                    "{{ step := {}, relationship := {} }}",
                     quoted(slice.slug().as_ref()),
                     quoted(slice.relationship().as_ref())
                 )

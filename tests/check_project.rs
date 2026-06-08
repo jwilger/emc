@@ -1028,8 +1028,8 @@ mod tests {
 
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let lean = read_to_string(&lean_path)?.replace(
-            "def workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Slice description.\"),(\"review-ticket\", \"Review ticket\", \"state_view\", \"Slice description.\")]",
-            "def workflowSliceDetails : List (String × String × String × String) := []",
+            "def workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := \"state_view\", description := \"Slice description.\" },{ slug := \"review-ticket\", name := \"Review ticket\", kind := \"state_view\", description := \"Slice description.\" }]",
+            "def workflowSliceDetails : List WorkflowSliceDetail := []",
         );
         write(lean_path, lean)?;
 
@@ -1054,7 +1054,7 @@ mod tests {
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let mut lean = read_to_string(&lean_path)?;
         lean.push_str(
-            "\ndef workflowSliceDetails : List (String × String × String × String) := [(\"stale-slice\", \"Stale slice\", \"state_view\", \"Stale description.\")]\n",
+            "\ndef workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"stale-slice\", name := \"Stale slice\", kind := \"state_view\", description := \"Stale description.\" }]\n",
         );
         write(lean_path, lean)?;
 

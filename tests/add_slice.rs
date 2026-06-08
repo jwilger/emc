@@ -126,13 +126,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Actor enters repair ticket details.\")]"
+                "def workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := \"state_view\", description := \"Actor enters repair ticket details.\" }]"
             ),
             "Lean artifact must represent the workflow's business slice details"
         );
         assert!(
             lean.contains(
-                "def workflowSliceModules : List (String × String) := [(\"capture-ticket\", \"CaptureTicket\")]"
+                "def workflowSliceModules : List WorkflowSliceModule := [{ slice := \"capture-ticket\", formalModule := \"CaptureTicket\" }]"
             ),
             "Lean artifact must represent the formal module composed for each workflow slice"
         );
@@ -353,7 +353,7 @@ mod tests {
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         assert_eq!(
             lean.matches(
-                "(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Slice description.\")"
+                "{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := \"state_view\", description := \"Slice description.\" }"
             )
             .count(),
             1,

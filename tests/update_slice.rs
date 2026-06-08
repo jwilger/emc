@@ -38,7 +38,7 @@ mod tests {
 
         assert!(
             workflow_lean.contains(
-                "(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Actor enters repair ticket details and priority.\")"
+                "{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := \"state_view\", description := \"Actor enters repair ticket details and priority.\" }"
             ),
             "workflow Lean artifact must represent the updated slice detail"
         );
@@ -97,7 +97,7 @@ mod tests {
 
         assert!(
             workflow_lean.contains(
-                "(\"capture-ticket\", \"Capture ticket\", \"automation\", \"Actor enters repair ticket details.\")"
+                "{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := \"automation\", description := \"Actor enters repair ticket details.\" }"
             ),
             "workflow Lean artifact must represent the updated slice kind"
         );
@@ -159,7 +159,7 @@ mod tests {
 
         assert!(
             workflow_lean.contains(
-                "(\"capture-ticket\", \"Capture repair ticket\", \"state_view\", \"Actor enters repair ticket details.\")"
+                "{ slug := \"capture-ticket\", name := \"Capture repair ticket\", kind := \"state_view\", description := \"Actor enters repair ticket details.\" }"
             ),
             "workflow Lean artifact must represent the updated slice name"
         );
@@ -287,7 +287,7 @@ mod tests {
 
         assert!(
             workflow_lean.contains(
-                "(\"review-ticket\", \"Review ticket\", \"state_view\", \"Actor reviews repair ticket details.\")"
+                "{ slug := \"review-ticket\", name := \"Review ticket\", kind := \"state_view\", description := \"Actor reviews repair ticket details.\" }"
             ),
             "rejected slice rename must not mutate the workflow Lean artifact"
         );

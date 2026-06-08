@@ -115,8 +115,27 @@ mod tests {
         ));
         assert!(
             lean.contains(
-                "def workflowSliceDetails : List (String × String × String × String) := [(\"capture-ticket\", \"Capture ticket\", \"state_view\", \"Actor enters repair ticket details.\"),(\"review-ticket\", \"Review ticket\", \"state_view\", \"Actor reviews repair ticket details.\")]"
-            )
+                "structure WorkflowSliceDetail where\n  slug : String\n  name : String\n  kind : String\n  description : String"
+            ),
+            "Lean workflow artifacts must name slice detail fields instead of relying on tuple positions"
+        );
+        assert!(
+            lean.contains(
+                "def workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := \"state_view\", description := \"Actor enters repair ticket details.\" },{ slug := \"review-ticket\", name := \"Review ticket\", kind := \"state_view\", description := \"Actor reviews repair ticket details.\" }]"
+            ),
+            "Lean workflow artifacts must emit slice details as named records"
+        );
+        assert!(
+            lean.contains(
+                "structure WorkflowSliceModule where\n  slice : String\n  formalModule : String"
+            ),
+            "Lean workflow artifacts must name slice module fields instead of relying on tuple positions"
+        );
+        assert!(
+            lean.contains(
+                "def workflowSliceModules : List WorkflowSliceModule := [{ slice := \"capture-ticket\", formalModule := \"CaptureTicket\" },{ slice := \"review-ticket\", formalModule := \"ReviewTicket\" }]"
+            ),
+            "Lean workflow artifacts must emit slice module references as named records"
         );
         assert!(
             lean.contains(
@@ -192,12 +211,14 @@ mod tests {
             "Lean workflow artifacts must model the allowed workflow step relationship inventory"
         );
         assert!(
-            lean.contains("def workflowStepRelationships : List (String × String) :="),
-            "Lean workflow artifacts must represent each workflow step relationship separately from rendering concerns"
+            lean.contains(
+                "structure WorkflowStepRelationship where\n  step : String\n  relationship : String"
+            ),
+            "Lean workflow artifacts must name workflow step relationship fields instead of relying on tuple positions"
         );
         assert!(
             lean.contains(
-                "def workflowStepRelationships : List (String × String) := [(\"capture-ticket\", \"entry\"),(\"review-ticket\", \"main\")]"
+                "def workflowStepRelationships : List WorkflowStepRelationship := [{ step := \"capture-ticket\", relationship := \"entry\" },{ step := \"review-ticket\", relationship := \"main\" }]"
             ),
             "Lean workflow artifacts must emit concrete workflow step relationships"
         );
@@ -241,7 +262,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowStepIsReachableFromEntry (step : String × String) : Bool := step.2 == \"supporting\" || step.2 == \"async_lifecycle\" || workflowReachableStepsFromEntry.contains step.1"
+                "def workflowStepIsReachableFromEntry (step : WorkflowStepRelationship) : Bool := step.relationship == \"supporting\" || step.relationship == \"async_lifecycle\" || workflowReachableStepsFromEntry.contains step.step"
             ),
             "Lean workflow artifacts must exempt supporting and async lifecycle steps from required entry reachability"
         );
@@ -252,7 +273,7 @@ mod tests {
             "Lean workflow artifacts must expose non-supporting workflow reachability as a proof obligation"
         );
         assert!(
-            lean.contains("def workflowBranchOrAlternateStepHasTriggerOrRationale (step : String × String) : Bool := (step.2 != \"branch\" && step.2 != \"alternate\") || workflowTransitions.any (fun transition => transition.target == step.1 && (transition.trigger.isEmpty == false || transition.rationale.isEmpty == false))"),
+            lean.contains("def workflowBranchOrAlternateStepHasTriggerOrRationale (step : WorkflowStepRelationship) : Bool := (step.relationship != \"branch\" && step.relationship != \"alternate\") || workflowTransitions.any (fun transition => transition.target == step.step && (transition.trigger.isEmpty == false || transition.rationale.isEmpty == false))"),
             "Lean workflow artifacts must define branch and alternate step trigger/rationale obligations"
         );
         assert!(
@@ -467,7 +488,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowSliceHasKind (slice : String) (kind : String) : Bool := workflowSliceDetails.any (fun detail => detail.1 == slice && detail.2.2.1 == kind)"
+                "def workflowSliceHasKind (slice : String) (kind : String) : Bool := workflowSliceDetails.any (fun detail => detail.slug == slice && detail.kind == kind)"
             ),
             "Lean workflow artifacts must be able to resolve workflow slice kinds"
         );
@@ -726,11 +747,7 @@ mod tests {
         let lean = module.as_ref();
 
         assert!(lean.contains("def workflowSlices : List String := []"));
-        assert!(
-            lean.contains(
-                "def workflowSliceDetails : List (String × String × String × String) := []"
-            )
-        );
+        assert!(lean.contains("def workflowSliceDetails : List WorkflowSliceDetail := []"));
         assert!(lean.contains("def workflowTransitions : List WorkflowTransition := []"));
 
         Ok(())
