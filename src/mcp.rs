@@ -15,7 +15,7 @@ const SUPPORTED_MCP_PROTOCOL_VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "
 
 use crate::command;
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
-use crate::core::effect::ArtifactDigest;
+use crate::core::effect::{ArtifactDigest, ChosenEventId, EventConflictId};
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, CommandInputSource,
     CommandObservedStreams, EmittedEventNames, NewAutomationDefinition, NewBitLevelDataFlow,
@@ -1617,10 +1617,18 @@ fn resolve_conflict_tool_text(request: &Value) -> Result<String, ShellError> {
         .and_then(Value::as_str)
         .ok_or_else(|| ShellError::message("resolve_conflict requires choose_event"))?;
     interpret_collect_reports(command::resolve_conflict(
-        parse_artifact_digest("conflict id", conflict_id)?,
-        parse_artifact_digest("chosen event id", chosen_event_id)?,
+        parse_event_conflict_id(conflict_id)?,
+        parse_chosen_event_id(chosen_event_id)?,
     ))
     .map(|reports| reports.join("\n"))
+}
+
+fn parse_event_conflict_id(value: &str) -> Result<EventConflictId, ShellError> {
+    parse_artifact_digest("event conflict id", value).map(EventConflictId::new)
+}
+
+fn parse_chosen_event_id(value: &str) -> Result<ChosenEventId, ShellError> {
+    parse_artifact_digest("chosen event id", value).map(ChosenEventId::new)
 }
 
 fn parse_artifact_digest(label: &str, value: &str) -> Result<ArtifactDigest, ShellError> {

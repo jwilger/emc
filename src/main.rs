@@ -13,7 +13,7 @@ mod mcp;
 mod shell;
 
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
-use crate::core::effect::ArtifactDigest;
+use crate::core::effect::{ArtifactDigest, ChosenEventId, EventConflictId};
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, CommandInputSource,
     CommandObservedStreams, EmittedEventNames, NewAutomationDefinition, NewBitLevelDataFlow,
@@ -181,8 +181,8 @@ enum Command {
         slug: WorkflowSlug,
     },
     ResolveConflict {
-        conflict_id: String,
-        chosen_event_id: String,
+        conflict_id: EventConflictId,
+        chosen_event_id: ChosenEventId,
     },
     ShowSlice {
         slug: SliceSlug,
@@ -317,10 +317,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::ResolveConflict {
             conflict_id,
             chosen_event_id,
-        } => interpret(command::resolve_conflict(
-            parse_artifact_digest("conflict id", conflict_id)?,
-            parse_artifact_digest("chosen event id", chosen_event_id)?,
-        )),
+        } => interpret(command::resolve_conflict(conflict_id, chosen_event_id)),
         Command::ShowSlice { slug } => interpret(command::show_slice(slug)),
         Command::ShowWorkflow { slug } => interpret(command::show_workflow(slug)),
         Command::UpdateSliceDescription { slug, description } => {
@@ -345,6 +342,14 @@ fn run(cli: Cli) -> Result<(), ShellError> {
 fn parse_artifact_digest(label: &str, value: String) -> Result<ArtifactDigest, ShellError> {
     ArtifactDigest::try_new(value)
         .map_err(|error| ShellError::message(format!("invalid {label}: {error}")))
+}
+
+fn parse_event_conflict_id(value: &str) -> Result<EventConflictId, ShellError> {
+    parse_artifact_digest("event conflict id", value.to_owned()).map(EventConflictId::new)
+}
+
+fn parse_chosen_event_id(value: &str) -> Result<ChosenEventId, ShellError> {
+    parse_artifact_digest("chosen event id", value.to_owned()).map(ChosenEventId::new)
 }
 
 fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
@@ -3769,8 +3774,8 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         {
             Ok(Cli {
                 command: Command::ResolveConflict {
-                    conflict_id: conflict_id.to_owned(),
-                    chosen_event_id: chosen_event_id.to_owned(),
+                    conflict_id: parse_event_conflict_id(conflict_id)?,
+                    chosen_event_id: parse_chosen_event_id(chosen_event_id)?,
                 },
             })
         }
