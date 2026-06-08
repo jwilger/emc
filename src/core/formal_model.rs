@@ -323,7 +323,7 @@ pub(crate) fn lean_scenario_record_structures() -> &'static str {
 }
 
 pub(crate) fn lean_data_flow_record_structure() -> &'static str {
-    "structure ModelDataFlow where\n  workflow : String\n  slice : String\n  datum : String\n  sourceKind : String\n  source : String\n  transformation : String\n  target : String\n  bitEncoding : String"
+    "inductive ModelDataFlowSourceKind where\n  | original\n  | modeledTarget\nderiving BEq, DecidableEq, Repr\n\nstructure ModelDataFlow where\n  workflow : String\n  slice : String\n  datum : String\n  sourceKind : ModelDataFlowSourceKind\n  source : String\n  transformation : String\n  target : String\n  bitEncoding : String"
 }
 
 pub(crate) fn lean_outcome_record_structure() -> &'static str {
@@ -449,7 +449,7 @@ pub(crate) fn lean_model_data_flow_list(data_flows: &[FormalModelDataFlow]) -> S
             quoted(data_flow.workflow.as_ref()),
             quoted(data_flow.slice.as_ref()),
             quoted(data_flow.datum.as_ref()),
-            quoted(data_flow.source_kind.as_ref()),
+            lean_data_flow_source_kind(data_flow.source_kind),
             quoted(data_flow.source.as_ref()),
             quoted(data_flow.transformation.as_ref()),
             quoted(data_flow.target.as_ref()),
@@ -595,7 +595,7 @@ pub(crate) fn quint_model_data_flow_list(data_flows: &[FormalModelDataFlow]) -> 
             quoted(data_flow.workflow.as_ref()),
             quoted(data_flow.slice.as_ref()),
             quoted(data_flow.datum.as_ref()),
-            quoted(data_flow.source_kind.as_ref()),
+            quint_data_flow_source_kind(data_flow.source_kind),
             quoted(data_flow.source.as_ref()),
             quoted(data_flow.transformation.as_ref()),
             quoted(data_flow.target.as_ref()),
@@ -673,6 +673,20 @@ pub(crate) fn quint_model_command_input_list(command_inputs: &[FormalModelComman
                 )
             }),
     )
+}
+
+fn lean_data_flow_source_kind(source_kind: DataFlowSourceKind) -> &'static str {
+    match source_kind {
+        DataFlowSourceKind::Original => "ModelDataFlowSourceKind.original",
+        DataFlowSourceKind::ModeledTarget => "ModelDataFlowSourceKind.modeledTarget",
+    }
+}
+
+fn quint_data_flow_source_kind(source_kind: DataFlowSourceKind) -> &'static str {
+    match source_kind {
+        DataFlowSourceKind::Original => "Original",
+        DataFlowSourceKind::ModeledTarget => "ModeledTarget",
+    }
 }
 
 fn sorted_slices(slices: &[FormalModelSlice]) -> Vec<&FormalModelSlice> {

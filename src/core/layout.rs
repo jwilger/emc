@@ -48,11 +48,11 @@ use crate::core::project::ProjectName;
 use crate::core::types::{
     BitEncodingSemantics, CommandErrorName, CommandErrorRecoveryKind,
     CommandInputSourceDescription, CommandInputSourceKind, CommandName, ContractKindName,
-    CoveredDefinitionName, DataFlowSource, DataFlowSourceKind, DataFlowTarget, DatumName,
-    EventAttributeName, EventAttributeSourceField, EventAttributeSourceName, EventName,
-    LeanModuleName, ModelDescription, ModelName, OutcomeLabelName, QuintModuleName, ScenarioName,
-    ScenarioStepText, SliceSlug, SourceChainHop, StreamName, TransformationSemantics,
-    WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionRecord,
+    CoveredDefinitionName, DataFlowSource, DataFlowTarget, DatumName, EventAttributeName,
+    EventAttributeSourceField, EventAttributeSourceName, EventName, LeanModuleName,
+    ModelDescription, ModelName, OutcomeLabelName, QuintModuleName, ScenarioName, ScenarioStepText,
+    SliceSlug, SourceChainHop, StreamName, TransformationSemantics, WorkflowSliceDetail,
+    WorkflowSlug, WorkflowTransitionRecord,
 };
 use sha2::{Digest, Sha256};
 
@@ -729,8 +729,32 @@ fn project_root_effects(
         ),
         Effect::require_canonical_declaration(
             lean_path.clone(),
+            canonical_declaration_prefix("inductive ModelDataFlowSourceKind where"),
+            canonical_declaration_marker("inductive ModelDataFlowSourceKind where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  | original"),
+            canonical_declaration_marker("  | original"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  | modeledTarget"),
+            canonical_declaration_marker("  | modeledTarget"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
             canonical_declaration_prefix("structure ModelDataFlow where"),
             canonical_declaration_marker("structure ModelDataFlow where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  sourceKind : ModelDataFlowSourceKind"),
+            canonical_declaration_marker("  sourceKind : ModelDataFlowSourceKind"),
             lean_message.clone(),
         ),
         Effect::require_canonical_declaration(
@@ -1115,7 +1139,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowIsBitComplete"),
             canonical_declaration_marker(
-                "def modelDataFlowIsBitComplete (dataFlow : ModelDataFlow) : Bool := dataFlow.datum.isEmpty == false && dataFlow.sourceKind.isEmpty == false && dataFlow.source.isEmpty == false && dataFlow.transformation.isEmpty == false && dataFlow.target.isEmpty == false && dataFlow.bitEncoding.isEmpty == false",
+                "def modelDataFlowIsBitComplete (dataFlow : ModelDataFlow) : Bool := dataFlow.datum.isEmpty == false && dataFlow.source.isEmpty == false && dataFlow.transformation.isEmpty == false && dataFlow.target.isEmpty == false && dataFlow.bitEncoding.isEmpty == false",
             ),
             lean_message.clone(),
         ),
@@ -1155,7 +1179,23 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowHasModeledSourceKind"),
             canonical_declaration_marker(
-                "def modelDataFlowHasModeledSourceKind (dataFlow : ModelDataFlow) : Bool := (dataFlow.sourceKind == \"original\" && dataFlow.source.isEmpty == false) || (dataFlow.sourceKind == \"modeled_target\" && dataFlow.source.isEmpty == false)",
+                "def modelDataFlowHasModeledSourceKind (dataFlow : ModelDataFlow) : Bool := match dataFlow.sourceKind with",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  | ModelDataFlowSourceKind.original"),
+            canonical_declaration_marker(
+                "  | ModelDataFlowSourceKind.original => dataFlow.source.isEmpty == false",
+            ),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  | ModelDataFlowSourceKind.modeledTarget"),
+            canonical_declaration_marker(
+                "  | ModelDataFlowSourceKind.modeledTarget => dataFlow.source.isEmpty == false",
             ),
             lean_message.clone(),
         ),
@@ -1163,7 +1203,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowModeledSourceResolves"),
             canonical_declaration_marker(
-                "def modelDataFlowModeledSourceResolves (dataFlow : ModelDataFlow) : Bool := dataFlow.sourceKind != \"modeled_target\" || modelDataFlows.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source && modelDataFlowIsBitComplete sourceFlow)",
+                "def modelDataFlowModeledSourceResolves (dataFlow : ModelDataFlow) : Bool := dataFlow.sourceKind != ModelDataFlowSourceKind.modeledTarget || modelDataFlows.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source && modelDataFlowIsBitComplete sourceFlow)",
             ),
             lean_message.clone(),
         ),
@@ -1179,7 +1219,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowTargetsFromReachable"),
             canonical_declaration_marker(
-                "def modelDataFlowTargetsFromReachable (reachable : List ModelDataFlow) : List ModelDataFlow := modelDataFlows.filter (fun dataFlow => dataFlow.sourceKind == \"modeled_target\" && reachable.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source && modelDataFlowIsBitComplete sourceFlow))",
+                "def modelDataFlowTargetsFromReachable (reachable : List ModelDataFlow) : List ModelDataFlow := modelDataFlows.filter (fun dataFlow => dataFlow.sourceKind == ModelDataFlowSourceKind.modeledTarget && reachable.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source && modelDataFlowIsBitComplete sourceFlow))",
             ),
             lean_message.clone(),
         ),
@@ -1195,7 +1235,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowsReachableFromOriginals :"),
             canonical_declaration_marker(
-                "def modelDataFlowsReachableFromOriginals : List ModelDataFlow := modelDataFlowsReachableFromOriginalsAfterFuel modelDataFlows.length (modelDataFlows.filter (fun dataFlow => dataFlow.sourceKind == \"original\" && modelDataFlowIsBitComplete dataFlow))",
+                "def modelDataFlowsReachableFromOriginals : List ModelDataFlow := modelDataFlowsReachableFromOriginalsAfterFuel modelDataFlows.length (modelDataFlows.filter (fun dataFlow => dataFlow.sourceKind == ModelDataFlowSourceKind.original && modelDataFlowIsBitComplete dataFlow))",
             ),
             lean_message.clone(),
         ),
@@ -1203,7 +1243,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowHasOriginalSourceChain"),
             canonical_declaration_marker(
-                "def modelDataFlowHasOriginalSourceChain (dataFlow : ModelDataFlow) : Bool := dataFlow.sourceKind == \"original\" || modelDataFlowsReachableFromOriginals.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)",
+                "def modelDataFlowHasOriginalSourceChain (dataFlow : ModelDataFlow) : Bool := dataFlow.sourceKind == ModelDataFlowSourceKind.original || modelDataFlowsReachableFromOriginals.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)",
             ),
             lean_message.clone(),
         ),
@@ -1211,7 +1251,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowTargetsFromBitPreservingReachable"),
             canonical_declaration_marker(
-                "def modelDataFlowTargetsFromBitPreservingReachable (reachable : List ModelDataFlow) : List ModelDataFlow := modelDataFlows.filter (fun dataFlow => dataFlow.sourceKind == \"modeled_target\" && reachable.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source && sourceFlow.bitEncoding == dataFlow.bitEncoding && modelDataFlowIsBitComplete sourceFlow))",
+                "def modelDataFlowTargetsFromBitPreservingReachable (reachable : List ModelDataFlow) : List ModelDataFlow := modelDataFlows.filter (fun dataFlow => dataFlow.sourceKind == ModelDataFlowSourceKind.modeledTarget && reachable.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source && sourceFlow.bitEncoding == dataFlow.bitEncoding && modelDataFlowIsBitComplete sourceFlow))",
             ),
             lean_message.clone(),
         ),
@@ -1231,7 +1271,7 @@ fn project_root_effects(
                 "def modelDataFlowsReachableFromOriginalsWithPreservedBits :",
             ),
             canonical_declaration_marker(
-                "def modelDataFlowsReachableFromOriginalsWithPreservedBits : List ModelDataFlow := modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel modelDataFlows.length (modelDataFlows.filter (fun dataFlow => dataFlow.sourceKind == \"original\" && modelDataFlowIsBitComplete dataFlow))",
+                "def modelDataFlowsReachableFromOriginalsWithPreservedBits : List ModelDataFlow := modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel modelDataFlows.length (modelDataFlows.filter (fun dataFlow => dataFlow.sourceKind == ModelDataFlowSourceKind.original && modelDataFlowIsBitComplete dataFlow))",
             ),
             lean_message.clone(),
         ),
@@ -1239,7 +1279,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowHasBitPreservingOriginalSourceChain"),
             canonical_declaration_marker(
-                "def modelDataFlowHasBitPreservingOriginalSourceChain (dataFlow : ModelDataFlow) : Bool := dataFlow.sourceKind == \"original\" || modelDataFlowsReachableFromOriginalsWithPreservedBits.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)",
+                "def modelDataFlowHasBitPreservingOriginalSourceChain (dataFlow : ModelDataFlow) : Bool := dataFlow.sourceKind == ModelDataFlowSourceKind.original || modelDataFlowsReachableFromOriginalsWithPreservedBits.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)",
             ),
             lean_message.clone(),
         ),
@@ -1920,9 +1960,17 @@ fn project_root_effects(
         ),
         Effect::require_canonical_declaration(
             quint_path.clone(),
+            canonical_declaration_prefix("  type ModelDataFlowSourceKind ="),
+            canonical_declaration_marker(
+                "  type ModelDataFlowSourceKind = Original | ModeledTarget",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            quint_path.clone(),
             canonical_declaration_prefix("  type ModelDataFlow ="),
             canonical_declaration_marker(
-                "  type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: str, source: str, transformation: str, target: str, bitEncoding: str }",
+                "  type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: ModelDataFlowSourceKind, source: str, transformation: str, target: str, bitEncoding: str }",
             ),
             quint_message.clone(),
         ),
@@ -2510,7 +2558,7 @@ fn project_root_effects(
             quint_path.clone(),
             canonical_declaration_prefix("  def modelDataFlowIsBitComplete"),
             canonical_declaration_marker(
-                "  def modelDataFlowIsBitComplete(dataFlow) = dataFlow.datum != \"\" and dataFlow.sourceKind != \"\" and dataFlow.source != \"\" and dataFlow.transformation != \"\" and dataFlow.target != \"\" and dataFlow.bitEncoding != \"\"",
+                "  def modelDataFlowIsBitComplete(dataFlow) = dataFlow.datum != \"\" and dataFlow.source != \"\" and dataFlow.transformation != \"\" and dataFlow.target != \"\" and dataFlow.bitEncoding != \"\"",
             ),
             quint_message.clone(),
         ),
@@ -2552,7 +2600,7 @@ fn project_root_effects(
             quint_path.clone(),
             canonical_declaration_prefix("  def modelDataFlowHasModeledSourceKind"),
             canonical_declaration_marker(
-                "  def modelDataFlowHasModeledSourceKind(dataFlow) = (dataFlow.sourceKind == \"original\" and dataFlow.source != \"\") or (dataFlow.sourceKind == \"modeled_target\" and dataFlow.source != \"\")",
+                "  def modelDataFlowHasModeledSourceKind(dataFlow) = (dataFlow.sourceKind == Original and dataFlow.source != \"\") or (dataFlow.sourceKind == ModeledTarget and dataFlow.source != \"\")",
             ),
             quint_message.clone(),
         ),
@@ -2560,7 +2608,7 @@ fn project_root_effects(
             quint_path.clone(),
             canonical_declaration_prefix("  def modelDataFlowModeledSourceResolves"),
             canonical_declaration_marker(
-                "  def modelDataFlowModeledSourceResolves(dataFlow) = dataFlow.sourceKind != \"modeled_target\" or modelDataFlows.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and modelDataFlowIsBitComplete(sourceFlow)).length() > 0",
+                "  def modelDataFlowModeledSourceResolves(dataFlow) = dataFlow.sourceKind != ModeledTarget or modelDataFlows.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and modelDataFlowIsBitComplete(sourceFlow)).length() > 0",
             ),
             quint_message.clone(),
         ),
@@ -2576,7 +2624,7 @@ fn project_root_effects(
             quint_path.clone(),
             canonical_declaration_prefix("  def modelDataFlowTargetsFromReachable"),
             canonical_declaration_marker(
-                "  def modelDataFlowTargetsFromReachable(reachable) = modelDataFlows.select(dataFlow => dataFlow.sourceKind == \"modeled_target\" and reachable.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and modelDataFlowIsBitComplete(sourceFlow)).length() > 0)",
+                "  def modelDataFlowTargetsFromReachable(reachable) = modelDataFlows.select(dataFlow => dataFlow.sourceKind == ModeledTarget and reachable.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and modelDataFlowIsBitComplete(sourceFlow)).length() > 0)",
             ),
             quint_message.clone(),
         ),
@@ -2592,7 +2640,7 @@ fn project_root_effects(
             quint_path.clone(),
             canonical_declaration_prefix("  val modelDataFlowsReachableFromOriginals ="),
             canonical_declaration_marker(
-                "  val modelDataFlowsReachableFromOriginals = modelDataFlowsReachableFromOriginalsAfterFuel(modelDataFlowCount, modelDataFlows.select(dataFlow => dataFlow.sourceKind == \"original\" and modelDataFlowIsBitComplete(dataFlow)))",
+                "  val modelDataFlowsReachableFromOriginals = modelDataFlowsReachableFromOriginalsAfterFuel(modelDataFlowCount, modelDataFlows.select(dataFlow => dataFlow.sourceKind == Original and modelDataFlowIsBitComplete(dataFlow)))",
             ),
             quint_message.clone(),
         ),
@@ -2600,7 +2648,7 @@ fn project_root_effects(
             quint_path.clone(),
             canonical_declaration_prefix("  def modelDataFlowHasOriginalSourceChain"),
             canonical_declaration_marker(
-                "  def modelDataFlowHasOriginalSourceChain(dataFlow) = dataFlow.sourceKind == \"original\" or modelDataFlowsReachableFromOriginals.select(reachableFlow => modelSameDataFlowTarget(reachableFlow, dataFlow)).length() > 0",
+                "  def modelDataFlowHasOriginalSourceChain(dataFlow) = dataFlow.sourceKind == Original or modelDataFlowsReachableFromOriginals.select(reachableFlow => modelSameDataFlowTarget(reachableFlow, dataFlow)).length() > 0",
             ),
             quint_message.clone(),
         ),
@@ -2608,7 +2656,7 @@ fn project_root_effects(
             quint_path.clone(),
             canonical_declaration_prefix("  def modelDataFlowTargetsFromBitPreservingReachable"),
             canonical_declaration_marker(
-                "  def modelDataFlowTargetsFromBitPreservingReachable(reachable) = modelDataFlows.select(dataFlow => dataFlow.sourceKind == \"modeled_target\" and reachable.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and sourceFlow.bitEncoding == dataFlow.bitEncoding and modelDataFlowIsBitComplete(sourceFlow)).length() > 0)",
+                "  def modelDataFlowTargetsFromBitPreservingReachable(reachable) = modelDataFlows.select(dataFlow => dataFlow.sourceKind == ModeledTarget and reachable.select(sourceFlow => sourceFlow.workflow == dataFlow.workflow and sourceFlow.slice == dataFlow.slice and sourceFlow.datum == dataFlow.datum and sourceFlow.target == dataFlow.source and sourceFlow.bitEncoding == dataFlow.bitEncoding and modelDataFlowIsBitComplete(sourceFlow)).length() > 0)",
             ),
             quint_message.clone(),
         ),
@@ -2628,7 +2676,7 @@ fn project_root_effects(
                 "  val modelDataFlowsReachableFromOriginalsWithPreservedBits",
             ),
             canonical_declaration_marker(
-                "  val modelDataFlowsReachableFromOriginalsWithPreservedBits = modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel(modelDataFlowCount, modelDataFlows.select(dataFlow => dataFlow.sourceKind == \"original\" and modelDataFlowIsBitComplete(dataFlow)))",
+                "  val modelDataFlowsReachableFromOriginalsWithPreservedBits = modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel(modelDataFlowCount, modelDataFlows.select(dataFlow => dataFlow.sourceKind == Original and modelDataFlowIsBitComplete(dataFlow)))",
             ),
             quint_message.clone(),
         ),
@@ -2636,7 +2684,7 @@ fn project_root_effects(
             quint_path.clone(),
             canonical_declaration_prefix("  def modelDataFlowHasBitPreservingOriginalSourceChain"),
             canonical_declaration_marker(
-                "  def modelDataFlowHasBitPreservingOriginalSourceChain(dataFlow) = dataFlow.sourceKind == \"original\" or modelDataFlowsReachableFromOriginalsWithPreservedBits.select(reachableFlow => modelSameDataFlowTarget(reachableFlow, dataFlow)).length() > 0",
+                "  def modelDataFlowHasBitPreservingOriginalSourceChain(dataFlow) = dataFlow.sourceKind == Original or modelDataFlowsReachableFromOriginalsWithPreservedBits.select(reachableFlow => modelSameDataFlowTarget(reachableFlow, dataFlow)).length() > 0",
             ),
             quint_message.clone(),
         ),
@@ -4077,11 +4125,7 @@ fn formal_model_data_flows(project_data_flows: &[ProjectDataFlow]) -> Vec<Formal
                 ),
                 slice: semantic_value("slice slug", data_flow.slice_slug(), SliceSlug::try_new),
                 datum: semantic_value("data-flow datum", data_flow.datum(), DatumName::try_new),
-                source_kind: semantic_value(
-                    "data-flow source kind",
-                    data_flow.source_kind(),
-                    DataFlowSourceKind::try_new,
-                ),
+                source_kind: data_flow.source_kind(),
                 source: semantic_value(
                     "data-flow source",
                     data_flow.source(),
