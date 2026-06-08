@@ -73,7 +73,7 @@ const PROJECTION_FINGERPRINT_PATH: &str = "model/events/projection.fingerprint";
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct EventDraft {
     stream_id: EventStreamId,
-    body: EventDraftBody,
+    body: ExportedEventBody,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -302,7 +302,7 @@ impl Display for EventStreamIdError {
 impl Error for EventStreamIdError {}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
-pub(crate) enum EventDraftType {
+pub(crate) enum ExportedEventType {
     ProjectInitialized,
     WorkflowAdded,
     WorkflowUpdated,
@@ -335,8 +335,8 @@ pub(crate) enum EventDraftType {
     ConflictResolved,
 }
 
-impl EventDraftType {
-    pub(crate) fn try_new(value: String) -> Result<Self, EventDraftTypeError> {
+impl ExportedEventType {
+    pub(crate) fn try_new(value: String) -> Result<Self, ExportedEventTypeError> {
         match value.trim() {
             "ProjectInitialized" => Ok(Self::ProjectInitialized),
             "WorkflowAdded" => Ok(Self::WorkflowAdded),
@@ -370,7 +370,7 @@ impl EventDraftType {
             "SliceBoardConnectionAdded" => Ok(Self::SliceBoardConnectionAdded),
             "ReviewRecorded" => Ok(Self::ReviewRecorded),
             "ConflictResolved" => Ok(Self::ConflictResolved),
-            _ => Err(EventDraftTypeError::new(value)),
+            _ => Err(ExportedEventTypeError::new(value)),
         }
     }
 
@@ -393,7 +393,7 @@ impl EventDraftType {
     }
 }
 
-impl AsRef<str> for EventDraftType {
+impl AsRef<str> for ExportedEventType {
     fn as_ref(&self) -> &str {
         match self {
             Self::ProjectInitialized => "ProjectInitialized",
@@ -432,18 +432,18 @@ impl AsRef<str> for EventDraftType {
     }
 }
 
-impl Display for EventDraftType {
+impl Display for ExportedEventType {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
         formatter.write_str(self.as_ref())
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct EventDraftTypeError {
+pub(crate) struct ExportedEventTypeError {
     message: String,
 }
 
-impl EventDraftTypeError {
+impl ExportedEventTypeError {
     fn new(value: String) -> Self {
         Self {
             message: format!("expected a modeled exported event type, got '{value}'"),
@@ -451,16 +451,16 @@ impl EventDraftTypeError {
     }
 }
 
-impl Display for EventDraftTypeError {
+impl Display for ExportedEventTypeError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
         formatter.write_str(&self.message)
     }
 }
 
-impl Error for EventDraftTypeError {}
+impl Error for ExportedEventTypeError {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) enum EventDraftBody {
+pub(crate) enum ExportedEventBody {
     ProjectInitialized {
         name: ProjectName,
     },
@@ -568,47 +568,51 @@ pub(crate) enum EventDraftBody {
     },
 }
 
-impl EventDraftBody {
-    pub(crate) fn event_type(&self) -> EventDraftType {
+impl ExportedEventBody {
+    pub(crate) fn event_type(&self) -> ExportedEventType {
         match self {
-            Self::ProjectInitialized { .. } => EventDraftType::ProjectInitialized,
-            Self::WorkflowAdded { .. } => EventDraftType::WorkflowAdded,
-            Self::WorkflowUpdated { .. } => EventDraftType::WorkflowUpdated,
-            Self::WorkflowRemoved { .. } => EventDraftType::WorkflowRemoved,
-            Self::WorkflowOutcomeAdded { .. } => EventDraftType::WorkflowOutcomeAdded,
-            Self::WorkflowCommandErrorAdded { .. } => EventDraftType::WorkflowCommandErrorAdded,
+            Self::ProjectInitialized { .. } => ExportedEventType::ProjectInitialized,
+            Self::WorkflowAdded { .. } => ExportedEventType::WorkflowAdded,
+            Self::WorkflowUpdated { .. } => ExportedEventType::WorkflowUpdated,
+            Self::WorkflowRemoved { .. } => ExportedEventType::WorkflowRemoved,
+            Self::WorkflowOutcomeAdded { .. } => ExportedEventType::WorkflowOutcomeAdded,
+            Self::WorkflowCommandErrorAdded { .. } => ExportedEventType::WorkflowCommandErrorAdded,
             Self::WorkflowOwnedDefinitionAdded { .. } => {
-                EventDraftType::WorkflowOwnedDefinitionAdded
+                ExportedEventType::WorkflowOwnedDefinitionAdded
             }
             Self::WorkflowTransitionEvidenceAdded { .. } => {
-                EventDraftType::WorkflowTransitionEvidenceAdded
+                ExportedEventType::WorkflowTransitionEvidenceAdded
             }
             Self::WorkflowEntryLifecycleCoverageRequired { .. } => {
-                EventDraftType::WorkflowEntryLifecycleCoverageRequired
+                ExportedEventType::WorkflowEntryLifecycleCoverageRequired
             }
             Self::WorkflowEntryLifecycleStateAdded { .. } => {
-                EventDraftType::WorkflowEntryLifecycleStateAdded
+                ExportedEventType::WorkflowEntryLifecycleStateAdded
             }
-            Self::WorkflowReadinessDeclared { .. } => EventDraftType::WorkflowReadinessDeclared,
-            Self::WorkflowConnected { .. } => EventDraftType::WorkflowConnected,
-            Self::WorkflowTransitionRemoved { .. } => EventDraftType::WorkflowTransitionRemoved,
-            Self::SliceAdded { .. } => EventDraftType::SliceAdded,
-            Self::SliceUpdated { .. } => EventDraftType::SliceUpdated,
-            Self::SliceRemoved { .. } => EventDraftType::SliceRemoved,
-            Self::SliceScenarioAdded { .. } => EventDraftType::SliceScenarioAdded,
-            Self::SliceOutcomeAdded { .. } => EventDraftType::SliceOutcomeAdded,
-            Self::SliceExternalPayloadAdded { .. } => EventDraftType::SliceExternalPayloadAdded,
-            Self::SliceEventDefinitionAdded { .. } => EventDraftType::SliceEventDefinitionAdded,
-            Self::SliceCommandDefinitionAdded { .. } => EventDraftType::SliceCommandDefinitionAdded,
-            Self::SliceReadModelAdded { .. } => EventDraftType::SliceReadModelAdded,
-            Self::SliceViewAdded { .. } => EventDraftType::SliceViewAdded,
-            Self::SliceBitLevelDataFlowAdded { .. } => EventDraftType::SliceBitLevelDataFlowAdded,
-            Self::SliceTranslationAdded { .. } => EventDraftType::SliceTranslationAdded,
-            Self::SliceAutomationAdded { .. } => EventDraftType::SliceAutomationAdded,
-            Self::SliceBoardElementAdded { .. } => EventDraftType::SliceBoardElementAdded,
-            Self::SliceBoardConnectionAdded { .. } => EventDraftType::SliceBoardConnectionAdded,
-            Self::ReviewRecorded { .. } => EventDraftType::ReviewRecorded,
-            Self::ConflictResolved { .. } => EventDraftType::ConflictResolved,
+            Self::WorkflowReadinessDeclared { .. } => ExportedEventType::WorkflowReadinessDeclared,
+            Self::WorkflowConnected { .. } => ExportedEventType::WorkflowConnected,
+            Self::WorkflowTransitionRemoved { .. } => ExportedEventType::WorkflowTransitionRemoved,
+            Self::SliceAdded { .. } => ExportedEventType::SliceAdded,
+            Self::SliceUpdated { .. } => ExportedEventType::SliceUpdated,
+            Self::SliceRemoved { .. } => ExportedEventType::SliceRemoved,
+            Self::SliceScenarioAdded { .. } => ExportedEventType::SliceScenarioAdded,
+            Self::SliceOutcomeAdded { .. } => ExportedEventType::SliceOutcomeAdded,
+            Self::SliceExternalPayloadAdded { .. } => ExportedEventType::SliceExternalPayloadAdded,
+            Self::SliceEventDefinitionAdded { .. } => ExportedEventType::SliceEventDefinitionAdded,
+            Self::SliceCommandDefinitionAdded { .. } => {
+                ExportedEventType::SliceCommandDefinitionAdded
+            }
+            Self::SliceReadModelAdded { .. } => ExportedEventType::SliceReadModelAdded,
+            Self::SliceViewAdded { .. } => ExportedEventType::SliceViewAdded,
+            Self::SliceBitLevelDataFlowAdded { .. } => {
+                ExportedEventType::SliceBitLevelDataFlowAdded
+            }
+            Self::SliceTranslationAdded { .. } => ExportedEventType::SliceTranslationAdded,
+            Self::SliceAutomationAdded { .. } => ExportedEventType::SliceAutomationAdded,
+            Self::SliceBoardElementAdded { .. } => ExportedEventType::SliceBoardElementAdded,
+            Self::SliceBoardConnectionAdded { .. } => ExportedEventType::SliceBoardConnectionAdded,
+            Self::ReviewRecorded { .. } => ExportedEventType::ReviewRecorded,
+            Self::ConflictResolved { .. } => ExportedEventType::ConflictResolved,
         }
     }
 
@@ -764,54 +768,54 @@ impl EventDraftBody {
     }
 
     pub(crate) fn from_event_type_and_payload(
-        event_type: EventDraftType,
+        event_type: ExportedEventType,
         payload: &Value,
     ) -> Result<Self, String> {
         match event_type {
-            EventDraftType::ProjectInitialized => Ok(Self::ProjectInitialized {
+            ExportedEventType::ProjectInitialized => Ok(Self::ProjectInitialized {
                 name: project_name(required_str(payload, "name")?)?,
             }),
-            EventDraftType::WorkflowAdded => Ok(Self::WorkflowAdded {
+            ExportedEventType::WorkflowAdded => Ok(Self::WorkflowAdded {
                 workflow: workflow_from_payload(payload)?,
             }),
-            EventDraftType::WorkflowUpdated => Ok(Self::WorkflowUpdated {
+            ExportedEventType::WorkflowUpdated => Ok(Self::WorkflowUpdated {
                 workflow: workflow_from_payload(payload)?,
             }),
-            EventDraftType::WorkflowRemoved => Ok(Self::WorkflowRemoved {
+            ExportedEventType::WorkflowRemoved => Ok(Self::WorkflowRemoved {
                 slug: workflow_slug(required_str(payload, "slug")?)?,
             }),
-            EventDraftType::WorkflowOutcomeAdded => Ok(Self::WorkflowOutcomeAdded {
+            ExportedEventType::WorkflowOutcomeAdded => Ok(Self::WorkflowOutcomeAdded {
                 workflow: workflow_slug(required_str(payload, "workflow")?)?,
                 outcome: workflow_outcome_from_payload(payload)?,
             }),
-            EventDraftType::WorkflowCommandErrorAdded => Ok(Self::WorkflowCommandErrorAdded {
+            ExportedEventType::WorkflowCommandErrorAdded => Ok(Self::WorkflowCommandErrorAdded {
                 workflow: workflow_slug(required_str(payload, "workflow")?)?,
                 error: workflow_command_error_from_payload(payload)?,
             }),
-            EventDraftType::WorkflowOwnedDefinitionAdded => {
+            ExportedEventType::WorkflowOwnedDefinitionAdded => {
                 Ok(Self::WorkflowOwnedDefinitionAdded {
                     workflow: workflow_slug(required_str(payload, "workflow")?)?,
                     definition: workflow_owned_definition_from_payload(payload)?,
                 })
             }
-            EventDraftType::WorkflowTransitionEvidenceAdded => {
+            ExportedEventType::WorkflowTransitionEvidenceAdded => {
                 Ok(Self::WorkflowTransitionEvidenceAdded {
                     workflow: workflow_slug(required_str(payload, "workflow")?)?,
                     evidence: workflow_transition_evidence_from_payload(payload)?,
                 })
             }
-            EventDraftType::WorkflowEntryLifecycleCoverageRequired => {
+            ExportedEventType::WorkflowEntryLifecycleCoverageRequired => {
                 Ok(Self::WorkflowEntryLifecycleCoverageRequired {
                     workflow: workflow_slug(required_str(payload, "workflow")?)?,
                 })
             }
-            EventDraftType::WorkflowEntryLifecycleStateAdded => {
+            ExportedEventType::WorkflowEntryLifecycleStateAdded => {
                 Ok(Self::WorkflowEntryLifecycleStateAdded {
                     workflow: workflow_slug(required_str(payload, "workflow")?)?,
                     coverage: workflow_entry_lifecycle_state_from_payload(payload)?,
                 })
             }
-            EventDraftType::WorkflowReadinessDeclared => Ok(Self::WorkflowReadinessDeclared {
+            ExportedEventType::WorkflowReadinessDeclared => Ok(Self::WorkflowReadinessDeclared {
                 workflow: workflow_slug(required_str(payload, "workflow")?)?,
                 projection_fingerprint: projection_fingerprint_from_payload(payload)?,
                 model_content_digest: model_content_digest_from_payload(payload)?,
@@ -819,58 +823,60 @@ impl EventDraftBody {
                 verified_by: reviewer_id(required_str(payload, "verified_by")?)?,
                 review_event: review_event_reference_from_payload(payload)?,
             }),
-            EventDraftType::WorkflowConnected => Ok(Self::WorkflowConnected {
+            ExportedEventType::WorkflowConnected => Ok(Self::WorkflowConnected {
                 connection: workflow_connection_from_payload(payload)?,
             }),
-            EventDraftType::WorkflowTransitionRemoved => Ok(Self::WorkflowTransitionRemoved {
+            ExportedEventType::WorkflowTransitionRemoved => Ok(Self::WorkflowTransitionRemoved {
                 removal: workflow_transition_removal_from_payload(payload)?,
             }),
-            EventDraftType::SliceAdded => Ok(Self::SliceAdded {
+            ExportedEventType::SliceAdded => Ok(Self::SliceAdded {
                 slice: slice_from_payload(payload)?,
             }),
-            EventDraftType::SliceUpdated => Ok(Self::SliceUpdated {
+            ExportedEventType::SliceUpdated => Ok(Self::SliceUpdated {
                 slice: workflow_slice_detail_from_payload(payload)?,
             }),
-            EventDraftType::SliceRemoved => Ok(Self::SliceRemoved {
+            ExportedEventType::SliceRemoved => Ok(Self::SliceRemoved {
                 slug: slice_slug(required_str(payload, "slug")?)?,
             }),
-            EventDraftType::SliceScenarioAdded => Ok(Self::SliceScenarioAdded {
+            ExportedEventType::SliceScenarioAdded => Ok(Self::SliceScenarioAdded {
                 scenario: slice_scenario_from_payload(payload)?,
             }),
-            EventDraftType::SliceOutcomeAdded => Ok(Self::SliceOutcomeAdded {
+            ExportedEventType::SliceOutcomeAdded => Ok(Self::SliceOutcomeAdded {
                 outcome: slice_outcome_from_payload(payload)?,
             }),
-            EventDraftType::SliceExternalPayloadAdded => Ok(Self::SliceExternalPayloadAdded {
+            ExportedEventType::SliceExternalPayloadAdded => Ok(Self::SliceExternalPayloadAdded {
                 external_payload: slice_external_payload_from_payload(payload)?,
             }),
-            EventDraftType::SliceEventDefinitionAdded => Ok(Self::SliceEventDefinitionAdded {
+            ExportedEventType::SliceEventDefinitionAdded => Ok(Self::SliceEventDefinitionAdded {
                 event: slice_event_definition_from_payload(payload)?,
             }),
-            EventDraftType::SliceCommandDefinitionAdded => Ok(Self::SliceCommandDefinitionAdded {
-                command: slice_command_definition_from_payload(payload)?,
-            }),
-            EventDraftType::SliceReadModelAdded => Ok(Self::SliceReadModelAdded {
+            ExportedEventType::SliceCommandDefinitionAdded => {
+                Ok(Self::SliceCommandDefinitionAdded {
+                    command: slice_command_definition_from_payload(payload)?,
+                })
+            }
+            ExportedEventType::SliceReadModelAdded => Ok(Self::SliceReadModelAdded {
                 read_model: slice_read_model_from_payload(payload)?,
             }),
-            EventDraftType::SliceViewAdded => Ok(Self::SliceViewAdded {
+            ExportedEventType::SliceViewAdded => Ok(Self::SliceViewAdded {
                 view: slice_view_from_payload(payload)?,
             }),
-            EventDraftType::SliceBitLevelDataFlowAdded => Ok(Self::SliceBitLevelDataFlowAdded {
+            ExportedEventType::SliceBitLevelDataFlowAdded => Ok(Self::SliceBitLevelDataFlowAdded {
                 data_flow: slice_bit_level_data_flow_from_payload(payload)?,
             }),
-            EventDraftType::SliceTranslationAdded => Ok(Self::SliceTranslationAdded {
+            ExportedEventType::SliceTranslationAdded => Ok(Self::SliceTranslationAdded {
                 translation: slice_translation_from_payload(payload)?,
             }),
-            EventDraftType::SliceAutomationAdded => Ok(Self::SliceAutomationAdded {
+            ExportedEventType::SliceAutomationAdded => Ok(Self::SliceAutomationAdded {
                 automation: slice_automation_from_payload(payload)?,
             }),
-            EventDraftType::SliceBoardElementAdded => Ok(Self::SliceBoardElementAdded {
+            ExportedEventType::SliceBoardElementAdded => Ok(Self::SliceBoardElementAdded {
                 element: slice_board_element_from_payload(payload)?,
             }),
-            EventDraftType::SliceBoardConnectionAdded => Ok(Self::SliceBoardConnectionAdded {
+            ExportedEventType::SliceBoardConnectionAdded => Ok(Self::SliceBoardConnectionAdded {
                 connection: slice_board_connection_from_payload(payload)?,
             }),
-            EventDraftType::ReviewRecorded => Ok(Self::ReviewRecorded {
+            ExportedEventType::ReviewRecorded => Ok(Self::ReviewRecorded {
                 workflow_slug: workflow_slug(required_str(payload, "workflow")?)?,
                 model_content_digest: ModelContentDigest::new(artifact_digest_from_str(
                     required_str(payload, "model_content_digest")?,
@@ -879,7 +885,7 @@ impl EventDraftBody {
                 reviewed_at: review_timestamp(required_str(payload, "reviewed_at")?)?,
                 categories: review_rule_names_from_payload(payload)?,
             }),
-            EventDraftType::ConflictResolved => Ok(Self::ConflictResolved {
+            ExportedEventType::ConflictResolved => Ok(Self::ConflictResolved {
                 conflict_id: EventConflictId::new(artifact_digest_from_str(required_str(
                     payload,
                     "conflict_id",
@@ -897,11 +903,11 @@ impl EventDraft {
     pub(crate) fn project_initialized(name: &ProjectName) -> Self {
         Self {
             stream_id: EventStreamId::project(),
-            body: EventDraftBody::ProjectInitialized { name: name.clone() },
+            body: ExportedEventBody::ProjectInitialized { name: name.clone() },
         }
     }
 
-    pub(crate) fn event_type(&self) -> EventDraftType {
+    pub(crate) fn event_type(&self) -> ExportedEventType {
         self.body.event_type()
     }
 
@@ -909,7 +915,7 @@ impl EventDraft {
         self.stream_id.as_ref()
     }
 
-    pub(crate) fn body(&self) -> &EventDraftBody {
+    pub(crate) fn body(&self) -> &ExportedEventBody {
         &self.body
     }
 
@@ -920,7 +926,7 @@ impl EventDraft {
     pub(crate) fn workflow_added(workflow: &NewWorkflow) -> Self {
         Self {
             stream_id: EventStreamId::workflow(workflow.slug()),
-            body: EventDraftBody::WorkflowAdded {
+            body: ExportedEventBody::WorkflowAdded {
                 workflow: workflow.clone(),
             },
         }
@@ -929,7 +935,7 @@ impl EventDraft {
     pub(crate) fn workflow_updated(workflow: &NewWorkflow) -> Self {
         Self {
             stream_id: EventStreamId::workflow(workflow.slug()),
-            body: EventDraftBody::WorkflowUpdated {
+            body: ExportedEventBody::WorkflowUpdated {
                 workflow: workflow.clone(),
             },
         }
@@ -938,7 +944,7 @@ impl EventDraft {
     pub(crate) fn workflow_removed(workflow: &WorkflowSlug) -> Self {
         Self {
             stream_id: EventStreamId::workflow(workflow),
-            body: EventDraftBody::WorkflowRemoved {
+            body: ExportedEventBody::WorkflowRemoved {
                 slug: workflow.clone(),
             },
         }
@@ -950,7 +956,7 @@ impl EventDraft {
     ) -> Self {
         Self {
             stream_id: EventStreamId::workflow(workflow),
-            body: EventDraftBody::WorkflowOutcomeAdded {
+            body: ExportedEventBody::WorkflowOutcomeAdded {
                 workflow: workflow.clone(),
                 outcome: outcome.clone(),
             },
@@ -963,7 +969,7 @@ impl EventDraft {
     ) -> Self {
         Self {
             stream_id: EventStreamId::workflow(workflow),
-            body: EventDraftBody::WorkflowCommandErrorAdded {
+            body: ExportedEventBody::WorkflowCommandErrorAdded {
                 workflow: workflow.clone(),
                 error: error.clone(),
             },
@@ -976,7 +982,7 @@ impl EventDraft {
     ) -> Self {
         Self {
             stream_id: EventStreamId::workflow(workflow),
-            body: EventDraftBody::WorkflowOwnedDefinitionAdded {
+            body: ExportedEventBody::WorkflowOwnedDefinitionAdded {
                 workflow: workflow.clone(),
                 definition: definition.clone(),
             },
@@ -989,7 +995,7 @@ impl EventDraft {
     ) -> Self {
         Self {
             stream_id: EventStreamId::workflow(workflow),
-            body: EventDraftBody::WorkflowTransitionEvidenceAdded {
+            body: ExportedEventBody::WorkflowTransitionEvidenceAdded {
                 workflow: workflow.clone(),
                 evidence: evidence.clone(),
             },
@@ -999,7 +1005,7 @@ impl EventDraft {
     pub(crate) fn workflow_entry_lifecycle_coverage_required(workflow: &WorkflowSlug) -> Self {
         Self {
             stream_id: EventStreamId::workflow(workflow),
-            body: EventDraftBody::WorkflowEntryLifecycleCoverageRequired {
+            body: ExportedEventBody::WorkflowEntryLifecycleCoverageRequired {
                 workflow: workflow.clone(),
             },
         }
@@ -1011,7 +1017,7 @@ impl EventDraft {
     ) -> Self {
         Self {
             stream_id: EventStreamId::workflow(workflow),
-            body: EventDraftBody::WorkflowEntryLifecycleStateAdded {
+            body: ExportedEventBody::WorkflowEntryLifecycleStateAdded {
                 workflow: workflow.clone(),
                 coverage: coverage.clone(),
             },
@@ -1028,7 +1034,7 @@ impl EventDraft {
     ) -> Self {
         Self {
             stream_id: EventStreamId::workflow(workflow),
-            body: EventDraftBody::WorkflowReadinessDeclared {
+            body: ExportedEventBody::WorkflowReadinessDeclared {
                 workflow: workflow.clone(),
                 projection_fingerprint: projection_fingerprint.clone(),
                 model_content_digest: model_content_digest.clone(),
@@ -1042,7 +1048,7 @@ impl EventDraft {
     pub(crate) fn workflow_connected(connection: &WorkflowConnection) -> Self {
         Self {
             stream_id: EventStreamId::workflow(connection.workflow_slug()),
-            body: EventDraftBody::WorkflowConnected {
+            body: ExportedEventBody::WorkflowConnected {
                 connection: connection.clone(),
             },
         }
@@ -1051,7 +1057,7 @@ impl EventDraft {
     pub(crate) fn workflow_transition_removed(removal: &WorkflowTransitionRemoval) -> Self {
         Self {
             stream_id: EventStreamId::workflow(removal.workflow_slug()),
-            body: EventDraftBody::WorkflowTransitionRemoved {
+            body: ExportedEventBody::WorkflowTransitionRemoved {
                 removal: removal.clone(),
             },
         }
@@ -1060,7 +1066,7 @@ impl EventDraft {
     pub(crate) fn slice_added(slice: &NewSlice) -> Self {
         Self {
             stream_id: EventStreamId::slice(slice.slug()),
-            body: EventDraftBody::SliceAdded {
+            body: ExportedEventBody::SliceAdded {
                 slice: slice.clone(),
             },
         }
@@ -1069,7 +1075,7 @@ impl EventDraft {
     pub(crate) fn slice_updated(slice: &WorkflowSliceDetail) -> Self {
         Self {
             stream_id: EventStreamId::slice(slice.slug()),
-            body: EventDraftBody::SliceUpdated {
+            body: ExportedEventBody::SliceUpdated {
                 slice: slice.clone(),
             },
         }
@@ -1078,7 +1084,7 @@ impl EventDraft {
     pub(crate) fn slice_removed(slice: &WorkflowSliceDetail) -> Self {
         Self {
             stream_id: EventStreamId::slice(slice.slug()),
-            body: EventDraftBody::SliceRemoved {
+            body: ExportedEventBody::SliceRemoved {
                 slug: slice.slug().clone(),
             },
         }
@@ -1087,7 +1093,7 @@ impl EventDraft {
     pub(crate) fn slice_scenario_added(scenario: &NewSliceScenario) -> Self {
         Self {
             stream_id: EventStreamId::slice(scenario.slice_slug()),
-            body: EventDraftBody::SliceScenarioAdded {
+            body: ExportedEventBody::SliceScenarioAdded {
                 scenario: scenario.clone(),
             },
         }
@@ -1096,7 +1102,7 @@ impl EventDraft {
     pub(crate) fn slice_outcome_added(outcome: &NewOutcomeDefinition) -> Self {
         Self {
             stream_id: EventStreamId::slice(outcome.slice_slug()),
-            body: EventDraftBody::SliceOutcomeAdded {
+            body: ExportedEventBody::SliceOutcomeAdded {
                 outcome: outcome.clone(),
             },
         }
@@ -1107,7 +1113,7 @@ impl EventDraft {
     ) -> Self {
         Self {
             stream_id: EventStreamId::slice(external_payload.slice_slug()),
-            body: EventDraftBody::SliceExternalPayloadAdded {
+            body: ExportedEventBody::SliceExternalPayloadAdded {
                 external_payload: external_payload.clone(),
             },
         }
@@ -1116,7 +1122,7 @@ impl EventDraft {
     pub(crate) fn slice_event_definition_added(event: &NewEventDefinition) -> Self {
         Self {
             stream_id: EventStreamId::slice(event.slice_slug()),
-            body: EventDraftBody::SliceEventDefinitionAdded {
+            body: ExportedEventBody::SliceEventDefinitionAdded {
                 event: event.clone(),
             },
         }
@@ -1125,7 +1131,7 @@ impl EventDraft {
     pub(crate) fn slice_command_definition_added(command: &NewCommandDefinition) -> Self {
         Self {
             stream_id: EventStreamId::slice(command.slice_slug()),
-            body: EventDraftBody::SliceCommandDefinitionAdded {
+            body: ExportedEventBody::SliceCommandDefinitionAdded {
                 command: command.clone(),
             },
         }
@@ -1134,7 +1140,7 @@ impl EventDraft {
     pub(crate) fn slice_read_model_added(read_model: &NewReadModelDefinition) -> Self {
         Self {
             stream_id: EventStreamId::slice(read_model.slice_slug()),
-            body: EventDraftBody::SliceReadModelAdded {
+            body: ExportedEventBody::SliceReadModelAdded {
                 read_model: read_model.clone(),
             },
         }
@@ -1143,14 +1149,14 @@ impl EventDraft {
     pub(crate) fn slice_view_added(view: &NewViewDefinition) -> Self {
         Self {
             stream_id: EventStreamId::slice(view.slice_slug()),
-            body: EventDraftBody::SliceViewAdded { view: view.clone() },
+            body: ExportedEventBody::SliceViewAdded { view: view.clone() },
         }
     }
 
     pub(crate) fn slice_bit_level_data_flow_added(data_flow: &NewBitLevelDataFlow) -> Self {
         Self {
             stream_id: EventStreamId::slice(data_flow.slice_slug()),
-            body: EventDraftBody::SliceBitLevelDataFlowAdded {
+            body: ExportedEventBody::SliceBitLevelDataFlowAdded {
                 data_flow: data_flow.clone(),
             },
         }
@@ -1159,7 +1165,7 @@ impl EventDraft {
     pub(crate) fn slice_translation_added(translation: &NewTranslationDefinition) -> Self {
         Self {
             stream_id: EventStreamId::slice(translation.slice_slug()),
-            body: EventDraftBody::SliceTranslationAdded {
+            body: ExportedEventBody::SliceTranslationAdded {
                 translation: translation.clone(),
             },
         }
@@ -1168,7 +1174,7 @@ impl EventDraft {
     pub(crate) fn slice_automation_added(automation: &NewAutomationDefinition) -> Self {
         Self {
             stream_id: EventStreamId::slice(automation.slice_slug()),
-            body: EventDraftBody::SliceAutomationAdded {
+            body: ExportedEventBody::SliceAutomationAdded {
                 automation: automation.clone(),
             },
         }
@@ -1177,7 +1183,7 @@ impl EventDraft {
     pub(crate) fn slice_board_element_added(element: &NewBoardElement) -> Self {
         Self {
             stream_id: EventStreamId::slice(element.slice_slug()),
-            body: EventDraftBody::SliceBoardElementAdded {
+            body: ExportedEventBody::SliceBoardElementAdded {
                 element: element.clone(),
             },
         }
@@ -1186,7 +1192,7 @@ impl EventDraft {
     pub(crate) fn slice_board_connection_added(connection: &NewBoardConnection) -> Self {
         Self {
             stream_id: EventStreamId::slice(connection.slice_slug()),
-            body: EventDraftBody::SliceBoardConnectionAdded {
+            body: ExportedEventBody::SliceBoardConnectionAdded {
                 connection: connection.clone(),
             },
         }
@@ -1198,7 +1204,7 @@ impl EventDraft {
     ) -> Self {
         Self {
             stream_id: EventStreamId::project(),
-            body: EventDraftBody::ConflictResolved {
+            body: ExportedEventBody::ConflictResolved {
                 conflict_id: conflict_id.clone(),
                 chosen_event_id: chosen_event_id.clone(),
             },
@@ -1214,7 +1220,7 @@ impl EventDraft {
     ) -> Self {
         Self {
             stream_id: EventStreamId::review(workflow_slug),
-            body: EventDraftBody::ReviewRecorded {
+            body: ExportedEventBody::ReviewRecorded {
                 workflow_slug: workflow_slug.clone(),
                 model_content_digest: model_content_digest.clone(),
                 reviewer_id: reviewer_id.clone(),
@@ -1228,7 +1234,7 @@ impl EventDraft {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ExportedEvent {
     meta: ExportedEventMeta,
-    body: EventDraftBody,
+    body: ExportedEventBody,
 }
 
 impl ExportedEvent {
@@ -1255,9 +1261,9 @@ impl ExportedEvent {
                 "unsupported exported event schema version {schema_version}"
             ));
         }
-        let event_type = EventDraftType::try_new(required_str(value, "type")?.to_owned())
+        let event_type = ExportedEventType::try_new(required_str(value, "type")?.to_owned())
             .map_err(|error| error.to_string())?;
-        let body = EventDraftBody::from_event_type_and_payload(
+        let body = ExportedEventBody::from_event_type_and_payload(
             event_type,
             required_object(value, "payload")?,
         )?;
@@ -1277,7 +1283,7 @@ impl ExportedEvent {
         Self::from_json_value(value)
     }
 
-    pub(crate) fn event_type(&self) -> EventDraftType {
+    pub(crate) fn event_type(&self) -> ExportedEventType {
         self.body.event_type()
     }
 
@@ -1293,7 +1299,7 @@ impl ExportedEvent {
         self.meta.parents()
     }
 
-    pub(crate) fn body(&self) -> &EventDraftBody {
+    pub(crate) fn body(&self) -> &ExportedEventBody {
         &self.body
     }
 
@@ -1324,7 +1330,7 @@ struct ExportedEventHeader {
     event_id: ExportedEventId,
     stream_id: Option<EventStreamId>,
     parents: Vec<ExportedEventId>,
-    event_type: EventDraftType,
+    event_type: ExportedEventType,
 }
 
 impl ExportedEventHeader {
@@ -1336,7 +1342,7 @@ impl ExportedEventHeader {
                 .transpose()
                 .map_err(|error| error.to_string())?,
             parents: parents(value)?,
-            event_type: EventDraftType::try_new(required_str(value, "type")?.to_owned())
+            event_type: ExportedEventType::try_new(required_str(value, "type")?.to_owned())
                 .map_err(|error| error.to_string())?,
         })
     }
@@ -1348,7 +1354,7 @@ impl ExportedEventHeader {
 
 trait ExportedEventFrontier {
     fn frontier_event_id(&self) -> &ExportedEventId;
-    fn frontier_event_type(&self) -> EventDraftType;
+    fn frontier_event_type(&self) -> ExportedEventType;
 }
 
 impl ExportedEventFrontier for ExportedEvent {
@@ -1356,7 +1362,7 @@ impl ExportedEventFrontier for ExportedEvent {
         self.event_id()
     }
 
-    fn frontier_event_type(&self) -> EventDraftType {
+    fn frontier_event_type(&self) -> ExportedEventType {
         self.event_type()
     }
 }
@@ -1366,7 +1372,7 @@ impl ExportedEventFrontier for ExportedEventHeader {
         &self.event_id
     }
 
-    fn frontier_event_type(&self) -> EventDraftType {
+    fn frontier_event_type(&self) -> ExportedEventType {
         self.event_type
     }
 }
@@ -1814,7 +1820,7 @@ pub(crate) fn list_stale_workflow_readiness() -> Result<EffectPlan, String> {
     let latest_readiness = events.into_iter().try_fold(
         BTreeMap::<WorkflowSlug, WorkflowReadinessDeclaration>::new(),
         |mut declarations, event| -> Result<_, String> {
-            if let EventDraftBody::WorkflowReadinessDeclared {
+            if let ExportedEventBody::WorkflowReadinessDeclared {
                 workflow,
                 projection_fingerprint,
                 ..
@@ -1983,7 +1989,7 @@ fn resolved_conflict_ids(events: &[ExportedEvent]) -> Result<BTreeSet<String>, S
     Ok(events
         .iter()
         .filter_map(|event| match event.body() {
-            EventDraftBody::ConflictResolved { conflict_id, .. } => {
+            ExportedEventBody::ConflictResolved { conflict_id, .. } => {
                 Some(conflict_id.as_ref().to_owned())
             }
             _ => None,
@@ -2010,8 +2016,8 @@ fn conflict_id(key: &ConflictKey) -> String {
 
 fn conflict_key(event: &ExportedEvent) -> Result<Option<ConflictKey>, String> {
     let semantic_key = match event.body() {
-        EventDraftBody::WorkflowUpdated { workflow } => workflow.slug().as_ref().to_owned(),
-        EventDraftBody::SliceUpdated { slice } => slice.slug().as_ref().to_owned(),
+        ExportedEventBody::WorkflowUpdated { workflow } => workflow.slug().as_ref().to_owned(),
+        ExportedEventBody::SliceUpdated { slice } => slice.slug().as_ref().to_owned(),
         _ => return Ok(None),
     };
 
@@ -2108,7 +2114,7 @@ fn projection_fingerprint_digest<T: ExportedEventFrontier>(
 ) -> Result<ProjectionFingerprint, String> {
     let event_ids = events
         .iter()
-        .filter(|event| event.frontier_event_type() != EventDraftType::WorkflowReadinessDeclared)
+        .filter(|event| event.frontier_event_type() != ExportedEventType::WorkflowReadinessDeclared)
         .map(ExportedEventFrontier::frontier_event_id)
         .map(|event_id| event_id.as_ref())
         .collect::<Vec<_>>();
@@ -2169,7 +2175,7 @@ impl ProjectedModel {
                 None::<Self>,
                 |model, event| -> Result<Option<Self>, String> {
                     match event.body {
-                        EventDraftBody::ProjectInitialized { name } => {
+                        ExportedEventBody::ProjectInitialized { name } => {
                             let (workflows, reviews) = model
                                 .map(|model| (model.workflows, model.reviews))
                                 .unwrap_or_default();
@@ -2179,7 +2185,7 @@ impl ProjectedModel {
                                 reviews,
                             }))
                         }
-                        EventDraftBody::WorkflowAdded { workflow } => {
+                        ExportedEventBody::WorkflowAdded { workflow } => {
                             let mut model = model.ok_or_else(|| {
                                 "WorkflowAdded appeared before project initialization".to_owned()
                             })?;
@@ -2198,7 +2204,7 @@ impl ProjectedModel {
                             });
                             Ok(Some(model))
                         }
-                        EventDraftBody::WorkflowUpdated { workflow } => {
+                        ExportedEventBody::WorkflowUpdated { workflow } => {
                             let mut model = model.ok_or_else(|| {
                                 "WorkflowUpdated appeared before project initialization".to_owned()
                             })?;
@@ -2216,7 +2222,7 @@ impl ProjectedModel {
                             projected_workflow.description = workflow.description().clone();
                             Ok(Some(model))
                         }
-                        EventDraftBody::WorkflowRemoved { slug } => {
+                        ExportedEventBody::WorkflowRemoved { slug } => {
                             let mut model = model.ok_or_else(|| {
                                 "WorkflowRemoved appeared before project initialization".to_owned()
                             })?;
@@ -2232,7 +2238,7 @@ impl ProjectedModel {
                             }
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceAdded { slice } => {
+                        ExportedEventBody::SliceAdded { slice } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceAdded appeared before project initialization".to_owned()
                             })?;
@@ -2272,7 +2278,7 @@ impl ProjectedModel {
                             });
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceUpdated { slice } => {
+                        ExportedEventBody::SliceUpdated { slice } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceUpdated appeared before project initialization".to_owned()
                             })?;
@@ -2292,7 +2298,7 @@ impl ProjectedModel {
                             projected_slice.description = slice.description().clone();
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceRemoved { slug } => {
+                        ExportedEventBody::SliceRemoved { slug } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceRemoved appeared before project initialization".to_owned()
                             })?;
@@ -2319,7 +2325,7 @@ impl ProjectedModel {
                             }
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceOutcomeAdded { outcome } => {
+                        ExportedEventBody::SliceOutcomeAdded { outcome } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceOutcomeAdded appeared before project initialization".to_owned()
                             })?;
@@ -2337,7 +2343,7 @@ impl ProjectedModel {
                             slice.outcomes.push(outcome);
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceScenarioAdded { scenario } => {
+                        ExportedEventBody::SliceScenarioAdded { scenario } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceScenarioAdded appeared before project initialization"
                                     .to_owned()
@@ -2356,7 +2362,7 @@ impl ProjectedModel {
                             slice.scenarios.push(scenario);
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceExternalPayloadAdded { external_payload } => {
+                        ExportedEventBody::SliceExternalPayloadAdded { external_payload } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceExternalPayloadAdded appeared before project initialization"
                                     .to_owned()
@@ -2375,7 +2381,7 @@ impl ProjectedModel {
                             slice.external_payloads.push(external_payload);
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceEventDefinitionAdded { event } => {
+                        ExportedEventBody::SliceEventDefinitionAdded { event } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceEventDefinitionAdded appeared before project initialization"
                                     .to_owned()
@@ -2394,7 +2400,7 @@ impl ProjectedModel {
                             slice.event_definitions.push(event);
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceCommandDefinitionAdded { command } => {
+                        ExportedEventBody::SliceCommandDefinitionAdded { command } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceCommandDefinitionAdded appeared before project initialization"
                                     .to_owned()
@@ -2413,7 +2419,7 @@ impl ProjectedModel {
                             slice.command_definitions.push(command);
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceReadModelAdded { read_model } => {
+                        ExportedEventBody::SliceReadModelAdded { read_model } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceReadModelAdded appeared before project initialization"
                                     .to_owned()
@@ -2432,7 +2438,7 @@ impl ProjectedModel {
                             slice.read_models.push(read_model);
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceBitLevelDataFlowAdded { data_flow } => {
+                        ExportedEventBody::SliceBitLevelDataFlowAdded { data_flow } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceBitLevelDataFlowAdded appeared before project initialization"
                                     .to_owned()
@@ -2451,7 +2457,7 @@ impl ProjectedModel {
                             slice.bit_level_data_flows.push(data_flow);
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceViewAdded { view } => {
+                        ExportedEventBody::SliceViewAdded { view } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceViewAdded appeared before project initialization".to_owned()
                             })?;
@@ -2469,7 +2475,7 @@ impl ProjectedModel {
                             slice.views.push(view);
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceTranslationAdded { translation } => {
+                        ExportedEventBody::SliceTranslationAdded { translation } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceTranslationAdded appeared before project initialization"
                                     .to_owned()
@@ -2488,7 +2494,7 @@ impl ProjectedModel {
                             slice.translations.push(translation);
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceAutomationAdded { automation } => {
+                        ExportedEventBody::SliceAutomationAdded { automation } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceAutomationAdded appeared before project initialization"
                                     .to_owned()
@@ -2507,7 +2513,7 @@ impl ProjectedModel {
                             slice.automations.push(automation);
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceBoardElementAdded { element } => {
+                        ExportedEventBody::SliceBoardElementAdded { element } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceBoardElementAdded appeared before project initialization"
                                     .to_owned()
@@ -2526,7 +2532,7 @@ impl ProjectedModel {
                             slice.board_elements.push(element);
                             Ok(Some(model))
                         }
-                        EventDraftBody::SliceBoardConnectionAdded { connection } => {
+                        ExportedEventBody::SliceBoardConnectionAdded { connection } => {
                             let mut model = model.ok_or_else(|| {
                                 "SliceBoardConnectionAdded appeared before project initialization"
                                     .to_owned()
@@ -2545,14 +2551,14 @@ impl ProjectedModel {
                             slice.board_connections.push(connection);
                             Ok(Some(model))
                         }
-                        EventDraftBody::WorkflowReadinessDeclared { .. } => {
+                        ExportedEventBody::WorkflowReadinessDeclared { .. } => {
                             let model = model.ok_or_else(|| {
                                 "WorkflowReadinessDeclared appeared before project initialization"
                                     .to_owned()
                             })?;
                             Ok(Some(model))
                         }
-                        EventDraftBody::WorkflowConnected { connection } => {
+                        ExportedEventBody::WorkflowConnected { connection } => {
                             let mut model = model.ok_or_else(|| {
                                 "WorkflowConnected appeared before project initialization"
                                     .to_owned()
@@ -2572,7 +2578,7 @@ impl ProjectedModel {
                                 .push(workflow_transition_record_from_connection(&connection)?);
                             Ok(Some(model))
                         }
-                        EventDraftBody::WorkflowOutcomeAdded { workflow, outcome } => {
+                        ExportedEventBody::WorkflowOutcomeAdded { workflow, outcome } => {
                             let mut model = model.ok_or_else(|| {
                                 "WorkflowOutcomeAdded appeared before project initialization"
                                     .to_owned()
@@ -2590,7 +2596,7 @@ impl ProjectedModel {
                             projected_workflow.outcomes.push(outcome);
                             Ok(Some(model))
                         }
-                        EventDraftBody::WorkflowCommandErrorAdded { workflow, error } => {
+                        ExportedEventBody::WorkflowCommandErrorAdded { workflow, error } => {
                             let mut model = model.ok_or_else(|| {
                                 "WorkflowCommandErrorAdded appeared before project initialization"
                                     .to_owned()
@@ -2608,7 +2614,7 @@ impl ProjectedModel {
                             projected_workflow.command_errors.push(error);
                             Ok(Some(model))
                         }
-                        EventDraftBody::WorkflowOwnedDefinitionAdded {
+                        ExportedEventBody::WorkflowOwnedDefinitionAdded {
                             workflow,
                             definition,
                         } => {
@@ -2629,7 +2635,7 @@ impl ProjectedModel {
                             projected_workflow.owned_definitions.push(definition);
                             Ok(Some(model))
                         }
-                        EventDraftBody::WorkflowTransitionEvidenceAdded { workflow, evidence } => {
+                        ExportedEventBody::WorkflowTransitionEvidenceAdded { workflow, evidence } => {
                             let mut model = model.ok_or_else(|| {
                                 "WorkflowTransitionEvidenceAdded appeared before project initialization"
                                     .to_owned()
@@ -2647,7 +2653,7 @@ impl ProjectedModel {
                             projected_workflow.transition_evidences.push(evidence);
                             Ok(Some(model))
                         }
-                        EventDraftBody::WorkflowEntryLifecycleCoverageRequired { workflow } => {
+                        ExportedEventBody::WorkflowEntryLifecycleCoverageRequired { workflow } => {
                             let mut model = model.ok_or_else(|| {
                                 "WorkflowEntryLifecycleCoverageRequired appeared before project initialization"
                                     .to_owned()
@@ -2665,7 +2671,7 @@ impl ProjectedModel {
                             projected_workflow.requires_entry_lifecycle_coverage = true;
                             Ok(Some(model))
                         }
-                        EventDraftBody::WorkflowEntryLifecycleStateAdded { workflow, coverage } => {
+                        ExportedEventBody::WorkflowEntryLifecycleStateAdded { workflow, coverage } => {
                             let mut model = model.ok_or_else(|| {
                                 "WorkflowEntryLifecycleStateAdded appeared before project initialization"
                                     .to_owned()
@@ -2683,7 +2689,7 @@ impl ProjectedModel {
                             projected_workflow.entry_lifecycle_states.push(coverage);
                             Ok(Some(model))
                         }
-                        EventDraftBody::WorkflowTransitionRemoved { removal } => {
+                        ExportedEventBody::WorkflowTransitionRemoved { removal } => {
                             let mut model = model.ok_or_else(|| {
                                 "WorkflowTransitionRemoved appeared before project initialization"
                                     .to_owned()
@@ -2705,7 +2711,7 @@ impl ProjectedModel {
                                 .retain(|transition| !same_transition(transition, &removed_transition));
                             Ok(Some(model))
                         }
-                        EventDraftBody::ReviewRecorded {
+                        ExportedEventBody::ReviewRecorded {
                             workflow_slug,
                             model_content_digest,
                             reviewer_id,
@@ -2741,7 +2747,7 @@ impl ProjectedModel {
                             model.reviews.push(review);
                             Ok(Some(model))
                         }
-                        EventDraftBody::ConflictResolved { .. } => Ok(model),
+                        ExportedEventBody::ConflictResolved { .. } => Ok(model),
                     }
                 },
             )?

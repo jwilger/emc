@@ -20,7 +20,7 @@ use crate::core::event_commands::{
     RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput, UpdateSliceCommand,
     UpdateWorkflowCommand, WorkflowFactInput,
 };
-use crate::core::events::{EventDraft, EventDraftBody, EventDraftType, ExportedEvent};
+use crate::core::events::{EventDraft, ExportedEvent, ExportedEventBody, ExportedEventType};
 use crate::core::types::{ModelDescription, ModelName, SliceKindName, SliceSlug, WorkflowSlug};
 
 const EVENT_EXPORT_DIRECTORY: &str = "model/events/v1";
@@ -150,7 +150,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                 .map_err(|error| error.to_string())?;
             }
             match draft.body() {
-                EventDraftBody::ProjectInitialized { name } => {
+                ExportedEventBody::ProjectInitialized { name } => {
                     execute(
                         &store,
                         InitializeProjectCommand::from_semantic(name.clone())?,
@@ -159,7 +159,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::WorkflowAdded { workflow } => {
+                ExportedEventBody::WorkflowAdded { workflow } => {
                     execute(
                         &store,
                         AddWorkflowCommand::from_semantic(
@@ -172,7 +172,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::WorkflowUpdated { workflow } => {
+                ExportedEventBody::WorkflowUpdated { workflow } => {
                     execute(
                         &store,
                         UpdateWorkflowCommand::from_semantic(
@@ -185,7 +185,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::WorkflowRemoved { slug } => {
+                ExportedEventBody::WorkflowRemoved { slug } => {
                     execute(
                         &store,
                         RemoveWorkflowCommand::from_semantic(slug.clone())?,
@@ -194,7 +194,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::WorkflowOutcomeAdded { workflow, outcome } => {
+                ExportedEventBody::WorkflowOutcomeAdded { workflow, outcome } => {
                     execute(
                         &store,
                         AddWorkflowFactCommand::new(WorkflowFactInput::OutcomeAdded {
@@ -206,7 +206,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::WorkflowCommandErrorAdded { workflow, error } => {
+                ExportedEventBody::WorkflowCommandErrorAdded { workflow, error } => {
                     execute(
                         &store,
                         AddWorkflowFactCommand::new(WorkflowFactInput::CommandErrorAdded {
@@ -218,7 +218,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::WorkflowOwnedDefinitionAdded {
+                ExportedEventBody::WorkflowOwnedDefinitionAdded {
                     workflow,
                     definition,
                 } => {
@@ -233,7 +233,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::WorkflowTransitionEvidenceAdded { workflow, evidence } => {
+                ExportedEventBody::WorkflowTransitionEvidenceAdded { workflow, evidence } => {
                     execute(
                         &store,
                         AddWorkflowFactCommand::new(WorkflowFactInput::TransitionEvidenceAdded {
@@ -245,7 +245,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::WorkflowEntryLifecycleCoverageRequired { workflow } => {
+                ExportedEventBody::WorkflowEntryLifecycleCoverageRequired { workflow } => {
                     execute(
                         &store,
                         AddWorkflowFactCommand::new(
@@ -258,7 +258,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::WorkflowEntryLifecycleStateAdded { workflow, coverage } => {
+                ExportedEventBody::WorkflowEntryLifecycleStateAdded { workflow, coverage } => {
                     execute(
                         &store,
                         AddWorkflowFactCommand::new(WorkflowFactInput::EntryLifecycleStateAdded {
@@ -270,7 +270,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::WorkflowReadinessDeclared {
+                ExportedEventBody::WorkflowReadinessDeclared {
                     workflow,
                     projection_fingerprint,
                     model_content_digest,
@@ -293,7 +293,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::WorkflowConnected { connection } => {
+                ExportedEventBody::WorkflowConnected { connection } => {
                     execute(
                         &store,
                         ConnectWorkflowCommand::from_connection(connection.clone())?,
@@ -302,7 +302,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::WorkflowTransitionRemoved { removal } => {
+                ExportedEventBody::WorkflowTransitionRemoved { removal } => {
                     execute(
                         &store,
                         RemoveWorkflowTransitionCommand::from_removal(removal.clone())?,
@@ -311,7 +311,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::SliceAdded { slice } => {
+                ExportedEventBody::SliceAdded { slice } => {
                     execute(
                         &store,
                         AddSliceCommand::from_semantic(
@@ -326,7 +326,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::SliceUpdated { slice } => {
+                ExportedEventBody::SliceUpdated { slice } => {
                     execute(
                         &store,
                         UpdateSliceCommand::from_semantic(
@@ -340,7 +340,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::SliceRemoved { slug } => {
+                ExportedEventBody::SliceRemoved { slug } => {
                     execute(
                         &store,
                         RemoveSliceCommand::from_semantic(slug.clone())?,
@@ -349,18 +349,18 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::SliceScenarioAdded { .. }
-                | EventDraftBody::SliceOutcomeAdded { .. }
-                | EventDraftBody::SliceExternalPayloadAdded { .. }
-                | EventDraftBody::SliceEventDefinitionAdded { .. }
-                | EventDraftBody::SliceCommandDefinitionAdded { .. }
-                | EventDraftBody::SliceReadModelAdded { .. }
-                | EventDraftBody::SliceViewAdded { .. }
-                | EventDraftBody::SliceBitLevelDataFlowAdded { .. }
-                | EventDraftBody::SliceTranslationAdded { .. }
-                | EventDraftBody::SliceAutomationAdded { .. }
-                | EventDraftBody::SliceBoardElementAdded { .. }
-                | EventDraftBody::SliceBoardConnectionAdded { .. } => {
+                ExportedEventBody::SliceScenarioAdded { .. }
+                | ExportedEventBody::SliceOutcomeAdded { .. }
+                | ExportedEventBody::SliceExternalPayloadAdded { .. }
+                | ExportedEventBody::SliceEventDefinitionAdded { .. }
+                | ExportedEventBody::SliceCommandDefinitionAdded { .. }
+                | ExportedEventBody::SliceReadModelAdded { .. }
+                | ExportedEventBody::SliceViewAdded { .. }
+                | ExportedEventBody::SliceBitLevelDataFlowAdded { .. }
+                | ExportedEventBody::SliceTranslationAdded { .. }
+                | ExportedEventBody::SliceAutomationAdded { .. }
+                | ExportedEventBody::SliceBoardElementAdded { .. }
+                | ExportedEventBody::SliceBoardConnectionAdded { .. } => {
                     execute(
                         &store,
                         AddSliceFactCommand::new(SliceFactInput::from_event_body(draft.body())?)?,
@@ -369,7 +369,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::ReviewRecorded {
+                ExportedEventBody::ReviewRecorded {
                     workflow_slug,
                     model_content_digest,
                     reviewer_id,
@@ -390,7 +390,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
                     .await
                     .map_err(|error| error.to_string())?;
                 }
-                EventDraftBody::ConflictResolved {
+                ExportedEventBody::ConflictResolved {
                     conflict_id,
                     chosen_event_id,
                 } => {
@@ -411,7 +411,7 @@ fn execute_eventcore_command_for_exported_event_at_path(
 }
 
 fn repair_project_stream_if_needed(sqlite_path: &Path, draft: &EventDraft) -> Result<(), String> {
-    if draft.event_type() != EventDraftType::ConflictResolved {
+    if draft.event_type() != ExportedEventType::ConflictResolved {
         return Ok(());
     }
 
@@ -435,17 +435,17 @@ fn workflow_added_prerequisite_if_stream_needs_repair(
 ) -> Result<Option<WorkflowAddedPrerequisite>, String> {
     if !matches!(
         draft.event_type(),
-        EventDraftType::WorkflowUpdated
-            | EventDraftType::WorkflowRemoved
-            | EventDraftType::WorkflowConnected
-            | EventDraftType::WorkflowTransitionRemoved
-            | EventDraftType::WorkflowOutcomeAdded
-            | EventDraftType::WorkflowCommandErrorAdded
-            | EventDraftType::WorkflowOwnedDefinitionAdded
-            | EventDraftType::WorkflowTransitionEvidenceAdded
-            | EventDraftType::WorkflowEntryLifecycleCoverageRequired
-            | EventDraftType::WorkflowEntryLifecycleStateAdded
-            | EventDraftType::WorkflowReadinessDeclared
+        ExportedEventType::WorkflowUpdated
+            | ExportedEventType::WorkflowRemoved
+            | ExportedEventType::WorkflowConnected
+            | ExportedEventType::WorkflowTransitionRemoved
+            | ExportedEventType::WorkflowOutcomeAdded
+            | ExportedEventType::WorkflowCommandErrorAdded
+            | ExportedEventType::WorkflowOwnedDefinitionAdded
+            | ExportedEventType::WorkflowTransitionEvidenceAdded
+            | ExportedEventType::WorkflowEntryLifecycleCoverageRequired
+            | ExportedEventType::WorkflowEntryLifecycleStateAdded
+            | ExportedEventType::WorkflowReadinessDeclared
     ) {
         return Ok(None);
     }
@@ -474,7 +474,7 @@ fn slice_added_prerequisite_if_stream_needs_repair(
 ) -> Result<Option<SliceAddedPrerequisite>, String> {
     if !matches!(
         draft.event_type(),
-        EventDraftType::SliceUpdated | EventDraftType::SliceRemoved
+        ExportedEventType::SliceUpdated | ExportedEventType::SliceRemoved
     ) && !draft.event_type().is_slice_fact()
     {
         return Ok(None);
@@ -527,7 +527,7 @@ struct WorkflowAddedPrerequisite {
 impl WorkflowAddedPrerequisite {
     fn from_exported_event(event: &ExportedEvent) -> Result<Self, String> {
         match event.body() {
-            EventDraftBody::WorkflowAdded { workflow } => Ok(Self {
+            ExportedEventBody::WorkflowAdded { workflow } => Ok(Self {
                 slug: workflow.slug().clone(),
                 name: workflow.name().clone(),
                 description: workflow.description().clone(),
@@ -549,7 +549,7 @@ struct SliceAddedPrerequisite {
 impl SliceAddedPrerequisite {
     fn from_exported_event(event: &ExportedEvent) -> Result<Self, String> {
         match event.body() {
-            EventDraftBody::SliceAdded { slice } => Ok(Self {
+            ExportedEventBody::SliceAdded { slice } => Ok(Self {
                 workflow: slice.workflow_slug().clone(),
                 slug: slice.slug().clone(),
                 name: slice.name().clone(),
@@ -574,7 +574,7 @@ fn workflow_added_payload(
         let contents = fs::read_to_string(path).map_err(|error| error.to_string())?;
         let event = ExportedEvent::from_json_str(&contents)?;
         if event.stream_id().as_ref() == stream_id
-            && matches!(event.body(), EventDraftBody::WorkflowAdded { .. })
+            && matches!(event.body(), ExportedEventBody::WorkflowAdded { .. })
         {
             return WorkflowAddedPrerequisite::from_exported_event(&event);
         }
@@ -595,7 +595,7 @@ fn slice_added_payload(
         let contents = fs::read_to_string(path).map_err(|error| error.to_string())?;
         let event = ExportedEvent::from_json_str(&contents)?;
         if event.stream_id().as_ref() == stream_id
-            && matches!(event.body(), EventDraftBody::SliceAdded { .. })
+            && matches!(event.body(), ExportedEventBody::SliceAdded { .. })
         {
             return SliceAddedPrerequisite::from_exported_event(&event);
         }
