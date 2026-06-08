@@ -77,6 +77,55 @@ pub(crate) struct EventDraft {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct ExportedEventMeta {
+    event_id: ExportedEventId,
+    command_id: ExportedCommandId,
+    command_ordinal: usize,
+    stream_id: EventStreamId,
+    parents: Vec<ExportedEventId>,
+}
+
+impl ExportedEventMeta {
+    fn from_draft(
+        draft: &EventDraft,
+        parents: Vec<ExportedEventId>,
+        command_ordinal: usize,
+    ) -> Result<Self, String> {
+        let event_id = event_id(draft, &parents, command_ordinal)?;
+        let command_id = ExportedCommandId::from_event_id(&event_id);
+        Ok(Self {
+            event_id,
+            command_id,
+            command_ordinal,
+            stream_id: draft.stream_id.clone(),
+            parents,
+        })
+    }
+
+    fn from_json_value(value: &Value) -> Result<Self, String> {
+        Ok(Self {
+            event_id: required_exported_event_id(value, "event_id")?,
+            command_id: required_exported_command_id(value, "command_id")?,
+            command_ordinal: required_usize(value, "command_ordinal")?,
+            stream_id: required_event_stream_id(value, "stream_id")?,
+            parents: parents(value)?,
+        })
+    }
+
+    fn event_id(&self) -> &ExportedEventId {
+        &self.event_id
+    }
+
+    fn stream_id(&self) -> &EventStreamId {
+        &self.stream_id
+    }
+
+    fn parents(&self) -> &[ExportedEventId] {
+        &self.parents
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ExportedEventId {
     value: ArtifactDigest,
 }
@@ -1178,11 +1227,7 @@ impl EventDraft {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ExportedEvent {
-    event_id: ExportedEventId,
-    command_id: ExportedCommandId,
-    command_ordinal: usize,
-    stream_id: EventStreamId,
-    parents: Vec<ExportedEventId>,
+    meta: ExportedEventMeta,
     body: EventDraftBody,
 }
 
@@ -1192,14 +1237,8 @@ impl ExportedEvent {
         parents: Vec<ExportedEventId>,
         command_ordinal: usize,
     ) -> Result<Self, String> {
-        let event_id = event_id(draft, &parents, command_ordinal)?;
-        let command_id = ExportedCommandId::from_event_id(&event_id);
         Ok(Self {
-            command_id,
-            event_id,
-            command_ordinal,
-            stream_id: draft.stream_id.clone(),
-            parents,
+            meta: ExportedEventMeta::from_draft(draft, parents, command_ordinal)?,
             body: draft.body.clone(),
         })
     }
@@ -1223,12 +1262,7 @@ impl ExportedEvent {
             required_object(value, "payload")?,
         )?;
         Ok(Self {
-            event_id: required_exported_event_id(value, "event_id")?,
-            command_id: required_exported_command_id(value, "command_id")?,
-            command_ordinal: required_usize(value, "command_ordinal")?,
-            stream_id: EventStreamId::try_new(required_str(value, "stream_id")?.to_owned())
-                .map_err(|error| error.to_string())?,
-            parents: parents(value)?,
+            meta: ExportedEventMeta::from_json_value(value)?,
             body,
         })
     }
@@ -1248,15 +1282,15 @@ impl ExportedEvent {
     }
 
     pub(crate) fn event_id(&self) -> &ExportedEventId {
-        &self.event_id
+        self.meta.event_id()
     }
 
     pub(crate) fn stream_id(&self) -> &EventStreamId {
-        &self.stream_id
+        self.meta.stream_id()
     }
 
     pub(crate) fn parents(&self) -> &[ExportedEventId] {
-        &self.parents
+        self.meta.parents()
     }
 
     pub(crate) fn body(&self) -> &EventDraftBody {
@@ -1270,11 +1304,11 @@ impl ExportedEvent {
     fn to_json_value(&self) -> Value {
         json!({
             "schema_version": SCHEMA_VERSION,
-            "event_id": self.event_id.as_ref(),
-            "command_id": self.command_id.as_ref(),
-            "command_ordinal": self.command_ordinal,
-            "stream_id": self.stream_id.as_ref(),
-            "parents": self.parents.iter().map(|parent| parent.as_ref()).collect::<Vec<_>>(),
+            "event_id": self.meta.event_id.as_ref(),
+            "command_id": self.meta.command_id.as_ref(),
+            "command_ordinal": self.meta.command_ordinal,
+            "stream_id": self.meta.stream_id.as_ref(),
+            "parents": self.meta.parents.iter().map(|parent| parent.as_ref()).collect::<Vec<_>>(),
             "type": self.event_type().as_ref(),
             "payload": self.payload_json(),
         })
@@ -3125,6 +3159,12 @@ fn required_usize(event: &Value, field: &str) -> Result<usize, String> {
         .and_then(Value::as_u64)
         .ok_or_else(|| format!("exported event is missing unsigned integer field {field}"))?;
     usize::try_from(value).map_err(|_| format!("exported event field {field} is too large"))
+}
+
+fn required_event_stream_id(event: &Value, field: &str) -> Result<EventStreamId, String> {
+    EventStreamId::try_new(required_str(event, field)?.to_owned()).map_err(|error| {
+        format!("exported event JSON field {field} contains an invalid stream id: {error}")
+    })
 }
 
 fn required_exported_event_id(event: &Value, field: &str) -> Result<ExportedEventId, String> {
