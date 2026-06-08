@@ -15,7 +15,7 @@ use crate::core::formal_model::{
     FormalModelCommandInputFields, FormalModelDataFlow, FormalModelDataFlowFields,
     FormalModelOutcome, FormalModelScenario, FormalModelScenarioDefinition,
     FormalModelScenarioDefinitionFields, FormalModelSlice, FormalModelSliceModule,
-    lean_model_command_error_list as render_lean_model_command_error_list,
+    FormalModelWorkflow, lean_model_command_error_list as render_lean_model_command_error_list,
     lean_model_command_input_list as render_lean_model_command_input_list,
     lean_model_command_list as render_lean_model_command_list,
     lean_model_data_flow_list as render_lean_model_data_flow_list,
@@ -24,6 +24,7 @@ use crate::core::formal_model::{
     lean_model_scenario_list as render_lean_model_scenario_list,
     lean_model_slice_list as render_lean_model_slice_list,
     lean_model_slice_module_list as render_lean_model_slice_module_list,
+    lean_model_workflow_list as render_lean_model_workflow_list,
     quint_model_command_error_list as render_quint_model_command_error_list,
     quint_model_command_input_list as render_quint_model_command_input_list,
     quint_model_command_list as render_quint_model_command_list,
@@ -402,6 +403,7 @@ fn project_root_effects(
     let model_version = "0.1.0";
     let workflow_slug_list = workflow_slug_list(modeled_workflows);
     let workflow_count = modeled_workflows.len();
+    let model_workflows = formal_model_workflows(modeled_workflows);
     let model_slices = formal_model_slices(formal_workflows);
     let model_slice_modules = formal_model_slice_modules(formal_workflows);
     let model_scenarios = formal_model_scenarios(inventories.scenarios);
@@ -412,6 +414,7 @@ fn project_root_effects(
     let model_command_errors = formal_model_command_errors(inventories.command_errors);
     let model_commands = formal_model_commands(inventories.commands);
     let model_command_inputs = formal_model_command_inputs(inventories.command_inputs);
+    let lean_model_workflow_list = render_lean_model_workflow_list(&model_workflows);
     let lean_model_slice_list = render_lean_model_slice_list(&model_slices);
     let lean_model_slice_module_list = render_lean_model_slice_module_list(&model_slice_modules);
     let lean_model_scenario_list = render_lean_model_scenario_list(&model_scenarios);
@@ -620,9 +623,15 @@ fn project_root_effects(
         ),
         Effect::require_canonical_declaration(
             lean_path.clone(),
+            canonical_declaration_prefix("structure ModelWorkflow where"),
+            canonical_declaration_marker("structure ModelWorkflow where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
             canonical_declaration_prefix("def modelWorkflows :"),
             canonical_declaration_marker(format!(
-                "def modelWorkflows : List String := {workflow_slug_list}"
+                "def modelWorkflows : List ModelWorkflow := {lean_model_workflow_list}"
             )),
             lean_message.clone(),
         ),
@@ -664,7 +673,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelSliceBelongsToDeclaredWorkflow"),
             canonical_declaration_marker(
-                "def modelSliceBelongsToDeclaredWorkflow (slice : ModelSlice) : Bool := modelWorkflows.any (fun workflow => workflow == slice.workflow)",
+                "def modelSliceBelongsToDeclaredWorkflow (slice : ModelSlice) : Bool := modelWorkflows.any (fun workflow => workflow.workflow == slice.workflow)",
             ),
             lean_message.clone(),
         ),
@@ -688,7 +697,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelWorkflowSlicesHaveModules"),
             canonical_declaration_marker(
-                "def modelWorkflowSlicesHaveModules (workflow : String) : Bool := modelSlices.all (fun slice => slice.workflow != workflow || modelSliceHasModule slice)",
+                "def modelWorkflowSlicesHaveModules (workflow : ModelWorkflow) : Bool := modelSlices.all (fun slice => slice.workflow != workflow.workflow || modelSliceHasModule slice)",
             ),
             lean_message.clone(),
         ),
@@ -696,7 +705,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelWorkflowHasCompositionStructure"),
             canonical_declaration_marker(
-                "def modelWorkflowHasCompositionStructure (workflow : String) : Bool := modelWorkflowSlicesHaveModules workflow",
+                "def modelWorkflowHasCompositionStructure (workflow : ModelWorkflow) : Bool := modelWorkflowSlicesHaveModules workflow",
             ),
             lean_message.clone(),
         ),
@@ -3926,6 +3935,13 @@ fn workflow_slug_list(modeled_workflows: &[ModeledWorkflowLayout]) -> String {
             .collect::<Vec<_>>()
             .join(",")
     )
+}
+
+fn formal_model_workflows(modeled_workflows: &[ModeledWorkflowLayout]) -> Vec<FormalModelWorkflow> {
+    modeled_workflows
+        .iter()
+        .map(|workflow| FormalModelWorkflow::new(workflow.slug().clone()))
+        .collect()
 }
 
 fn formal_model_slices(formal_workflows: &[FormalWorkflowGraph]) -> Vec<FormalModelSlice> {

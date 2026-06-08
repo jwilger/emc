@@ -13,6 +13,17 @@ use crate::core::types::{
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct FormalModelWorkflow {
+    workflow: WorkflowSlug,
+}
+
+impl FormalModelWorkflow {
+    pub(crate) fn new(workflow: WorkflowSlug) -> Self {
+        Self { workflow }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct FormalModelSlice {
     workflow: WorkflowSlug,
     slice: SliceSlug,
@@ -303,6 +314,10 @@ pub(crate) fn lean_slice_record_structures() -> &'static str {
     "structure ModelSlice where\n  workflow : String\n  slice : String\n\nstructure ModelSliceModule where\n  workflow : String\n  slice : String\n  formalModule : String"
 }
 
+pub(crate) fn lean_workflow_record_structure() -> &'static str {
+    "structure ModelWorkflow where\n  workflow : String"
+}
+
 pub(crate) fn lean_scenario_record_structures() -> &'static str {
     "structure ModelScenario where\n  workflow : String\n  slice : String\n  scenarioKind : String\n  scenario : String\n\nstructure ModelScenarioDefinition where\n  workflow : String\n  slice : String\n  scenarioKind : String\n  scenario : String\n  given : String\n  when : String\n  thenStep : String\n  readStreams : List String\n  writtenStreams : List String\n  contractKind : String\n  coveredDefinition : String\n  errorReferences : List String"
 }
@@ -353,6 +368,19 @@ pub(crate) fn lean_external_payload_record_structures() -> &'static str {
 
 pub(crate) fn lean_event_inventory_record_structures() -> &'static str {
     "structure ModelStream where\n  workflow : String\n  slice : String\n  stream : String\n\nstructure ModelEvent where\n  workflow : String\n  slice : String\n  event : String\n  stream : String\n\nstructure ModelEventAttribute where\n  workflow : String\n  slice : String\n  event : String\n  attributeName : String\n  sourceKind : String\n  sourceName : String\n  sourceField : String\n  generatedSourceKind : String\n  provenance : String"
+}
+
+pub(crate) fn lean_model_workflow_list(workflows: &[FormalModelWorkflow]) -> String {
+    let mut workflows = workflows
+        .iter()
+        .map(|workflow| workflow.workflow.as_ref())
+        .collect::<Vec<_>>();
+    workflows.sort_unstable();
+    render_list(
+        workflows
+            .into_iter()
+            .map(|workflow| format!("{{ workflow := {} }}", quoted(workflow))),
+    )
 }
 
 pub(crate) fn lean_model_slice_list(slices: &[FormalModelSlice]) -> String {

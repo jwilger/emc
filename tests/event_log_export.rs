@@ -2334,8 +2334,9 @@ mod tests {
             .success();
 
         assert!(
-            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
-                .contains("def modelWorkflows : List String := [\"open-ticket\"]"),
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelWorkflows : List ModelWorkflow := [{ workflow := \"open-ticket\" }]"
+            ),
             "project root must be rebuilt from exported events"
         );
         assert!(

@@ -354,8 +354,8 @@ mod tests {
         write(
             &lean_root_path,
             lean_root.replace(
-                "def modelWorkflows : List String := [\"open-ticket\"]",
-                "def modelWorkflows : List String := []",
+                "def modelWorkflows : List ModelWorkflow := [{ workflow := \"open-ticket\" }]",
+                "def modelWorkflows : List ModelWorkflow := []",
             ),
         )?;
 

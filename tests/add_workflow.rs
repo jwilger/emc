@@ -51,7 +51,13 @@ mod tests {
         let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
         assert!(
-            lean_root.contains("def modelWorkflows : List String := [\"open-ticket\"]"),
+            lean_root.contains("structure ModelWorkflow where\n  workflow : String"),
+            "Lean root artifact must type modeled workflows as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelWorkflows : List ModelWorkflow := [{ workflow := \"open-ticket\" }]"
+            ),
             "Lean root artifact must explicitly enumerate modeled workflows"
         );
         assert!(
