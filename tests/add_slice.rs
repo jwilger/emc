@@ -169,14 +169,30 @@ mod tests {
             "Quint artifact must verify every workflow slice has a composed formal module reference"
         );
         assert!(
-            lean_root.contains("def modelSlices : List (String × String) := [(\"open-ticket\", \"capture-ticket\")]"),
-            "Lean project root must represent composed workflow-to-slice membership"
+            lean_root.contains("structure ModelSlice where\n  workflow : String\n  slice : String"),
+            "Lean project root must type composed workflow-to-slice membership as a named record"
+        );
+        assert!(
+            lean_root.contains("def modelSlices : List ModelSlice := [{ workflow := \"open-ticket\", slice := \"capture-ticket\" }]"),
+            "Lean project root must represent composed workflow-to-slice membership as named records"
         );
         assert!(
             lean_root.contains(
-                "def modelSliceModules : List (String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"CaptureTicket\")]"
+                "structure ModelSliceModule where\n  workflow : String\n  slice : String\n  formalModule : String"
             ),
-            "Lean project root must represent the formal module composed for each workflow slice"
+            "Lean project root must type composed slice module references as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelSliceModules : List ModelSliceModule := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", formalModule := \"CaptureTicket\" }]"
+            ),
+            "Lean project root must represent the formal module composed for each workflow slice as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelSliceHasModule (slice : ModelSlice) : Bool := modelSliceModules.any (fun sliceModule => sliceModule.workflow == slice.workflow && sliceModule.slice == slice.slice && sliceModule.formalModule.isEmpty == false)"
+            ),
+            "Lean project root must verify composed slice modules through named fields"
         );
         assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
         assert!(
