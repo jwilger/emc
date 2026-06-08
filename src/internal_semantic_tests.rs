@@ -923,6 +923,64 @@ mod tests {
     }
 
     #[test]
+    fn exported_event_json_rejects_empty_identity_terms() -> Result<(), Box<dyn Error>> {
+        let valid_event = serde_json::json!({
+            "schema_version": "emc.events.v1",
+            "event_id": "workflow-added-1",
+            "command_id": "workflow-added-1",
+            "command_ordinal": 0,
+            "stream_id": "workflow::open-ticket",
+            "parents": ["project-initialized-1"],
+            "type": "WorkflowAdded",
+            "payload": {
+                "slug": "open-ticket",
+                "name": "Open ticket",
+                "description": "Actor opens a repair ticket."
+            }
+        });
+
+        let mut empty_event_id = valid_event.clone();
+        empty_event_id["event_id"] = serde_json::json!("");
+        let empty_event_id_error = match ExportedEvent::from_json_for_test(&empty_event_id) {
+            Ok(_) => return Err("empty event ids must not enter the exported event graph".into()),
+            Err(error) => error,
+        };
+        assert!(
+            empty_event_id_error.contains("event_id")
+                && empty_event_id_error.contains("exported event JSON"),
+            "event id errors should name the invalid metadata field, got: {empty_event_id_error}"
+        );
+
+        let mut empty_command_id = valid_event.clone();
+        empty_command_id["command_id"] = serde_json::json!("");
+        let empty_command_id_error = match ExportedEvent::from_json_for_test(&empty_command_id) {
+            Ok(_) => {
+                return Err("empty command ids must not enter exported event metadata".into());
+            }
+            Err(error) => error,
+        };
+        assert!(
+            empty_command_id_error.contains("command_id")
+                && empty_command_id_error.contains("exported event JSON"),
+            "command id errors should name the invalid metadata field, got: {empty_command_id_error}"
+        );
+
+        let mut empty_parent = valid_event;
+        empty_parent["parents"] = serde_json::json!([""]);
+        let empty_parent_error = match ExportedEvent::from_json_for_test(&empty_parent) {
+            Ok(_) => return Err("empty parent ids must not enter exported event frontiers".into()),
+            Err(error) => error,
+        };
+        assert!(
+            empty_parent_error.contains("parents")
+                && empty_parent_error.contains("exported event JSON"),
+            "parent id errors should name the invalid metadata field, got: {empty_parent_error}"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn eventcore_project_initialized_events_serialize_semantic_project_names()
     -> Result<(), Box<dyn Error>> {
         let event = EmcEvent::ProjectInitialized {
