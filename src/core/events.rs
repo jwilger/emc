@@ -3344,7 +3344,7 @@ pub(crate) fn list_event_conflicts() -> Result<EffectPlan, String> {
                 conflict.event_type,
                 conflict.semantic_key,
                 event_ids,
-                conflict.id
+                conflict.id.as_ref()
             ))
             .map(Effect::Report)
         })
@@ -3404,7 +3404,7 @@ pub(crate) fn resolve_event_conflict(
 
     let conflict = event_conflicts(path)?
         .into_iter()
-        .find(|conflict| conflict.id == conflict_id.as_ref())
+        .find(|conflict| conflict.id.as_ref() == conflict_id.as_ref())
         .ok_or_else(|| format!("unknown event conflict {}", conflict_id.as_ref()))?;
     let chosen_exported_event_id = ExportedEventId::try_new(chosen_event_id.as_ref().to_owned())?;
     if !conflict.event_ids.contains(&chosen_exported_event_id) {
@@ -3468,52 +3468,105 @@ fn exported_event_ids() -> Result<Vec<ExportedEventId>, String> {
 
 #[derive(Debug)]
 struct EventConflict {
-    id: String,
-    stream_id: String,
-    event_type: String,
-    semantic_key: String,
+    id: EventConflictId,
+    stream_id: EventStreamId,
+    event_type: ExportedEventType,
+    semantic_key: ConflictSemanticKey,
     event_ids: BTreeSet<ExportedEventId>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct ConflictKey {
-    stream_id: String,
-    event_type: String,
-    semantic_key: String,
+    stream_id: EventStreamId,
+    event_type: ExportedEventType,
+    semantic_key: ConflictSemanticKey,
     parents: Vec<ExportedEventId>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+impl Ord for ConflictKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.stream_id
+            .cmp(&other.stream_id)
+            .then_with(|| self.event_type.as_ref().cmp(other.event_type.as_ref()))
+            .then_with(|| self.semantic_key.cmp(&other.semantic_key))
+            .then_with(|| self.parents.cmp(&other.parents))
+    }
+}
+
+impl PartialOrd for ConflictKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+enum ConflictSemanticKey {
+    Workflow(WorkflowSlug),
+    Slice(SliceSlug),
+}
+
+impl Ord for ConflictSemanticKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Self::Workflow(left), Self::Workflow(right)) => left.cmp(right),
+            (Self::Slice(left), Self::Slice(right)) => left.as_ref().cmp(right.as_ref()),
+            (Self::Workflow(_), Self::Slice(_)) => Ordering::Less,
+            (Self::Slice(_), Self::Workflow(_)) => Ordering::Greater,
+        }
+    }
+}
+
+impl PartialOrd for ConflictSemanticKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl AsRef<str> for ConflictSemanticKey {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Workflow(slug) => slug.as_ref(),
+            Self::Slice(slug) => slug.as_ref(),
+        }
+    }
+}
+
+impl Display for ConflictSemanticKey {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
+        formatter.write_str(self.as_ref())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct ConflictPayload {
     event_id: ExportedEventId,
-    payload: String,
+    body: ConflictPayloadBody,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+enum ConflictPayloadBody {
+    WorkflowUpdated(NewWorkflow),
+    SliceUpdated(WorkflowSliceDetail),
 }
 
 fn event_conflicts(path: &Path) -> Result<Vec<EventConflict>, String> {
     let events = exported_events_in_topological_order(path)?;
-    let resolved_conflicts = resolved_conflict_ids(&events)?;
-    let mut grouped = BTreeMap::<ConflictKey, BTreeSet<ConflictPayload>>::new();
+    let resolved_conflicts = resolved_conflict_ids(&events);
+    let mut grouped = BTreeMap::<ConflictKey, Vec<ConflictPayload>>::new();
 
     for event in events {
-        if let Some(key) = conflict_key(&event)? {
-            grouped.entry(key).or_default().insert(ConflictPayload {
-                event_id: event.event_id().clone(),
-                payload: canonical_payload(&event)?,
-            });
+        if let Some((key, payload)) = conflict_entry(&event) {
+            grouped.entry(key).or_default().push(payload);
         }
     }
 
-    Ok(grouped
+    grouped
         .into_iter()
-        .filter_map(|(key, payloads)| {
-            let id = conflict_id(&key);
-            let distinct_payload_count = payloads
-                .iter()
-                .map(|payload| payload.payload.as_str())
-                .collect::<BTreeSet<_>>()
-                .len();
-            (distinct_payload_count > 1 && !resolved_conflicts.contains(&id)).then(|| {
-                EventConflict {
+        .filter_map(|(key, payloads)| match conflict_id(&key) {
+            Ok(id)
+                if distinct_payload_count(&payloads) > 1 && !resolved_conflicts.contains(&id) =>
+            {
+                Some(Ok(EventConflict {
                     id,
                     stream_id: key.stream_id,
                     event_type: key.event_type,
@@ -3522,54 +3575,83 @@ fn event_conflicts(path: &Path) -> Result<Vec<EventConflict>, String> {
                         .into_iter()
                         .map(|payload| payload.event_id)
                         .collect::<BTreeSet<_>>(),
-                }
-            })
-        })
-        .collect())
-}
-
-fn resolved_conflict_ids(events: &[ExportedEvent]) -> Result<BTreeSet<String>, String> {
-    Ok(events
-        .iter()
-        .filter_map(|event| match event.body() {
-            ExportedEventBody::ConflictResolved { conflict_id, .. } => {
-                Some(conflict_id.as_ref().to_owned())
+                }))
             }
-            _ => None,
+            Ok(_id) => None,
+            Err(error) => Some(Err(error)),
         })
-        .collect())
+        .collect::<Result<Vec<_>, _>>()
 }
 
-fn conflict_id(key: &ConflictKey) -> String {
+fn resolved_conflict_ids(events: &[ExportedEvent]) -> Vec<EventConflictId> {
+    let mut resolved = Vec::new();
+    for event in events {
+        match event.body() {
+            ExportedEventBody::ConflictResolved { conflict_id, .. }
+                if !resolved.contains(conflict_id) =>
+            {
+                resolved.push(conflict_id.clone());
+            }
+            _ => {}
+        }
+    }
+    resolved
+}
+
+fn conflict_id(key: &ConflictKey) -> Result<EventConflictId, String> {
     let parent_ids = key
         .parents
         .iter()
         .map(|parent| parent.as_ref())
         .collect::<Vec<_>>();
-    hex::encode(Sha256::digest(
+    ArtifactDigest::try_new(hex::encode(Sha256::digest(
         serde_json::to_vec(&json!({
-            "stream_id": key.stream_id,
-            "type": key.event_type,
-            "semantic_key": key.semantic_key,
+            "stream_id": key.stream_id.as_ref(),
+            "type": key.event_type.as_ref(),
+            "semantic_key": key.semantic_key.as_ref(),
             "parents": parent_ids,
         }))
-        .unwrap_or_default(),
+        .map_err(|error| error.to_string())?,
+    )))
+    .map(EventConflictId::new)
+    .map_err(|error| error.to_string())
+}
+
+fn conflict_entry(event: &ExportedEvent) -> Option<(ConflictKey, ConflictPayload)> {
+    let (semantic_key, body) = match event.body() {
+        ExportedEventBody::WorkflowUpdated { workflow } => (
+            ConflictSemanticKey::Workflow(workflow.slug().clone()),
+            ConflictPayloadBody::WorkflowUpdated(workflow.clone()),
+        ),
+        ExportedEventBody::SliceUpdated { slice } => (
+            ConflictSemanticKey::Slice(slice.slug().clone()),
+            ConflictPayloadBody::SliceUpdated(slice.clone()),
+        ),
+        _ => return None,
+    };
+
+    Some((
+        ConflictKey {
+            stream_id: event.stream_id().clone(),
+            event_type: event.event_type(),
+            semantic_key,
+            parents: event.parents().to_vec(),
+        },
+        ConflictPayload {
+            event_id: event.event_id().clone(),
+            body,
+        },
     ))
 }
 
-fn conflict_key(event: &ExportedEvent) -> Result<Option<ConflictKey>, String> {
-    let semantic_key = match event.body() {
-        ExportedEventBody::WorkflowUpdated { workflow } => workflow.slug().as_ref().to_owned(),
-        ExportedEventBody::SliceUpdated { slice } => slice.slug().as_ref().to_owned(),
-        _ => return Ok(None),
-    };
-
-    Ok(Some(ConflictKey {
-        stream_id: event.stream_id().as_ref().to_owned(),
-        event_type: event.event_type().as_ref().to_owned(),
-        semantic_key,
-        parents: event.parents().to_vec(),
-    }))
+fn distinct_payload_count(payloads: &[ConflictPayload]) -> usize {
+    let mut distinct = Vec::<ConflictPayloadBody>::new();
+    for payload in payloads {
+        if !distinct.contains(&payload.body) {
+            distinct.push(payload.body.clone());
+        }
+    }
+    distinct.len()
 }
 
 fn parents(event: &Value) -> Result<Vec<ExportedEventId>, String> {
@@ -3594,10 +3676,6 @@ fn parent_refs(parents: &[ExportedEventId]) -> Vec<&str> {
         .iter()
         .map(|parent| parent.as_ref())
         .collect::<Vec<_>>()
-}
-
-fn canonical_payload(event: &ExportedEvent) -> Result<String, String> {
-    serde_json::to_string(&event.payload_json()).map_err(|error| error.to_string())
 }
 
 fn exported_events_in_topological_order(path: &Path) -> Result<Vec<ExportedEvent>, String> {
