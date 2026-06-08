@@ -460,6 +460,43 @@ impl Display for ExportedEventTypeError {
 impl Error for ExportedEventTypeError {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowEventPayload {
+    slug: WorkflowSlug,
+    name: ModelName,
+    description: ModelDescription,
+}
+
+impl WorkflowEventPayload {
+    fn from_workflow(workflow: &NewWorkflow) -> Self {
+        Self {
+            slug: workflow.slug().clone(),
+            name: workflow.name().clone(),
+            description: workflow.description().clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            slug: workflow_slug(required_str(payload, "slug")?)?,
+            name: model_name(required_str(payload, "name")?)?,
+            description: model_description(required_str(payload, "description")?)?,
+        })
+    }
+
+    fn into_workflow(self) -> NewWorkflow {
+        NewWorkflow::new(self.name, self.description, self.slug)
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slug": self.slug.as_ref(),
+            "name": self.name.as_ref(),
+            "description": self.description.as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum ExportedEventBody {
     ProjectInitialized {
         name: ProjectName,
@@ -619,11 +656,9 @@ impl ExportedEventBody {
     pub(crate) fn payload_json(&self) -> Value {
         match self {
             Self::ProjectInitialized { name } => json!({ "name": name.as_ref() }),
-            Self::WorkflowAdded { workflow } | Self::WorkflowUpdated { workflow } => json!({
-                "slug": workflow.slug().as_ref(),
-                "name": workflow.name().as_ref(),
-                "description": workflow.description().as_ref(),
-            }),
+            Self::WorkflowAdded { workflow } | Self::WorkflowUpdated { workflow } => {
+                WorkflowEventPayload::from_workflow(workflow).to_json_value()
+            }
             Self::WorkflowRemoved { slug } => json!({ "slug": slug.as_ref() }),
             Self::WorkflowOutcomeAdded { workflow, outcome } => json!({
                 "workflow": workflow.as_ref(),
@@ -798,10 +833,10 @@ impl ExportedEventBody {
                 name: project_name(required_str(payload, "name")?)?,
             }),
             ExportedEventType::WorkflowAdded => Ok(Self::WorkflowAdded {
-                workflow: workflow_from_payload(payload)?,
+                workflow: WorkflowEventPayload::from_json_value(payload)?.into_workflow(),
             }),
             ExportedEventType::WorkflowUpdated => Ok(Self::WorkflowUpdated {
-                workflow: workflow_from_payload(payload)?,
+                workflow: WorkflowEventPayload::from_json_value(payload)?.into_workflow(),
             }),
             ExportedEventType::WorkflowRemoved => Ok(Self::WorkflowRemoved {
                 slug: workflow_slug(required_str(payload, "slug")?)?,
@@ -3209,14 +3244,6 @@ fn required_exported_command_id(event: &Value, field: &str) -> Result<ExportedCo
     })
 }
 
-fn workflow_from_payload(payload: &Value) -> Result<NewWorkflow, String> {
-    Ok(NewWorkflow::new(
-        model_name(required_str(payload, "name")?)?,
-        model_description(required_str(payload, "description")?)?,
-        workflow_slug(required_str(payload, "slug")?)?,
-    ))
-}
-
 fn slice_from_payload(payload: &Value) -> Result<NewSlice, String> {
     Ok(NewSlice::new(
         workflow_slug(required_str(payload, "workflow")?)?,
@@ -4377,4 +4404,37 @@ fn file_contents(value: impl Into<String>) -> Result<FileContents, String> {
 
 fn report_line(value: impl Into<String>) -> Result<ReportLine, String> {
     ReportLine::try_new(value.into()).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workflow_event_payload_round_trips_between_semantic_workflow_and_json_boundary()
+    -> Result<(), String> {
+        let workflow = NewWorkflow::new(
+            model_name("Open ticket")?,
+            model_description("Actor opens a repair ticket.")?,
+            workflow_slug("open-ticket")?,
+        );
+
+        let payload = WorkflowEventPayload::from_workflow(&workflow);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "slug": "open-ticket",
+                "name": "Open ticket",
+                "description": "Actor opens a repair ticket.",
+            })
+        );
+        assert_eq!(
+            WorkflowEventPayload::from_json_value(&json)?.into_workflow(),
+            workflow
+        );
+
+        Ok(())
+    }
 }
