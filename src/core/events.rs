@@ -856,6 +856,277 @@ impl SliceEventDefinitionAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceCommandDefinitionAddedEventPayload {
+    command: NewCommandDefinition,
+}
+
+impl SliceCommandDefinitionAddedEventPayload {
+    fn from_command(command: &NewCommandDefinition) -> Self {
+        Self {
+            command: command.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        let input = Self::command_input_from_json_value(required_object(payload, "input")?)?;
+
+        let mut command = NewCommandDefinition::new(
+            slice_slug(required_str(payload, "slice")?)?,
+            command_name(required_str(payload, "name")?)?,
+            input,
+            EmittedEventNames::from_events(
+                required_string_array(payload, "emitted_events")?
+                    .into_iter()
+                    .map(|event| event_name(&event))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+        )
+        .with_observed_streams(CommandObservedStreams::from_streams(
+            required_string_array(payload, "observed_streams")?
+                .into_iter()
+                .map(|stream| stream_name(&stream))
+                .collect::<Result<Vec<_>, _>>()?,
+        ))
+        .with_errors(CommandErrorDefinitions::from_errors(
+            required_array(payload, "errors")?
+                .iter()
+                .map(Self::command_error_from_json_value)
+                .collect::<Result<Vec<_>, _>>()?,
+        ));
+
+        if let Some(repeat_behavior) = optional_str(payload, "singleton_repeat_behavior")? {
+            command =
+                command.with_singleton_repeat_behavior(singleton_repeat_behavior(repeat_behavior)?);
+        }
+
+        Ok(Self { command })
+    }
+
+    fn into_command(self) -> NewCommandDefinition {
+        self.command
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slice": self.command.slice_slug().as_ref(),
+            "name": self.command.name().as_ref(),
+            "input": Self::command_input_to_json_value(self.command.input()),
+            "emitted_events": self
+                .command
+                .emitted_events()
+                .as_slice()
+                .iter()
+                .map(|event| event.as_ref())
+                .collect::<Vec<_>>(),
+            "observed_streams": self
+                .command
+                .observed_streams()
+                .as_slice()
+                .iter()
+                .map(|stream| stream.as_ref())
+                .collect::<Vec<_>>(),
+            "errors": self
+                .command
+                .errors()
+                .as_slice()
+                .iter()
+                .map(Self::command_error_to_json_value)
+                .collect::<Vec<_>>(),
+            "singleton_repeat_behavior": self
+                .command
+                .singleton_repeat_behavior()
+                .map(|repeat_behavior| repeat_behavior.as_ref()),
+        })
+    }
+
+    fn command_input_from_json_value(input_payload: &Value) -> Result<NewCommandInput, String> {
+        let source_kind = command_input_source_kind(required_str(input_payload, "source_kind")?)?;
+        Ok(NewCommandInput::new(
+            datum_name(required_str(input_payload, "name")?)?,
+            Self::command_input_source_from_json_value(source_kind, input_payload)?,
+            command_input_source_description(required_str(input_payload, "source_description")?)?,
+            CommandInputProvenanceChain::from_hops(
+                required_string_array(input_payload, "provenance_chain")?
+                    .into_iter()
+                    .map(|hop| source_chain_hop(&hop))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+        ))
+    }
+
+    fn command_input_to_json_value(input: &NewCommandInput) -> Value {
+        json!({
+            "name": input.name().as_ref(),
+            "source_kind": input.source_kind().as_ref(),
+            "source_description": input.source_description().as_ref(),
+            "provenance_chain": input
+                .provenance_chain()
+                .as_slice()
+                .iter()
+                .map(|hop| hop.as_ref())
+                .collect::<Vec<_>>(),
+            "event_stream_source_event": input
+                .event_stream_source_event()
+                .map(|event| event.as_ref()),
+            "event_stream_source_attribute": input
+                .event_stream_source_attribute()
+                .map(|attribute| attribute.as_ref()),
+            "external_payload_source_name": input
+                .external_payload_source_name()
+                .map(|name| name.as_ref()),
+            "external_payload_source_field": input
+                .external_payload_source_field()
+                .map(|field| field.as_ref()),
+            "generated_source_name": input
+                .generated_source_name()
+                .map(|name| name.as_ref()),
+            "generated_source_field": input
+                .generated_source_field()
+                .map(|field| field.as_ref()),
+            "session_source_name": input
+                .session_source_name()
+                .map(|name| name.as_ref()),
+            "session_source_field": input
+                .session_source_field()
+                .map(|field| field.as_ref()),
+            "invocation_argument_source_name": input
+                .invocation_argument_source_name()
+                .map(|name| name.as_ref()),
+            "invocation_argument_source_field": input
+                .invocation_argument_source_field()
+                .map(|field| field.as_ref()),
+        })
+    }
+
+    fn command_input_source_from_json_value(
+        source_kind: CommandInputSourceKind,
+        input_payload: &Value,
+    ) -> Result<CommandInputSource, String> {
+        let event_stream = Self::optional_event_stream_source(input_payload)?;
+        let external_payload = Self::optional_source_field_pair(
+            input_payload,
+            "external_payload_source_name",
+            "external_payload_source_field",
+        )?;
+        let generated = Self::optional_source_field_pair(
+            input_payload,
+            "generated_source_name",
+            "generated_source_field",
+        )?;
+        let session = Self::optional_source_field_pair(
+            input_payload,
+            "session_source_name",
+            "session_source_field",
+        )?;
+        let invocation_argument = Self::optional_source_field_pair(
+            input_payload,
+            "invocation_argument_source_name",
+            "invocation_argument_source_field",
+        )?;
+
+        match (
+            source_kind,
+            event_stream,
+            external_payload,
+            generated,
+            session,
+            invocation_argument,
+        ) {
+            (CommandInputSourceKind::Actor, None, None, None, None, None) => {
+                Ok(CommandInputSource::actor())
+            }
+            (
+                CommandInputSourceKind::EventStreamState,
+                Some((event, attribute)),
+                None,
+                None,
+                None,
+                None,
+            ) => Ok(CommandInputSource::event_stream_state(event, attribute)),
+            (
+                CommandInputSourceKind::ExternalPayload,
+                None,
+                Some((payload, field)),
+                None,
+                None,
+                None,
+            ) => Ok(CommandInputSource::external_payload(payload, field)),
+            (CommandInputSourceKind::Generated, None, None, Some((source, field)), None, None) => {
+                Ok(CommandInputSource::generated(source, field))
+            }
+            (CommandInputSourceKind::Session, None, None, None, Some((source, field)), None) => {
+                Ok(CommandInputSource::session(source, field))
+            }
+            (
+                CommandInputSourceKind::InvocationArgument,
+                None,
+                None,
+                None,
+                None,
+                Some((argument, field)),
+            ) => Ok(CommandInputSource::invocation_argument(argument, field)),
+            _ => Err(
+                "command input source kind and source coordinates must describe the same source"
+                    .to_owned(),
+            ),
+        }
+    }
+
+    fn optional_event_stream_source(
+        payload: &Value,
+    ) -> Result<Option<(EventName, EventAttributeName)>, String> {
+        match (
+            optional_str(payload, "event_stream_source_event")?,
+            optional_str(payload, "event_stream_source_attribute")?,
+        ) {
+            (Some(event), Some(attribute)) => {
+                Ok(Some((event_name(event)?, event_attribute_name(attribute)?)))
+            }
+            (None, None) => Ok(None),
+            _ => {
+                Err("command input event stream source fields must be supplied together".to_owned())
+            }
+        }
+    }
+
+    fn optional_source_field_pair(
+        payload: &Value,
+        source_field: &str,
+        field_field: &str,
+    ) -> Result<Option<(EventAttributeSourceName, EventAttributeSourceField)>, String> {
+        match (
+            optional_str(payload, source_field)?,
+            optional_str(payload, field_field)?,
+        ) {
+            (Some(source), Some(field)) => Ok(Some((
+                event_attribute_source_name(source)?,
+                event_attribute_source_field(field)?,
+            ))),
+            (None, None) => Ok(None),
+            _ => Err(format!(
+                "command input source fields {source_field} and {field_field} must be supplied together"
+            )),
+        }
+    }
+
+    fn command_error_from_json_value(payload: &Value) -> Result<NewCommandErrorDefinition, String> {
+        Ok(NewCommandErrorDefinition::new(
+            command_error_name(required_str(payload, "name")?)?,
+            scenario_name(required_str(payload, "scenario")?)?,
+            command_error_recovery_kind(required_str(payload, "recovery")?)?,
+        ))
+    }
+
+    fn command_error_to_json_value(error: &NewCommandErrorDefinition) -> Value {
+        json!({
+            "name": error.name().as_ref(),
+            "scenario": error.scenario_name().as_ref(),
+            "recovery": error.recovery_kind().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowConnectedEventPayload {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
@@ -1673,7 +1944,7 @@ impl ExportedEventBody {
                 SliceEventDefinitionAddedEventPayload::from_event(event).to_json_value()
             }
             Self::SliceCommandDefinitionAdded { command } => {
-                slice_command_definition_payload(command)
+                SliceCommandDefinitionAddedEventPayload::from_command(command).to_json_value()
             }
             Self::SliceReadModelAdded { read_model } => slice_read_model_payload(read_model),
             Self::SliceViewAdded { view } => slice_view_payload(view),
@@ -1825,7 +2096,8 @@ impl ExportedEventBody {
             }),
             ExportedEventType::SliceCommandDefinitionAdded => {
                 Ok(Self::SliceCommandDefinitionAdded {
-                    command: slice_command_definition_from_payload(payload)?,
+                    command: SliceCommandDefinitionAddedEventPayload::from_json_value(payload)?
+                        .into_command(),
                 })
             }
             ExportedEventType::SliceReadModelAdded => Ok(Self::SliceReadModelAdded {
@@ -2350,41 +2622,6 @@ impl ExportedEventFrontier for ExportedEventHeader {
     }
 }
 
-fn slice_command_definition_payload(command: &NewCommandDefinition) -> Value {
-    json!({
-        "slice": command.slice_slug().as_ref(),
-        "name": command.name().as_ref(),
-        "input": command_input_payload(command.input()),
-        "emitted_events": command
-            .emitted_events()
-            .as_slice()
-            .iter()
-            .map(|event| event.as_ref())
-            .collect::<Vec<_>>(),
-        "observed_streams": command
-            .observed_streams()
-            .as_slice()
-            .iter()
-            .map(|stream| stream.as_ref())
-            .collect::<Vec<_>>(),
-        "errors": command
-            .errors()
-            .as_slice()
-            .iter()
-            .map(|error| {
-                json!({
-                    "name": error.name().as_ref(),
-                    "scenario": error.scenario_name().as_ref(),
-                    "recovery": error.recovery_kind().as_ref(),
-                })
-            })
-            .collect::<Vec<_>>(),
-        "singleton_repeat_behavior": command
-            .singleton_repeat_behavior()
-            .map(|repeat_behavior| repeat_behavior.as_ref()),
-    })
-}
-
 fn slice_read_model_payload(read_model: &NewReadModelDefinition) -> Value {
     json!({
         "slice": read_model.slice_slug().as_ref(),
@@ -2488,50 +2725,6 @@ fn slice_board_connection_payload(connection: &NewBoardConnection) -> Value {
         "source_kind": connection.source_kind().as_ref(),
         "target": connection.target().as_ref(),
         "target_kind": connection.target_kind().as_ref(),
-    })
-}
-
-fn command_input_payload(input: &NewCommandInput) -> Value {
-    json!({
-        "name": input.name().as_ref(),
-        "source_kind": input.source_kind().as_ref(),
-        "source_description": input.source_description().as_ref(),
-        "provenance_chain": input
-            .provenance_chain()
-            .as_slice()
-            .iter()
-            .map(|hop| hop.as_ref())
-            .collect::<Vec<_>>(),
-        "event_stream_source_event": input
-            .event_stream_source_event()
-            .map(|event| event.as_ref()),
-        "event_stream_source_attribute": input
-            .event_stream_source_attribute()
-            .map(|attribute| attribute.as_ref()),
-        "external_payload_source_name": input
-            .external_payload_source_name()
-            .map(|name| name.as_ref()),
-        "external_payload_source_field": input
-            .external_payload_source_field()
-            .map(|field| field.as_ref()),
-        "generated_source_name": input
-            .generated_source_name()
-            .map(|name| name.as_ref()),
-        "generated_source_field": input
-            .generated_source_field()
-            .map(|field| field.as_ref()),
-        "session_source_name": input
-            .session_source_name()
-            .map(|name| name.as_ref()),
-        "session_source_field": input
-            .session_source_field()
-            .map(|field| field.as_ref()),
-        "invocation_argument_source_name": input
-            .invocation_argument_source_name()
-            .map(|name| name.as_ref()),
-        "invocation_argument_source_field": input
-            .invocation_argument_source_field()
-            .map(|field| field.as_ref()),
     })
 }
 
@@ -4152,171 +4345,6 @@ fn workflow_transition_kind_from_connection(
     workflow_transition_kind(&raw_kind)
 }
 
-pub(crate) fn slice_command_definition_from_payload(
-    payload: &Value,
-) -> Result<NewCommandDefinition, String> {
-    let input_payload = required_object(payload, "input")?;
-    let source_kind = command_input_source_kind(required_str(input_payload, "source_kind")?)?;
-    let input = NewCommandInput::new(
-        datum_name(required_str(input_payload, "name")?)?,
-        command_input_source_from_payload(source_kind, input_payload)?,
-        command_input_source_description(required_str(input_payload, "source_description")?)?,
-        CommandInputProvenanceChain::from_hops(
-            required_string_array(input_payload, "provenance_chain")?
-                .into_iter()
-                .map(|hop| source_chain_hop(&hop))
-                .collect::<Result<Vec<_>, _>>()?,
-        ),
-    );
-
-    let mut command = NewCommandDefinition::new(
-        slice_slug(required_str(payload, "slice")?)?,
-        command_name(required_str(payload, "name")?)?,
-        input,
-        EmittedEventNames::from_events(
-            required_string_array(payload, "emitted_events")?
-                .into_iter()
-                .map(|event| event_name(&event))
-                .collect::<Result<Vec<_>, _>>()?,
-        ),
-    )
-    .with_observed_streams(CommandObservedStreams::from_streams(
-        required_string_array(payload, "observed_streams")?
-            .into_iter()
-            .map(|stream| stream_name(&stream))
-            .collect::<Result<Vec<_>, _>>()?,
-    ))
-    .with_errors(CommandErrorDefinitions::from_errors(
-        required_array(payload, "errors")?
-            .iter()
-            .map(command_error_definition_from_payload)
-            .collect::<Result<Vec<_>, _>>()?,
-    ));
-
-    if let Some(repeat_behavior) = optional_str(payload, "singleton_repeat_behavior")? {
-        command =
-            command.with_singleton_repeat_behavior(singleton_repeat_behavior(repeat_behavior)?);
-    }
-
-    Ok(command)
-}
-
-fn command_input_source_from_payload(
-    source_kind: CommandInputSourceKind,
-    input_payload: &Value,
-) -> Result<CommandInputSource, String> {
-    let event_stream = optional_event_stream_source(input_payload)?;
-    let external_payload = optional_source_field_pair(
-        input_payload,
-        "external_payload_source_name",
-        "external_payload_source_field",
-    )?;
-    let generated = optional_source_field_pair(
-        input_payload,
-        "generated_source_name",
-        "generated_source_field",
-    )?;
-    let session =
-        optional_source_field_pair(input_payload, "session_source_name", "session_source_field")?;
-    let invocation_argument = optional_source_field_pair(
-        input_payload,
-        "invocation_argument_source_name",
-        "invocation_argument_source_field",
-    )?;
-
-    match (
-        source_kind,
-        event_stream,
-        external_payload,
-        generated,
-        session,
-        invocation_argument,
-    ) {
-        (CommandInputSourceKind::Actor, None, None, None, None, None) => {
-            Ok(CommandInputSource::actor())
-        }
-        (
-            CommandInputSourceKind::EventStreamState,
-            Some((event, attribute)),
-            None,
-            None,
-            None,
-            None,
-        ) => Ok(CommandInputSource::event_stream_state(event, attribute)),
-        (
-            CommandInputSourceKind::ExternalPayload,
-            None,
-            Some((payload, field)),
-            None,
-            None,
-            None,
-        ) => Ok(CommandInputSource::external_payload(payload, field)),
-        (CommandInputSourceKind::Generated, None, None, Some((source, field)), None, None) => {
-            Ok(CommandInputSource::generated(source, field))
-        }
-        (CommandInputSourceKind::Session, None, None, None, Some((source, field)), None) => {
-            Ok(CommandInputSource::session(source, field))
-        }
-        (
-            CommandInputSourceKind::InvocationArgument,
-            None,
-            None,
-            None,
-            None,
-            Some((argument, field)),
-        ) => Ok(CommandInputSource::invocation_argument(argument, field)),
-        _ => Err(
-            "command input source kind and source coordinates must describe the same source"
-                .to_owned(),
-        ),
-    }
-}
-
-fn optional_event_stream_source(
-    payload: &Value,
-) -> Result<Option<(EventName, EventAttributeName)>, String> {
-    match (
-        optional_str(payload, "event_stream_source_event")?,
-        optional_str(payload, "event_stream_source_attribute")?,
-    ) {
-        (Some(event), Some(attribute)) => {
-            Ok(Some((event_name(event)?, event_attribute_name(attribute)?)))
-        }
-        (None, None) => Ok(None),
-        _ => Err("command input event stream source fields must be supplied together".to_owned()),
-    }
-}
-
-fn optional_source_field_pair(
-    payload: &Value,
-    source_field: &str,
-    field_field: &str,
-) -> Result<Option<(EventAttributeSourceName, EventAttributeSourceField)>, String> {
-    match (
-        optional_str(payload, source_field)?,
-        optional_str(payload, field_field)?,
-    ) {
-        (Some(source), Some(field)) => Ok(Some((
-            event_attribute_source_name(source)?,
-            event_attribute_source_field(field)?,
-        ))),
-        (None, None) => Ok(None),
-        _ => Err(format!(
-            "command input source fields {source_field} and {field_field} must be supplied together"
-        )),
-    }
-}
-
-fn command_error_definition_from_payload(
-    payload: &Value,
-) -> Result<NewCommandErrorDefinition, String> {
-    Ok(NewCommandErrorDefinition::new(
-        command_error_name(required_str(payload, "name")?)?,
-        scenario_name(required_str(payload, "scenario")?)?,
-        command_error_recovery_kind(required_str(payload, "recovery")?)?,
-    ))
-}
-
 pub(crate) fn slice_read_model_from_payload(
     payload: &Value,
 ) -> Result<NewReadModelDefinition, String> {
@@ -5230,6 +5258,88 @@ mod tests {
         assert_eq!(
             SliceEventDefinitionAddedEventPayload::from_json_value(&json)?.into_event(),
             event
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_command_definition_added_event_payload_round_trips_generated_input_errors_and_repeat_behavior()
+    -> Result<(), String> {
+        let command = NewCommandDefinition::new(
+            slice_slug("capture-ticket")?,
+            command_name("CaptureTicket")?,
+            NewCommandInput::new(
+                datum_name("ticket_id")?,
+                CommandInputSource::generated(
+                    event_attribute_source_name("ticket_id_generator")?,
+                    event_attribute_source_field("uuid")?,
+                ),
+                command_input_source_description("ticket id allocated by generator")?,
+                CommandInputProvenanceChain::from_hops([
+                    source_chain_hop("ticket_id_generator.uuid")?,
+                    source_chain_hop("CaptureTicket.ticket_id")?,
+                ]),
+            ),
+            EmittedEventNames::from_events([
+                event_name("TicketCaptured")?,
+                event_name("TicketQueued")?,
+            ]),
+        )
+        .with_observed_streams(CommandObservedStreams::from_streams([stream_name(
+            "tickets",
+        )?]))
+        .with_errors(CommandErrorDefinitions::from_errors([
+            NewCommandErrorDefinition::new(
+                command_error_name("DuplicateTicket")?,
+                scenario_name("Duplicate ticket is rejected")?,
+                command_error_recovery_kind("retry")?,
+            ),
+        ]))
+        .with_singleton_repeat_behavior(singleton_repeat_behavior("idempotent")?);
+
+        let payload = SliceCommandDefinitionAddedEventPayload::from_command(&command);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "slice": "capture-ticket",
+                "name": "CaptureTicket",
+                "input": {
+                    "name": "ticket_id",
+                    "source_kind": "generated",
+                    "source_description": "ticket id allocated by generator",
+                    "provenance_chain": [
+                        "ticket_id_generator.uuid",
+                        "CaptureTicket.ticket_id",
+                    ],
+                    "event_stream_source_event": null,
+                    "event_stream_source_attribute": null,
+                    "external_payload_source_name": null,
+                    "external_payload_source_field": null,
+                    "generated_source_name": "ticket_id_generator",
+                    "generated_source_field": "uuid",
+                    "session_source_name": null,
+                    "session_source_field": null,
+                    "invocation_argument_source_name": null,
+                    "invocation_argument_source_field": null,
+                },
+                "emitted_events": ["TicketCaptured", "TicketQueued"],
+                "observed_streams": ["tickets"],
+                "errors": [
+                    {
+                        "name": "DuplicateTicket",
+                        "scenario": "Duplicate ticket is rejected",
+                        "recovery": "retry",
+                    },
+                ],
+                "singleton_repeat_behavior": "idempotent",
+            })
+        );
+        assert_eq!(
+            SliceCommandDefinitionAddedEventPayload::from_json_value(&json)?.into_command(),
+            command
         );
 
         Ok(())
