@@ -143,8 +143,15 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure WorkflowTransition where\n  source : String\n  target : String\n  kind : String\n  trigger : String\n  rationale : String\n  payloadContract : String"
-            )
+                "inductive WorkflowTransitionKind where\n  | command\n  | event\n  | navigation\n  | externalTrigger\n  | outcome\n  | workflowExitCommand\n  | workflowExitEvent\n  | workflowExitNavigation\n  | workflowExitExternalTrigger\n  | workflowExitOutcome"
+            ),
+            "Lean workflow artifacts must model transition kind as a closed domain type"
+        );
+        assert!(
+            lean.contains(
+                "structure WorkflowTransition where\n  source : String\n  target : String\n  kind : WorkflowTransitionKind\n  trigger : String\n  rationale : String\n  payloadContract : String"
+            ),
+            "Lean workflow artifacts must use the closed transition-kind domain type"
         );
         assert!(
             lean.contains(
@@ -172,7 +179,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := \"external_trigger\", trigger := \"callback_received\", rationale := \"\", payloadContract := \"CallbackReceivedPayload\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.externalTrigger, trigger := \"callback_received\", rationale := \"\", payloadContract := \"CallbackReceivedPayload\" }]"
             ),
             "Lean artifact must model transitions as named business records, not anonymous tuples"
         );
@@ -300,9 +307,9 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl"
+                "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl"
             ),
-            "Lean artifact must prove every business transition has source, target, kind, and trigger fields"
+            "Lean artifact must prove every business transition has source, target, and trigger fields"
         );
         assert!(
             lean.contains(
@@ -354,7 +361,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowTransitionKindIsModeled (transition : WorkflowTransition) : Bool := transition.kind == \"navigation\" || transition.kind == \"command\" || transition.kind == \"event\" || transition.kind == \"external_trigger\" || transition.kind == \"outcome\" || workflowExitTargets.contains transition.target"
+                "def workflowTransitionKindIsModeled (transition : WorkflowTransition) : Bool := transition.kind == WorkflowTransitionKind.navigation || transition.kind == WorkflowTransitionKind.command || transition.kind == WorkflowTransitionKind.event || transition.kind == WorkflowTransitionKind.externalTrigger || transition.kind == WorkflowTransitionKind.outcome || transition.kind == WorkflowTransitionKind.workflowExitNavigation || transition.kind == WorkflowTransitionKind.workflowExitCommand || transition.kind == WorkflowTransitionKind.workflowExitEvent || transition.kind == WorkflowTransitionKind.workflowExitExternalTrigger || transition.kind == WorkflowTransitionKind.workflowExitOutcome"
             ),
             "Lean workflow artifacts must model the legal workflow transition kinds, including explicit workflow exits"
         );
@@ -378,7 +385,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowOutcomeHandledByTransition (outcome : WorkflowOutcome) : Bool := outcome.externallyRelevant == false || workflowTransitions.any (fun transition => transition.source == outcome.sourceSlice && transition.kind == \"outcome\" && transition.trigger == outcome.label)"
+                "def workflowOutcomeHandledByTransition (outcome : WorkflowOutcome) : Bool := outcome.externallyRelevant == false || workflowTransitions.any (fun transition => transition.source == outcome.sourceSlice && transition.kind == WorkflowTransitionKind.outcome && transition.trigger == outcome.label)"
             ),
             "Lean workflow artifacts must define how externally relevant outcomes are handled by workflow transitions"
         );
@@ -414,7 +421,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowTransitionIsNotCommandErrorOutcome (transition : WorkflowTransition) : Bool := transition.kind != \"outcome\" || workflowCommandErrors.any (fun error => error.sourceSlice == transition.source && error.errorName == transition.trigger) == false"
+                "def workflowTransitionIsNotCommandErrorOutcome (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.outcome || workflowCommandErrors.any (fun error => error.sourceSlice == transition.source && error.errorName == transition.trigger) == false"
             ),
             "Lean workflow artifacts must distinguish command-local errors from business outcomes"
         );
@@ -462,7 +469,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowCommandTransitionTargetsOwnedCommand (transition : WorkflowTransition) : Bool := transition.kind != \"command\" || workflowOwnsDefinition transition.target \"command\" transition.trigger"
+                "def workflowCommandTransitionTargetsOwnedCommand (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.command || workflowOwnsDefinition transition.target \"command\" transition.trigger"
             ),
             "Lean workflow artifacts must require command transitions to target command-owning slices"
         );
@@ -474,7 +481,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowCommandTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != \"command\" || workflowOwnsDefinition transition.source \"control\" transition.trigger"
+                "def workflowCommandTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.command || workflowOwnsDefinition transition.source \"control\" transition.trigger"
             ),
             "Lean workflow artifacts must require command transitions to come from source-owned controls"
         );
@@ -498,7 +505,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowStateViewCommandTransitionTargetsStateChange (transition : WorkflowTransition) : Bool := transition.kind != \"command\" || workflowSliceHasKind transition.source \"state_view\" == false || workflowSliceHasKind transition.target \"state_change\""
+                "def workflowStateViewCommandTransitionTargetsStateChange (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.command || workflowSliceHasKind transition.source \"state_view\" == false || workflowSliceHasKind transition.target \"state_change\""
             ),
             "Lean workflow artifacts must require state-view command transitions to target state-change slices"
         );
@@ -510,7 +517,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowEventTransitionIsSharedByEndpoints (transition : WorkflowTransition) : Bool := transition.kind != \"event\" || (workflowOwnsDefinition transition.source \"event\" transition.trigger && workflowOwnsDefinition transition.target \"event\" transition.trigger)"
+                "def workflowEventTransitionIsSharedByEndpoints (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.event || (workflowOwnsDefinition transition.source \"event\" transition.trigger && workflowOwnsDefinition transition.target \"event\" transition.trigger)"
             ),
             "Lean workflow artifacts must require event transitions to be shared by source and target slices"
         );
@@ -534,13 +541,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != \"navigation\" || workflowOwnsDefinition transition.source \"control\" transition.trigger"
+                "def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.source \"control\" transition.trigger"
             ),
             "Lean workflow artifacts must require navigation transitions to come from source-owned controls"
         );
         assert!(
             lean.contains(
-                "def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransition) : Bool := transition.kind != \"navigation\" || workflowOwnsDefinition transition.target \"view\" transition.trigger"
+                "def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.target \"view\" transition.trigger"
             ),
             "Lean workflow artifacts must require navigation transitions to resolve to target-owned views"
         );
@@ -552,7 +559,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowNavigationTransitionTargetsEntryView (transition : WorkflowTransition) : Bool := transition.kind != \"navigation\" || workflowOwnsEntryView transition.target transition.trigger"
+                "def workflowNavigationTransitionTargetsEntryView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsEntryView transition.target transition.trigger"
             ),
             "Lean workflow artifacts must require navigation transitions to target entry views"
         );
@@ -570,7 +577,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransition) : Bool := transition.kind != \"external_trigger\" || (transition.payloadContract.isEmpty == false && workflowOwnsDefinition transition.source \"external_payload\" transition.payloadContract)"
+                "def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.externalTrigger || (transition.payloadContract.isEmpty == false && workflowOwnsDefinition transition.source \"external_payload\" transition.payloadContract)"
             ),
             "Lean workflow artifacts must require external-trigger transitions to declare owned payload contracts"
         );
@@ -582,7 +589,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowExternalTriggerPayloadContractHasProvenance (transition : WorkflowTransition) : Bool := transition.kind != \"external_trigger\" || workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == transition.source && definition.definitionKind == \"external_payload\" && definition.definitionName == transition.payloadContract && definition.sourceProvenance.isEmpty == false)"
+                "def workflowExternalTriggerPayloadContractHasProvenance (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.externalTrigger || workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == transition.source && definition.definitionKind == \"external_payload\" && definition.definitionName == transition.payloadContract && definition.sourceProvenance.isEmpty == false)"
             ),
             "Lean workflow artifacts must require external-trigger payload contracts to carry provenance"
         );

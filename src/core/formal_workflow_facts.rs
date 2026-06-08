@@ -5,6 +5,7 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest};
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
+use crate::core::emit::{lean_workflow_transition_kind, quint_workflow_transition_kind};
 use crate::core::formal_graph::{parse_lean_workflow_graph, parse_quint_workflow_graph};
 use crate::core::types::{
     WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
@@ -325,7 +326,7 @@ fn lean_workflow_transition_evidence_record(evidence: &WorkflowTransitionEvidenc
         "{{ source := {}, target := {}, kind := {}, trigger := {}, sourceEvidence := {}, targetEvidence := {} }}",
         quoted(evidence.source().as_ref()),
         quoted(evidence.target().as_ref()),
-        quoted(evidence.kind().as_ref()),
+        lean_workflow_transition_kind(*evidence.kind()),
         quoted(evidence.trigger().as_ref()),
         quoted(evidence.source_evidence().as_ref()),
         quoted(evidence.target_evidence().as_ref()),
@@ -339,7 +340,7 @@ fn quint_workflow_transition_evidence_record(
         "{{ source: {}, target: {}, kind: {}, trigger: {}, sourceEvidence: {}, targetEvidence: {} }}",
         quoted(evidence.source().as_ref()),
         quoted(evidence.target().as_ref()),
-        quoted(evidence.kind().as_ref()),
+        quint_workflow_transition_kind(*evidence.kind()),
         quoted(evidence.trigger().as_ref()),
         quoted(evidence.source_evidence().as_ref()),
         quoted(evidence.target_evidence().as_ref()),

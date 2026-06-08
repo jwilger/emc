@@ -1,6 +1,7 @@
 // Copyright 2026 John Wilger
 
 use crate::core::effect::{ArtifactDigest, FileContents};
+use crate::core::emit::quint_workflow_transition_kind;
 use crate::core::types::{
     BoardLaneId, CommandErrorRecoveryKind, CommandInputSourceKind, EventAttributeSourceKind,
     ModelDescription, ModelName, NavigationTargetType, QuintModuleName, ReadModelFieldSourceKind,
@@ -48,11 +49,12 @@ pub(crate) fn emit_workflow_module(
   type WorkflowSliceDetail = {{ slug: str, name: str, kind: str, description: str }}
   type WorkflowSliceModule = {{ slice: str, formalModule: str }}
   type WorkflowStepRelationship = {{ step: str, relationship: str }}
-  type WorkflowTransition = {{ source: str, target: str, kind: str, trigger: str, rationale: str, payloadContract: str }}
+  type WorkflowTransitionKind = Command | Event | Navigation | ExternalTrigger | Outcome | WorkflowExitCommand | WorkflowExitEvent | WorkflowExitNavigation | WorkflowExitExternalTrigger | WorkflowExitOutcome
+  type WorkflowTransition = {{ source: str, target: str, kind: WorkflowTransitionKind, trigger: str, rationale: str, payloadContract: str }}
   type WorkflowOutcome = {{ sourceSlice: str, label: str, externallyRelevant: bool }}
   type WorkflowCommandError = {{ sourceSlice: str, commandName: str, errorName: str }}
   type WorkflowOwnedDefinition = {{ sourceSlice: str, definitionKind: str, definitionName: str, definitionStream: str, sourceProvenance: str, eventParticipation: str, viewRole: str }}
-  type WorkflowTransitionEvidence = {{ source: str, target: str, kind: str, trigger: str, sourceEvidence: str, targetEvidence: str }}
+  type WorkflowTransitionEvidence = {{ source: str, target: str, kind: WorkflowTransitionKind, trigger: str, sourceEvidence: str, targetEvidence: str }}
   type WorkflowEntryLifecycleState = {{ state: str, step: str, evidence: str }}
   val workflowName = {workflow_name_json}
   val workflowSlug = {workflow_slug_json}
@@ -76,7 +78,7 @@ pub(crate) fn emit_workflow_module(
   val workflowSlicesHaveDetails = length(workflowSlices) == length(workflowSliceDetails)
   val workflowSliceDetailsComplete = workflowSlicesHaveDetails
   val workflowSliceModulesComplete = workflowSlices.length() == workflowSliceModules.length()
-  val workflowTransitionsStructured = workflowTransitions.select(transition => transition.source != "" and transition.target != "" and transition.kind != "" and transition.trigger != "").length() == workflowTransitions.length()
+  val workflowTransitionsStructured = workflowTransitions.select(transition => transition.source != "" and transition.target != "" and transition.trigger != "").length() == workflowTransitions.length()
   val workflowTransitionSourcesResolve = workflowTransitions.select(transition => workflowSliceSlugs.select(step => step == transition.source).length() > 0).length() == workflowTransitions.length()
   val workflowTransitionTargetsResolve = workflowTransitions.select(transition => workflowSliceSlugs.select(step => step == transition.target).length() > 0 or workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() > 0).length() == workflowTransitions.length()
   def workflowStepRelationshipIsAllowed(step) = workflowSliceSlugs.select(workflowSlice => workflowSlice == step.step).length() > 0 and allowedWorkflowStepRelationships.select(relationship => relationship == step.relationship).length() > 0
@@ -93,17 +95,17 @@ pub(crate) fn emit_workflow_module(
   val workflowNonSupportingStepsReachableFromEntry = workflowStepRelationships.select(step => workflowStepIsReachableFromEntry(step)).length() == workflowStepRelationships.length()
   def workflowBranchOrAlternateStepHasTriggerOrRationale(step) = (step.relationship != "branch" and step.relationship != "alternate") or workflowTransitions.select(transition => transition.target == step.step and (transition.trigger != "" or transition.rationale != "")).length() > 0
   val workflowBranchAndAlternateStepsHaveTriggerOrRationale = workflowStepRelationships.select(step => workflowBranchOrAlternateStepHasTriggerOrRationale(step)).length() == workflowStepRelationships.length()
-  def workflowTransitionKindIsModeled(transition) = transition.kind == "navigation" or transition.kind == "command" or transition.kind == "event" or transition.kind == "external_trigger" or transition.kind == "outcome" or workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() > 0
+  def workflowTransitionKindIsModeled(transition) = transition.kind == Navigation or transition.kind == Command or transition.kind == Event or transition.kind == ExternalTrigger or transition.kind == Outcome or transition.kind == WorkflowExitNavigation or transition.kind == WorkflowExitCommand or transition.kind == WorkflowExitEvent or transition.kind == WorkflowExitExternalTrigger or transition.kind == WorkflowExitOutcome
   def workflowTransitionExitHasRationale(transition) = workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() == 0 or transition.rationale != ""
   val workflowTransitionsHaveModeledKinds = workflowTransitions.select(transition => workflowTransitionKindIsModeled(transition)).length() == workflowTransitions.length()
   val workflowExitsNameTargetsAndRationale = workflowTransitions.select(transition => workflowTransitionExitHasRationale(transition)).length() == workflowTransitions.length()
-  def workflowOutcomeHandledByTransition(outcome) = not(outcome.externallyRelevant) or workflowTransitions.select(transition => transition.source == outcome.sourceSlice and transition.kind == "outcome" and transition.trigger == outcome.label).length() > 0
+  def workflowOutcomeHandledByTransition(outcome) = not(outcome.externallyRelevant) or workflowTransitions.select(transition => transition.source == outcome.sourceSlice and transition.kind == Outcome and transition.trigger == outcome.label).length() > 0
   val workflowExternallyRelevantOutcomesHandled = workflowOutcomes.select(outcome => workflowOutcomeHandledByTransition(outcome)).length() == workflowOutcomes.length()
   def workflowOutcomeSourceResolves(outcome) = workflowSliceSlugs.select(step => step == outcome.sourceSlice).length() > 0
   val workflowOutcomesSourceResolve = workflowOutcomes.select(outcome => workflowOutcomeSourceResolves(outcome)).length() == workflowOutcomes.length()
   def workflowCommandErrorSourceResolves(error) = workflowSliceSlugs.select(step => step == error.sourceSlice).length() > 0
   val workflowCommandErrorsSourceResolve = workflowCommandErrors.select(error => workflowCommandErrorSourceResolves(error)).length() == workflowCommandErrors.length()
-  val workflowTransitionsDoNotUseCommandErrorsAsOutcomes = workflowTransitions.select(transition => transition.kind != "outcome" or workflowCommandErrors.select(error => error.sourceSlice == transition.source and error.errorName == transition.trigger).length() == 0).length() == workflowTransitions.length()
+  val workflowTransitionsDoNotUseCommandErrorsAsOutcomes = workflowTransitions.select(transition => transition.kind != Outcome or workflowCommandErrors.select(error => error.sourceSlice == transition.source and error.errorName == transition.trigger).length() == 0).length() == workflowTransitions.length()
   def workflowNonEventDefinitionOwnedOnce(definition) = definition.definitionKind == "event" or workflowOwnedDefinitions.select(other => other.definitionKind == definition.definitionKind and other.definitionName == definition.definitionName).length() == 1
   val workflowNonEventDefinitionsAreUniquelyOwned = workflowOwnedDefinitions.select(definition => workflowNonEventDefinitionOwnedOnce(definition)).length() == workflowOwnedDefinitions.length()
   def workflowEventDefinitionHasIdentity(definition) = definition.definitionKind != "event" or (definition.definitionStream != "" and definition.sourceProvenance != "")
@@ -115,29 +117,29 @@ pub(crate) fn emit_workflow_module(
   def workflowEventDefinitionParticipates(sourceSlice, eventName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == "event" and definition.definitionName == eventName and workflowEventParticipationIsModeled(definition)).length() > 0
   def workflowViewRoleIsEntry(definition) = definition.viewRole == "entry"
   def workflowOwnsEntryView(sourceSlice, viewName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == "view" and definition.definitionName == viewName and workflowViewRoleIsEntry(definition)).length() > 0
-  def workflowCommandTransitionTargetsOwnedCommand(transition) = transition.kind != "command" or workflowOwnsDefinition(transition.target, "command", transition.trigger)
+  def workflowCommandTransitionTargetsOwnedCommand(transition) = transition.kind != Command or workflowOwnsDefinition(transition.target, "command", transition.trigger)
   val workflowCommandTransitionsTargetOwnedCommands = workflowTransitions.select(transition => workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()
-  def workflowCommandTransitionSourceOwnsControl(transition) = transition.kind != "command" or workflowOwnsDefinition(transition.source, "control", transition.trigger)
+  def workflowCommandTransitionSourceOwnsControl(transition) = transition.kind != Command or workflowOwnsDefinition(transition.source, "control", transition.trigger)
   val workflowCommandTransitionsSourceOwnedControls = workflowTransitions.select(transition => workflowCommandTransitionSourceOwnsControl(transition)).length() == workflowTransitions.length()
   val workflowCommandTransitionsResolveControlsAndCommands = workflowTransitions.select(transition => workflowCommandTransitionSourceOwnsControl(transition) and workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()
   def workflowSliceHasKind(sliceSlug, kind) = workflowSliceDetails.select(detail => detail.slug == sliceSlug and detail.kind == kind).length() > 0
-  def workflowStateViewCommandTransitionTargetsStateChange(transition) = transition.kind != "command" or not(workflowSliceHasKind(transition.source, "state_view")) or workflowSliceHasKind(transition.target, "state_change")
+  def workflowStateViewCommandTransitionTargetsStateChange(transition) = transition.kind != Command or not(workflowSliceHasKind(transition.source, "state_view")) or workflowSliceHasKind(transition.target, "state_change")
   val workflowStateViewCommandTransitionsTargetStateChanges = workflowTransitions.select(transition => workflowStateViewCommandTransitionTargetsStateChange(transition)).length() == workflowTransitions.length()
-  def workflowEventTransitionIsSharedByEndpoints(transition) = transition.kind != "event" or (workflowOwnsDefinition(transition.source, "event", transition.trigger) and workflowOwnsDefinition(transition.target, "event", transition.trigger))
+  def workflowEventTransitionIsSharedByEndpoints(transition) = transition.kind != Event or (workflowOwnsDefinition(transition.source, "event", transition.trigger) and workflowOwnsDefinition(transition.target, "event", transition.trigger))
   val workflowEventTransitionsAreSharedByEndpointSlices = workflowTransitions.select(transition => workflowEventTransitionIsSharedByEndpoints(transition)).length() == workflowTransitions.length()
-  def workflowEventTransitionSourceParticipates(transition) = transition.kind != "event" or workflowEventDefinitionParticipates(transition.source, transition.trigger)
-  def workflowEventTransitionTargetParticipates(transition) = transition.kind != "event" or workflowEventDefinitionParticipates(transition.target, transition.trigger)
+  def workflowEventTransitionSourceParticipates(transition) = transition.kind != Event or workflowEventDefinitionParticipates(transition.source, transition.trigger)
+  def workflowEventTransitionTargetParticipates(transition) = transition.kind != Event or workflowEventDefinitionParticipates(transition.target, transition.trigger)
   val workflowEventTransitionsHaveParticipatingEndpointEvents = workflowTransitions.select(transition => workflowEventTransitionSourceParticipates(transition) and workflowEventTransitionTargetParticipates(transition)).length() == workflowTransitions.length()
-  def workflowNavigationTransitionSourceOwnsControl(transition) = transition.kind != "navigation" or workflowOwnsDefinition(transition.source, "control", transition.trigger)
-  def workflowNavigationTransitionTargetsOwnedView(transition) = transition.kind != "navigation" or workflowOwnsDefinition(transition.target, "view", transition.trigger)
-  def workflowNavigationTransitionTargetsEntryView(transition) = transition.kind != "navigation" or workflowOwnsEntryView(transition.target, transition.trigger)
+  def workflowNavigationTransitionSourceOwnsControl(transition) = transition.kind != Navigation or workflowOwnsDefinition(transition.source, "control", transition.trigger)
+  def workflowNavigationTransitionTargetsOwnedView(transition) = transition.kind != Navigation or workflowOwnsDefinition(transition.target, "view", transition.trigger)
+  def workflowNavigationTransitionTargetsEntryView(transition) = transition.kind != Navigation or workflowOwnsEntryView(transition.target, transition.trigger)
   val workflowNavigationTransitionsResolveControlsAndViews = workflowTransitions.select(transition => workflowNavigationTransitionSourceOwnsControl(transition) and workflowNavigationTransitionTargetsOwnedView(transition)).length() == workflowTransitions.length()
   val workflowNavigationTransitionsResolveToEntryViews = workflowTransitions.select(transition => workflowNavigationTransitionTargetsEntryView(transition)).length() == workflowTransitions.length()
-  def workflowExternalTriggerDeclaresPayloadContract(transition) = transition.kind != "external_trigger" or (transition.payloadContract != "" and workflowOwnsDefinition(transition.source, "external_payload", transition.payloadContract))
+  def workflowExternalTriggerDeclaresPayloadContract(transition) = transition.kind != ExternalTrigger or (transition.payloadContract != "" and workflowOwnsDefinition(transition.source, "external_payload", transition.payloadContract))
   val workflowExternalTriggersDeclarePayloadContracts = workflowTransitions.select(transition => workflowExternalTriggerDeclaresPayloadContract(transition)).length() == workflowTransitions.length()
-  def workflowExternalTriggerPayloadContractHasProvenance(transition) = transition.kind != "external_trigger" or workflowOwnedDefinitions.select(definition => definition.sourceSlice == transition.source and definition.definitionKind == "external_payload" and definition.definitionName == transition.payloadContract and definition.sourceProvenance != "").length() > 0
+  def workflowExternalTriggerPayloadContractHasProvenance(transition) = transition.kind != ExternalTrigger or workflowOwnedDefinitions.select(definition => definition.sourceSlice == transition.source and definition.definitionKind == "external_payload" and definition.definitionName == transition.payloadContract and definition.sourceProvenance != "").length() > 0
   val workflowExternalTriggerPayloadContractsHaveProvenance = workflowTransitions.select(transition => workflowExternalTriggerPayloadContractHasProvenance(transition)).length() == workflowTransitions.length()
-  def workflowTransitionRequiresEvidence(transition) = transition.kind == "event" or transition.kind == "command" or transition.kind == "navigation"
+  def workflowTransitionRequiresEvidence(transition) = transition.kind == Event or transition.kind == Command or transition.kind == Navigation
   def workflowTransitionEvidenceMatches(transition, evidence) = evidence.source == transition.source and evidence.target == transition.target and evidence.kind == transition.kind and evidence.trigger == transition.trigger and evidence.sourceEvidence != "" and evidence.targetEvidence != ""
   def workflowTransitionHasRequiredEvidence(transition) = not(workflowTransitionRequiresEvidence(transition)) or workflowTransitionEvidences.select(evidence => workflowTransitionEvidenceMatches(transition, evidence)).length() > 0
   val workflowTransitionsHaveRequiredEvidence = workflowTransitions.select(transition => workflowTransitionHasRequiredEvidence(transition)).length() == workflowTransitions.length()
@@ -777,7 +779,7 @@ fn workflow_transition_evidence_record(evidence: &WorkflowTransitionEvidenceReco
         "{{ source: {}, target: {}, kind: {}, trigger: {}, sourceEvidence: {}, targetEvidence: {} }}",
         quoted(evidence.source().as_ref()),
         quoted(evidence.target().as_ref()),
-        quoted(evidence.kind().as_ref()),
+        quint_workflow_transition_kind(*evidence.kind()),
         quoted(evidence.trigger().as_ref()),
         quoted(evidence.source_evidence().as_ref()),
         quoted(evidence.target_evidence().as_ref()),
@@ -812,7 +814,7 @@ fn transition_record(transition: &WorkflowTransitionRecord) -> String {
         "{{ source: {}, target: {}, kind: {}, trigger: {}, rationale: {}, payloadContract: {} }}",
         quoted(transition.source().as_ref()),
         quoted(transition.target().as_ref()),
-        quoted(transition.kind().as_ref()),
+        quint_workflow_transition_kind(*transition.kind()),
         quoted(transition.trigger().as_ref()),
         quoted(
             transition

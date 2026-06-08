@@ -1,6 +1,7 @@
 // Copyright 2026 John Wilger
 
 use crate::core::effect::{ArtifactDigest, FileContents};
+use crate::core::emit::lean_workflow_transition_kind;
 use crate::core::types::{
     BoardLaneId, CommandErrorRecoveryKind, CommandInputSourceKind, EventAttributeSourceKind,
     LeanModuleName, ModelDescription, ModelName, NavigationTargetType, ReadModelFieldSourceKind,
@@ -68,6 +69,19 @@ structure WorkflowSliceModule where
   slice : String
   formalModule : String
 
+inductive WorkflowTransitionKind where
+  | command
+  | event
+  | navigation
+  | externalTrigger
+  | outcome
+  | workflowExitCommand
+  | workflowExitEvent
+  | workflowExitNavigation
+  | workflowExitExternalTrigger
+  | workflowExitOutcome
+deriving BEq, DecidableEq, Repr
+
 def workflowSliceDetails : List WorkflowSliceDetail := {slice_detail_list}
 
 def workflowSliceModules : List WorkflowSliceModule := {slice_module_list}
@@ -75,7 +89,7 @@ def workflowSliceModules : List WorkflowSliceModule := {slice_module_list}
 structure WorkflowTransition where
   source : String
   target : String
-  kind : String
+  kind : WorkflowTransitionKind
   trigger : String
   rationale : String
   payloadContract : String
@@ -102,7 +116,7 @@ structure WorkflowOwnedDefinition where
 structure WorkflowTransitionEvidence where
   source : String
   target : String
-  kind : String
+  kind : WorkflowTransitionKind
   trigger : String
   sourceEvidence : String
   targetEvidence : String
@@ -172,7 +186,7 @@ def workflowBranchOrAlternateStepHasTriggerOrRationale (step : WorkflowStepRelat
 
 def workflowBranchAndAlternateStepsHaveTriggerOrRationale : Bool := workflowStepRelationships.all workflowBranchOrAlternateStepHasTriggerOrRationale
 
-def workflowTransitionKindIsModeled (transition : WorkflowTransition) : Bool := transition.kind == "navigation" || transition.kind == "command" || transition.kind == "event" || transition.kind == "external_trigger" || transition.kind == "outcome" || workflowExitTargets.contains transition.target
+def workflowTransitionKindIsModeled (transition : WorkflowTransition) : Bool := transition.kind == WorkflowTransitionKind.navigation || transition.kind == WorkflowTransitionKind.command || transition.kind == WorkflowTransitionKind.event || transition.kind == WorkflowTransitionKind.externalTrigger || transition.kind == WorkflowTransitionKind.outcome || transition.kind == WorkflowTransitionKind.workflowExitNavigation || transition.kind == WorkflowTransitionKind.workflowExitCommand || transition.kind == WorkflowTransitionKind.workflowExitEvent || transition.kind == WorkflowTransitionKind.workflowExitExternalTrigger || transition.kind == WorkflowTransitionKind.workflowExitOutcome
 
 def workflowTransitionExitHasRationale (transition : WorkflowTransition) : Bool := workflowExitTargets.contains transition.target == false || transition.rationale.isEmpty == false
 
@@ -180,7 +194,7 @@ def workflowTransitionsHaveModeledKinds : Bool := workflowTransitions.all workfl
 
 def workflowExitsNameTargetsAndRationale : Bool := workflowTransitions.all workflowTransitionExitHasRationale
 
-def workflowOutcomeHandledByTransition (outcome : WorkflowOutcome) : Bool := outcome.externallyRelevant == false || workflowTransitions.any (fun transition => transition.source == outcome.sourceSlice && transition.kind == "outcome" && transition.trigger == outcome.label)
+def workflowOutcomeHandledByTransition (outcome : WorkflowOutcome) : Bool := outcome.externallyRelevant == false || workflowTransitions.any (fun transition => transition.source == outcome.sourceSlice && transition.kind == WorkflowTransitionKind.outcome && transition.trigger == outcome.label)
 
 def workflowExternallyRelevantOutcomesHandled : Bool := workflowOutcomes.all workflowOutcomeHandledByTransition
 
@@ -192,7 +206,7 @@ def workflowCommandErrorSourceResolves (error : WorkflowCommandError) : Bool := 
 
 def workflowCommandErrorsSourceResolve : Bool := workflowCommandErrors.all workflowCommandErrorSourceResolves
 
-def workflowTransitionIsNotCommandErrorOutcome (transition : WorkflowTransition) : Bool := transition.kind != "outcome" || workflowCommandErrors.any (fun error => error.sourceSlice == transition.source && error.errorName == transition.trigger) == false
+def workflowTransitionIsNotCommandErrorOutcome (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.outcome || workflowCommandErrors.any (fun error => error.sourceSlice == transition.source && error.errorName == transition.trigger) == false
 
 def workflowTransitionsDoNotUseCommandErrorsAsOutcomes : Bool := workflowTransitions.all workflowTransitionIsNotCommandErrorOutcome
 
@@ -220,49 +234,49 @@ def workflowViewRoleIsEntry (definition : WorkflowOwnedDefinition) : Bool := def
 
 def workflowOwnsEntryView (sourceSlice : String) (viewName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == "view" && definition.definitionName == viewName && workflowViewRoleIsEntry definition)
 
-def workflowCommandTransitionTargetsOwnedCommand (transition : WorkflowTransition) : Bool := transition.kind != "command" || workflowOwnsDefinition transition.target "command" transition.trigger
+def workflowCommandTransitionTargetsOwnedCommand (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.command || workflowOwnsDefinition transition.target "command" transition.trigger
 
 def workflowCommandTransitionsTargetOwnedCommands : Bool := workflowTransitions.all workflowCommandTransitionTargetsOwnedCommand
 
-def workflowCommandTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != "command" || workflowOwnsDefinition transition.source "control" transition.trigger
+def workflowCommandTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.command || workflowOwnsDefinition transition.source "control" transition.trigger
 
 def workflowCommandTransitionsSourceOwnedControls : Bool := workflowTransitions.all workflowCommandTransitionSourceOwnsControl
 
 def workflowCommandTransitionsResolveControlsAndCommands : Bool := workflowTransitions.all (fun transition => workflowCommandTransitionSourceOwnsControl transition && workflowCommandTransitionTargetsOwnedCommand transition)
 
-def workflowStateViewCommandTransitionTargetsStateChange (transition : WorkflowTransition) : Bool := transition.kind != "command" || workflowSliceHasKind transition.source "state_view" == false || workflowSliceHasKind transition.target "state_change"
+def workflowStateViewCommandTransitionTargetsStateChange (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.command || workflowSliceHasKind transition.source "state_view" == false || workflowSliceHasKind transition.target "state_change"
 
 def workflowStateViewCommandTransitionsTargetStateChanges : Bool := workflowTransitions.all workflowStateViewCommandTransitionTargetsStateChange
 
-def workflowEventTransitionIsSharedByEndpoints (transition : WorkflowTransition) : Bool := transition.kind != "event" || (workflowOwnsDefinition transition.source "event" transition.trigger && workflowOwnsDefinition transition.target "event" transition.trigger)
+def workflowEventTransitionIsSharedByEndpoints (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.event || (workflowOwnsDefinition transition.source "event" transition.trigger && workflowOwnsDefinition transition.target "event" transition.trigger)
 
 def workflowEventTransitionsAreSharedByEndpointSlices : Bool := workflowTransitions.all workflowEventTransitionIsSharedByEndpoints
 
-def workflowEventTransitionSourceParticipates (transition : WorkflowTransition) : Bool := transition.kind != "event" || workflowEventDefinitionParticipates transition.source transition.trigger
+def workflowEventTransitionSourceParticipates (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.event || workflowEventDefinitionParticipates transition.source transition.trigger
 
-def workflowEventTransitionTargetParticipates (transition : WorkflowTransition) : Bool := transition.kind != "event" || workflowEventDefinitionParticipates transition.target transition.trigger
+def workflowEventTransitionTargetParticipates (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.event || workflowEventDefinitionParticipates transition.target transition.trigger
 
 def workflowEventTransitionsHaveParticipatingEndpointEvents : Bool := workflowTransitions.all (fun transition => workflowEventTransitionSourceParticipates transition && workflowEventTransitionTargetParticipates transition)
 
-def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != "navigation" || workflowOwnsDefinition transition.source "control" transition.trigger
+def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.source "control" transition.trigger
 
-def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransition) : Bool := transition.kind != "navigation" || workflowOwnsDefinition transition.target "view" transition.trigger
+def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.target "view" transition.trigger
 
-def workflowNavigationTransitionTargetsEntryView (transition : WorkflowTransition) : Bool := transition.kind != "navigation" || workflowOwnsEntryView transition.target transition.trigger
+def workflowNavigationTransitionTargetsEntryView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsEntryView transition.target transition.trigger
 
 def workflowNavigationTransitionsResolveControlsAndViews : Bool := workflowTransitions.all (fun transition => workflowNavigationTransitionSourceOwnsControl transition && workflowNavigationTransitionTargetsOwnedView transition)
 
 def workflowNavigationTransitionsResolveToEntryViews : Bool := workflowTransitions.all workflowNavigationTransitionTargetsEntryView
 
-def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransition) : Bool := transition.kind != "external_trigger" || (transition.payloadContract.isEmpty == false && workflowOwnsDefinition transition.source "external_payload" transition.payloadContract)
+def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.externalTrigger || (transition.payloadContract.isEmpty == false && workflowOwnsDefinition transition.source "external_payload" transition.payloadContract)
 
 def workflowExternalTriggersDeclarePayloadContracts : Bool := workflowTransitions.all workflowExternalTriggerDeclaresPayloadContract
 
-def workflowExternalTriggerPayloadContractHasProvenance (transition : WorkflowTransition) : Bool := transition.kind != "external_trigger" || workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == transition.source && definition.definitionKind == "external_payload" && definition.definitionName == transition.payloadContract && definition.sourceProvenance.isEmpty == false)
+def workflowExternalTriggerPayloadContractHasProvenance (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.externalTrigger || workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == transition.source && definition.definitionKind == "external_payload" && definition.definitionName == transition.payloadContract && definition.sourceProvenance.isEmpty == false)
 
 def workflowExternalTriggerPayloadContractsHaveProvenance : Bool := workflowTransitions.all workflowExternalTriggerPayloadContractHasProvenance
 
-def workflowTransitionRequiresEvidence (transition : WorkflowTransition) : Bool := transition.kind == "event" || transition.kind == "command" || transition.kind == "navigation"
+def workflowTransitionRequiresEvidence (transition : WorkflowTransition) : Bool := transition.kind == WorkflowTransitionKind.event || transition.kind == WorkflowTransitionKind.command || transition.kind == WorkflowTransitionKind.navigation
 
 def workflowTransitionEvidenceMatches (transition : WorkflowTransition) (evidence : WorkflowTransitionEvidence) : Bool := evidence.source == transition.source && evidence.target == transition.target && evidence.kind == transition.kind && evidence.trigger == transition.trigger && evidence.sourceEvidence.isEmpty == false && evidence.targetEvidence.isEmpty == false
 
@@ -280,7 +294,7 @@ theorem workflowSlicesHaveDetails : workflowSlices.length = workflowSliceDetails
 
 theorem workflowSlicesHaveModuleReferences : workflowSlices.length = workflowSliceModules.length := rfl
 
-theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl
+theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl
 
 theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.source) = true := rfl
 
@@ -1083,7 +1097,7 @@ fn workflow_transition_evidence_record(evidence: &WorkflowTransitionEvidenceReco
         "{{ source := {}, target := {}, kind := {}, trigger := {}, sourceEvidence := {}, targetEvidence := {} }}",
         quoted(evidence.source().as_ref()),
         quoted(evidence.target().as_ref()),
-        quoted(evidence.kind().as_ref()),
+        lean_workflow_transition_kind(*evidence.kind()),
         quoted(evidence.trigger().as_ref()),
         quoted(evidence.source_evidence().as_ref()),
         quoted(evidence.target_evidence().as_ref()),
@@ -1118,7 +1132,7 @@ fn transition_record(transition: &WorkflowTransitionRecord) -> String {
         "{{ source := {}, target := {}, kind := {}, trigger := {}, rationale := {}, payloadContract := {} }}",
         quoted(transition.source().as_ref()),
         quoted(transition.target().as_ref()),
-        quoted(transition.kind().as_ref()),
+        lean_workflow_transition_kind(*transition.kind()),
         quoted(transition.trigger().as_ref()),
         quoted(
             transition

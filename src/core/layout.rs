@@ -9,6 +9,7 @@ use crate::core::effect::{
 };
 use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
+use crate::core::emit::{lean_workflow_transition_kind, quint_workflow_transition_kind};
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
 use crate::core::formal_model::{
     FormalModelCommand, FormalModelCommandError, FormalModelCommandInput,
@@ -3364,7 +3365,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let lean_slice_module_invariant_prefix =
         canonical_declaration_prefix("theorem workflowSlicesHaveModuleReferences :");
     let lean_transition_invariant_marker = canonical_declaration_marker(
-        "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.kind.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl",
+        "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl",
     );
     let lean_transition_invariant_prefix =
         canonical_declaration_prefix("theorem workflowTransitionsAreStructured :");
@@ -3400,7 +3401,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let quint_slice_module_complete_prefix =
         canonical_declaration_prefix("val workflowSliceModulesComplete =");
     let quint_transition_invariant_marker = canonical_declaration_marker(
-        "val workflowTransitionsStructured = workflowTransitions.select(transition => transition.source != \"\" and transition.target != \"\" and transition.kind != \"\" and transition.trigger != \"\").length() == workflowTransitions.length()",
+        "val workflowTransitionsStructured = workflowTransitions.select(transition => transition.source != \"\" and transition.target != \"\" and transition.trigger != \"\").length() == workflowTransitions.length()",
     );
     let quint_transition_invariant_prefix =
         canonical_declaration_prefix("val workflowTransitionsStructured =");
@@ -3844,7 +3845,7 @@ fn lean_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> CanonicalD
                     "{{ source := {}, target := {}, kind := {}, trigger := {}, rationale := {}, payloadContract := {} }}",
                     json_string(transition.source().as_ref()),
                     json_string(transition.target().as_ref()),
-                    json_string(transition.kind().as_ref()),
+                    lean_workflow_transition_kind(*transition.kind()),
                     json_string(transition.trigger().as_ref()),
                     json_string(
                         transition
@@ -3939,7 +3940,7 @@ fn quint_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> Canonical
                     "{{ source: {}, target: {}, kind: {}, trigger: {}, rationale: {}, payloadContract: {} }}",
                     json_string(transition.source().as_ref()),
                     json_string(transition.target().as_ref()),
-                    json_string(transition.kind().as_ref()),
+                    quint_workflow_transition_kind(*transition.kind()),
                     json_string(transition.trigger().as_ref()),
                     json_string(
                         transition
