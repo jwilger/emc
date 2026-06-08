@@ -11,7 +11,7 @@ use crate::core::effect::{
     ChosenEventId, EventConflictId, ModelContentDigest, ProjectionFingerprint, ReviewEventReference,
 };
 use crate::core::events::{
-    EventDraft, EventDraftBody, EventDraftType, slice_automation_from_payload,
+    EventDraft, ExportedEventBody, ExportedEventType, slice_automation_from_payload,
     slice_bit_level_data_flow_from_payload, slice_board_connection_from_payload,
     slice_board_element_from_payload, slice_command_definition_from_payload,
     slice_event_definition_from_payload, slice_external_payload_from_payload,
@@ -832,7 +832,7 @@ impl<'de> Deserialize<'de> for SliceFactEvent {
     {
         #[derive(Deserialize)]
         struct SerializedSliceFactEvent {
-            exported_event_type: EventDraftType,
+            exported_event_type: ExportedEventType,
             payload: Value,
         }
 
@@ -898,78 +898,80 @@ impl SliceFactInput {
     }
 
     fn from_event_type_and_payload(
-        event_type: EventDraftType,
+        event_type: ExportedEventType,
         payload: &Value,
     ) -> Result<Self, String> {
         match event_type {
-            EventDraftType::SliceScenarioAdded => {
+            ExportedEventType::SliceScenarioAdded => {
                 slice_scenario_from_payload(payload).map(Self::Scenario)
             }
-            EventDraftType::SliceOutcomeAdded => {
+            ExportedEventType::SliceOutcomeAdded => {
                 slice_outcome_from_payload(payload).map(Self::Outcome)
             }
-            EventDraftType::SliceExternalPayloadAdded => {
+            ExportedEventType::SliceExternalPayloadAdded => {
                 slice_external_payload_from_payload(payload).map(Self::ExternalPayload)
             }
-            EventDraftType::SliceEventDefinitionAdded => {
+            ExportedEventType::SliceEventDefinitionAdded => {
                 slice_event_definition_from_payload(payload).map(Self::EventDefinition)
             }
-            EventDraftType::SliceCommandDefinitionAdded => {
+            ExportedEventType::SliceCommandDefinitionAdded => {
                 slice_command_definition_from_payload(payload).map(Self::CommandDefinition)
             }
-            EventDraftType::SliceReadModelAdded => {
+            ExportedEventType::SliceReadModelAdded => {
                 slice_read_model_from_payload(payload).map(Self::ReadModel)
             }
-            EventDraftType::SliceViewAdded => slice_view_from_payload(payload).map(Self::View),
-            EventDraftType::SliceBitLevelDataFlowAdded => {
+            ExportedEventType::SliceViewAdded => slice_view_from_payload(payload).map(Self::View),
+            ExportedEventType::SliceBitLevelDataFlowAdded => {
                 slice_bit_level_data_flow_from_payload(payload).map(Self::BitLevelDataFlow)
             }
-            EventDraftType::SliceTranslationAdded => {
+            ExportedEventType::SliceTranslationAdded => {
                 slice_translation_from_payload(payload).map(Self::Translation)
             }
-            EventDraftType::SliceAutomationAdded => {
+            ExportedEventType::SliceAutomationAdded => {
                 slice_automation_from_payload(payload).map(Self::Automation)
             }
-            EventDraftType::SliceBoardElementAdded => {
+            ExportedEventType::SliceBoardElementAdded => {
                 slice_board_element_from_payload(payload).map(Self::BoardElement)
             }
-            EventDraftType::SliceBoardConnectionAdded => {
+            ExportedEventType::SliceBoardConnectionAdded => {
                 slice_board_connection_from_payload(payload).map(Self::BoardConnection)
             }
             event_type => Err(format!("unsupported slice fact event type {event_type}")),
         }
     }
 
-    pub(crate) fn from_event_body(body: &EventDraftBody) -> Result<Self, String> {
+    pub(crate) fn from_event_body(body: &ExportedEventBody) -> Result<Self, String> {
         match body {
-            EventDraftBody::SliceScenarioAdded { scenario } => Ok(Self::Scenario(scenario.clone())),
-            EventDraftBody::SliceOutcomeAdded { outcome } => Ok(Self::Outcome(outcome.clone())),
-            EventDraftBody::SliceExternalPayloadAdded { external_payload } => {
+            ExportedEventBody::SliceScenarioAdded { scenario } => {
+                Ok(Self::Scenario(scenario.clone()))
+            }
+            ExportedEventBody::SliceOutcomeAdded { outcome } => Ok(Self::Outcome(outcome.clone())),
+            ExportedEventBody::SliceExternalPayloadAdded { external_payload } => {
                 Ok(Self::ExternalPayload(external_payload.clone()))
             }
-            EventDraftBody::SliceEventDefinitionAdded { event } => {
+            ExportedEventBody::SliceEventDefinitionAdded { event } => {
                 Ok(Self::EventDefinition(event.clone()))
             }
-            EventDraftBody::SliceCommandDefinitionAdded { command } => {
+            ExportedEventBody::SliceCommandDefinitionAdded { command } => {
                 Ok(Self::CommandDefinition(command.clone()))
             }
-            EventDraftBody::SliceReadModelAdded { read_model } => {
+            ExportedEventBody::SliceReadModelAdded { read_model } => {
                 Ok(Self::ReadModel(read_model.clone()))
             }
-            EventDraftBody::SliceViewAdded { view } => Ok(Self::View(view.clone())),
-            EventDraftBody::SliceBitLevelDataFlowAdded { data_flow } => {
+            ExportedEventBody::SliceViewAdded { view } => Ok(Self::View(view.clone())),
+            ExportedEventBody::SliceBitLevelDataFlowAdded { data_flow } => {
                 Ok(Self::BitLevelDataFlow(data_flow.clone()))
             }
-            EventDraftBody::SliceTranslationAdded { translation } => {
+            ExportedEventBody::SliceTranslationAdded { translation } => {
                 Ok(Self::Translation(translation.clone()))
             }
-            EventDraftBody::SliceAutomationAdded { automation } => {
+            ExportedEventBody::SliceAutomationAdded { automation } => {
                 Ok(Self::Automation(automation.clone()))
             }
-            EventDraftBody::SliceBoardElementAdded { element } => {
+            ExportedEventBody::SliceBoardElementAdded { element } => {
                 Ok(Self::BoardElement(element.clone()))
             }
-            EventDraftBody::SliceBoardConnectionAdded { connection } => {
+            ExportedEventBody::SliceBoardConnectionAdded { connection } => {
                 Ok(Self::BoardConnection(connection.clone()))
             }
             body => Err(format!(

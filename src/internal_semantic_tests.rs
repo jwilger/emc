@@ -11,7 +11,7 @@ mod tests {
     };
     use crate::core::event_commands::{EmcEvent, SliceFactEvent, SliceFactInput};
     use crate::core::events::{
-        EventDraft, EventDraftBody, EventDraftType, EventStreamId, ExportedEvent,
+        EventDraft, EventStreamId, ExportedEvent, ExportedEventBody, ExportedEventType,
     };
     use crate::core::formal_slice_facts::{NewOutcomeDefinition, OutcomeEventNames};
     use crate::core::review_record::ReviewRecordDocument;
@@ -801,18 +801,18 @@ mod tests {
         .into_iter()
         .for_each(|event_type| {
             assert!(
-                EventDraftType::try_new(event_type.to_owned()).is_ok(),
+                ExportedEventType::try_new(event_type.to_owned()).is_ok(),
                 "{event_type} should be accepted as a modeled exported event type"
             );
         });
 
         assert!(
-            EventDraftType::try_new("SliceFactAdded".to_owned()).is_err(),
-            "internal eventcore aggregate events must not be exported event draft types"
+            ExportedEventType::try_new("SliceFactAdded".to_owned()).is_err(),
+            "internal eventcore aggregate events must not be exported event types"
         );
         assert!(
-            EventDraftType::try_new("WorkflowRenamed".to_owned()).is_err(),
-            "arbitrary event type strings must not enter exported event drafts"
+            ExportedEventType::try_new("WorkflowRenamed".to_owned()).is_err(),
+            "arbitrary event type strings must not enter exported events"
         );
     }
 
@@ -845,7 +845,7 @@ mod tests {
         .for_each(|raw| {
             assert!(
                 EventStreamId::try_new(raw.to_owned()).is_err(),
-                "{raw:?} must not enter exported event drafts as a stream id"
+                "{raw:?} must not enter exported events as a stream id"
             );
         });
 
@@ -863,18 +863,18 @@ mod tests {
 
         let draft = EventDraft::workflow_added(&workflow);
 
-        assert_eq!(draft.event_type(), EventDraftType::WorkflowAdded);
+        assert_eq!(draft.event_type(), ExportedEventType::WorkflowAdded);
         assert_eq!(
             draft.body(),
-            &EventDraftBody::WorkflowAdded {
+            &ExportedEventBody::WorkflowAdded {
                 workflow: workflow.clone()
             },
-            "exported event drafts should carry semantic data, not raw JSON payloads"
+            "exported event drafts should use the exported event body ADT, not raw JSON payloads"
         );
 
         let exported = ExportedEvent::from_draft_for_test(&draft)?;
 
-        assert_eq!(exported.event_type(), EventDraftType::WorkflowAdded);
+        assert_eq!(exported.event_type(), ExportedEventType::WorkflowAdded);
         assert_eq!(exported.body(), draft.body());
         assert_eq!(
             exported.payload_json(),
@@ -906,10 +906,10 @@ mod tests {
             }
         }))?;
 
-        assert_eq!(exported.event_type(), EventDraftType::WorkflowAdded);
+        assert_eq!(exported.event_type(), ExportedEventType::WorkflowAdded);
         assert_eq!(
             exported.body(),
-            &EventDraftBody::WorkflowAdded {
+            &ExportedEventBody::WorkflowAdded {
                 workflow: NewWorkflow::new(
                     parse_model_name("Open ticket")?,
                     parse_model_description("Actor opens a repair ticket.")?,
