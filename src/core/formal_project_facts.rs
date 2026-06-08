@@ -1985,7 +1985,7 @@ pub(crate) fn parse_lean_project_scenarios(
 ) -> Result<Vec<ProjectScenario>, FormalProjectFactError> {
     scenario_entries_from_list(
         contents.as_ref(),
-        "def modelScenarios : List (String × String × String × String) := ",
+        "def modelScenarios : List ModelScenario := ",
     )
 }
 
@@ -2003,7 +2003,7 @@ pub(crate) fn parse_lean_project_scenario_definitions(
 ) -> Result<Vec<ProjectScenarioDefinition>, FormalProjectFactError> {
     scenario_definition_entries_from_list(
         contents.as_ref(),
-        "def modelScenarioDefinitions : List (String × String × String × String × String × String × String × List String × List String × String × String × List String) := ",
+        "def modelScenarioDefinitions : List ModelScenarioDefinition := ",
         ScenarioDefinitionSyntax::Lean,
     )
 }
@@ -2023,7 +2023,7 @@ pub(crate) fn parse_lean_project_data_flows(
 ) -> Result<Vec<ProjectDataFlow>, FormalProjectFactError> {
     data_flow_entries_from_list(
         contents.as_ref(),
-        "def modelDataFlows : List (String × String × String × String × String × String × String × String) := ",
+        "def modelDataFlows : List ModelDataFlow := ",
     )
 }
 
@@ -2041,7 +2041,7 @@ pub(crate) fn parse_lean_project_outcomes(
 ) -> Result<Vec<ProjectOutcome>, FormalProjectFactError> {
     outcome_entries_from_list(
         contents.as_ref(),
-        "def modelOutcomes : List (String × String × String × List String × Bool) := ",
+        "def modelOutcomes : List ModelOutcome := ",
     )
 }
 
@@ -2059,7 +2059,7 @@ pub(crate) fn parse_lean_project_commands(
 ) -> Result<Vec<ProjectCommand>, FormalProjectFactError> {
     command_entries_from_list(
         contents.as_ref(),
-        "def modelCommands : List (String × String × String) := ",
+        "def modelCommands : List ModelCommand := ",
     )
 }
 
@@ -2077,7 +2077,7 @@ pub(crate) fn parse_lean_project_command_inputs(
 ) -> Result<Vec<ProjectCommandInput>, FormalProjectFactError> {
     command_input_entries_from_list(
         contents.as_ref(),
-        "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) := ",
+        "def modelCommandInputs : List ModelCommandInput := ",
     )
 }
 
@@ -2095,7 +2095,7 @@ pub(crate) fn parse_lean_project_command_errors(
 ) -> Result<Vec<ProjectCommandError>, FormalProjectFactError> {
     command_error_entries_from_list(
         contents.as_ref(),
-        "def modelCommandErrors : List (String × String × String × String × String × String) := ",
+        "def modelCommandErrors : List ModelCommandError := ",
     )
 }
 
@@ -2427,18 +2427,18 @@ pub(crate) fn add_project_scenario(
         .map(quint_scenario_definition_record);
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelScenarios : List (String × String × String × String) := ",
+        "def modelScenarios : List ModelScenario := ",
         &lean_record,
     )
     .and_then(|contents| {
         let scenarios = scenario_entries_from_list(
             &contents,
-            "def modelScenarios : List (String × String × String × String) := ",
+            "def modelScenarios : List ModelScenario := ",
         )?;
         let contents = if let Some(record) = &lean_definition_record {
             append_record_if_missing(
                 &contents,
-                "def modelScenarioDefinitions : List (String × String × String × String × String × String × String × List String × List String × String × String × List String) := ",
+                "def modelScenarioDefinitions : List ModelScenarioDefinition := ",
                 record,
             )?
         } else {
@@ -2450,7 +2450,7 @@ pub(crate) fn add_project_scenario(
             &contents,
             "def modelScenarios :",
             &format!(
-                "def modelScenarios : List (String × String × String × String) := {}",
+                "def modelScenarios : List ModelScenario := {}",
                 lean_project_scenario_list(&scenarios)
             ),
         )
@@ -2469,7 +2469,7 @@ pub(crate) fn add_project_scenario(
                 &contents,
                 "def modelScenarioDefinitions :",
                 &format!(
-                    "def modelScenarioDefinitions : List (String × String × String × String × String × String × String × List String × List String × String × String × List String) := {}",
+                    "def modelScenarioDefinitions : List ModelScenarioDefinition := {}",
                     lean_project_scenario_definition_list(&scenario_definitions)
                 ),
             )
@@ -2699,19 +2699,17 @@ pub(crate) fn add_project_data_flow(
     let quint_record = quint_data_flow_record(&data_flow);
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelDataFlows : List (String × String × String × String × String × String × String × String) := ",
+        "def modelDataFlows : List ModelDataFlow := ",
         &lean_record,
     )
     .and_then(|contents| {
-        let data_flows = data_flow_entries_from_list(
-            &contents,
-            "def modelDataFlows : List (String × String × String × String × String × String × String × String) := ",
-        )?;
+        let data_flows =
+            data_flow_entries_from_list(&contents, "def modelDataFlows : List ModelDataFlow := ")?;
         replace_declaration(
             &contents,
             "def modelDataFlows :",
             &format!(
-                "def modelDataFlows : List (String × String × String × String × String × String × String × String) := {}",
+                "def modelDataFlows : List ModelDataFlow := {}",
                 lean_project_data_flow_list(&data_flows)
             ),
         )
@@ -2727,23 +2725,28 @@ pub(crate) fn add_project_data_flow(
         })
         .and_then(|contents| {
             let scenarios = parse_lean_project_scenarios_from_contents_or_empty(&contents);
-            let scenario_definitions = parse_lean_project_scenario_definitions_from_contents_or_empty(&contents);
+            let scenario_definitions =
+                parse_lean_project_scenario_definitions_from_contents_or_empty(&contents);
             let data_flows = parse_lean_project_data_flows_from_contents_or_empty(&contents);
             let outcomes = parse_lean_project_outcomes_from_contents_or_empty(&contents);
             let command_errors =
                 parse_lean_project_command_errors_from_contents_or_empty(&contents);
             let commands = parse_lean_project_commands_from_contents_or_empty(&contents);
-            let command_inputs = parse_lean_project_command_inputs_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
-            let read_model_definitions = parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
-            let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
-            let view_controls =
-                parse_lean_project_view_controls_from_contents_or_empty(&contents);
-            let board_elements = parse_lean_project_board_elements_from_contents_or_empty(&contents);
-            let board_connections = parse_lean_project_board_connections_from_contents_or_empty(&contents);
+            let view_controls = parse_lean_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements =
+                parse_lean_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections =
+                parse_lean_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -2757,7 +2760,8 @@ pub(crate) fn add_project_data_flow(
                 parse_lean_project_external_payload_fields_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
-            let event_attributes = parse_lean_project_event_attributes_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_lean_project_event_attributes_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -2916,19 +2920,17 @@ pub(crate) fn add_project_outcome(
     let quint_record = quint_outcome_record(&outcome);
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelOutcomes : List (String × String × String × List String × Bool) := ",
+        "def modelOutcomes : List ModelOutcome := ",
         &lean_record,
     )
     .and_then(|contents| {
-        let outcomes = outcome_entries_from_list(
-            &contents,
-            "def modelOutcomes : List (String × String × String × List String × Bool) := ",
-        )?;
+        let outcomes =
+            outcome_entries_from_list(&contents, "def modelOutcomes : List ModelOutcome := ")?;
         replace_declaration(
             &contents,
             "def modelOutcomes :",
             &format!(
-                "def modelOutcomes : List (String × String × String × List String × Bool) := {}",
+                "def modelOutcomes : List ModelOutcome := {}",
                 lean_project_outcome_list(&outcomes)
             ),
         )
@@ -3132,7 +3134,7 @@ pub(crate) fn add_project_command(
     let quint_record = quint_command_record(&command);
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelCommands : List (String × String × String) := ",
+        "def modelCommands : List ModelCommand := ",
         &lean_record,
     )
     .and_then(|contents| {
@@ -3142,32 +3144,33 @@ pub(crate) fn add_project_command(
             .try_fold(contents, |contents, input| {
                 append_record_if_missing(
                     &contents,
-                    "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) := ",
+                    "def modelCommandInputs : List ModelCommandInput := ",
                     &lean_command_input_record(input),
                 )
             })
     })
     .and_then(|contents| {
-        command.command_errors.iter().try_fold(contents, |contents, error| {
-            append_record_if_missing(
-                &contents,
-                "def modelCommandErrors : List (String × String × String × String × String × String) := ",
-                &lean_command_error_record(error),
-            )
-        })
+        command
+            .command_errors
+            .iter()
+            .try_fold(contents, |contents, error| {
+                append_record_if_missing(
+                    &contents,
+                    "def modelCommandErrors : List ModelCommandError := ",
+                    &lean_command_error_record(error),
+                )
+            })
     })
     .and_then(|contents| {
-        let commands = command_entries_from_list(
-            &contents,
-            "def modelCommands : List (String × String × String) := ",
-        )?;
+        let commands =
+            command_entries_from_list(&contents, "def modelCommands : List ModelCommand := ")?;
         let command_errors = command_error_entries_from_list(
             &contents,
-            "def modelCommandErrors : List (String × String × String × String × String × String) := ",
+            "def modelCommandErrors : List ModelCommandError := ",
         )?;
         let command_inputs = command_input_entries_from_list(
             &contents,
-            "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) := ",
+            "def modelCommandInputs : List ModelCommandInput := ",
         )?;
         replace_declaration(
             &contents,
@@ -3199,21 +3202,27 @@ pub(crate) fn add_project_command(
         })
         .and_then(|contents| {
             let scenarios = parse_lean_project_scenarios_from_contents_or_empty(&contents);
-            let scenario_definitions = parse_lean_project_scenario_definitions_from_contents_or_empty(&contents);
+            let scenario_definitions =
+                parse_lean_project_scenario_definitions_from_contents_or_empty(&contents);
             let data_flows = parse_lean_project_data_flows_from_contents_or_empty(&contents);
             let outcomes = parse_lean_project_outcomes_from_contents_or_empty(&contents);
-            let command_errors = parse_lean_project_command_errors_from_contents_or_empty(&contents);
-            let command_inputs = parse_lean_project_command_inputs_from_contents_or_empty(&contents);
+            let command_errors =
+                parse_lean_project_command_errors_from_contents_or_empty(&contents);
+            let command_inputs =
+                parse_lean_project_command_inputs_from_contents_or_empty(&contents);
             let read_models = parse_lean_project_read_models_from_contents_or_empty(&contents);
-            let read_model_definitions = parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
-            let read_model_fields = parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
+            let read_model_definitions =
+                parse_lean_project_read_model_definitions_from_contents_or_empty(&contents);
+            let read_model_fields =
+                parse_lean_project_read_model_fields_from_contents_or_empty(&contents);
             let views = parse_lean_project_views_from_contents_or_empty(&contents);
             let view_definitions =
                 parse_lean_project_view_definitions_from_contents_or_empty(&contents);
-            let view_controls =
-                parse_lean_project_view_controls_from_contents_or_empty(&contents);
-            let board_elements = parse_lean_project_board_elements_from_contents_or_empty(&contents);
-            let board_connections = parse_lean_project_board_connections_from_contents_or_empty(&contents);
+            let view_controls = parse_lean_project_view_controls_from_contents_or_empty(&contents);
+            let board_elements =
+                parse_lean_project_board_elements_from_contents_or_empty(&contents);
+            let board_connections =
+                parse_lean_project_board_connections_from_contents_or_empty(&contents);
             let view_fields = parse_lean_project_view_fields_from_contents_or_empty(&contents);
             let automations = parse_lean_project_automations_from_contents_or_empty(&contents);
             let automation_definitions =
@@ -3227,7 +3236,8 @@ pub(crate) fn add_project_command(
                 parse_lean_project_external_payload_fields_from_contents_or_empty(&contents);
             let streams = parse_lean_project_streams_from_contents_or_empty(&contents);
             let events = parse_lean_project_events_from_contents_or_empty(&contents);
-            let event_attributes = parse_lean_project_event_attributes_from_contents_or_empty(&contents);
+            let event_attributes =
+                parse_lean_project_event_attributes_from_contents_or_empty(&contents);
             update_lean_digest(
                 &contents,
                 ProjectDigestInventories {
@@ -5275,23 +5285,19 @@ pub(crate) fn add_project_event(
     .and_then(|contents| {
         let scenarios = scenario_entries_from_list(
             &contents,
-            "def modelScenarios : List (String × String × String × String) := ",
+            "def modelScenarios : List ModelScenario := ",
         )?;
         let scenario_definitions =
             parse_lean_project_scenario_definitions_from_contents_or_empty(&contents);
         let data_flows = parse_lean_project_data_flows_from_contents_or_empty(&contents);
-        let outcomes = outcome_entries_from_list(
-            &contents,
-            "def modelOutcomes : List (String × String × String × List String × Bool) := ",
-        )?;
+        let outcomes =
+            outcome_entries_from_list(&contents, "def modelOutcomes : List ModelOutcome := ")?;
         let command_errors = parse_lean_project_command_errors_from_contents_or_empty(&contents);
-        let commands = command_entries_from_list(
-            &contents,
-            "def modelCommands : List (String × String × String) := ",
-        )?;
+        let commands =
+            command_entries_from_list(&contents, "def modelCommands : List ModelCommand := ")?;
         let command_inputs = command_input_entries_from_list(
             &contents,
-            "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) := ",
+            "def modelCommandInputs : List ModelCommandInput := ",
         )?;
         let read_models = read_model_entries_from_list(
             &contents,
@@ -5707,11 +5713,8 @@ fn stream_entries_from_list(
 }
 
 fn parse_lean_project_commands_from_contents_or_empty(contents: &str) -> Vec<ProjectCommand> {
-    command_entries_from_list(
-        contents,
-        "def modelCommands : List (String × String × String) := ",
-    )
-    .unwrap_or_default()
+    command_entries_from_list(contents, "def modelCommands : List ModelCommand := ")
+        .unwrap_or_default()
 }
 
 fn parse_lean_project_command_inputs_from_contents_or_empty(
@@ -5719,17 +5722,14 @@ fn parse_lean_project_command_inputs_from_contents_or_empty(
 ) -> Vec<ProjectCommandInput> {
     command_input_entries_from_list(
         contents,
-        "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) := ",
+        "def modelCommandInputs : List ModelCommandInput := ",
     )
     .unwrap_or_default()
 }
 
 fn parse_lean_project_scenarios_from_contents_or_empty(contents: &str) -> Vec<ProjectScenario> {
-    scenario_entries_from_list(
-        contents,
-        "def modelScenarios : List (String × String × String × String) := ",
-    )
-    .unwrap_or_default()
+    scenario_entries_from_list(contents, "def modelScenarios : List ModelScenario := ")
+        .unwrap_or_default()
 }
 
 fn parse_quint_project_scenarios_from_contents_or_empty(contents: &str) -> Vec<ProjectScenario> {
@@ -5742,7 +5742,7 @@ fn parse_lean_project_scenario_definitions_from_contents_or_empty(
 ) -> Vec<ProjectScenarioDefinition> {
     scenario_definition_entries_from_list(
         contents,
-        "def modelScenarioDefinitions : List (String × String × String × String × String × String × String × List String × List String × String × String × List String) := ",
+        "def modelScenarioDefinitions : List ModelScenarioDefinition := ",
         ScenarioDefinitionSyntax::Lean,
     )
     .unwrap_or_default()
@@ -5760,11 +5760,8 @@ fn parse_quint_project_scenario_definitions_from_contents_or_empty(
 }
 
 fn parse_lean_project_data_flows_from_contents_or_empty(contents: &str) -> Vec<ProjectDataFlow> {
-    data_flow_entries_from_list(
-        contents,
-        "def modelDataFlows : List (String × String × String × String × String × String × String × String) := ",
-    )
-    .unwrap_or_default()
+    data_flow_entries_from_list(contents, "def modelDataFlows : List ModelDataFlow := ")
+        .unwrap_or_default()
 }
 
 fn parse_quint_project_data_flows_from_contents_or_empty(contents: &str) -> Vec<ProjectDataFlow> {
@@ -5773,11 +5770,8 @@ fn parse_quint_project_data_flows_from_contents_or_empty(contents: &str) -> Vec<
 }
 
 fn parse_lean_project_outcomes_from_contents_or_empty(contents: &str) -> Vec<ProjectOutcome> {
-    outcome_entries_from_list(
-        contents,
-        "def modelOutcomes : List (String × String × String × List String × Bool) := ",
-    )
-    .unwrap_or_default()
+    outcome_entries_from_list(contents, "def modelOutcomes : List ModelOutcome := ")
+        .unwrap_or_default()
 }
 
 fn parse_quint_project_outcomes_from_contents_or_empty(contents: &str) -> Vec<ProjectOutcome> {
@@ -5805,7 +5799,7 @@ fn parse_lean_project_command_errors_from_contents_or_empty(
 ) -> Vec<ProjectCommandError> {
     command_error_entries_from_list(
         contents,
-        "def modelCommandErrors : List (String × String × String × String × String × String) := ",
+        "def modelCommandErrors : List ModelCommandError := ",
     )
     .unwrap_or_default()
 }
@@ -6336,7 +6330,13 @@ fn scenario_definition_entry_from_record(
 
     let value = |index: usize| -> Result<&str, FormalProjectFactError> {
         match syntax {
-            ScenarioDefinitionSyntax::Lean => Ok(fields[index].trim()),
+            ScenarioDefinitionSyntax::Lean => {
+                if record.trim_start().starts_with('{') {
+                    record_field_value(&fields[index])
+                } else {
+                    Ok(fields[index].trim())
+                }
+            }
             ScenarioDefinitionSyntax::Quint => record_field_value(&fields[index]),
         }
     };
@@ -7110,7 +7110,8 @@ fn split_top_level_fields(record: &str) -> Result<Vec<String>, FormalProjectFact
 
 fn record_field_value(field: &str) -> Result<&str, FormalProjectFactError> {
     field
-        .split_once(':')
+        .split_once(":=")
+        .or_else(|| field.split_once(':'))
         .map(|(_name, value)| value.trim())
         .ok_or_else(|| FormalProjectFactError::new("formal project record field is malformed"))
 }
@@ -7122,10 +7123,7 @@ fn record_values(record: &str) -> Result<Vec<String>, FormalProjectFactError> {
         .iter()
         .map(|field| {
             if uses_named_fields {
-                field
-                    .split_once(':')
-                    .map(|(_name, value)| value.trim())
-                    .unwrap_or(field.trim())
+                record_field_value(field).unwrap_or(field.trim())
             } else {
                 field.trim()
             }
@@ -7274,7 +7272,7 @@ fn update_lean_digest(
             "def modelName := ",
             "def modelVersion := ",
             "def modelWorkflows : List String := ",
-            "def modelSliceModules : List (String × String × String) := ",
+            "def modelSliceModules : List ModelSliceModule := ",
         )?,
         &inventories,
     );
@@ -8051,7 +8049,7 @@ fn lean_stream_record(stream: &NewProjectStream) -> String {
 
 fn lean_command_record(command: &NewProjectCommand) -> String {
     format!(
-        "({}, {}, {})",
+        "{{ workflow := {}, slice := {}, command := {} }}",
         quoted(command.workflow_slug.as_ref()),
         quoted(command.slice_slug.as_ref()),
         quoted(command.command.as_ref())
@@ -8060,7 +8058,7 @@ fn lean_command_record(command: &NewProjectCommand) -> String {
 
 fn lean_command_input_record(command_input: &NewProjectCommandInput) -> String {
     format!(
-        "({}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+        "{{ workflow := {}, slice := {}, command := {}, input := {}, sourceKind := {}, sourceDescription := {}, provenanceChain := [{}], eventStreamSourceEvent := {}, eventStreamSourceAttribute := {}, externalPayloadSourceName := {}, externalPayloadSourceField := {}, generatedSourceName := {}, generatedSourceField := {}, sessionSourceName := {}, sessionSourceField := {}, invocationArgumentSourceName := {}, invocationArgumentSourceField := {} }}",
         quoted(command_input.workflow_slug.as_ref()),
         quoted(command_input.slice_slug.as_ref()),
         quoted(command_input.command.as_ref()),
@@ -8106,7 +8104,7 @@ fn quint_command_input_record(command_input: &NewProjectCommandInput) -> String 
 
 fn lean_command_error_record(command_error: &NewProjectCommandError) -> String {
     format!(
-        "({}, {}, {}, {}, {}, {})",
+        "{{ workflow := {}, slice := {}, command := {}, error := {}, scenario := {}, recovery := {} }}",
         quoted(command_error.workflow_slug.as_ref()),
         quoted(command_error.slice_slug.as_ref()),
         quoted(command_error.command.as_ref()),
@@ -8118,7 +8116,7 @@ fn lean_command_error_record(command_error: &NewProjectCommandError) -> String {
 
 fn lean_scenario_record(scenario: &NewProjectScenario) -> String {
     format!(
-        "({}, {}, {}, {})",
+        "{{ workflow := {}, slice := {}, scenarioKind := {}, scenario := {} }}",
         quoted(scenario.workflow_slug.as_ref()),
         quoted(scenario.slice_slug.as_ref()),
         quoted(scenario.scenario_kind.as_str()),
@@ -8128,7 +8126,7 @@ fn lean_scenario_record(scenario: &NewProjectScenario) -> String {
 
 fn lean_scenario_definition_record(scenario: &NewProjectScenarioDefinition) -> String {
     format!(
-        "({}, {}, {}, {}, {}, {}, {}, [{}], [{}], {}, {}, [{}])",
+        "{{ workflow := {}, slice := {}, scenarioKind := {}, scenario := {}, given := {}, when := {}, thenStep := {}, readStreams := [{}], writtenStreams := [{}], contractKind := {}, coveredDefinition := {}, errorReferences := [{}] }}",
         quoted(scenario.workflow_slug.as_ref()),
         quoted(scenario.slice_slug.as_ref()),
         quoted(scenario.scenario_kind.as_str()),
@@ -8173,7 +8171,7 @@ fn lean_scenario_definition_record(scenario: &NewProjectScenarioDefinition) -> S
 
 fn lean_data_flow_record(data_flow: &NewProjectDataFlow) -> String {
     format!(
-        "({}, {}, {}, [{}], [{}], [{}], [{}], [{}])",
+        "{{ workflow := {}, slice := {}, datum := {}, sourceKind := {}, source := {}, transformation := {}, target := {}, bitEncoding := {} }}",
         quoted(data_flow.workflow_slug.as_ref()),
         quoted(data_flow.slice_slug.as_ref()),
         quoted(data_flow.datum.as_ref()),
@@ -8256,7 +8254,7 @@ fn quint_scenario_definition_record(scenario: &NewProjectScenarioDefinition) -> 
 
 fn lean_outcome_record(outcome: &NewProjectOutcome) -> String {
     format!(
-        "({}, {}, {}, [{}], {})",
+        "{{ workflow := {}, slice := {}, outcome := {}, events := [{}], externallyRelevant := {} }}",
         quoted(outcome.workflow_slug.as_ref()),
         quoted(outcome.slice_slug.as_ref()),
         quoted(outcome.outcome.as_ref()),
@@ -8327,7 +8325,7 @@ fn lean_project_scenario_list(project_scenarios: &[ProjectScenario]) -> String {
             .into_iter()
             .map(|(workflow_slug, slice_slug, scenario_kind, scenario)| {
                 format!(
-                    "({}, {}, {}, {})",
+                    "{{ workflow := {}, slice := {}, scenarioKind := {}, scenario := {} }}",
                     quoted(workflow_slug),
                     quoted(slice_slug),
                     quoted(scenario_kind),
@@ -8381,7 +8379,7 @@ fn lean_project_scenario_definition_list(
             .into_iter()
             .map(|scenario| {
                 format!(
-                    "({}, {}, {}, {}, {}, {}, {}, [{}], [{}], {}, {}, [{}])",
+                    "{{ workflow := {}, slice := {}, scenarioKind := {}, scenario := {}, given := {}, when := {}, thenStep := {}, readStreams := [{}], writtenStreams := [{}], contractKind := {}, coveredDefinition := {}, errorReferences := [{}] }}",
                     quoted(scenario.workflow_slug()),
                     quoted(scenario.slice_slug()),
                     quoted(scenario.scenario_kind()),
@@ -8441,7 +8439,7 @@ fn lean_project_data_flow_list(project_data_flows: &[ProjectDataFlow]) -> String
             .into_iter()
             .map(|data_flow| {
                 format!(
-                    "({}, {}, {}, {}, {}, {}, {}, {})",
+                    "{{ workflow := {}, slice := {}, datum := {}, sourceKind := {}, source := {}, transformation := {}, target := {}, bitEncoding := {} }}",
                     quoted(data_flow.workflow_slug()),
                     quoted(data_flow.slice_slug()),
                     quoted(data_flow.datum()),
@@ -8491,7 +8489,7 @@ fn lean_project_outcome_list(project_outcomes: &[ProjectOutcome]) -> String {
             .into_iter()
             .map(|outcome| {
                 format!(
-                    "({}, {}, {}, [{}], {})",
+                    "{{ workflow := {}, slice := {}, outcome := {}, events := [{}], externallyRelevant := {} }}",
                     quoted(outcome.workflow_slug()),
                     quoted(outcome.slice_slug()),
                     quoted(outcome.outcome()),

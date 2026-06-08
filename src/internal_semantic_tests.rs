@@ -10,7 +10,9 @@ mod tests {
         ProjectPath, ProjectionFingerprint, ReviewEventId, ReviewEventReference,
     };
     use crate::core::event_commands::{EmcEvent, SliceFactEvent, SliceFactInput};
-    use crate::core::events::{EventDraftType, EventStreamId};
+    use crate::core::events::{
+        EventDraft, EventDraftBody, EventDraftType, EventStreamId, ExportedEvent,
+    };
     use crate::core::formal_slice_facts::{NewOutcomeDefinition, OutcomeEventNames};
     use crate::core::review_record::ReviewRecordDocument;
     use crate::core::types::{
@@ -22,6 +24,7 @@ mod tests {
         WorkflowTransitionTargetEvidenceText,
     };
     use crate::core::verify::{QuintInvariantName, QuintInvariantSet};
+    use crate::core::workflow::NewWorkflow;
     use crate::io::dto::{
         parse_board_connection_endpoint_kind, parse_board_element_kind, parse_board_lane_id,
         parse_command_error_recovery_kind, parse_command_input_source_kind,
@@ -845,6 +848,76 @@ mod tests {
                 "{raw:?} must not enter exported event drafts as a stream id"
             );
         });
+
+        Ok(())
+    }
+
+    #[test]
+    fn exported_events_preserve_semantic_bodies_until_json_boundaries() -> Result<(), Box<dyn Error>>
+    {
+        let workflow = NewWorkflow::new(
+            parse_model_name("Open ticket")?,
+            parse_model_description("Actor opens a repair ticket.")?,
+            parse_workflow_slug("open-ticket")?,
+        );
+
+        let draft = EventDraft::workflow_added(&workflow);
+
+        assert_eq!(draft.event_type(), EventDraftType::WorkflowAdded);
+        assert_eq!(
+            draft.body(),
+            &EventDraftBody::WorkflowAdded {
+                workflow: workflow.clone()
+            },
+            "exported event drafts should carry semantic data, not raw JSON payloads"
+        );
+
+        let exported = ExportedEvent::from_draft_for_test(&draft)?;
+
+        assert_eq!(exported.event_type(), EventDraftType::WorkflowAdded);
+        assert_eq!(exported.body(), draft.body());
+        assert_eq!(
+            exported.payload_json(),
+            serde_json::json!({
+                "slug": "open-ticket",
+                "name": "Open ticket",
+                "description": "Actor opens a repair ticket."
+            }),
+            "JSON should be produced only at the export boundary"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn exported_event_json_is_parsed_to_a_semantic_body() -> Result<(), Box<dyn Error>> {
+        let exported = ExportedEvent::from_json_for_test(&serde_json::json!({
+            "schema_version": "emc.events.v1",
+            "event_id": "workflow-added-1",
+            "command_id": "workflow-added-1",
+            "command_ordinal": 0,
+            "stream_id": "workflow::open-ticket",
+            "parents": [],
+            "type": "WorkflowAdded",
+            "payload": {
+                "slug": "open-ticket",
+                "name": "Open ticket",
+                "description": "Actor opens a repair ticket."
+            }
+        }))?;
+
+        assert_eq!(exported.event_type(), EventDraftType::WorkflowAdded);
+        assert_eq!(
+            exported.body(),
+            &EventDraftBody::WorkflowAdded {
+                workflow: NewWorkflow::new(
+                    parse_model_name("Open ticket")?,
+                    parse_model_description("Actor opens a repair ticket.")?,
+                    parse_workflow_slug("open-ticket")?,
+                )
+            },
+            "exported event JSON should be parsed once into semantic event data"
+        );
 
         Ok(())
     }

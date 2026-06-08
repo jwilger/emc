@@ -72,7 +72,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelSliceBelongsToDeclaredWorkflow (slice : String × String) : Bool := modelWorkflows.any (fun workflow => workflow == slice.1)"
+                "def modelSliceBelongsToDeclaredWorkflow (slice : ModelSlice) : Bool := modelWorkflows.any (fun workflow => workflow == slice.workflow)"
             ),
             "Lean project root must encode workflow composition slice membership"
         );
@@ -81,6 +81,52 @@ mod tests {
                 "theorem modelWorkflowCompositionStructureComplete : (modelSlices.all modelSliceBelongsToDeclaredWorkflow && modelSlices.all modelSliceHasModule && modelSliceModules.all modelSliceModuleBelongsToDeclaredSlice && modelWorkflows.all modelWorkflowHasCompositionStructure) = true := rfl"
             ),
             "Lean project root must prove workflow composition structure completeness"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelOutcome where\n  workflow : String\n  slice : String\n  outcome : String\n  events : List String\n  externallyRelevant : Bool"
+            ),
+            "Lean project root must model outcomes as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelOutcomeBranchIsModeled (outcome : ModelOutcome) : Bool := outcome.outcome.isEmpty == false && outcome.events.isEmpty == false"
+            ),
+            "Lean project root must check outcome branches through named fields"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelCommandError where\n  workflow : String\n  slice : String\n  command : String\n  error : String\n  scenario : String\n  recovery : String"
+            ),
+            "Lean project root must type command errors as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelCommand where\n  workflow : String\n  slice : String\n  command : String"
+            ),
+            "Lean project root must type commands as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelCommands : List ModelCommand := []"),
+            "Lean project root must initialize commands as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelCommandInput where\n  workflow : String\n  slice : String\n  command : String\n  input : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
+            ),
+            "Lean project root must type command inputs as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelCommandInputs : List ModelCommandInput := []"),
+            "Lean project root must initialize command inputs as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelCommandErrorRecoveryIsModeled (commandError : ModelCommandError) : Bool := commandError.command.isEmpty == false && commandError.error.isEmpty == false && commandError.scenario.isEmpty == false && commandError.recovery.isEmpty == false"
+            ),
+            "Lean project root must check command-error recovery through named fields"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
@@ -96,13 +142,13 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := control.1 == input.1 && control.2.2.2.2.1 == input.2.2.1 && control.2.2.2.2.2.1 == input.2.2.2.1"
+                "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : ModelCommandInput) : Bool := control.1 == input.workflow && control.2.2.2.2.1 == input.command && control.2.2.2.2.2.1 == input.input"
             ),
             "Lean project root must be able to prove controls provide target command inputs across composed slices"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelViewControlProvidesEveryCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) : Bool := modelCommandInputs.all (fun input => input.1 != control.1 || input.2.2.1 != control.2.2.2.2.1 || modelViewControls.any (fun providedInput => providedInput.1 == control.1 && providedInput.2.1 == control.2.1 && providedInput.2.2.1 == control.2.2.1 && providedInput.2.2.2.1 == control.2.2.2.1 && providedInput.2.2.2.2.1 == control.2.2.2.2.1 && modelControlProvidesCommandInput providedInput input))"
+                "def modelViewControlProvidesEveryCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) : Bool := modelCommandInputs.all (fun input => input.workflow != control.1 || input.command != control.2.2.2.2.1 || modelViewControls.any (fun providedInput => providedInput.1 == control.1 && providedInput.2.1 == control.2.1 && providedInput.2.2.1 == control.2.2.1 && providedInput.2.2.2.1 == control.2.2.2.1 && providedInput.2.2.2.2.1 == control.2.2.2.2.1 && modelControlProvidesCommandInput providedInput input))"
             ),
             "Lean project root must prove each control invocation supplies every input required by its target command"
         );
@@ -114,7 +160,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelScenarioDefinitionHasGwt (scenario : String × String × String × String × String × String × String × List String × List String × String × String × List String) : Bool := scenario.2.2.2.2.1.isEmpty == false && scenario.2.2.2.2.2.1.isEmpty == false && scenario.2.2.2.2.2.2.1.isEmpty == false"
+                "def modelScenarioDefinitionHasGwt (scenario : ModelScenarioDefinition) : Bool := scenario.given.isEmpty == false && scenario.when.isEmpty == false && scenario.thenStep.isEmpty == false"
             ),
             "Lean project root must prove first-class scenario definitions include Given/When/Then"
         );
@@ -126,7 +172,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelCommandInputHasProvenance (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, sourceDescription, provenanceChain, _, _, _, _, _, _, _, _, _, _) := input; sourceDescription.isEmpty == false && provenanceChain.isEmpty == false"
+                "def modelCommandInputHasProvenance (input : ModelCommandInput) : Bool := input.sourceDescription.isEmpty == false && input.provenanceChain.isEmpty == false"
             ),
             "Lean project root must prove command inputs carry source descriptions and provenance chains"
         );
@@ -204,19 +250,25 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelDataFlow where\n  workflow : String\n  slice : String\n  datum : String\n  sourceKind : String\n  source : String\n  transformation : String\n  target : String\n  bitEncoding : String"
+            ),
+            "Lean project root must model data flows as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
                 "def modelDataFlowCoversDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) : Bool :="
             ),
             "Lean project root must define target-aware datum-to-data-flow coverage in the formal artifact"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "flowWorkflow == workflow && flowSlice == slice && flowDatum == datum && flowTarget == target && modelDataFlowIsBitComplete dataFlow"
+                "dataFlow.workflow == workflow && dataFlow.slice == slice && dataFlow.datum == datum && dataFlow.target == target && modelDataFlowIsBitComplete dataFlow"
             ),
             "Lean project root must require the matching data-flow coverage row to carry complete source, transformation, target, and bit encoding semantics"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelDataFlowBitEncodingMatchesDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) (bitEncoding : String) : Bool := modelDataFlows.any (fun dataFlow => let (flowWorkflow, flowSlice, flowDatum, _, _, _, flowTarget, flowBitEncoding) := dataFlow; flowWorkflow == workflow && flowSlice == slice && flowDatum == datum && flowTarget == target && flowBitEncoding == bitEncoding && modelDataFlowIsBitComplete dataFlow)"
+                "def modelDataFlowBitEncodingMatchesDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) (bitEncoding : String) : Bool := modelDataFlows.any (fun dataFlow => dataFlow.workflow == workflow && dataFlow.slice == slice && dataFlow.datum == datum && dataFlow.target == target && dataFlow.bitEncoding == bitEncoding && modelDataFlowIsBitComplete dataFlow)"
             ),
             "Lean project root must define datum-to-data-flow bit encoding consistency"
         );
@@ -234,37 +286,37 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelDataFlowSourceBitEncodingMatchesModeledSource (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, datum, _, source, _, _, bitEncoding) := dataFlow; (modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source) == false) || modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, sourceBitEncoding) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && sourceBitEncoding == bitEncoding && modelDataFlowIsBitComplete sourceFlow)"
+                "def modelDataFlowSourceBitEncodingMatchesModeledSource (dataFlow : ModelDataFlow) : Bool := (modelDataFlows.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source) == false) || modelDataFlows.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source && sourceFlow.bitEncoding == dataFlow.bitEncoding && modelDataFlowIsBitComplete sourceFlow)"
             ),
             "Lean project root must compare modeled data-flow source bit semantics with the source data-flow row"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelDataFlowHasModeledTransformationSemantics (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, transformation, _, _) := dataFlow; transformation == \"identity\" || transformation == \"projection\" || transformation == \"derivation\" || transformation == \"default\" || transformation == \"absence\" || transformation == \"transformation\""
+                "def modelDataFlowHasModeledTransformationSemantics (dataFlow : ModelDataFlow) : Bool := dataFlow.transformation == \"identity\" || dataFlow.transformation == \"projection\" || dataFlow.transformation == \"derivation\" || dataFlow.transformation == \"default\" || dataFlow.transformation == \"absence\" || dataFlow.transformation == \"transformation\""
             ),
             "Lean project root must classify data-flow transformation semantics"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelDataFlowHasModeledSourceKind (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, sourceKind, source, _, _, _) := dataFlow; (sourceKind == \"original\" && source.isEmpty == false) || (sourceKind == \"modeled_target\" && source.isEmpty == false)"
+                "def modelDataFlowHasModeledSourceKind (dataFlow : ModelDataFlow) : Bool := (dataFlow.sourceKind == \"original\" && dataFlow.source.isEmpty == false) || (dataFlow.sourceKind == \"modeled_target\" && dataFlow.source.isEmpty == false)"
             ),
             "Lean project root must classify data-flow source semantics"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelDataFlowModeledSourceResolves (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, datum, sourceKind, source, _, _, _) := dataFlow; sourceKind != \"modeled_target\" || modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && modelDataFlowIsBitComplete sourceFlow)"
+                "def modelDataFlowModeledSourceResolves (dataFlow : ModelDataFlow) : Bool := dataFlow.sourceKind != \"modeled_target\" || modelDataFlows.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source && modelDataFlowIsBitComplete sourceFlow)"
             ),
             "Lean project root must resolve modeled-target data-flow sources"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelDataFlowsReachableFromOriginalsAfterFuel : Nat -> List (String × String × String × String × String × String × String × String) -> List (String × String × String × String × String × String × String × String)"
+                "def modelDataFlowsReachableFromOriginalsAfterFuel : Nat -> List ModelDataFlow -> List ModelDataFlow"
             ),
             "Lean project root must compute finite data-flow source-chain reachability from original sources"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelDataFlowHasOriginalSourceChain (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" || modelDataFlowsReachableFromOriginals.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)"
+                "def modelDataFlowHasOriginalSourceChain (dataFlow : ModelDataFlow) : Bool := dataFlow.sourceKind == \"original\" || modelDataFlowsReachableFromOriginals.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)"
             ),
             "Lean project root must require modeled-target data-flow chains to terminate at reachable original sources"
         );

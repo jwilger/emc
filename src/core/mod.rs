@@ -8,6 +8,7 @@ pub(crate) mod event_commands;
 pub(crate) mod event_runtime;
 pub(crate) mod events;
 pub(crate) mod formal_graph;
+pub(crate) mod formal_model;
 pub(crate) mod formal_project_facts;
 pub(crate) mod formal_slice_facts;
 pub(crate) mod formal_workflow_facts;

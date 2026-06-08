@@ -8,11 +8,10 @@ use serde_json::Value;
 
 use crate::core::connection::{ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::effect::{
-    ArtifactDigest, ChosenEventId, EventConflictId, ModelContentDigest, ProjectionFingerprint,
-    ReviewEventReference,
+    ChosenEventId, EventConflictId, ModelContentDigest, ProjectionFingerprint, ReviewEventReference,
 };
 use crate::core::events::{
-    EventDraft, EventDraftType, slice_automation_from_payload,
+    EventDraft, EventDraftBody, EventDraftType, slice_automation_from_payload,
     slice_bit_level_data_flow_from_payload, slice_board_connection_from_payload,
     slice_board_element_from_payload, slice_command_definition_from_payload,
     slice_event_definition_from_payload, slice_external_payload_from_payload,
@@ -273,10 +272,10 @@ pub(crate) struct InitializeProjectCommand {
 }
 
 impl InitializeProjectCommand {
-    pub(crate) fn new(name: String) -> Result<Self, String> {
+    pub(crate) fn from_semantic(name: ProjectName) -> Result<Self, String> {
         Ok(Self {
             project_stream: project_stream_id()?,
-            name: ProjectName::try_new(name).map_err(|error| error.to_string())?,
+            name,
         })
     }
 }
@@ -314,14 +313,6 @@ pub(crate) struct AddWorkflowCommand {
 }
 
 impl AddWorkflowCommand {
-    pub(crate) fn new(slug: String, name: String, description: String) -> Result<Self, String> {
-        let slug = WorkflowSlug::try_new(slug).map_err(|error| error.to_string())?;
-        let name = ModelName::try_new(name).map_err(|error| error.to_string())?;
-        let description =
-            ModelDescription::try_new(description).map_err(|error| error.to_string())?;
-        Self::from_semantic(slug, name, description)
-    }
-
     pub(crate) fn from_semantic(
         slug: WorkflowSlug,
         name: ModelName,
@@ -366,14 +357,16 @@ pub(crate) struct UpdateWorkflowCommand {
 }
 
 impl UpdateWorkflowCommand {
-    pub(crate) fn new(slug: String, name: String, description: String) -> Result<Self, String> {
-        let slug = WorkflowSlug::try_new(slug).map_err(|error| error.to_string())?;
+    pub(crate) fn from_semantic(
+        slug: WorkflowSlug,
+        name: ModelName,
+        description: ModelDescription,
+    ) -> Result<Self, String> {
         Ok(Self {
             workflow_stream: workflow_stream_id(slug.as_ref())?,
             slug,
-            name: ModelName::try_new(name).map_err(|error| error.to_string())?,
-            description: ModelDescription::try_new(description)
-                .map_err(|error| error.to_string())?,
+            name,
+            description,
         })
     }
 }
@@ -406,8 +399,7 @@ pub(crate) struct RemoveWorkflowCommand {
 }
 
 impl RemoveWorkflowCommand {
-    pub(crate) fn new(slug: String) -> Result<Self, String> {
-        let slug = WorkflowSlug::try_new(slug).map_err(|error| error.to_string())?;
+    pub(crate) fn from_semantic(slug: WorkflowSlug) -> Result<Self, String> {
         Ok(Self {
             workflow_stream: workflow_stream_id(slug.as_ref())?,
             slug,
@@ -440,101 +432,10 @@ pub(crate) struct ConnectWorkflowCommand {
     connection: WorkflowConnection,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) enum ConnectWorkflowInput {
-    Slice {
-        workflow: WorkflowSlug,
-        source: SliceSlug,
-        target: SliceSlug,
-        via: ConnectionKind,
-        name: TransitionTriggerName,
-        payload_contract: Option<PayloadContractName>,
-    },
-    WorkflowExit {
-        workflow: WorkflowSlug,
-        source: SliceSlug,
-        target: WorkflowSlug,
-        via: ConnectionKind,
-        name: TransitionTriggerName,
-        reason: ModelDescription,
-    },
-}
-
-impl ConnectWorkflowInput {
-    pub(crate) fn slice(
-        workflow: WorkflowSlug,
-        source: SliceSlug,
-        target: SliceSlug,
-        via: ConnectionKind,
-        name: TransitionTriggerName,
-        payload_contract: Option<PayloadContractName>,
-    ) -> Self {
-        Self::Slice {
-            workflow,
-            source,
-            target,
-            via,
-            name,
-            payload_contract,
-        }
-    }
-
-    pub(crate) fn workflow_exit(
-        workflow: WorkflowSlug,
-        source: SliceSlug,
-        target: WorkflowSlug,
-        via: ConnectionKind,
-        name: TransitionTriggerName,
-        reason: ModelDescription,
-    ) -> Self {
-        Self::WorkflowExit {
-            workflow,
-            source,
-            target,
-            via,
-            name,
-            reason,
-        }
-    }
-}
-
 impl ConnectWorkflowCommand {
-    pub(crate) fn new(input: ConnectWorkflowInput) -> Result<Self, String> {
-        let workflow = match &input {
-            ConnectWorkflowInput::Slice { workflow, .. }
-            | ConnectWorkflowInput::WorkflowExit { workflow, .. } => workflow,
-        };
-        let workflow_stream = workflow_stream_id(workflow.as_ref())?;
-        let connection = match input {
-            ConnectWorkflowInput::Slice {
-                workflow,
-                source,
-                target,
-                via,
-                name,
-                payload_contract,
-            } => match payload_contract {
-                Some(payload_contract) => WorkflowConnection::new_with_payload_contract(
-                    workflow,
-                    source,
-                    target,
-                    via,
-                    name,
-                    payload_contract,
-                ),
-                None => WorkflowConnection::new(workflow, source, target, via, name),
-            },
-            ConnectWorkflowInput::WorkflowExit {
-                workflow,
-                source,
-                target,
-                via,
-                name,
-                reason,
-            } => WorkflowConnection::new_workflow_exit(workflow, source, target, via, name, reason),
-        };
+    pub(crate) fn from_connection(connection: WorkflowConnection) -> Result<Self, String> {
         Ok(Self {
-            workflow_stream,
+            workflow_stream: workflow_stream_id(connection.workflow_slug().as_ref())?,
             connection,
         })
     }
@@ -572,83 +473,10 @@ pub(crate) struct RemoveWorkflowTransitionCommand {
     removal: WorkflowTransitionRemoval,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) enum RemoveWorkflowTransitionInput {
-    Slice {
-        workflow: WorkflowSlug,
-        source: SliceSlug,
-        target: SliceSlug,
-        via: ConnectionKind,
-        name: TransitionTriggerName,
-    },
-    WorkflowExit {
-        workflow: WorkflowSlug,
-        source: SliceSlug,
-        target: WorkflowSlug,
-        via: ConnectionKind,
-        name: TransitionTriggerName,
-    },
-}
-
-impl RemoveWorkflowTransitionInput {
-    pub(crate) fn slice(
-        workflow: WorkflowSlug,
-        source: SliceSlug,
-        target: SliceSlug,
-        via: ConnectionKind,
-        name: TransitionTriggerName,
-    ) -> Self {
-        Self::Slice {
-            workflow,
-            source,
-            target,
-            via,
-            name,
-        }
-    }
-
-    pub(crate) fn workflow_exit(
-        workflow: WorkflowSlug,
-        source: SliceSlug,
-        target: WorkflowSlug,
-        via: ConnectionKind,
-        name: TransitionTriggerName,
-    ) -> Self {
-        Self::WorkflowExit {
-            workflow,
-            source,
-            target,
-            via,
-            name,
-        }
-    }
-}
-
 impl RemoveWorkflowTransitionCommand {
-    pub(crate) fn new(input: RemoveWorkflowTransitionInput) -> Result<Self, String> {
-        let workflow = match &input {
-            RemoveWorkflowTransitionInput::Slice { workflow, .. }
-            | RemoveWorkflowTransitionInput::WorkflowExit { workflow, .. } => workflow,
-        };
-        let workflow_stream = workflow_stream_id(workflow.as_ref())?;
-        let removal = match input {
-            RemoveWorkflowTransitionInput::Slice {
-                workflow,
-                source,
-                target,
-                via,
-                name,
-            } => WorkflowTransitionRemoval::new(workflow, source, target, via, name),
-            RemoveWorkflowTransitionInput::WorkflowExit {
-                workflow,
-                source,
-                target,
-                via,
-                name,
-            } => WorkflowTransitionRemoval::new_workflow_exit(workflow, source, target, via, name),
-        };
+    pub(crate) fn from_removal(removal: WorkflowTransitionRemoval) -> Result<Self, String> {
         Ok(Self {
-            workflow_stream,
+            workflow_stream: workflow_stream_id(removal.workflow_slug().as_ref())?,
             removal,
         })
     }
@@ -817,22 +645,6 @@ pub(crate) struct AddSliceCommand {
 }
 
 impl AddSliceCommand {
-    pub(crate) fn new(
-        workflow: String,
-        slug: String,
-        name: String,
-        kind: String,
-        description: String,
-    ) -> Result<Self, String> {
-        let workflow = WorkflowSlug::try_new(workflow).map_err(|error| error.to_string())?;
-        let slug = SliceSlug::try_new(slug).map_err(|error| error.to_string())?;
-        let name = ModelName::try_new(name).map_err(|error| error.to_string())?;
-        let description =
-            ModelDescription::try_new(description).map_err(|error| error.to_string())?;
-        let kind = SliceKindName::try_new(kind).map_err(|error| error.to_string())?;
-        Self::from_semantic(workflow, slug, name, kind, description)
-    }
-
     pub(crate) fn from_semantic(
         workflow: WorkflowSlug,
         slug: SliceSlug,
@@ -881,20 +693,18 @@ pub(crate) struct UpdateSliceCommand {
 }
 
 impl UpdateSliceCommand {
-    pub(crate) fn new(
-        slug: String,
-        name: String,
-        kind: String,
-        description: String,
+    pub(crate) fn from_semantic(
+        slug: SliceSlug,
+        name: ModelName,
+        kind: SliceKindName,
+        description: ModelDescription,
     ) -> Result<Self, String> {
-        let slug = SliceSlug::try_new(slug).map_err(|error| error.to_string())?;
         Ok(Self {
             slice_stream: slice_stream_id(slug.as_ref())?,
             slug,
-            name: ModelName::try_new(name).map_err(|error| error.to_string())?,
-            kind: slice_kind(&kind)?,
-            description: ModelDescription::try_new(description)
-                .map_err(|error| error.to_string())?,
+            name,
+            kind: kind.into(),
+            description,
         })
     }
 }
@@ -928,8 +738,7 @@ pub(crate) struct RemoveSliceCommand {
 }
 
 impl RemoveSliceCommand {
-    pub(crate) fn new(slug: String) -> Result<Self, String> {
-        let slug = SliceSlug::try_new(slug).map_err(|error| error.to_string())?;
+    pub(crate) fn from_semantic(slug: SliceSlug) -> Result<Self, String> {
         Ok(Self {
             slice_stream: slice_stream_id(slug.as_ref())?,
             slug,
@@ -952,16 +761,6 @@ impl CommandLogic for RemoveSliceCommand {
             slug: self.slug.clone(),
         }]
         .into())
-    }
-}
-
-fn slice_kind(value: &str) -> Result<SliceKind, String> {
-    match value {
-        "state_view" => Ok(SliceKind::state_view()),
-        "state_change" => Ok(SliceKind::state_change()),
-        "translation" => Ok(SliceKind::translation()),
-        "automation" => Ok(SliceKind::automation()),
-        _ => Err(format!("unknown slice kind {value}")),
     }
 }
 
@@ -1018,9 +817,10 @@ impl Serialize for SliceFactEvent {
         S: Serializer,
     {
         let draft = self.fact.to_event_draft();
+        let payload = draft.payload_json();
         let mut state = serializer.serialize_struct("SliceFactEvent", 2)?;
         state.serialize_field("exported_event_type", &draft.event_type())?;
-        state.serialize_field("payload", draft.payload())?;
+        state.serialize_field("payload", &payload)?;
         state.end()
     }
 }
@@ -1139,6 +939,45 @@ impl SliceFactInput {
             event_type => Err(format!("unsupported slice fact event type {event_type}")),
         }
     }
+
+    pub(crate) fn from_event_body(body: &EventDraftBody) -> Result<Self, String> {
+        match body {
+            EventDraftBody::SliceScenarioAdded { scenario } => Ok(Self::Scenario(scenario.clone())),
+            EventDraftBody::SliceOutcomeAdded { outcome } => Ok(Self::Outcome(outcome.clone())),
+            EventDraftBody::SliceExternalPayloadAdded { external_payload } => {
+                Ok(Self::ExternalPayload(external_payload.clone()))
+            }
+            EventDraftBody::SliceEventDefinitionAdded { event } => {
+                Ok(Self::EventDefinition(event.clone()))
+            }
+            EventDraftBody::SliceCommandDefinitionAdded { command } => {
+                Ok(Self::CommandDefinition(command.clone()))
+            }
+            EventDraftBody::SliceReadModelAdded { read_model } => {
+                Ok(Self::ReadModel(read_model.clone()))
+            }
+            EventDraftBody::SliceViewAdded { view } => Ok(Self::View(view.clone())),
+            EventDraftBody::SliceBitLevelDataFlowAdded { data_flow } => {
+                Ok(Self::BitLevelDataFlow(data_flow.clone()))
+            }
+            EventDraftBody::SliceTranslationAdded { translation } => {
+                Ok(Self::Translation(translation.clone()))
+            }
+            EventDraftBody::SliceAutomationAdded { automation } => {
+                Ok(Self::Automation(automation.clone()))
+            }
+            EventDraftBody::SliceBoardElementAdded { element } => {
+                Ok(Self::BoardElement(element.clone()))
+            }
+            EventDraftBody::SliceBoardConnectionAdded { connection } => {
+                Ok(Self::BoardConnection(connection.clone()))
+            }
+            body => Err(format!(
+                "unsupported slice fact event type {}",
+                body.event_type()
+            )),
+        }
+    }
 }
 
 #[derive(Command)]
@@ -1153,28 +992,20 @@ pub(crate) struct RecordReviewCommand {
 }
 
 impl RecordReviewCommand {
-    pub(crate) fn new(
-        workflow: String,
-        model_content_digest: String,
-        reviewer_id: String,
-        reviewed_at: String,
-        categories: Vec<String>,
+    pub(crate) fn from_semantic(
+        workflow: WorkflowSlug,
+        model_content_digest: ModelContentDigest,
+        reviewer_id: ReviewerId,
+        reviewed_at: ReviewTimestamp,
+        categories: Vec<ReviewRuleName>,
     ) -> Result<Self, String> {
-        let workflow = WorkflowSlug::try_new(workflow).map_err(|error| error.to_string())?;
         Ok(Self {
             review_stream: review_stream_id(workflow.as_ref())?,
             workflow,
-            model_content_digest: ModelContentDigest::new(
-                ArtifactDigest::try_new(model_content_digest).map_err(|error| error.to_string())?,
-            ),
-            reviewer_id: ReviewerId::try_new(reviewer_id).map_err(|error| error.to_string())?,
-            reviewed_at: ReviewTimestamp::try_new(reviewed_at)
-                .map_err(|error| error.to_string())?,
-            categories: categories
-                .into_iter()
-                .map(ReviewRuleName::try_new)
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|error| error.to_string())?,
+            model_content_digest,
+            reviewer_id,
+            reviewed_at,
+            categories,
         })
     }
 }
@@ -1265,15 +1096,14 @@ pub(crate) struct ResolveConflictCommand {
 }
 
 impl ResolveConflictCommand {
-    pub(crate) fn new(conflict_id: String, chosen_event_id: String) -> Result<Self, String> {
+    pub(crate) fn from_semantic(
+        conflict_id: EventConflictId,
+        chosen_event_id: ChosenEventId,
+    ) -> Result<Self, String> {
         Ok(Self {
             project_stream: project_stream_id()?,
-            conflict_id: EventConflictId::new(
-                ArtifactDigest::try_new(conflict_id).map_err(|error| error.to_string())?,
-            ),
-            chosen_event_id: ChosenEventId::new(
-                ArtifactDigest::try_new(chosen_event_id).map_err(|error| error.to_string())?,
-            ),
+            conflict_id,
+            chosen_event_id,
         })
     }
 }

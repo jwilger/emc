@@ -1,5 +1,7 @@
 // Copyright 2026 John Wilger
 
+use std::fmt::Display;
+
 use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest};
 use crate::core::effect::{
     ArtifactFileExtension, CanonicalDeclarationMarker, CanonicalDeclarationPrefix, Effect,
@@ -8,6 +10,30 @@ use crate::core::effect::{
 use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
+use crate::core::formal_model::{
+    FormalModelCommand, FormalModelCommandError, FormalModelCommandInput,
+    FormalModelCommandInputFields, FormalModelDataFlow, FormalModelDataFlowFields,
+    FormalModelOutcome, FormalModelScenario, FormalModelScenarioDefinition,
+    FormalModelScenarioDefinitionFields, FormalModelSlice, FormalModelSliceModule,
+    lean_model_command_error_list as render_lean_model_command_error_list,
+    lean_model_command_input_list as render_lean_model_command_input_list,
+    lean_model_command_list as render_lean_model_command_list,
+    lean_model_data_flow_list as render_lean_model_data_flow_list,
+    lean_model_outcome_list as render_lean_model_outcome_list,
+    lean_model_scenario_definition_list as render_lean_model_scenario_definition_list,
+    lean_model_scenario_list as render_lean_model_scenario_list,
+    lean_model_slice_list as render_lean_model_slice_list,
+    lean_model_slice_module_list as render_lean_model_slice_module_list,
+    quint_model_command_error_list as render_quint_model_command_error_list,
+    quint_model_command_input_list as render_quint_model_command_input_list,
+    quint_model_command_list as render_quint_model_command_list,
+    quint_model_data_flow_list as render_quint_model_data_flow_list,
+    quint_model_outcome_list as render_quint_model_outcome_list,
+    quint_model_scenario_definition_list as render_quint_model_scenario_definition_list,
+    quint_model_scenario_list as render_quint_model_scenario_list,
+    quint_model_slice_list as render_quint_model_slice_list,
+    quint_model_slice_module_list as render_quint_model_slice_module_list,
+};
 use crate::core::formal_project_facts::{
     ProjectAutomation, ProjectAutomationDefinition, ProjectBoardConnection, ProjectBoardElement,
     ProjectCommand, ProjectCommandError, ProjectCommandInput, ProjectDataFlow, ProjectEvent,
@@ -16,10 +42,16 @@ use crate::core::formal_project_facts::{
     ProjectScenarioDefinition, ProjectStream, ProjectTranslation, ProjectTranslationDefinition,
     ProjectView, ProjectViewControl, ProjectViewDefinition, ProjectViewField,
 };
+use crate::core::formal_slice_facts::ScenarioKind;
 use crate::core::project::ProjectName;
 use crate::core::types::{
-    LeanModuleName, ModelDescription, ModelName, QuintModuleName, WorkflowSliceDetail,
-    WorkflowSlug, WorkflowTransitionRecord,
+    BitEncodingSemantics, CommandErrorName, CommandErrorRecoveryKind,
+    CommandInputSourceDescription, CommandInputSourceKind, CommandName, ContractKindName,
+    CoveredDefinitionName, DataFlowSource, DataFlowSourceKind, DataFlowTarget, DatumName,
+    EventAttributeName, EventAttributeSourceField, EventAttributeSourceName, EventName,
+    LeanModuleName, ModelDescription, ModelName, OutcomeLabelName, QuintModuleName, ScenarioName,
+    ScenarioStepText, SliceSlug, SourceChainHop, StreamName, TransformationSemantics,
+    WorkflowSliceDetail, WorkflowSlug, WorkflowTransitionRecord,
 };
 use sha2::{Digest, Sha256};
 
@@ -370,16 +402,26 @@ fn project_root_effects(
     let model_version = "0.1.0";
     let workflow_slug_list = workflow_slug_list(modeled_workflows);
     let workflow_count = modeled_workflows.len();
-    let lean_model_slice_list = lean_model_slice_list(formal_workflows);
-    let lean_model_slice_module_list = lean_model_slice_module_list(formal_workflows);
-    let lean_model_scenario_list = lean_model_scenario_list(inventories.scenarios);
+    let model_slices = formal_model_slices(formal_workflows);
+    let model_slice_modules = formal_model_slice_modules(formal_workflows);
+    let model_scenarios = formal_model_scenarios(inventories.scenarios);
+    let model_scenario_definitions =
+        formal_model_scenario_definitions(inventories.scenario_definitions);
+    let model_data_flows = formal_model_data_flows(inventories.data_flows);
+    let model_outcomes = formal_model_outcomes(inventories.outcomes);
+    let model_command_errors = formal_model_command_errors(inventories.command_errors);
+    let model_commands = formal_model_commands(inventories.commands);
+    let model_command_inputs = formal_model_command_inputs(inventories.command_inputs);
+    let lean_model_slice_list = render_lean_model_slice_list(&model_slices);
+    let lean_model_slice_module_list = render_lean_model_slice_module_list(&model_slice_modules);
+    let lean_model_scenario_list = render_lean_model_scenario_list(&model_scenarios);
     let lean_model_scenario_definition_list =
-        lean_model_scenario_definition_list(inventories.scenario_definitions);
-    let lean_model_data_flow_list = lean_model_data_flow_list(inventories.data_flows);
-    let lean_model_outcome_list = lean_model_outcome_list(inventories.outcomes);
-    let lean_model_command_error_list = lean_model_command_error_list(inventories.command_errors);
-    let lean_model_command_list = lean_model_command_list(inventories.commands);
-    let lean_model_command_input_list = lean_model_command_input_list(inventories.command_inputs);
+        render_lean_model_scenario_definition_list(&model_scenario_definitions);
+    let lean_model_data_flow_list = render_lean_model_data_flow_list(&model_data_flows);
+    let lean_model_outcome_list = render_lean_model_outcome_list(&model_outcomes);
+    let lean_model_command_error_list = render_lean_model_command_error_list(&model_command_errors);
+    let lean_model_command_list = render_lean_model_command_list(&model_commands);
+    let lean_model_command_input_list = render_lean_model_command_input_list(&model_command_inputs);
     let lean_model_read_model_list = lean_model_read_model_list(inventories.read_models);
     let lean_model_read_model_definition_list =
         lean_model_read_model_definition_list(inventories.read_model_definitions);
@@ -407,16 +449,18 @@ fn project_root_effects(
     let lean_model_event_list = lean_model_event_list(inventories.events);
     let lean_model_event_attribute_list =
         lean_model_event_attribute_list(inventories.event_attributes);
-    let quint_model_slice_list = quint_model_slice_list(formal_workflows);
-    let quint_model_slice_module_list = quint_model_slice_module_list(formal_workflows);
-    let quint_model_scenario_list = quint_model_scenario_list(inventories.scenarios);
+    let quint_model_slice_list = render_quint_model_slice_list(&model_slices);
+    let quint_model_slice_module_list = render_quint_model_slice_module_list(&model_slice_modules);
+    let quint_model_scenario_list = render_quint_model_scenario_list(&model_scenarios);
     let quint_model_scenario_definition_list =
-        quint_model_scenario_definition_list(inventories.scenario_definitions);
-    let quint_model_data_flow_list = quint_model_data_flow_list(inventories.data_flows);
-    let quint_model_outcome_list = quint_model_outcome_list(inventories.outcomes);
-    let quint_model_command_error_list = quint_model_command_error_list(inventories.command_errors);
-    let quint_model_command_list = quint_model_command_list(inventories.commands);
-    let quint_model_command_input_list = quint_model_command_input_list(inventories.command_inputs);
+        render_quint_model_scenario_definition_list(&model_scenario_definitions);
+    let quint_model_data_flow_list = render_quint_model_data_flow_list(&model_data_flows);
+    let quint_model_outcome_list = render_quint_model_outcome_list(&model_outcomes);
+    let quint_model_command_error_list =
+        render_quint_model_command_error_list(&model_command_errors);
+    let quint_model_command_list = render_quint_model_command_list(&model_commands);
+    let quint_model_command_input_list =
+        render_quint_model_command_input_list(&model_command_inputs);
     let quint_model_read_model_list = quint_model_read_model_list(inventories.read_models);
     let quint_model_read_model_definition_list =
         quint_model_read_model_definition_list(inventories.read_model_definitions);
@@ -584,9 +628,27 @@ fn project_root_effects(
         ),
         Effect::require_canonical_declaration(
             lean_path.clone(),
+            canonical_declaration_prefix("structure ModelSlice where"),
+            canonical_declaration_marker("structure ModelSlice where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelSliceModule where"),
+            canonical_declaration_marker("structure ModelSliceModule where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  formalModule : String"),
+            canonical_declaration_marker("  formalModule : String"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
             canonical_declaration_prefix("def modelSlices :"),
             canonical_declaration_marker(format!(
-                "def modelSlices : List (String × String) := {lean_model_slice_list}"
+                "def modelSlices : List ModelSlice := {lean_model_slice_list}"
             )),
             lean_message.clone(),
         ),
@@ -594,7 +656,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelSliceModules :"),
             canonical_declaration_marker(format!(
-                "def modelSliceModules : List (String × String × String) := {lean_model_slice_module_list}"
+                "def modelSliceModules : List ModelSliceModule := {lean_model_slice_module_list}"
             )),
             lean_message.clone(),
         ),
@@ -602,7 +664,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelSliceBelongsToDeclaredWorkflow"),
             canonical_declaration_marker(
-                "def modelSliceBelongsToDeclaredWorkflow (slice : String × String) : Bool := modelWorkflows.any (fun workflow => workflow == slice.1)",
+                "def modelSliceBelongsToDeclaredWorkflow (slice : ModelSlice) : Bool := modelWorkflows.any (fun workflow => workflow == slice.workflow)",
             ),
             lean_message.clone(),
         ),
@@ -610,7 +672,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelSliceHasModule"),
             canonical_declaration_marker(
-                "def modelSliceHasModule (slice : String × String) : Bool := modelSliceModules.any (fun sliceModule => sliceModule.1 == slice.1 && sliceModule.2.1 == slice.2 && sliceModule.2.2.isEmpty == false)",
+                "def modelSliceHasModule (slice : ModelSlice) : Bool := modelSliceModules.any (fun sliceModule => sliceModule.workflow == slice.workflow && sliceModule.slice == slice.slice && sliceModule.formalModule.isEmpty == false)",
             ),
             lean_message.clone(),
         ),
@@ -618,7 +680,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelSliceModuleBelongsToDeclaredSlice"),
             canonical_declaration_marker(
-                "def modelSliceModuleBelongsToDeclaredSlice (sliceModule : String × String × String) : Bool := sliceModule.2.2.isEmpty == false && modelSlices.any (fun slice => slice.1 == sliceModule.1 && slice.2 == sliceModule.2.1)",
+                "def modelSliceModuleBelongsToDeclaredSlice (sliceModule : ModelSliceModule) : Bool := sliceModule.formalModule.isEmpty == false && modelSlices.any (fun slice => slice.workflow == sliceModule.workflow && slice.slice == sliceModule.slice)",
             ),
             lean_message.clone(),
         ),
@@ -626,7 +688,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelWorkflowSlicesHaveModules"),
             canonical_declaration_marker(
-                "def modelWorkflowSlicesHaveModules (workflow : String) : Bool := modelSlices.all (fun slice => slice.1 != workflow || modelSliceHasModule slice)",
+                "def modelWorkflowSlicesHaveModules (workflow : String) : Bool := modelSlices.all (fun slice => slice.workflow != workflow || modelSliceHasModule slice)",
             ),
             lean_message.clone(),
         ),
@@ -640,9 +702,81 @@ fn project_root_effects(
         ),
         Effect::require_canonical_declaration(
             lean_path.clone(),
+            canonical_declaration_prefix("structure ModelScenario where"),
+            canonical_declaration_marker("structure ModelScenario where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelScenarioDefinition where"),
+            canonical_declaration_marker("structure ModelScenarioDefinition where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  errorReferences : List String"),
+            canonical_declaration_marker("  errorReferences : List String"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelDataFlow where"),
+            canonical_declaration_marker("structure ModelDataFlow where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  bitEncoding : String"),
+            canonical_declaration_marker("  bitEncoding : String"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelOutcome where"),
+            canonical_declaration_marker("structure ModelOutcome where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  externallyRelevant : Bool"),
+            canonical_declaration_marker("  externallyRelevant : Bool"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelCommandError where"),
+            canonical_declaration_marker("structure ModelCommandError where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  recovery : String"),
+            canonical_declaration_marker("  recovery : String"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelCommand where"),
+            canonical_declaration_marker("structure ModelCommand where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelCommandInput where"),
+            canonical_declaration_marker("structure ModelCommandInput where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  invocationArgumentSourceField : String"),
+            canonical_declaration_marker("  invocationArgumentSourceField : String"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
             canonical_declaration_prefix("def modelScenarios :"),
             canonical_declaration_marker(format!(
-                "def modelScenarios : List (String × String × String × String) := {lean_model_scenario_list}"
+                "def modelScenarios : List ModelScenario := {lean_model_scenario_list}"
             )),
             lean_message.clone(),
         ),
@@ -650,7 +784,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelScenarioDefinitions :"),
             canonical_declaration_marker(format!(
-                "def modelScenarioDefinitions : List (String × String × String × String × String × String × String × List String × List String × String × String × List String) := {lean_model_scenario_definition_list}"
+                "def modelScenarioDefinitions : List ModelScenarioDefinition := {lean_model_scenario_definition_list}"
             )),
             lean_message.clone(),
         ),
@@ -658,7 +792,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlows :"),
             canonical_declaration_marker(format!(
-                "def modelDataFlows : List (String × String × String × String × String × String × String × String) := {lean_model_data_flow_list}"
+                "def modelDataFlows : List ModelDataFlow := {lean_model_data_flow_list}"
             )),
             lean_message.clone(),
         ),
@@ -666,7 +800,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelOutcomes :"),
             canonical_declaration_marker(format!(
-                "def modelOutcomes : List (String × String × String × List String × Bool) := {lean_model_outcome_list}"
+                "def modelOutcomes : List ModelOutcome := {lean_model_outcome_list}"
             )),
             lean_message.clone(),
         ),
@@ -674,7 +808,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelCommandErrors :"),
             canonical_declaration_marker(format!(
-                "def modelCommandErrors : List (String × String × String × String × String × String) := {lean_model_command_error_list}"
+                "def modelCommandErrors : List ModelCommandError := {lean_model_command_error_list}"
             )),
             lean_message.clone(),
         ),
@@ -682,7 +816,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelCommands :"),
             canonical_declaration_marker(format!(
-                "def modelCommands : List (String × String × String) := {lean_model_command_list}"
+                "def modelCommands : List ModelCommand := {lean_model_command_list}"
             )),
             lean_message.clone(),
         ),
@@ -690,7 +824,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelCommandInputs :"),
             canonical_declaration_marker(format!(
-                "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) := {lean_model_command_input_list}"
+                "def modelCommandInputs : List ModelCommandInput := {lean_model_command_input_list}"
             )),
             lean_message.clone(),
         ),
@@ -842,7 +976,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelScenarioDefinitionHasGwt"),
             canonical_declaration_marker(
-                "def modelScenarioDefinitionHasGwt (scenario : String × String × String × String × String × String × String × List String × List String × String × String × List String) : Bool := scenario.2.2.2.2.1.isEmpty == false && scenario.2.2.2.2.2.1.isEmpty == false && scenario.2.2.2.2.2.2.1.isEmpty == false",
+                "def modelScenarioDefinitionHasGwt (scenario : ModelScenarioDefinition) : Bool := scenario.given.isEmpty == false && scenario.when.isEmpty == false && scenario.thenStep.isEmpty == false",
             ),
             lean_message.clone(),
         ),
@@ -850,7 +984,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelScenarioKindIsFirstClass"),
             canonical_declaration_marker(
-                "def modelScenarioKindIsFirstClass (scenario : String × String × String × String × String × String × String × List String × List String × String × String × List String) : Bool := scenario.2.2.1 == \"acceptance\" || scenario.2.2.1 == \"contract\"",
+                "def modelScenarioKindIsFirstClass (scenario : ModelScenarioDefinition) : Bool := scenario.scenarioKind == \"acceptance\" || scenario.scenarioKind == \"contract\"",
             ),
             lean_message.clone(),
         ),
@@ -858,7 +992,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowIsBitComplete"),
             canonical_declaration_marker(
-                "def modelDataFlowIsBitComplete (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, datum, sourceKind, source, transformation, target, bitEncoding) := dataFlow; datum.isEmpty == false && sourceKind.isEmpty == false && source.isEmpty == false && transformation.isEmpty == false && target.isEmpty == false && bitEncoding.isEmpty == false",
+                "def modelDataFlowIsBitComplete (dataFlow : ModelDataFlow) : Bool := dataFlow.datum.isEmpty == false && dataFlow.sourceKind.isEmpty == false && dataFlow.source.isEmpty == false && dataFlow.transformation.isEmpty == false && dataFlow.target.isEmpty == false && dataFlow.bitEncoding.isEmpty == false",
             ),
             lean_message.clone(),
         ),
@@ -866,7 +1000,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowCoversDatumTarget"),
             canonical_declaration_marker(
-                "def modelDataFlowCoversDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) : Bool := modelDataFlows.any (fun dataFlow => let (flowWorkflow, flowSlice, flowDatum, _, _, _, flowTarget, _) := dataFlow; flowWorkflow == workflow && flowSlice == slice && flowDatum == datum && flowTarget == target && modelDataFlowIsBitComplete dataFlow)",
+                "def modelDataFlowCoversDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) : Bool := modelDataFlows.any (fun dataFlow => dataFlow.workflow == workflow && dataFlow.slice == slice && dataFlow.datum == datum && dataFlow.target == target && modelDataFlowIsBitComplete dataFlow)",
             ),
             lean_message.clone(),
         ),
@@ -874,7 +1008,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowBitEncodingMatchesDatumTarget"),
             canonical_declaration_marker(
-                "def modelDataFlowBitEncodingMatchesDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) (bitEncoding : String) : Bool := modelDataFlows.any (fun dataFlow => let (flowWorkflow, flowSlice, flowDatum, _, _, _, flowTarget, flowBitEncoding) := dataFlow; flowWorkflow == workflow && flowSlice == slice && flowDatum == datum && flowTarget == target && flowBitEncoding == bitEncoding && modelDataFlowIsBitComplete dataFlow)",
+                "def modelDataFlowBitEncodingMatchesDatumTarget (workflow : String) (slice : String) (datum : String) (target : String) (bitEncoding : String) : Bool := modelDataFlows.any (fun dataFlow => dataFlow.workflow == workflow && dataFlow.slice == slice && dataFlow.datum == datum && dataFlow.target == target && dataFlow.bitEncoding == bitEncoding && modelDataFlowIsBitComplete dataFlow)",
             ),
             lean_message.clone(),
         ),
@@ -882,7 +1016,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowSourceBitEncodingMatchesModeledSource"),
             canonical_declaration_marker(
-                "def modelDataFlowSourceBitEncodingMatchesModeledSource (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, datum, _, source, _, _, bitEncoding) := dataFlow; (modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source) == false) || modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, sourceBitEncoding) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && sourceBitEncoding == bitEncoding && modelDataFlowIsBitComplete sourceFlow)",
+                "def modelDataFlowSourceBitEncodingMatchesModeledSource (dataFlow : ModelDataFlow) : Bool := (modelDataFlows.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source) == false) || modelDataFlows.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source && sourceFlow.bitEncoding == dataFlow.bitEncoding && modelDataFlowIsBitComplete sourceFlow)",
             ),
             lean_message.clone(),
         ),
@@ -890,7 +1024,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowHasModeledTransformationSemantics"),
             canonical_declaration_marker(
-                "def modelDataFlowHasModeledTransformationSemantics (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, transformation, _, _) := dataFlow; transformation == \"identity\" || transformation == \"projection\" || transformation == \"derivation\" || transformation == \"default\" || transformation == \"absence\" || transformation == \"transformation\"",
+                "def modelDataFlowHasModeledTransformationSemantics (dataFlow : ModelDataFlow) : Bool := dataFlow.transformation == \"identity\" || dataFlow.transformation == \"projection\" || dataFlow.transformation == \"derivation\" || dataFlow.transformation == \"default\" || dataFlow.transformation == \"absence\" || dataFlow.transformation == \"transformation\"",
             ),
             lean_message.clone(),
         ),
@@ -898,7 +1032,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowHasModeledSourceKind"),
             canonical_declaration_marker(
-                "def modelDataFlowHasModeledSourceKind (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, sourceKind, source, _, _, _) := dataFlow; (sourceKind == \"original\" && source.isEmpty == false) || (sourceKind == \"modeled_target\" && source.isEmpty == false)",
+                "def modelDataFlowHasModeledSourceKind (dataFlow : ModelDataFlow) : Bool := (dataFlow.sourceKind == \"original\" && dataFlow.source.isEmpty == false) || (dataFlow.sourceKind == \"modeled_target\" && dataFlow.source.isEmpty == false)",
             ),
             lean_message.clone(),
         ),
@@ -906,7 +1040,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowModeledSourceResolves"),
             canonical_declaration_marker(
-                "def modelDataFlowModeledSourceResolves (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, datum, sourceKind, source, _, _, _) := dataFlow; sourceKind != \"modeled_target\" || modelDataFlows.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && modelDataFlowIsBitComplete sourceFlow)",
+                "def modelDataFlowModeledSourceResolves (dataFlow : ModelDataFlow) : Bool := dataFlow.sourceKind != \"modeled_target\" || modelDataFlows.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source && modelDataFlowIsBitComplete sourceFlow)",
             ),
             lean_message.clone(),
         ),
@@ -914,7 +1048,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelSameDataFlowTarget"),
             canonical_declaration_marker(
-                "def modelSameDataFlowTarget (left : String × String × String × String × String × String × String × String) (right : String × String × String × String × String × String × String × String) : Bool := let (leftWorkflow, leftSlice, leftDatum, _, _, _, leftTarget, _) := left; let (rightWorkflow, rightSlice, rightDatum, _, _, _, rightTarget, _) := right; leftWorkflow == rightWorkflow && leftSlice == rightSlice && leftDatum == rightDatum && leftTarget == rightTarget",
+                "def modelSameDataFlowTarget (left : ModelDataFlow) (right : ModelDataFlow) : Bool := left.workflow == right.workflow && left.slice == right.slice && left.datum == right.datum && left.target == right.target",
             ),
             lean_message.clone(),
         ),
@@ -922,7 +1056,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowTargetsFromReachable"),
             canonical_declaration_marker(
-                "def modelDataFlowTargetsFromReachable (reachable : List (String × String × String × String × String × String × String × String)) : List (String × String × String × String × String × String × String × String) := modelDataFlows.filter (fun dataFlow => let (workflow, slice, datum, sourceKind, source, _, _, _) := dataFlow; sourceKind == \"modeled_target\" && reachable.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, _) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && modelDataFlowIsBitComplete sourceFlow))",
+                "def modelDataFlowTargetsFromReachable (reachable : List ModelDataFlow) : List ModelDataFlow := modelDataFlows.filter (fun dataFlow => dataFlow.sourceKind == \"modeled_target\" && reachable.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source && modelDataFlowIsBitComplete sourceFlow))",
             ),
             lean_message.clone(),
         ),
@@ -930,7 +1064,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowsReachableFromOriginalsAfterFuel"),
             canonical_declaration_marker(
-                "def modelDataFlowsReachableFromOriginalsAfterFuel : Nat -> List (String × String × String × String × String × String × String × String) -> List (String × String × String × String × String × String × String × String)",
+                "def modelDataFlowsReachableFromOriginalsAfterFuel : Nat -> List ModelDataFlow -> List ModelDataFlow",
             ),
             lean_message.clone(),
         ),
@@ -938,7 +1072,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowsReachableFromOriginals :"),
             canonical_declaration_marker(
-                "def modelDataFlowsReachableFromOriginals : List (String × String × String × String × String × String × String × String) := modelDataFlowsReachableFromOriginalsAfterFuel modelDataFlows.length (modelDataFlows.filter (fun dataFlow => let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" && modelDataFlowIsBitComplete dataFlow))",
+                "def modelDataFlowsReachableFromOriginals : List ModelDataFlow := modelDataFlowsReachableFromOriginalsAfterFuel modelDataFlows.length (modelDataFlows.filter (fun dataFlow => dataFlow.sourceKind == \"original\" && modelDataFlowIsBitComplete dataFlow))",
             ),
             lean_message.clone(),
         ),
@@ -946,7 +1080,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowHasOriginalSourceChain"),
             canonical_declaration_marker(
-                "def modelDataFlowHasOriginalSourceChain (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" || modelDataFlowsReachableFromOriginals.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)",
+                "def modelDataFlowHasOriginalSourceChain (dataFlow : ModelDataFlow) : Bool := dataFlow.sourceKind == \"original\" || modelDataFlowsReachableFromOriginals.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)",
             ),
             lean_message.clone(),
         ),
@@ -954,7 +1088,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowTargetsFromBitPreservingReachable"),
             canonical_declaration_marker(
-                "def modelDataFlowTargetsFromBitPreservingReachable (reachable : List (String × String × String × String × String × String × String × String)) : List (String × String × String × String × String × String × String × String) := modelDataFlows.filter (fun dataFlow => let (workflow, slice, datum, sourceKind, source, _, _, bitEncoding) := dataFlow; sourceKind == \"modeled_target\" && reachable.any (fun sourceFlow => let (sourceWorkflow, sourceSlice, sourceDatum, _, _, _, sourceTarget, sourceBitEncoding) := sourceFlow; sourceWorkflow == workflow && sourceSlice == slice && sourceDatum == datum && sourceTarget == source && sourceBitEncoding == bitEncoding && modelDataFlowIsBitComplete sourceFlow))",
+                "def modelDataFlowTargetsFromBitPreservingReachable (reachable : List ModelDataFlow) : List ModelDataFlow := modelDataFlows.filter (fun dataFlow => dataFlow.sourceKind == \"modeled_target\" && reachable.any (fun sourceFlow => sourceFlow.workflow == dataFlow.workflow && sourceFlow.slice == dataFlow.slice && sourceFlow.datum == dataFlow.datum && sourceFlow.target == dataFlow.source && sourceFlow.bitEncoding == dataFlow.bitEncoding && modelDataFlowIsBitComplete sourceFlow))",
             ),
             lean_message.clone(),
         ),
@@ -964,7 +1098,7 @@ fn project_root_effects(
                 "def modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel",
             ),
             canonical_declaration_marker(
-                "def modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel : Nat -> List (String × String × String × String × String × String × String × String) -> List (String × String × String × String × String × String × String × String)",
+                "def modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel : Nat -> List ModelDataFlow -> List ModelDataFlow",
             ),
             lean_message.clone(),
         ),
@@ -974,7 +1108,7 @@ fn project_root_effects(
                 "def modelDataFlowsReachableFromOriginalsWithPreservedBits :",
             ),
             canonical_declaration_marker(
-                "def modelDataFlowsReachableFromOriginalsWithPreservedBits : List (String × String × String × String × String × String × String × String) := modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel modelDataFlows.length (modelDataFlows.filter (fun dataFlow => let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" && modelDataFlowIsBitComplete dataFlow))",
+                "def modelDataFlowsReachableFromOriginalsWithPreservedBits : List ModelDataFlow := modelDataFlowsReachableFromOriginalsWithPreservedBitsAfterFuel modelDataFlows.length (modelDataFlows.filter (fun dataFlow => dataFlow.sourceKind == \"original\" && modelDataFlowIsBitComplete dataFlow))",
             ),
             lean_message.clone(),
         ),
@@ -982,7 +1116,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlowHasBitPreservingOriginalSourceChain"),
             canonical_declaration_marker(
-                "def modelDataFlowHasBitPreservingOriginalSourceChain (dataFlow : String × String × String × String × String × String × String × String) : Bool := let (_, _, _, sourceKind, _, _, _, _) := dataFlow; sourceKind == \"original\" || modelDataFlowsReachableFromOriginalsWithPreservedBits.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)",
+                "def modelDataFlowHasBitPreservingOriginalSourceChain (dataFlow : ModelDataFlow) : Bool := dataFlow.sourceKind == \"original\" || modelDataFlowsReachableFromOriginalsWithPreservedBits.any (fun reachableFlow => modelSameDataFlowTarget reachableFlow dataFlow)",
             ),
             lean_message.clone(),
         ),
@@ -990,7 +1124,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelCommandInputHasModeledDataFlow"),
             canonical_declaration_marker(
-                "def modelCommandInputHasModeledDataFlow (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetCommand, datum, _, _, _, _, _, _, _, _, _, _, _, _, _) := input; modelDataFlowCoversDatumTarget workflow slice datum targetCommand",
+                "def modelCommandInputHasModeledDataFlow (input : ModelCommandInput) : Bool := modelDataFlowCoversDatumTarget input.workflow input.slice input.input input.command",
             ),
             lean_message.clone(),
         ),
@@ -1054,7 +1188,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelCommandInputHasProvenance"),
             canonical_declaration_marker(
-                "def modelCommandInputHasProvenance (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, _, sourceDescription, provenanceChain, _, _, _, _, _, _, _, _, _, _) := input; sourceDescription.isEmpty == false && provenanceChain.isEmpty == false",
+                "def modelCommandInputHasProvenance (input : ModelCommandInput) : Bool := input.sourceDescription.isEmpty == false && input.provenanceChain.isEmpty == false",
             ),
             lean_message.clone(),
         ),
@@ -1062,7 +1196,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelCommandInputTracesToInvocationSource"),
             canonical_declaration_marker(
-                "def modelCommandInputTracesToInvocationSource (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, sourceKind, _, _, eventStreamSourceEvent, eventStreamSourceAttribute, externalPayloadSourceName, externalPayloadSourceField, generatedSourceName, generatedSourceField, sessionSourceName, sessionSourceField, invocationArgumentSourceName, invocationArgumentSourceField) := input; sourceKind == \"actor\" || (sourceKind == \"event_stream_state\" && eventStreamSourceEvent.isEmpty == false && eventStreamSourceAttribute.isEmpty == false) || (sourceKind == \"external_payload\" && externalPayloadSourceName.isEmpty == false && externalPayloadSourceField.isEmpty == false) || (sourceKind == \"generated\" && generatedSourceName.isEmpty == false && generatedSourceField.isEmpty == false) || (sourceKind == \"session\" && sessionSourceName.isEmpty == false && sessionSourceField.isEmpty == false) || (sourceKind == \"invocation_argument\" && invocationArgumentSourceName.isEmpty == false && invocationArgumentSourceField.isEmpty == false)",
+                "def modelCommandInputTracesToInvocationSource (input : ModelCommandInput) : Bool := input.sourceKind == \"actor\" || (input.sourceKind == \"event_stream_state\" && input.eventStreamSourceEvent.isEmpty == false && input.eventStreamSourceAttribute.isEmpty == false) || (input.sourceKind == \"external_payload\" && input.externalPayloadSourceName.isEmpty == false && input.externalPayloadSourceField.isEmpty == false) || (input.sourceKind == \"generated\" && input.generatedSourceName.isEmpty == false && input.generatedSourceField.isEmpty == false) || (input.sourceKind == \"session\" && input.sessionSourceName.isEmpty == false && input.sessionSourceField.isEmpty == false) || (input.sourceKind == \"invocation_argument\" && input.invocationArgumentSourceName.isEmpty == false && input.invocationArgumentSourceField.isEmpty == false)",
             ),
             lean_message.clone(),
         ),
@@ -1126,7 +1260,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelControlProvidesCommandInput"),
             canonical_declaration_marker(
-                "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) : Bool := control.1 == input.1 && control.2.2.2.2.1 == input.2.2.1 && control.2.2.2.2.2.1 == input.2.2.2.1",
+                "def modelControlProvidesCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) (input : ModelCommandInput) : Bool := control.1 == input.workflow && control.2.2.2.2.1 == input.command && control.2.2.2.2.2.1 == input.input",
             ),
             lean_message.clone(),
         ),
@@ -1134,7 +1268,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViewControlProvidesEveryCommandInput"),
             canonical_declaration_marker(
-                "def modelViewControlProvidesEveryCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) : Bool := modelCommandInputs.all (fun input => input.1 != control.1 || input.2.2.1 != control.2.2.2.2.1 || modelViewControls.any (fun providedInput => providedInput.1 == control.1 && providedInput.2.1 == control.2.1 && providedInput.2.2.1 == control.2.2.1 && providedInput.2.2.2.1 == control.2.2.2.1 && providedInput.2.2.2.2.1 == control.2.2.2.2.1 && modelControlProvidesCommandInput providedInput input))",
+                "def modelViewControlProvidesEveryCommandInput (control : String × String × String × String × String × String × String × String × String × Bool × Bool × List String × String × String × String × String × String × String × String) : Bool := modelCommandInputs.all (fun input => input.workflow != control.1 || input.command != control.2.2.2.2.1 || modelViewControls.any (fun providedInput => providedInput.1 == control.1 && providedInput.2.1 == control.2.1 && providedInput.2.2.1 == control.2.2.1 && providedInput.2.2.2.1 == control.2.2.2.1 && providedInput.2.2.2.2.1 == control.2.2.2.2.1 && modelControlProvidesCommandInput providedInput input))",
             ),
             lean_message.clone(),
         ),
@@ -1142,7 +1276,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelOutcomeBranchIsModeled"),
             canonical_declaration_marker(
-                "def modelOutcomeBranchIsModeled (outcome : String × String × String × List String × Bool) : Bool := let (_, _, outcomeName, events, _) := outcome; outcomeName.isEmpty == false && events.isEmpty == false",
+                "def modelOutcomeBranchIsModeled (outcome : ModelOutcome) : Bool := outcome.outcome.isEmpty == false && outcome.events.isEmpty == false",
             ),
             lean_message.clone(),
         ),
@@ -1150,7 +1284,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelCommandErrorRecoveryIsModeled"),
             canonical_declaration_marker(
-                "def modelCommandErrorRecoveryIsModeled (commandError : String × String × String × String × String × String) : Bool := let (_, _, command, error, scenario, recovery) := commandError; command.isEmpty == false && error.isEmpty == false && scenario.isEmpty == false && recovery.isEmpty == false",
+                "def modelCommandErrorRecoveryIsModeled (commandError : ModelCommandError) : Bool := commandError.command.isEmpty == false && commandError.error.isEmpty == false && commandError.scenario.isEmpty == false && commandError.recovery.isEmpty == false",
             ),
             lean_message.clone(),
         ),
@@ -3681,396 +3815,375 @@ fn workflow_slug_list(modeled_workflows: &[ModeledWorkflowLayout]) -> String {
     )
 }
 
-fn lean_model_slice_list(formal_workflows: &[FormalWorkflowGraph]) -> String {
-    let mut memberships = formal_workflows
+fn formal_model_slices(formal_workflows: &[FormalWorkflowGraph]) -> Vec<FormalModelSlice> {
+    formal_workflows
         .iter()
         .flat_map(|workflow| {
             workflow
                 .slice_details()
                 .as_slice()
                 .iter()
-                .map(|slice| (workflow.slug().as_ref(), slice.slug().as_ref()))
+                .map(|slice| FormalModelSlice::new(workflow.slug().clone(), slice.slug().clone()))
         })
-        .collect::<Vec<_>>();
-    memberships.sort_unstable();
-    format!(
-        "[{}]",
-        memberships
-            .into_iter()
-            .map(|(workflow_slug, slice_slug)| {
-                format!(
-                    "({}, {})",
-                    json_string(workflow_slug),
-                    json_string(slice_slug)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
+        .collect()
 }
 
-fn quint_model_slice_list(formal_workflows: &[FormalWorkflowGraph]) -> String {
-    let mut memberships = formal_workflows
-        .iter()
-        .flat_map(|workflow| {
-            workflow
-                .slice_details()
-                .as_slice()
-                .iter()
-                .map(|slice| (workflow.slug().as_ref(), slice.slug().as_ref()))
-        })
-        .collect::<Vec<_>>();
-    memberships.sort_unstable();
-    format!(
-        "[{}]",
-        memberships
-            .into_iter()
-            .map(|(workflow_slug, slice_slug)| {
-                format!(
-                    "{{ workflow: {}, slice: {} }}",
-                    json_string(workflow_slug),
-                    json_string(slice_slug)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
-    )
-}
-
-fn lean_model_slice_module_list(formal_workflows: &[FormalWorkflowGraph]) -> String {
-    let mut memberships = formal_workflows
+fn formal_model_slice_modules(
+    formal_workflows: &[FormalWorkflowGraph],
+) -> Vec<FormalModelSliceModule> {
+    formal_workflows
         .iter()
         .flat_map(|workflow| {
             workflow.slice_details().as_slice().iter().map(|slice| {
-                (
-                    workflow.slug().as_ref(),
-                    slice.slug().as_ref(),
-                    module_name_from_model(slice.name().clone()),
+                FormalModelSliceModule::new(
+                    workflow.slug().clone(),
+                    slice.slug().clone(),
+                    lean_module_name(module_name_from_model(slice.name().clone())),
                 )
             })
         })
-        .collect::<Vec<_>>();
-    memberships.sort_unstable();
-    format!(
-        "[{}]",
-        memberships
-            .into_iter()
-            .map(|(workflow_slug, slice_slug, slice_module)| {
-                format!(
-                    "({}, {}, {})",
-                    json_string(workflow_slug),
-                    json_string(slice_slug),
-                    json_string(&slice_module)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
+        .collect()
 }
 
-fn quint_model_slice_module_list(formal_workflows: &[FormalWorkflowGraph]) -> String {
-    let mut memberships = formal_workflows
-        .iter()
-        .flat_map(|workflow| {
-            workflow.slice_details().as_slice().iter().map(|slice| {
-                (
-                    workflow.slug().as_ref(),
-                    slice.slug().as_ref(),
-                    module_name_from_model(slice.name().clone()),
-                )
-            })
-        })
-        .collect::<Vec<_>>();
-    memberships.sort_unstable();
-    format!(
-        "[{}]",
-        memberships
-            .into_iter()
-            .map(|(workflow_slug, slice_slug, slice_module)| {
-                format!(
-                    "{{ workflow: {}, slice: {}, formalModule: {} }}",
-                    json_string(workflow_slug),
-                    json_string(slice_slug),
-                    json_string(&slice_module)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
-    )
-}
-
-fn lean_model_scenario_list(project_scenarios: &[ProjectScenario]) -> String {
-    let mut project_scenarios = project_scenarios
+fn formal_model_scenarios(project_scenarios: &[ProjectScenario]) -> Vec<FormalModelScenario> {
+    project_scenarios
         .iter()
         .map(|scenario| {
-            (
-                scenario.workflow_slug(),
-                scenario.slice_slug(),
-                scenario.scenario_kind(),
-                scenario.scenario(),
+            FormalModelScenario::new(
+                semantic_value(
+                    "workflow slug",
+                    scenario.workflow_slug(),
+                    WorkflowSlug::try_new,
+                ),
+                semantic_value("slice slug", scenario.slice_slug(), SliceSlug::try_new),
+                semantic_value(
+                    "scenario kind",
+                    scenario.scenario_kind(),
+                    ScenarioKind::try_new,
+                ),
+                semantic_value("scenario name", scenario.scenario(), ScenarioName::try_new),
             )
         })
-        .collect::<Vec<_>>();
-    project_scenarios.sort_unstable();
-    format!(
-        "[{}]",
-        project_scenarios
-            .into_iter()
-            .map(|(workflow_slug, slice_slug, scenario_kind, scenario)| {
-                format!(
-                    "({}, {}, {}, {})",
-                    json_string(workflow_slug),
-                    json_string(slice_slug),
-                    json_string(scenario_kind),
-                    json_string(scenario)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
+        .collect()
 }
 
-fn quint_model_scenario_list(project_scenarios: &[ProjectScenario]) -> String {
-    let mut project_scenarios = project_scenarios
+fn formal_model_scenario_definitions(
+    scenario_definitions: &[ProjectScenarioDefinition],
+) -> Vec<FormalModelScenarioDefinition> {
+    scenario_definitions
         .iter()
         .map(|scenario| {
-            (
-                scenario.workflow_slug(),
-                scenario.slice_slug(),
-                scenario.scenario_kind(),
-                scenario.scenario(),
+            FormalModelScenarioDefinition::new(FormalModelScenarioDefinitionFields {
+                workflow: semantic_value(
+                    "workflow slug",
+                    scenario.workflow_slug(),
+                    WorkflowSlug::try_new,
+                ),
+                slice: semantic_value("slice slug", scenario.slice_slug(), SliceSlug::try_new),
+                scenario_kind: semantic_value(
+                    "scenario kind",
+                    scenario.scenario_kind(),
+                    ScenarioKind::try_new,
+                ),
+                scenario: semantic_value(
+                    "scenario name",
+                    scenario.scenario(),
+                    ScenarioName::try_new,
+                ),
+                given: semantic_value(
+                    "scenario given step",
+                    scenario.given(),
+                    ScenarioStepText::try_new,
+                ),
+                when: semantic_value(
+                    "scenario when step",
+                    scenario.when(),
+                    ScenarioStepText::try_new,
+                ),
+                then: semantic_value(
+                    "scenario then step",
+                    scenario.then(),
+                    ScenarioStepText::try_new,
+                ),
+                read_streams: semantic_values(
+                    "scenario read stream",
+                    scenario.read_streams(),
+                    StreamName::try_new,
+                ),
+                written_streams: semantic_values(
+                    "scenario written stream",
+                    scenario.written_streams(),
+                    StreamName::try_new,
+                ),
+                contract_kind: optional_semantic_value(
+                    "scenario contract kind",
+                    scenario.contract_kind(),
+                    ContractKindName::try_new,
+                ),
+                covered_definition: optional_semantic_value(
+                    "scenario covered definition",
+                    scenario.covered_definition(),
+                    CoveredDefinitionName::try_new,
+                ),
+                error_references: semantic_values(
+                    "scenario error reference",
+                    scenario.error_references(),
+                    CommandErrorName::try_new,
+                ),
+            })
+        })
+        .collect()
+}
+
+fn formal_model_data_flows(project_data_flows: &[ProjectDataFlow]) -> Vec<FormalModelDataFlow> {
+    project_data_flows
+        .iter()
+        .map(|data_flow| {
+            FormalModelDataFlow::new(FormalModelDataFlowFields {
+                workflow: semantic_value(
+                    "workflow slug",
+                    data_flow.workflow_slug(),
+                    WorkflowSlug::try_new,
+                ),
+                slice: semantic_value("slice slug", data_flow.slice_slug(), SliceSlug::try_new),
+                datum: semantic_value("data-flow datum", data_flow.datum(), DatumName::try_new),
+                source_kind: semantic_value(
+                    "data-flow source kind",
+                    data_flow.source_kind(),
+                    DataFlowSourceKind::try_new,
+                ),
+                source: semantic_value(
+                    "data-flow source",
+                    data_flow.source(),
+                    DataFlowSource::try_new,
+                ),
+                transformation: semantic_value(
+                    "data-flow transformation",
+                    data_flow.transformation(),
+                    TransformationSemantics::try_new,
+                ),
+                target: semantic_value(
+                    "data-flow target",
+                    data_flow.target(),
+                    DataFlowTarget::try_new,
+                ),
+                bit_encoding: semantic_value(
+                    "data-flow bit encoding",
+                    data_flow.bit_encoding(),
+                    BitEncodingSemantics::try_new,
+                ),
+            })
+        })
+        .collect()
+}
+
+fn formal_model_outcomes(project_outcomes: &[ProjectOutcome]) -> Vec<FormalModelOutcome> {
+    project_outcomes
+        .iter()
+        .map(|outcome| {
+            FormalModelOutcome::new(
+                semantic_value(
+                    "workflow slug",
+                    outcome.workflow_slug(),
+                    WorkflowSlug::try_new,
+                ),
+                semantic_value("slice slug", outcome.slice_slug(), SliceSlug::try_new),
+                semantic_value(
+                    "outcome label",
+                    outcome.outcome(),
+                    OutcomeLabelName::try_new,
+                ),
+                semantic_values("outcome event", outcome.events(), EventName::try_new),
+                outcome.externally_relevant(),
             )
         })
-        .collect::<Vec<_>>();
-    project_scenarios.sort_unstable();
-    format!(
-        "[{}]",
-        project_scenarios
-            .into_iter()
-            .map(|(workflow_slug, slice_slug, scenario_kind, scenario)| {
-                format!(
-                    "{{ workflow: {}, slice: {}, scenarioKind: {}, scenario: {} }}",
-                    json_string(workflow_slug),
-                    json_string(slice_slug),
-                    json_string(scenario_kind),
-                    json_string(scenario)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
+        .collect()
 }
 
-fn lean_model_scenario_definition_list(
-    scenario_definitions: &[ProjectScenarioDefinition],
-) -> String {
-    let mut scenario_definitions = scenario_definitions.to_vec();
-    scenario_definitions.sort();
-    format!(
-        "[{}]",
-        scenario_definitions
-            .into_iter()
-            .map(|scenario| {
-                format!(
-                    "({}, {}, {}, {}, {}, {}, {}, [{}], [{}], {}, {}, [{}])",
-                    json_string(scenario.workflow_slug()),
-                    json_string(scenario.slice_slug()),
-                    json_string(scenario.scenario_kind()),
-                    json_string(scenario.scenario()),
-                    json_string(scenario.given()),
-                    json_string(scenario.when()),
-                    json_string(scenario.then()),
-                    json_string_list(scenario.read_streams()),
-                    json_string_list(scenario.written_streams()),
-                    json_string(scenario.contract_kind()),
-                    json_string(scenario.covered_definition()),
-                    json_string_list(scenario.error_references())
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
+fn formal_model_command_errors(
+    project_command_errors: &[ProjectCommandError],
+) -> Vec<FormalModelCommandError> {
+    project_command_errors
+        .iter()
+        .map(|command_error| {
+            FormalModelCommandError::new(
+                semantic_value(
+                    "workflow slug",
+                    command_error.workflow_slug(),
+                    WorkflowSlug::try_new,
+                ),
+                semantic_value("slice slug", command_error.slice_slug(), SliceSlug::try_new),
+                semantic_value(
+                    "command name",
+                    command_error.command(),
+                    CommandName::try_new,
+                ),
+                semantic_value(
+                    "command error name",
+                    command_error.error(),
+                    CommandErrorName::try_new,
+                ),
+                semantic_value(
+                    "scenario name",
+                    command_error.scenario(),
+                    ScenarioName::try_new,
+                ),
+                semantic_value(
+                    "command error recovery",
+                    command_error.recovery(),
+                    CommandErrorRecoveryKind::try_new,
+                ),
+            )
+        })
+        .collect()
 }
 
-fn quint_model_scenario_definition_list(
-    scenario_definitions: &[ProjectScenarioDefinition],
-) -> String {
-    let mut scenario_definitions = scenario_definitions.to_vec();
-    scenario_definitions.sort();
-    format!(
-        "[{}]",
-        scenario_definitions
-            .into_iter()
-            .map(|scenario| {
-                format!(
-                    "{{ workflow: {}, slice: {}, scenarioKind: {}, scenario: {}, given: {}, when: {}, then: {}, readStreams: [{}], writtenStreams: [{}], contractKind: {}, coveredDefinition: {}, errorReferences: [{}] }}",
-                    json_string(scenario.workflow_slug()),
-                    json_string(scenario.slice_slug()),
-                    json_string(scenario.scenario_kind()),
-                    json_string(scenario.scenario()),
-                    json_string(scenario.given()),
-                    json_string(scenario.when()),
-                    json_string(scenario.then()),
-                    json_string_list(scenario.read_streams()),
-                    json_string_list(scenario.written_streams()),
-                    json_string(scenario.contract_kind()),
-                    json_string(scenario.covered_definition()),
-                    json_string_list(scenario.error_references())
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
+fn formal_model_commands(project_commands: &[ProjectCommand]) -> Vec<FormalModelCommand> {
+    project_commands
+        .iter()
+        .map(|command| {
+            FormalModelCommand::new(
+                semantic_value(
+                    "workflow slug",
+                    command.workflow_slug(),
+                    WorkflowSlug::try_new,
+                ),
+                semantic_value("slice slug", command.slice_slug(), SliceSlug::try_new),
+                semantic_value("command name", command.command(), CommandName::try_new),
+            )
+        })
+        .collect()
 }
 
-fn lean_model_data_flow_list(project_data_flows: &[ProjectDataFlow]) -> String {
-    let mut project_data_flows = project_data_flows.iter().collect::<Vec<_>>();
-    project_data_flows.sort_unstable();
-    format!(
-        "[{}]",
-        project_data_flows
-            .into_iter()
-            .map(|data_flow| {
-                format!(
-                    "({}, {}, {}, {}, {}, {}, {}, {})",
-                    json_string(data_flow.workflow_slug()),
-                    json_string(data_flow.slice_slug()),
-                    json_string(data_flow.datum()),
-                    json_string(data_flow.source_kind()),
-                    json_string(data_flow.source()),
-                    json_string(data_flow.transformation()),
-                    json_string(data_flow.target()),
-                    json_string(data_flow.bit_encoding())
-                )
+fn formal_model_command_inputs(
+    project_command_inputs: &[ProjectCommandInput],
+) -> Vec<FormalModelCommandInput> {
+    project_command_inputs
+        .iter()
+        .map(|command_input| {
+            FormalModelCommandInput::new(FormalModelCommandInputFields {
+                workflow: semantic_value(
+                    "workflow slug",
+                    command_input.workflow_slug(),
+                    WorkflowSlug::try_new,
+                ),
+                slice: semantic_value("slice slug", command_input.slice_slug(), SliceSlug::try_new),
+                command: semantic_value(
+                    "command name",
+                    command_input.command(),
+                    CommandName::try_new,
+                ),
+                input: semantic_value(
+                    "command input name",
+                    command_input.input(),
+                    DatumName::try_new,
+                ),
+                source_kind: semantic_value(
+                    "command input source kind",
+                    command_input.source_kind(),
+                    CommandInputSourceKind::try_new,
+                ),
+                source_description: semantic_value(
+                    "command input source description",
+                    command_input.source_description(),
+                    CommandInputSourceDescription::try_new,
+                ),
+                provenance_chain: semantic_values(
+                    "command input provenance chain hop",
+                    command_input.provenance_chain(),
+                    SourceChainHop::try_new,
+                ),
+                event_stream_source_event: optional_semantic_value(
+                    "command input event stream source event",
+                    command_input.event_stream_source_event(),
+                    EventName::try_new,
+                ),
+                event_stream_source_attribute: optional_semantic_value(
+                    "command input event stream source attribute",
+                    command_input.event_stream_source_attribute(),
+                    EventAttributeName::try_new,
+                ),
+                external_payload_source_name: optional_semantic_value(
+                    "command input external payload source name",
+                    command_input.external_payload_source_name(),
+                    EventAttributeSourceName::try_new,
+                ),
+                external_payload_source_field: optional_semantic_value(
+                    "command input external payload source field",
+                    command_input.external_payload_source_field(),
+                    EventAttributeSourceField::try_new,
+                ),
+                generated_source_name: optional_semantic_value(
+                    "command input generated source name",
+                    command_input.generated_source_name(),
+                    EventAttributeSourceName::try_new,
+                ),
+                generated_source_field: optional_semantic_value(
+                    "command input generated source field",
+                    command_input.generated_source_field(),
+                    EventAttributeSourceField::try_new,
+                ),
+                session_source_name: optional_semantic_value(
+                    "command input session source name",
+                    command_input.session_source_name(),
+                    EventAttributeSourceName::try_new,
+                ),
+                session_source_field: optional_semantic_value(
+                    "command input session source field",
+                    command_input.session_source_field(),
+                    EventAttributeSourceField::try_new,
+                ),
+                invocation_argument_source_name: optional_semantic_value(
+                    "command input invocation argument source name",
+                    command_input.invocation_argument_source_name(),
+                    EventAttributeSourceName::try_new,
+                ),
+                invocation_argument_source_field: optional_semantic_value(
+                    "command input invocation argument source field",
+                    command_input.invocation_argument_source_field(),
+                    EventAttributeSourceField::try_new,
+                ),
             })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
+        })
+        .collect()
 }
 
-fn quint_model_data_flow_list(project_data_flows: &[ProjectDataFlow]) -> String {
-    let mut project_data_flows = project_data_flows.iter().collect::<Vec<_>>();
-    project_data_flows.sort_unstable();
-    format!(
-        "[{}]",
-        project_data_flows
-            .into_iter()
-            .map(|data_flow| {
-                format!(
-                    "{{ workflow: {}, slice: {}, datum: {}, sourceKind: {}, source: {}, transformation: {}, target: {}, bitEncoding: {} }}",
-                    json_string(data_flow.workflow_slug()),
-                    json_string(data_flow.slice_slug()),
-                    json_string(data_flow.datum()),
-                    json_string(data_flow.source_kind()),
-                    json_string(data_flow.source()),
-                    json_string(data_flow.transformation()),
-                    json_string(data_flow.target()),
-                    json_string(data_flow.bit_encoding())
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
+fn semantic_values<T, E>(
+    field: &str,
+    values: &[String],
+    parse: impl Fn(String) -> Result<T, E> + Copy,
+) -> Vec<T>
+where
+    E: Display,
+{
+    values
+        .iter()
+        .map(|value| semantic_value(field, value, parse))
+        .collect()
 }
 
-fn lean_model_outcome_list(project_outcomes: &[ProjectOutcome]) -> String {
-    let mut project_outcomes = project_outcomes.iter().collect::<Vec<_>>();
-    project_outcomes.sort_unstable();
-    format!(
-        "[{}]",
-        project_outcomes
-            .into_iter()
-            .map(|outcome| {
-                format!(
-                    "({}, {}, {}, [{}], {})",
-                    json_string(outcome.workflow_slug()),
-                    json_string(outcome.slice_slug()),
-                    json_string(outcome.outcome()),
-                    outcome
-                        .events()
-                        .iter()
-                        .map(|event| json_string(event))
-                        .collect::<Vec<_>>()
-                        .join(","),
-                    outcome.externally_relevant()
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
+fn optional_semantic_value<T, E>(
+    field: &str,
+    value: &str,
+    parse: impl FnOnce(String) -> Result<T, E>,
+) -> Option<T>
+where
+    E: Display,
+{
+    if value.trim().is_empty() {
+        None
+    } else {
+        Some(semantic_value(field, value, parse))
+    }
 }
 
-fn quint_model_outcome_list(project_outcomes: &[ProjectOutcome]) -> String {
-    let mut project_outcomes = project_outcomes.iter().collect::<Vec<_>>();
-    project_outcomes.sort_unstable();
-    format!(
-        "[{}]",
-        project_outcomes
-            .into_iter()
-            .map(|outcome| {
-                format!(
-                    "{{ workflow: {}, slice: {}, outcome: {}, events: [{}], externallyRelevant: {} }}",
-                    json_string(outcome.workflow_slug()),
-                    json_string(outcome.slice_slug()),
-                    json_string(outcome.outcome()),
-                    outcome
-                        .events()
-                        .iter()
-                        .map(|event| json_string(event))
-                        .collect::<Vec<_>>()
-                        .join(","),
-                    outcome.externally_relevant()
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
-}
-
-fn lean_model_command_error_list(project_command_errors: &[ProjectCommandError]) -> String {
-    let mut project_command_errors = project_command_errors.iter().collect::<Vec<_>>();
-    project_command_errors.sort_unstable();
-    format!(
-        "[{}]",
-        project_command_errors
-            .into_iter()
-            .map(|command_error| {
-                format!(
-                    "({}, {}, {}, {}, {}, {})",
-                    json_string(command_error.workflow_slug()),
-                    json_string(command_error.slice_slug()),
-                    json_string(command_error.command()),
-                    json_string(command_error.error()),
-                    json_string(command_error.scenario()),
-                    json_string(command_error.recovery())
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
-}
-
-fn quint_model_command_error_list(project_command_errors: &[ProjectCommandError]) -> String {
-    let mut project_command_errors = project_command_errors.iter().collect::<Vec<_>>();
-    project_command_errors.sort_unstable();
-    format!(
-        "[{}]",
-        project_command_errors
-            .into_iter()
-            .map(|command_error| {
-                format!(
-                    "{{ workflow: {}, slice: {}, command: {}, error: {}, scenario: {}, recovery: {} }}",
-                    json_string(command_error.workflow_slug()),
-                    json_string(command_error.slice_slug()),
-                    json_string(command_error.command()),
-                    json_string(command_error.error()),
-                    json_string(command_error.scenario()),
-                    json_string(command_error.recovery())
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
+fn semantic_value<T, E>(field: &str, value: &str, parse: impl FnOnce(String) -> Result<T, E>) -> T
+where
+    E: Display,
+{
+    parse(value.to_owned()).unwrap_or_else(|error| {
+        unreachable!("EMC generated project inventory must carry valid {field}: {error}");
+    })
 }
 
 fn lean_model_stream_list(project_streams: &[ProjectStream]) -> String {
@@ -4112,132 +4225,6 @@ fn quint_model_stream_list(project_streams: &[ProjectStream]) -> String {
                     json_string(workflow_slug),
                     json_string(slice_slug),
                     json_string(stream)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
-}
-
-fn lean_model_command_list(project_commands: &[ProjectCommand]) -> String {
-    let mut project_commands = project_commands
-        .iter()
-        .map(|command| {
-            (
-                command.workflow_slug(),
-                command.slice_slug(),
-                command.command(),
-            )
-        })
-        .collect::<Vec<_>>();
-    project_commands.sort_unstable();
-    format!(
-        "[{}]",
-        project_commands
-            .into_iter()
-            .map(|(workflow_slug, slice_slug, command)| {
-                format!(
-                    "({}, {}, {})",
-                    json_string(workflow_slug),
-                    json_string(slice_slug),
-                    json_string(command)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
-}
-
-fn quint_model_command_list(project_commands: &[ProjectCommand]) -> String {
-    let mut project_commands = project_commands
-        .iter()
-        .map(|command| {
-            (
-                command.workflow_slug(),
-                command.slice_slug(),
-                command.command(),
-            )
-        })
-        .collect::<Vec<_>>();
-    project_commands.sort_unstable();
-    format!(
-        "[{}]",
-        project_commands
-            .into_iter()
-            .map(|(workflow_slug, slice_slug, command)| {
-                format!(
-                    "{{ workflow: {}, slice: {}, command: {} }}",
-                    json_string(workflow_slug),
-                    json_string(slice_slug),
-                    json_string(command)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
-}
-
-fn lean_model_command_input_list(project_command_inputs: &[ProjectCommandInput]) -> String {
-    let mut project_command_inputs = project_command_inputs.iter().collect::<Vec<_>>();
-    project_command_inputs.sort_unstable();
-    format!(
-        "[{}]",
-        project_command_inputs
-            .into_iter()
-            .map(|command_input| {
-                format!(
-                    "({}, {}, {}, {}, {}, {}, [{}], {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
-                    json_string(command_input.workflow_slug()),
-                    json_string(command_input.slice_slug()),
-                    json_string(command_input.command()),
-                    json_string(command_input.input()),
-                    json_string(command_input.source_kind()),
-                    json_string(command_input.source_description()),
-                    json_string_list(command_input.provenance_chain()),
-                    json_string(command_input.event_stream_source_event()),
-                    json_string(command_input.event_stream_source_attribute()),
-                    json_string(command_input.external_payload_source_name()),
-                    json_string(command_input.external_payload_source_field()),
-                    json_string(command_input.generated_source_name()),
-                    json_string(command_input.generated_source_field()),
-                    json_string(command_input.session_source_name()),
-                    json_string(command_input.session_source_field()),
-                    json_string(command_input.invocation_argument_source_name()),
-                    json_string(command_input.invocation_argument_source_field())
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(",")
-    )
-}
-
-fn quint_model_command_input_list(project_command_inputs: &[ProjectCommandInput]) -> String {
-    let mut project_command_inputs = project_command_inputs.iter().collect::<Vec<_>>();
-    project_command_inputs.sort_unstable();
-    format!(
-        "[{}]",
-        project_command_inputs
-            .into_iter()
-            .map(|command_input| {
-                format!(
-                    "{{ workflow: {}, slice: {}, command: {}, input: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {}, externalPayloadSourceName: {}, externalPayloadSourceField: {}, generatedSourceName: {}, generatedSourceField: {}, sessionSourceName: {}, sessionSourceField: {}, invocationArgumentSourceName: {}, invocationArgumentSourceField: {} }}",
-                    json_string(command_input.workflow_slug()),
-                    json_string(command_input.slice_slug()),
-                    json_string(command_input.command()),
-                    json_string(command_input.input()),
-                    json_string(command_input.source_kind()),
-                    json_string(command_input.source_description()),
-                    json_string_list(command_input.provenance_chain()),
-                    json_string(command_input.event_stream_source_event()),
-                    json_string(command_input.event_stream_source_attribute()),
-                    json_string(command_input.external_payload_source_name()),
-                    json_string(command_input.external_payload_source_field()),
-                    json_string(command_input.generated_source_name()),
-                    json_string(command_input.generated_source_field()),
-                    json_string(command_input.session_source_name()),
-                    json_string(command_input.session_source_field()),
-                    json_string(command_input.invocation_argument_source_name()),
-                    json_string(command_input.invocation_argument_source_field())
                 )
             })
             .collect::<Vec<_>>()

@@ -143,9 +143,15 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelScenarios : List (String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"acceptance\", \"Actor captures ticket\"),(\"open-ticket\", \"capture-ticket\", \"contract\", \"Ticket state projector records title\")]"
+                "structure ModelScenario where\n  workflow : String\n  slice : String\n  scenarioKind : String\n  scenario : String"
             ),
-            "Lean project root must inventory authored first-class scenarios"
+            "Lean project root must type authored first-class scenarios as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelScenarios : List ModelScenario := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", scenarioKind := \"acceptance\", scenario := \"Actor captures ticket\" },{ workflow := \"open-ticket\", slice := \"capture-ticket\", scenarioKind := \"contract\", scenario := \"Ticket state projector records title\" }]"
+            ),
+            "Lean project root must inventory authored first-class scenarios as named records"
         );
         assert!(
             lean_root
@@ -154,9 +160,21 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelScenarioDefinitions : List (String × String × String × String × String × String × String × List String × List String × String × String × List String) := [(\"open-ticket\", \"capture-ticket\", \"acceptance\", \"Actor captures ticket\", \"ticket intake screen is open\", \"the actor submits ticket details\", \"the ticket details are visible for review\", [], [], \"\", \"\", []),(\"open-ticket\", \"capture-ticket\", \"contract\", \"Ticket state projector records title\", \"TicketCaptured is stored\", \"ticket_state projects the event\", \"ticket_state.title equals the event title\", [], [], \"projector\", \"ticket_state\", [])]"
+                "structure ModelScenarioDefinition where\n  workflow : String\n  slice : String\n  scenarioKind : String\n  scenario : String\n  given : String\n  when : String\n  thenStep : String\n  readStreams : List String\n  writtenStreams : List String\n  contractKind : String\n  coveredDefinition : String\n  errorReferences : List String"
             ),
-            "Lean project root must inventory authored scenario GWT and contract definitions"
+            "Lean project root must type authored scenario definitions as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelScenarioDefinitions : List ModelScenarioDefinition := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", scenarioKind := \"acceptance\", scenario := \"Actor captures ticket\", given := \"ticket intake screen is open\", when := \"the actor submits ticket details\", thenStep := \"the ticket details are visible for review\", readStreams := [], writtenStreams := [], contractKind := \"\", coveredDefinition := \"\", errorReferences := [] },{ workflow := \"open-ticket\", slice := \"capture-ticket\", scenarioKind := \"contract\", scenario := \"Ticket state projector records title\", given := \"TicketCaptured is stored\", when := \"ticket_state projects the event\", thenStep := \"ticket_state.title equals the event title\", readStreams := [], writtenStreams := [], contractKind := \"projector\", coveredDefinition := \"ticket_state\", errorReferences := [] }]"
+            ),
+            "Lean project root must inventory authored scenario GWT and contract definitions as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelScenarioDefinitionHasGwt (scenario : ModelScenarioDefinition) : Bool := scenario.given.isEmpty == false && scenario.when.isEmpty == false && scenario.thenStep.isEmpty == false"
+            ),
+            "Lean project root must prove scenario GWT completeness through named fields"
         );
         assert!(
             lean_root.contains(
@@ -200,9 +218,21 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelDataFlows : List (String × String × String × String × String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"ticket_title\", \"original\", \"actor input title field\", \"identity\", \"Capture ticket.ticket_title\", \"UTF-8 string\")]"
+                "structure ModelDataFlow where\n  workflow : String\n  slice : String\n  datum : String\n  sourceKind : String\n  source : String\n  transformation : String\n  target : String\n  bitEncoding : String"
             ),
-            "Lean project root must inventory authored bit-level data flows"
+            "Lean project root must type authored bit-level data flows as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelDataFlows : List ModelDataFlow := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", datum := \"ticket_title\", sourceKind := \"original\", source := \"actor input title field\", transformation := \"identity\", target := \"Capture ticket.ticket_title\", bitEncoding := \"UTF-8 string\" }]"
+            ),
+            "Lean project root must inventory authored bit-level data flows as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelDataFlowIsBitComplete (dataFlow : ModelDataFlow) : Bool := dataFlow.datum.isEmpty == false && dataFlow.sourceKind.isEmpty == false && dataFlow.source.isEmpty == false && dataFlow.transformation.isEmpty == false && dataFlow.target.isEmpty == false && dataFlow.bitEncoding.isEmpty == false"
+            ),
+            "Lean project root must prove bit-level data-flow completeness through named fields"
         );
         assert!(
             lean_root
@@ -757,9 +787,21 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelCommandInputs : List (String × String × String × String × String × String × List String × String × String × String × String × String × String × String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"CaptureTicket\", \"ticket_title\", \"actor\", \"title field on the intake form\", [\"actor keystrokes -> form field\"], \"\", \"\", \"\", \"\", \"\", \"\", \"\", \"\", \"\", \"\")]"
+                "structure ModelCommandInput where\n  workflow : String\n  slice : String\n  command : String\n  input : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
+            ),
+            "Lean project root must type authored command input source-chain inventory entries as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelCommandInputs : List ModelCommandInput := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", command := \"CaptureTicket\", input := \"ticket_title\", sourceKind := \"actor\", sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\", generatedSourceName := \"\", generatedSourceField := \"\", sessionSourceName := \"\", sessionSourceField := \"\", invocationArgumentSourceName := \"\", invocationArgumentSourceField := \"\" }]"
             ),
             "Lean project root must inventory authored command input source chains"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelCommandInputHasProvenance (input : ModelCommandInput) : Bool := input.sourceDescription.isEmpty == false && input.provenanceChain.isEmpty == false"
+            ),
+            "Lean project root must prove command input provenance through named fields"
         );
         assert!(
             lean_root.contains(
@@ -1704,8 +1746,9 @@ mod tests {
             "Quint slice artifact must verify invocation-argument command inputs have source coordinates"
         );
         assert!(
-            lean_root.contains("\"CaptureTicket\", \"ticket_title\", \"invocation_argument\"")
-                && lean_root.contains("\"CaptureTicket\", \"title\""),
+            lean_root.contains("sourceKind := \"invocation_argument\"")
+                && lean_root.contains("invocationArgumentSourceName := \"CaptureTicket\"")
+                && lean_root.contains("invocationArgumentSourceField := \"title\""),
             "Lean project root must carry invocation-argument command input coordinates"
         );
         assert!(
@@ -1919,9 +1962,15 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelCommandErrors : List (String × String × String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"CaptureTicket\", \"DuplicateTicket\", \"Duplicate ticket is rejected\", \"retry\")]"
+                "structure ModelCommandError where\n  workflow : String\n  slice : String\n  command : String\n  error : String\n  scenario : String\n  recovery : String"
             ),
-            "Lean project root must inventory authored command errors with scenario and recovery"
+            "Lean project root must type authored command errors as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelCommandErrors : List ModelCommandError := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", command := \"CaptureTicket\", error := \"DuplicateTicket\", scenario := \"Duplicate ticket is rejected\", recovery := \"retry\" }]"
+            ),
+            "Lean project root must inventory authored command errors as named records"
         );
         assert!(
             lean_root.contains(
@@ -2220,8 +2269,9 @@ mod tests {
             "MCP-authored invocation-argument command inputs must name invocation argument coordinates in Quint"
         );
         assert!(
-            lean_root.contains("\"CaptureTicket\", \"ticket_title\", \"invocation_argument\"")
-                && lean_root.contains("\"CaptureTicket\", \"title\""),
+            lean_root.contains("sourceKind := \"invocation_argument\"")
+                && lean_root.contains("invocationArgumentSourceName := \"CaptureTicket\"")
+                && lean_root.contains("invocationArgumentSourceField := \"title\""),
             "MCP-authored project root facts must carry invocation-argument command input coordinates in Lean"
         );
         assert!(
@@ -2616,9 +2666,15 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelOutcomes : List (String × String × String × List String × Bool) := [(\"open-ticket\", \"capture-ticket\", \"ticket_captured\", [\"TicketCaptured\"], false)]"
+                "structure ModelOutcome where\n  workflow : String\n  slice : String\n  outcome : String\n  events : List String\n  externallyRelevant : Bool"
             ),
-            "Lean project root must inventory authored outcomes with backing event sets"
+            "Lean project root must type authored outcomes as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelOutcomes : List ModelOutcome := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", outcome := \"ticket_captured\", events := [\"TicketCaptured\"], externallyRelevant := false }]"
+            ),
+            "Lean project root must inventory authored outcomes as named records"
         );
         assert!(
             lean_root
@@ -3054,9 +3110,15 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelCommands : List (String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"CaptureTicket\")]"
+                "structure ModelCommand where\n  workflow : String\n  slice : String\n  command : String"
             ),
-            "Lean project root must carry the authored command inventory"
+            "Lean project root must type authored commands as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelCommands : List ModelCommand := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", command := \"CaptureTicket\" }]"
+            ),
+            "Lean project root must carry the authored command inventory as named records"
         );
         assert!(
             lean_root

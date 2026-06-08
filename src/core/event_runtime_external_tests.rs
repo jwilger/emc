@@ -6,20 +6,27 @@ mod tests {
     use std::ffi::OsString;
     use std::path::Path;
 
-    use super::super::sqlite_event_store_path_with_env;
-    use crate::core::connection::ConnectionKind;
+    use super::super::{
+        execute_eventcore_command_for_exported_event_at_path_for_test,
+        sqlite_event_store_path_with_env,
+    };
+    use crate::core::connection::{ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval};
     use crate::core::effect::{
         ArtifactDigest, ModelContentDigest, ProjectionFingerprint, ReviewEventReference,
     };
     use crate::core::event_commands::{
-        AddSliceCommand, AddWorkflowCommand, ConnectWorkflowCommand, ConnectWorkflowInput,
+        AddSliceCommand, AddWorkflowCommand, ConnectWorkflowCommand,
         DeclareWorkflowReadinessCommand, InitializeProjectCommand, RemoveSliceCommand,
-        RemoveWorkflowCommand, RemoveWorkflowTransitionCommand, RemoveWorkflowTransitionInput,
-        UpdateSliceCommand, UpdateWorkflowCommand,
+        RemoveWorkflowCommand, RemoveWorkflowTransitionCommand, UpdateSliceCommand,
+        UpdateWorkflowCommand,
     };
+    use crate::core::events::EventDraft;
+    use crate::core::project::ProjectName;
     use crate::core::types::{
-        ReviewTimestamp, ReviewerId, SliceSlug, TransitionTriggerName, WorkflowSlug,
+        ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceKindName, SliceSlug,
+        TransitionTriggerName, WorkflowSlug,
     };
+    use crate::core::workflow::NewWorkflow;
     use eventcore::{RetryPolicy, execute};
     use eventcore_sqlite::{SqliteConfig, SqliteEventStore, rusqlite};
     use sha2::{Digest, Sha256};
@@ -84,7 +91,7 @@ mod tests {
             store.migrate().await?;
             execute(
                 &store,
-                InitializeProjectCommand::new("Repair Desk".to_owned())?,
+                InitializeProjectCommand::from_semantic(model_project_name("Repair Desk")?)?,
                 RetryPolicy::new(),
             )
             .await?;
@@ -124,11 +131,7 @@ mod tests {
             store.migrate().await?;
             execute(
                 &store,
-                AddWorkflowCommand::new(
-                    "open-ticket".to_owned(),
-                    "Open ticket".to_owned(),
-                    "Actor opens a repair ticket.".to_owned(),
-                )?,
+                add_open_ticket_workflow_command()?,
                 RetryPolicy::new(),
             )
             .await?;
@@ -160,6 +163,49 @@ mod tests {
     }
 
     #[test]
+    fn exported_workflow_added_event_replay_uses_semantic_draft_body() -> Result<(), Box<dyn Error>>
+    {
+        let project = TempDir::new()?;
+        let store_dir = TempDir::new()?;
+        let sqlite_path = store_dir.path().join("events.sqlite3");
+        let workflow = NewWorkflow::new(
+            ModelName::try_new("Open ticket".to_owned())?,
+            ModelDescription::try_new("Actor opens a repair ticket.".to_owned())?,
+            WorkflowSlug::try_new("open-ticket".to_owned())?,
+        );
+        let draft = EventDraft::workflow_added(&workflow);
+
+        execute_eventcore_command_for_exported_event_at_path_for_test(
+            project.path(),
+            &sqlite_path,
+            &draft,
+        )?;
+
+        let conn = rusqlite::Connection::open(sqlite_path)?;
+        let (stream_id, event_type, event_data): (String, String, String) = conn.query_row(
+            "SELECT stream_id, event_type, event_data FROM eventcore_events",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+        assert_eq!(stream_id, "workflow::open-ticket");
+        assert_eq!(event_type, "EmcEvent");
+        assert!(
+            event_data.contains("\"WorkflowAdded\""),
+            "replaying an exported event draft must append the workflow-added event"
+        );
+        assert!(
+            event_data.contains("\"Open ticket\""),
+            "replay must preserve the semantic workflow name"
+        );
+        assert!(
+            event_data.contains("\"Actor opens a repair ticket.\""),
+            "replay must preserve the semantic workflow description"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn update_workflow_command_appends_eventcore_sqlite_event() -> Result<(), Box<dyn Error>> {
         let store_dir = TempDir::new()?;
         let sqlite_path = store_dir.path().join("events.sqlite3");
@@ -172,20 +218,16 @@ mod tests {
             store.migrate().await?;
             execute(
                 &store,
-                AddWorkflowCommand::new(
-                    "open-ticket".to_owned(),
-                    "Open ticket".to_owned(),
-                    "Actor opens a repair ticket.".to_owned(),
-                )?,
+                add_open_ticket_workflow_command()?,
                 RetryPolicy::new(),
             )
             .await?;
             execute(
                 &store,
-                UpdateWorkflowCommand::new(
-                    "open-ticket".to_owned(),
-                    "Open repair ticket".to_owned(),
-                    "Actor opens a repair ticket with priority.".to_owned(),
+                UpdateWorkflowCommand::from_semantic(
+                    workflow_slug("open-ticket")?,
+                    model_name("Open repair ticket")?,
+                    model_description("Actor opens a repair ticket with priority.")?,
                 )?,
                 RetryPolicy::new(),
             )
@@ -231,17 +273,13 @@ mod tests {
             store.migrate().await?;
             execute(
                 &store,
-                AddWorkflowCommand::new(
-                    "open-ticket".to_owned(),
-                    "Open ticket".to_owned(),
-                    "Actor opens a repair ticket.".to_owned(),
-                )?,
+                add_open_ticket_workflow_command()?,
                 RetryPolicy::new(),
             )
             .await?;
             execute(
                 &store,
-                RemoveWorkflowCommand::new("open-ticket".to_owned())?,
+                RemoveWorkflowCommand::from_semantic(workflow_slug("open-ticket")?)?,
                 RetryPolicy::new(),
             )
             .await?;
@@ -282,23 +320,18 @@ mod tests {
             store.migrate().await?;
             execute(
                 &store,
-                AddWorkflowCommand::new(
-                    "open-ticket".to_owned(),
-                    "Open ticket".to_owned(),
-                    "Actor opens a repair ticket.".to_owned(),
-                )?,
+                add_open_ticket_workflow_command()?,
                 RetryPolicy::new(),
             )
             .await?;
             execute(
                 &store,
-                ConnectWorkflowCommand::new(ConnectWorkflowInput::slice(
+                ConnectWorkflowCommand::from_connection(WorkflowConnection::new(
                     WorkflowSlug::try_new("open-ticket".to_owned())?,
                     SliceSlug::try_new("capture-ticket".to_owned())?,
                     SliceSlug::try_new("review-ticket".to_owned())?,
                     ConnectionKind::Navigation,
                     TransitionTriggerName::try_new("review-ticket-screen".to_owned())?,
-                    None,
                 ))?,
                 RetryPolicy::new(),
             )
@@ -341,17 +374,13 @@ mod tests {
             store.migrate().await?;
             execute(
                 &store,
-                AddWorkflowCommand::new(
-                    "open-ticket".to_owned(),
-                    "Open ticket".to_owned(),
-                    "Actor opens a repair ticket.".to_owned(),
-                )?,
+                add_open_ticket_workflow_command()?,
                 RetryPolicy::new(),
             )
             .await?;
             execute(
                 &store,
-                RemoveWorkflowTransitionCommand::new(RemoveWorkflowTransitionInput::slice(
+                RemoveWorkflowTransitionCommand::from_removal(WorkflowTransitionRemoval::new(
                     WorkflowSlug::try_new("open-ticket".to_owned())?,
                     SliceSlug::try_new("capture-ticket".to_owned())?,
                     SliceSlug::try_new("review-ticket".to_owned())?,
@@ -399,11 +428,7 @@ mod tests {
             store.migrate().await?;
             execute(
                 &store,
-                AddWorkflowCommand::new(
-                    "open-ticket".to_owned(),
-                    "Open ticket".to_owned(),
-                    "Actor opens a repair ticket.".to_owned(),
-                )?,
+                add_open_ticket_workflow_command()?,
                 RetryPolicy::new(),
             )
             .await?;
@@ -459,13 +484,7 @@ mod tests {
             store.migrate().await?;
             execute(
                 &store,
-                AddSliceCommand::new(
-                    "open-ticket".to_owned(),
-                    "capture-ticket".to_owned(),
-                    "Capture ticket".to_owned(),
-                    "state_view".to_owned(),
-                    "Actor enters ticket details.".to_owned(),
-                )?,
+                add_capture_ticket_slice_command()?,
                 RetryPolicy::new(),
             )
             .await?;
@@ -513,23 +532,17 @@ mod tests {
             store.migrate().await?;
             execute(
                 &store,
-                AddSliceCommand::new(
-                    "open-ticket".to_owned(),
-                    "capture-ticket".to_owned(),
-                    "Capture ticket".to_owned(),
-                    "state_view".to_owned(),
-                    "Actor enters ticket details.".to_owned(),
-                )?,
+                add_capture_ticket_slice_command()?,
                 RetryPolicy::new(),
             )
             .await?;
             execute(
                 &store,
-                UpdateSliceCommand::new(
-                    "capture-ticket".to_owned(),
-                    "Capture repair ticket".to_owned(),
-                    "state_change".to_owned(),
-                    "Actor enters prioritized ticket details.".to_owned(),
+                UpdateSliceCommand::from_semantic(
+                    slice_slug("capture-ticket")?,
+                    model_name("Capture repair ticket")?,
+                    slice_kind_name("state_change")?,
+                    model_description("Actor enters prioritized ticket details.")?,
                 )?,
                 RetryPolicy::new(),
             )
@@ -575,19 +588,13 @@ mod tests {
             store.migrate().await?;
             execute(
                 &store,
-                AddSliceCommand::new(
-                    "open-ticket".to_owned(),
-                    "capture-ticket".to_owned(),
-                    "Capture ticket".to_owned(),
-                    "state_view".to_owned(),
-                    "Actor enters ticket details.".to_owned(),
-                )?,
+                add_capture_ticket_slice_command()?,
                 RetryPolicy::new(),
             )
             .await?;
             execute(
                 &store,
-                RemoveSliceCommand::new("capture-ticket".to_owned())?,
+                RemoveSliceCommand::from_semantic(slice_slug("capture-ticket")?)?,
                 RetryPolicy::new(),
             )
             .await?;
@@ -613,5 +620,47 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    fn add_open_ticket_workflow_command() -> Result<AddWorkflowCommand, String> {
+        AddWorkflowCommand::from_semantic(
+            workflow_slug("open-ticket")?,
+            model_name("Open ticket")?,
+            model_description("Actor opens a repair ticket.")?,
+        )
+    }
+
+    fn add_capture_ticket_slice_command() -> Result<AddSliceCommand, String> {
+        AddSliceCommand::from_semantic(
+            workflow_slug("open-ticket")?,
+            slice_slug("capture-ticket")?,
+            model_name("Capture ticket")?,
+            slice_kind_name("state_view")?,
+            model_description("Actor enters ticket details.")?,
+        )
+    }
+
+    fn model_project_name(value: &str) -> Result<ProjectName, String> {
+        ProjectName::try_new(value.to_owned()).map_err(|error| error.to_string())
+    }
+
+    fn model_name(value: &str) -> Result<ModelName, String> {
+        ModelName::try_new(value.to_owned()).map_err(|error| error.to_string())
+    }
+
+    fn model_description(value: &str) -> Result<ModelDescription, String> {
+        ModelDescription::try_new(value.to_owned()).map_err(|error| error.to_string())
+    }
+
+    fn workflow_slug(value: &str) -> Result<WorkflowSlug, String> {
+        WorkflowSlug::try_new(value.to_owned()).map_err(|error| error.to_string())
+    }
+
+    fn slice_slug(value: &str) -> Result<SliceSlug, String> {
+        SliceSlug::try_new(value.to_owned()).map_err(|error| error.to_string())
+    }
+
+    fn slice_kind_name(value: &str) -> Result<SliceKindName, String> {
+        SliceKindName::try_new(value.to_owned()).map_err(|error| error.to_string())
     }
 }
