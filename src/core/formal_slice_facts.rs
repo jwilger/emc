@@ -2498,7 +2498,7 @@ fn lean_command_definition_record(command: &NewCommandDefinition) -> String {
         "{{ name := {}, inputs := [{}], emittedEvents := [{}], observedStreams := [{}], errors := [{}], singleton := {}, repeatBehavior := {} }}",
         quoted(command.name.as_ref()),
         lean_command_input_record(&command.input),
-        lean_list(command.emitted_events.as_slice()),
+        lean_event_reference_records(command.emitted_events.as_slice()),
         lean_list(command.observed_streams.as_slice()),
         command
             .errors
@@ -2522,7 +2522,7 @@ fn quint_command_definition_record(command: &NewCommandDefinition) -> String {
         "{{ name: {}, inputs: [{}], emittedEvents: [{}], observedStreams: [{}], errors: [{}], singleton: {}, repeatBehavior: {} }}",
         quoted(command.name.as_ref()),
         quint_command_input_record(&command.input),
-        quint_list(command.emitted_events.as_slice()),
+        quint_event_reference_records(command.emitted_events.as_slice()),
         quint_list(command.observed_streams.as_slice()),
         command
             .errors
@@ -2675,6 +2675,22 @@ fn lean_event_reference_record(event_name: &str) -> String {
 
 fn quint_event_reference_record(event_name: &str) -> String {
     format!("{{ name: {} }}", quoted(event_name))
+}
+
+fn lean_event_reference_records(event_names: &[EventName]) -> String {
+    event_names
+        .iter()
+        .map(|event_name| lean_event_reference_record(event_name.as_ref()))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn quint_event_reference_records(event_names: &[EventName]) -> String {
+    event_names
+        .iter()
+        .map(|event_name| quint_event_reference_record(event_name.as_ref()))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn lean_command_reference_record(command_name: &str) -> String {
