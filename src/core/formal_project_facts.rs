@@ -1968,10 +1968,7 @@ impl ProjectStream {
 pub(crate) fn parse_lean_project_streams(
     contents: &FileContents,
 ) -> Result<Vec<ProjectStream>, FormalProjectFactError> {
-    stream_entries_from_list(
-        contents.as_ref(),
-        "def modelStreams : List (String × String × String) := ",
-    )
+    stream_entries_from_list(contents.as_ref(), "def modelStreams : List ModelStream := ")
 }
 
 pub(crate) fn parse_quint_project_streams(
@@ -2378,10 +2375,7 @@ pub(crate) fn parse_quint_project_external_payload_fields(
 pub(crate) fn parse_lean_project_events(
     contents: &FileContents,
 ) -> Result<Vec<ProjectEvent>, FormalProjectFactError> {
-    event_entries_from_list(
-        contents.as_ref(),
-        "def modelEvents : List (String × String × String × String) := ",
-    )
+    event_entries_from_list(contents.as_ref(), "def modelEvents : List ModelEvent := ")
 }
 
 pub(crate) fn parse_quint_project_events(
@@ -2395,7 +2389,7 @@ pub(crate) fn parse_lean_project_event_attributes(
 ) -> Result<Vec<ProjectEventAttribute>, FormalProjectFactError> {
     event_attribute_entries_from_list(
         contents.as_ref(),
-        "def modelEventAttributes : List (String × String × String × String × String × String × String × String × String) := ",
+        "def modelEventAttributes : List ModelEventAttribute := ",
     )
 }
 
@@ -5064,14 +5058,12 @@ pub(crate) fn add_project_stream(
     let quint_record = quint_stream_record(&stream);
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelStreams : List (String × String × String) := ",
+        "def modelStreams : List ModelStream := ",
         &lean_record,
     )
     .and_then(|contents| {
-        let streams = stream_entries_from_list(
-            &contents,
-            "def modelStreams : List (String × String × String) := ",
-        )?;
+        let streams =
+            stream_entries_from_list(&contents, "def modelStreams : List ModelStream := ")?;
         replace_declaration(
             &contents,
             "theorem modelStreamsAreDeclared :",
@@ -5268,7 +5260,7 @@ pub(crate) fn add_project_event(
         .collect::<Vec<_>>();
     let lean = append_record_if_missing(
         lean_contents.as_ref(),
-        "def modelEvents : List (String × String × String × String) := ",
+        "def modelEvents : List ModelEvent := ",
         &lean_record,
     )
     .and_then(|contents| {
@@ -5277,7 +5269,7 @@ pub(crate) fn add_project_event(
             .try_fold(contents, |contents, record| {
                 append_record_if_missing(
                     &contents,
-                    "def modelEventAttributes : List (String × String × String × String × String × String × String × String × String) := ",
+                    "def modelEventAttributes : List ModelEventAttribute := ",
                     record,
                 )
             })
@@ -5353,15 +5345,15 @@ pub(crate) fn add_project_event(
         )?;
         let streams = stream_entries_from_list(
             &contents,
-            "def modelStreams : List (String × String × String) := ",
+            "def modelStreams : List ModelStream := ",
         )?;
         let events = event_entries_from_list(
             &contents,
-            "def modelEvents : List (String × String × String × String) := ",
+            "def modelEvents : List ModelEvent := ",
         )?;
         let event_attributes = event_attribute_entries_from_list(
             &contents,
-            "def modelEventAttributes : List (String × String × String × String × String × String × String × String × String) := ",
+            "def modelEventAttributes : List ModelEventAttribute := ",
         )?;
         let board_elements = board_element_entries_from_list(
             &contents,
@@ -6062,11 +6054,8 @@ fn parse_quint_project_external_payloads_from_contents_or_empty(
 }
 
 fn parse_lean_project_streams_from_contents_or_empty(contents: &str) -> Vec<ProjectStream> {
-    stream_entries_from_list(
-        contents,
-        "def modelStreams : List (String × String × String) := ",
-    )
-    .unwrap_or_default()
+    stream_entries_from_list(contents, "def modelStreams : List ModelStream := ")
+        .unwrap_or_default()
 }
 
 fn parse_quint_project_streams_from_contents_or_empty(contents: &str) -> Vec<ProjectStream> {
@@ -6918,11 +6907,7 @@ fn parse_quint_project_external_payload_fields_from_contents_or_empty(
 }
 
 fn parse_lean_project_events_from_contents_or_empty(contents: &str) -> Vec<ProjectEvent> {
-    event_entries_from_list(
-        contents,
-        "def modelEvents : List (String × String × String × String) := ",
-    )
-    .unwrap_or_default()
+    event_entries_from_list(contents, "def modelEvents : List ModelEvent := ").unwrap_or_default()
 }
 
 fn parse_quint_project_events_from_contents_or_empty(contents: &str) -> Vec<ProjectEvent> {
@@ -6934,7 +6919,7 @@ fn parse_lean_project_event_attributes_from_contents_or_empty(
 ) -> Vec<ProjectEventAttribute> {
     event_attribute_entries_from_list(
         contents,
-        "def modelEventAttributes : List (String × String × String × String × String × String × String × String × String) := ",
+        "def modelEventAttributes : List ModelEventAttribute := ",
     )
     .unwrap_or_default()
 }
@@ -8040,7 +8025,7 @@ fn join_lines_preserving_trailing_newline(original: &str, lines: Vec<String>) ->
 
 fn lean_stream_record(stream: &NewProjectStream) -> String {
     format!(
-        "({}, {}, {})",
+        "{{ workflow := {}, slice := {}, stream := {} }}",
         quoted(stream.workflow_slug.as_ref()),
         quoted(stream.slice_slug.as_ref()),
         quoted(stream.stream.as_ref())
@@ -9213,7 +9198,7 @@ fn quint_stream_record(stream: &NewProjectStream) -> String {
 
 fn lean_event_record(event: &NewProjectEvent) -> String {
     format!(
-        "({}, {}, {}, {})",
+        "{{ workflow := {}, slice := {}, event := {}, stream := {} }}",
         quoted(event.workflow_slug.as_ref()),
         quoted(event.slice_slug.as_ref()),
         quoted(event.event.as_ref()),
@@ -9223,7 +9208,7 @@ fn lean_event_record(event: &NewProjectEvent) -> String {
 
 fn lean_event_attribute_record(attribute: &NewProjectEventAttribute) -> String {
     format!(
-        "({}, {}, {}, {}, {}, {}, {}, {}, {})",
+        "{{ workflow := {}, slice := {}, event := {}, attributeName := {}, sourceKind := {}, sourceName := {}, sourceField := {}, generatedSourceKind := {}, provenance := {} }}",
         quoted(attribute.workflow_slug.as_ref()),
         quoted(attribute.slice_slug.as_ref()),
         quoted(attribute.event.as_ref()),
