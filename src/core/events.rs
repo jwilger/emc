@@ -497,6 +497,98 @@ impl WorkflowEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceAddedEventPayload {
+    workflow_slug: WorkflowSlug,
+    slug: SliceSlug,
+    name: ModelName,
+    kind: SliceKindName,
+    description: ModelDescription,
+}
+
+impl SliceAddedEventPayload {
+    fn from_slice(slice: &NewSlice) -> Self {
+        Self {
+            workflow_slug: slice.workflow_slug().clone(),
+            slug: slice.slug().clone(),
+            name: slice.name().clone(),
+            kind: SliceKindName::from(slice.kind()),
+            description: slice.description().clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            workflow_slug: workflow_slug(required_str(payload, "workflow")?)?,
+            slug: slice_slug(required_str(payload, "slug")?)?,
+            name: model_name(required_str(payload, "name")?)?,
+            kind: slice_kind_name(required_str(payload, "kind")?)?,
+            description: model_description(required_str(payload, "description")?)?,
+        })
+    }
+
+    fn into_slice(self) -> NewSlice {
+        NewSlice::new(
+            self.workflow_slug,
+            self.slug,
+            self.name,
+            self.description,
+            self.kind.into(),
+        )
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "workflow": self.workflow_slug.as_ref(),
+            "slug": self.slug.as_ref(),
+            "name": self.name.as_ref(),
+            "kind": self.kind.as_ref(),
+            "description": self.description.as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceUpdatedEventPayload {
+    slug: SliceSlug,
+    name: ModelName,
+    kind: SliceKindName,
+    description: ModelDescription,
+}
+
+impl SliceUpdatedEventPayload {
+    fn from_slice_detail(slice: &WorkflowSliceDetail) -> Self {
+        Self {
+            slug: slice.slug().clone(),
+            name: slice.name().clone(),
+            kind: *slice.kind(),
+            description: slice.description().clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            slug: slice_slug(required_str(payload, "slug")?)?,
+            name: model_name(required_str(payload, "name")?)?,
+            kind: slice_kind_name(required_str(payload, "kind")?)?,
+            description: model_description(required_str(payload, "description")?)?,
+        })
+    }
+
+    fn into_slice_detail(self) -> WorkflowSliceDetail {
+        WorkflowSliceDetail::new(self.slug, self.name, self.kind, self.description)
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slug": self.slug.as_ref(),
+            "name": self.name.as_ref(),
+            "kind": self.kind.as_ref(),
+            "description": self.description.as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum ExportedEventBody {
     ProjectInitialized {
         name: ProjectName,
@@ -745,19 +837,10 @@ impl ExportedEventBody {
                 "via": removal.kind().trigger_kind(),
                 "name": removal.trigger().as_ref(),
             }),
-            Self::SliceAdded { slice } => json!({
-                "workflow": slice.workflow_slug().as_ref(),
-                "slug": slice.slug().as_ref(),
-                "name": slice.name().as_ref(),
-                "kind": slice.kind().as_str(),
-                "description": slice.description().as_ref(),
-            }),
-            Self::SliceUpdated { slice } => json!({
-                "slug": slice.slug().as_ref(),
-                "name": slice.name().as_ref(),
-                "kind": slice.kind().as_ref(),
-                "description": slice.description().as_ref(),
-            }),
+            Self::SliceAdded { slice } => SliceAddedEventPayload::from_slice(slice).to_json_value(),
+            Self::SliceUpdated { slice } => {
+                SliceUpdatedEventPayload::from_slice_detail(slice).to_json_value()
+            }
             Self::SliceRemoved { slug } => json!({ "slug": slug.as_ref() }),
             Self::SliceScenarioAdded { scenario } => slice_scenario_payload(scenario),
             Self::SliceOutcomeAdded { outcome } => slice_outcome_payload(outcome),
@@ -887,10 +970,10 @@ impl ExportedEventBody {
                 removal: workflow_transition_removal_from_payload(payload)?,
             }),
             ExportedEventType::SliceAdded => Ok(Self::SliceAdded {
-                slice: slice_from_payload(payload)?,
+                slice: SliceAddedEventPayload::from_json_value(payload)?.into_slice(),
             }),
             ExportedEventType::SliceUpdated => Ok(Self::SliceUpdated {
-                slice: workflow_slice_detail_from_payload(payload)?,
+                slice: SliceUpdatedEventPayload::from_json_value(payload)?.into_slice_detail(),
             }),
             ExportedEventType::SliceRemoved => Ok(Self::SliceRemoved {
                 slug: slice_slug(required_str(payload, "slug")?)?,
@@ -3244,25 +3327,6 @@ fn required_exported_command_id(event: &Value, field: &str) -> Result<ExportedCo
     })
 }
 
-fn slice_from_payload(payload: &Value) -> Result<NewSlice, String> {
-    Ok(NewSlice::new(
-        workflow_slug(required_str(payload, "workflow")?)?,
-        slice_slug(required_str(payload, "slug")?)?,
-        model_name(required_str(payload, "name")?)?,
-        model_description(required_str(payload, "description")?)?,
-        slice_kind_name(required_str(payload, "kind")?)?.into(),
-    ))
-}
-
-fn workflow_slice_detail_from_payload(payload: &Value) -> Result<WorkflowSliceDetail, String> {
-    Ok(WorkflowSliceDetail::new(
-        slice_slug(required_str(payload, "slug")?)?,
-        model_name(required_str(payload, "name")?)?,
-        slice_kind_name(required_str(payload, "kind")?)?,
-        model_description(required_str(payload, "description")?)?,
-    ))
-}
-
 fn projection_fingerprint_from_payload(payload: &Value) -> Result<ProjectionFingerprint, String> {
     Ok(ProjectionFingerprint::new(artifact_digest_from_str(
         required_str(payload, "projection_fingerprint")?,
@@ -4433,6 +4497,68 @@ mod tests {
         assert_eq!(
             WorkflowEventPayload::from_json_value(&json)?.into_workflow(),
             workflow
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_added_event_payload_round_trips_between_semantic_slice_and_json_boundary()
+    -> Result<(), String> {
+        let slice = NewSlice::new(
+            workflow_slug("open-ticket")?,
+            slice_slug("capture-ticket")?,
+            model_name("Capture ticket")?,
+            model_description("Actor captures repair ticket details.")?,
+            slice_kind_name("state_view")?.into(),
+        );
+
+        let payload = SliceAddedEventPayload::from_slice(&slice);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "slug": "capture-ticket",
+                "name": "Capture ticket",
+                "kind": "state_view",
+                "description": "Actor captures repair ticket details.",
+            })
+        );
+        assert_eq!(
+            SliceAddedEventPayload::from_json_value(&json)?.into_slice(),
+            slice
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_updated_event_payload_round_trips_between_semantic_slice_detail_and_json_boundary()
+    -> Result<(), String> {
+        let slice = WorkflowSliceDetail::new(
+            slice_slug("capture-ticket")?,
+            model_name("Capture ticket")?,
+            slice_kind_name("state_change")?,
+            model_description("Actor captures updated repair ticket details.")?,
+        );
+
+        let payload = SliceUpdatedEventPayload::from_slice_detail(&slice);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "slug": "capture-ticket",
+                "name": "Capture ticket",
+                "kind": "state_change",
+                "description": "Actor captures updated repair ticket details.",
+            })
+        );
+        assert_eq!(
+            SliceUpdatedEventPayload::from_json_value(&json)?.into_slice_detail(),
+            slice
         );
 
         Ok(())
