@@ -1,5 +1,6 @@
 // Copyright 2026 John Wilger
 
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
@@ -73,6 +74,64 @@ const PROJECTION_FINGERPRINT_PATH: &str = "model/events/projection.fingerprint";
 pub(crate) struct EventDraft {
     stream_id: EventStreamId,
     body: EventDraftBody,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ExportedEventId {
+    value: ArtifactDigest,
+}
+
+impl ExportedEventId {
+    fn try_new(value: String) -> Result<Self, String> {
+        ArtifactDigest::try_new(value)
+            .map(|value| Self { value })
+            .map_err(|error| error.to_string())
+    }
+}
+
+impl AsRef<str> for ExportedEventId {
+    fn as_ref(&self) -> &str {
+        self.value.as_ref()
+    }
+}
+
+impl Ord for ExportedEventId {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_ref().cmp(other.as_ref())
+    }
+}
+
+impl PartialOrd for ExportedEventId {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct ExportedCommandId {
+    value: ArtifactDigest,
+}
+
+impl ExportedCommandId {
+    fn try_new(value: String) -> Result<Self, String> {
+        ArtifactDigest::try_new(value)
+            .map(|value| Self { value })
+            .map_err(|error| error.to_string())
+    }
+
+    fn from_event_id(event_id: &ExportedEventId) -> Self {
+        Self {
+            value: ArtifactDigest::try_new(event_id.as_ref().to_owned()).unwrap_or_else(|error| {
+                unreachable!("exported event id must be a valid command id: {error}");
+            }),
+        }
+    }
+}
+
+impl AsRef<str> for ExportedCommandId {
+    fn as_ref(&self) -> &str {
+        self.value.as_ref()
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -1119,23 +1178,24 @@ impl EventDraft {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ExportedEvent {
-    event_id: String,
-    command_id: String,
+    event_id: ExportedEventId,
+    command_id: ExportedCommandId,
     command_ordinal: usize,
     stream_id: EventStreamId,
-    parents: Vec<String>,
+    parents: Vec<ExportedEventId>,
     body: EventDraftBody,
 }
 
 impl ExportedEvent {
     pub(crate) fn from_draft(
         draft: &EventDraft,
-        parents: Vec<String>,
+        parents: Vec<ExportedEventId>,
         command_ordinal: usize,
     ) -> Result<Self, String> {
         let event_id = event_id(draft, &parents, command_ordinal)?;
+        let command_id = ExportedCommandId::from_event_id(&event_id);
         Ok(Self {
-            command_id: command_id(&event_id),
+            command_id,
             event_id,
             command_ordinal,
             stream_id: draft.stream_id.clone(),
@@ -1163,8 +1223,8 @@ impl ExportedEvent {
             required_object(value, "payload")?,
         )?;
         Ok(Self {
-            event_id: required_str(value, "event_id")?.to_owned(),
-            command_id: required_str(value, "command_id")?.to_owned(),
+            event_id: required_exported_event_id(value, "event_id")?,
+            command_id: required_exported_command_id(value, "command_id")?,
             command_ordinal: required_usize(value, "command_ordinal")?,
             stream_id: EventStreamId::try_new(required_str(value, "stream_id")?.to_owned())
                 .map_err(|error| error.to_string())?,
@@ -1187,7 +1247,7 @@ impl ExportedEvent {
         self.body.event_type()
     }
 
-    pub(crate) fn event_id(&self) -> &str {
+    pub(crate) fn event_id(&self) -> &ExportedEventId {
         &self.event_id
     }
 
@@ -1195,7 +1255,7 @@ impl ExportedEvent {
         &self.stream_id
     }
 
-    pub(crate) fn parents(&self) -> &[String] {
+    pub(crate) fn parents(&self) -> &[ExportedEventId] {
         &self.parents
     }
 
@@ -1210,11 +1270,11 @@ impl ExportedEvent {
     fn to_json_value(&self) -> Value {
         json!({
             "schema_version": SCHEMA_VERSION,
-            "event_id": self.event_id,
-            "command_id": self.command_id,
+            "event_id": self.event_id.as_ref(),
+            "command_id": self.command_id.as_ref(),
             "command_ordinal": self.command_ordinal,
             "stream_id": self.stream_id.as_ref(),
-            "parents": self.parents,
+            "parents": self.parents.iter().map(|parent| parent.as_ref()).collect::<Vec<_>>(),
             "type": self.event_type().as_ref(),
             "payload": self.payload_json(),
         })
@@ -1227,16 +1287,16 @@ impl ExportedEvent {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct ExportedEventHeader {
-    event_id: String,
+    event_id: ExportedEventId,
     stream_id: Option<EventStreamId>,
-    parents: Vec<String>,
+    parents: Vec<ExportedEventId>,
     event_type: EventDraftType,
 }
 
 impl ExportedEventHeader {
     fn from_json_value(value: &Value) -> Result<Self, String> {
         Ok(Self {
-            event_id: required_str(value, "event_id")?.to_owned(),
+            event_id: required_exported_event_id(value, "event_id")?,
             stream_id: optional_str(value, "stream_id")?
                 .map(|stream_id| EventStreamId::try_new(stream_id.to_owned()))
                 .transpose()
@@ -1253,12 +1313,12 @@ impl ExportedEventHeader {
 }
 
 trait ExportedEventFrontier {
-    fn frontier_event_id(&self) -> &str;
+    fn frontier_event_id(&self) -> &ExportedEventId;
     fn frontier_event_type(&self) -> EventDraftType;
 }
 
 impl ExportedEventFrontier for ExportedEvent {
-    fn frontier_event_id(&self) -> &str {
+    fn frontier_event_id(&self) -> &ExportedEventId {
         self.event_id()
     }
 
@@ -1268,7 +1328,7 @@ impl ExportedEventFrontier for ExportedEvent {
 }
 
 impl ExportedEventFrontier for ExportedEventHeader {
-    fn frontier_event_id(&self) -> &str {
+    fn frontier_event_id(&self) -> &ExportedEventId {
         &self.event_id
     }
 
@@ -1632,7 +1692,10 @@ pub(crate) fn export_event_file_contents(
         .map_err(|error| error.to_string())?;
     let contents = FileContents::try_new(format!("{json}\n")).map_err(|error| error.to_string())?;
     Ok((
-        format!("{EVENT_EXPORT_DIRECTORY}/{}.json", exported.event_id()),
+        format!(
+            "{EVENT_EXPORT_DIRECTORY}/{}.json",
+            exported.event_id().as_ref()
+        ),
         contents,
     ))
 }
@@ -1686,7 +1749,12 @@ pub(crate) fn list_event_conflicts() -> Result<EffectPlan, String> {
     let effects = conflicts
         .into_iter()
         .map(|conflict| {
-            let event_ids = conflict.event_ids.into_iter().collect::<Vec<_>>().join(",");
+            let event_ids = conflict
+                .event_ids
+                .into_iter()
+                .map(|event_id| event_id.as_ref().to_owned())
+                .collect::<Vec<_>>()
+                .join(",");
             report_line(format!(
                 "conflict {} {} {} {} id {}",
                 conflict.stream_id,
@@ -1755,13 +1823,16 @@ pub(crate) fn resolve_event_conflict(
         .into_iter()
         .find(|conflict| conflict.id == conflict_id)
         .ok_or_else(|| format!("unknown event conflict {conflict_id}"))?;
-    if !conflict.event_ids.contains(&chosen_event_id) {
+    let chosen_exported_event_id = ExportedEventId::try_new(chosen_event_id)?;
+    if !conflict.event_ids.contains(&chosen_exported_event_id) {
         return Err(format!(
-            "event {chosen_event_id} is not part of conflict {conflict_id}"
+            "event {} is not part of conflict {conflict_id}",
+            chosen_exported_event_id.as_ref()
         ));
     }
     let conflict_id = EventConflictId::new(artifact_digest_from_str(&conflict_id)?);
-    let chosen_event_id = ChosenEventId::new(artifact_digest_from_str(&chosen_event_id)?);
+    let chosen_event_id =
+        ChosenEventId::new(artifact_digest_from_str(chosen_exported_event_id.as_ref())?);
 
     Ok(EffectPlan::new(vec![
         Effect::ExportEvent(EventDraft::conflict_resolved(
@@ -1800,7 +1871,7 @@ pub(crate) fn reject_legacy_artifact_only_project() -> Result<(), String> {
     Ok(())
 }
 
-fn exported_event_ids() -> Result<Vec<String>, String> {
+fn exported_event_ids() -> Result<Vec<ExportedEventId>, String> {
     let path = Path::new(EVENT_EXPORT_DIRECTORY);
     if !path.exists() {
         return Ok(Vec::new());
@@ -1820,7 +1891,7 @@ struct EventConflict {
     stream_id: String,
     event_type: String,
     semantic_key: String,
-    event_ids: BTreeSet<String>,
+    event_ids: BTreeSet<ExportedEventId>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -1828,12 +1899,12 @@ struct ConflictKey {
     stream_id: String,
     event_type: String,
     semantic_key: String,
-    parents: Vec<String>,
+    parents: Vec<ExportedEventId>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 struct ConflictPayload {
-    event_id: String,
+    event_id: ExportedEventId,
     payload: String,
 }
 
@@ -1845,7 +1916,7 @@ fn event_conflicts(path: &Path) -> Result<Vec<EventConflict>, String> {
     for event in events {
         if let Some(key) = conflict_key(&event)? {
             grouped.entry(key).or_default().insert(ConflictPayload {
-                event_id: event.event_id().to_owned(),
+                event_id: event.event_id().clone(),
                 payload: canonical_payload(&event)?,
             });
         }
@@ -1889,12 +1960,17 @@ fn resolved_conflict_ids(events: &[ExportedEvent]) -> Result<BTreeSet<String>, S
 }
 
 fn conflict_id(key: &ConflictKey) -> String {
+    let parent_ids = key
+        .parents
+        .iter()
+        .map(|parent| parent.as_ref())
+        .collect::<Vec<_>>();
     hex::encode(Sha256::digest(
         serde_json::to_vec(&json!({
             "stream_id": key.stream_id,
             "type": key.event_type,
             "semantic_key": key.semantic_key,
-            "parents": key.parents,
+            "parents": parent_ids,
         }))
         .unwrap_or_default(),
     ))
@@ -1915,7 +1991,7 @@ fn conflict_key(event: &ExportedEvent) -> Result<Option<ConflictKey>, String> {
     }))
 }
 
-fn parents(event: &Value) -> Result<Vec<String>, String> {
+fn parents(event: &Value) -> Result<Vec<ExportedEventId>, String> {
     let mut parents = event
         .get("parents")
         .and_then(Value::as_array)
@@ -1924,12 +2000,19 @@ fn parents(event: &Value) -> Result<Vec<String>, String> {
         .map(|parent| {
             parent
                 .as_str()
-                .map(str::to_owned)
                 .ok_or_else(|| "exported event parent must be a string".to_owned())
+                .and_then(|value| exported_event_id(value, "parents"))
         })
         .collect::<Result<Vec<_>, _>>()?;
     parents.sort();
     Ok(parents)
+}
+
+fn parent_refs(parents: &[ExportedEventId]) -> Vec<&str> {
+    parents
+        .iter()
+        .map(|parent| parent.as_ref())
+        .collect::<Vec<_>>()
 }
 
 fn canonical_payload(event: &ExportedEvent) -> Result<String, String> {
@@ -1995,6 +2078,7 @@ fn projection_fingerprint_digest<T: ExportedEventFrontier>(
         .iter()
         .filter(|event| event.frontier_event_type() != EventDraftType::WorkflowReadinessDeclared)
         .map(ExportedEventFrontier::frontier_event_id)
+        .map(|event_id| event_id.as_ref())
         .collect::<Vec<_>>();
     ArtifactDigest::try_new(hex::encode(Sha256::digest(
         serde_json::to_vec(&event_ids).map_err(|error| error.to_string())?,
@@ -2022,24 +2106,20 @@ fn command_ordinal_for_stream(stream_id: &str) -> Result<usize, String> {
 
 fn event_id(
     draft: &EventDraft,
-    parents: &[String],
+    parents: &[ExportedEventId],
     command_ordinal: usize,
-) -> Result<String, String> {
+) -> Result<ExportedEventId, String> {
     let payload = draft.payload_json();
     let canonical = serde_json::to_vec(&json!({
         "schema_version": SCHEMA_VERSION,
         "command_ordinal": command_ordinal,
         "stream_id": draft.stream_id.as_ref(),
-        "parents": parents,
+        "parents": parent_refs(parents),
         "type": draft.event_type().as_ref(),
         "payload": payload,
     }))
     .map_err(|error| error.to_string())?;
-    Ok(hex::encode(Sha256::digest(canonical)))
-}
-
-fn command_id(event_id: &str) -> String {
-    event_id.to_owned()
+    ExportedEventId::try_new(hex::encode(Sha256::digest(canonical)))
 }
 
 #[derive(Debug)]
@@ -3045,6 +3125,22 @@ fn required_usize(event: &Value, field: &str) -> Result<usize, String> {
         .and_then(Value::as_u64)
         .ok_or_else(|| format!("exported event is missing unsigned integer field {field}"))?;
     usize::try_from(value).map_err(|_| format!("exported event field {field} is too large"))
+}
+
+fn required_exported_event_id(event: &Value, field: &str) -> Result<ExportedEventId, String> {
+    exported_event_id(required_str(event, field)?, field)
+}
+
+fn exported_event_id(value: &str, field: &str) -> Result<ExportedEventId, String> {
+    ExportedEventId::try_new(value.to_owned()).map_err(|error| {
+        format!("exported event JSON field {field} contains an invalid id: {error}")
+    })
+}
+
+fn required_exported_command_id(event: &Value, field: &str) -> Result<ExportedCommandId, String> {
+    ExportedCommandId::try_new(required_str(event, field)?.to_owned()).map_err(|error| {
+        format!("exported event JSON field {field} contains an invalid id: {error}")
+    })
 }
 
 fn workflow_from_payload(payload: &Value) -> Result<NewWorkflow, String> {

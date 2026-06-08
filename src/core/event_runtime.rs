@@ -657,7 +657,7 @@ fn sync_exported_events_into_sqlite(project_root: &Path, sqlite_path: &Path) -> 
              (event_id, stream_id, stream_version, event_type, event_data, metadata)
              VALUES (?1, ?2, ?3, ?4, ?5, '{}')",
             params![
-                event.event_id(),
+                event.event_id().as_ref(),
                 stream_id,
                 *version,
                 event.event_type().as_ref(),
