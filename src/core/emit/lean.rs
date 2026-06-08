@@ -669,7 +669,7 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
     let contents = contents
         .replace(
             "structure CommandDefinition where\n  name : String\n  inputs : List CommandInput\n  emittedEvents : List String\n  observedStreams : List String\n  errors : List CommandErrorDefinition\n  singleton : Bool\n  repeatBehavior : String\n\nstructure OutcomeDefinition where",
-            "structure SliceEventReference where\n  name : String\n\nstructure CommandDefinition where\n  name : String\n  inputs : List CommandInput\n  emittedEvents : List SliceEventReference\n  observedStreams : List String\n  errors : List CommandErrorDefinition\n  singleton : Bool\n  repeatBehavior : String\n\nstructure SliceCommandReference where\n  name : String\n\nstructure OutcomeDefinition where",
+            "structure SliceEventReference where\n  name : String\n\nstructure SliceStreamReference where\n  name : String\n\nstructure CommandDefinition where\n  name : String\n  inputs : List CommandInput\n  emittedEvents : List SliceEventReference\n  observedStreams : List SliceStreamReference\n  errors : List CommandErrorDefinition\n  singleton : Bool\n  repeatBehavior : String\n\nstructure SliceCommandReference where\n  name : String\n\nstructure OutcomeDefinition where",
         )
         .replace(
             "structure ReadModelDefinition where\n  name : String\n  fields : List ReadModelField\n  transitive : Bool\n  relationshipFields : List String\n  transitiveRule : String\n  exampleScenarioName : String\n\nstructure ViewField where",
@@ -728,6 +728,10 @@ theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclar
         .replace(
             "def automationHasTrigger (automation : AutomationDefinition) : Bool :=",
             "def commandEmittedEventNames (command : CommandDefinition) : List String := command.emittedEvents.map (fun eventRef => eventRef.name)\n\ndef automationHasTrigger (automation : AutomationDefinition) : Bool :=",
+        )
+        .replace(
+            "def commandInputEventStreamSourceResolves (command : CommandDefinition) (input : CommandInput) : Bool := input.sourceKind != \"event_stream_state\" || (command.observedStreams.isEmpty == false && command.observedStreams.all scenarioStreamResolves && input.eventStreamSourceEvent.isEmpty == false && input.eventStreamSourceAttribute.isEmpty == false && sliceEventDefinitions.any (fun event => event.name == input.eventStreamSourceEvent && event.attributes.any (fun eventAttribute => eventAttribute.name == input.eventStreamSourceAttribute)))",
+            "def commandObservedStreamNames (command : CommandDefinition) : List String := command.observedStreams.map (fun streamRef => streamRef.name)\n\ndef commandInputEventStreamSourceResolves (command : CommandDefinition) (input : CommandInput) : Bool := input.sourceKind != \"event_stream_state\" || ((commandObservedStreamNames command).isEmpty == false && (commandObservedStreamNames command).all scenarioStreamResolves && input.eventStreamSourceEvent.isEmpty == false && input.eventStreamSourceAttribute.isEmpty == false && sliceEventDefinitions.any (fun event => event.name == input.eventStreamSourceEvent && event.attributes.any (fun eventAttribute => eventAttribute.name == input.eventStreamSourceAttribute)))",
         )
         .replace(
             "command.emittedEvents.contains ",

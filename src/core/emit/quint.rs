@@ -361,7 +361,7 @@ pub(crate) fn emit_slice_module(
     let contents = contents
         .replace(
             "type CommandDefinition = { name: str, inputs: List[CommandInput], emittedEvents: List[str], observedStreams: List[str], errors: List[CommandErrorDefinition], singleton: bool, repeatBehavior: str }\n  type OutcomeDefinition",
-            "type SliceEventReference = { name: str }\n  type CommandDefinition = { name: str, inputs: List[CommandInput], emittedEvents: List[SliceEventReference], observedStreams: List[str], errors: List[CommandErrorDefinition], singleton: bool, repeatBehavior: str }\n  type SliceCommandReference = { name: str }\n  type OutcomeDefinition",
+            "type SliceEventReference = { name: str }\n  type SliceStreamReference = { name: str }\n  type CommandDefinition = { name: str, inputs: List[CommandInput], emittedEvents: List[SliceEventReference], observedStreams: List[SliceStreamReference], errors: List[CommandErrorDefinition], singleton: bool, repeatBehavior: str }\n  type SliceCommandReference = { name: str }\n  type OutcomeDefinition",
         )
         .replace(
             "type ReadModelDefinition = { name: str, fields: List[ReadModelField], transitive: bool, relationshipFields: List[str], transitiveRule: str, exampleScenarioName: str }\n  type ViewField",
@@ -426,6 +426,10 @@ pub(crate) fn emit_slice_module(
         .replace(
             "def automationHasTrigger(automation) =",
             "def commandEmittedEventNames(command) = command.emittedEvents.foldl([], (names, eventRef) => names.append(eventRef.name))\n  def automationHasTrigger(automation) =",
+        )
+        .replace(
+            "def commandInputEventStreamSourceResolves(command, input) = input.sourceKind != \"event_stream_state\" or (command.observedStreams.length() > 0 and command.observedStreams.select(streamName => scenarioStreamResolves(streamName)).length() == command.observedStreams.length() and input.eventStreamSourceEvent != \"\" and input.eventStreamSourceAttribute != \"\" and sliceEventDefinitions.select(event => event.name == input.eventStreamSourceEvent and event.attributes.select(attribute => attribute.name == input.eventStreamSourceAttribute).length() > 0).length() > 0)",
+            "def commandObservedStreamNames(command) = command.observedStreams.foldl([], (names, streamRef) => names.append(streamRef.name))\n  def commandInputEventStreamSourceResolves(command, input) = input.sourceKind != \"event_stream_state\" or (commandObservedStreamNames(command).length() > 0 and commandObservedStreamNames(command).select(streamName => scenarioStreamResolves(streamName)).length() == commandObservedStreamNames(command).length() and input.eventStreamSourceEvent != \"\" and input.eventStreamSourceAttribute != \"\" and sliceEventDefinitions.select(event => event.name == input.eventStreamSourceEvent and event.attributes.select(attribute => attribute.name == input.eventStreamSourceAttribute).length() > 0).length() > 0)",
         )
         .replace(
             "command.emittedEvents.select(eventName => eventName == ",
