@@ -917,6 +917,117 @@ impl WorkflowCommandErrorEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowOwnedDefinitionEventPayload {
+    workflow: WorkflowSlug,
+    definition: WorkflowOwnedDefinitionRecord,
+}
+
+impl WorkflowOwnedDefinitionEventPayload {
+    fn from_parts(workflow: &WorkflowSlug, definition: &WorkflowOwnedDefinitionRecord) -> Self {
+        Self {
+            workflow: workflow.clone(),
+            definition: definition.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        let workflow = workflow_slug(required_str(payload, "workflow")?)?;
+        let source_slice = workflow_transition_endpoint(required_str(payload, "source_slice")?)?;
+        let definition_kind =
+            workflow_owned_definition_kind(required_str(payload, "definition_kind")?)?;
+        let definition_name =
+            workflow_owned_definition_name(required_str(payload, "definition_name")?)?;
+        let definition_stream = optional_str(payload, "definition_stream")?
+            .map(stream_name)
+            .transpose()?;
+        let source_provenance = optional_str(payload, "source_provenance")?
+            .map(model_description)
+            .transpose()?;
+        let event_participation = optional_str(payload, "event_participation")?
+            .map(workflow_event_participation)
+            .transpose()?;
+        let view_role = optional_str(payload, "view_role")?
+            .map(workflow_view_role)
+            .transpose()?;
+
+        let definition = match (
+            definition_stream,
+            source_provenance,
+            event_participation,
+            view_role,
+        ) {
+            (None, None, None, None) => {
+                WorkflowOwnedDefinitionRecord::new(source_slice, definition_kind, definition_name)
+            }
+            (None, None, None, Some(view_role)) => {
+                WorkflowOwnedDefinitionRecord::new_with_view_role(
+                    source_slice,
+                    definition_kind,
+                    definition_name,
+                    view_role,
+                )
+                .ok_or_else(|| "view role requires a view owned-definition kind".to_owned())?
+            }
+            (Some(definition_stream), Some(source_provenance), None, None) => {
+                WorkflowOwnedDefinitionRecord::new_with_event_identity(
+                    source_slice,
+                    definition_kind,
+                    definition_name,
+                    definition_stream,
+                    source_provenance,
+                )
+            }
+            (Some(definition_stream), Some(source_provenance), Some(event_participation), None) => {
+                WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
+                    source_slice,
+                    definition_kind,
+                    definition_name,
+                    definition_stream,
+                    source_provenance,
+                    event_participation,
+                )
+            }
+            _ => {
+                return Err(
+                    "WorkflowOwnedDefinitionAdded has incompatible optional fields".to_owned(),
+                );
+            }
+        };
+
+        Ok(Self {
+            workflow,
+            definition,
+        })
+    }
+
+    fn into_parts(self) -> (WorkflowSlug, WorkflowOwnedDefinitionRecord) {
+        (self.workflow, self.definition)
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "workflow": self.workflow.as_ref(),
+            "source_slice": self.definition.source_slice().as_ref(),
+            "definition_kind": self.definition.definition_kind().as_ref(),
+            "definition_name": self.definition.definition_name().as_ref(),
+            "definition_stream": self
+                .definition
+                .definition_stream()
+                .map(|stream| stream.as_ref()),
+            "source_provenance": self
+                .definition
+                .source_provenance()
+                .map(|provenance| provenance.as_ref()),
+            "event_participation": self
+                .definition
+                .event_participation()
+                .map(|participation| participation.as_ref()),
+            "view_role": self.definition.view_role().map(|role| role.as_ref()),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowTransitionEvidenceEventPayload {
     workflow: WorkflowSlug,
     evidence: WorkflowTransitionEvidenceRecord,
@@ -1179,20 +1290,8 @@ impl ExportedEventBody {
             Self::WorkflowOwnedDefinitionAdded {
                 workflow,
                 definition,
-            } => json!({
-                "workflow": workflow.as_ref(),
-                "source_slice": definition.source_slice().as_ref(),
-                "definition_kind": definition.definition_kind().as_ref(),
-                "definition_name": definition.definition_name().as_ref(),
-                "definition_stream": definition.definition_stream().map(|stream| stream.as_ref()),
-                "source_provenance": definition
-                    .source_provenance()
-                    .map(|provenance| provenance.as_ref()),
-                "event_participation": definition
-                    .event_participation()
-                    .map(|participation| participation.as_ref()),
-                "view_role": definition.view_role().map(|role| role.as_ref()),
-            }),
+            } => WorkflowOwnedDefinitionEventPayload::from_parts(workflow, definition)
+                .to_json_value(),
             Self::WorkflowTransitionEvidenceAdded { workflow, evidence } => {
                 WorkflowTransitionEvidenceEventPayload::from_parts(workflow, evidence)
                     .to_json_value()
@@ -1325,9 +1424,11 @@ impl ExportedEventBody {
                 Ok(Self::WorkflowCommandErrorAdded { workflow, error })
             }
             ExportedEventType::WorkflowOwnedDefinitionAdded => {
+                let (workflow, definition) =
+                    WorkflowOwnedDefinitionEventPayload::from_json_value(payload)?.into_parts();
                 Ok(Self::WorkflowOwnedDefinitionAdded {
-                    workflow: workflow_slug(required_str(payload, "workflow")?)?,
-                    definition: workflow_owned_definition_from_payload(payload)?,
+                    workflow,
+                    definition,
                 })
             }
             ExportedEventType::WorkflowTransitionEvidenceAdded => {
@@ -4334,68 +4435,6 @@ pub(crate) fn slice_board_connection_from_payload(
     ))
 }
 
-fn workflow_owned_definition_from_payload(
-    payload: &Value,
-) -> Result<WorkflowOwnedDefinitionRecord, String> {
-    let source_slice = workflow_transition_endpoint(required_str(payload, "source_slice")?)?;
-    let definition_kind =
-        workflow_owned_definition_kind(required_str(payload, "definition_kind")?)?;
-    let definition_name =
-        workflow_owned_definition_name(required_str(payload, "definition_name")?)?;
-    let definition_stream = optional_str(payload, "definition_stream")?
-        .map(stream_name)
-        .transpose()?;
-    let source_provenance = optional_str(payload, "source_provenance")?
-        .map(model_description)
-        .transpose()?;
-    let event_participation = optional_str(payload, "event_participation")?
-        .map(workflow_event_participation)
-        .transpose()?;
-    let view_role = optional_str(payload, "view_role")?
-        .map(workflow_view_role)
-        .transpose()?;
-
-    match (
-        definition_stream,
-        source_provenance,
-        event_participation,
-        view_role,
-    ) {
-        (None, None, None, None) => Ok(WorkflowOwnedDefinitionRecord::new(
-            source_slice,
-            definition_kind,
-            definition_name,
-        )),
-        (None, None, None, Some(view_role)) => WorkflowOwnedDefinitionRecord::new_with_view_role(
-            source_slice,
-            definition_kind,
-            definition_name,
-            view_role,
-        )
-        .ok_or_else(|| "view role requires a view owned-definition kind".to_owned()),
-        (Some(definition_stream), Some(source_provenance), None, None) => {
-            Ok(WorkflowOwnedDefinitionRecord::new_with_event_identity(
-                source_slice,
-                definition_kind,
-                definition_name,
-                definition_stream,
-                source_provenance,
-            ))
-        }
-        (Some(definition_stream), Some(source_provenance), Some(event_participation), None) => Ok(
-            WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
-                source_slice,
-                definition_kind,
-                definition_name,
-                definition_stream,
-                source_provenance,
-                event_participation,
-            ),
-        ),
-        _ => Err("WorkflowOwnedDefinitionAdded has incompatible optional fields".to_owned()),
-    }
-}
-
 fn same_transition(left: &WorkflowTransitionRecord, right: &WorkflowTransitionRecord) -> bool {
     left.source().as_ref() == right.source().as_ref()
         && left.target().as_ref() == right.target().as_ref()
@@ -4976,6 +5015,120 @@ mod tests {
         assert_eq!(
             WorkflowTransitionRemovedEventPayload::from_json_value(&json)?.into_removal(),
             removal
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn workflow_owned_definition_event_payload_preserves_optional_field_invariants()
+    -> Result<(), String> {
+        let workflow = workflow_slug("open-ticket")?;
+        let basic_definition = WorkflowOwnedDefinitionRecord::new(
+            workflow_transition_endpoint("capture-ticket")?,
+            workflow_owned_definition_kind("command")?,
+            workflow_owned_definition_name("CaptureTicket")?,
+        );
+        let event_definition =
+            WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
+                workflow_transition_endpoint("capture-ticket")?,
+                workflow_owned_definition_kind("event")?,
+                workflow_owned_definition_name("TicketCaptured")?,
+                stream_name("ticket-events")?,
+                model_description("CaptureTicket emits TicketCaptured.")?,
+                workflow_event_participation("emitted")?,
+            );
+        let entry_view = WorkflowOwnedDefinitionRecord::new_with_view_role(
+            workflow_transition_endpoint("capture-ticket")?,
+            workflow_owned_definition_kind("view")?,
+            workflow_owned_definition_name("CaptureTicketScreen")?,
+            workflow_view_role("entry")?,
+        )
+        .ok_or_else(|| "view owned definition should accept entry view role".to_owned())?;
+
+        let basic_payload =
+            WorkflowOwnedDefinitionEventPayload::from_parts(&workflow, &basic_definition);
+        let basic_json = basic_payload.to_json_value();
+        assert_eq!(
+            basic_json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "source_slice": "capture-ticket",
+                "definition_kind": "command",
+                "definition_name": "CaptureTicket",
+                "definition_stream": null,
+                "source_provenance": null,
+                "event_participation": null,
+                "view_role": null,
+            })
+        );
+        assert_eq!(
+            WorkflowOwnedDefinitionEventPayload::from_json_value(&basic_json)?.into_parts(),
+            (workflow.clone(), basic_definition)
+        );
+
+        let event_payload =
+            WorkflowOwnedDefinitionEventPayload::from_parts(&workflow, &event_definition);
+        let event_json = event_payload.to_json_value();
+        assert_eq!(
+            event_json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "source_slice": "capture-ticket",
+                "definition_kind": "event",
+                "definition_name": "TicketCaptured",
+                "definition_stream": "ticket-events",
+                "source_provenance": "CaptureTicket emits TicketCaptured.",
+                "event_participation": "emitted",
+                "view_role": null,
+            })
+        );
+        assert_eq!(
+            WorkflowOwnedDefinitionEventPayload::from_json_value(&event_json)?.into_parts(),
+            (workflow.clone(), event_definition)
+        );
+
+        let view_payload = WorkflowOwnedDefinitionEventPayload::from_parts(&workflow, &entry_view);
+        let view_json = view_payload.to_json_value();
+        assert_eq!(
+            view_json,
+            serde_json::json!({
+                "workflow": "open-ticket",
+                "source_slice": "capture-ticket",
+                "definition_kind": "view",
+                "definition_name": "CaptureTicketScreen",
+                "definition_stream": null,
+                "source_provenance": null,
+                "event_participation": null,
+                "view_role": "entry",
+            })
+        );
+        assert_eq!(
+            WorkflowOwnedDefinitionEventPayload::from_json_value(&view_json)?.into_parts(),
+            (workflow, entry_view)
+        );
+
+        let incompatible_json = serde_json::json!({
+            "workflow": "open-ticket",
+            "source_slice": "capture-ticket",
+            "definition_kind": "event",
+            "definition_name": "TicketCaptured",
+            "definition_stream": "ticket-events",
+            "source_provenance": null,
+            "event_participation": null,
+            "view_role": null,
+        });
+        let error = match WorkflowOwnedDefinitionEventPayload::from_json_value(&incompatible_json) {
+            Ok(_) => {
+                return Err(
+                    "definition stream without source provenance must be rejected".to_owned(),
+                );
+            }
+            Err(error) => error,
+        };
+        assert_eq!(
+            error,
+            "WorkflowOwnedDefinitionAdded has incompatible optional fields"
         );
 
         Ok(())
