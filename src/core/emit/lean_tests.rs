@@ -809,7 +809,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure CommandDefinition where\n  name : String\n  inputs : List CommandInput\n  emittedEvents : List SliceEventReference\n  observedStreams : List String\n  errors : List CommandErrorDefinition\n  singleton : Bool\n  repeatBehavior : String"
+                "structure CommandDefinition where\n  name : String\n  inputs : List CommandInput\n  emittedEvents : List SliceEventReference\n  observedStreams : List SliceStreamReference\n  errors : List CommandErrorDefinition\n  singleton : Bool\n  repeatBehavior : String"
             ),
             "Lean slice artifacts must represent commands in terms of inputs, emitted events, stream-derived state, declared errors, and singleton repeat behavior"
         );
@@ -1232,7 +1232,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def commandInputEventStreamSourceResolves (command : CommandDefinition) (input : CommandInput) : Bool := input.sourceKind != \"event_stream_state\" || (command.observedStreams.isEmpty == false && command.observedStreams.all scenarioStreamResolves && input.eventStreamSourceEvent.isEmpty == false && input.eventStreamSourceAttribute.isEmpty == false && sliceEventDefinitions.any (fun event => event.name == input.eventStreamSourceEvent && event.attributes.any (fun eventAttribute => eventAttribute.name == input.eventStreamSourceAttribute)))"
+                "def commandObservedStreamNames (command : CommandDefinition) : List String := command.observedStreams.map (fun streamRef => streamRef.name)"
+            ),
+            "Lean slice artifacts must project typed command-observed stream references to names"
+        );
+        assert!(
+            lean.contains(
+                "def commandInputEventStreamSourceResolves (command : CommandDefinition) (input : CommandInput) : Bool := input.sourceKind != \"event_stream_state\" || ((commandObservedStreamNames command).isEmpty == false && (commandObservedStreamNames command).all scenarioStreamResolves && input.eventStreamSourceEvent.isEmpty == false && input.eventStreamSourceAttribute.isEmpty == false && sliceEventDefinitions.any (fun event => event.name == input.eventStreamSourceEvent && event.attributes.any (fun eventAttribute => eventAttribute.name == input.eventStreamSourceAttribute)))"
             ),
             "Lean slice artifacts must require event-stream command inputs to name observed streams and upstream event attributes"
         );

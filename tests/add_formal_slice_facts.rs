@@ -983,7 +983,7 @@ mod tests {
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
         assert!(
-            lean.contains("observedStreams := [\"tickets\"]"),
+            lean.contains("observedStreams := [{ name := \"tickets\" }]"),
             "Lean slice artifact must carry event streams observed for command inputs"
         );
         assert!(
@@ -992,7 +992,7 @@ mod tests {
             "Lean slice artifact must link event-stream command inputs to an upstream event attribute"
         );
         assert!(
-            quint.contains("observedStreams: [\"tickets\"]"),
+            quint.contains("observedStreams: [{ name: \"tickets\" }]"),
             "Quint slice artifact must carry event streams observed for command inputs"
         );
         assert!(
@@ -2079,7 +2079,7 @@ mod tests {
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
         assert!(
-            lean.contains("observedStreams := [\"tickets\"]"),
+            lean.contains("observedStreams := [{ name := \"tickets\" }]"),
             "MCP-authored event-stream command inputs must be represented in the Lean artifact"
         );
         assert!(
@@ -2088,7 +2088,7 @@ mod tests {
             "MCP-authored event-stream command inputs must link to an upstream event attribute in the Lean artifact"
         );
         assert!(
-            quint.contains("observedStreams: [\"tickets\"]"),
+            quint.contains("observedStreams: [{ name: \"tickets\" }]"),
             "MCP-authored event-stream command inputs must be represented in the Quint artifact"
         );
         assert!(

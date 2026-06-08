@@ -2499,7 +2499,7 @@ fn lean_command_definition_record(command: &NewCommandDefinition) -> String {
         quoted(command.name.as_ref()),
         lean_command_input_record(&command.input),
         lean_event_reference_records(command.emitted_events.as_slice()),
-        lean_list(command.observed_streams.as_slice()),
+        lean_stream_reference_records(command.observed_streams.as_slice()),
         command
             .errors
             .as_slice()
@@ -2523,7 +2523,7 @@ fn quint_command_definition_record(command: &NewCommandDefinition) -> String {
         quoted(command.name.as_ref()),
         quint_command_input_record(&command.input),
         quint_event_reference_records(command.emitted_events.as_slice()),
-        quint_list(command.observed_streams.as_slice()),
+        quint_stream_reference_records(command.observed_streams.as_slice()),
         command
             .errors
             .as_slice()
@@ -2669,6 +2669,14 @@ fn quint_stream_record(stream: &str) -> String {
     format!("{{ name: {} }}", quoted(stream))
 }
 
+fn lean_stream_reference_record(stream_name: &str) -> String {
+    format!("{{ name := {} }}", quoted(stream_name))
+}
+
+fn quint_stream_reference_record(stream_name: &str) -> String {
+    format!("{{ name: {} }}", quoted(stream_name))
+}
+
 fn lean_event_reference_record(event_name: &str) -> String {
     format!("{{ name := {} }}", quoted(event_name))
 }
@@ -2689,6 +2697,22 @@ fn quint_event_reference_records(event_names: &[EventName]) -> String {
     event_names
         .iter()
         .map(|event_name| quint_event_reference_record(event_name.as_ref()))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn lean_stream_reference_records(stream_names: &[StreamName]) -> String {
+    stream_names
+        .iter()
+        .map(|stream_name| lean_stream_reference_record(stream_name.as_ref()))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn quint_stream_reference_records(stream_names: &[StreamName]) -> String {
+    stream_names
+        .iter()
+        .map(|stream_name| quint_stream_reference_record(stream_name.as_ref()))
         .collect::<Vec<_>>()
         .join(",")
 }
