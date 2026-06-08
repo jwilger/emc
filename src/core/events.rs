@@ -688,6 +688,54 @@ impl SliceScenarioAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceOutcomeAddedEventPayload {
+    outcome: NewOutcomeDefinition,
+}
+
+impl SliceOutcomeAddedEventPayload {
+    fn from_outcome(outcome: &NewOutcomeDefinition) -> Self {
+        Self {
+            outcome: outcome.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            outcome: NewOutcomeDefinition::new(
+                slice_slug(required_str(payload, "slice")?)?,
+                outcome_label_name(required_str(payload, "label")?)?,
+                OutcomeEventNames::from_events(
+                    required_string_array(payload, "events")?
+                        .into_iter()
+                        .map(|event| event_name(&event))
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+                required_bool(payload, "externally_relevant")?,
+            ),
+        })
+    }
+
+    fn into_outcome(self) -> NewOutcomeDefinition {
+        self.outcome
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slice": self.outcome.slice_slug().as_ref(),
+            "label": self.outcome.label().as_ref(),
+            "events": self
+                .outcome
+                .event_set()
+                .as_slice()
+                .iter()
+                .map(|event| event.as_ref())
+                .collect::<Vec<_>>(),
+            "externally_relevant": self.outcome.externally_relevant(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowConnectedEventPayload {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
@@ -1494,7 +1542,9 @@ impl ExportedEventBody {
             Self::SliceScenarioAdded { scenario } => {
                 SliceScenarioAddedEventPayload::from_scenario(scenario).to_json_value()
             }
-            Self::SliceOutcomeAdded { outcome } => slice_outcome_payload(outcome),
+            Self::SliceOutcomeAdded { outcome } => {
+                SliceOutcomeAddedEventPayload::from_outcome(outcome).to_json_value()
+            }
             Self::SliceExternalPayloadAdded { external_payload } => {
                 slice_external_payload_payload(external_payload)
             }
@@ -1640,7 +1690,7 @@ impl ExportedEventBody {
                 scenario: SliceScenarioAddedEventPayload::from_json_value(payload)?.into_scenario(),
             }),
             ExportedEventType::SliceOutcomeAdded => Ok(Self::SliceOutcomeAdded {
-                outcome: slice_outcome_from_payload(payload)?,
+                outcome: SliceOutcomeAddedEventPayload::from_json_value(payload)?.into_outcome(),
             }),
             ExportedEventType::SliceExternalPayloadAdded => Ok(Self::SliceExternalPayloadAdded {
                 external_payload: slice_external_payload_from_payload(payload)?,
@@ -2173,20 +2223,6 @@ impl ExportedEventFrontier for ExportedEventHeader {
     fn frontier_event_type(&self) -> ExportedEventType {
         self.event_type
     }
-}
-
-fn slice_outcome_payload(outcome: &NewOutcomeDefinition) -> Value {
-    json!({
-        "slice": outcome.slice_slug().as_ref(),
-        "label": outcome.label().as_ref(),
-        "events": outcome
-            .event_set()
-            .as_slice()
-            .iter()
-            .map(|event| event.as_ref())
-            .collect::<Vec<_>>(),
-        "externally_relevant": outcome.externally_relevant(),
-    })
 }
 
 fn slice_external_payload_payload(external_payload: &NewExternalPayloadDefinition) -> Value {
@@ -4022,20 +4058,6 @@ fn workflow_transition_kind_from_connection(
     workflow_transition_kind(&raw_kind)
 }
 
-pub(crate) fn slice_outcome_from_payload(payload: &Value) -> Result<NewOutcomeDefinition, String> {
-    Ok(NewOutcomeDefinition::new(
-        slice_slug(required_str(payload, "slice")?)?,
-        outcome_label_name(required_str(payload, "label")?)?,
-        OutcomeEventNames::from_events(
-            required_string_array(payload, "events")?
-                .into_iter()
-                .map(|event| event_name(&event))
-                .collect::<Result<Vec<_>, _>>()?,
-        ),
-        required_bool(payload, "externally_relevant")?,
-    ))
-}
-
 pub(crate) fn slice_external_payload_from_payload(
     payload: &Value,
 ) -> Result<NewExternalPayloadDefinition, String> {
@@ -5059,6 +5081,39 @@ mod tests {
         assert_eq!(
             error,
             "SliceScenarioAdded has incompatible scenario kind fields"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_outcome_added_event_payload_round_trips_between_semantic_outcome_and_json_boundary()
+    -> Result<(), String> {
+        let outcome = NewOutcomeDefinition::new(
+            slice_slug("capture-ticket")?,
+            outcome_label_name("ticket_captured")?,
+            OutcomeEventNames::from_events([
+                event_name("TicketCaptured")?,
+                event_name("TicketQueued")?,
+            ]),
+            true,
+        );
+
+        let payload = SliceOutcomeAddedEventPayload::from_outcome(&outcome);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "slice": "capture-ticket",
+                "label": "ticket_captured",
+                "events": ["TicketCaptured", "TicketQueued"],
+                "externally_relevant": true,
+            })
+        );
+        assert_eq!(
+            SliceOutcomeAddedEventPayload::from_json_value(&json)?.into_outcome(),
+            outcome
         );
 
         Ok(())
