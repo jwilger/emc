@@ -1294,6 +1294,191 @@ impl SliceReadModelAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceViewAddedEventPayload {
+    view: NewViewDefinition,
+}
+
+impl SliceViewAddedEventPayload {
+    fn from_view(view: &NewViewDefinition) -> Self {
+        Self { view: view.clone() }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        let mut view = NewViewDefinition::new(
+            slice_slug(required_str(payload, "slice")?)?,
+            view_name(required_str(payload, "name")?)?,
+            Self::view_field_from_json_value(required_object(payload, "field")?)?,
+        )
+        .with_controls(ViewControls::from_controls(
+            required_array(payload, "controls")?
+                .iter()
+                .map(Self::control_definition_from_json_value)
+                .collect::<Result<Vec<_>, _>>()?,
+        ))
+        .with_local_states(ViewLocalStates::from_targets(
+            required_string_array(payload, "local_states")?
+                .into_iter()
+                .map(|target| navigation_target_name(&target))
+                .collect::<Result<Vec<_>, _>>()?,
+        ));
+        view = view.with_filters(ViewFilters::from_targets(
+            required_string_array(payload, "filters")?
+                .into_iter()
+                .map(|target| navigation_target_name(&target))
+                .collect::<Result<Vec<_>, _>>()?,
+        ));
+        Ok(Self { view })
+    }
+
+    fn into_view(self) -> NewViewDefinition {
+        self.view
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slice": self.view.slice_slug().as_ref(),
+            "name": self.view.name().as_ref(),
+            "field": Self::view_field_to_json_value(self.view.field()),
+            "controls": self
+                .view
+                .controls()
+                .as_slice()
+                .iter()
+                .map(Self::control_to_json_value)
+                .collect::<Vec<_>>(),
+            "local_states": self
+                .view
+                .local_states()
+                .as_slice()
+                .iter()
+                .map(|state| state.as_ref())
+                .collect::<Vec<_>>(),
+            "filters": self
+                .view
+                .filters()
+                .as_slice()
+                .iter()
+                .map(|filter| filter.as_ref())
+                .collect::<Vec<_>>(),
+        })
+    }
+
+    fn view_field_from_json_value(payload: &Value) -> Result<NewViewField, String> {
+        Ok(NewViewField::new(
+            view_field_name(required_str(payload, "name")?)?,
+            view_field_source_kind(required_str(payload, "source_kind")?)?,
+            read_model_name(required_str(payload, "source_read_model")?)?,
+            view_field_name(required_str(payload, "source_field")?)?,
+            sketch_token(required_str(payload, "sketch_token")?)?,
+            provenance_description(required_str(payload, "provenance")?)?,
+            bit_encoding_semantics(required_str(payload, "bit_encoding")?)?,
+        ))
+    }
+
+    fn view_field_to_json_value(field: &NewViewField) -> Value {
+        json!({
+            "name": field.name().as_ref(),
+            "source_kind": field.source_kind().as_ref(),
+            "source_read_model": field.source_read_model().as_ref(),
+            "source_field": field.source_field().as_ref(),
+            "sketch_token": field.sketch_token().as_ref(),
+            "provenance": field.provenance_description().as_ref(),
+            "bit_encoding": field.bit_encoding().as_ref(),
+        })
+    }
+
+    fn control_definition_from_json_value(payload: &Value) -> Result<NewControlDefinition, String> {
+        Ok(NewControlDefinition::new(
+            control_name(required_str(payload, "name")?)?,
+            command_name(required_str(payload, "command")?)?,
+            Self::control_input_from_json_value(required_object(payload, "input")?)?,
+            command_error_names(required_string_array(payload, "handled_errors")?)?,
+            control_recovery_behavior(required_str(payload, "recovery_behavior")?)?,
+            sketch_token(required_str(payload, "sketch_token")?)?,
+            Self::navigation_from_json_value(required_object(payload, "navigation")?)?,
+        ))
+    }
+
+    fn control_to_json_value(control: &NewControlDefinition) -> Value {
+        json!({
+            "name": control.name().as_ref(),
+            "command": control.command_name().as_ref(),
+            "input": Self::control_input_to_json_value(control.input()),
+            "handled_errors": control
+                .handled_errors()
+                .as_slice()
+                .iter()
+                .map(|error| error.as_ref())
+                .collect::<Vec<_>>(),
+            "recovery_behavior": control.recovery_behavior().as_ref(),
+            "sketch_token": control.sketch_token().as_ref(),
+            "navigation": Self::navigation_to_json_value(control.navigation()),
+        })
+    }
+
+    fn control_input_from_json_value(payload: &Value) -> Result<NewControlInputProvision, String> {
+        Ok(NewControlInputProvision::new(
+            datum_name(required_str(payload, "name")?)?,
+            command_input_source_kind(required_str(payload, "source_kind")?)?,
+            command_input_source_description(required_str(payload, "source_description")?)?,
+            sketch_token(required_str(payload, "sketch_token")?)?,
+            required_bool(payload, "visible_to_actor")?,
+            required_bool(payload, "decision_field")?,
+        ))
+    }
+
+    fn control_input_to_json_value(input: &NewControlInputProvision) -> Value {
+        json!({
+            "name": input.name().as_ref(),
+            "source_kind": input.source_kind().as_ref(),
+            "source_description": input.source_description().as_ref(),
+            "sketch_token": input.sketch_token().as_ref(),
+            "visible_to_actor": input.visible_to_actor(),
+            "decision_field": input.decision_field(),
+        })
+    }
+
+    fn navigation_from_json_value(payload: &Value) -> Result<NewNavigationTarget, String> {
+        let navigation = NewNavigationTarget::new(
+            navigation_target_type(required_str(payload, "type")?)?,
+            navigation_target_name(required_str(payload, "target")?)?,
+        );
+        match (
+            optional_str(payload, "external_workflow")?,
+            optional_str(payload, "external_system")?,
+            optional_str(payload, "handoff_contract")?,
+        ) {
+            (None, None, None) => Ok(navigation),
+            (Some(external_workflow), None, None) => {
+                Ok(navigation.with_external_workflow(navigation_target_name(external_workflow)?))
+            }
+            (None, Some(external_system), Some(handoff_contract)) => Ok(navigation
+                .with_external_system(
+                    navigation_target_name(external_system)?,
+                    payload_contract_name(handoff_contract)?,
+                )),
+            _ => Err("SliceViewAdded has incompatible navigation target fields".to_owned()),
+        }
+    }
+
+    fn navigation_to_json_value(navigation: &NewNavigationTarget) -> Value {
+        json!({
+            "type": navigation.target_type().as_ref(),
+            "target": navigation.target_name().as_ref(),
+            "external_workflow": navigation
+                .external_workflow_name()
+                .map(|workflow| workflow.as_ref()),
+            "external_system": navigation
+                .external_system_name()
+                .map(|system| system.as_ref()),
+            "handoff_contract": navigation
+                .handoff_contract()
+                .map(|contract| contract.as_ref()),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowConnectedEventPayload {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
@@ -2116,7 +2301,9 @@ impl ExportedEventBody {
             Self::SliceReadModelAdded { read_model } => {
                 SliceReadModelAddedEventPayload::from_read_model(read_model).to_json_value()
             }
-            Self::SliceViewAdded { view } => slice_view_payload(view),
+            Self::SliceViewAdded { view } => {
+                SliceViewAddedEventPayload::from_view(view).to_json_value()
+            }
             Self::SliceBitLevelDataFlowAdded { data_flow } => {
                 slice_bit_level_data_flow_payload(data_flow)
             }
@@ -2274,7 +2461,7 @@ impl ExportedEventBody {
                     .into_read_model(),
             }),
             ExportedEventType::SliceViewAdded => Ok(Self::SliceViewAdded {
-                view: slice_view_from_payload(payload)?,
+                view: SliceViewAddedEventPayload::from_json_value(payload)?.into_view(),
             }),
             ExportedEventType::SliceBitLevelDataFlowAdded => Ok(Self::SliceBitLevelDataFlowAdded {
                 data_flow: slice_bit_level_data_flow_from_payload(payload)?,
@@ -2792,32 +2979,6 @@ impl ExportedEventFrontier for ExportedEventHeader {
     }
 }
 
-fn slice_view_payload(view: &NewViewDefinition) -> Value {
-    json!({
-        "slice": view.slice_slug().as_ref(),
-        "name": view.name().as_ref(),
-        "field": view_field_payload(view.field()),
-        "controls": view
-            .controls()
-            .as_slice()
-            .iter()
-            .map(control_payload)
-            .collect::<Vec<_>>(),
-        "local_states": view
-            .local_states()
-            .as_slice()
-            .iter()
-            .map(|state| state.as_ref())
-            .collect::<Vec<_>>(),
-        "filters": view
-            .filters()
-            .as_slice()
-            .iter()
-            .map(|filter| filter.as_ref())
-            .collect::<Vec<_>>(),
-    })
-}
-
 fn slice_bit_level_data_flow_payload(data_flow: &NewBitLevelDataFlow) -> Value {
     json!({
         "slice": data_flow.slice_slug().as_ref(),
@@ -2874,62 +3035,6 @@ fn slice_board_connection_payload(connection: &NewBoardConnection) -> Value {
         "source_kind": connection.source_kind().as_ref(),
         "target": connection.target().as_ref(),
         "target_kind": connection.target_kind().as_ref(),
-    })
-}
-
-fn view_field_payload(field: &NewViewField) -> Value {
-    json!({
-        "name": field.name().as_ref(),
-        "source_kind": field.source_kind().as_ref(),
-        "source_read_model": field.source_read_model().as_ref(),
-        "source_field": field.source_field().as_ref(),
-        "sketch_token": field.sketch_token().as_ref(),
-        "provenance": field.provenance_description().as_ref(),
-        "bit_encoding": field.bit_encoding().as_ref(),
-    })
-}
-
-fn control_payload(control: &NewControlDefinition) -> Value {
-    json!({
-        "name": control.name().as_ref(),
-        "command": control.command_name().as_ref(),
-        "input": control_input_payload(control.input()),
-        "handled_errors": control
-            .handled_errors()
-            .as_slice()
-            .iter()
-            .map(|error| error.as_ref())
-            .collect::<Vec<_>>(),
-        "recovery_behavior": control.recovery_behavior().as_ref(),
-        "sketch_token": control.sketch_token().as_ref(),
-        "navigation": navigation_payload(control.navigation()),
-    })
-}
-
-fn control_input_payload(input: &NewControlInputProvision) -> Value {
-    json!({
-        "name": input.name().as_ref(),
-        "source_kind": input.source_kind().as_ref(),
-        "source_description": input.source_description().as_ref(),
-        "sketch_token": input.sketch_token().as_ref(),
-        "visible_to_actor": input.visible_to_actor(),
-        "decision_field": input.decision_field(),
-    })
-}
-
-fn navigation_payload(navigation: &NewNavigationTarget) -> Value {
-    json!({
-        "type": navigation.target_type().as_ref(),
-        "target": navigation.target_name().as_ref(),
-        "external_workflow": navigation
-            .external_workflow_name()
-            .map(|workflow| workflow.as_ref()),
-        "external_system": navigation
-            .external_system_name()
-            .map(|system| system.as_ref()),
-        "handoff_contract": navigation
-            .handoff_contract()
-            .map(|contract| contract.as_ref()),
     })
 }
 
@@ -4482,91 +4587,6 @@ pub(crate) fn slice_bit_level_data_flow_from_payload(
     ))
 }
 
-pub(crate) fn slice_view_from_payload(payload: &Value) -> Result<NewViewDefinition, String> {
-    let mut view = NewViewDefinition::new(
-        slice_slug(required_str(payload, "slice")?)?,
-        view_name(required_str(payload, "name")?)?,
-        view_field_from_payload(required_object(payload, "field")?)?,
-    )
-    .with_controls(ViewControls::from_controls(
-        required_array(payload, "controls")?
-            .iter()
-            .map(control_definition_from_payload)
-            .collect::<Result<Vec<_>, _>>()?,
-    ))
-    .with_local_states(ViewLocalStates::from_targets(
-        required_string_array(payload, "local_states")?
-            .into_iter()
-            .map(|target| navigation_target_name(&target))
-            .collect::<Result<Vec<_>, _>>()?,
-    ));
-    view = view.with_filters(ViewFilters::from_targets(
-        required_string_array(payload, "filters")?
-            .into_iter()
-            .map(|target| navigation_target_name(&target))
-            .collect::<Result<Vec<_>, _>>()?,
-    ));
-    Ok(view)
-}
-
-fn view_field_from_payload(payload: &Value) -> Result<NewViewField, String> {
-    Ok(NewViewField::new(
-        view_field_name(required_str(payload, "name")?)?,
-        view_field_source_kind(required_str(payload, "source_kind")?)?,
-        read_model_name(required_str(payload, "source_read_model")?)?,
-        view_field_name(required_str(payload, "source_field")?)?,
-        sketch_token(required_str(payload, "sketch_token")?)?,
-        provenance_description(required_str(payload, "provenance")?)?,
-        bit_encoding_semantics(required_str(payload, "bit_encoding")?)?,
-    ))
-}
-
-fn control_definition_from_payload(payload: &Value) -> Result<NewControlDefinition, String> {
-    Ok(NewControlDefinition::new(
-        control_name(required_str(payload, "name")?)?,
-        command_name(required_str(payload, "command")?)?,
-        control_input_from_payload(required_object(payload, "input")?)?,
-        command_error_names(required_string_array(payload, "handled_errors")?)?,
-        control_recovery_behavior(required_str(payload, "recovery_behavior")?)?,
-        sketch_token(required_str(payload, "sketch_token")?)?,
-        navigation_from_payload(required_object(payload, "navigation")?)?,
-    ))
-}
-
-fn control_input_from_payload(payload: &Value) -> Result<NewControlInputProvision, String> {
-    Ok(NewControlInputProvision::new(
-        datum_name(required_str(payload, "name")?)?,
-        command_input_source_kind(required_str(payload, "source_kind")?)?,
-        command_input_source_description(required_str(payload, "source_description")?)?,
-        sketch_token(required_str(payload, "sketch_token")?)?,
-        required_bool(payload, "visible_to_actor")?,
-        required_bool(payload, "decision_field")?,
-    ))
-}
-
-fn navigation_from_payload(payload: &Value) -> Result<NewNavigationTarget, String> {
-    let navigation = NewNavigationTarget::new(
-        navigation_target_type(required_str(payload, "type")?)?,
-        navigation_target_name(required_str(payload, "target")?)?,
-    );
-    match (
-        optional_str(payload, "external_workflow")?,
-        optional_str(payload, "external_system")?,
-        optional_str(payload, "handoff_contract")?,
-    ) {
-        (None, None, None) => Ok(navigation),
-        (Some(external_workflow), None, None) => {
-            Ok(navigation.with_external_workflow(navigation_target_name(external_workflow)?))
-        }
-        (None, Some(external_system), Some(handoff_contract)) => Ok(navigation
-            .with_external_system(
-                navigation_target_name(external_system)?,
-                payload_contract_name(handoff_contract)?,
-            )),
-        _ => Err("SliceViewAdded has incompatible navigation target fields".to_owned()),
-    }
-}
-
 pub(crate) fn slice_translation_from_payload(
     payload: &Value,
 ) -> Result<NewTranslationDefinition, String> {
@@ -5131,6 +5151,105 @@ mod tests {
         assert_eq!(
             SliceReadModelAddedEventPayload::from_json_value(&json)?.into_read_model(),
             read_model
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_view_added_event_payload_round_trips_controls_navigation_and_filters()
+    -> Result<(), String> {
+        let view = NewViewDefinition::new(
+            slice_slug("capture-ticket")?,
+            view_name("ticket_summary")?,
+            NewViewField::new(
+                view_field_name("ticket_title")?,
+                view_field_source_kind("read_model")?,
+                read_model_name("ticket_state")?,
+                view_field_name("title")?,
+                sketch_token("title-label")?,
+                provenance_description("ticket_state.title")?,
+                bit_encoding_semantics("UTF-8 string")?,
+            ),
+        )
+        .with_controls(ViewControls::from_controls([NewControlDefinition::new(
+            control_name("AssignTicket")?,
+            command_name("AssignTicket")?,
+            NewControlInputProvision::new(
+                datum_name("assignee_id")?,
+                command_input_source_kind("actor")?,
+                command_input_source_description("selected assignee")?,
+                sketch_token("assignee-picker")?,
+                true,
+                false,
+            ),
+            CommandErrorNames::from_names([command_error_name("MissingAssignee")?]),
+            control_recovery_behavior("stay_on_screen")?,
+            sketch_token("assign-button")?,
+            NewNavigationTarget::new(
+                navigation_target_type("external_system")?,
+                navigation_target_name("dispatch")?,
+            )
+            .with_external_system(
+                navigation_target_name("dispatch-crm")?,
+                payload_contract_name("assignment_handoff")?,
+            ),
+        )]))
+        .with_local_states(ViewLocalStates::from_targets([navigation_target_name(
+            "assignee_picker",
+        )?]))
+        .with_filters(ViewFilters::from_targets([navigation_target_name(
+            "open_tickets",
+        )?]));
+
+        let payload = SliceViewAddedEventPayload::from_view(&view);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "slice": "capture-ticket",
+                "name": "ticket_summary",
+                "field": {
+                    "name": "ticket_title",
+                    "source_kind": "read_model",
+                    "source_read_model": "ticket_state",
+                    "source_field": "title",
+                    "sketch_token": "title-label",
+                    "provenance": "ticket_state.title",
+                    "bit_encoding": "UTF-8 string",
+                },
+                "controls": [
+                    {
+                        "name": "AssignTicket",
+                        "command": "AssignTicket",
+                        "input": {
+                            "name": "assignee_id",
+                            "source_kind": "actor",
+                            "source_description": "selected assignee",
+                            "sketch_token": "assignee-picker",
+                            "visible_to_actor": true,
+                            "decision_field": false,
+                        },
+                        "handled_errors": ["MissingAssignee"],
+                        "recovery_behavior": "stay_on_screen",
+                        "sketch_token": "assign-button",
+                        "navigation": {
+                            "type": "external_system",
+                            "target": "dispatch",
+                            "external_workflow": null,
+                            "external_system": "dispatch-crm",
+                            "handoff_contract": "assignment_handoff",
+                        },
+                    },
+                ],
+                "local_states": ["assignee_picker"],
+                "filters": ["open_tickets"],
+            })
+        );
+        assert_eq!(
+            SliceViewAddedEventPayload::from_json_value(&json)?.into_view(),
+            view
         );
 
         Ok(())
