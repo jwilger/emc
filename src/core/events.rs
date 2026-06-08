@@ -1608,6 +1608,47 @@ impl SliceAutomationAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceBoardElementAddedEventPayload {
+    element: NewBoardElement,
+}
+
+impl SliceBoardElementAddedEventPayload {
+    fn from_element(element: &NewBoardElement) -> Self {
+        Self {
+            element: element.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            element: NewBoardElement::new(
+                slice_slug(required_str(payload, "slice")?)?,
+                board_element_name(required_str(payload, "name")?)?,
+                board_element_kind(required_str(payload, "kind")?)?,
+                board_lane_id(required_str(payload, "lane")?)?,
+                board_element_declared_name(required_str(payload, "declared_name")?)?,
+                required_bool(payload, "main_path")?,
+            ),
+        })
+    }
+
+    fn into_element(self) -> NewBoardElement {
+        self.element
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slice": self.element.slice_slug().as_ref(),
+            "name": self.element.name().as_ref(),
+            "kind": self.element.kind().as_ref(),
+            "lane": self.element.lane().as_ref(),
+            "declared_name": self.element.declared_name().as_ref(),
+            "main_path": self.element.main_path(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowConnectedEventPayload {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
@@ -2442,7 +2483,9 @@ impl ExportedEventBody {
             Self::SliceAutomationAdded { automation } => {
                 SliceAutomationAddedEventPayload::from_automation(automation).to_json_value()
             }
-            Self::SliceBoardElementAdded { element } => slice_board_element_payload(element),
+            Self::SliceBoardElementAdded { element } => {
+                SliceBoardElementAddedEventPayload::from_element(element).to_json_value()
+            }
             Self::SliceBoardConnectionAdded { connection } => {
                 slice_board_connection_payload(connection)
             }
@@ -2609,7 +2652,8 @@ impl ExportedEventBody {
                     .into_automation(),
             }),
             ExportedEventType::SliceBoardElementAdded => Ok(Self::SliceBoardElementAdded {
-                element: slice_board_element_from_payload(payload)?,
+                element: SliceBoardElementAddedEventPayload::from_json_value(payload)?
+                    .into_element(),
             }),
             ExportedEventType::SliceBoardConnectionAdded => Ok(Self::SliceBoardConnectionAdded {
                 connection: slice_board_connection_from_payload(payload)?,
@@ -3113,17 +3157,6 @@ impl ExportedEventFrontier for ExportedEventHeader {
     fn frontier_event_type(&self) -> ExportedEventType {
         self.event_type
     }
-}
-
-fn slice_board_element_payload(element: &NewBoardElement) -> Value {
-    json!({
-        "slice": element.slice_slug().as_ref(),
-        "name": element.name().as_ref(),
-        "kind": element.kind().as_ref(),
-        "lane": element.lane().as_ref(),
-        "declared_name": element.declared_name().as_ref(),
-        "main_path": element.main_path(),
-    })
 }
 
 fn slice_board_connection_payload(connection: &NewBoardConnection) -> Value {
@@ -4671,17 +4704,6 @@ fn workflow_transition_kind_from_connection(
     workflow_transition_kind(&raw_kind)
 }
 
-pub(crate) fn slice_board_element_from_payload(payload: &Value) -> Result<NewBoardElement, String> {
-    Ok(NewBoardElement::new(
-        slice_slug(required_str(payload, "slice")?)?,
-        board_element_name(required_str(payload, "name")?)?,
-        board_element_kind(required_str(payload, "kind")?)?,
-        board_lane_id(required_str(payload, "lane")?)?,
-        board_element_declared_name(required_str(payload, "declared_name")?)?,
-        required_bool(payload, "main_path")?,
-    ))
-}
-
 pub(crate) fn slice_board_connection_from_payload(
     payload: &Value,
 ) -> Result<NewBoardConnection, String> {
@@ -5414,6 +5436,40 @@ mod tests {
         assert_eq!(
             SliceAutomationAddedEventPayload::from_json_value(&json)?.into_automation(),
             automation
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_board_element_added_event_payload_round_trips_board_shape_and_main_path()
+    -> Result<(), String> {
+        let element = NewBoardElement::new(
+            slice_slug("capture-ticket")?,
+            board_element_name("capture-ticket-card")?,
+            board_element_kind("command")?,
+            board_lane_id("actions")?,
+            board_element_declared_name("Capture ticket")?,
+            true,
+        );
+
+        let payload = SliceBoardElementAddedEventPayload::from_element(&element);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "slice": "capture-ticket",
+                "name": "capture-ticket-card",
+                "kind": "command",
+                "lane": "actions",
+                "declared_name": "Capture ticket",
+                "main_path": true,
+            })
+        );
+        assert_eq!(
+            SliceBoardElementAddedEventPayload::from_json_value(&json)?.into_element(),
+            element
         );
 
         Ok(())
