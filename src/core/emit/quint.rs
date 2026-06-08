@@ -372,6 +372,10 @@ pub(crate) fn emit_slice_module(
             "type ReadModelDefinition = { name: str, fields: List[ReadModelField], transitive: bool, relationshipFields: List[str], transitiveRule: str, exampleScenarioName: str }\n  type SliceReadModelReference = { name: str }\n  type ViewField",
         )
         .replace(
+            "type ViewDefinition = { name: str, readModels: List[str], fields: List[ViewField], controls: List[ControlDefinition], sketchTokens: List[str], localStates: List[str], filters: List[str] }\n  val sliceName",
+            "type ViewDefinition = { name: str, readModels: List[str], fields: List[ViewField], controls: List[ControlDefinition], sketchTokens: List[str], localStates: List[str], filters: List[str] }\n  type SliceViewReference = { name: str }\n  val sliceName",
+        )
+        .replace(
             "val sliceCommands: List[str] = []\n  val sliceCommandDefinitions: List[CommandDefinition] = []",
             "val sliceCommands: List[SliceCommandReference] = []\n  val sliceCommandNames: List[str] = sliceCommands.foldl([], (names, commandRef) => names.append(commandRef.name))\n  val sliceCommandDefinitions: List[CommandDefinition] = []",
         )
@@ -388,6 +392,10 @@ pub(crate) fn emit_slice_module(
             "val sliceReadModels: List[SliceReadModelReference] = []\n  val sliceReadModelNames: List[str] = sliceReadModels.foldl([], (names, readModelRef) => names.append(readModelRef.name))\n  val sliceReadModelDefinitions: List[ReadModelDefinition] = []",
         )
         .replace(
+            "val sliceViews: List[str] = []\n  val sliceViewDefinitions: List[ViewDefinition] = []",
+            "val sliceViews: List[SliceViewReference] = []\n  val sliceViewNames: List[str] = sliceViews.foldl([], (names, viewRef) => names.append(viewRef.name))\n  val sliceViewDefinitions: List[ViewDefinition] = []",
+        )
+        .replace(
             "definitionNamesAreUnique(sliceCommands)",
             "definitionNamesAreUnique(sliceCommandNames)",
         )
@@ -400,6 +408,10 @@ pub(crate) fn emit_slice_module(
             "definitionNamesAreUnique(sliceReadModelNames)",
         )
         .replace(
+            "definitionNamesAreUnique(sliceViews)",
+            "definitionNamesAreUnique(sliceViewNames)",
+        )
+        .replace(
             "sliceCommands.select(command => command == ",
             "sliceCommandNames.select(commandName => commandName == ",
         )
@@ -410,6 +422,10 @@ pub(crate) fn emit_slice_module(
         .replace(
             "sliceReadModels.select(readModel => readModel == ",
             "sliceReadModelNames.select(readModelName => readModelName == ",
+        )
+        .replace(
+            "sliceViews.select(viewName => viewName == ",
+            "sliceViewNames.select(viewName => viewName == ",
         )
         .replace(
             "def eventIsKnownToSlice(eventName) = sliceEvents.select(event => event == eventName).length() > 0 or sliceEventDefinitions.select(event => event.name == eventName and (event.observed or event.shared)).length() > 0",

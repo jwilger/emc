@@ -2221,11 +2221,12 @@ pub(crate) fn add_view_definition(
     quint_contents: FileContents,
     view: NewViewDefinition,
 ) -> Result<EffectPlan, FormalSliceFactError> {
-    let view_name = quoted(view.name.as_ref());
+    let lean_view_reference = lean_view_reference_record(view.name.as_ref());
+    let quint_view_reference = quint_view_reference_record(view.name.as_ref());
     let lean = append_record(
         lean_contents.as_ref(),
-        "def sliceViews : List String := ",
-        &view_name,
+        "def sliceViews : List SliceViewReference := ",
+        &lean_view_reference,
     )
     .and_then(|contents| {
         append_records(
@@ -2243,8 +2244,8 @@ pub(crate) fn add_view_definition(
     })?;
     let quint = append_record(
         quint_contents.as_ref(),
-        "val sliceViews: List[str] = ",
-        &view_name,
+        "val sliceViews: List[SliceViewReference] = ",
+        &quint_view_reference,
     )
     .and_then(|contents| {
         append_records(
@@ -2690,6 +2691,14 @@ fn lean_read_model_reference_record(read_model_name: &str) -> String {
 
 fn quint_read_model_reference_record(read_model_name: &str) -> String {
     format!("{{ name: {} }}", quoted(read_model_name))
+}
+
+fn lean_view_reference_record(view_name: &str) -> String {
+    format!("{{ name := {} }}", quoted(view_name))
+}
+
+fn quint_view_reference_record(view_name: &str) -> String {
+    format!("{{ name: {} }}", quoted(view_name))
 }
 
 fn lean_external_payload_definition_record(

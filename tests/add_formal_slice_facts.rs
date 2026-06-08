@@ -4237,7 +4237,9 @@ mod tests {
         let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
         assert!(
-            lean.contains("def sliceViews : List String := [\"ticket_summary\"]"),
+            lean.contains(
+                "def sliceViews : List SliceViewReference := [{ name := \"ticket_summary\" }]"
+            ),
             "Lean slice artifact must carry the authored view name"
         );
         assert!(
@@ -4247,7 +4249,9 @@ mod tests {
             "Lean slice artifact must carry the authored displayed datum source and sketch token"
         );
         assert!(
-            quint.contains("val sliceViews: List[str] = [\"ticket_summary\"]"),
+            quint.contains(
+                "val sliceViews: List[SliceViewReference] = [{ name: \"ticket_summary\" }]"
+            ),
             "Quint slice artifact must carry the authored view name"
         );
         assert!(
