@@ -774,6 +774,30 @@ fn project_root_effects(
         ),
         Effect::require_canonical_declaration(
             lean_path.clone(),
+            canonical_declaration_prefix("structure ModelStream where"),
+            canonical_declaration_marker("structure ModelStream where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelEvent where"),
+            canonical_declaration_marker("structure ModelEvent where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("structure ModelEventAttribute where"),
+            canonical_declaration_marker("structure ModelEventAttribute where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  generatedSourceKind : String"),
+            canonical_declaration_marker("  generatedSourceKind : String"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
             canonical_declaration_prefix("def modelScenarios :"),
             canonical_declaration_marker(format!(
                 "def modelScenarios : List ModelScenario := {lean_model_scenario_list}"
@@ -952,7 +976,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelStreams :"),
             canonical_declaration_marker(format!(
-                "def modelStreams : List (String × String × String) := {lean_model_stream_list}"
+                "def modelStreams : List ModelStream := {lean_model_stream_list}"
             )),
             lean_message.clone(),
         ),
@@ -960,7 +984,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelEvents :"),
             canonical_declaration_marker(format!(
-                "def modelEvents : List (String × String × String × String) := {lean_model_event_list}"
+                "def modelEvents : List ModelEvent := {lean_model_event_list}"
             )),
             lean_message.clone(),
         ),
@@ -968,7 +992,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelEventAttributes :"),
             canonical_declaration_marker(format!(
-                "def modelEventAttributes : List (String × String × String × String × String × String × String × String × String) := {lean_model_event_attribute_list}"
+                "def modelEventAttributes : List ModelEventAttribute := {lean_model_event_attribute_list}"
             )),
             lean_message.clone(),
         ),
@@ -1132,7 +1156,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelEventAttributeHasModeledDataFlow"),
             canonical_declaration_marker(
-                "def modelEventAttributeHasModeledDataFlow (eventAttribute : String × String × String × String × String × String × String × String × String) : Bool := let (workflow, slice, targetEvent, datum, _, _, _, _, _) := eventAttribute; modelDataFlowCoversDatumTarget workflow slice datum targetEvent",
+                "def modelEventAttributeHasModeledDataFlow (eventAttribute : ModelEventAttribute) : Bool := modelDataFlowCoversDatumTarget eventAttribute.workflow eventAttribute.slice eventAttribute.attributeName eventAttribute.event",
             ),
             lean_message.clone(),
         ),
@@ -1204,7 +1228,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelEventAttributeSourceIsComplete"),
             canonical_declaration_marker(
-                "def modelEventAttributeSourceIsComplete (eventAttribute : String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, sourceKind, sourceName, sourceField, generatedSourceKind, provenance) := eventAttribute; provenance.isEmpty == false && ((sourceKind == \"command_input\" && sourceName.isEmpty == false && sourceField.isEmpty == false) || (sourceKind == \"external_payload\" && sourceName.isEmpty == false && sourceField.isEmpty == false) || (sourceKind == \"generated\" && sourceName.isEmpty == false && generatedSourceKind.isEmpty == false) || (sourceKind == \"session\" && sourceName.isEmpty == false) || (sourceKind == \"derivation\" && sourceName.isEmpty == false && sourceField.isEmpty == false))",
+                "def modelEventAttributeSourceIsComplete (eventAttribute : ModelEventAttribute) : Bool := eventAttribute.provenance.isEmpty == false && ((eventAttribute.sourceKind == \"command_input\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.sourceField.isEmpty == false) || (eventAttribute.sourceKind == \"external_payload\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.sourceField.isEmpty == false) || (eventAttribute.sourceKind == \"generated\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.generatedSourceKind.isEmpty == false) || (eventAttribute.sourceKind == \"session\" && eventAttribute.sourceName.isEmpty == false) || (eventAttribute.sourceKind == \"derivation\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.sourceField.isEmpty == false))",
             ),
             lean_message.clone(),
         ),
@@ -1228,7 +1252,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelReadModelFieldTracesToOriginalProvenance"),
             canonical_declaration_marker(
-                "def modelReadModelFieldTracesToOriginalProvenance (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := let (workflow, slice, _, _, sourceKind, sourceEvent, sourceAttribute, derivationRule, derivationSourceFields, absenceEvent, _, _, provenance) := field; provenance.isEmpty == false && ((sourceKind == \"event_attribute\" && modelEventAttributes.any (fun eventAttribute => eventAttribute.1 == workflow && eventAttribute.2.1 == slice && eventAttribute.2.2.1 == sourceEvent && eventAttribute.2.2.2.1 == sourceAttribute && modelEventAttributeSourceIsComplete eventAttribute)) || (sourceKind == \"derivation\" && derivationRule.isEmpty == false && derivationSourceFields.isEmpty == false) || (sourceKind == \"absence_default\" && absenceEvent.isEmpty == false))",
+                "def modelReadModelFieldTracesToOriginalProvenance (field : String × String × String × String × String × String × String × String × List String × String × String × String × String) : Bool := let (workflow, slice, _, _, sourceKind, sourceEvent, sourceAttribute, derivationRule, derivationSourceFields, absenceEvent, _, _, provenance) := field; provenance.isEmpty == false && ((sourceKind == \"event_attribute\" && modelEventAttributes.any (fun eventAttribute => eventAttribute.workflow == workflow && eventAttribute.slice == slice && eventAttribute.event == sourceEvent && eventAttribute.attributeName == sourceAttribute && modelEventAttributeSourceIsComplete eventAttribute)) || (sourceKind == \"derivation\" && derivationRule.isEmpty == false && derivationSourceFields.isEmpty == false) || (sourceKind == \"absence_default\" && absenceEvent.isEmpty == false))",
             ),
             lean_message.clone(),
         ),
@@ -4197,7 +4221,7 @@ fn lean_model_stream_list(project_streams: &[ProjectStream]) -> String {
             .into_iter()
             .map(|(workflow_slug, slice_slug, stream)| {
                 format!(
-                    "({}, {}, {})",
+                    "{{ workflow := {}, slice := {}, stream := {} }}",
                     json_string(workflow_slug),
                     json_string(slice_slug),
                     json_string(stream)
@@ -5277,7 +5301,7 @@ fn lean_model_event_list(project_events: &[ProjectEvent]) -> String {
             .into_iter()
             .map(|(workflow_slug, slice_slug, event, stream)| {
                 format!(
-                    "({}, {}, {}, {})",
+                    "{{ workflow := {}, slice := {}, event := {}, stream := {} }}",
                     json_string(workflow_slug),
                     json_string(slice_slug),
                     json_string(event),
@@ -5355,7 +5379,7 @@ fn lean_model_event_attribute_list(project_event_attributes: &[ProjectEventAttri
                     provenance,
                 )| {
                     format!(
-                        "({}, {}, {}, {}, {}, {}, {}, {}, {})",
+                        "{{ workflow := {}, slice := {}, event := {}, attributeName := {}, sourceKind := {}, sourceName := {}, sourceField := {}, generatedSourceKind := {}, provenance := {} }}",
                         json_string(workflow_slug),
                         json_string(slice_slug),
                         json_string(event),

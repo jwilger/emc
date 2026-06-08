@@ -3139,7 +3139,13 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelStreams : List (String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"tickets\")]"
+                "structure ModelStream where\n  workflow : String\n  slice : String\n  stream : String"
+            ),
+            "Lean project root must type the authored stream inventory as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelStreams : List ModelStream := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", stream := \"tickets\" }]"
             ),
             "Lean project root must carry the authored stream inventory"
         );
@@ -3161,13 +3167,25 @@ mod tests {
         );
         assert!(
             lean_root.contains(
-                "def modelEvents : List (String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"TicketCaptured\", \"tickets\")]"
+                "structure ModelEvent where\n  workflow : String\n  slice : String\n  event : String\n  stream : String"
+            ),
+            "Lean project root must type the authored event inventory as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelEvents : List ModelEvent := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", event := \"TicketCaptured\", stream := \"tickets\" }]"
             ),
             "Lean project root must carry the authored event inventory"
         );
         assert!(
             lean_root.contains(
-                "def modelEventAttributes : List (String × String × String × String × String × String × String × String × String) := [(\"open-ticket\", \"capture-ticket\", \"TicketCaptured\", \"ticket_title\", \"command_input\", \"ticket_title\", \"value\", \"\", \"CaptureTicket.ticket_title\")]"
+                "structure ModelEventAttribute where\n  workflow : String\n  slice : String\n  event : String\n  attributeName : String\n  sourceKind : String\n  sourceName : String\n  sourceField : String\n  generatedSourceKind : String\n  provenance : String"
+            ),
+            "Lean project root must type authored event attributes as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelEventAttributes : List ModelEventAttribute := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", event := \"TicketCaptured\", attributeName := \"ticket_title\", sourceKind := \"command_input\", sourceName := \"ticket_title\", sourceField := \"value\", generatedSourceKind := \"\", provenance := \"CaptureTicket.ticket_title\" }]"
             ),
             "Lean project root must carry authored event attribute provenance"
         );

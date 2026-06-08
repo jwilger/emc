@@ -124,6 +124,39 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelStream where\n  workflow : String\n  slice : String\n  stream : String"
+            ),
+            "Lean project root must type event streams as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelStreams : List ModelStream := []"),
+            "Lean project root must initialize event streams as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelEvent where\n  workflow : String\n  slice : String\n  event : String\n  stream : String"
+            ),
+            "Lean project root must type events as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelEvents : List ModelEvent := []"),
+            "Lean project root must initialize events as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "structure ModelEventAttribute where\n  workflow : String\n  slice : String\n  event : String\n  attributeName : String\n  sourceKind : String\n  sourceName : String\n  sourceField : String\n  generatedSourceKind : String\n  provenance : String"
+            ),
+            "Lean project root must type event attributes as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?
+                .contains("def modelEventAttributes : List ModelEventAttribute := []"),
+            "Lean project root must initialize event attributes as named records"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
                 "def modelCommandErrorRecoveryIsModeled (commandError : ModelCommandError) : Bool := commandError.command.isEmpty == false && commandError.error.isEmpty == false && commandError.scenario.isEmpty == false && commandError.recovery.isEmpty == false"
             ),
             "Lean project root must check command-error recovery through named fields"
@@ -184,7 +217,13 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "def modelEventAttributeSourceIsComplete (eventAttribute : String × String × String × String × String × String × String × String × String) : Bool := let (_, _, _, _, sourceKind, sourceName, sourceField, generatedSourceKind, provenance) := eventAttribute; provenance.isEmpty == false && ((sourceKind == \"command_input\" && sourceName.isEmpty == false && sourceField.isEmpty == false) || (sourceKind == \"external_payload\" && sourceName.isEmpty == false && sourceField.isEmpty == false) || (sourceKind == \"generated\" && sourceName.isEmpty == false && generatedSourceKind.isEmpty == false) || (sourceKind == \"session\" && sourceName.isEmpty == false) || (sourceKind == \"derivation\" && sourceName.isEmpty == false && sourceField.isEmpty == false))"
+                "def modelEventAttributeHasModeledDataFlow (eventAttribute : ModelEventAttribute) : Bool := modelDataFlowCoversDatumTarget eventAttribute.workflow eventAttribute.slice eventAttribute.attributeName eventAttribute.event"
+            ),
+            "Lean project root must prove event attributes have data flows through named fields"
+        );
+        assert!(
+            fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
+                "def modelEventAttributeSourceIsComplete (eventAttribute : ModelEventAttribute) : Bool := eventAttribute.provenance.isEmpty == false && ((eventAttribute.sourceKind == \"command_input\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.sourceField.isEmpty == false) || (eventAttribute.sourceKind == \"external_payload\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.sourceField.isEmpty == false) || (eventAttribute.sourceKind == \"generated\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.generatedSourceKind.isEmpty == false) || (eventAttribute.sourceKind == \"session\" && eventAttribute.sourceName.isEmpty == false) || (eventAttribute.sourceKind == \"derivation\" && eventAttribute.sourceName.isEmpty == false && eventAttribute.sourceField.isEmpty == false))"
             ),
             "Lean project root must encode stored event fact source/provenance completeness"
         );
