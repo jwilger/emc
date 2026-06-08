@@ -775,6 +775,87 @@ impl SliceExternalPayloadAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceEventDefinitionAddedEventPayload {
+    event: NewEventDefinition,
+}
+
+impl SliceEventDefinitionAddedEventPayload {
+    fn from_event(event: &NewEventDefinition) -> Self {
+        Self {
+            event: event.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        let attribute_payload = required_object(payload, "attribute")?;
+        let generated_source_kind = optional_str(attribute_payload, "generated_source_kind")?
+            .map(generated_event_attribute_source_kind)
+            .transpose()?;
+        let attribute = match generated_source_kind {
+            Some(generated_source_kind) => NewEventAttribute::new_with_generated_source_kind(
+                event_attribute_name(required_str(attribute_payload, "name")?)?,
+                event_attribute_source_kind(required_str(attribute_payload, "source_kind")?)?,
+                event_attribute_source_name(required_str(attribute_payload, "source_name")?)?,
+                event_attribute_source_field(required_str(attribute_payload, "source_field")?)?,
+                generated_source_kind,
+                provenance_description(required_str(attribute_payload, "provenance")?)?,
+            ),
+            None => NewEventAttribute::new(
+                event_attribute_name(required_str(attribute_payload, "name")?)?,
+                event_attribute_source_kind(required_str(attribute_payload, "source_kind")?)?,
+                event_attribute_source_name(required_str(attribute_payload, "source_name")?)?,
+                event_attribute_source_field(required_str(attribute_payload, "source_field")?)?,
+                provenance_description(required_str(attribute_payload, "provenance")?)?,
+            ),
+        };
+        let slice_slug = slice_slug(required_str(payload, "slice")?)?;
+        let name = event_name(required_str(payload, "name")?)?;
+        let stream = stream_name(required_str(payload, "stream")?)?;
+
+        let event = match (
+            required_bool(payload, "observed")?,
+            required_bool(payload, "shared")?,
+        ) {
+            (false, false) => NewEventDefinition::new(slice_slug, name, stream, attribute),
+            (true, false) => NewEventDefinition::new_observed(slice_slug, name, stream, attribute),
+            (false, true) => NewEventDefinition::new_shared(slice_slug, name, stream, attribute),
+            (true, true) => {
+                return Err(
+                    "SliceEventDefinitionAdded cannot be both observed and shared".to_owned(),
+                );
+            }
+        };
+
+        Ok(Self { event })
+    }
+
+    fn into_event(self) -> NewEventDefinition {
+        self.event
+    }
+
+    fn to_json_value(&self) -> Value {
+        let attribute = self.event.attribute();
+        json!({
+            "slice": self.event.slice_slug().as_ref(),
+            "name": self.event.name().as_ref(),
+            "stream": self.event.stream().as_ref(),
+            "attribute": {
+                "name": attribute.name().as_ref(),
+                "source_kind": attribute.source_kind().as_ref(),
+                "source_name": attribute.source_name().as_ref(),
+                "source_field": attribute.source_field().as_ref(),
+                "generated_source_kind": attribute
+                    .generated_source_kind()
+                    .map(|source_kind| source_kind.as_ref()),
+                "provenance": attribute.provenance_description().as_ref(),
+            },
+            "observed": self.event.observed(),
+            "shared": self.event.shared(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowConnectedEventPayload {
     workflow_slug: WorkflowSlug,
     source: SliceSlug,
@@ -1588,7 +1669,9 @@ impl ExportedEventBody {
                 SliceExternalPayloadAddedEventPayload::from_external_payload(external_payload)
                     .to_json_value()
             }
-            Self::SliceEventDefinitionAdded { event } => slice_event_definition_payload(event),
+            Self::SliceEventDefinitionAdded { event } => {
+                SliceEventDefinitionAddedEventPayload::from_event(event).to_json_value()
+            }
             Self::SliceCommandDefinitionAdded { command } => {
                 slice_command_definition_payload(command)
             }
@@ -1737,7 +1820,8 @@ impl ExportedEventBody {
                     .into_external_payload(),
             }),
             ExportedEventType::SliceEventDefinitionAdded => Ok(Self::SliceEventDefinitionAdded {
-                event: slice_event_definition_from_payload(payload)?,
+                event: SliceEventDefinitionAddedEventPayload::from_json_value(payload)?
+                    .into_event(),
             }),
             ExportedEventType::SliceCommandDefinitionAdded => {
                 Ok(Self::SliceCommandDefinitionAdded {
@@ -2264,27 +2348,6 @@ impl ExportedEventFrontier for ExportedEventHeader {
     fn frontier_event_type(&self) -> ExportedEventType {
         self.event_type
     }
-}
-
-fn slice_event_definition_payload(event: &NewEventDefinition) -> Value {
-    let attribute = event.attribute();
-    json!({
-        "slice": event.slice_slug().as_ref(),
-        "name": event.name().as_ref(),
-        "stream": event.stream().as_ref(),
-        "attribute": {
-            "name": attribute.name().as_ref(),
-            "source_kind": attribute.source_kind().as_ref(),
-            "source_name": attribute.source_name().as_ref(),
-            "source_field": attribute.source_field().as_ref(),
-            "generated_source_kind": attribute
-                .generated_source_kind()
-                .map(|source_kind| source_kind.as_ref()),
-            "provenance": attribute.provenance_description().as_ref(),
-        },
-        "observed": event.observed(),
-        "shared": event.shared(),
-    })
 }
 
 fn slice_command_definition_payload(command: &NewCommandDefinition) -> Value {
@@ -4089,51 +4152,6 @@ fn workflow_transition_kind_from_connection(
     workflow_transition_kind(&raw_kind)
 }
 
-pub(crate) fn slice_event_definition_from_payload(
-    payload: &Value,
-) -> Result<NewEventDefinition, String> {
-    let attribute_payload = required_object(payload, "attribute")?;
-    let generated_source_kind = optional_str(attribute_payload, "generated_source_kind")?
-        .map(generated_event_attribute_source_kind)
-        .transpose()?;
-    let attribute = match generated_source_kind {
-        Some(generated_source_kind) => NewEventAttribute::new_with_generated_source_kind(
-            event_attribute_name(required_str(attribute_payload, "name")?)?,
-            event_attribute_source_kind(required_str(attribute_payload, "source_kind")?)?,
-            event_attribute_source_name(required_str(attribute_payload, "source_name")?)?,
-            event_attribute_source_field(required_str(attribute_payload, "source_field")?)?,
-            generated_source_kind,
-            provenance_description(required_str(attribute_payload, "provenance")?)?,
-        ),
-        None => NewEventAttribute::new(
-            event_attribute_name(required_str(attribute_payload, "name")?)?,
-            event_attribute_source_kind(required_str(attribute_payload, "source_kind")?)?,
-            event_attribute_source_name(required_str(attribute_payload, "source_name")?)?,
-            event_attribute_source_field(required_str(attribute_payload, "source_field")?)?,
-            provenance_description(required_str(attribute_payload, "provenance")?)?,
-        ),
-    };
-    let slice_slug = slice_slug(required_str(payload, "slice")?)?;
-    let name = event_name(required_str(payload, "name")?)?;
-    let stream = stream_name(required_str(payload, "stream")?)?;
-
-    match (
-        required_bool(payload, "observed")?,
-        required_bool(payload, "shared")?,
-    ) {
-        (false, false) => Ok(NewEventDefinition::new(slice_slug, name, stream, attribute)),
-        (true, false) => Ok(NewEventDefinition::new_observed(
-            slice_slug, name, stream, attribute,
-        )),
-        (false, true) => Ok(NewEventDefinition::new_shared(
-            slice_slug, name, stream, attribute,
-        )),
-        (true, true) => {
-            Err("SliceEventDefinitionAdded cannot be both observed and shared".to_owned())
-        }
-    }
-}
-
 pub(crate) fn slice_command_definition_from_payload(
     payload: &Value,
 ) -> Result<NewCommandDefinition, String> {
@@ -5166,6 +5184,52 @@ mod tests {
         assert_eq!(
             SliceExternalPayloadAddedEventPayload::from_json_value(&json)?.into_external_payload(),
             external_payload
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn slice_event_definition_added_event_payload_round_trips_generated_observed_event_definition()
+    -> Result<(), String> {
+        let event = NewEventDefinition::new_observed(
+            slice_slug("capture-ticket")?,
+            event_name("TicketCaptured")?,
+            stream_name("tickets")?,
+            NewEventAttribute::new_with_generated_source_kind(
+                event_attribute_name("ticket_title")?,
+                event_attribute_source_kind("generated")?,
+                event_attribute_source_name("upstream_event_store")?,
+                event_attribute_source_field("ticket_title")?,
+                generated_event_attribute_source_kind("event_store_observation")?,
+                provenance_description("TicketCaptured.ticket_title")?,
+            ),
+        );
+
+        let payload = SliceEventDefinitionAddedEventPayload::from_event(&event);
+        let json = payload.to_json_value();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "slice": "capture-ticket",
+                "name": "TicketCaptured",
+                "stream": "tickets",
+                "attribute": {
+                    "name": "ticket_title",
+                    "source_kind": "generated",
+                    "source_name": "upstream_event_store",
+                    "source_field": "ticket_title",
+                    "generated_source_kind": "event_store_observation",
+                    "provenance": "TicketCaptured.ticket_title",
+                },
+                "observed": true,
+                "shared": false,
+            })
+        );
+        assert_eq!(
+            SliceEventDefinitionAddedEventPayload::from_json_value(&json)?.into_event(),
+            event
         );
 
         Ok(())
