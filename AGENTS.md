@@ -25,6 +25,22 @@ Work one major change at a time. Do not start another major task while a PR for
 the current task is still waiting on CI, review, approval, merge, or local
 cleanup.
 
+For long-running architectural goals, keep the main agent focused on
+integration, review, PR ownership, CI, and merge cleanup. Use subagents only for
+bounded work that can run in parallel without blocking the next local step:
+specific codebase scouting questions, disjoint implementation slices with
+explicit file ownership, or focused verification. Prefer the smallest available
+capable model for scout-style subagents, and do not use subagents for overlapping
+shared-type refactors, PR merge/review handling, or work that requires immediate
+main-thread decisions.
+
+For token efficiency on long-running goals, keep a short progress ledger in the
+repository when the work spans multiple PRs. The ledger should record completed
+increments, current PR boundaries, remaining typed-domain/string-boundary
+targets, focused verification already run, and the next likely increment. Use
+the ledger to avoid rediscovering repository state at the start of each
+increment.
+
 Before pushing to a PR branch, run focused local verification appropriate to
 the files changed. Do not run local `just ci` solely as a pre-push ritual;
 Forgejo CI is the full PR gate. If local `just ci` is run and returns green,
