@@ -366,15 +366,31 @@ fn parse_slice_details(value: &str) -> Result<Vec<WorkflowSliceDetail>, FormalGr
 fn parse_step_relationships(
     value: &str,
 ) -> Result<Vec<(String, WorkflowStepRelationshipName)>, FormalGraphError> {
-    quoted_string_groups(value, 2)?
-        .chunks_exact(2)
-        .map(|chunk| {
-            Ok((
-                chunk[0].clone(),
-                workflow_step_relationship_name(&chunk[1])?,
-            ))
-        })
-        .collect()
+    let relationships = parse_workflow_step_relationship_field_values(value)?;
+    let strings = parse_quoted_strings(value)?;
+    if strings.is_empty() {
+        Ok(Vec::new())
+    } else if strings.len() == relationships.len() {
+        strings
+            .into_iter()
+            .zip(relationships)
+            .map(|(step, relationship)| Ok((step, relationship)))
+            .collect()
+    } else if strings.len() % 2 == 0 {
+        strings
+            .chunks_exact(2)
+            .map(|chunk| {
+                Ok((
+                    chunk[0].clone(),
+                    workflow_step_relationship_name(&chunk[1])?,
+                ))
+            })
+            .collect()
+    } else {
+        Err(FormalGraphError::new(
+            "formal workflow step relationship declarations must contain a relationship plus step field",
+        ))
+    }
 }
 
 fn slice_details_with_relationships(
@@ -827,6 +843,93 @@ fn workflow_owned_definition_kind_from_formal_value(
         _ => artifact_value,
     };
     workflow_owned_definition_kind(semantic_value)
+}
+
+fn parse_workflow_step_relationship_field_values(
+    value: &str,
+) -> Result<Vec<WorkflowStepRelationshipName>, FormalGraphError> {
+    let mut relationships = Vec::new();
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut index = 0;
+    while index < value.len() {
+        let rest = &value[index..];
+        let character = rest
+            .chars()
+            .next()
+            .ok_or_else(|| FormalGraphError::new("formal step relationship scan failed"))?;
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+            index += character.len_utf8();
+        } else if character == '"' {
+            in_string = true;
+            index += character.len_utf8();
+        } else if rest.starts_with("relationship :=") || rest.starts_with("relationship:") {
+            relationships.push(parse_workflow_step_relationship_field_value(
+                &rest["relationship".len()..],
+            )?);
+            index += "relationship".len();
+        } else {
+            index += character.len_utf8();
+        }
+    }
+    Ok(relationships)
+}
+
+fn parse_workflow_step_relationship_field_value(
+    after_name: &str,
+) -> Result<WorkflowStepRelationshipName, FormalGraphError> {
+    let after_separator = after_name
+        .trim_start()
+        .strip_prefix(":=")
+        .or_else(|| after_name.trim_start().strip_prefix(':'))
+        .ok_or_else(|| {
+            FormalGraphError::new("formal workflow step relationship field is missing a separator")
+        })?
+        .trim_start();
+    let raw_value = if after_separator.starts_with('"') {
+        parse_quoted_strings(after_separator)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                FormalGraphError::new("formal workflow step relationship field is missing a value")
+            })?
+    } else {
+        after_separator
+            .split([',', '}', ']'])
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_owned()
+    };
+    workflow_step_relationship_from_formal_value(&raw_value)
+}
+
+fn workflow_step_relationship_from_formal_value(
+    value: &str,
+) -> Result<WorkflowStepRelationshipName, FormalGraphError> {
+    let artifact_value = value
+        .trim()
+        .strip_prefix("WorkflowStepRelationshipName.")
+        .unwrap_or(value.trim());
+    let semantic_value = match artifact_value {
+        "StepEntry" | "Entry" | "entry" => "entry",
+        "StepMain" | "Main" | "main" => "main",
+        "StepBranch" | "Branch" | "branch" => "branch",
+        "StepAlternate" | "Alternate" | "alternate" => "alternate",
+        "StepAsyncLifecycle" | "AsyncLifecycle" | "asyncLifecycle" | "async_lifecycle" => {
+            "async_lifecycle"
+        }
+        "StepSupporting" | "Supporting" | "supporting" => "supporting",
+        _ => artifact_value,
+    };
+    workflow_step_relationship_name(semantic_value)
 }
 
 fn workflow_transition_kind_from_formal_value(

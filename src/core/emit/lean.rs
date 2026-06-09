@@ -1,7 +1,10 @@
 // Copyright 2026 John Wilger
 
 use crate::core::effect::{ArtifactDigest, FileContents};
-use crate::core::emit::{lean_workflow_owned_definition_kind, lean_workflow_transition_kind};
+use crate::core::emit::{
+    lean_workflow_owned_definition_kind, lean_workflow_step_relationship_name,
+    lean_workflow_transition_kind,
+};
 use crate::core::types::{
     BoardLaneId, CommandErrorRecoveryKind, CommandInputSourceKind, EventAttributeSourceKind,
     LeanModuleName, ModelDescription, ModelName, NavigationTargetType, ReadModelFieldSourceKind,
@@ -95,6 +98,15 @@ inductive WorkflowOwnedDefinitionKind where
   | externalPayload
 deriving BEq, DecidableEq, Repr
 
+inductive WorkflowStepRelationshipName where
+  | entry
+  | main
+  | branch
+  | alternate
+  | asyncLifecycle
+  | supporting
+deriving BEq, DecidableEq, Repr
+
 def workflowSliceDetails : List WorkflowSliceDetail := {slice_detail_list}
 
 def workflowSliceModules : List WorkflowSliceModule := {slice_module_list}
@@ -157,15 +169,13 @@ def workflowExitTargets : List String := {workflow_exit_target_list}
 
 def requiredEntryLifecycleStates : List String := {required_entry_lifecycle_state_list}
 
-def allowedWorkflowStepRelationships : List String := ["entry","main","branch","alternate","async_lifecycle","supporting"]
-
 structure WorkflowStepRelationship where
   step : String
-  relationship : String
+  relationship : WorkflowStepRelationshipName
 
 def workflowStepRelationships : List WorkflowStepRelationship := {workflow_step_relationship_list}
 
-def workflowStepRelationshipIsAllowed (step : WorkflowStepRelationship) : Bool := workflowSliceSlugs.contains step.step && allowedWorkflowStepRelationships.contains step.relationship
+def workflowStepRelationshipIsAllowed (step : WorkflowStepRelationship) : Bool := workflowSliceSlugs.contains step.step
 
 def workflowStepRelationshipsAreAllowed : Bool := workflowStepRelationships.all workflowStepRelationshipIsAllowed
 
@@ -173,15 +183,15 @@ def workflowStepSlugCount (slug : String) : Nat := (workflowSliceSlugs.filter (f
 
 def workflowStepSlugsAreUnique : Bool := workflowSliceSlugs.all (fun step => workflowStepSlugCount step == 1)
 
-def workflowEntryStepCount : Nat := (workflowStepRelationships.filter (fun step => step.relationship == "entry")).length
+def workflowEntryStepCount : Nat := (workflowStepRelationships.filter (fun step => step.relationship == WorkflowStepRelationshipName.entry)).length
 
 def workflowHasExactlyOneEntryStep : Bool := workflowEntryStepCount == 1
 
-def workflowMainStepHasIncomingTransition (step : WorkflowStepRelationship) : Bool := step.relationship != "main" || workflowTransitions.any (fun transition => transition.target == step.step)
+def workflowMainStepHasIncomingTransition (step : WorkflowStepRelationship) : Bool := step.relationship != WorkflowStepRelationshipName.main || workflowTransitions.any (fun transition => transition.target == step.step)
 
 def workflowMainStepsHaveIncomingReachability : Bool := workflowStepRelationships.all workflowMainStepHasIncomingTransition
 
-def workflowEntrySteps : List String := (workflowStepRelationships.filter (fun step => step.relationship == "entry")).map (fun step => step.step)
+def workflowEntrySteps : List String := (workflowStepRelationships.filter (fun step => step.relationship == WorkflowStepRelationshipName.entry)).map (fun step => step.step)
 
 def workflowTargetsFromReachable (reachable : List String) : List String := (workflowTransitions.filter (fun transition => reachable.contains transition.source && workflowSliceSlugs.contains transition.target)).map (fun transition => transition.target)
 
@@ -191,11 +201,11 @@ def workflowReachableStepsAfterFuel : Nat -> List String -> List String
 
 def workflowReachableStepsFromEntry : List String := workflowReachableStepsAfterFuel workflowSlices.length workflowEntrySteps
 
-def workflowStepIsReachableFromEntry (step : WorkflowStepRelationship) : Bool := step.relationship == "supporting" || step.relationship == "async_lifecycle" || workflowReachableStepsFromEntry.contains step.step
+def workflowStepIsReachableFromEntry (step : WorkflowStepRelationship) : Bool := step.relationship == WorkflowStepRelationshipName.supporting || step.relationship == WorkflowStepRelationshipName.asyncLifecycle || workflowReachableStepsFromEntry.contains step.step
 
 def workflowNonSupportingStepsReachableFromEntry : Bool := workflowStepRelationships.all workflowStepIsReachableFromEntry
 
-def workflowBranchOrAlternateStepHasTriggerOrRationale (step : WorkflowStepRelationship) : Bool := (step.relationship != "branch" && step.relationship != "alternate") || workflowTransitions.any (fun transition => transition.target == step.step && (transition.trigger.isEmpty == false || transition.rationale.isEmpty == false))
+def workflowBranchOrAlternateStepHasTriggerOrRationale (step : WorkflowStepRelationship) : Bool := (step.relationship != WorkflowStepRelationshipName.branch && step.relationship != WorkflowStepRelationshipName.alternate) || workflowTransitions.any (fun transition => transition.target == step.step && (transition.trigger.isEmpty == false || transition.rationale.isEmpty == false))
 
 def workflowBranchAndAlternateStepsHaveTriggerOrRationale : Bool := workflowStepRelationships.all workflowBranchOrAlternateStepHasTriggerOrRationale
 
@@ -939,7 +949,7 @@ fn workflow_step_relationship_list(workflow_slice_details: &[WorkflowSliceDetail
                 format!(
                     "{{ step := {}, relationship := {} }}",
                     quoted(slice.slug().as_ref()),
-                    quoted(slice.relationship().as_ref())
+                    lean_workflow_step_relationship_name(*slice.relationship())
                 )
             })
             .collect::<Vec<_>>()

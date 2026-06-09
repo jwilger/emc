@@ -224,18 +224,20 @@ mod tests {
             "Lean workflow artifacts must encode the required application-entry lifecycle states"
         );
         assert!(
-            lean.contains("def allowedWorkflowStepRelationships : List String := [\"entry\",\"main\",\"branch\",\"alternate\",\"async_lifecycle\",\"supporting\"]"),
-            "Lean workflow artifacts must model the allowed workflow step relationship inventory"
+            lean.contains(
+                "inductive WorkflowStepRelationshipName where\n  | entry\n  | main\n  | branch\n  | alternate\n  | asyncLifecycle\n  | supporting"
+            ),
+            "Lean workflow artifacts must model workflow step relationships as a closed domain type"
         );
         assert!(
             lean.contains(
-                "structure WorkflowStepRelationship where\n  step : String\n  relationship : String"
+                "structure WorkflowStepRelationship where\n  step : String\n  relationship : WorkflowStepRelationshipName"
             ),
             "Lean workflow artifacts must name workflow step relationship fields instead of relying on tuple positions"
         );
         assert!(
             lean.contains(
-                "def workflowStepRelationships : List WorkflowStepRelationship := [{ step := \"capture-ticket\", relationship := \"entry\" },{ step := \"review-ticket\", relationship := \"main\" }]"
+                "def workflowStepRelationships : List WorkflowStepRelationship := [{ step := \"capture-ticket\", relationship := WorkflowStepRelationshipName.entry },{ step := \"review-ticket\", relationship := WorkflowStepRelationshipName.main }]"
             ),
             "Lean workflow artifacts must emit concrete workflow step relationships"
         );
@@ -279,7 +281,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowStepIsReachableFromEntry (step : WorkflowStepRelationship) : Bool := step.relationship == \"supporting\" || step.relationship == \"async_lifecycle\" || workflowReachableStepsFromEntry.contains step.step"
+                "def workflowStepIsReachableFromEntry (step : WorkflowStepRelationship) : Bool := step.relationship == WorkflowStepRelationshipName.supporting || step.relationship == WorkflowStepRelationshipName.asyncLifecycle || workflowReachableStepsFromEntry.contains step.step"
             ),
             "Lean workflow artifacts must exempt supporting and async lifecycle steps from required entry reachability"
         );
@@ -290,7 +292,7 @@ mod tests {
             "Lean workflow artifacts must expose non-supporting workflow reachability as a proof obligation"
         );
         assert!(
-            lean.contains("def workflowBranchOrAlternateStepHasTriggerOrRationale (step : WorkflowStepRelationship) : Bool := (step.relationship != \"branch\" && step.relationship != \"alternate\") || workflowTransitions.any (fun transition => transition.target == step.step && (transition.trigger.isEmpty == false || transition.rationale.isEmpty == false))"),
+            lean.contains("def workflowBranchOrAlternateStepHasTriggerOrRationale (step : WorkflowStepRelationship) : Bool := (step.relationship != WorkflowStepRelationshipName.branch && step.relationship != WorkflowStepRelationshipName.alternate) || workflowTransitions.any (fun transition => transition.target == step.step && (transition.trigger.isEmpty == false || transition.rationale.isEmpty == false))"),
             "Lean workflow artifacts must define branch and alternate step trigger/rationale obligations"
         );
         assert!(

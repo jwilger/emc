@@ -1,6 +1,8 @@
 // Copyright 2026 John Wilger
 
-use crate::core::types::{WorkflowOwnedDefinitionKind, WorkflowTransitionKind};
+use crate::core::types::{
+    WorkflowOwnedDefinitionKind, WorkflowStepRelationshipName, WorkflowTransitionKind,
+};
 
 pub(crate) mod lean;
 pub(crate) mod quint;
@@ -72,5 +74,33 @@ pub(crate) fn quint_workflow_owned_definition_kind(
         WorkflowOwnedDefinitionKind::Automation => "OwnedAutomation",
         WorkflowOwnedDefinitionKind::Translation => "OwnedTranslation",
         WorkflowOwnedDefinitionKind::ExternalPayload => "OwnedExternalPayload",
+    }
+}
+
+pub(crate) fn lean_workflow_step_relationship_name(
+    relationship: WorkflowStepRelationshipName,
+) -> &'static str {
+    match relationship {
+        WorkflowStepRelationshipName::Entry => "WorkflowStepRelationshipName.entry",
+        WorkflowStepRelationshipName::Main => "WorkflowStepRelationshipName.main",
+        WorkflowStepRelationshipName::Branch => "WorkflowStepRelationshipName.branch",
+        WorkflowStepRelationshipName::Alternate => "WorkflowStepRelationshipName.alternate",
+        WorkflowStepRelationshipName::AsyncLifecycle => {
+            "WorkflowStepRelationshipName.asyncLifecycle"
+        }
+        WorkflowStepRelationshipName::Supporting => "WorkflowStepRelationshipName.supporting",
+    }
+}
+
+pub(crate) fn quint_workflow_step_relationship_name(
+    relationship: WorkflowStepRelationshipName,
+) -> &'static str {
+    match relationship {
+        WorkflowStepRelationshipName::Entry => "StepEntry",
+        WorkflowStepRelationshipName::Main => "StepMain",
+        WorkflowStepRelationshipName::Branch => "StepBranch",
+        WorkflowStepRelationshipName::Alternate => "StepAlternate",
+        WorkflowStepRelationshipName::AsyncLifecycle => "StepAsyncLifecycle",
+        WorkflowStepRelationshipName::Supporting => "StepSupporting",
     }
 }
