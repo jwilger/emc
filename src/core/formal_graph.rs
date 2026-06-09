@@ -480,66 +480,41 @@ fn parse_workflow_command_errors(
 fn parse_workflow_owned_definitions(
     value: &str,
 ) -> Result<Vec<WorkflowOwnedDefinitionRecord>, FormalGraphError> {
+    let kinds = parse_workflow_owned_definition_kind_field_values(value)?;
     let strings = parse_quoted_strings(value)?;
     if strings.is_empty() {
         return Ok(Vec::new());
     }
-    if strings.len() % 7 != 0 {
-        return Err(FormalGraphError::new(
-            "workflow owned definition declarations must contain groups of 7 strings",
-        ));
+    if strings.len() == kinds.len() * 6 {
+        strings
+            .chunks_exact(6)
+            .zip(kinds)
+            .map(|(chunk, kind)| {
+                workflow_owned_definition_record_from_formal_fields(
+                    &chunk[0], kind, &chunk[1], &chunk[2], &chunk[3], &chunk[4], &chunk[5],
+                )
+            })
+            .collect()
+    } else if strings.len() % 7 == 0 {
+        strings
+            .chunks_exact(7)
+            .map(|chunk| {
+                workflow_owned_definition_record_from_formal_fields(
+                    &chunk[0],
+                    workflow_owned_definition_kind(&chunk[1])?,
+                    &chunk[2],
+                    &chunk[3],
+                    &chunk[4],
+                    &chunk[5],
+                    &chunk[6],
+                )
+            })
+            .collect()
+    } else {
+        Err(FormalGraphError::new(
+            "workflow owned definition declarations must contain a kind plus source, name, stream, provenance, event participation, and view role fields",
+        ))
     }
-    strings
-        .chunks_exact(7)
-        .map(|chunk| {
-            if chunk[3].is_empty()
-                && chunk[4].is_empty()
-                && chunk[5].is_empty()
-                && chunk[6].is_empty()
-            {
-                Ok(WorkflowOwnedDefinitionRecord::new(
-                    transition_endpoint(&chunk[0])?,
-                    workflow_owned_definition_kind(&chunk[1])?,
-                    workflow_owned_definition_name(&chunk[2])?,
-                ))
-            } else if chunk[3].is_empty() && chunk[4].is_empty() && chunk[5].is_empty() {
-                Ok(WorkflowOwnedDefinitionRecord::new_with_view_role(
-                    transition_endpoint(&chunk[0])?,
-                    workflow_owned_definition_kind(&chunk[1])?,
-                    workflow_owned_definition_name(&chunk[2])?,
-                    workflow_view_role(&chunk[6])?,
-                )
-                .ok_or_else(|| {
-                    FormalGraphError::new(
-                        "workflow owned definition view roles require definition kind view",
-                    )
-                })?)
-            } else if chunk[5].is_empty() && chunk[6].is_empty() {
-                Ok(WorkflowOwnedDefinitionRecord::new_with_event_identity(
-                    transition_endpoint(&chunk[0])?,
-                    workflow_owned_definition_kind(&chunk[1])?,
-                    workflow_owned_definition_name(&chunk[2])?,
-                    stream_name(&chunk[3])?,
-                    model_description(chunk[4].clone())?,
-                ))
-            } else if chunk[6].is_empty() {
-                Ok(
-                    WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
-                        transition_endpoint(&chunk[0])?,
-                        workflow_owned_definition_kind(&chunk[1])?,
-                        workflow_owned_definition_name(&chunk[2])?,
-                        stream_name(&chunk[3])?,
-                        model_description(chunk[4].clone())?,
-                        workflow_event_participation(&chunk[5])?,
-                    ),
-                )
-            } else {
-                Err(FormalGraphError::new(
-                    "workflow owned definition declarations cannot combine event participation and view role",
-                ))
-            }
-        })
-        .collect()
 }
 
 fn parse_workflow_transition_evidences(
@@ -633,6 +608,66 @@ fn transition_record_from_formal_fields(
     }
 }
 
+fn workflow_owned_definition_record_from_formal_fields(
+    source_slice: &str,
+    definition_kind: WorkflowOwnedDefinitionKind,
+    definition_name: &str,
+    definition_stream: &str,
+    source_provenance: &str,
+    event_participation: &str,
+    view_role: &str,
+) -> Result<WorkflowOwnedDefinitionRecord, FormalGraphError> {
+    if definition_stream.is_empty()
+        && source_provenance.is_empty()
+        && event_participation.is_empty()
+        && view_role.is_empty()
+    {
+        Ok(WorkflowOwnedDefinitionRecord::new(
+            transition_endpoint(source_slice)?,
+            definition_kind,
+            workflow_owned_definition_name(definition_name)?,
+        ))
+    } else if definition_stream.is_empty()
+        && source_provenance.is_empty()
+        && event_participation.is_empty()
+    {
+        Ok(WorkflowOwnedDefinitionRecord::new_with_view_role(
+            transition_endpoint(source_slice)?,
+            definition_kind,
+            workflow_owned_definition_name(definition_name)?,
+            workflow_view_role(view_role)?,
+        )
+        .ok_or_else(|| {
+            FormalGraphError::new(
+                "workflow owned definition view roles require definition kind view",
+            )
+        })?)
+    } else if event_participation.is_empty() && view_role.is_empty() {
+        Ok(WorkflowOwnedDefinitionRecord::new_with_event_identity(
+            transition_endpoint(source_slice)?,
+            definition_kind,
+            workflow_owned_definition_name(definition_name)?,
+            stream_name(definition_stream)?,
+            model_description(source_provenance.to_owned())?,
+        ))
+    } else if view_role.is_empty() {
+        Ok(
+            WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
+                transition_endpoint(source_slice)?,
+                definition_kind,
+                workflow_owned_definition_name(definition_name)?,
+                stream_name(definition_stream)?,
+                model_description(source_provenance.to_owned())?,
+                workflow_event_participation(event_participation)?,
+            ),
+        )
+    } else {
+        Err(FormalGraphError::new(
+            "workflow owned definition declarations cannot combine event participation and view role",
+        ))
+    }
+}
+
 fn parse_workflow_transition_kind_field_values(
     value: &str,
 ) -> Result<Vec<WorkflowTransitionKind>, FormalGraphError> {
@@ -697,6 +732,101 @@ fn parse_workflow_transition_kind_field_value(
             .to_owned()
     };
     workflow_transition_kind_from_formal_value(&raw_value)
+}
+
+fn parse_workflow_owned_definition_kind_field_values(
+    value: &str,
+) -> Result<Vec<WorkflowOwnedDefinitionKind>, FormalGraphError> {
+    let mut kinds = Vec::new();
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut index = 0;
+    while index < value.len() {
+        let rest = &value[index..];
+        let character = rest
+            .chars()
+            .next()
+            .ok_or_else(|| FormalGraphError::new("formal owned definition kind scan failed"))?;
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+            index += character.len_utf8();
+        } else if character == '"' {
+            in_string = true;
+            index += character.len_utf8();
+        } else if rest.starts_with("definitionKind :=") || rest.starts_with("definitionKind:") {
+            kinds.push(parse_workflow_owned_definition_kind_field_value(
+                &rest["definitionKind".len()..],
+            )?);
+            index += "definitionKind".len();
+        } else {
+            index += character.len_utf8();
+        }
+    }
+    Ok(kinds)
+}
+
+fn parse_workflow_owned_definition_kind_field_value(
+    after_name: &str,
+) -> Result<WorkflowOwnedDefinitionKind, FormalGraphError> {
+    let after_separator = after_name
+        .trim_start()
+        .strip_prefix(":=")
+        .or_else(|| after_name.trim_start().strip_prefix(':'))
+        .ok_or_else(|| {
+            FormalGraphError::new(
+                "formal workflow owned definition kind field is missing a separator",
+            )
+        })?
+        .trim_start();
+    let raw_value = if after_separator.starts_with('"') {
+        parse_quoted_strings(after_separator)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                FormalGraphError::new(
+                    "formal workflow owned definition kind field is missing a value",
+                )
+            })?
+    } else {
+        after_separator
+            .split([',', '}', ']'])
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_owned()
+    };
+    workflow_owned_definition_kind_from_formal_value(&raw_value)
+}
+
+fn workflow_owned_definition_kind_from_formal_value(
+    value: &str,
+) -> Result<WorkflowOwnedDefinitionKind, FormalGraphError> {
+    let artifact_value = value
+        .trim()
+        .strip_prefix("WorkflowOwnedDefinitionKind.")
+        .unwrap_or(value.trim());
+    let semantic_value = match artifact_value {
+        "OwnedCommand" | "Command" | "command" => "command",
+        "OwnedEvent" | "Event" | "event" => "event",
+        "OwnedView" | "View" | "view" => "view",
+        "OwnedControl" | "Control" | "control" => "control",
+        "OwnedReadModel" | "ReadModel" | "readModel" | "read_model" => "read_model",
+        "OwnedOutcome" | "Outcome" | "outcome" => "outcome",
+        "OwnedError" | "Error" | "error" => "error",
+        "OwnedAutomation" | "Automation" | "automation" => "automation",
+        "OwnedTranslation" | "Translation" | "translation" => "translation",
+        "OwnedExternalPayload" | "ExternalPayload" | "externalPayload" | "external_payload" => {
+            "external_payload"
+        }
+        _ => artifact_value,
+    };
+    workflow_owned_definition_kind(semantic_value)
 }
 
 fn workflow_transition_kind_from_formal_value(
