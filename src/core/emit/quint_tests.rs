@@ -11,11 +11,13 @@ mod tests {
     use crate::core::types::{
         CommandErrorName, CommandName, OutcomeLabelName, PayloadContractName, SliceKindName,
         TransitionTriggerName, WorkflowCommandErrorRecord, WorkflowCommandErrorRecords,
-        WorkflowModuleData, WorkflowOutcomeRecord, WorkflowOutcomeRecords,
-        WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
-        WorkflowOwnedDefinitionRecords, WorkflowSliceDetail, WorkflowSliceDetails,
-        WorkflowStepRelationshipName, WorkflowTransitionEndpoint, WorkflowTransitionKind,
-        WorkflowTransitionRecord, WorkflowTransitionRecords,
+        WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
+        WorkflowEntryLifecycleStateRecord, WorkflowEntryLifecycleStateRecords, WorkflowModuleData,
+        WorkflowOutcomeRecord, WorkflowOutcomeRecords, WorkflowOwnedDefinitionKind,
+        WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords,
+        WorkflowSliceDetail, WorkflowSliceDetails, WorkflowStepRelationshipName,
+        WorkflowTransitionEndpoint, WorkflowTransitionKind, WorkflowTransitionRecord,
+        WorkflowTransitionRecords,
     };
     use crate::io::dto::{
         parse_model_description, parse_model_name, parse_quint_module_name, parse_slice_slug,
@@ -67,6 +69,16 @@ mod tests {
                 WorkflowOwnedDefinitionKind::try_new("external_payload".to_owned())?,
                 WorkflowOwnedDefinitionName::try_new("CallbackReceivedPayload".to_owned())?,
             )]);
+        let workflow_entry_lifecycle_states = WorkflowEntryLifecycleStateRecords::from_records([
+            WorkflowEntryLifecycleStateRecord::new(
+                WorkflowEntryLifecycleStateName::FreshUninitialized,
+                WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
+                WorkflowEntryLifecycleEvidenceText::try_new(
+                    "capture-ticket view distinguishes first arrival before initialization"
+                        .to_owned(),
+                )?,
+            ),
+        ]);
         let module = emit_workflow_module(
             parse_quint_module_name("OpenTicket")?,
             WorkflowModuleData::new(
@@ -88,7 +100,7 @@ mod tests {
                     workflow_owned_definitions: workflow_owned_definitions.clone(),
                     workflow_transition_evidences: Default::default(),
                     workflow_requires_entry_lifecycle_coverage: false,
-                    workflow_entry_lifecycle_states: Default::default(),
+                    workflow_entry_lifecycle_states: workflow_entry_lifecycle_states.clone(),
                 }),
             )
             .with_slice_details(WorkflowSliceDetails::from_details(workflow_slice_details))
@@ -97,7 +109,8 @@ mod tests {
             ))
             .with_outcomes(workflow_outcomes)
             .with_command_errors(workflow_command_errors)
-            .with_owned_definitions(workflow_owned_definitions),
+            .with_owned_definitions(workflow_owned_definitions)
+            .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
         );
         let quint = module.as_ref();
 
@@ -132,7 +145,10 @@ mod tests {
             "type WorkflowOwnedDefinition = { sourceSlice: str, definitionKind: WorkflowOwnedDefinitionKind, definitionName: str, definitionStream: str, sourceProvenance: str, eventParticipation: str, viewRole: str }"
         ));
         assert!(quint.contains(
-            "type WorkflowEntryLifecycleState = { state: str, step: str, evidence: str }"
+            "type WorkflowEntryLifecycleStateName = FreshUninitialized | InitializedUnauthenticated | InitializedAuthenticated | PartiallyConfigured | FullyConfigured"
+        ));
+        assert!(quint.contains(
+            "type WorkflowEntryLifecycleState = { state: WorkflowEntryLifecycleStateName, step: str, evidence: str }"
         ));
         assert!(quint.contains("type WorkflowSlice = { slug: str }"));
         assert!(
@@ -164,7 +180,7 @@ mod tests {
         assert!(quint.contains("val workflowRequiresEntryLifecycleCoverage = false"));
         assert!(
             quint.contains(
-                "val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = []"
+                "val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = [{ state: FreshUninitialized, step: \"capture-ticket\", evidence: \"capture-ticket view distinguishes first arrival before initialization\" }]"
             )
         );
         assert!(quint.contains("val workflowIdentityStable"));
@@ -178,7 +194,7 @@ mod tests {
             "Quint workflow artifacts must explicitly model workflow-exit targets for transition target resolution"
         );
         assert!(
-            quint.contains("val requiredEntryLifecycleStates: List[str] = [\"fresh_uninitialized\",\"initialized_unauthenticated\",\"initialized_authenticated\",\"partially_configured\",\"fully_configured\"]"),
+            quint.contains("val requiredEntryLifecycleStates: List[WorkflowEntryLifecycleStateName] = [FreshUninitialized,InitializedUnauthenticated,InitializedAuthenticated,PartiallyConfigured,FullyConfigured]"),
             "Quint workflow artifacts must encode the required application-entry lifecycle states"
         );
         assert!(
@@ -242,6 +258,10 @@ mod tests {
         assert!(
             quint.contains("val workflowBranchAndAlternateStepsHaveTriggerOrRationale = workflowStepRelationships.select(step => workflowBranchOrAlternateStepHasTriggerOrRationale(step)).length() == workflowStepRelationships.length()"),
             "Quint workflow artifacts must verify branch and alternate steps explain why they are reached"
+        );
+        assert!(
+            quint.contains("def workflowEntryLifecycleStateCovered(state) = workflowEntryLifecycleStates.select(coverage => coverage.state == state and workflowSliceSlugs.select(step => step == coverage.step).length() > 0 and coverage.evidence != \"\").length() > 0"),
+            "Quint workflow artifacts must check lifecycle coverage with the closed lifecycle-state type"
         );
         assert!(
             quint.contains("val workflowEntryLifecycleStatesCoverRequiredStates = not(workflowRequiresEntryLifecycleCoverage) or requiredEntryLifecycleStates.select(state => workflowEntryLifecycleStateCovered(state)).length() == requiredEntryLifecycleStates.length()"),

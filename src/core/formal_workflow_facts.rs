@@ -6,7 +6,8 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest};
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::emit::{
-    lean_workflow_owned_definition_kind, lean_workflow_transition_kind,
+    lean_workflow_entry_lifecycle_state_name, lean_workflow_owned_definition_kind,
+    lean_workflow_transition_kind, quint_workflow_entry_lifecycle_state_name,
     quint_workflow_owned_definition_kind, quint_workflow_transition_kind,
 };
 use crate::core::formal_graph::{parse_lean_workflow_graph, parse_quint_workflow_graph};
@@ -355,7 +356,7 @@ fn lean_workflow_entry_lifecycle_state_record(
 ) -> String {
     format!(
         "{{ state := {}, step := {}, evidence := {} }}",
-        quoted(coverage.state().as_ref()),
+        lean_workflow_entry_lifecycle_state_name(*coverage.state()),
         quoted(coverage.step().as_ref()),
         quoted(coverage.evidence().as_ref()),
     )
@@ -366,7 +367,7 @@ fn quint_workflow_entry_lifecycle_state_record(
 ) -> String {
     format!(
         "{{ state: {}, step: {}, evidence: {} }}",
-        quoted(coverage.state().as_ref()),
+        quint_workflow_entry_lifecycle_state_name(*coverage.state()),
         quoted(coverage.step().as_ref()),
         quoted(coverage.evidence().as_ref()),
     )

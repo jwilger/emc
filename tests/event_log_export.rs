@@ -1753,7 +1753,7 @@ mod tests {
         );
         assert!(
             workflow_lean.contains(
-                "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := [{ state := \"fresh_uninitialized\", step := \"capture-ticket\", evidence := \"capture-ticket view distinguishes first arrival before initialization\" }]"
+                "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := [{ state := WorkflowEntryLifecycleStateName.freshUninitialized, step := \"capture-ticket\", evidence := \"capture-ticket view distinguishes first arrival before initialization\" }]"
             ),
             "workflow lifecycle state must be rebuilt from exported events"
         );

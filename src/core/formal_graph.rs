@@ -578,16 +578,49 @@ fn parse_workflow_transition_evidences(
 fn parse_workflow_entry_lifecycle_states(
     value: &str,
 ) -> Result<Vec<WorkflowEntryLifecycleStateRecord>, FormalGraphError> {
-    quoted_string_groups(value, 3)?
-        .chunks_exact(3)
-        .map(|chunk| {
-            Ok(WorkflowEntryLifecycleStateRecord::new(
-                workflow_entry_lifecycle_state_name(&chunk[0])?,
-                transition_endpoint(&chunk[1])?,
-                workflow_entry_lifecycle_evidence_text(&chunk[2])?,
-            ))
-        })
-        .collect()
+    let states = parse_workflow_entry_lifecycle_state_field_values(value)?;
+    let strings = parse_quoted_strings(value)?;
+
+    if states.is_empty() {
+        quoted_string_groups(value, 3)?
+            .chunks_exact(3)
+            .map(|chunk| {
+                Ok(WorkflowEntryLifecycleStateRecord::new(
+                    workflow_entry_lifecycle_state_name(&chunk[0])?,
+                    transition_endpoint(&chunk[1])?,
+                    workflow_entry_lifecycle_evidence_text(&chunk[2])?,
+                ))
+            })
+            .collect()
+    } else if strings.len() == states.len() * 2 {
+        strings
+            .chunks_exact(2)
+            .zip(states)
+            .map(|(chunk, state)| {
+                Ok(WorkflowEntryLifecycleStateRecord::new(
+                    state,
+                    transition_endpoint(&chunk[0])?,
+                    workflow_entry_lifecycle_evidence_text(&chunk[1])?,
+                ))
+            })
+            .collect()
+    } else if strings.len() == states.len() * 3 {
+        strings
+            .chunks_exact(3)
+            .zip(states)
+            .map(|(chunk, state)| {
+                Ok(WorkflowEntryLifecycleStateRecord::new(
+                    state,
+                    transition_endpoint(&chunk[1])?,
+                    workflow_entry_lifecycle_evidence_text(&chunk[2])?,
+                ))
+            })
+            .collect()
+    } else {
+        Err(FormalGraphError::new(
+            "formal workflow entry lifecycle state declarations must contain a state plus step and evidence fields",
+        ))
+    }
 }
 
 fn transition_record_from_formal_fields(
@@ -930,6 +963,102 @@ fn workflow_step_relationship_from_formal_value(
         _ => artifact_value,
     };
     workflow_step_relationship_name(semantic_value)
+}
+
+fn parse_workflow_entry_lifecycle_state_field_values(
+    value: &str,
+) -> Result<Vec<WorkflowEntryLifecycleStateName>, FormalGraphError> {
+    let mut states = Vec::new();
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut index = 0;
+    while index < value.len() {
+        let rest = &value[index..];
+        let character = rest
+            .chars()
+            .next()
+            .ok_or_else(|| FormalGraphError::new("formal entry lifecycle state scan failed"))?;
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+            index += character.len_utf8();
+        } else if character == '"' {
+            in_string = true;
+            index += character.len_utf8();
+        } else if rest.starts_with("state :=") || rest.starts_with("state:") {
+            states.push(parse_workflow_entry_lifecycle_state_field_value(
+                &rest["state".len()..],
+            )?);
+            index += "state".len();
+        } else {
+            index += character.len_utf8();
+        }
+    }
+    Ok(states)
+}
+
+fn parse_workflow_entry_lifecycle_state_field_value(
+    after_name: &str,
+) -> Result<WorkflowEntryLifecycleStateName, FormalGraphError> {
+    let after_separator = after_name
+        .trim_start()
+        .strip_prefix(":=")
+        .or_else(|| after_name.trim_start().strip_prefix(':'))
+        .ok_or_else(|| {
+            FormalGraphError::new(
+                "formal workflow entry lifecycle state field is missing a separator",
+            )
+        })?
+        .trim_start();
+    let raw_value = if after_separator.starts_with('"') {
+        parse_quoted_strings(after_separator)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                FormalGraphError::new(
+                    "formal workflow entry lifecycle state field is missing a value",
+                )
+            })?
+    } else {
+        after_separator
+            .split([',', '}', ']'])
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_owned()
+    };
+    workflow_entry_lifecycle_state_from_formal_value(&raw_value)
+}
+
+fn workflow_entry_lifecycle_state_from_formal_value(
+    value: &str,
+) -> Result<WorkflowEntryLifecycleStateName, FormalGraphError> {
+    let artifact_value = value
+        .trim()
+        .strip_prefix("WorkflowEntryLifecycleStateName.")
+        .unwrap_or(value.trim());
+    let semantic_value = match artifact_value {
+        "FreshUninitialized" | "freshUninitialized" | "fresh_uninitialized" => {
+            "fresh_uninitialized"
+        }
+        "InitializedUnauthenticated"
+        | "initializedUnauthenticated"
+        | "initialized_unauthenticated" => "initialized_unauthenticated",
+        "InitializedAuthenticated" | "initializedAuthenticated" | "initialized_authenticated" => {
+            "initialized_authenticated"
+        }
+        "PartiallyConfigured" | "partiallyConfigured" | "partially_configured" => {
+            "partially_configured"
+        }
+        "FullyConfigured" | "fullyConfigured" | "fully_configured" => "fully_configured",
+        _ => artifact_value,
+    };
+    workflow_entry_lifecycle_state_name(semantic_value)
 }
 
 fn workflow_transition_kind_from_formal_value(

@@ -1,7 +1,8 @@
 // Copyright 2026 John Wilger
 
 use crate::core::types::{
-    WorkflowOwnedDefinitionKind, WorkflowStepRelationshipName, WorkflowTransitionKind,
+    WorkflowEntryLifecycleStateName, WorkflowOwnedDefinitionKind, WorkflowStepRelationshipName,
+    WorkflowTransitionKind,
 };
 
 pub(crate) mod lean;
@@ -102,5 +103,39 @@ pub(crate) fn quint_workflow_step_relationship_name(
         WorkflowStepRelationshipName::Alternate => "StepAlternate",
         WorkflowStepRelationshipName::AsyncLifecycle => "StepAsyncLifecycle",
         WorkflowStepRelationshipName::Supporting => "StepSupporting",
+    }
+}
+
+pub(crate) fn lean_workflow_entry_lifecycle_state_name(
+    state: WorkflowEntryLifecycleStateName,
+) -> &'static str {
+    match state {
+        WorkflowEntryLifecycleStateName::FreshUninitialized => {
+            "WorkflowEntryLifecycleStateName.freshUninitialized"
+        }
+        WorkflowEntryLifecycleStateName::InitializedUnauthenticated => {
+            "WorkflowEntryLifecycleStateName.initializedUnauthenticated"
+        }
+        WorkflowEntryLifecycleStateName::InitializedAuthenticated => {
+            "WorkflowEntryLifecycleStateName.initializedAuthenticated"
+        }
+        WorkflowEntryLifecycleStateName::PartiallyConfigured => {
+            "WorkflowEntryLifecycleStateName.partiallyConfigured"
+        }
+        WorkflowEntryLifecycleStateName::FullyConfigured => {
+            "WorkflowEntryLifecycleStateName.fullyConfigured"
+        }
+    }
+}
+
+pub(crate) fn quint_workflow_entry_lifecycle_state_name(
+    state: WorkflowEntryLifecycleStateName,
+) -> &'static str {
+    match state {
+        WorkflowEntryLifecycleStateName::FreshUninitialized => "FreshUninitialized",
+        WorkflowEntryLifecycleStateName::InitializedUnauthenticated => "InitializedUnauthenticated",
+        WorkflowEntryLifecycleStateName::InitializedAuthenticated => "InitializedAuthenticated",
+        WorkflowEntryLifecycleStateName::PartiallyConfigured => "PartiallyConfigured",
+        WorkflowEntryLifecycleStateName::FullyConfigured => "FullyConfigured",
     }
 }

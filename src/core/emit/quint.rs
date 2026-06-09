@@ -2,8 +2,8 @@
 
 use crate::core::effect::{ArtifactDigest, FileContents};
 use crate::core::emit::{
-    quint_workflow_owned_definition_kind, quint_workflow_step_relationship_name,
-    quint_workflow_transition_kind,
+    quint_workflow_entry_lifecycle_state_name, quint_workflow_owned_definition_kind,
+    quint_workflow_step_relationship_name, quint_workflow_transition_kind,
 };
 use crate::core::types::{
     BoardLaneId, CommandErrorRecoveryKind, CommandInputSourceKind, EventAttributeSourceKind,
@@ -53,6 +53,7 @@ pub(crate) fn emit_workflow_module(
   type WorkflowSliceModule = {{ slice: str, formalModule: str }}
   type WorkflowStepRelationshipName = StepEntry | StepMain | StepBranch | StepAlternate | StepAsyncLifecycle | StepSupporting
   type WorkflowStepRelationship = {{ step: str, relationship: WorkflowStepRelationshipName }}
+  type WorkflowEntryLifecycleStateName = FreshUninitialized | InitializedUnauthenticated | InitializedAuthenticated | PartiallyConfigured | FullyConfigured
   type WorkflowTransitionKind = Command | Event | Navigation | ExternalTrigger | Outcome | WorkflowExitCommand | WorkflowExitEvent | WorkflowExitNavigation | WorkflowExitExternalTrigger | WorkflowExitOutcome
   type WorkflowOwnedDefinitionKind = OwnedCommand | OwnedEvent | OwnedView | OwnedControl | OwnedReadModel | OwnedOutcome | OwnedError | OwnedAutomation | OwnedTranslation | OwnedExternalPayload
   type WorkflowTransition = {{ source: str, target: str, kind: WorkflowTransitionKind, trigger: str, rationale: str, payloadContract: str }}
@@ -60,7 +61,7 @@ pub(crate) fn emit_workflow_module(
   type WorkflowCommandError = {{ sourceSlice: str, commandName: str, errorName: str }}
   type WorkflowOwnedDefinition = {{ sourceSlice: str, definitionKind: WorkflowOwnedDefinitionKind, definitionName: str, definitionStream: str, sourceProvenance: str, eventParticipation: str, viewRole: str }}
   type WorkflowTransitionEvidence = {{ source: str, target: str, kind: WorkflowTransitionKind, trigger: str, sourceEvidence: str, targetEvidence: str }}
-  type WorkflowEntryLifecycleState = {{ state: str, step: str, evidence: str }}
+  type WorkflowEntryLifecycleState = {{ state: WorkflowEntryLifecycleStateName, step: str, evidence: str }}
   val workflowName = {workflow_name_json}
   val workflowSlug = {workflow_slug_json}
   val workflowDescription = {workflow_description_json}
@@ -77,7 +78,7 @@ pub(crate) fn emit_workflow_module(
   val workflowRequiresEntryLifecycleCoverage = {workflow_requires_entry_lifecycle_coverage}
   val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = {workflow_entry_lifecycle_state_list}
   val workflowExitTargets: List[str] = {workflow_exit_target_list}
-  val requiredEntryLifecycleStates: List[str] = {required_entry_lifecycle_state_list}
+  val requiredEntryLifecycleStates: List[WorkflowEntryLifecycleStateName] = {required_entry_lifecycle_state_list}
   val workflowIdentityStable = workflowName == {workflow_name_json}
   val workflowSlicesHaveDetails = length(workflowSlices) == length(workflowSliceDetails)
   val workflowSliceDetailsComplete = workflowSlicesHaveDetails
@@ -629,7 +630,7 @@ fn required_entry_lifecycle_state_list() -> String {
         "[{}]",
         WorkflowEntryLifecycleStateName::REQUIRED
             .iter()
-            .map(|state| quoted(state.as_ref()))
+            .map(|state| quint_workflow_entry_lifecycle_state_name(*state))
             .collect::<Vec<_>>()
             .join(",")
     )
@@ -807,7 +808,7 @@ fn workflow_entry_lifecycle_state_list(
 fn workflow_entry_lifecycle_state_record(coverage: &WorkflowEntryLifecycleStateRecord) -> String {
     format!(
         "{{ state: {}, step: {}, evidence: {} }}",
-        quoted(coverage.state().as_ref()),
+        quint_workflow_entry_lifecycle_state_name(*coverage.state()),
         quoted(coverage.step().as_ref()),
         quoted(coverage.evidence().as_ref()),
     )
