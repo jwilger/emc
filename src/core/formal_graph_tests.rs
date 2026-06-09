@@ -10,7 +10,9 @@ mod tests {
     use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
     use crate::core::formal_graph::{parse_lean_workflow_graph, parse_quint_workflow_graph};
     use crate::core::types::{
-        SliceKindName, TransitionTriggerName, WorkflowCommandErrorRecords, WorkflowModuleData,
+        SliceKindName, TransitionTriggerName, WorkflowCommandErrorRecords,
+        WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
+        WorkflowEntryLifecycleStateRecord, WorkflowEntryLifecycleStateRecords, WorkflowModuleData,
         WorkflowOutcomeRecords, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
         WorkflowSliceDetails, WorkflowStepRelationshipName, WorkflowTransitionEndpoint,
         WorkflowTransitionKind, WorkflowTransitionRecord, WorkflowTransitionRecords,
@@ -156,9 +158,83 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn parsed_formal_graph_reads_legacy_string_entry_lifecycle_states() -> Result<(), Box<dyn Error>>
+    {
+        let lean_artifact = emit_lean_workflow_module(
+            parse_lean_module_name("OpenTicket")?,
+            workflow_module_data_with_entry_lifecycle(
+                workflow_slice_details()?,
+                workflow_transitions()?,
+            )?,
+        );
+        let legacy_lean = lean_artifact.as_ref().replace(
+            "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := [{ state := WorkflowEntryLifecycleStateName.freshUninitialized, step := \"capture-ticket\", evidence := \"capture-ticket view distinguishes first arrival before initialization\" }]",
+            "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := [{ state := \"fresh_uninitialized\", step := \"capture-ticket\", evidence := \"capture-ticket view distinguishes first arrival before initialization\" }]",
+        );
+
+        assert_eq!(
+            parse_lean_workflow_graph(&FileContents::try_new(legacy_lean)?)?,
+            parse_lean_workflow_graph(&lean_artifact)?,
+            "formal parser must continue reading legacy Lean entry lifecycle state strings"
+        );
+
+        let quint_artifact = emit_quint_workflow_module(
+            parse_quint_module_name("OpenTicket")?,
+            workflow_module_data_with_entry_lifecycle(
+                workflow_slice_details()?,
+                workflow_transitions()?,
+            )?,
+        );
+        let legacy_quint = quint_artifact.as_ref().replace(
+            "val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = [{ state: FreshUninitialized, step: \"capture-ticket\", evidence: \"capture-ticket view distinguishes first arrival before initialization\" }]",
+            "val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = [{ state: \"fresh_uninitialized\", step: \"capture-ticket\", evidence: \"capture-ticket view distinguishes first arrival before initialization\" }]",
+        );
+
+        assert_eq!(
+            parse_quint_workflow_graph(&FileContents::try_new(legacy_quint)?)?,
+            parse_quint_workflow_graph(&quint_artifact)?,
+            "formal parser must continue reading legacy Quint entry lifecycle state strings"
+        );
+
+        Ok(())
+    }
+
     fn workflow_module_data(
         workflow_slice_details: Vec<WorkflowSliceDetail>,
         workflow_transitions: Vec<WorkflowTransitionRecord>,
+    ) -> Result<WorkflowModuleData, Box<dyn Error>> {
+        workflow_module_data_with_entry_lifecycle_records(
+            workflow_slice_details,
+            workflow_transitions,
+            WorkflowEntryLifecycleStateRecords::from_records([]),
+        )
+    }
+
+    fn workflow_module_data_with_entry_lifecycle(
+        workflow_slice_details: Vec<WorkflowSliceDetail>,
+        workflow_transitions: Vec<WorkflowTransitionRecord>,
+    ) -> Result<WorkflowModuleData, Box<dyn Error>> {
+        workflow_module_data_with_entry_lifecycle_records(
+            workflow_slice_details,
+            workflow_transitions,
+            WorkflowEntryLifecycleStateRecords::from_records([
+                WorkflowEntryLifecycleStateRecord::new(
+                    WorkflowEntryLifecycleStateName::FreshUninitialized,
+                    WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
+                    WorkflowEntryLifecycleEvidenceText::try_new(
+                        "capture-ticket view distinguishes first arrival before initialization"
+                            .to_owned(),
+                    )?,
+                ),
+            ]),
+        )
+    }
+
+    fn workflow_module_data_with_entry_lifecycle_records(
+        workflow_slice_details: Vec<WorkflowSliceDetail>,
+        workflow_transitions: Vec<WorkflowTransitionRecord>,
+        workflow_entry_lifecycle_states: WorkflowEntryLifecycleStateRecords,
     ) -> Result<WorkflowModuleData, Box<dyn Error>> {
         let workflow_name = parse_model_name("Open ticket")?;
         let workflow_slug = parse_workflow_slug("open-ticket")?;
@@ -183,14 +259,15 @@ mod tests {
                 workflow_owned_definitions: workflow_owned_definitions.clone(),
                 workflow_transition_evidences: Default::default(),
                 workflow_requires_entry_lifecycle_coverage: false,
-                workflow_entry_lifecycle_states: Default::default(),
+                workflow_entry_lifecycle_states: workflow_entry_lifecycle_states.clone(),
             }),
         )
         .with_slice_details(workflow_slice_details)
         .with_transitions(workflow_transitions)
         .with_outcomes(workflow_outcomes)
         .with_command_errors(workflow_command_errors)
-        .with_owned_definitions(workflow_owned_definitions))
+        .with_owned_definitions(workflow_owned_definitions)
+        .with_entry_lifecycle_states(workflow_entry_lifecycle_states))
     }
 
     fn workflow_slice_details() -> Result<Vec<WorkflowSliceDetail>, Box<dyn Error>> {

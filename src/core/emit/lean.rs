@@ -2,8 +2,8 @@
 
 use crate::core::effect::{ArtifactDigest, FileContents};
 use crate::core::emit::{
-    lean_workflow_owned_definition_kind, lean_workflow_step_relationship_name,
-    lean_workflow_transition_kind,
+    lean_workflow_entry_lifecycle_state_name, lean_workflow_owned_definition_kind,
+    lean_workflow_step_relationship_name, lean_workflow_transition_kind,
 };
 use crate::core::types::{
     BoardLaneId, CommandErrorRecoveryKind, CommandInputSourceKind, EventAttributeSourceKind,
@@ -107,6 +107,14 @@ inductive WorkflowStepRelationshipName where
   | supporting
 deriving BEq, DecidableEq, Repr
 
+inductive WorkflowEntryLifecycleStateName where
+  | freshUninitialized
+  | initializedUnauthenticated
+  | initializedAuthenticated
+  | partiallyConfigured
+  | fullyConfigured
+deriving BEq, DecidableEq, Repr
+
 def workflowSliceDetails : List WorkflowSliceDetail := {slice_detail_list}
 
 def workflowSliceModules : List WorkflowSliceModule := {slice_module_list}
@@ -147,7 +155,7 @@ structure WorkflowTransitionEvidence where
   targetEvidence : String
 
 structure WorkflowEntryLifecycleState where
-  state : String
+  state : WorkflowEntryLifecycleStateName
   step : String
   evidence : String
 
@@ -167,7 +175,7 @@ def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := {workflow
 
 def workflowExitTargets : List String := {workflow_exit_target_list}
 
-def requiredEntryLifecycleStates : List String := {required_entry_lifecycle_state_list}
+def requiredEntryLifecycleStates : List WorkflowEntryLifecycleStateName := {required_entry_lifecycle_state_list}
 
 structure WorkflowStepRelationship where
   step : String
@@ -307,7 +315,7 @@ def workflowTransitionHasRequiredEvidence (transition : WorkflowTransition) : Bo
 
 def workflowTransitionsHaveRequiredEvidence : Bool := workflowTransitions.all workflowTransitionHasRequiredEvidence
 
-def workflowEntryLifecycleStateCovered (state : String) : Bool := workflowEntryLifecycleStates.any (fun coverage => coverage.state == state && workflowSliceSlugs.contains coverage.step && coverage.evidence.isEmpty == false)
+def workflowEntryLifecycleStateCovered (state : WorkflowEntryLifecycleStateName) : Bool := workflowEntryLifecycleStates.any (fun coverage => coverage.state == state && workflowSliceSlugs.contains coverage.step && coverage.evidence.isEmpty == false)
 
 def workflowEntryLifecycleStatesCoverRequiredStates : Bool := workflowRequiresEntryLifecycleCoverage == false || requiredEntryLifecycleStates.all workflowEntryLifecycleStateCovered
 
@@ -962,7 +970,7 @@ fn required_entry_lifecycle_state_list() -> String {
         "[{}]",
         WorkflowEntryLifecycleStateName::REQUIRED
             .iter()
-            .map(|state| quoted(state.as_ref()))
+            .map(|state| lean_workflow_entry_lifecycle_state_name(*state))
             .collect::<Vec<_>>()
             .join(",")
     )
@@ -1144,7 +1152,7 @@ fn workflow_entry_lifecycle_state_list(
 fn workflow_entry_lifecycle_state_record(coverage: &WorkflowEntryLifecycleStateRecord) -> String {
     format!(
         "{{ state := {}, step := {}, evidence := {} }}",
-        quoted(coverage.state().as_ref()),
+        lean_workflow_entry_lifecycle_state_name(*coverage.state()),
         quoted(coverage.step().as_ref()),
         quoted(coverage.evidence().as_ref()),
     )

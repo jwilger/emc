@@ -11,11 +11,13 @@ mod tests {
     use crate::core::types::{
         CommandErrorName, CommandName, OutcomeLabelName, PayloadContractName, SliceKindName,
         TransitionTriggerName, WorkflowCommandErrorRecord, WorkflowCommandErrorRecords,
-        WorkflowModuleData, WorkflowOutcomeRecord, WorkflowOutcomeRecords,
-        WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
-        WorkflowOwnedDefinitionRecords, WorkflowSliceDetail, WorkflowSliceDetails,
-        WorkflowStepRelationshipName, WorkflowTransitionEndpoint, WorkflowTransitionKind,
-        WorkflowTransitionRecord, WorkflowTransitionRecords,
+        WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
+        WorkflowEntryLifecycleStateRecord, WorkflowEntryLifecycleStateRecords, WorkflowModuleData,
+        WorkflowOutcomeRecord, WorkflowOutcomeRecords, WorkflowOwnedDefinitionKind,
+        WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords,
+        WorkflowSliceDetail, WorkflowSliceDetails, WorkflowStepRelationshipName,
+        WorkflowTransitionEndpoint, WorkflowTransitionKind, WorkflowTransitionRecord,
+        WorkflowTransitionRecords,
     };
     use crate::io::dto::{
         parse_lean_module_name, parse_model_description, parse_model_name, parse_slice_slug,
@@ -67,6 +69,16 @@ mod tests {
                 WorkflowOwnedDefinitionKind::try_new("external_payload".to_owned())?,
                 WorkflowOwnedDefinitionName::try_new("CallbackReceivedPayload".to_owned())?,
             )]);
+        let workflow_entry_lifecycle_states = WorkflowEntryLifecycleStateRecords::from_records([
+            WorkflowEntryLifecycleStateRecord::new(
+                WorkflowEntryLifecycleStateName::FreshUninitialized,
+                WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
+                WorkflowEntryLifecycleEvidenceText::try_new(
+                    "capture-ticket view distinguishes first arrival before initialization"
+                        .to_owned(),
+                )?,
+            ),
+        ]);
         let module = emit_workflow_module(
             parse_lean_module_name("OpenTicket")?,
             WorkflowModuleData::new(
@@ -88,7 +100,7 @@ mod tests {
                     workflow_owned_definitions: workflow_owned_definitions.clone(),
                     workflow_transition_evidences: Default::default(),
                     workflow_requires_entry_lifecycle_coverage: false,
-                    workflow_entry_lifecycle_states: Default::default(),
+                    workflow_entry_lifecycle_states: workflow_entry_lifecycle_states.clone(),
                 }),
             )
             .with_slice_details(WorkflowSliceDetails::from_details(workflow_slice_details))
@@ -97,7 +109,8 @@ mod tests {
             ))
             .with_outcomes(workflow_outcomes)
             .with_command_errors(workflow_command_errors)
-            .with_owned_definitions(workflow_owned_definitions),
+            .with_owned_definitions(workflow_owned_definitions)
+            .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
         );
         let lean = module.as_ref();
 
@@ -179,7 +192,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure WorkflowEntryLifecycleState where\n  state : String\n  step : String\n  evidence : String"
+                "inductive WorkflowEntryLifecycleStateName where\n  | freshUninitialized\n  | initializedUnauthenticated\n  | initializedAuthenticated\n  | partiallyConfigured\n  | fullyConfigured"
+            ),
+            "Lean workflow artifacts must model entry lifecycle states as a closed domain type"
+        );
+        assert!(
+            lean.contains(
+                "structure WorkflowEntryLifecycleState where\n  state : WorkflowEntryLifecycleStateName\n  step : String\n  evidence : String"
             ),
             "Lean workflow artifacts must represent application-entry lifecycle coverage"
         );
@@ -211,7 +230,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := []"
+                "def workflowEntryLifecycleStates : List WorkflowEntryLifecycleState := [{ state := WorkflowEntryLifecycleStateName.freshUninitialized, step := \"capture-ticket\", evidence := \"capture-ticket view distinguishes first arrival before initialization\" }]"
             ),
             "Lean workflow artifacts must carry authored application-entry lifecycle coverage facts"
         );
@@ -220,7 +239,7 @@ mod tests {
             "Lean workflow artifacts must explicitly model workflow-exit targets for transition target resolution"
         );
         assert!(
-            lean.contains("def requiredEntryLifecycleStates : List String := [\"fresh_uninitialized\",\"initialized_unauthenticated\",\"initialized_authenticated\",\"partially_configured\",\"fully_configured\"]"),
+            lean.contains("def requiredEntryLifecycleStates : List WorkflowEntryLifecycleStateName := [WorkflowEntryLifecycleStateName.freshUninitialized,WorkflowEntryLifecycleStateName.initializedUnauthenticated,WorkflowEntryLifecycleStateName.initializedAuthenticated,WorkflowEntryLifecycleStateName.partiallyConfigured,WorkflowEntryLifecycleStateName.fullyConfigured]"),
             "Lean workflow artifacts must encode the required application-entry lifecycle states"
         );
         assert!(
@@ -298,6 +317,10 @@ mod tests {
         assert!(
             lean.contains("def workflowBranchAndAlternateStepsHaveTriggerOrRationale : Bool := workflowStepRelationships.all workflowBranchOrAlternateStepHasTriggerOrRationale"),
             "Lean workflow artifacts must expose branch and alternate trigger/rationale as a proof obligation"
+        );
+        assert!(
+            lean.contains("def workflowEntryLifecycleStateCovered (state : WorkflowEntryLifecycleStateName) : Bool := workflowEntryLifecycleStates.any (fun coverage => coverage.state == state && workflowSliceSlugs.contains coverage.step && coverage.evidence.isEmpty == false)"),
+            "Lean workflow artifacts must check lifecycle coverage with the closed lifecycle-state type"
         );
         assert!(
             lean.contains("def workflowEntryLifecycleStatesCoverRequiredStates : Bool := workflowRequiresEntryLifecycleCoverage == false || requiredEntryLifecycleStates.all workflowEntryLifecycleStateCovered"),
