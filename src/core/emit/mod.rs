@@ -1,12 +1,30 @@
 // Copyright 2026 John Wilger
 
 use crate::core::types::{
-    WorkflowEntryLifecycleStateName, WorkflowOwnedDefinitionKind, WorkflowStepRelationshipName,
-    WorkflowTransitionKind,
+    SliceKindName, WorkflowEntryLifecycleStateName, WorkflowOwnedDefinitionKind,
+    WorkflowStepRelationshipName, WorkflowTransitionKind,
 };
 
 pub(crate) mod lean;
 pub(crate) mod quint;
+
+pub(crate) fn lean_slice_kind_name(kind: SliceKindName) -> &'static str {
+    match kind {
+        SliceKindName::StateView => "SliceKindName.stateView",
+        SliceKindName::StateChange => "SliceKindName.stateChange",
+        SliceKindName::Translation => "SliceKindName.translation",
+        SliceKindName::Automation => "SliceKindName.automation",
+    }
+}
+
+pub(crate) fn quint_slice_kind_name(kind: SliceKindName) -> &'static str {
+    match kind {
+        SliceKindName::StateView => "SliceStateView",
+        SliceKindName::StateChange => "SliceStateChange",
+        SliceKindName::Translation => "SliceTranslation",
+        SliceKindName::Automation => "SliceAutomation",
+    }
+}
 
 pub(crate) fn lean_workflow_transition_kind(kind: WorkflowTransitionKind) -> &'static str {
     match kind {

@@ -5881,7 +5881,8 @@ mod tests {
             "CaptureTicket",
         ];
 
-        if lean.contains("def sliceKind := \"state_change\"")
+        if (lean.contains("def sliceKind := \"state_change\"")
+            || lean.contains("def sliceKind : SliceKindName := SliceKindName.stateChange"))
             && lean.contains("name := \"tickets\"")
         {
             args.extend(["--read-streams", "tickets", "--written-streams", "tickets"]);

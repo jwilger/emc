@@ -87,7 +87,7 @@ mod tests {
             "Lean slice artifact must represent the business slice slug"
         );
         assert!(
-            slice_lean.contains("def sliceKind := \"state_view\""),
+            slice_lean.contains("def sliceKind : SliceKindName := SliceKindName.stateView"),
             "Lean slice artifact must represent the semantic slice kind"
         );
         assert!(
@@ -113,7 +113,7 @@ mod tests {
             "Quint slice artifact must represent the business slice slug"
         );
         assert!(
-            slice_quint.contains("val sliceKind = \"state_view\""),
+            slice_quint.contains("val sliceKind: SliceKindName = SliceStateView"),
             "Quint slice artifact must represent the semantic slice kind"
         );
         assert!(
@@ -128,7 +128,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := \"state_view\", description := \"Actor enters repair ticket details.\" }]"
+                "def workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := SliceKindName.stateView, description := \"Actor enters repair ticket details.\" }]"
             ),
             "Lean artifact must represent the workflow's business slice details"
         );
@@ -152,7 +152,7 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val workflowSliceDetails: List[WorkflowSliceDetail] = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Actor enters repair ticket details.\" }]"
+                "val workflowSliceDetails: List[WorkflowSliceDetail] = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: SliceStateView, description: \"Actor enters repair ticket details.\" }]"
             ),
             "Quint artifact must represent the workflow's business slice details"
         );
@@ -357,7 +357,7 @@ mod tests {
         let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         assert_eq!(
             lean.matches(
-                "{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := \"state_view\", description := \"Slice description.\" }"
+                "{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := SliceKindName.stateView, description := \"Slice description.\" }"
             )
             .count(),
             1,

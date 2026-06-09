@@ -9,7 +9,10 @@ use crate::core::effect::{
 };
 use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
-use crate::core::emit::{lean_workflow_transition_kind, quint_workflow_transition_kind};
+use crate::core::emit::{
+    lean_slice_kind_name, lean_workflow_transition_kind, quint_slice_kind_name,
+    quint_workflow_transition_kind,
+};
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
 use crate::core::formal_model::{
     FormalModelCommand, FormalModelCommandError, FormalModelCommandInput,
@@ -3805,7 +3808,7 @@ fn lean_workflow_slice_detail_marker(workflow: &FormalWorkflowGraph) -> Canonica
                     "{{ slug := {}, name := {}, kind := {}, description := {} }}",
                     json_string(slice.slug().as_ref()),
                     json_string(slice.name().as_ref()),
-                    json_string(slice.kind().as_ref()),
+                    lean_slice_kind_name(*slice.kind()),
                     json_string(slice.description().as_ref())
                 )
             })
@@ -3898,7 +3901,7 @@ fn quint_workflow_slice_detail_marker(
                     "{{ slug: {}, name: {}, kind: {}, description: {} }}",
                     json_string(slice.slug().as_ref()),
                     json_string(slice.name().as_ref()),
-                    json_string(slice.kind().as_ref()),
+                    quint_slice_kind_name(*slice.kind()),
                     json_string(slice.description().as_ref())
                 )
             })

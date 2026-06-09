@@ -2418,7 +2418,7 @@ mod tests {
             "slice name update must be rebuilt from exported events"
         );
         assert!(
-            slice_lean.contains("def sliceKind := \"state_change\""),
+            slice_lean.contains("def sliceKind : SliceKindName := SliceKindName.stateChange"),
             "slice kind update must be rebuilt from exported events"
         );
         assert!(

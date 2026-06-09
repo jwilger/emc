@@ -124,7 +124,7 @@ mod tests {
         assert!(quint.contains("val workflowSlug = \"open-ticket\""));
         assert!(quint.contains("val workflowDescription = \"Actor opens a repair ticket.\""));
         assert!(quint.contains(
-            "type WorkflowSliceDetail = { slug: str, name: str, kind: str, description: str }"
+            "type WorkflowSliceDetail = { slug: str, name: str, kind: SliceKindName, description: str }"
         ));
         assert!(quint.contains(
             "type WorkflowTransitionKind = Command | Event | Navigation | ExternalTrigger | Outcome | WorkflowExitCommand | WorkflowExitEvent | WorkflowExitNavigation | WorkflowExitExternalTrigger | WorkflowExitOutcome"
@@ -162,7 +162,7 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val workflowSliceDetails: List[WorkflowSliceDetail] = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Actor enters repair ticket details.\" },{ slug: \"review-ticket\", name: \"Review ticket\", kind: \"state_view\", description: \"Actor reviews repair ticket details.\" }]"
+                "val workflowSliceDetails: List[WorkflowSliceDetail] = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: SliceStateView, description: \"Actor enters repair ticket details.\" },{ slug: \"review-ticket\", name: \"Review ticket\", kind: SliceStateView, description: \"Actor reviews repair ticket details.\" }]"
             )
         );
         assert!(
@@ -364,7 +364,7 @@ mod tests {
             "def workflowSliceHasKind(sliceSlug, kind) = workflowSliceDetails.select(detail => detail.slug == sliceSlug and detail.kind == kind).length() > 0"
         ));
         assert!(quint.contains(
-            "def workflowStateViewCommandTransitionTargetsStateChange(transition) = transition.kind != Command or not(workflowSliceHasKind(transition.source, \"state_view\")) or workflowSliceHasKind(transition.target, \"state_change\")"
+            "def workflowStateViewCommandTransitionTargetsStateChange(transition) = transition.kind != Command or not(workflowSliceHasKind(transition.source, SliceStateView)) or workflowSliceHasKind(transition.target, SliceStateChange)"
         ));
         assert!(quint.contains(
             "val workflowStateViewCommandTransitionsTargetStateChanges = workflowTransitions.select(transition => workflowStateViewCommandTransitionTargetsStateChange(transition)).length() == workflowTransitions.length()"
@@ -619,7 +619,7 @@ mod tests {
             "def scenarioStreamsResolve(scenario) = scenario.readStreams.select(streamName => scenarioStreamResolves(streamName)).length() == scenario.readStreams.length() and scenario.writtenStreams.select(streamName => scenarioStreamResolves(streamName)).length() == scenario.writtenStreams.length()"
         ));
         assert!(quint.contains(
-            "def stateChangeScenarioNamesStreams(scenario) = sliceKind != \"state_change\" or (scenario.readStreams.length() > 0 and scenario.writtenStreams.length() > 0)"
+            "def stateChangeScenarioNamesStreams(scenario) = sliceKind != SliceStateChange or (scenario.readStreams.length() > 0 and scenario.writtenStreams.length() > 0)"
         ));
         assert!(quint.contains(
             "val sliceAcceptanceScenarioStreamsResolve = sliceAcceptanceScenarios.select(scenario => scenarioStreamsResolve(scenario)).length() == sliceAcceptanceScenarios.length()"
@@ -649,7 +649,7 @@ mod tests {
             "def readModelHasProjectorContract(readModel) = sliceContractScenarios.select(scenario => scenarioCoversContract(\"projector\", readModel.name, scenario)).length() > 0"
         ));
         assert!(quint.contains(
-            "val stateViewReadModelsHaveProjectorContracts = sliceKind != \"state_view\" or sliceReadModelDefinitions.select(readModel => readModelHasProjectorContract(readModel)).length() == sliceReadModelDefinitions.length()"
+            "val stateViewReadModelsHaveProjectorContracts = sliceKind != SliceStateView or sliceReadModelDefinitions.select(readModel => readModelHasProjectorContract(readModel)).length() == sliceReadModelDefinitions.length()"
         ));
         assert!(quint.contains(
             "def contractScenarioTargetsKnownDefinition(scenario) = (scenario.contractKind == \"projector\" and (sliceReadModelNames.select(readModelName => readModelName == scenario.coveredDefinition).length() > 0 or sliceReadModelDefinitions.select(readModel => readModel.name == scenario.coveredDefinition).length() > 0)) or (scenario.contractKind == \"command\" and (sliceCommandNames.select(commandName => commandName == scenario.coveredDefinition).length() > 0 or sliceCommandDefinitions.select(command => command.name == scenario.coveredDefinition).length() > 0)) or (scenario.contractKind == \"automation\" and sliceAutomations.select(automation => automation.name == scenario.coveredDefinition).length() > 0) or (scenario.contractKind == \"translation\" and sliceTranslations.select(translation => translation.name == scenario.coveredDefinition).length() > 0) or (scenario.contractKind == \"derivation\" and scenario.coveredDefinition != \"\" and sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => readModelField.sourceKind == \"derivation\" and readModelField.derivationScenarioName == scenario.name).length() > 0).length() > 0) or (scenario.contractKind == \"absence\" and scenario.coveredDefinition != \"\" and sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => readModelField.sourceKind == \"absence_default\" and readModelField.absenceScenarioName == scenario.name).length() > 0).length() > 0) or (scenario.contractKind == \"transitive\" and sliceReadModelDefinitions.select(readModel => readModel.transitive and readModel.name == scenario.coveredDefinition and readModel.exampleScenarioName == scenario.name).length() > 0)"
@@ -772,10 +772,10 @@ mod tests {
             "def automationHandlesCommandErrors(automation, command) = command.name != automation.commandName or command.errors.select(error => automation.handledErrors.select(handledError => handledError == error.name).length() > 0).length() == command.errors.length()"
         ));
         assert!(quint.contains(
-            "val automationSlicesDeclareTriggers = sliceKind != \"automation\" or (sliceAutomations.length() > 0 and sliceAutomations.select(automation => automationHasTrigger(automation)).length() == sliceAutomations.length())"
+            "val automationSlicesDeclareTriggers = sliceKind != SliceAutomation or (sliceAutomations.length() > 0 and sliceAutomations.select(automation => automationHasTrigger(automation)).length() == sliceAutomations.length())"
         ));
         assert!(quint.contains(
-            "val automationSlicesRepresentOneReaction = sliceKind != \"automation\" or sliceAutomations.length() == 1"
+            "val automationSlicesRepresentOneReaction = sliceKind != SliceAutomation or sliceAutomations.length() == 1"
         ));
         assert!(quint.contains(
             "val automationsIssueKnownCommands = sliceAutomations.select(automation => automationIssuesKnownCommand(automation)).length() == sliceAutomations.length()"
@@ -799,7 +799,7 @@ mod tests {
             "def translationReferencesObservedExternalEvent(translation) = sliceEventDefinitions.select(event => event.name == translation.externalEventName and event.observed).length() > 0"
         ));
         assert!(quint.contains(
-            "val translationSlicesDeclareExternalContracts = sliceKind != \"translation\" or (sliceTranslations.length() > 0 and sliceTranslations.select(translation => translationHasExternalContract(translation)).length() == sliceTranslations.length())"
+            "val translationSlicesDeclareExternalContracts = sliceKind != SliceTranslation or (sliceTranslations.length() > 0 and sliceTranslations.select(translation => translationHasExternalContract(translation)).length() == sliceTranslations.length())"
         ));
         assert!(quint.contains(
             "val translationsTargetKnownCommands = sliceTranslations.select(translation => translationTargetsKnownCommand(translation)).length() == sliceTranslations.length()"
@@ -1125,55 +1125,53 @@ mod tests {
             "val viewControlRecoveryBehaviorIsModeled = sliceViewDefinitions.select(view => view.controls.select(control => controlRecoveryBehaviorIsModeled(control)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
-            "val stateViewSlicesDoNotOwnCommands = sliceKind != \"state_view\" or (sliceCommands.length() == 0 and sliceCommandDefinitions.length() == 0)"
+            "val stateViewSlicesDoNotOwnCommands = sliceKind != SliceStateView or (sliceCommands.length() == 0 and sliceCommandDefinitions.length() == 0)"
         ));
         assert!(quint.contains(
-            "val stateViewSlicesOwnViews = sliceKind != \"state_view\" or (sliceViews.length() > 0 or sliceViewDefinitions.length() > 0)"
+            "val stateViewSlicesOwnViews = sliceKind != SliceStateView or (sliceViews.length() > 0 or sliceViewDefinitions.length() > 0)"
         ));
         assert!(quint.contains(
-            "val stateViewSlicesOwnReadModels = sliceKind != \"state_view\" or (sliceReadModels.length() > 0 or sliceReadModelDefinitions.length() > 0)"
+            "val stateViewSlicesOwnReadModels = sliceKind != SliceStateView or (sliceReadModels.length() > 0 or sliceReadModelDefinitions.length() > 0)"
         ));
         assert!(quint.contains(
             "def readModelOwnsProjectionPath(readModel) = readModel.fields.length() > 0 and readModel.fields.select(readModelField => readModelFieldSourceIsComplete(readModelField)).length() == readModel.fields.length()"
         ));
         assert!(quint.contains(
-            "val stateViewSlicesOwnProjectionPaths = sliceKind != \"state_view\" or sliceReadModelDefinitions.select(readModel => readModelOwnsProjectionPath(readModel)).length() == sliceReadModelDefinitions.length()"
+            "val stateViewSlicesOwnProjectionPaths = sliceKind != SliceStateView or sliceReadModelDefinitions.select(readModel => readModelOwnsProjectionPath(readModel)).length() == sliceReadModelDefinitions.length()"
         ));
         assert!(quint.contains(
-            "val stateViewSlicesRepresentSingleViewProjectionBoundary = sliceKind != \"state_view\" or (sliceViewDefinitions.length() == 1 and sliceReadModelDefinitions.length() > 0)"
+            "val stateViewSlicesRepresentSingleViewProjectionBoundary = sliceKind != SliceStateView or (sliceViewDefinitions.length() == 1 and sliceReadModelDefinitions.length() > 0)"
         ));
         assert!(quint.contains(
-            "val stateChangeSlicesOwnCommands = sliceKind != \"state_change\" or (sliceCommands.length() > 0 or sliceCommandDefinitions.length() > 0)"
+            "val stateChangeSlicesOwnCommands = sliceKind != SliceStateChange or (sliceCommands.length() > 0 or sliceCommandDefinitions.length() > 0)"
         ));
         assert!(quint.contains(
-            "val stateChangeSlicesOwnEvents = sliceKind != \"state_change\" or (sliceEvents.length() > 0 or sliceEventDefinitions.length() > 0)"
+            "val stateChangeSlicesOwnEvents = sliceKind != SliceStateChange or (sliceEvents.length() > 0 or sliceEventDefinitions.length() > 0)"
         ));
         assert!(quint.contains(
-            "val stateChangeSlicesOwnOutcomes = sliceKind != \"state_change\" or sliceOutcomeDefinitions.length() > 0"
+            "val stateChangeSlicesOwnOutcomes = sliceKind != SliceStateChange or sliceOutcomeDefinitions.length() > 0"
         ));
         assert!(quint.contains(
-            "val stateChangeSlicesOwnErrors = sliceKind != \"state_change\" or commandErrorsAreDeclared"
+            "val stateChangeSlicesOwnErrors = sliceKind != SliceStateChange or commandErrorsAreDeclared"
         ));
         assert!(quint.contains(
-            "val stateChangeSlicesDoNotOwnReadModelsOrViews = sliceKind != \"state_change\" or (sliceReadModels.length() == 0 and sliceReadModelDefinitions.length() == 0 and sliceViews.length() == 0 and sliceViewDefinitions.length() == 0)"
+            "val stateChangeSlicesDoNotOwnReadModelsOrViews = sliceKind != SliceStateChange or (sliceReadModels.length() == 0 and sliceReadModelDefinitions.length() == 0 and sliceViews.length() == 0 and sliceViewDefinitions.length() == 0)"
         ));
         assert!(quint.contains(
-            "val stateChangeSlicesDoNotOwnAutomationsOrTranslations = sliceKind != \"state_change\" or (sliceAutomations.length() == 0 and sliceTranslations.length() == 0)"
+            "val stateChangeSlicesDoNotOwnAutomationsOrTranslations = sliceKind != SliceStateChange or (sliceAutomations.length() == 0 and sliceTranslations.length() == 0)"
         ));
         assert!(quint.contains(
-            "val stateChangeSlicesDoNotOwnControlsOrSketches = sliceKind != \"state_change\" or sliceViewDefinitions.select(view => view.controls.length() == 0 and view.sketchTokens.length() == 0).length() == sliceViewDefinitions.length()"
+            "val stateChangeSlicesDoNotOwnControlsOrSketches = sliceKind != SliceStateChange or sliceViewDefinitions.select(view => view.controls.length() == 0 and view.sketchTokens.length() == 0).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
-            "val translationSlicesDoNotOwnViews = sliceKind != \"translation\" or (sliceViews.length() == 0 and sliceViewDefinitions.length() == 0)"
+            "val translationSlicesDoNotOwnViews = sliceKind != SliceTranslation or (sliceViews.length() == 0 and sliceViewDefinitions.length() == 0)"
         ));
-        assert!(quint.contains(
-            "val recognizedSliceKind = sliceKind == \"state_view\" or sliceKind == \"state_change\" or sliceKind == \"translation\" or sliceKind == \"automation\""
-        ));
+        assert!(quint.contains("val recognizedSliceKind = true"));
         assert!(quint.contains(
             "val sliceRepresentsOneCoherentModelUnit = recognizedSliceKind and stateViewSlicesDoNotOwnCommands and stateViewSlicesOwnViews and stateViewSlicesOwnReadModels and stateViewSlicesOwnProjectionPaths and stateChangeSlicesOwnCommands and stateChangeSlicesOwnEvents and stateChangeSlicesOwnOutcomes and stateChangeSlicesOwnErrors and stateChangeSlicesDoNotOwnReadModelsOrViews and stateChangeSlicesDoNotOwnAutomationsOrTranslations and stateChangeSlicesDoNotOwnControlsOrSketches and translationSlicesDeclareExternalContracts and externalBoundariesHavePayloadContractsAndFieldProvenance and translationsTargetKnownCommands and translationsReferenceObservedExternalEvents and translationSlicesDoNotOwnViews and automationSlicesDeclareTriggers and automationSlicesRepresentOneReaction and automationsIssueKnownCommands and automationsHandleCommandErrors"
         ));
         assert!(quint.contains(
-            "val stateChangeSlicesRepresentSingleCommandBoundary = sliceKind != \"state_change\" or sliceCommandDefinitions.length() == 1"
+            "val stateChangeSlicesRepresentSingleCommandBoundary = sliceKind != SliceStateChange or sliceCommandDefinitions.length() == 1"
         ));
         assert!(quint.contains(
             "val sliceRepresentsSmallestUsefulBehaviorBoundary = sliceRepresentsOneCoherentModelUnit and stateViewSlicesRepresentSingleViewProjectionBoundary and stateChangeSlicesRepresentSingleCommandBoundary and automationSlicesRepresentOneReaction and translationSlicesDeclareExternalContracts"
@@ -1229,7 +1227,7 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val sliceStateChangeRequiresEvent = sliceKind != \"state_change\" or sliceHasLocallyEmittedEvent"
+                "val sliceStateChangeRequiresEvent = sliceKind != SliceStateChange or sliceHasLocallyEmittedEvent"
             ),
             "Quint slice artifacts must expose the state-change event obligation"
         );

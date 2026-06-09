@@ -187,7 +187,7 @@ A model is complete and valid only when all of these are true:
 
 - ✅ Workflow compositions declare explicit steps.
 - ✅ Workflow steps reference composed formal slice modules.
-- ✅ Workflow transition kinds, workflow step relationship kinds,
+- ✅ Slice kinds, workflow transition kinds, workflow step relationship kinds,
   owned-definition kinds, and entry lifecycle states are closed Lean4 and Quint
   domain types.
 - ✅ Referenced non-supporting slices appear in workflow steps.

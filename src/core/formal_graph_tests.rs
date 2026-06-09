@@ -159,6 +159,41 @@ mod tests {
     }
 
     #[test]
+    fn parsed_formal_graph_reads_legacy_string_slice_kinds() -> Result<(), Box<dyn Error>> {
+        let lean_artifact = emit_lean_workflow_module(
+            parse_lean_module_name("OpenTicket")?,
+            workflow_module_data(workflow_slice_details()?, workflow_transitions()?)?,
+        );
+        let legacy_lean = lean_artifact.as_ref().replace(
+            "def workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := SliceKindName.stateView, description := \"Actor enters repair ticket details.\" },{ slug := \"review-ticket\", name := \"Review ticket\", kind := SliceKindName.stateView, description := \"Actor reviews the repair ticket.\" }]",
+            "def workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := \"state_view\", description := \"Actor enters repair ticket details.\" },{ slug := \"review-ticket\", name := \"Review ticket\", kind := \"state_view\", description := \"Actor reviews the repair ticket.\" }]",
+        );
+
+        assert_eq!(
+            parse_lean_workflow_graph(&FileContents::try_new(legacy_lean)?)?,
+            parse_lean_workflow_graph(&lean_artifact)?,
+            "formal parser must continue reading legacy Lean slice kind strings"
+        );
+
+        let quint_artifact = emit_quint_workflow_module(
+            parse_quint_module_name("OpenTicket")?,
+            workflow_module_data(workflow_slice_details()?, workflow_transitions()?)?,
+        );
+        let legacy_quint = quint_artifact.as_ref().replace(
+            "val workflowSliceDetails: List[WorkflowSliceDetail] = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: SliceStateView, description: \"Actor enters repair ticket details.\" },{ slug: \"review-ticket\", name: \"Review ticket\", kind: SliceStateView, description: \"Actor reviews the repair ticket.\" }]",
+            "val workflowSliceDetails: List[WorkflowSliceDetail] = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Actor enters repair ticket details.\" },{ slug: \"review-ticket\", name: \"Review ticket\", kind: \"state_view\", description: \"Actor reviews the repair ticket.\" }]",
+        );
+
+        assert_eq!(
+            parse_quint_workflow_graph(&FileContents::try_new(legacy_quint)?)?,
+            parse_quint_workflow_graph(&quint_artifact)?,
+            "formal parser must continue reading legacy Quint slice kind strings"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn parsed_formal_graph_reads_legacy_string_entry_lifecycle_states() -> Result<(), Box<dyn Error>>
     {
         let lean_artifact = emit_lean_workflow_module(
