@@ -182,11 +182,15 @@ mod tests {
             "Quint workflow artifacts must encode the required application-entry lifecycle states"
         );
         assert!(
-            quint.contains("val allowedWorkflowStepRelationships: List[str] = [\"entry\",\"main\",\"branch\",\"alternate\",\"async_lifecycle\",\"supporting\"]"),
-            "Quint workflow artifacts must model the allowed workflow step relationship inventory"
+            quint.contains(
+                "type WorkflowStepRelationshipName = StepEntry | StepMain | StepBranch | StepAlternate | StepAsyncLifecycle | StepSupporting"
+            ),
+            "Quint workflow artifacts must model workflow step relationships as a closed domain type"
         );
         assert!(
-            quint.contains("type WorkflowStepRelationship = { step: str, relationship: str }"),
+            quint.contains(
+                "type WorkflowStepRelationship = { step: str, relationship: WorkflowStepRelationshipName }"
+            ),
             "Quint workflow artifacts must represent workflow step relationships separately from rendering concerns"
         );
         assert!(
@@ -195,7 +199,7 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val workflowStepRelationships: List[WorkflowStepRelationship] = [{ step: \"capture-ticket\", relationship: \"entry\" },{ step: \"review-ticket\", relationship: \"main\" }]"
+                "val workflowStepRelationships: List[WorkflowStepRelationship] = [{ step: \"capture-ticket\", relationship: StepEntry },{ step: \"review-ticket\", relationship: StepMain }]"
             ),
             "Quint workflow artifacts must emit concrete workflow step relationships"
         );
@@ -208,7 +212,7 @@ mod tests {
             "Quint workflow artifacts must verify workflow step slugs are unique"
         );
         assert!(
-            quint.contains("val workflowHasExactlyOneEntryStep = workflowStepRelationships.select(step => step.relationship == \"entry\").length() == 1"),
+            quint.contains("val workflowHasExactlyOneEntryStep = workflowStepRelationships.select(step => step.relationship == StepEntry).length() == 1"),
             "Quint workflow artifacts must verify the composition has exactly one entry step"
         );
         assert!(
@@ -224,7 +228,7 @@ mod tests {
             "Quint workflow artifacts must bound reachability traversal by the emitted workflow size"
         );
         assert!(
-            quint.contains("def workflowStepIsReachableFromEntry(step) = step.relationship == \"supporting\" or step.relationship == \"async_lifecycle\" or workflowReachableStepsFromEntry.select(reachableStep => reachableStep == step.step).length() > 0"),
+            quint.contains("def workflowStepIsReachableFromEntry(step) = step.relationship == StepSupporting or step.relationship == StepAsyncLifecycle or workflowReachableStepsFromEntry.select(reachableStep => reachableStep == step.step).length() > 0"),
             "Quint workflow artifacts must exempt supporting and async lifecycle steps from required entry reachability"
         );
         assert!(
@@ -232,7 +236,7 @@ mod tests {
             "Quint workflow artifacts must expose non-supporting workflow reachability as an invariant"
         );
         assert!(
-            quint.contains("def workflowBranchOrAlternateStepHasTriggerOrRationale(step) = (step.relationship != \"branch\" and step.relationship != \"alternate\") or workflowTransitions.select(transition => transition.target == step.step and (transition.trigger != \"\" or transition.rationale != \"\")).length() > 0"),
+            quint.contains("def workflowBranchOrAlternateStepHasTriggerOrRationale(step) = (step.relationship != StepBranch and step.relationship != StepAlternate) or workflowTransitions.select(transition => transition.target == step.step and (transition.trigger != \"\" or transition.rationale != \"\")).length() > 0"),
             "Quint workflow artifacts must define branch and alternate step trigger/rationale obligations"
         );
         assert!(

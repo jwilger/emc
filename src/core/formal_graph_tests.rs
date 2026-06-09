@@ -121,6 +121,41 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn parsed_formal_graph_reads_legacy_string_step_relationships() -> Result<(), Box<dyn Error>> {
+        let lean_artifact = emit_lean_workflow_module(
+            parse_lean_module_name("OpenTicket")?,
+            workflow_module_data(workflow_slice_details()?, workflow_transitions()?)?,
+        );
+        let legacy_lean = lean_artifact.as_ref().replace(
+            "def workflowStepRelationships : List WorkflowStepRelationship := [{ step := \"capture-ticket\", relationship := WorkflowStepRelationshipName.entry },{ step := \"review-ticket\", relationship := WorkflowStepRelationshipName.main }]",
+            "def workflowStepRelationships : List WorkflowStepRelationship := [{ step := \"capture-ticket\", relationship := \"entry\" },{ step := \"review-ticket\", relationship := \"main\" }]",
+        );
+
+        assert_eq!(
+            parse_lean_workflow_graph(&FileContents::try_new(legacy_lean)?)?,
+            parse_lean_workflow_graph(&lean_artifact)?,
+            "formal parser must continue reading legacy Lean step relationship strings"
+        );
+
+        let quint_artifact = emit_quint_workflow_module(
+            parse_quint_module_name("OpenTicket")?,
+            workflow_module_data(workflow_slice_details()?, workflow_transitions()?)?,
+        );
+        let legacy_quint = quint_artifact.as_ref().replace(
+            "val workflowStepRelationships: List[WorkflowStepRelationship] = [{ step: \"capture-ticket\", relationship: StepEntry },{ step: \"review-ticket\", relationship: StepMain }]",
+            "val workflowStepRelationships: List[WorkflowStepRelationship] = [{ step: \"capture-ticket\", relationship: \"entry\" },{ step: \"review-ticket\", relationship: \"main\" }]",
+        );
+
+        assert_eq!(
+            parse_quint_workflow_graph(&FileContents::try_new(legacy_quint)?)?,
+            parse_quint_workflow_graph(&quint_artifact)?,
+            "formal parser must continue reading legacy Quint step relationship strings"
+        );
+
+        Ok(())
+    }
+
     fn workflow_module_data(
         workflow_slice_details: Vec<WorkflowSliceDetail>,
         workflow_transitions: Vec<WorkflowTransitionRecord>,

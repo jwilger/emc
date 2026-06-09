@@ -1,7 +1,10 @@
 // Copyright 2026 John Wilger
 
 use crate::core::effect::{ArtifactDigest, FileContents};
-use crate::core::emit::{quint_workflow_owned_definition_kind, quint_workflow_transition_kind};
+use crate::core::emit::{
+    quint_workflow_owned_definition_kind, quint_workflow_step_relationship_name,
+    quint_workflow_transition_kind,
+};
 use crate::core::types::{
     BoardLaneId, CommandErrorRecoveryKind, CommandInputSourceKind, EventAttributeSourceKind,
     ModelDescription, ModelName, NavigationTargetType, QuintModuleName, ReadModelFieldSourceKind,
@@ -48,7 +51,8 @@ pub(crate) fn emit_workflow_module(
   type WorkflowSlice = {{ slug: str }}
   type WorkflowSliceDetail = {{ slug: str, name: str, kind: str, description: str }}
   type WorkflowSliceModule = {{ slice: str, formalModule: str }}
-  type WorkflowStepRelationship = {{ step: str, relationship: str }}
+  type WorkflowStepRelationshipName = StepEntry | StepMain | StepBranch | StepAlternate | StepAsyncLifecycle | StepSupporting
+  type WorkflowStepRelationship = {{ step: str, relationship: WorkflowStepRelationshipName }}
   type WorkflowTransitionKind = Command | Event | Navigation | ExternalTrigger | Outcome | WorkflowExitCommand | WorkflowExitEvent | WorkflowExitNavigation | WorkflowExitExternalTrigger | WorkflowExitOutcome
   type WorkflowOwnedDefinitionKind = OwnedCommand | OwnedEvent | OwnedView | OwnedControl | OwnedReadModel | OwnedOutcome | OwnedError | OwnedAutomation | OwnedTranslation | OwnedExternalPayload
   type WorkflowTransition = {{ source: str, target: str, kind: WorkflowTransitionKind, trigger: str, rationale: str, payloadContract: str }}
@@ -64,7 +68,6 @@ pub(crate) fn emit_workflow_module(
   val workflowSliceSlugs: List[str] = workflowSlices.foldl([], (slugs, workflowSlice) => slugs.append(workflowSlice.slug))
   val workflowSliceDetails: List[WorkflowSliceDetail] = {slice_detail_list}
   val workflowSliceModules: List[WorkflowSliceModule] = {slice_module_list}
-  val allowedWorkflowStepRelationships: List[str] = ["entry","main","branch","alternate","async_lifecycle","supporting"]
   val workflowStepRelationships: List[WorkflowStepRelationship] = {workflow_step_relationship_list}
   val workflowTransitions: List[WorkflowTransition] = {transition_list}
   val workflowOutcomes: List[WorkflowOutcome] = {workflow_outcome_list}
@@ -82,19 +85,19 @@ pub(crate) fn emit_workflow_module(
   val workflowTransitionsStructured = workflowTransitions.select(transition => transition.source != "" and transition.target != "" and transition.trigger != "").length() == workflowTransitions.length()
   val workflowTransitionSourcesResolve = workflowTransitions.select(transition => workflowSliceSlugs.select(step => step == transition.source).length() > 0).length() == workflowTransitions.length()
   val workflowTransitionTargetsResolve = workflowTransitions.select(transition => workflowSliceSlugs.select(step => step == transition.target).length() > 0 or workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() > 0).length() == workflowTransitions.length()
-  def workflowStepRelationshipIsAllowed(step) = workflowSliceSlugs.select(workflowSlice => workflowSlice == step.step).length() > 0 and allowedWorkflowStepRelationships.select(relationship => relationship == step.relationship).length() > 0
+  def workflowStepRelationshipIsAllowed(step) = workflowSliceSlugs.select(workflowSlice => workflowSlice == step.step).length() > 0
   val workflowStepRelationshipsAreAllowed = workflowStepRelationships.select(step => workflowStepRelationshipIsAllowed(step)).length() == workflowStepRelationships.length()
   val workflowStepSlugsAreUnique = workflowSliceSlugs.select(step => workflowSliceSlugs.select(other => other == step).length() == 1).length() == workflowSliceSlugs.length()
-  val workflowHasExactlyOneEntryStep = workflowStepRelationships.select(step => step.relationship == "entry").length() == 1
-  def workflowMainStepHasIncomingTransition(step) = step.relationship != "main" or workflowTransitions.select(transition => transition.target == step.step).length() > 0
+  val workflowHasExactlyOneEntryStep = workflowStepRelationships.select(step => step.relationship == StepEntry).length() == 1
+  def workflowMainStepHasIncomingTransition(step) = step.relationship != StepMain or workflowTransitions.select(transition => transition.target == step.step).length() > 0
   val workflowMainStepsHaveIncomingReachability = workflowStepRelationships.select(step => workflowMainStepHasIncomingTransition(step)).length() == workflowStepRelationships.length()
-  val workflowEntrySteps: List[str] = workflowStepRelationships.select(step => step.relationship == "entry").foldl([], (entrySteps, step) => entrySteps.append(step.step))
+  val workflowEntrySteps: List[str] = workflowStepRelationships.select(step => step.relationship == StepEntry).foldl([], (entrySteps, step) => entrySteps.append(step.step))
   def workflowTargetsFromReachable(reachable) = workflowTransitions.select(transition => reachable.select(step => step == transition.source).length() > 0 and workflowSliceSlugs.select(step => step == transition.target).length() > 0).foldl([], (targets, transition) => targets.append(transition.target))
   def workflowReachableStepsAfterFuel(fuel, reachable) = range(0, fuel).foldl(reachable, (currentReachable, _) => currentReachable.concat(workflowTargetsFromReachable(currentReachable)))
   val workflowReachableStepsFromEntry = workflowReachableStepsAfterFuel({workflow_slice_count}, workflowEntrySteps)
-  def workflowStepIsReachableFromEntry(step) = step.relationship == "supporting" or step.relationship == "async_lifecycle" or workflowReachableStepsFromEntry.select(reachableStep => reachableStep == step.step).length() > 0
+  def workflowStepIsReachableFromEntry(step) = step.relationship == StepSupporting or step.relationship == StepAsyncLifecycle or workflowReachableStepsFromEntry.select(reachableStep => reachableStep == step.step).length() > 0
   val workflowNonSupportingStepsReachableFromEntry = workflowStepRelationships.select(step => workflowStepIsReachableFromEntry(step)).length() == workflowStepRelationships.length()
-  def workflowBranchOrAlternateStepHasTriggerOrRationale(step) = (step.relationship != "branch" and step.relationship != "alternate") or workflowTransitions.select(transition => transition.target == step.step and (transition.trigger != "" or transition.rationale != "")).length() > 0
+  def workflowBranchOrAlternateStepHasTriggerOrRationale(step) = (step.relationship != StepBranch and step.relationship != StepAlternate) or workflowTransitions.select(transition => transition.target == step.step and (transition.trigger != "" or transition.rationale != "")).length() > 0
   val workflowBranchAndAlternateStepsHaveTriggerOrRationale = workflowStepRelationships.select(step => workflowBranchOrAlternateStepHasTriggerOrRationale(step)).length() == workflowStepRelationships.length()
   def workflowTransitionKindIsModeled(transition) = transition.kind == Navigation or transition.kind == Command or transition.kind == Event or transition.kind == ExternalTrigger or transition.kind == Outcome or transition.kind == WorkflowExitNavigation or transition.kind == WorkflowExitCommand or transition.kind == WorkflowExitEvent or transition.kind == WorkflowExitExternalTrigger or transition.kind == WorkflowExitOutcome
   def workflowTransitionExitHasRationale(transition) = workflowExitTargets.select(exitTarget => exitTarget == transition.target).length() == 0 or transition.rationale != ""
@@ -613,7 +616,7 @@ fn workflow_step_relationship_list(workflow_slice_details: &[WorkflowSliceDetail
                 format!(
                     "{{ step: {}, relationship: {} }}",
                     quoted(slice.slug().as_ref()),
-                    quoted(slice.relationship().as_ref())
+                    quint_workflow_step_relationship_name(*slice.relationship())
                 )
             })
             .collect::<Vec<_>>()
