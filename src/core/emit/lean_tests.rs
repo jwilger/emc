@@ -132,13 +132,13 @@ mod tests {
         ));
         assert!(
             lean.contains(
-                "structure WorkflowSliceDetail where\n  slug : String\n  name : String\n  kind : String\n  description : String"
+                "structure WorkflowSliceDetail where\n  slug : String\n  name : String\n  kind : SliceKindName\n  description : String"
             ),
             "Lean workflow artifacts must name slice detail fields instead of relying on tuple positions"
         );
         assert!(
             lean.contains(
-                "def workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := \"state_view\", description := \"Actor enters repair ticket details.\" },{ slug := \"review-ticket\", name := \"Review ticket\", kind := \"state_view\", description := \"Actor reviews repair ticket details.\" }]"
+                "def workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := SliceKindName.stateView, description := \"Actor enters repair ticket details.\" },{ slug := \"review-ticket\", name := \"Review ticket\", kind := SliceKindName.stateView, description := \"Actor reviews repair ticket details.\" }]"
             ),
             "Lean workflow artifacts must emit slice details as named records"
         );
@@ -530,13 +530,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowSliceHasKind (slice : String) (kind : String) : Bool := workflowSliceDetails.any (fun detail => detail.slug == slice && detail.kind == kind)"
+                "def workflowSliceHasKind (slice : String) (kind : SliceKindName) : Bool := workflowSliceDetails.any (fun detail => detail.slug == slice && detail.kind == kind)"
             ),
             "Lean workflow artifacts must be able to resolve workflow slice kinds"
         );
         assert!(
             lean.contains(
-                "def workflowStateViewCommandTransitionTargetsStateChange (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.command || workflowSliceHasKind transition.source \"state_view\" == false || workflowSliceHasKind transition.target \"state_change\""
+                "def workflowStateViewCommandTransitionTargetsStateChange (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.command || workflowSliceHasKind transition.source SliceKindName.stateView == false || workflowSliceHasKind transition.target SliceKindName.stateChange"
             ),
             "Lean workflow artifacts must require state-view command transitions to target state-change slices"
         );
@@ -819,7 +819,7 @@ mod tests {
         );
         assert!(lean.contains("def sliceName := \"Capture ticket\""));
         assert!(lean.contains("def sliceSlug := \"capture-ticket\""));
-        assert!(lean.contains("def sliceKind := \"state_view\""));
+        assert!(lean.contains("def sliceKind : SliceKindName := SliceKindName.stateView"));
         assert!(lean.contains("def sliceDescription := \"Actor enters repair ticket details.\""));
         assert!(
             lean.contains(
@@ -1120,7 +1120,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def stateChangeScenarioNamesStreams (scenario : EventModelScenario) : Bool := sliceKind != \"state_change\" || (scenario.readStreams.isEmpty == false && scenario.writtenStreams.isEmpty == false)"
+                "def stateChangeScenarioNamesStreams (scenario : EventModelScenario) : Bool := sliceKind != SliceKindName.stateChange || (scenario.readStreams.isEmpty == false && scenario.writtenStreams.isEmpty == false)"
             ),
             "Lean slice artifacts must require state-change scenarios to name read and written streams"
         );
@@ -1156,7 +1156,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def stateViewReadModelsHaveProjectorContracts : Bool := sliceKind != \"state_view\" || sliceReadModelDefinitions.all readModelHasProjectorContract"
+                "def stateViewReadModelsHaveProjectorContracts : Bool := sliceKind != SliceKindName.stateView || sliceReadModelDefinitions.all readModelHasProjectorContract"
             ),
             "Lean slice artifacts must require state-view read models to have projector contract scenarios"
         );
@@ -1426,13 +1426,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def automationSlicesDeclareTriggers : Bool := sliceKind != \"automation\" || (sliceAutomations.isEmpty == false && sliceAutomations.all automationHasTrigger)"
+                "def automationSlicesDeclareTriggers : Bool := sliceKind != SliceKindName.automation || (sliceAutomations.isEmpty == false && sliceAutomations.all automationHasTrigger)"
             ),
             "Lean slice artifacts must prove automation slices declare at least one triggered automation"
         );
         assert!(
             lean.contains(
-                "def automationSlicesRepresentOneReaction : Bool := sliceKind != \"automation\" || sliceAutomations.length == 1"
+                "def automationSlicesRepresentOneReaction : Bool := sliceKind != SliceKindName.automation || sliceAutomations.length == 1"
             ),
             "Lean slice artifacts must require automation slices to represent one coherent reaction"
         );
@@ -1480,7 +1480,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def translationSlicesDeclareExternalContracts : Bool := sliceKind != \"translation\" || (sliceTranslations.isEmpty == false && sliceTranslations.all translationHasExternalContract)"
+                "def translationSlicesDeclareExternalContracts : Bool := sliceKind != SliceKindName.translation || (sliceTranslations.isEmpty == false && sliceTranslations.all translationHasExternalContract)"
             ),
             "Lean slice artifacts must prove translation slices declare at least one external contract"
         );
@@ -2302,19 +2302,19 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def stateViewSlicesDoNotOwnCommands : Bool := sliceKind != \"state_view\" || (sliceCommands.isEmpty && sliceCommandDefinitions.isEmpty)"
+                "def stateViewSlicesDoNotOwnCommands : Bool := sliceKind != SliceKindName.stateView || (sliceCommands.isEmpty && sliceCommandDefinitions.isEmpty)"
             ),
             "Lean slice artifacts must prove state-view slices do not own state-changing commands"
         );
         assert!(
             lean.contains(
-                "def stateViewSlicesOwnViews : Bool := sliceKind != \"state_view\" || (sliceViews.isEmpty == false || sliceViewDefinitions.isEmpty == false)"
+                "def stateViewSlicesOwnViews : Bool := sliceKind != SliceKindName.stateView || (sliceViews.isEmpty == false || sliceViewDefinitions.isEmpty == false)"
             ),
             "Lean slice artifacts must prove state-view slices own at least one view"
         );
         assert!(
             lean.contains(
-                "def stateViewSlicesOwnReadModels : Bool := sliceKind != \"state_view\" || (sliceReadModels.isEmpty == false || sliceReadModelDefinitions.isEmpty == false)"
+                "def stateViewSlicesOwnReadModels : Bool := sliceKind != SliceKindName.stateView || (sliceReadModels.isEmpty == false || sliceReadModelDefinitions.isEmpty == false)"
             ),
             "Lean slice artifacts must prove state-view slices own read models"
         );
@@ -2326,68 +2326,66 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def stateViewSlicesOwnProjectionPaths : Bool := sliceKind != \"state_view\" || sliceReadModelDefinitions.all readModelOwnsProjectionPath"
+                "def stateViewSlicesOwnProjectionPaths : Bool := sliceKind != SliceKindName.stateView || sliceReadModelDefinitions.all readModelOwnsProjectionPath"
             ),
             "Lean slice artifacts must prove state-view slices own projection paths"
         );
         assert!(
             lean.contains(
-                "def stateViewSlicesRepresentSingleViewProjectionBoundary : Bool := sliceKind != \"state_view\" || (sliceViewDefinitions.length == 1 && sliceReadModelDefinitions.isEmpty == false)"
+                "def stateViewSlicesRepresentSingleViewProjectionBoundary : Bool := sliceKind != SliceKindName.stateView || (sliceViewDefinitions.length == 1 && sliceReadModelDefinitions.isEmpty == false)"
             ),
             "Lean slice artifacts must require state-view slices to model one view/projection boundary"
         );
         assert!(
             lean.contains(
-                "def stateChangeSlicesOwnCommands : Bool := sliceKind != \"state_change\" || (sliceCommands.isEmpty == false || sliceCommandDefinitions.isEmpty == false)"
+                "def stateChangeSlicesOwnCommands : Bool := sliceKind != SliceKindName.stateChange || (sliceCommands.isEmpty == false || sliceCommandDefinitions.isEmpty == false)"
             ),
             "Lean slice artifacts must prove state-change slices own commands"
         );
         assert!(
             lean.contains(
-                "def stateChangeSlicesOwnEvents : Bool := sliceKind != \"state_change\" || (sliceEvents.isEmpty == false || sliceEventDefinitions.isEmpty == false)"
+                "def stateChangeSlicesOwnEvents : Bool := sliceKind != SliceKindName.stateChange || (sliceEvents.isEmpty == false || sliceEventDefinitions.isEmpty == false)"
             ),
             "Lean slice artifacts must prove state-change slices own emitted event facts"
         );
         assert!(
             lean.contains(
-                "def stateChangeSlicesOwnOutcomes : Bool := sliceKind != \"state_change\" || sliceOutcomeDefinitions.isEmpty == false"
+                "def stateChangeSlicesOwnOutcomes : Bool := sliceKind != SliceKindName.stateChange || sliceOutcomeDefinitions.isEmpty == false"
             ),
             "Lean slice artifacts must prove state-change slices own outcome facts"
         );
         assert!(
             lean.contains(
-                "def stateChangeSlicesOwnErrors : Bool := sliceKind != \"state_change\" || commandErrorsAreDeclared"
+                "def stateChangeSlicesOwnErrors : Bool := sliceKind != SliceKindName.stateChange || commandErrorsAreDeclared"
             ),
             "Lean slice artifacts must prove state-change command-local errors are owned by command definitions"
         );
         assert!(
             lean.contains(
-                "def stateChangeSlicesDoNotOwnReadModelsOrViews : Bool := sliceKind != \"state_change\" || (sliceReadModels.isEmpty && sliceReadModelDefinitions.isEmpty && sliceViews.isEmpty && sliceViewDefinitions.isEmpty)"
+                "def stateChangeSlicesDoNotOwnReadModelsOrViews : Bool := sliceKind != SliceKindName.stateChange || (sliceReadModels.isEmpty && sliceReadModelDefinitions.isEmpty && sliceViews.isEmpty && sliceViewDefinitions.isEmpty)"
             ),
             "Lean slice artifacts must prove state-change slices do not own read models or views"
         );
         assert!(
             lean.contains(
-                "def stateChangeSlicesDoNotOwnAutomationsOrTranslations : Bool := sliceKind != \"state_change\" || (sliceAutomations.isEmpty && sliceTranslations.isEmpty)"
+                "def stateChangeSlicesDoNotOwnAutomationsOrTranslations : Bool := sliceKind != SliceKindName.stateChange || (sliceAutomations.isEmpty && sliceTranslations.isEmpty)"
             ),
             "Lean slice artifacts must prove state-change slices do not own automations or translations"
         );
         assert!(
             lean.contains(
-                "def stateChangeSlicesDoNotOwnControlsOrSketches : Bool := sliceKind != \"state_change\" || sliceViewDefinitions.all (fun view => view.controls.isEmpty && view.sketchTokens.isEmpty)"
+                "def stateChangeSlicesDoNotOwnControlsOrSketches : Bool := sliceKind != SliceKindName.stateChange || sliceViewDefinitions.all (fun view => view.controls.isEmpty && view.sketchTokens.isEmpty)"
             ),
             "Lean slice artifacts must prove state-change slices do not own controls or wireframe/sketch tokens"
         );
         assert!(
             lean.contains(
-                "def translationSlicesDoNotOwnViews : Bool := sliceKind != \"translation\" || (sliceViews.isEmpty && sliceViewDefinitions.isEmpty)"
+                "def translationSlicesDoNotOwnViews : Bool := sliceKind != SliceKindName.translation || (sliceViews.isEmpty && sliceViewDefinitions.isEmpty)"
             ),
             "Lean slice artifacts must prove translation slices do not own screens"
         );
         assert!(
-            lean.contains(
-                "def recognizedSliceKind : Bool := sliceKind == \"state_view\" || sliceKind == \"state_change\" || sliceKind == \"translation\" || sliceKind == \"automation\""
-            ),
+            lean.contains("def recognizedSliceKind : Bool := true"),
             "Lean slice artifacts must reject unrecognized slice kinds"
         );
         assert!(
@@ -2398,7 +2396,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def stateChangeSlicesRepresentSingleCommandBoundary : Bool := sliceKind != \"state_change\" || sliceCommandDefinitions.length == 1"
+                "def stateChangeSlicesRepresentSingleCommandBoundary : Bool := sliceKind != SliceKindName.stateChange || sliceCommandDefinitions.length == 1"
             ),
             "Lean slice artifacts must require state-change slices to model one command-level behavior"
         );
@@ -2416,7 +2414,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def sliceStateChangeRequiresEvent : Prop := sliceKind = \"state_change\" -> sliceHasLocallyEmittedEvent"
+                "def sliceStateChangeRequiresEvent : Prop := sliceKind = SliceKindName.stateChange -> sliceHasLocallyEmittedEvent"
             ),
             "Lean slice artifacts must state the local event-emission proof obligation for state changes"
         );
@@ -2464,7 +2462,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem stateChangeScenariosNameStreamsIsStable : stateChangeScenariosNameStreams = true := rfl"
+                "theorem stateChangeScenariosNameStreamsIsStable : stateChangeScenariosNameStreams = true := by\n  native_decide"
             ),
             "Lean slice artifacts must prove current state-change scenarios name read and written streams"
         );
@@ -2954,19 +2952,19 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem stateChangeSlicesOwnEventsIsStable : stateChangeSlicesOwnEvents = true := by\n  simp [stateChangeSlicesOwnEvents, sliceKind, sliceEvents, sliceEventDefinitions]"
+                "theorem stateChangeSlicesOwnEventsIsStable : stateChangeSlicesOwnEvents = true := by\n  native_decide"
             ),
             "Lean slice artifacts must prove current state-change slices own emitted event facts"
         );
         assert!(
             lean.contains(
-                "theorem stateChangeSlicesOwnOutcomesIsStable : stateChangeSlicesOwnOutcomes = true := by\n  simp [stateChangeSlicesOwnOutcomes, sliceKind, sliceOutcomeDefinitions]"
+                "theorem stateChangeSlicesOwnOutcomesIsStable : stateChangeSlicesOwnOutcomes = true := by\n  native_decide"
             ),
             "Lean slice artifacts must prove current state-change slices own outcome facts"
         );
         assert!(
             lean.contains(
-                "theorem stateChangeSlicesOwnErrorsIsStable : stateChangeSlicesOwnErrors = true := by\n  by_cases h : sliceKind != \"state_change\"\n  · simp [stateChangeSlicesOwnErrors, h]\n  · simp [stateChangeSlicesOwnErrors, h]\n    exact commandErrorsAreDeclaredIsStable"
+                "theorem stateChangeSlicesOwnErrorsIsStable : stateChangeSlicesOwnErrors = true := by\n  native_decide"
             ),
             "Lean slice artifacts must prove current state-change slices own command-local errors"
         );

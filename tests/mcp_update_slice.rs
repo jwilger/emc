@@ -148,11 +148,11 @@ mod tests {
             read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
 
         assert!(
-            slice_lean.contains("def sliceKind := \"automation\""),
+            slice_lean.contains("def sliceKind : SliceKindName := SliceKindName.automation"),
             "slice Lean artifact must represent the MCP-updated kind"
         );
         assert!(
-            slice_quint.contains("val sliceKind = \"automation\""),
+            slice_quint.contains("val sliceKind: SliceKindName = SliceAutomation"),
             "slice Quint artifact must represent the MCP-updated kind"
         );
 

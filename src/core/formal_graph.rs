@@ -330,15 +330,52 @@ fn quint_val_value_optional<'a>(
 }
 
 fn parse_slice_details(value: &str) -> Result<Vec<WorkflowSliceDetail>, FormalGraphError> {
+    let kinds = parse_slice_kind_field_values(value)?;
     let strings = parse_quoted_strings(value)?;
-    if strings.len() % 5 == 0 {
+    if !kinds.is_empty() && strings.len() == kinds.len() * 3 {
+        strings
+            .chunks_exact(3)
+            .zip(kinds)
+            .map(|(chunk, kind)| {
+                Ok(WorkflowSliceDetail::new(
+                    slice_slug(&chunk[0])?,
+                    model_name(chunk[1].clone())?,
+                    kind,
+                    model_description(chunk[2].clone())?,
+                ))
+            })
+            .collect()
+    } else if !kinds.is_empty() && strings.len() == kinds.len() * 4 {
+        strings
+            .chunks_exact(4)
+            .zip(kinds)
+            .map(|(chunk, kind)| {
+                if slice_kind_name_from_formal_value(&chunk[2]).is_ok() {
+                    Ok(WorkflowSliceDetail::new(
+                        slice_slug(&chunk[0])?,
+                        model_name(chunk[1].clone())?,
+                        kind,
+                        model_description(chunk[3].clone())?,
+                    ))
+                } else {
+                    Ok(WorkflowSliceDetail::new_with_relationship(
+                        slice_slug(&chunk[0])?,
+                        model_name(chunk[1].clone())?,
+                        kind,
+                        model_description(chunk[2].clone())?,
+                        workflow_step_relationship_name(&chunk[3])?,
+                    ))
+                }
+            })
+            .collect()
+    } else if strings.len() % 5 == 0 {
         strings
             .chunks_exact(5)
             .map(|chunk| {
                 Ok(WorkflowSliceDetail::new_with_relationship(
                     slice_slug(&chunk[0])?,
                     model_name(chunk[1].clone())?,
-                    slice_kind_name(&chunk[2])?,
+                    slice_kind_name_from_formal_value(&chunk[2])?,
                     model_description(chunk[3].clone())?,
                     workflow_step_relationship_name(&chunk[4])?,
                 ))
@@ -351,7 +388,7 @@ fn parse_slice_details(value: &str) -> Result<Vec<WorkflowSliceDetail>, FormalGr
                 Ok(WorkflowSliceDetail::new(
                     slice_slug(&chunk[0])?,
                     model_name(chunk[1].clone())?,
-                    slice_kind_name(&chunk[2])?,
+                    slice_kind_name_from_formal_value(&chunk[2])?,
                     model_description(chunk[3].clone())?,
                 ))
             })
@@ -783,6 +820,62 @@ fn parse_workflow_transition_kind_field_value(
     workflow_transition_kind_from_formal_value(&raw_value)
 }
 
+fn parse_slice_kind_field_values(value: &str) -> Result<Vec<SliceKindName>, FormalGraphError> {
+    let mut kinds = Vec::new();
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut index = 0;
+    while index < value.len() {
+        let rest = &value[index..];
+        let character = rest
+            .chars()
+            .next()
+            .ok_or_else(|| FormalGraphError::new("formal slice kind scan failed"))?;
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+            index += character.len_utf8();
+        } else if character == '"' {
+            in_string = true;
+            index += character.len_utf8();
+        } else if rest.starts_with("kind :=") || rest.starts_with("kind:") {
+            kinds.push(parse_slice_kind_field_value(&rest["kind".len()..])?);
+            index += "kind".len();
+        } else {
+            index += character.len_utf8();
+        }
+    }
+    Ok(kinds)
+}
+
+fn parse_slice_kind_field_value(after_name: &str) -> Result<SliceKindName, FormalGraphError> {
+    let after_separator = after_name
+        .trim_start()
+        .strip_prefix(":=")
+        .or_else(|| after_name.trim_start().strip_prefix(':'))
+        .ok_or_else(|| FormalGraphError::new("formal slice kind field is missing a separator"))?
+        .trim_start();
+    let raw_value = if after_separator.starts_with('"') {
+        parse_quoted_strings(after_separator)?
+            .into_iter()
+            .next()
+            .ok_or_else(|| FormalGraphError::new("formal slice kind field is missing a value"))?
+    } else {
+        after_separator
+            .split([',', '}', ']'])
+            .next()
+            .unwrap_or("")
+            .trim()
+            .to_owned()
+    };
+    slice_kind_name_from_formal_value(&raw_value)
+}
+
 fn parse_workflow_owned_definition_kind_field_values(
     value: &str,
 ) -> Result<Vec<WorkflowOwnedDefinitionKind>, FormalGraphError> {
@@ -1191,6 +1284,21 @@ fn slice_slug(value: &str) -> Result<SliceSlug, FormalGraphError> {
 fn slice_kind_name(value: &str) -> Result<SliceKindName, FormalGraphError> {
     SliceKindName::try_new(value.to_owned())
         .map_err(|error| FormalGraphError::new(error.to_string()))
+}
+
+fn slice_kind_name_from_formal_value(value: &str) -> Result<SliceKindName, FormalGraphError> {
+    let artifact_value = value
+        .trim()
+        .strip_prefix("SliceKindName.")
+        .unwrap_or(value.trim());
+    let semantic_value = match artifact_value {
+        "SliceStateView" | "StateView" | "stateView" | "state_view" => "state_view",
+        "SliceStateChange" | "StateChange" | "stateChange" | "state_change" => "state_change",
+        "SliceTranslation" | "Translation" | "translation" => "translation",
+        "SliceAutomation" | "Automation" | "automation" => "automation",
+        _ => artifact_value,
+    };
+    slice_kind_name(semantic_value)
 }
 
 fn transition_endpoint(value: &str) -> Result<WorkflowTransitionEndpoint, FormalGraphError> {

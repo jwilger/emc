@@ -1030,7 +1030,7 @@ mod tests {
 
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let lean = read_to_string(&lean_path)?.replace(
-            "def workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := \"state_view\", description := \"Slice description.\" },{ slug := \"review-ticket\", name := \"Review ticket\", kind := \"state_view\", description := \"Slice description.\" }]",
+            "def workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"capture-ticket\", name := \"Capture ticket\", kind := SliceKindName.stateView, description := \"Slice description.\" },{ slug := \"review-ticket\", name := \"Review ticket\", kind := SliceKindName.stateView, description := \"Slice description.\" }]",
             "def workflowSliceDetails : List WorkflowSliceDetail := []",
         );
         write(lean_path, lean)?;
@@ -1056,7 +1056,7 @@ mod tests {
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let mut lean = read_to_string(&lean_path)?;
         lean.push_str(
-            "\ndef workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"stale-slice\", name := \"Stale slice\", kind := \"state_view\", description := \"Stale description.\" }]\n",
+            "\ndef workflowSliceDetails : List WorkflowSliceDetail := [{ slug := \"stale-slice\", name := \"Stale slice\", kind := SliceKindName.stateView, description := \"Stale description.\" }]\n",
         );
         write(lean_path, lean)?;
 
@@ -1202,7 +1202,7 @@ mod tests {
 
         let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
         let quint = read_to_string(&quint_path)?.replace(
-            "val workflowSliceDetails: List[WorkflowSliceDetail] = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: \"state_view\", description: \"Slice description.\" },{ slug: \"review-ticket\", name: \"Review ticket\", kind: \"state_view\", description: \"Slice description.\" }]",
+            "val workflowSliceDetails: List[WorkflowSliceDetail] = [{ slug: \"capture-ticket\", name: \"Capture ticket\", kind: SliceStateView, description: \"Slice description.\" },{ slug: \"review-ticket\", name: \"Review ticket\", kind: SliceStateView, description: \"Slice description.\" }]",
             "val workflowSliceDetails: List[WorkflowSliceDetail] = []",
         );
         write(quint_path, quint)?;
@@ -1228,7 +1228,7 @@ mod tests {
         let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
         let mut quint = read_to_string(&quint_path)?;
         quint.push_str(
-            "  val workflowSliceDetails = [{ slug: \"stale-slice\", name: \"Stale slice\", kind: \"state_view\", description: \"Stale description.\" }]\n",
+            "  val workflowSliceDetails = [{ slug: \"stale-slice\", name: \"Stale slice\", kind: SliceStateView, description: \"Stale description.\" }]\n",
         );
         write(quint_path, quint)?;
 
@@ -1520,7 +1520,7 @@ mod tests {
         create_connected_workflow(&temp_dir)?;
         let quint_slice_path = temp_dir.path().join("model/quint/slices/CaptureTicket.qnt");
         let quint_slice = read_to_string(&quint_slice_path)?.replace(
-            "val sliceKind = \"state_view\"",
+            "val sliceKind: SliceKindName = SliceStateView",
             "val sliceKind = \"stale_kind\"",
         );
         write(quint_slice_path, quint_slice)?;
