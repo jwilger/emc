@@ -1468,13 +1468,13 @@ mod tests {
 
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?.contains(
-                "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"command\", definitionName := \"CaptureTicket\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"\" }]"
+                "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := WorkflowOwnedDefinitionKind.command, definitionName := \"CaptureTicket\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"\" }]"
             ),
             "workflow owned definition must be rebuilt from exported events"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?.contains(
-                "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: \"command\", definitionName: \"CaptureTicket\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"\" }]"
+                "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: OwnedCommand, definitionName: \"CaptureTicket\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"\" }]"
             ),
             "workflow owned definition must be rebuilt from exported events"
         );

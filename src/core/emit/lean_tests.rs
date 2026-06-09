@@ -167,7 +167,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure WorkflowOwnedDefinition where\n  sourceSlice : String\n  definitionKind : String\n  definitionName : String\n  definitionStream : String\n  sourceProvenance : String\n  eventParticipation : String\n  viewRole : String"
+                "inductive WorkflowOwnedDefinitionKind where\n  | command\n  | event\n  | view\n  | control\n  | readModel\n  | outcome\n  | error\n  | automation\n  | translation\n  | externalPayload"
+            ),
+            "Lean workflow artifacts must model owned-definition kind as a closed domain type"
+        );
+        assert!(
+            lean.contains(
+                "structure WorkflowOwnedDefinition where\n  sourceSlice : String\n  definitionKind : WorkflowOwnedDefinitionKind\n  definitionName : String\n  definitionStream : String\n  sourceProvenance : String\n  eventParticipation : String\n  viewRole : String"
             ),
             "Lean workflow artifacts must represent cross-slice definition ownership with event identity fields"
         );
@@ -196,7 +202,7 @@ mod tests {
             "Lean workflow artifacts must carry command-local errors so outcome transitions cannot use them"
         );
         assert!(
-            lean.contains("def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := \"external_payload\", definitionName := \"CallbackReceivedPayload\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"\" }]"),
+            lean.contains("def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := WorkflowOwnedDefinitionKind.externalPayload, definitionName := \"CallbackReceivedPayload\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"\" }]"),
             "Lean workflow artifacts must carry the authored cross-slice ownership inventory"
         );
         assert!(
@@ -427,7 +433,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowNonEventDefinitionOwnedOnce (definition : WorkflowOwnedDefinition) : Bool := definition.definitionKind == \"event\" || (workflowOwnedDefinitions.filter (fun other => other.definitionKind == definition.definitionKind && other.definitionName == definition.definitionName)).length == 1"
+                "def workflowNonEventDefinitionOwnedOnce (definition : WorkflowOwnedDefinition) : Bool := definition.definitionKind == WorkflowOwnedDefinitionKind.event || (workflowOwnedDefinitions.filter (fun other => other.definitionKind == definition.definitionKind && other.definitionName == definition.definitionName)).length == 1"
             ),
             "Lean workflow artifacts must define non-event definition ownership uniqueness"
         );
@@ -439,13 +445,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowEventDefinitionHasIdentity (definition : WorkflowOwnedDefinition) : Bool := definition.definitionKind != \"event\" || (definition.definitionStream.isEmpty == false && definition.sourceProvenance.isEmpty == false)"
+                "def workflowEventDefinitionHasIdentity (definition : WorkflowOwnedDefinition) : Bool := definition.definitionKind != WorkflowOwnedDefinitionKind.event || (definition.definitionStream.isEmpty == false && definition.sourceProvenance.isEmpty == false)"
             ),
             "Lean workflow artifacts must require shared event definitions to carry stream and provenance identity"
         );
         assert!(
             lean.contains(
-                "def workflowSharedEventDefinitionMatches (left : WorkflowOwnedDefinition) (right : WorkflowOwnedDefinition) : Bool := left.definitionKind != \"event\" || right.definitionKind != \"event\" || left.definitionName != right.definitionName || (left.definitionStream == right.definitionStream && left.sourceProvenance == right.sourceProvenance)"
+                "def workflowSharedEventDefinitionMatches (left : WorkflowOwnedDefinition) (right : WorkflowOwnedDefinition) : Bool := left.definitionKind != WorkflowOwnedDefinitionKind.event || right.definitionKind != WorkflowOwnedDefinitionKind.event || left.definitionName != right.definitionName || (left.definitionStream == right.definitionStream && left.sourceProvenance == right.sourceProvenance)"
             ),
             "Lean workflow artifacts must compare duplicate shared events by stream and source provenance"
         );
@@ -463,13 +469,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowOwnsDefinition (sourceSlice : String) (definitionKind : String) (definitionName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == definitionKind && definition.definitionName == definitionName)"
+                "def workflowOwnsDefinition (sourceSlice : String) (definitionKind : WorkflowOwnedDefinitionKind) (definitionName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == definitionKind && definition.definitionName == definitionName)"
             ),
             "Lean workflow artifacts must define workflow-scoped definition ownership lookup"
         );
         assert!(
             lean.contains(
-                "def workflowCommandTransitionTargetsOwnedCommand (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.command || workflowOwnsDefinition transition.target \"command\" transition.trigger"
+                "def workflowCommandTransitionTargetsOwnedCommand (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.command || workflowOwnsDefinition transition.target WorkflowOwnedDefinitionKind.command transition.trigger"
             ),
             "Lean workflow artifacts must require command transitions to target command-owning slices"
         );
@@ -481,7 +487,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowCommandTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.command || workflowOwnsDefinition transition.source \"control\" transition.trigger"
+                "def workflowCommandTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.command || workflowOwnsDefinition transition.source WorkflowOwnedDefinitionKind.control transition.trigger"
             ),
             "Lean workflow artifacts must require command transitions to come from source-owned controls"
         );
@@ -517,7 +523,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowEventTransitionIsSharedByEndpoints (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.event || (workflowOwnsDefinition transition.source \"event\" transition.trigger && workflowOwnsDefinition transition.target \"event\" transition.trigger)"
+                "def workflowEventTransitionIsSharedByEndpoints (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.event || (workflowOwnsDefinition transition.source WorkflowOwnedDefinitionKind.event transition.trigger && workflowOwnsDefinition transition.target WorkflowOwnedDefinitionKind.event transition.trigger)"
             ),
             "Lean workflow artifacts must require event transitions to be shared by source and target slices"
         );
@@ -529,7 +535,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowEventDefinitionParticipates (sourceSlice : String) (eventName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == \"event\" && definition.definitionName == eventName && workflowEventParticipationIsModeled definition)"
+                "def workflowEventDefinitionParticipates (sourceSlice : String) (eventName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == WorkflowOwnedDefinitionKind.event && definition.definitionName == eventName && workflowEventParticipationIsModeled definition)"
             ),
             "Lean workflow artifacts must resolve event transition endpoint event participation"
         );
@@ -541,19 +547,19 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.source \"control\" transition.trigger"
+                "def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.source WorkflowOwnedDefinitionKind.control transition.trigger"
             ),
             "Lean workflow artifacts must require navigation transitions to come from source-owned controls"
         );
         assert!(
             lean.contains(
-                "def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.target \"view\" transition.trigger"
+                "def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.target WorkflowOwnedDefinitionKind.view transition.trigger"
             ),
             "Lean workflow artifacts must require navigation transitions to resolve to target-owned views"
         );
         assert!(
             lean.contains(
-                "def workflowOwnsEntryView (sourceSlice : String) (viewName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == \"view\" && definition.definitionName == viewName && workflowViewRoleIsEntry definition)"
+                "def workflowOwnsEntryView (sourceSlice : String) (viewName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == WorkflowOwnedDefinitionKind.view && definition.definitionName == viewName && workflowViewRoleIsEntry definition)"
             ),
             "Lean workflow artifacts must define workflow-scoped entry view ownership"
         );
@@ -577,7 +583,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.externalTrigger || (transition.payloadContract.isEmpty == false && workflowOwnsDefinition transition.source \"external_payload\" transition.payloadContract)"
+                "def workflowExternalTriggerDeclaresPayloadContract (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.externalTrigger || (transition.payloadContract.isEmpty == false && workflowOwnsDefinition transition.source WorkflowOwnedDefinitionKind.externalPayload transition.payloadContract)"
             ),
             "Lean workflow artifacts must require external-trigger transitions to declare owned payload contracts"
         );
@@ -589,7 +595,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowExternalTriggerPayloadContractHasProvenance (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.externalTrigger || workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == transition.source && definition.definitionKind == \"external_payload\" && definition.definitionName == transition.payloadContract && definition.sourceProvenance.isEmpty == false)"
+                "def workflowExternalTriggerPayloadContractHasProvenance (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.externalTrigger || workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == transition.source && definition.definitionKind == WorkflowOwnedDefinitionKind.externalPayload && definition.definitionName == transition.payloadContract && definition.sourceProvenance.isEmpty == false)"
             ),
             "Lean workflow artifacts must require external-trigger payload contracts to carry provenance"
         );

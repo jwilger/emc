@@ -5,7 +5,10 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest};
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
-use crate::core::emit::{lean_workflow_transition_kind, quint_workflow_transition_kind};
+use crate::core::emit::{
+    lean_workflow_owned_definition_kind, lean_workflow_transition_kind,
+    quint_workflow_owned_definition_kind, quint_workflow_transition_kind,
+};
 use crate::core::formal_graph::{parse_lean_workflow_graph, parse_quint_workflow_graph};
 use crate::core::types::{
     WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
@@ -267,7 +270,7 @@ fn lean_workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRec
     format!(
         "{{ sourceSlice := {}, definitionKind := {}, definitionName := {}, definitionStream := {}, sourceProvenance := {}, eventParticipation := {}, viewRole := {} }}",
         quoted(definition.source_slice().as_ref()),
-        quoted(definition.definition_kind().as_ref()),
+        lean_workflow_owned_definition_kind(*definition.definition_kind()),
         quoted(definition.definition_name().as_ref()),
         quoted(
             definition
@@ -296,7 +299,7 @@ fn quint_workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRe
     format!(
         "{{ sourceSlice: {}, definitionKind: {}, definitionName: {}, definitionStream: {}, sourceProvenance: {}, eventParticipation: {}, viewRole: {} }}",
         quoted(definition.source_slice().as_ref()),
-        quoted(definition.definition_kind().as_ref()),
+        quint_workflow_owned_definition_kind(*definition.definition_kind()),
         quoted(definition.definition_name().as_ref()),
         quoted(
             definition

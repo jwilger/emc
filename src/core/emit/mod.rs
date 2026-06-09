@@ -1,6 +1,6 @@
 // Copyright 2026 John Wilger
 
-use crate::core::types::WorkflowTransitionKind;
+use crate::core::types::{WorkflowOwnedDefinitionKind, WorkflowTransitionKind};
 
 pub(crate) mod lean;
 pub(crate) mod quint;
@@ -36,5 +36,41 @@ pub(crate) fn quint_workflow_transition_kind(kind: WorkflowTransitionKind) -> &'
         WorkflowTransitionKind::WorkflowExitNavigation => "WorkflowExitNavigation",
         WorkflowTransitionKind::WorkflowExitExternalTrigger => "WorkflowExitExternalTrigger",
         WorkflowTransitionKind::WorkflowExitOutcome => "WorkflowExitOutcome",
+    }
+}
+
+pub(crate) fn lean_workflow_owned_definition_kind(
+    kind: WorkflowOwnedDefinitionKind,
+) -> &'static str {
+    match kind {
+        WorkflowOwnedDefinitionKind::Command => "WorkflowOwnedDefinitionKind.command",
+        WorkflowOwnedDefinitionKind::Event => "WorkflowOwnedDefinitionKind.event",
+        WorkflowOwnedDefinitionKind::View => "WorkflowOwnedDefinitionKind.view",
+        WorkflowOwnedDefinitionKind::Control => "WorkflowOwnedDefinitionKind.control",
+        WorkflowOwnedDefinitionKind::ReadModel => "WorkflowOwnedDefinitionKind.readModel",
+        WorkflowOwnedDefinitionKind::Outcome => "WorkflowOwnedDefinitionKind.outcome",
+        WorkflowOwnedDefinitionKind::Error => "WorkflowOwnedDefinitionKind.error",
+        WorkflowOwnedDefinitionKind::Automation => "WorkflowOwnedDefinitionKind.automation",
+        WorkflowOwnedDefinitionKind::Translation => "WorkflowOwnedDefinitionKind.translation",
+        WorkflowOwnedDefinitionKind::ExternalPayload => {
+            "WorkflowOwnedDefinitionKind.externalPayload"
+        }
+    }
+}
+
+pub(crate) fn quint_workflow_owned_definition_kind(
+    kind: WorkflowOwnedDefinitionKind,
+) -> &'static str {
+    match kind {
+        WorkflowOwnedDefinitionKind::Command => "OwnedCommand",
+        WorkflowOwnedDefinitionKind::Event => "OwnedEvent",
+        WorkflowOwnedDefinitionKind::View => "OwnedView",
+        WorkflowOwnedDefinitionKind::Control => "OwnedControl",
+        WorkflowOwnedDefinitionKind::ReadModel => "OwnedReadModel",
+        WorkflowOwnedDefinitionKind::Outcome => "OwnedOutcome",
+        WorkflowOwnedDefinitionKind::Error => "OwnedError",
+        WorkflowOwnedDefinitionKind::Automation => "OwnedAutomation",
+        WorkflowOwnedDefinitionKind::Translation => "OwnedTranslation",
+        WorkflowOwnedDefinitionKind::ExternalPayload => "OwnedExternalPayload",
     }
 }
