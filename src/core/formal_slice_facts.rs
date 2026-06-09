@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
+use crate::core::emit::{lean_command_input_source_kind, quint_command_input_source_kind};
 use crate::core::types::{
     AutomationName, AutomationReactionDescription, AutomationTriggerName, BitEncodingSemantics,
     BoardConnectionEndpoint, BoardConnectionEndpointKind, BoardElementDeclaredName,
@@ -3020,7 +3021,7 @@ fn lean_control_input_record(input: &NewControlInputProvision) -> String {
     format!(
         "{{ name := {}, sourceKind := {}, sourceDescription := {}, sketchToken := {}, visibleToActor := {}, decisionField := {} }}",
         quoted(input.name.as_ref()),
-        quoted(input.source_kind().as_ref()),
+        lean_command_input_source_kind(*input.source_kind()),
         quoted(input.source_description.as_ref()),
         quoted(input.sketch_token.as_ref()),
         lean_bool(input.visible_to_actor),
@@ -3032,7 +3033,7 @@ fn quint_control_input_record(input: &NewControlInputProvision) -> String {
     format!(
         "{{ name: {}, sourceKind: {}, sourceDescription: {}, sketchToken: {}, visibleToActor: {}, decisionField: {} }}",
         quoted(input.name.as_ref()),
-        quoted(input.source_kind().as_ref()),
+        quint_command_input_source_kind(*input.source_kind()),
         quoted(input.source_description.as_ref()),
         quoted(input.sketch_token.as_ref()),
         lean_bool(input.visible_to_actor),
@@ -3122,7 +3123,7 @@ fn lean_command_input_record(input: &NewCommandInput) -> String {
     format!(
         "{{ name := {}, sourceKind := {}, sourceDescription := {}, provenanceChain := [{}], eventStreamSourceEvent := {}, eventStreamSourceAttribute := {}, externalPayloadSourceName := {}, externalPayloadSourceField := {}, generatedSourceName := {}, generatedSourceField := {}, sessionSourceName := {}, sessionSourceField := {}, invocationArgumentSourceName := {}, invocationArgumentSourceField := {} }}",
         quoted(input.name.as_ref()),
-        quoted(input.source_kind().as_ref()),
+        lean_command_input_source_kind(input.source_kind()),
         quoted(input.source_description.as_ref()),
         lean_list(input.provenance_chain.as_slice()),
         quoted(
@@ -3182,7 +3183,7 @@ fn quint_command_input_record(input: &NewCommandInput) -> String {
     format!(
         "{{ name: {}, sourceKind: {}, sourceDescription: {}, provenanceChain: [{}], eventStreamSourceEvent: {}, eventStreamSourceAttribute: {}, externalPayloadSourceName: {}, externalPayloadSourceField: {}, generatedSourceName: {}, generatedSourceField: {}, sessionSourceName: {}, sessionSourceField: {}, invocationArgumentSourceName: {}, invocationArgumentSourceField: {} }}",
         quoted(input.name.as_ref()),
-        quoted(input.source_kind().as_ref()),
+        quint_command_input_source_kind(input.source_kind()),
         quoted(input.source_description.as_ref()),
         quint_list(input.provenance_chain.as_slice()),
         quoted(

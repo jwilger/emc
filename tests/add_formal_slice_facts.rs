@@ -240,9 +240,10 @@ mod tests {
             "Lean project root must prove authored bit-level data-flow inventory completeness"
         );
         assert!(
-            quint_root.contains(
-                "type ModelDataFlowSourceKind = Original | ModeledTarget\n  type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: ModelDataFlowSourceKind, source: str, transformation: str, target: str, bitEncoding: str }"
-            ),
+            quint_root.contains("type ModelDataFlowSourceKind = Original | ModeledTarget")
+                && quint_root.contains(
+                    "type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: ModelDataFlowSourceKind, source: str, transformation: str, target: str, bitEncoding: str }"
+                ),
             "Quint project root must type authored bit-level data-flow source kinds as closed semantic values"
         );
         assert!(
@@ -773,7 +774,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\", inputs := [{ name := \"ticket_title\", sourceKind := \"actor\", sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\", generatedSourceName := \"\", generatedSourceField := \"\", sessionSourceName := \"\", sessionSourceField := \"\", invocationArgumentSourceName := \"\", invocationArgumentSourceField := \"\" }], emittedEvents := [{ name := \"TicketCaptured\" }], observedStreams := [], errors := [], singleton := true, repeatBehavior := \"idempotent\" }]"
+                "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\", inputs := [{ name := \"ticket_title\", sourceKind := CommandInputSourceKind.actor, sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\", generatedSourceName := \"\", generatedSourceField := \"\", sessionSourceName := \"\", sessionSourceField := \"\", invocationArgumentSourceName := \"\", invocationArgumentSourceField := \"\" }], emittedEvents := [{ name := \"TicketCaptured\" }], observedStreams := [], errors := [], singleton := true, repeatBehavior := \"idempotent\" }]"
             ),
             "Lean slice artifact must carry the authored command definition"
         );
@@ -785,19 +786,19 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val sliceCommandDefinitions: List[CommandDefinition] = [{ name: \"CaptureTicket\", inputs: [{ name: \"ticket_title\", sourceKind: \"actor\", sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\", externalPayloadSourceName: \"\", externalPayloadSourceField: \"\", generatedSourceName: \"\", generatedSourceField: \"\", sessionSourceName: \"\", sessionSourceField: \"\", invocationArgumentSourceName: \"\", invocationArgumentSourceField: \"\" }], emittedEvents: [{ name: \"TicketCaptured\" }], observedStreams: [], errors: [], singleton: true, repeatBehavior: \"idempotent\" }]"
+                "val sliceCommandDefinitions: List[CommandDefinition] = [{ name: \"CaptureTicket\", inputs: [{ name: \"ticket_title\", sourceKind: CommandInputActor, sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\", externalPayloadSourceName: \"\", externalPayloadSourceField: \"\", generatedSourceName: \"\", generatedSourceField: \"\", sessionSourceName: \"\", sessionSourceField: \"\", invocationArgumentSourceName: \"\", invocationArgumentSourceField: \"\" }], emittedEvents: [{ name: \"TicketCaptured\" }], observedStreams: [], errors: [], singleton: true, repeatBehavior: \"idempotent\" }]"
             ),
             "Quint slice artifact must carry the authored command definition"
         );
         assert!(
             lean_root.contains(
-                "structure ModelCommandInput where\n  workflow : String\n  slice : String\n  command : String\n  input : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
+                "inductive ModelCommandInputSourceKind where\n  | actor\n  | session\n  | generated\n  | externalPayload\n  | eventStreamState\n  | invocationArgument\nderiving BEq, DecidableEq, Repr\n\nstructure ModelCommandInput where\n  workflow : String\n  slice : String\n  command : String\n  input : String\n  sourceKind : ModelCommandInputSourceKind\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
             ),
             "Lean project root must type authored command input source-chain inventory entries as named records"
         );
         assert!(
             lean_root.contains(
-                "def modelCommandInputs : List ModelCommandInput := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", command := \"CaptureTicket\", input := \"ticket_title\", sourceKind := \"actor\", sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\", generatedSourceName := \"\", generatedSourceField := \"\", sessionSourceName := \"\", sessionSourceField := \"\", invocationArgumentSourceName := \"\", invocationArgumentSourceField := \"\" }]"
+                "def modelCommandInputs : List ModelCommandInput := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", command := \"CaptureTicket\", input := \"ticket_title\", sourceKind := ModelCommandInputSourceKind.actor, sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\", generatedSourceName := \"\", generatedSourceField := \"\", sessionSourceName := \"\", sessionSourceField := \"\", invocationArgumentSourceName := \"\", invocationArgumentSourceField := \"\" }]"
             ),
             "Lean project root must inventory authored command input source chains"
         );
@@ -815,13 +816,15 @@ mod tests {
         );
         assert!(
             quint_root.contains(
-                "type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str, invocationArgumentSourceName: str, invocationArgumentSourceField: str }"
+                "type ModelCommandInputSourceKind = ModelCommandInputActor | ModelCommandInputSession | ModelCommandInputGenerated | ModelCommandInputExternalPayload | ModelCommandInputEventStreamState | ModelCommandInputInvocationArgument"
+            ) && quint_root.contains(
+                "type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: ModelCommandInputSourceKind, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str, invocationArgumentSourceName: str, invocationArgumentSourceField: str }"
             ),
             "Quint project root must type authored command input source-chain inventory entries"
         );
         assert!(
             quint_root.contains(
-                "val modelCommandInputs: List[ModelCommandInput] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", command: \"CaptureTicket\", input: \"ticket_title\", sourceKind: \"actor\", sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\", externalPayloadSourceName: \"\", externalPayloadSourceField: \"\", generatedSourceName: \"\", generatedSourceField: \"\", sessionSourceName: \"\", sessionSourceField: \"\", invocationArgumentSourceName: \"\", invocationArgumentSourceField: \"\" }]"
+                "val modelCommandInputs: List[ModelCommandInput] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", command: \"CaptureTicket\", input: \"ticket_title\", sourceKind: ModelCommandInputActor, sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\", externalPayloadSourceName: \"\", externalPayloadSourceField: \"\", generatedSourceName: \"\", generatedSourceField: \"\", sessionSourceName: \"\", sessionSourceField: \"\", invocationArgumentSourceName: \"\", invocationArgumentSourceField: \"\" }]"
             ),
             "Quint project root must inventory authored command input source chains"
         );
@@ -1750,7 +1753,7 @@ mod tests {
             "Quint slice artifact must verify invocation-argument command inputs have source coordinates"
         );
         assert!(
-            lean_root.contains("sourceKind := \"invocation_argument\"")
+            lean_root.contains("sourceKind := ModelCommandInputSourceKind.invocationArgument")
                 && lean_root.contains("invocationArgumentSourceName := \"CaptureTicket\"")
                 && lean_root.contains("invocationArgumentSourceField := \"title\""),
             "Lean project root must carry invocation-argument command input coordinates"
@@ -1954,13 +1957,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\", inputs := [{ name := \"ticket_title\", sourceKind := \"actor\", sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\", generatedSourceName := \"\", generatedSourceField := \"\", sessionSourceName := \"\", sessionSourceField := \"\", invocationArgumentSourceName := \"\", invocationArgumentSourceField := \"\" }], emittedEvents := [{ name := \"TicketCaptured\" }], observedStreams := [], errors := [{ name := \"DuplicateTicket\", scenarioName := \"Duplicate ticket is rejected\", recoveryKind := \"retry\" }], singleton := false, repeatBehavior := \"\" }]"
+                "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\", inputs := [{ name := \"ticket_title\", sourceKind := CommandInputSourceKind.actor, sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\", generatedSourceName := \"\", generatedSourceField := \"\", sessionSourceName := \"\", sessionSourceField := \"\", invocationArgumentSourceName := \"\", invocationArgumentSourceField := \"\" }], emittedEvents := [{ name := \"TicketCaptured\" }], observedStreams := [], errors := [{ name := \"DuplicateTicket\", scenarioName := \"Duplicate ticket is rejected\", recoveryKind := \"retry\" }], singleton := false, repeatBehavior := \"\" }]"
             ),
             "Lean slice artifact must carry authored command errors and recovery"
         );
         assert!(
             quint.contains(
-                "val sliceCommandDefinitions: List[CommandDefinition] = [{ name: \"CaptureTicket\", inputs: [{ name: \"ticket_title\", sourceKind: \"actor\", sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\", externalPayloadSourceName: \"\", externalPayloadSourceField: \"\", generatedSourceName: \"\", generatedSourceField: \"\", sessionSourceName: \"\", sessionSourceField: \"\", invocationArgumentSourceName: \"\", invocationArgumentSourceField: \"\" }], emittedEvents: [{ name: \"TicketCaptured\" }], observedStreams: [], errors: [{ name: \"DuplicateTicket\", scenarioName: \"Duplicate ticket is rejected\", recoveryKind: \"retry\" }], singleton: false, repeatBehavior: \"\" }]"
+                "val sliceCommandDefinitions: List[CommandDefinition] = [{ name: \"CaptureTicket\", inputs: [{ name: \"ticket_title\", sourceKind: CommandInputActor, sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\", externalPayloadSourceName: \"\", externalPayloadSourceField: \"\", generatedSourceName: \"\", generatedSourceField: \"\", sessionSourceName: \"\", sessionSourceField: \"\", invocationArgumentSourceName: \"\", invocationArgumentSourceField: \"\" }], emittedEvents: [{ name: \"TicketCaptured\" }], observedStreams: [], errors: [{ name: \"DuplicateTicket\", scenarioName: \"Duplicate ticket is rejected\", recoveryKind: \"retry\" }], singleton: false, repeatBehavior: \"\" }]"
             ),
             "Quint slice artifact must carry authored command errors and recovery"
         );
@@ -2273,7 +2276,7 @@ mod tests {
             "MCP-authored invocation-argument command inputs must name invocation argument coordinates in Quint"
         );
         assert!(
-            lean_root.contains("sourceKind := \"invocation_argument\"")
+            lean_root.contains("sourceKind := ModelCommandInputSourceKind.invocationArgument")
                 && lean_root.contains("invocationArgumentSourceName := \"CaptureTicket\"")
                 && lean_root.contains("invocationArgumentSourceField := \"title\""),
             "MCP-authored project root facts must carry invocation-argument command input coordinates in Lean"
@@ -4456,7 +4459,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "controls := [{ name := \"submit-ticket\", commandName := \"CaptureTicket\", inputs := [{ name := \"ticket_title\", sourceKind := \"actor\", sourceDescription := \"title field on the intake form\", sketchToken := \"title-input\", visibleToActor := true, decisionField := true }], handledErrors := [\"DuplicateTicket\"], recoveryBehavior := \"retry\", sketchToken := \"submit-button\", navigation := { targetType := \"modeled_view\", targetName := \"ticket_summary\", externalWorkflowName := \"\", externalSystemName := \"\", handoffContract := \"\" } }]"
+                "controls := [{ name := \"submit-ticket\", commandName := \"CaptureTicket\", inputs := [{ name := \"ticket_title\", sourceKind := CommandInputSourceKind.actor, sourceDescription := \"title field on the intake form\", sketchToken := \"title-input\", visibleToActor := true, decisionField := true }], handledErrors := [\"DuplicateTicket\"], recoveryBehavior := \"retry\", sketchToken := \"submit-button\", navigation := { targetType := \"modeled_view\", targetName := \"ticket_summary\", externalWorkflowName := \"\", externalSystemName := \"\", handoffContract := \"\" } }]"
             ),
             "Lean slice artifact must carry authored control input, error handling, and navigation"
         );
@@ -4472,13 +4475,13 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "controls: [{ name: \"submit-ticket\", commandName: \"CaptureTicket\", inputs: [{ name: \"ticket_title\", sourceKind: \"actor\", sourceDescription: \"title field on the intake form\", sketchToken: \"title-input\", visibleToActor: true, decisionField: true }], handledErrors: [\"DuplicateTicket\"], recoveryBehavior: \"retry\", sketchToken: \"submit-button\", navigation: { targetType: \"modeled_view\", targetName: \"ticket_summary\", externalWorkflowName: \"\", externalSystemName: \"\", handoffContract: \"\" } }]"
+                "controls: [{ name: \"submit-ticket\", commandName: \"CaptureTicket\", inputs: [{ name: \"ticket_title\", sourceKind: CommandInputActor, sourceDescription: \"title field on the intake form\", sketchToken: \"title-input\", visibleToActor: true, decisionField: true }], handledErrors: [\"DuplicateTicket\"], recoveryBehavior: \"retry\", sketchToken: \"submit-button\", navigation: { targetType: \"modeled_view\", targetName: \"ticket_summary\", externalWorkflowName: \"\", externalSystemName: \"\", handoffContract: \"\" } }]"
             ),
             "Quint slice artifact must carry authored control input, error handling, and navigation"
         );
         assert!(
             lean_root.contains(
-                "def modelViewControls : List ModelViewControl := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", view := \"ticket_summary\", control := \"submit-ticket\", command := \"CaptureTicket\", input := \"ticket_title\", inputSourceKind := \"actor\", inputSourceDescription := \"title field on the intake form\", inputSketchToken := \"title-input\", inputVisibleToActor := true, inputDecisionField := true, handledErrors := [\"DuplicateTicket\"], recoveryBehavior := \"retry\", controlSketchToken := \"submit-button\", navigationType := \"modeled_view\", navigationTarget := \"ticket_summary\", externalWorkflow := \"\", externalSystem := \"\", handoffContract := \"\" }]"
+                "def modelViewControls : List ModelViewControl := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", view := \"ticket_summary\", control := \"submit-ticket\", command := \"CaptureTicket\", input := \"ticket_title\", inputSourceKind := ModelCommandInputSourceKind.actor, inputSourceDescription := \"title field on the intake form\", inputSketchToken := \"title-input\", inputVisibleToActor := true, inputDecisionField := true, handledErrors := [\"DuplicateTicket\"], recoveryBehavior := \"retry\", controlSketchToken := \"submit-button\", navigationType := \"modeled_view\", navigationTarget := \"ticket_summary\", externalWorkflow := \"\", externalSystem := \"\", handoffContract := \"\" }]"
             ),
             "Lean project root must inventory authored control input, error handling, and navigation"
         );
@@ -4490,13 +4493,13 @@ mod tests {
         );
         assert!(
             quint_root.contains(
-                "type ModelViewControl = { workflow: str, slice: str, view: str, control: str, command: str, input: str, inputSourceKind: str, inputSourceDescription: str, inputSketchToken: str, inputVisibleToActor: bool, inputDecisionField: bool, handledErrors: List[str], recoveryBehavior: str, controlSketchToken: str, navigationType: str, navigationTarget: str, externalWorkflow: str, externalSystem: str, handoffContract: str }"
+                "type ModelViewControl = { workflow: str, slice: str, view: str, control: str, command: str, input: str, inputSourceKind: ModelCommandInputSourceKind, inputSourceDescription: str, inputSketchToken: str, inputVisibleToActor: bool, inputDecisionField: bool, handledErrors: List[str], recoveryBehavior: str, controlSketchToken: str, navigationType: str, navigationTarget: str, externalWorkflow: str, externalSystem: str, handoffContract: str }"
             ),
             "Quint project root must type authored view control inventory entries"
         );
         assert!(
             quint_root.contains(
-                "val modelViewControls: List[ModelViewControl] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", view: \"ticket_summary\", control: \"submit-ticket\", command: \"CaptureTicket\", input: \"ticket_title\", inputSourceKind: \"actor\", inputSourceDescription: \"title field on the intake form\", inputSketchToken: \"title-input\", inputVisibleToActor: true, inputDecisionField: true, handledErrors: [\"DuplicateTicket\"], recoveryBehavior: \"retry\", controlSketchToken: \"submit-button\", navigationType: \"modeled_view\", navigationTarget: \"ticket_summary\", externalWorkflow: \"\", externalSystem: \"\", handoffContract: \"\" }]"
+                "val modelViewControls: List[ModelViewControl] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", view: \"ticket_summary\", control: \"submit-ticket\", command: \"CaptureTicket\", input: \"ticket_title\", inputSourceKind: ModelCommandInputActor, inputSourceDescription: \"title field on the intake form\", inputSketchToken: \"title-input\", inputVisibleToActor: true, inputDecisionField: true, handledErrors: [\"DuplicateTicket\"], recoveryBehavior: \"retry\", controlSketchToken: \"submit-button\", navigationType: \"modeled_view\", navigationTarget: \"ticket_summary\", externalWorkflow: \"\", externalSystem: \"\", handoffContract: \"\" }]"
             ),
             "Quint project root must inventory authored control input, error handling, and navigation"
         );

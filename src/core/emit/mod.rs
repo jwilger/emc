@@ -1,8 +1,8 @@
 // Copyright 2026 John Wilger
 
 use crate::core::types::{
-    SliceKindName, WorkflowEntryLifecycleStateName, WorkflowOwnedDefinitionKind,
-    WorkflowStepRelationshipName, WorkflowTransitionKind,
+    CommandInputSourceKind, SliceKindName, WorkflowEntryLifecycleStateName,
+    WorkflowOwnedDefinitionKind, WorkflowStepRelationshipName, WorkflowTransitionKind,
 };
 
 pub(crate) mod lean;
@@ -23,6 +23,52 @@ pub(crate) fn quint_slice_kind_name(kind: SliceKindName) -> &'static str {
         SliceKindName::StateChange => "SliceStateChange",
         SliceKindName::Translation => "SliceTranslation",
         SliceKindName::Automation => "SliceAutomation",
+    }
+}
+
+pub(crate) fn lean_command_input_source_kind(kind: CommandInputSourceKind) -> &'static str {
+    match kind {
+        CommandInputSourceKind::Actor => "CommandInputSourceKind.actor",
+        CommandInputSourceKind::Session => "CommandInputSourceKind.session",
+        CommandInputSourceKind::Generated => "CommandInputSourceKind.generated",
+        CommandInputSourceKind::ExternalPayload => "CommandInputSourceKind.externalPayload",
+        CommandInputSourceKind::EventStreamState => "CommandInputSourceKind.eventStreamState",
+        CommandInputSourceKind::InvocationArgument => "CommandInputSourceKind.invocationArgument",
+    }
+}
+
+pub(crate) fn lean_model_command_input_source_kind(kind: CommandInputSourceKind) -> &'static str {
+    match kind {
+        CommandInputSourceKind::Actor => "ModelCommandInputSourceKind.actor",
+        CommandInputSourceKind::Session => "ModelCommandInputSourceKind.session",
+        CommandInputSourceKind::Generated => "ModelCommandInputSourceKind.generated",
+        CommandInputSourceKind::ExternalPayload => "ModelCommandInputSourceKind.externalPayload",
+        CommandInputSourceKind::EventStreamState => "ModelCommandInputSourceKind.eventStreamState",
+        CommandInputSourceKind::InvocationArgument => {
+            "ModelCommandInputSourceKind.invocationArgument"
+        }
+    }
+}
+
+pub(crate) fn quint_command_input_source_kind(kind: CommandInputSourceKind) -> &'static str {
+    match kind {
+        CommandInputSourceKind::Actor => "CommandInputActor",
+        CommandInputSourceKind::Session => "CommandInputSession",
+        CommandInputSourceKind::Generated => "CommandInputGenerated",
+        CommandInputSourceKind::ExternalPayload => "CommandInputExternalPayload",
+        CommandInputSourceKind::EventStreamState => "CommandInputEventStreamState",
+        CommandInputSourceKind::InvocationArgument => "CommandInputInvocationArgument",
+    }
+}
+
+pub(crate) fn quint_model_command_input_source_kind(kind: CommandInputSourceKind) -> &'static str {
+    match kind {
+        CommandInputSourceKind::Actor => "ModelCommandInputActor",
+        CommandInputSourceKind::Session => "ModelCommandInputSession",
+        CommandInputSourceKind::Generated => "ModelCommandInputGenerated",
+        CommandInputSourceKind::ExternalPayload => "ModelCommandInputExternalPayload",
+        CommandInputSourceKind::EventStreamState => "ModelCommandInputEventStreamState",
+        CommandInputSourceKind::InvocationArgument => "ModelCommandInputInvocationArgument",
     }
 }
 

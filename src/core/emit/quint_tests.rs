@@ -455,7 +455,7 @@ mod tests {
             "type BitLevelDataFlow = { datum: str, sourceKind: str, source: str, transformationSemantics: str, target: str, bitEncoding: str }"
         ));
         assert!(quint.contains(
-            "type CommandInput = { name: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str, invocationArgumentSourceName: str, invocationArgumentSourceField: str }"
+            "type CommandInputSourceKind = CommandInputActor | CommandInputSession | CommandInputGenerated | CommandInputExternalPayload | CommandInputEventStreamState | CommandInputInvocationArgument\n  type CommandInput = { name: str, sourceKind: CommandInputSourceKind, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str, invocationArgumentSourceName: str, invocationArgumentSourceField: str }"
         ));
         assert!(quint.contains(
             "type CommandErrorDefinition = { name: str, scenarioName: str, recoveryKind: str }"
@@ -487,7 +487,7 @@ mod tests {
             "type ViewField = { name: str, sourceKind: str, sourceReadModel: str, sourceField: str, sketchToken: str, provenanceDescription: str, bitEncoding: str }"
         ));
         assert!(quint.contains(
-            "type ControlInputProvision = { name: str, sourceKind: str, sourceDescription: str, sketchToken: str, visibleToActor: bool, decisionField: bool }"
+            "type ControlInputProvision = { name: str, sourceKind: CommandInputSourceKind, sourceDescription: str, sketchToken: str, visibleToActor: bool, decisionField: bool }"
         ));
         assert!(quint.contains(
             "type NavigationTarget = { targetType: str, targetName: str, externalWorkflowName: str, externalSystemName: str, handoffContract: str }"
@@ -544,7 +544,7 @@ mod tests {
         ));
         assert!(quint.contains("val sliceOutcomeDefinitions: List[OutcomeDefinition] = []"));
         assert!(quint.contains(
-            "val allowedCommandInputSourceKinds: List[str] = [\"actor\",\"session\",\"generated\",\"external_payload\",\"event_stream_state\",\"invocation_argument\"]"
+            "val allowedCommandInputSourceKinds: List[CommandInputSourceKind] = [CommandInputActor,CommandInputSession,CommandInputGenerated,CommandInputExternalPayload,CommandInputEventStreamState,CommandInputInvocationArgument]"
         ));
         assert!(quint.contains(
             "val allowedRecoveryKinds: List[str] = [\"retry\",\"stay_on_screen\",\"navigation\",\"explicit_recovery_action\"]"
@@ -580,7 +580,7 @@ mod tests {
         assert!(quint.contains("val sliceViewDefinitions: List[ViewDefinition] = []"));
         assert!(quint.contains("val allowedViewFieldSourceKinds: List[str] = [\"read_model\"]"));
         assert!(quint.contains(
-            "val allowedControlInputSourceKinds: List[str] = [\"actor\",\"session\",\"generated\",\"external_payload\",\"event_stream_state\",\"invocation_argument\"]"
+            "val allowedControlInputSourceKinds: List[CommandInputSourceKind] = [CommandInputActor,CommandInputSession,CommandInputGenerated,CommandInputExternalPayload,CommandInputEventStreamState,CommandInputInvocationArgument]"
         ));
         assert!(quint.contains(
             "val allowedNavigationTargetTypes: List[str] = [\"modeled_view\",\"local_view_state\",\"external_system\",\"external_workflow\"]"
@@ -676,16 +676,16 @@ mod tests {
             "val commandInputsHaveAllowedSources = sliceCommandDefinitions.select(command => command.inputs.select(input => allowedCommandInputSourceKinds.select(sourceKind => sourceKind == input.sourceKind).length() > 0).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(
-            "val commandInputsHaveProvenance = sliceCommandDefinitions.select(command => command.inputs.select(input => input.name != \"\" and input.sourceKind != \"\" and input.sourceDescription != \"\" and input.provenanceChain.length() > 0).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
+            "val commandInputsHaveProvenance = sliceCommandDefinitions.select(command => command.inputs.select(input => input.name != \"\" and input.sourceDescription != \"\" and input.provenanceChain.length() > 0).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(
-            "def commandInputSessionInputHasDescription(input) = input.sourceKind != \"session\" or input.sourceDescription != \"\""
+            "def commandInputSessionInputHasDescription(input) = input.sourceKind != CommandInputSession or input.sourceDescription != \"\""
         ));
         assert!(quint.contains(
             "def commandHasIssuingControl(command) = sliceViewDefinitions.select(view => view.controls.select(control => control.commandName == command.name).length() > 0).length() > 0"
         ));
         assert!(quint.contains(
-            "def commandInputWithoutIssuingControlHasProvenance(command, input) = commandHasIssuingControl(command) or (input.name != \"\" and input.sourceKind != \"\" and input.sourceDescription != \"\" and input.provenanceChain.length() > 0)"
+            "def commandInputWithoutIssuingControlHasProvenance(command, input) = commandHasIssuingControl(command) or (input.name != \"\" and input.sourceDescription != \"\" and input.provenanceChain.length() > 0)"
         ));
         assert!(quint.contains(
             "val commandInputsWithoutIssuingControlsHaveProvenance = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputWithoutIssuingControlHasProvenance(command, input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
@@ -703,25 +703,25 @@ mod tests {
             "def commandObservedStreamNames(command) = command.observedStreams.foldl([], (names, streamRef) => names.append(streamRef.name))"
         ));
         assert!(quint.contains(
-            "def commandInputEventStreamSourceResolves(command, input) = input.sourceKind != \"event_stream_state\" or (commandObservedStreamNames(command).length() > 0 and commandObservedStreamNames(command).select(streamName => scenarioStreamResolves(streamName)).length() == commandObservedStreamNames(command).length() and input.eventStreamSourceEvent != \"\" and input.eventStreamSourceAttribute != \"\" and sliceEventDefinitions.select(event => event.name == input.eventStreamSourceEvent and event.attributes.select(attribute => attribute.name == input.eventStreamSourceAttribute).length() > 0).length() > 0)"
+            "def commandInputEventStreamSourceResolves(command, input) = input.sourceKind != CommandInputEventStreamState or (commandObservedStreamNames(command).length() > 0 and commandObservedStreamNames(command).select(streamName => scenarioStreamResolves(streamName)).length() == commandObservedStreamNames(command).length() and input.eventStreamSourceEvent != \"\" and input.eventStreamSourceAttribute != \"\" and sliceEventDefinitions.select(event => event.name == input.eventStreamSourceEvent and event.attributes.select(attribute => attribute.name == input.eventStreamSourceAttribute).length() > 0).length() > 0)"
         ));
         assert!(quint.contains(
             "val commandInputsSourcedFromEventStreamsResolve = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputEventStreamSourceResolves(command, input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(
-            "def commandInputExternalPayloadSourceResolves(input) = input.sourceKind != \"external_payload\" or (input.externalPayloadSourceName != \"\" and input.externalPayloadSourceField != \"\" and sliceExternalPayloads.select(payload => payload.name == input.externalPayloadSourceName and payload.fields.select(payloadField => payloadField.name == input.externalPayloadSourceField).length() > 0).length() > 0)"
+            "def commandInputExternalPayloadSourceResolves(input) = input.sourceKind != CommandInputExternalPayload or (input.externalPayloadSourceName != \"\" and input.externalPayloadSourceField != \"\" and sliceExternalPayloads.select(payload => payload.name == input.externalPayloadSourceName and payload.fields.select(payloadField => payloadField.name == input.externalPayloadSourceField).length() > 0).length() > 0)"
         ));
         assert!(quint.contains(
             "val commandInputsSourcedFromExternalPayloadsResolve = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputExternalPayloadSourceResolves(input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(
-            "def commandInputGeneratedSourceHasCoordinates(input) = input.sourceKind != \"generated\" or (input.generatedSourceName != \"\" and input.generatedSourceField != \"\")"
+            "def commandInputGeneratedSourceHasCoordinates(input) = input.sourceKind != CommandInputGenerated or (input.generatedSourceName != \"\" and input.generatedSourceField != \"\")"
         ));
         assert!(quint.contains(
             "val commandInputsSourcedFromGeneratedValuesHaveCoordinates = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputGeneratedSourceHasCoordinates(input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
         assert!(quint.contains(
-            "def commandInputInvocationArgumentSourceHasCoordinates(input) = input.sourceKind != \"invocation_argument\" or (input.invocationArgumentSourceName != \"\" and input.invocationArgumentSourceField != \"\")"
+            "def commandInputInvocationArgumentSourceHasCoordinates(input) = input.sourceKind != CommandInputInvocationArgument or (input.invocationArgumentSourceName != \"\" and input.invocationArgumentSourceField != \"\")"
         ));
         assert!(quint.contains(
             "val commandInputsSourcedFromInvocationArgumentsHaveCoordinates = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputInvocationArgumentSourceHasCoordinates(input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
@@ -1015,7 +1015,7 @@ mod tests {
             "val viewFieldsAppearInSketch = sliceViewDefinitions.select(view => view.fields.select(viewField => viewFieldAppearsInSketch(view, viewField)).length() == view.fields.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
-            "def sketchTokenMapsToModeledElement(view, token) = view.fields.select(viewField => viewField.sketchToken == token).length() > 0 or view.controls.select(control => control.sketchToken == token or control.inputs.select(input => input.sourceKind == \"actor\" and input.sketchToken == token).length() > 0).length() > 0"
+            "def sketchTokenMapsToModeledElement(view, token) = view.fields.select(viewField => viewField.sketchToken == token).length() > 0 or view.controls.select(control => control.sketchToken == token or control.inputs.select(input => input.sourceKind == CommandInputActor and input.sketchToken == token).length() > 0).length() > 0"
         ));
         assert!(quint.contains(
             "val viewSketchTokensMapToModeledElements = sliceViewDefinitions.select(view => view.sketchTokens.select(sketchToken => sketchTokenMapsToModeledElement(view, sketchToken)).length() == view.sketchTokens.length()).length() == sliceViewDefinitions.length()"
@@ -1084,7 +1084,7 @@ mod tests {
             "val viewControlInputsHaveAllowedSources = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => allowedControlInputSourceKinds.select(sourceKind => sourceKind == input.sourceKind).length() > 0).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
-            "val viewControlInputsHaveProvenance = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => input.name != \"\" and input.sourceKind != \"\" and input.sourceDescription != \"\").length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
+            "val viewControlInputsHaveProvenance = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => input.name != \"\" and input.sourceDescription != \"\").length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(
             quint.contains(
@@ -1095,13 +1095,13 @@ mod tests {
             "val viewControlInputsHaveDescriptions = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => controlInputHasDescription(input)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
-            "def controlInputSessionInputHasDescription(input) = input.sourceKind != \"session\" or input.sourceDescription != \"\""
+            "def controlInputSessionInputHasDescription(input) = input.sourceKind != CommandInputSession or input.sourceDescription != \"\""
         ));
         assert!(quint.contains(
             "val viewControlSessionInputsHaveDescriptions = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => controlInputSessionInputHasDescription(input)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
-            "val viewControlInputVisibilityIsModeled = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => (input.sourceKind != \"actor\" or input.sketchToken != \"\" or input.visibleToActor) and (not(input.decisionField) or input.sketchToken != \"\" or input.visibleToActor)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
+            "val viewControlInputVisibilityIsModeled = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => (input.sourceKind != CommandInputActor or input.sketchToken != \"\" or input.visibleToActor) and (not(input.decisionField) or input.sketchToken != \"\" or input.visibleToActor)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
             "def controlInputDecisionFieldIsVisible(input) = not(input.decisionField) or input.sketchToken != \"\" or input.visibleToActor"
@@ -1110,7 +1110,7 @@ mod tests {
             "val viewControlDecisionFieldsAreVisible = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => controlInputDecisionFieldIsVisible(input)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
         assert!(quint.contains(
-            "def controlInputActorInputIsVisible(input) = input.sourceKind != \"actor\" or input.sketchToken != \"\" or input.visibleToActor"
+            "def controlInputActorInputIsVisible(input) = input.sourceKind != CommandInputActor or input.sketchToken != \"\" or input.visibleToActor"
         ));
         assert!(quint.contains(
             "val viewControlActorInputsAreVisible = sliceViewDefinitions.select(view => view.controls.select(control => control.inputs.select(input => controlInputActorInputIsVisible(input)).length() == control.inputs.length()).length() == view.controls.length()).length() == sliceViewDefinitions.length()"

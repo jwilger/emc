@@ -835,7 +835,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure CommandInput where\n  name : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
+                "inductive CommandInputSourceKind where\n  | actor\n  | session\n  | generated\n  | externalPayload\n  | eventStreamState\n  | invocationArgument\nderiving BEq, DecidableEq, Repr\n\nstructure CommandInput where\n  name : String\n  sourceKind : CommandInputSourceKind\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
             ),
             "Lean slice artifacts must represent command input source-chain provenance"
         );
@@ -899,7 +899,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure ControlInputProvision where\n  name : String\n  sourceKind : String\n  sourceDescription : String\n  sketchToken : String\n  visibleToActor : Bool\n  decisionField : Bool"
+                "structure ControlInputProvision where\n  name : String\n  sourceKind : CommandInputSourceKind\n  sourceDescription : String\n  sketchToken : String\n  visibleToActor : Bool\n  decisionField : Bool"
             ),
             "Lean slice artifacts must represent how controls provide command inputs"
         );
@@ -982,7 +982,7 @@ mod tests {
         assert!(lean.contains("def sliceOutcomeDefinitions : List OutcomeDefinition := []"));
         assert!(
             lean.contains(
-                "def allowedCommandInputSourceKinds : List String := [\"actor\",\"session\",\"generated\",\"external_payload\",\"event_stream_state\",\"invocation_argument\"]"
+                "def allowedCommandInputSourceKinds : List CommandInputSourceKind := [CommandInputSourceKind.actor,CommandInputSourceKind.session,CommandInputSourceKind.generated,CommandInputSourceKind.externalPayload,CommandInputSourceKind.eventStreamState,CommandInputSourceKind.invocationArgument]"
             ),
             "Lean slice artifacts must enumerate allowed command input source kinds without read_model"
         );
@@ -1039,7 +1039,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def allowedControlInputSourceKinds : List String := [\"actor\",\"session\",\"generated\",\"external_payload\",\"event_stream_state\",\"invocation_argument\"]"
+                "def allowedControlInputSourceKinds : List CommandInputSourceKind := [CommandInputSourceKind.actor,CommandInputSourceKind.session,CommandInputSourceKind.generated,CommandInputSourceKind.externalPayload,CommandInputSourceKind.eventStreamState,CommandInputSourceKind.invocationArgument]"
             ),
             "Lean slice artifacts must constrain control-provided inputs to modeled invocation/input sources"
         );
@@ -1210,13 +1210,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def commandInputHasProvenance (input : CommandInput) : Bool := input.name.isEmpty == false && input.sourceKind.isEmpty == false && input.sourceDescription.isEmpty == false && input.provenanceChain.isEmpty == false"
+                "def commandInputHasProvenance (input : CommandInput) : Bool := input.name.isEmpty == false && input.sourceDescription.isEmpty == false && input.provenanceChain.isEmpty == false"
             ),
             "Lean slice artifacts must require reportable command input source chains"
         );
         assert!(
             lean.contains(
-                "def commandInputSessionInputHasDescription (input : CommandInput) : Bool := input.sourceKind != \"session\" || input.sourceDescription.isEmpty == false"
+                "def commandInputSessionInputHasDescription (input : CommandInput) : Bool := input.sourceKind != CommandInputSourceKind.session || input.sourceDescription.isEmpty == false"
             ),
             "Lean slice artifacts must name session command-input descriptions as their own proof obligation"
         );
@@ -1276,7 +1276,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def commandInputEventStreamSourceResolves (command : CommandDefinition) (input : CommandInput) : Bool := input.sourceKind != \"event_stream_state\" || ((commandObservedStreamNames command).isEmpty == false && (commandObservedStreamNames command).all scenarioStreamResolves && input.eventStreamSourceEvent.isEmpty == false && input.eventStreamSourceAttribute.isEmpty == false && sliceEventDefinitions.any (fun event => event.name == input.eventStreamSourceEvent && event.attributes.any (fun eventAttribute => eventAttribute.name == input.eventStreamSourceAttribute)))"
+                "def commandInputEventStreamSourceResolves (command : CommandDefinition) (input : CommandInput) : Bool := input.sourceKind != CommandInputSourceKind.eventStreamState || ((commandObservedStreamNames command).isEmpty == false && (commandObservedStreamNames command).all scenarioStreamResolves && input.eventStreamSourceEvent.isEmpty == false && input.eventStreamSourceAttribute.isEmpty == false && sliceEventDefinitions.any (fun event => event.name == input.eventStreamSourceEvent && event.attributes.any (fun eventAttribute => eventAttribute.name == input.eventStreamSourceAttribute)))"
             ),
             "Lean slice artifacts must require event-stream command inputs to name observed streams and upstream event attributes"
         );
@@ -1288,7 +1288,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def commandInputExternalPayloadSourceResolves (input : CommandInput) : Bool := input.sourceKind != \"external_payload\" || (input.externalPayloadSourceName.isEmpty == false && input.externalPayloadSourceField.isEmpty == false && sliceExternalPayloads.any (fun payload => payload.name == input.externalPayloadSourceName && payload.fields.any (fun payloadField => payloadField.name == input.externalPayloadSourceField)))"
+                "def commandInputExternalPayloadSourceResolves (input : CommandInput) : Bool := input.sourceKind != CommandInputSourceKind.externalPayload || (input.externalPayloadSourceName.isEmpty == false && input.externalPayloadSourceField.isEmpty == false && sliceExternalPayloads.any (fun payload => payload.name == input.externalPayloadSourceName && payload.fields.any (fun payloadField => payloadField.name == input.externalPayloadSourceField)))"
             ),
             "Lean slice artifacts must require external-payload command inputs to name payload fields"
         );
@@ -1300,7 +1300,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def commandInputGeneratedSourceHasCoordinates (input : CommandInput) : Bool := input.sourceKind != \"generated\" || (input.generatedSourceName.isEmpty == false && input.generatedSourceField.isEmpty == false)"
+                "def commandInputGeneratedSourceHasCoordinates (input : CommandInput) : Bool := input.sourceKind != CommandInputSourceKind.generated || (input.generatedSourceName.isEmpty == false && input.generatedSourceField.isEmpty == false)"
             ),
             "Lean slice artifacts must require generated command inputs to name generated source coordinates"
         );
@@ -1312,7 +1312,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def commandInputInvocationArgumentSourceHasCoordinates (input : CommandInput) : Bool := input.sourceKind != \"invocation_argument\" || (input.invocationArgumentSourceName.isEmpty == false && input.invocationArgumentSourceField.isEmpty == false)"
+                "def commandInputInvocationArgumentSourceHasCoordinates (input : CommandInput) : Bool := input.sourceKind != CommandInputSourceKind.invocationArgument || (input.invocationArgumentSourceName.isEmpty == false && input.invocationArgumentSourceField.isEmpty == false)"
             ),
             "Lean slice artifacts must require invocation-argument command inputs to name invocation argument coordinates"
         );
@@ -1990,7 +1990,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def sketchTokenMapsToModeledElement (view : ViewDefinition) (token : String) : Bool := view.fields.any (fun field => field.sketchToken == token) || view.controls.any (fun control => control.sketchToken == token || control.inputs.any (fun input => input.sourceKind == \"actor\" && input.sketchToken == token))"
+                "def sketchTokenMapsToModeledElement (view : ViewDefinition) (token : String) : Bool := view.fields.any (fun field => field.sketchToken == token) || view.controls.any (fun control => control.sketchToken == token || control.inputs.any (fun input => input.sourceKind == CommandInputSourceKind.actor && input.sketchToken == token))"
             ),
             "Lean slice artifacts must require sketch tokens to map to modeled fields, controls, or actor inputs"
         );
@@ -2062,19 +2062,19 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def controlInputHasProvenance (input : ControlInputProvision) : Bool := input.name.isEmpty == false && input.sourceKind.isEmpty == false && input.sourceDescription.isEmpty == false"
+                "def controlInputHasProvenance (input : ControlInputProvision) : Bool := input.name.isEmpty == false && input.sourceDescription.isEmpty == false"
             ),
             "Lean slice artifacts must require control input provenance and descriptions"
         );
         assert!(
             lean.contains(
-                "def controlInputSessionInputHasDescription (input : ControlInputProvision) : Bool := input.sourceKind != \"session\" || input.sourceDescription.isEmpty == false"
+                "def controlInputSessionInputHasDescription (input : ControlInputProvision) : Bool := input.sourceKind != CommandInputSourceKind.session || input.sourceDescription.isEmpty == false"
             ),
             "Lean slice artifacts must name hidden session control-input descriptions as their own proof obligation"
         );
         assert!(
             lean.contains(
-                "def controlInputVisibilityIsModeled (input : ControlInputProvision) : Bool := (input.sourceKind != \"actor\" || input.sketchToken.isEmpty == false || input.visibleToActor) && (input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor)"
+                "def controlInputVisibilityIsModeled (input : ControlInputProvision) : Bool := (input.sourceKind != CommandInputSourceKind.actor || input.sketchToken.isEmpty == false || input.visibleToActor) && (input.decisionField == false || input.sketchToken.isEmpty == false || input.visibleToActor)"
             ),
             "Lean slice artifacts must require actor and decision inputs to be visible in the sketch"
         );
@@ -2086,7 +2086,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def controlInputActorInputIsVisible (input : ControlInputProvision) : Bool := input.sourceKind != \"actor\" || input.sketchToken.isEmpty == false || input.visibleToActor"
+                "def controlInputActorInputIsVisible (input : ControlInputProvision) : Bool := input.sourceKind != CommandInputSourceKind.actor || input.sketchToken.isEmpty == false || input.visibleToActor"
             ),
             "Lean slice artifacts must name actor-input visibility as its own proof obligation"
         );
