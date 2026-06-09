@@ -4,3 +4,7 @@
 command = "/home/jwilger/.build/cargo/debug/emc"
 args = ["mcp", "stdio"]
 cwd = "/home/jwilger/projects/emc"
+
+[agents]
+max_threads = 2
+max_depth = 1
