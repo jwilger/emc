@@ -2386,7 +2386,7 @@ impl Error for NavigationTargetTypeError {}
 )]
 pub struct NavigationTargetName(String);
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub enum CommandInputSourceKind {
     Actor,
     Session,

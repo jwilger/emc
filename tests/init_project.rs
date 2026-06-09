@@ -129,7 +129,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "structure ModelCommandInput where\n  workflow : String\n  slice : String\n  command : String\n  input : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
+                "inductive ModelCommandInputSourceKind where\n  | actor\n  | session\n  | generated\n  | externalPayload\n  | eventStreamState\n  | invocationArgument\nderiving BEq, DecidableEq, Repr\n\nstructure ModelCommandInput where\n  workflow : String\n  slice : String\n  command : String\n  input : String\n  sourceKind : ModelCommandInputSourceKind\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
             ),
             "Lean project root must type command inputs as named records"
         );
@@ -195,7 +195,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?.contains(
-                "structure ModelViewControl where\n  workflow : String\n  slice : String\n  view : String\n  control : String\n  command : String\n  input : String\n  inputSourceKind : String\n  inputSourceDescription : String\n  inputSketchToken : String\n  inputVisibleToActor : Bool\n  inputDecisionField : Bool\n  handledErrors : List String\n  recoveryBehavior : String\n  controlSketchToken : String\n  navigationType : String\n  navigationTarget : String\n  externalWorkflow : String\n  externalSystem : String\n  handoffContract : String"
+                "structure ModelViewControl where\n  workflow : String\n  slice : String\n  view : String\n  control : String\n  command : String\n  input : String\n  inputSourceKind : ModelCommandInputSourceKind\n  inputSourceDescription : String\n  inputSketchToken : String\n  inputVisibleToActor : Bool\n  inputDecisionField : Bool\n  handledErrors : List String\n  recoveryBehavior : String\n  controlSketchToken : String\n  navigationType : String\n  navigationTarget : String\n  externalWorkflow : String\n  externalSystem : String\n  handoffContract : String"
             ),
             "Lean project root must type view controls as named records"
         );
@@ -619,7 +619,7 @@ mod tests {
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?.contains(
-                "type ModelDataFlowSourceKind = Original | ModeledTarget\n  type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: ModelDataFlowSourceKind, source: str, transformation: str, target: str, bitEncoding: str }"
+                "type ModelDataFlowSourceKind = Original | ModeledTarget\n  type ModelCommandInputSourceKind = ModelCommandInputActor | ModelCommandInputSession | ModelCommandInputGenerated | ModelCommandInputExternalPayload | ModelCommandInputEventStreamState | ModelCommandInputInvocationArgument\n  type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: ModelDataFlowSourceKind, source: str, transformation: str, target: str, bitEncoding: str }"
             ),
             "Quint project root must model data-flow source kinds as a closed semantic type"
         );

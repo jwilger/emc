@@ -4,6 +4,9 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
 use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
+use crate::core::emit::{
+    lean_model_command_input_source_kind, quint_model_command_input_source_kind,
+};
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection,
     NewBoardElement, NewCommandDefinition, NewCommandErrorDefinition, NewCommandInput,
@@ -106,7 +109,7 @@ pub(crate) struct NewProjectCommandInput {
     slice_slug: SliceSlug,
     command: CommandName,
     input: DatumName,
-    source_kind: String,
+    source_kind: CommandInputSourceKind,
     source_description: String,
     provenance_chain: Vec<String>,
     event_stream_source_event: String,
@@ -128,7 +131,7 @@ impl NewProjectCommandInput {
             slice_slug: command.slice_slug.clone(),
             command: command.command.clone(),
             input: input.name().clone(),
-            source_kind: input.source_kind().as_ref().to_owned(),
+            source_kind: input.source_kind(),
             source_description: input.source_description().as_ref().to_owned(),
             provenance_chain: input
                 .provenance_chain()
@@ -984,7 +987,7 @@ pub(crate) struct ProjectCommandInput {
     slice_slug: String,
     command: String,
     input: String,
-    source_kind: String,
+    source_kind: CommandInputSourceKind,
     source_description: String,
     provenance_chain: Vec<String>,
     event_stream_source_event: String,
@@ -1016,8 +1019,8 @@ impl ProjectCommandInput {
         &self.input
     }
 
-    pub(crate) fn source_kind(&self) -> &str {
-        &self.source_kind
+    pub(crate) fn source_kind(&self) -> CommandInputSourceKind {
+        self.source_kind
     }
 
     pub(crate) fn source_description(&self) -> &str {
@@ -1354,7 +1357,7 @@ pub(crate) struct ProjectViewControl {
     control: String,
     command: String,
     input: String,
-    input_source_kind: String,
+    input_source_kind: CommandInputSourceKind,
     input_source_description: String,
     input_sketch_token: String,
     input_visible_to_actor: bool,
@@ -1394,8 +1397,8 @@ impl ProjectViewControl {
         &self.input
     }
 
-    pub(crate) fn input_source_kind(&self) -> &str {
-        &self.input_source_kind
+    pub(crate) fn input_source_kind(&self) -> CommandInputSourceKind {
+        self.input_source_kind
     }
 
     pub(crate) fn input_source_description(&self) -> &str {
@@ -6079,127 +6082,35 @@ fn command_input_entries_from_list(
     let mut command_inputs = split_top_level_records(list)?
         .into_iter()
         .map(|record| {
-            let strings = quoted_strings(&record)?;
-            if strings.len() < 7 {
+            let values = record_values(&record)?;
+            if values.len() < 7 {
                 Err(FormalProjectFactError::new(
                     "formal project command input record is malformed",
                 ))
             } else {
-                let (
-                    provenance_chain,
-                    event_stream_source_event,
-                    event_stream_source_attribute,
-                    external_payload_source_name,
-                    external_payload_source_field,
-                    generated_source_name,
-                    generated_source_field,
-                    session_source_name,
-                    session_source_field,
-                    invocation_argument_source_name,
-                    invocation_argument_source_field,
-                ) = if strings.len() >= 17 {
-                    (
-                        strings[6..strings.len() - 10].to_vec(),
-                        strings[strings.len() - 10].clone(),
-                        strings[strings.len() - 9].clone(),
-                        strings[strings.len() - 8].clone(),
-                        strings[strings.len() - 7].clone(),
-                        strings[strings.len() - 6].clone(),
-                        strings[strings.len() - 5].clone(),
-                        strings[strings.len() - 4].clone(),
-                        strings[strings.len() - 3].clone(),
-                        strings[strings.len() - 2].clone(),
-                        strings[strings.len() - 1].clone(),
-                    )
-                } else if strings.len() >= 15 {
-                    (
-                        strings[6..strings.len() - 8].to_vec(),
-                        strings[strings.len() - 8].clone(),
-                        strings[strings.len() - 7].clone(),
-                        strings[strings.len() - 6].clone(),
-                        strings[strings.len() - 5].clone(),
-                        strings[strings.len() - 4].clone(),
-                        strings[strings.len() - 3].clone(),
-                        strings[strings.len() - 2].clone(),
-                        strings[strings.len() - 1].clone(),
-                        String::new(),
-                        String::new(),
-                    )
-                } else if strings.len() >= 13 {
-                    (
-                        strings[6..strings.len() - 6].to_vec(),
-                        strings[strings.len() - 6].clone(),
-                        strings[strings.len() - 5].clone(),
-                        strings[strings.len() - 4].clone(),
-                        strings[strings.len() - 3].clone(),
-                        strings[strings.len() - 2].clone(),
-                        strings[strings.len() - 1].clone(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                    )
-                } else if strings.len() >= 11 {
-                    (
-                        strings[6..strings.len() - 4].to_vec(),
-                        strings[strings.len() - 4].clone(),
-                        strings[strings.len() - 3].clone(),
-                        strings[strings.len() - 2].clone(),
-                        strings[strings.len() - 1].clone(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                    )
-                } else if strings.len() >= 9 {
-                    (
-                        strings[6..strings.len() - 2].to_vec(),
-                        strings[strings.len() - 2].clone(),
-                        strings[strings.len() - 1].clone(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                    )
-                } else {
-                    (
-                        strings[6..].to_vec(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                        String::new(),
-                    )
+                let optional_string = |index: usize| -> Result<String, FormalProjectFactError> {
+                    values
+                        .get(index)
+                        .map_or(Ok(String::new()), |value| single_quoted_string(value))
                 };
                 Ok(ProjectCommandInput {
-                    workflow_slug: strings[0].clone(),
-                    slice_slug: strings[1].clone(),
-                    command: strings[2].clone(),
-                    input: strings[3].clone(),
-                    source_kind: strings[4].clone(),
-                    source_description: strings[5].clone(),
-                    provenance_chain,
-                    event_stream_source_event,
-                    event_stream_source_attribute,
-                    external_payload_source_name,
-                    external_payload_source_field,
-                    generated_source_name,
-                    generated_source_field,
-                    session_source_name,
-                    session_source_field,
-                    invocation_argument_source_name,
-                    invocation_argument_source_field,
+                    workflow_slug: single_quoted_string(&values[0])?,
+                    slice_slug: single_quoted_string(&values[1])?,
+                    command: single_quoted_string(&values[2])?,
+                    input: single_quoted_string(&values[3])?,
+                    source_kind: command_input_source_kind_value(&values[4])?,
+                    source_description: single_quoted_string(&values[5])?,
+                    provenance_chain: string_list_value(&values[6])?,
+                    event_stream_source_event: optional_string(7)?,
+                    event_stream_source_attribute: optional_string(8)?,
+                    external_payload_source_name: optional_string(9)?,
+                    external_payload_source_field: optional_string(10)?,
+                    generated_source_name: optional_string(11)?,
+                    generated_source_field: optional_string(12)?,
+                    session_source_name: optional_string(13)?,
+                    session_source_field: optional_string(14)?,
+                    invocation_argument_source_name: optional_string(15)?,
+                    invocation_argument_source_field: optional_string(16)?,
                 })
             }
         })
@@ -6382,6 +6293,46 @@ fn data_flow_source_kind_value(value: &str) -> Result<DataFlowSourceKind, Formal
         }
         _ => Err(FormalProjectFactError::new(
             "formal project data-flow source kind is malformed",
+        )),
+    }
+}
+
+fn command_input_source_kind_value(
+    value: &str,
+) -> Result<CommandInputSourceKind, FormalProjectFactError> {
+    let trimmed = value.trim();
+    if trimmed.starts_with('"') {
+        return CommandInputSourceKind::try_new(single_quoted_string(trimmed)?)
+            .map_err(|error| FormalProjectFactError::new(error.to_string()));
+    }
+
+    match trimmed {
+        "CommandInputSourceKind.actor"
+        | "ModelCommandInputSourceKind.actor"
+        | "CommandInputActor"
+        | "ModelCommandInputActor" => Ok(CommandInputSourceKind::Actor),
+        "CommandInputSourceKind.session"
+        | "ModelCommandInputSourceKind.session"
+        | "CommandInputSession"
+        | "ModelCommandInputSession" => Ok(CommandInputSourceKind::Session),
+        "CommandInputSourceKind.generated"
+        | "ModelCommandInputSourceKind.generated"
+        | "CommandInputGenerated"
+        | "ModelCommandInputGenerated" => Ok(CommandInputSourceKind::Generated),
+        "CommandInputSourceKind.externalPayload"
+        | "ModelCommandInputSourceKind.externalPayload"
+        | "CommandInputExternalPayload"
+        | "ModelCommandInputExternalPayload" => Ok(CommandInputSourceKind::ExternalPayload),
+        "CommandInputSourceKind.eventStreamState"
+        | "ModelCommandInputSourceKind.eventStreamState"
+        | "CommandInputEventStreamState"
+        | "ModelCommandInputEventStreamState" => Ok(CommandInputSourceKind::EventStreamState),
+        "CommandInputSourceKind.invocationArgument"
+        | "ModelCommandInputSourceKind.invocationArgument"
+        | "CommandInputInvocationArgument"
+        | "ModelCommandInputInvocationArgument" => Ok(CommandInputSourceKind::InvocationArgument),
+        _ => Err(FormalProjectFactError::new(
+            "formal project command input source kind is malformed",
         )),
     }
 }
@@ -6614,7 +6565,7 @@ fn view_control_entries_from_list(
                 control: single_quoted_string(&values[3])?,
                 command: single_quoted_string(&values[4])?,
                 input: single_quoted_string(&values[5])?,
-                input_source_kind: single_quoted_string(&values[6])?,
+                input_source_kind: command_input_source_kind_value(&values[6])?,
                 input_source_description: single_quoted_string(&values[7])?,
                 input_sketch_token: single_quoted_string(&values[8])?,
                 input_visible_to_actor: bool_value(&values[9])?,
@@ -8059,7 +8010,7 @@ fn lean_command_input_record(command_input: &NewProjectCommandInput) -> String {
         quoted(command_input.slice_slug.as_ref()),
         quoted(command_input.command.as_ref()),
         quoted(command_input.input.as_ref()),
-        quoted(&command_input.source_kind),
+        lean_model_command_input_source_kind(command_input.source_kind),
         quoted(&command_input.source_description),
         quoted_string_list(&command_input.provenance_chain),
         quoted(&command_input.event_stream_source_event),
@@ -8082,7 +8033,7 @@ fn quint_command_input_record(command_input: &NewProjectCommandInput) -> String 
         quoted(command_input.slice_slug.as_ref()),
         quoted(command_input.command.as_ref()),
         quoted(command_input.input.as_ref()),
-        quoted(&command_input.source_kind),
+        quint_model_command_input_source_kind(command_input.source_kind),
         quoted(&command_input.source_description),
         quoted_string_list(&command_input.provenance_chain),
         quoted(&command_input.event_stream_source_event),
@@ -8694,7 +8645,7 @@ fn lean_view_control_record(control: &NewProjectViewControl) -> String {
         quoted(control.control.as_ref()),
         quoted(control.command.as_ref()),
         quoted(control.input.as_ref()),
-        quoted(control.input_source_kind.as_ref()),
+        lean_model_command_input_source_kind(control.input_source_kind),
         quoted(control.input_source_description.as_ref()),
         quoted(control.input_sketch_token.as_ref()),
         control.input_visible_to_actor,
@@ -8724,7 +8675,7 @@ fn quint_view_control_record(control: &NewProjectViewControl) -> String {
         quoted(control.control.as_ref()),
         quoted(control.command.as_ref()),
         quoted(control.input.as_ref()),
-        quoted(control.input_source_kind.as_ref()),
+        quint_model_command_input_source_kind(control.input_source_kind),
         quoted(control.input_source_description.as_ref()),
         quoted(control.input_sketch_token.as_ref()),
         control.input_visible_to_actor,

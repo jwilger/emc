@@ -2,6 +2,9 @@
 
 use std::cmp::Ordering;
 
+use crate::core::emit::{
+    lean_model_command_input_source_kind, quint_model_command_input_source_kind,
+};
 use crate::core::formal_slice_facts::ScenarioKind;
 use crate::core::types::{
     BitEncodingSemantics, CommandErrorName, CommandErrorRecoveryKind,
@@ -339,7 +342,7 @@ pub(crate) fn lean_command_record_structure() -> &'static str {
 }
 
 pub(crate) fn lean_command_input_record_structure() -> &'static str {
-    "structure ModelCommandInput where\n  workflow : String\n  slice : String\n  command : String\n  input : String\n  sourceKind : String\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
+    "inductive ModelCommandInputSourceKind where\n  | actor\n  | session\n  | generated\n  | externalPayload\n  | eventStreamState\n  | invocationArgument\nderiving BEq, DecidableEq, Repr\n\nstructure ModelCommandInput where\n  workflow : String\n  slice : String\n  command : String\n  input : String\n  sourceKind : ModelCommandInputSourceKind\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
 }
 
 pub(crate) fn lean_read_model_record_structures() -> &'static str {
@@ -347,7 +350,7 @@ pub(crate) fn lean_read_model_record_structures() -> &'static str {
 }
 
 pub(crate) fn lean_view_record_structures() -> &'static str {
-    "structure ModelView where\n  workflow : String\n  slice : String\n  view : String\n\nstructure ModelViewDefinition where\n  workflow : String\n  slice : String\n  view : String\n  readModels : List String\n  sketchTokens : List String\n  localStates : List String\n  filters : List String\n\nstructure ModelViewControl where\n  workflow : String\n  slice : String\n  view : String\n  control : String\n  command : String\n  input : String\n  inputSourceKind : String\n  inputSourceDescription : String\n  inputSketchToken : String\n  inputVisibleToActor : Bool\n  inputDecisionField : Bool\n  handledErrors : List String\n  recoveryBehavior : String\n  controlSketchToken : String\n  navigationType : String\n  navigationTarget : String\n  externalWorkflow : String\n  externalSystem : String\n  handoffContract : String\n\nstructure ModelViewField where\n  workflow : String\n  slice : String\n  view : String\n  field : String\n  sourceKind : String\n  sourceReadModel : String\n  sourceField : String\n  provenance : String\n  bitEncoding : String"
+    "structure ModelView where\n  workflow : String\n  slice : String\n  view : String\n\nstructure ModelViewDefinition where\n  workflow : String\n  slice : String\n  view : String\n  readModels : List String\n  sketchTokens : List String\n  localStates : List String\n  filters : List String\n\nstructure ModelViewControl where\n  workflow : String\n  slice : String\n  view : String\n  control : String\n  command : String\n  input : String\n  inputSourceKind : ModelCommandInputSourceKind\n  inputSourceDescription : String\n  inputSketchToken : String\n  inputVisibleToActor : Bool\n  inputDecisionField : Bool\n  handledErrors : List String\n  recoveryBehavior : String\n  controlSketchToken : String\n  navigationType : String\n  navigationTarget : String\n  externalWorkflow : String\n  externalSystem : String\n  handoffContract : String\n\nstructure ModelViewField where\n  workflow : String\n  slice : String\n  view : String\n  field : String\n  sourceKind : String\n  sourceReadModel : String\n  sourceField : String\n  provenance : String\n  bitEncoding : String"
 }
 
 pub(crate) fn lean_board_record_structures() -> &'static str {
@@ -511,7 +514,7 @@ pub(crate) fn lean_model_command_input_list(command_inputs: &[FormalModelCommand
                     quoted(command_input.slice.as_ref()),
                     quoted(command_input.command.as_ref()),
                     quoted(command_input.input.as_ref()),
-                    quoted(command_input.source_kind.as_ref()),
+                    lean_model_command_input_source_kind(command_input.source_kind),
                     quoted(command_input.source_description.as_ref()),
                     quoted_list(&command_input.provenance_chain),
                     quoted(optional_text(&command_input.event_stream_source_event)),
@@ -657,7 +660,7 @@ pub(crate) fn quint_model_command_input_list(command_inputs: &[FormalModelComman
                     quoted(command_input.slice.as_ref()),
                     quoted(command_input.command.as_ref()),
                     quoted(command_input.input.as_ref()),
-                    quoted(command_input.source_kind.as_ref()),
+                    quint_model_command_input_source_kind(command_input.source_kind),
                     quoted(command_input.source_description.as_ref()),
                     quoted_list(&command_input.provenance_chain),
                     quoted(optional_text(&command_input.event_stream_source_event)),

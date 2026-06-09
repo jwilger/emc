@@ -10,8 +10,8 @@ use crate::core::effect::{
 use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
 use crate::core::emit::{
-    lean_slice_kind_name, lean_workflow_transition_kind, quint_slice_kind_name,
-    quint_workflow_transition_kind,
+    lean_model_command_input_source_kind, lean_slice_kind_name, lean_workflow_transition_kind,
+    quint_model_command_input_source_kind, quint_slice_kind_name, quint_workflow_transition_kind,
 };
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
 use crate::core::formal_model::{
@@ -51,12 +51,12 @@ use crate::core::formal_slice_facts::ScenarioKind;
 use crate::core::project::ProjectName;
 use crate::core::types::{
     BitEncodingSemantics, CommandErrorName, CommandErrorRecoveryKind,
-    CommandInputSourceDescription, CommandInputSourceKind, CommandName, ContractKindName,
-    CoveredDefinitionName, DataFlowSource, DataFlowTarget, DatumName, EventAttributeName,
-    EventAttributeSourceField, EventAttributeSourceName, EventName, LeanModuleName,
-    ModelDescription, ModelName, OutcomeLabelName, QuintModuleName, ScenarioName, ScenarioStepText,
-    SliceSlug, SourceChainHop, StreamName, TransformationSemantics, WorkflowSliceDetail,
-    WorkflowSlug, WorkflowTransitionRecord,
+    CommandInputSourceDescription, CommandName, ContractKindName, CoveredDefinitionName,
+    DataFlowSource, DataFlowTarget, DatumName, EventAttributeName, EventAttributeSourceField,
+    EventAttributeSourceName, EventName, LeanModuleName, ModelDescription, ModelName,
+    OutcomeLabelName, QuintModuleName, ScenarioName, ScenarioStepText, SliceSlug, SourceChainHop,
+    StreamName, TransformationSemantics, WorkflowSliceDetail, WorkflowSlug,
+    WorkflowTransitionRecord,
 };
 use sha2::{Digest, Sha256};
 
@@ -805,6 +805,18 @@ fn project_root_effects(
         ),
         Effect::require_canonical_declaration(
             lean_path.clone(),
+            canonical_declaration_prefix("inductive ModelCommandInputSourceKind where"),
+            canonical_declaration_marker("inductive ModelCommandInputSourceKind where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  sourceKind : ModelCommandInputSourceKind"),
+            canonical_declaration_marker("  sourceKind : ModelCommandInputSourceKind"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
             canonical_declaration_prefix("  invocationArgumentSourceField : String"),
             canonical_declaration_marker("  invocationArgumentSourceField : String"),
             lean_message.clone(),
@@ -849,6 +861,12 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("structure ModelViewControl where"),
             canonical_declaration_marker("structure ModelViewControl where"),
+            lean_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            lean_path.clone(),
+            canonical_declaration_prefix("  inputSourceKind : ModelCommandInputSourceKind"),
+            canonical_declaration_marker("  inputSourceKind : ModelCommandInputSourceKind"),
             lean_message.clone(),
         ),
         Effect::require_canonical_declaration(
@@ -1363,7 +1381,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("def modelCommandInputTracesToInvocationSource"),
             canonical_declaration_marker(
-                "def modelCommandInputTracesToInvocationSource (input : ModelCommandInput) : Bool := input.sourceKind == \"actor\" || (input.sourceKind == \"event_stream_state\" && input.eventStreamSourceEvent.isEmpty == false && input.eventStreamSourceAttribute.isEmpty == false) || (input.sourceKind == \"external_payload\" && input.externalPayloadSourceName.isEmpty == false && input.externalPayloadSourceField.isEmpty == false) || (input.sourceKind == \"generated\" && input.generatedSourceName.isEmpty == false && input.generatedSourceField.isEmpty == false) || (input.sourceKind == \"session\" && input.sessionSourceName.isEmpty == false && input.sessionSourceField.isEmpty == false) || (input.sourceKind == \"invocation_argument\" && input.invocationArgumentSourceName.isEmpty == false && input.invocationArgumentSourceField.isEmpty == false)",
+                "def modelCommandInputTracesToInvocationSource (input : ModelCommandInput) : Bool := input.sourceKind == ModelCommandInputSourceKind.actor || (input.sourceKind == ModelCommandInputSourceKind.eventStreamState && input.eventStreamSourceEvent.isEmpty == false && input.eventStreamSourceAttribute.isEmpty == false) || (input.sourceKind == ModelCommandInputSourceKind.externalPayload && input.externalPayloadSourceName.isEmpty == false && input.externalPayloadSourceField.isEmpty == false) || (input.sourceKind == ModelCommandInputSourceKind.generated && input.generatedSourceName.isEmpty == false && input.generatedSourceField.isEmpty == false) || (input.sourceKind == ModelCommandInputSourceKind.session && input.sessionSourceName.isEmpty == false && input.sessionSourceField.isEmpty == false) || (input.sourceKind == ModelCommandInputSourceKind.invocationArgument && input.invocationArgumentSourceName.isEmpty == false && input.invocationArgumentSourceField.isEmpty == false)",
             ),
             lean_message.clone(),
         ),
@@ -2006,7 +2024,15 @@ fn project_root_effects(
             quint_path.clone(),
             canonical_declaration_prefix("  type ModelCommandInput ="),
             canonical_declaration_marker(
-                "  type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: str, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str, invocationArgumentSourceName: str, invocationArgumentSourceField: str }",
+                "  type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: ModelCommandInputSourceKind, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str, invocationArgumentSourceName: str, invocationArgumentSourceField: str }",
+            ),
+            quint_message.clone(),
+        ),
+        Effect::require_canonical_declaration(
+            quint_path.clone(),
+            canonical_declaration_prefix("  type ModelCommandInputSourceKind ="),
+            canonical_declaration_marker(
+                "  type ModelCommandInputSourceKind = ModelCommandInputActor | ModelCommandInputSession | ModelCommandInputGenerated | ModelCommandInputExternalPayload | ModelCommandInputEventStreamState | ModelCommandInputInvocationArgument",
             ),
             quint_message.clone(),
         ),
@@ -2054,7 +2080,7 @@ fn project_root_effects(
             quint_path.clone(),
             canonical_declaration_prefix("  type ModelViewControl ="),
             canonical_declaration_marker(
-                "  type ModelViewControl = { workflow: str, slice: str, view: str, control: str, command: str, input: str, inputSourceKind: str, inputSourceDescription: str, inputSketchToken: str, inputVisibleToActor: bool, inputDecisionField: bool, handledErrors: List[str], recoveryBehavior: str, controlSketchToken: str, navigationType: str, navigationTarget: str, externalWorkflow: str, externalSystem: str, handoffContract: str }",
+                "  type ModelViewControl = { workflow: str, slice: str, view: str, control: str, command: str, input: str, inputSourceKind: ModelCommandInputSourceKind, inputSourceDescription: str, inputSketchToken: str, inputVisibleToActor: bool, inputDecisionField: bool, handledErrors: List[str], recoveryBehavior: str, controlSketchToken: str, navigationType: str, navigationTarget: str, externalWorkflow: str, externalSystem: str, handoffContract: str }",
             ),
             quint_message.clone(),
         ),
@@ -2896,7 +2922,7 @@ fn project_root_effects(
             quint_path.clone(),
             canonical_declaration_prefix("  def modelCommandInputTracesToInvocationSource"),
             canonical_declaration_marker(
-                "  def modelCommandInputTracesToInvocationSource(input) = input.sourceKind == \"actor\" or (input.sourceKind == \"event_stream_state\" and input.eventStreamSourceEvent != \"\" and input.eventStreamSourceAttribute != \"\") or (input.sourceKind == \"external_payload\" and input.externalPayloadSourceName != \"\" and input.externalPayloadSourceField != \"\") or (input.sourceKind == \"generated\" and input.generatedSourceName != \"\" and input.generatedSourceField != \"\") or (input.sourceKind == \"session\" and input.sessionSourceName != \"\" and input.sessionSourceField != \"\") or (input.sourceKind == \"invocation_argument\" and input.invocationArgumentSourceName != \"\" and input.invocationArgumentSourceField != \"\")",
+                "  def modelCommandInputTracesToInvocationSource(input) = input.sourceKind == ModelCommandInputActor or (input.sourceKind == ModelCommandInputEventStreamState and input.eventStreamSourceEvent != \"\" and input.eventStreamSourceAttribute != \"\") or (input.sourceKind == ModelCommandInputExternalPayload and input.externalPayloadSourceName != \"\" and input.externalPayloadSourceField != \"\") or (input.sourceKind == ModelCommandInputGenerated and input.generatedSourceName != \"\" and input.generatedSourceField != \"\") or (input.sourceKind == ModelCommandInputSession and input.sessionSourceName != \"\" and input.sessionSourceField != \"\") or (input.sourceKind == ModelCommandInputInvocationArgument and input.invocationArgumentSourceName != \"\" and input.invocationArgumentSourceField != \"\")",
             ),
             quint_message.clone(),
         ),
@@ -4256,11 +4282,7 @@ fn formal_model_command_inputs(
                     command_input.input(),
                     DatumName::try_new,
                 ),
-                source_kind: semantic_value(
-                    "command input source kind",
-                    command_input.source_kind(),
-                    CommandInputSourceKind::try_new,
-                ),
+                source_kind: command_input.source_kind(),
                 source_description: semantic_value(
                     "command input source description",
                     command_input.source_description(),
@@ -4820,7 +4842,7 @@ fn lean_model_view_control_list(project_view_controls: &[ProjectViewControl]) ->
                     json_string(control.control()),
                     json_string(control.command()),
                     json_string(control.input()),
-                    json_string(control.input_source_kind()),
+                    lean_model_command_input_source_kind(control.input_source_kind()),
                     json_string(control.input_source_description()),
                     json_string(control.input_sketch_token()),
                     control.input_visible_to_actor(),
@@ -4856,7 +4878,7 @@ fn quint_model_view_control_list(project_view_controls: &[ProjectViewControl]) -
                     json_string(control.control()),
                     json_string(control.command()),
                     json_string(control.input()),
-                    json_string(control.input_source_kind()),
+                    quint_model_command_input_source_kind(control.input_source_kind()),
                     json_string(control.input_source_description()),
                     json_string(control.input_sketch_token()),
                     control.input_visible_to_actor(),
