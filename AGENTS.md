@@ -29,17 +29,33 @@ For long-running architectural goals, keep the main agent focused on
 integration, review, PR ownership, CI, and merge cleanup. Use subagents only for
 bounded work that can run in parallel without blocking the next local step:
 specific codebase scouting questions, disjoint implementation slices with
-explicit file ownership, or focused verification. Prefer the smallest available
-capable model for scout-style subagents, and do not use subagents for overlapping
-shared-type refactors, PR merge/review handling, or work that requires immediate
-main-thread decisions.
+explicit file ownership, or focused verification. Do not use subagents by
+default. First prefer deterministic shell facts such as `rg`, `git diff`,
+generated artifact inspection, and focused test output. Use a subagent only when
+the delegated task is likely to consume fewer main-thread tokens than local
+inspection, usually no more than one scout subagent per increment. Prefer the
+smallest available capable model for scout-style subagents, and do not use
+subagents for overlapping shared-type refactors, PR merge/review handling, broad
+architecture surveys, or work that requires immediate main-thread decisions.
 
 For token efficiency on long-running goals, keep a short progress ledger in the
 repository when the work spans multiple PRs. The ledger should record completed
 increments, current PR boundaries, remaining typed-domain/string-boundary
 targets, focused verification already run, and the next likely increment. Use
 the ledger to avoid rediscovering repository state at the start of each
-increment.
+increment. When resuming such a goal, first read these instructions, read the
+ledger, and check `git status`; inspect only the files needed for the next
+increment unless the ledger is stale or contradicted by the worktree.
+
+Prefer deterministic scripts, including Codex hooks, only when they replace
+repeated agent inspection with cheap mechanical checks or concise state recall.
+Useful Codex hooks are narrow and fast: session-start reminders that point to a
+progress ledger, pre-tool guardrails that reject known-dangerous commands, or
+focused validation of generated artifacts. Avoid Codex hooks that emit large
+context, run broad repository scans, run tests on every prompt/tool call, update
+the worktree automatically, or duplicate Forgejo CI. Do not add hooks that
+enforce maintainer guidance by matching strings in documentation or source
+files.
 
 Before pushing to a PR branch, run focused local verification appropriate to
 the files changed. Do not run local `just ci` solely as a pre-push ritual;
