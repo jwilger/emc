@@ -1341,10 +1341,6 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         }
                     },
                     "required": ["workflow", "from", "via", "name"],
-                    "oneOf": [
-                        {"required": ["to"]},
-                        {"required": ["to_workflow", "reason"]}
-                    ],
                     "additionalProperties": false
             })),
         ),
@@ -1375,10 +1371,6 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         }
                     },
                     "required": ["workflow", "from", "via", "name"],
-                    "oneOf": [
-                        {"required": ["to"]},
-                        {"required": ["to_workflow"]}
-                    ],
                     "additionalProperties": false
             })),
         ),
