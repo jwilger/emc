@@ -8,6 +8,7 @@ mod tests {
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
+    use serde_json::Value;
     use tempfile::TempDir;
 
     #[test]
@@ -428,6 +429,51 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_transition_tool_schemas_have_openai_compatible_top_level_shape()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let output = Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(tools_list_requests())
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let stdout = String::from_utf8(output)?;
+        let responses = stdout
+            .lines()
+            .map(serde_json::from_str::<Value>)
+            .collect::<Result<Vec<_>, _>>()?;
+        let tools_response = responses
+            .iter()
+            .find(|response| response["id"] == 2)
+            .ok_or("tools/list response must be present")?;
+        let tools = tools_response["result"]["tools"]
+            .as_array()
+            .ok_or("tools/list response must include tools")?;
+
+        assert_openai_compatible_transition_tool_schema(transition_tool_schema(
+            tools,
+            "connect_workflow",
+        )?)?;
+        assert_openai_compatible_transition_tool_schema(transition_tool_schema(
+            tools,
+            "remove_transition",
+        )?)?;
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_authors_workflow_outcome_facts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -819,6 +865,40 @@ mod tests {
             .current_dir(cwd)
             .assert()
             .success();
+        Ok(())
+    }
+
+    fn transition_tool_schema<'tools>(
+        tools: &'tools [Value],
+        name: &str,
+    ) -> Result<&'tools Value, Box<dyn Error>> {
+        tools
+            .iter()
+            .find(|tool| tool["name"] == Value::String(name.to_owned()))
+            .and_then(|tool| tool.get("inputSchema"))
+            .ok_or_else(|| format!("{name} input schema must be advertised").into())
+    }
+
+    fn assert_openai_compatible_transition_tool_schema(
+        schema: &Value,
+    ) -> Result<(), Box<dyn Error>> {
+        assert_eq!(schema["type"], Value::String("object".to_owned()));
+        for keyword in ["oneOf", "anyOf", "allOf", "enum", "not"] {
+            assert!(
+                schema.get(keyword).is_none(),
+                "transition tool schemas must not use top-level {keyword}: {schema}"
+            );
+        }
+
+        let properties = schema["properties"]
+            .as_object()
+            .ok_or("transition tool schema must advertise object properties")?;
+        for property in ["workflow", "from", "to", "to_workflow", "via", "name"] {
+            assert!(
+                properties.contains_key(property),
+                "transition tool schema must advertise {property}: {schema}"
+            );
+        }
         Ok(())
     }
 
