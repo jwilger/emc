@@ -234,6 +234,7 @@
             nodejs
             openssl
             pkg-config
+            release-plz
             sqlite
           ] ++ runtimeTools;
 

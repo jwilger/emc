@@ -1,0 +1,75 @@
+# Copyright 2026 John Wilger
+
+name: Release-plz
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-plz-release:
+    name: Release unpublished crates
+    if: ${{ github.repository == 'Slipstream/emc' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: read
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      GIT_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install or reuse Nix
+        run: ./.forgejo/scripts/install-nix.sh
+
+      - name: Publish unpublished crates
+        run: |
+          set -euo pipefail
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          nix develop --command release-plz release --forge gitea
+
+  release-plz-pr:
+    name: Create or update release PR
+    if: ${{ github.repository == 'Slipstream/emc' }}
+    needs: release-plz-release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: release-plz-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      GIT_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install or reuse Nix
+        run: ./.forgejo/scripts/install-nix.sh
+
+      - name: Configure release-plz author
+        run: |
+          git config user.name "release-plz"
+          git config user.email "release-plz@noreply.git.johnwilger.com"
+
+      - name: Open release PR
+        run: |
+          set -euo pipefail
+          export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          nix develop --command release-plz release-pr --forge gitea
