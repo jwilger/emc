@@ -1,6 +1,6 @@
 // Copyright 2026 John Wilger
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
@@ -651,6 +651,7 @@ fn sync_exported_events_into_sqlite(project_root: &Path, sqlite_path: &Path) -> 
     events.sort_by(|left, right| left.event_id().cmp(right.event_id()));
 
     let mut conn = rusqlite::Connection::open(sqlite_path).map_err(|error| error.to_string())?;
+    prune_sqlite_streams_missing_from_exported_events(&mut conn, &events)?;
     let eventcore_streams = existing_eventcore_streams(&conn).map_err(|error| error.to_string())?;
     let mut stream_versions = existing_stream_versions(&conn).map_err(|error| error.to_string())?;
     let tx = conn.transaction().map_err(|error| error.to_string())?;
@@ -674,6 +675,35 @@ fn sync_exported_events_into_sqlite(project_root: &Path, sqlite_path: &Path) -> 
             ],
         )
         .map_err(|error| error.to_string())?;
+    }
+    tx.commit().map_err(|error| error.to_string())
+}
+
+fn prune_sqlite_streams_missing_from_exported_events(
+    conn: &mut rusqlite::Connection,
+    events: &[ExportedEvent],
+) -> Result<(), String> {
+    let exported_streams = events
+        .iter()
+        .map(|event| event.stream_id().as_ref().to_owned())
+        .collect::<BTreeSet<_>>();
+    if exported_streams.is_empty() {
+        return Ok(());
+    }
+
+    let streams = existing_stream_versions(conn)
+        .map_err(|error| error.to_string())?
+        .into_keys()
+        .collect::<Vec<_>>();
+    let tx = conn.transaction().map_err(|error| error.to_string())?;
+    for stream in streams {
+        if !exported_streams.contains(&stream) {
+            tx.execute(
+                "DELETE FROM eventcore_events WHERE stream_id = ?1",
+                params![stream],
+            )
+            .map_err(|error| error.to_string())?;
+        }
     }
     tx.commit().map_err(|error| error.to_string())
 }
