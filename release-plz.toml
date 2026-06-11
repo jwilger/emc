@@ -1,0 +1,8 @@
+# Copyright 2026 John Wilger
+
+[workspace]
+release_always = false
+repo_url = "https://git.johnwilger.com/Slipstream/emc"
+pr_branch_prefix = "release-plz-"
+pr_name = "chore: release"
+publish = true

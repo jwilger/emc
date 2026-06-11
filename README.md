@@ -364,3 +364,26 @@ The Nix gate is:
 ```sh
 nix flake check
 ```
+
+## Release Automation
+
+EMC releases are managed by release-plz in Forgejo Actions. The release
+workflow runs after pushes to `main`:
+
+- regular feature and fix PRs merged to `main` create or update a
+  `release-plz-*` release PR with the next crate version and changelog;
+- the release PR goes through the normal PR CI and review gates;
+- merging the release PR to `main` publishes unpublished crates, creates the git
+  tag, and creates the Forgejo release.
+
+The Forgejo repository must provide these secrets:
+
+- `RELEASE_PLZ_TOKEN`: Forgejo application token with repository read/write
+  access and issue read/write access so release-plz can create tags, releases,
+  labels, and release PRs.
+- `CARGO_REGISTRY_TOKEN`: crates.io token with `publish-new` and
+  `publish-update` scopes.
+
+`release-plz.toml` sets `release_always = false`, so publishing is tied to the
+merged release PR. The Forgejo server must support the commit-to-PR API used by
+release-plz to recognize release PR merge commits.
