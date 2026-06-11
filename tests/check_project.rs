@@ -1127,7 +1127,7 @@ mod tests {
         create_connected_workflow(&temp_dir)?;
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let lean = read_to_string(&lean_path)?.replace(
-            "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl",
+            "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.trigger.isEmpty == false) = true := by native_decide",
             "theorem workflowTransitionsAreStructured : workflowTransitions.length = 0 := rfl",
         );
         write(lean_path, lean)?;
