@@ -67,6 +67,38 @@ mod tests {
     }
 
     #[test]
+    fn sqlite_store_defaults_under_home_local_state_when_xdg_state_home_is_absent()
+    -> Result<(), Box<dyn Error>> {
+        let home = TempDir::new()?;
+        let project = TempDir::new()?;
+        let canonical_project = project.path().canonicalize()?;
+        let project_hash = hex::encode(Sha256::digest(
+            canonical_project.to_string_lossy().as_bytes(),
+        ));
+
+        let path = sqlite_event_store_path_with_env(project.path(), |name| {
+            (name == "HOME").then(|| home.path().as_os_str().to_os_string())
+        })?;
+
+        assert_eq!(
+            path,
+            home.path()
+                .join(".local")
+                .join("state")
+                .join("emc")
+                .join("projects")
+                .join(project_hash)
+                .join("events.sqlite3")
+        );
+        assert!(
+            !path.starts_with(project.path()),
+            "default SQLite event store must live outside the project repository"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn sqlite_store_path_honors_env_override() -> Result<(), Box<dyn Error>> {
         let project = TempDir::new()?;
         let override_path = Path::new("/tmp/custom-emc-events.sqlite3");
