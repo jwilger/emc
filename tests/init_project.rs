@@ -931,6 +931,46 @@ mod tests {
     }
 
     #[test]
+    fn init_recovers_artifact_only_project_by_exporting_initial_event() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        fs::write(
+            temp_dir.path().join("emc.toml"),
+            "[project]\nname = \"Eddy\"\nversion = \"0.1.0\"\nlean_module = \"Eddy\"\nquint_module = \"Eddy\"\n",
+        )?;
+        fs::create_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::create_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Eddy"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "EMC project Eddy layout is present",
+            ));
+
+        let exported_events_dir = temp_dir.path().join("model/events/v1");
+        assert!(
+            exported_events_dir.exists(),
+            "init must create the exported event directory for artifact-only recovery"
+        );
+        let exported_event_count = fs::read_dir(exported_events_dir)?.count();
+        assert!(
+            exported_event_count > 0,
+            "init must export the initial project event for artifact-only recovery"
+        );
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    #[test]
     fn init_requires_exact_name_flag() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
