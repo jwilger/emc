@@ -3394,17 +3394,17 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     let lean_slice_module_invariant_prefix =
         canonical_declaration_prefix("theorem workflowSlicesHaveModuleReferences :");
     let lean_transition_invariant_marker = canonical_declaration_marker(
-        "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl",
+        "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.trigger.isEmpty == false) = true := by native_decide",
     );
     let lean_transition_invariant_prefix =
         canonical_declaration_prefix("theorem workflowTransitionsAreStructured :");
     let lean_transition_source_resolution_marker = canonical_declaration_marker(
-        "theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.source) = true := rfl",
+        "theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.source) = true := by native_decide",
     );
     let lean_transition_source_resolution_prefix =
         canonical_declaration_prefix("theorem workflowTransitionSourcesResolve :");
     let lean_transition_target_resolution_marker = canonical_declaration_marker(
-        "theorem workflowTransitionTargetsResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.target || workflowExitTargets.contains transition.target) = true := rfl",
+        "theorem workflowTransitionTargetsResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.target || workflowExitTargets.contains transition.target) = true := by native_decide",
     );
     let lean_transition_target_resolution_prefix =
         canonical_declaration_prefix("theorem workflowTransitionTargetsResolve :");

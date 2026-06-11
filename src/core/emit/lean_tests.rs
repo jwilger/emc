@@ -3,6 +3,8 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
+    use std::fs::write;
+    use std::process::Command;
 
     use crate::core::digest::{
         WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest,
@@ -10,14 +12,16 @@ mod tests {
     use crate::core::emit::lean::{emit_slice_module, emit_workflow_module};
     use crate::core::types::{
         CommandErrorName, CommandName, OutcomeLabelName, PayloadContractName, SliceKindName,
-        TransitionTriggerName, WorkflowCommandErrorRecord, WorkflowCommandErrorRecords,
+        StreamName, TransitionTriggerName, WorkflowCommandErrorRecord, WorkflowCommandErrorRecords,
         WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
-        WorkflowEntryLifecycleStateRecord, WorkflowEntryLifecycleStateRecords, WorkflowModuleData,
-        WorkflowOutcomeRecord, WorkflowOutcomeRecords, WorkflowOwnedDefinitionKind,
-        WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords,
-        WorkflowSliceDetail, WorkflowSliceDetails, WorkflowStepRelationshipName,
-        WorkflowTransitionEndpoint, WorkflowTransitionKind, WorkflowTransitionRecord,
-        WorkflowTransitionRecords,
+        WorkflowEntryLifecycleStateRecord, WorkflowEntryLifecycleStateRecords,
+        WorkflowEventParticipation, WorkflowModuleData, WorkflowOutcomeRecord,
+        WorkflowOutcomeRecords, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
+        WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
+        WorkflowSliceDetails, WorkflowStepRelationshipName, WorkflowTransitionEndpoint,
+        WorkflowTransitionEvidenceRecord, WorkflowTransitionEvidenceRecords,
+        WorkflowTransitionKind, WorkflowTransitionRecord, WorkflowTransitionRecords,
+        WorkflowTransitionSourceEvidenceText, WorkflowTransitionTargetEvidenceText,
     };
     use crate::io::dto::{
         parse_lean_module_name, parse_model_description, parse_model_name, parse_slice_slug,
@@ -328,7 +332,7 @@ mod tests {
         );
         assert!(lean.contains("theorem workflowIdentityIsStable"));
         assert!(lean.contains(
-            "theorem workflowEntryLifecycleStatesCoverRequiredStatesIsStable : workflowEntryLifecycleStatesCoverRequiredStates = true := rfl"
+            "theorem workflowEntryLifecycleStatesCoverRequiredStatesIsStable : workflowEntryLifecycleStatesCoverRequiredStates = true := by native_decide"
         ));
         assert!(
             lean.contains(
@@ -338,55 +342,55 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.trigger.isEmpty == false) = true := rfl"
+                "theorem workflowTransitionsAreStructured : workflowTransitions.all (fun transition => transition.source.isEmpty == false && transition.target.isEmpty == false && transition.trigger.isEmpty == false) = true := by native_decide"
             ),
             "Lean artifact must prove every business transition has source, target, and trigger fields"
         );
         assert!(
             lean.contains(
-                "theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.source) = true := rfl"
+                "theorem workflowTransitionSourcesResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.source) = true := by native_decide"
             ),
             "Lean artifact must prove transition sources are composed workflow steps"
         );
         assert!(
             lean.contains(
-                "theorem workflowTransitionTargetsResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.target || workflowExitTargets.contains transition.target) = true := rfl"
+                "theorem workflowTransitionTargetsResolve : workflowTransitions.all (fun transition => workflowSliceSlugs.contains transition.target || workflowExitTargets.contains transition.target) = true := by native_decide"
             ),
             "Lean artifact must prove transition targets are composed steps or explicit workflow exits"
         );
         assert!(
             lean.contains(
-                "theorem workflowStepRelationshipsAreAllowedIsStable : workflowStepRelationshipsAreAllowed = true := rfl"
+                "theorem workflowStepRelationshipsAreAllowedIsStable : workflowStepRelationshipsAreAllowed = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current workflow step relationships are modeled"
         );
         assert!(
             lean.contains(
-                "theorem workflowStepSlugsAreUniqueIsStable : workflowStepSlugsAreUnique = true := rfl"
+                "theorem workflowStepSlugsAreUniqueIsStable : workflowStepSlugsAreUnique = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current workflow step slugs are unique"
         );
         assert!(
             lean.contains(
-                "theorem workflowHasExactlyOneEntryStepIsStable : workflowHasExactlyOneEntryStep = true := rfl"
+                "theorem workflowHasExactlyOneEntryStepIsStable : workflowHasExactlyOneEntryStep = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current workflow has exactly one entry step"
         );
         assert!(
             lean.contains(
-                "theorem workflowMainStepsHaveIncomingReachabilityIsStable : workflowMainStepsHaveIncomingReachability = true := rfl"
+                "theorem workflowMainStepsHaveIncomingReachabilityIsStable : workflowMainStepsHaveIncomingReachability = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current main workflow steps are reachable"
         );
         assert!(
             lean.contains(
-                "theorem workflowNonSupportingStepsReachableFromEntryIsStable : workflowNonSupportingStepsReachableFromEntry = true := rfl"
+                "theorem workflowNonSupportingStepsReachableFromEntryIsStable : workflowNonSupportingStepsReachableFromEntry = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current non-supporting workflow steps are reachable from entry"
         );
         assert!(
             lean.contains(
-                "theorem workflowBranchAndAlternateStepsHaveTriggerOrRationaleIsStable : workflowBranchAndAlternateStepsHaveTriggerOrRationale = true := rfl"
+                "theorem workflowBranchAndAlternateStepsHaveTriggerOrRationaleIsStable : workflowBranchAndAlternateStepsHaveTriggerOrRationale = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current branch and alternate steps explain why they are reached"
         );
@@ -632,115 +636,115 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem workflowExternallyRelevantOutcomesHandledIsStable : workflowExternallyRelevantOutcomesHandled = true := rfl"
+                "theorem workflowExternallyRelevantOutcomesHandledIsStable : workflowExternallyRelevantOutcomesHandled = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current externally relevant outcomes are handled"
         );
         assert!(
             lean.contains(
-                "theorem workflowTransitionsHaveModeledKindsIsStable : workflowTransitionsHaveModeledKinds = true := rfl"
+                "theorem workflowTransitionsHaveModeledKindsIsStable : workflowTransitionsHaveModeledKinds = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current transitions use modeled transition kinds"
         );
         assert!(
             lean.contains(
-                "theorem workflowExitsNameTargetsAndRationaleIsStable : workflowExitsNameTargetsAndRationale = true := rfl"
+                "theorem workflowExitsNameTargetsAndRationaleIsStable : workflowExitsNameTargetsAndRationale = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current workflow exits name their targets and rationale"
         );
         assert!(
             lean.contains(
-                "theorem workflowTransitionsDoNotUseCommandErrorsAsOutcomesIsStable : workflowTransitionsDoNotUseCommandErrorsAsOutcomes = true := rfl"
+                "theorem workflowTransitionsDoNotUseCommandErrorsAsOutcomesIsStable : workflowTransitionsDoNotUseCommandErrorsAsOutcomes = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current outcome transitions do not branch on command-local errors"
         );
         assert!(
             lean.contains(
-                "theorem workflowNonEventDefinitionsAreUniquelyOwnedIsStable : workflowNonEventDefinitionsAreUniquelyOwned = true := rfl"
+                "theorem workflowNonEventDefinitionsAreUniquelyOwnedIsStable : workflowNonEventDefinitionsAreUniquelyOwned = true := by native_decide"
             ),
             "Lean workflow artifacts must prove non-event definitions are owned by exactly one slice"
         );
         assert!(
             lean.contains(
-                "theorem workflowSharedEventDefinitionsHaveIdenticalIdentityIsStable : workflowSharedEventDefinitionsHaveIdenticalIdentity = true := rfl"
+                "theorem workflowSharedEventDefinitionsHaveIdenticalIdentityIsStable : workflowSharedEventDefinitionsHaveIdenticalIdentity = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current shared event definitions have identical stream and provenance identity"
         );
         assert!(
             lean.contains(
-                "theorem workflowOnlyEventsMayBeSharedAcrossSlicesIsStable : workflowOnlyEventsMayBeSharedAcrossSlices = true := rfl"
+                "theorem workflowOnlyEventsMayBeSharedAcrossSlicesIsStable : workflowOnlyEventsMayBeSharedAcrossSlices = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current cross-slice sharing is restricted to events"
         );
         assert!(
             lean.contains(
-                "theorem workflowCommandTransitionsResolveControlsAndCommandsIsStable : workflowCommandTransitionsResolveControlsAndCommands = true := rfl"
+                "theorem workflowCommandTransitionsResolveControlsAndCommandsIsStable : workflowCommandTransitionsResolveControlsAndCommands = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current command transitions resolve source controls and target commands"
         );
         assert!(
             lean.contains(
-                "theorem workflowStateViewCommandTransitionsTargetStateChangesIsStable : workflowStateViewCommandTransitionsTargetStateChanges = true := rfl"
+                "theorem workflowStateViewCommandTransitionsTargetStateChangesIsStable : workflowStateViewCommandTransitionsTargetStateChanges = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current state-view command transitions target state-change slices"
         );
         assert!(
             lean.contains(
-                "theorem workflowCommandTransitionsTargetOwnedCommandsIsStable : workflowCommandTransitionsTargetOwnedCommands = true := rfl"
+                "theorem workflowCommandTransitionsTargetOwnedCommandsIsStable : workflowCommandTransitionsTargetOwnedCommands = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current command transitions target command-owning slices"
         );
         assert!(
             lean.contains(
-                "theorem workflowCommandTransitionsSourceOwnedControlsIsStable : workflowCommandTransitionsSourceOwnedControls = true := rfl"
+                "theorem workflowCommandTransitionsSourceOwnedControlsIsStable : workflowCommandTransitionsSourceOwnedControls = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current command transitions come from source-owned controls"
         );
         assert!(
             lean.contains(
-                "theorem workflowEventTransitionsAreSharedByEndpointSlicesIsStable : workflowEventTransitionsAreSharedByEndpointSlices = true := rfl"
+                "theorem workflowEventTransitionsAreSharedByEndpointSlicesIsStable : workflowEventTransitionsAreSharedByEndpointSlices = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current event transitions are shared by endpoint slices"
         );
         assert!(
             lean.contains(
-                "theorem workflowEventTransitionsHaveParticipatingEndpointEventsIsStable : workflowEventTransitionsHaveParticipatingEndpointEvents = true := rfl"
+                "theorem workflowEventTransitionsHaveParticipatingEndpointEventsIsStable : workflowEventTransitionsHaveParticipatingEndpointEvents = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current event transitions have participating endpoint events"
         );
         assert!(
             lean.contains(
-                "theorem workflowNavigationTransitionsResolveControlsAndViewsIsStable : workflowNavigationTransitionsResolveControlsAndViews = true := rfl"
+                "theorem workflowNavigationTransitionsResolveControlsAndViewsIsStable : workflowNavigationTransitionsResolveControlsAndViews = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current navigation transitions resolve source controls and target views"
         );
         assert!(
             lean.contains(
-                "theorem workflowNavigationTransitionsResolveToEntryViewsIsStable : workflowNavigationTransitionsResolveToEntryViews = true := rfl"
+                "theorem workflowNavigationTransitionsResolveToEntryViewsIsStable : workflowNavigationTransitionsResolveToEntryViews = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current navigation transitions target entry views"
         );
         assert!(
             lean.contains(
-                "theorem workflowOutcomesSourceResolveIsStable : workflowOutcomesSourceResolve = true := rfl"
+                "theorem workflowOutcomesSourceResolveIsStable : workflowOutcomesSourceResolve = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current workflow outcome facts source from composed workflow steps"
         );
         assert!(
             lean.contains(
-                "theorem workflowCommandErrorsSourceResolveIsStable : workflowCommandErrorsSourceResolve = true := rfl"
+                "theorem workflowCommandErrorsSourceResolveIsStable : workflowCommandErrorsSourceResolve = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current workflow command-error facts source from composed workflow steps"
         );
         assert!(
             lean.contains(
-                "theorem workflowExternalTriggersDeclarePayloadContractsIsStable : workflowExternalTriggersDeclarePayloadContracts = true := rfl"
+                "theorem workflowExternalTriggersDeclarePayloadContractsIsStable : workflowExternalTriggersDeclarePayloadContracts = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current external triggers declare payload contracts"
         );
         assert!(
             lean.contains(
-                "theorem workflowExternalTriggerPayloadContractsHaveProvenanceIsStable : workflowExternalTriggerPayloadContractsHaveProvenance = true := rfl"
+                "theorem workflowExternalTriggerPayloadContractsHaveProvenanceIsStable : workflowExternalTriggerPayloadContractsHaveProvenance = true := by native_decide"
             ),
             "Lean workflow artifacts must prove current external trigger payload contract provenance"
         );
@@ -791,6 +795,147 @@ mod tests {
         assert!(lean.contains("def workflowSlices : List WorkflowSlice := []"));
         assert!(lean.contains("def workflowSliceDetails : List WorkflowSliceDetail := []"));
         assert!(lean.contains("def workflowTransitions : List WorkflowTransition := []"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn lean_workflow_module_verifies_large_shared_event_workflow() -> Result<(), Box<dyn Error>> {
+        let temp_dir = tempfile::TempDir::new()?;
+        let workflow_name = parse_model_name("Organization access")?;
+        let workflow_description = parse_model_description("Actor manages organization access.")?;
+        let workflow_slug = parse_workflow_slug("organization-access")?;
+
+        let workflow_slice_details = (0..40)
+            .map(|index| {
+                Ok(WorkflowSliceDetail::new_with_relationship(
+                    parse_slice_slug(&format!("access-step-{index}"))?,
+                    parse_model_name(&format!("Access step {index}"))?,
+                    if index % 2 == 0 {
+                        SliceKindName::try_new("state_view".to_owned())?
+                    } else {
+                        SliceKindName::try_new("state_change".to_owned())?
+                    },
+                    parse_model_description(&format!("Access step {index} boundary."))?,
+                    if index == 0 {
+                        WorkflowStepRelationshipName::Entry
+                    } else {
+                        WorkflowStepRelationshipName::Main
+                    },
+                ))
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+
+        let workflow_transitions = (0..39)
+            .map(|index| {
+                Ok(WorkflowTransitionRecord::new(
+                    WorkflowTransitionEndpoint::try_new(format!("access-step-{index}"))?,
+                    WorkflowTransitionEndpoint::try_new(format!("access-step-{}", index + 1))?,
+                    WorkflowTransitionKind::try_new("command".to_owned())?,
+                    TransitionTriggerName::try_new(format!("GrantAccess{index}"))?,
+                ))
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+
+        let mut owned_definitions = Vec::new();
+        for index in 0..40 {
+            owned_definitions.push(
+                WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
+                    WorkflowTransitionEndpoint::try_new(format!("access-step-{index}"))?,
+                    WorkflowOwnedDefinitionKind::try_new("event".to_owned())?,
+                    WorkflowOwnedDefinitionName::try_new("AccessChanged".to_owned())?,
+                    StreamName::try_new("organization-access-events".to_owned())?,
+                    parse_model_description("Shared organization-access event identity.")?,
+                    if index % 2 == 0 {
+                        WorkflowEventParticipation::Emitted
+                    } else {
+                        WorkflowEventParticipation::Observed
+                    },
+                ),
+            );
+        }
+        for index in 0..39 {
+            owned_definitions.push(WorkflowOwnedDefinitionRecord::new(
+                WorkflowTransitionEndpoint::try_new(format!("access-step-{index}"))?,
+                WorkflowOwnedDefinitionKind::try_new("control".to_owned())?,
+                WorkflowOwnedDefinitionName::try_new(format!("GrantAccess{index}"))?,
+            ));
+            owned_definitions.push(WorkflowOwnedDefinitionRecord::new(
+                WorkflowTransitionEndpoint::try_new(format!("access-step-{}", index + 1))?,
+                WorkflowOwnedDefinitionKind::try_new("command".to_owned())?,
+                WorkflowOwnedDefinitionName::try_new(format!("GrantAccess{index}"))?,
+            ));
+        }
+
+        let transition_evidences = (0..39)
+            .map(|index| {
+                Ok(WorkflowTransitionEvidenceRecord::new(
+                    WorkflowTransitionEndpoint::try_new(format!("access-step-{index}"))?,
+                    WorkflowTransitionEndpoint::try_new(format!("access-step-{}", index + 1))?,
+                    WorkflowTransitionKind::try_new("command".to_owned())?,
+                    TransitionTriggerName::try_new(format!("GrantAccess{index}"))?,
+                    WorkflowTransitionSourceEvidenceText::try_new(format!(
+                        "access-step-{index} exposes GrantAccess{index}"
+                    ))?,
+                    WorkflowTransitionTargetEvidenceText::try_new(format!(
+                        "access-step-{} handles GrantAccess{index}",
+                        index + 1
+                    ))?,
+                ))
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+
+        let workflow_owned_definitions =
+            WorkflowOwnedDefinitionRecords::from_records(owned_definitions.clone());
+        let workflow_transition_evidences =
+            WorkflowTransitionEvidenceRecords::from_records(transition_evidences.clone());
+        let workflow_module = WorkflowModuleData::new(
+            workflow_name.clone(),
+            workflow_description.clone(),
+            workflow_slug.clone(),
+            artifact_digest(WorkflowArtifactDigestInput {
+                workflow_name,
+                workflow_slug,
+                workflow_description,
+                workflow_slice_details: WorkflowSliceDetails::from_details(
+                    workflow_slice_details.clone(),
+                ),
+                workflow_transitions: WorkflowTransitionRecords::from_records(
+                    workflow_transitions.clone(),
+                ),
+                workflow_outcomes: WorkflowOutcomeRecords::from_records([]),
+                workflow_command_errors: WorkflowCommandErrorRecords::from_records([]),
+                workflow_owned_definitions: workflow_owned_definitions.clone(),
+                workflow_transition_evidences: workflow_transition_evidences.clone(),
+                workflow_requires_entry_lifecycle_coverage: false,
+                workflow_entry_lifecycle_states: Default::default(),
+            }),
+        )
+        .with_slice_details(WorkflowSliceDetails::from_details(workflow_slice_details))
+        .with_transitions(WorkflowTransitionRecords::from_records(
+            workflow_transitions,
+        ))
+        .with_owned_definitions(workflow_owned_definitions)
+        .with_transition_evidences(workflow_transition_evidences);
+
+        let lean_module = emit_workflow_module(
+            parse_lean_module_name("OrganizationAccess")?,
+            workflow_module,
+        );
+        let lean_path = temp_dir.path().join("OrganizationAccess.lean");
+        write(&lean_path, lean_module.as_ref())?;
+
+        let output = Command::new("lake")
+            .args(["env", "lean", "OrganizationAccess.lean"])
+            .current_dir(temp_dir.path())
+            .output()?;
+
+        assert!(
+            output.status.success(),
+            "generated large workflow Lean module must verify\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         Ok(())
     }
