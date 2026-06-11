@@ -699,6 +699,7 @@ pub(crate) enum Effect {
     RequireOnlyModeledArtifacts(ModeledArtifactsRequirement),
     RequireReviewRecord(ReviewRecordRequirement),
     RunProcess(ProcessInvocation),
+    RunProcessBatch(ProcessInvocations),
     RecordCleanReviewFromWorkflow(CleanReviewEffect),
     DeclareWorkflowReadinessFromWorkflow(WorkflowReadinessEffect),
     RequireWorkflowEntryLifecycleCoverageFromWorkflow(WorkflowSlug),
@@ -873,6 +874,21 @@ impl ProcessInvocation {
 
     pub(crate) fn success(&self) -> &ReportLine {
         &self.success
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct ProcessInvocations {
+    invocations: Vec<ProcessInvocation>,
+}
+
+impl ProcessInvocations {
+    pub(crate) fn new(invocations: Vec<ProcessInvocation>) -> Self {
+        Self { invocations }
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &ProcessInvocation> {
+        self.invocations.iter()
     }
 }
 

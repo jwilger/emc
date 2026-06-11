@@ -3,11 +3,12 @@
 use std::collections::BTreeSet;
 
 use crate::core::effect::{
-    Effect, EffectPlan, ProcessArgument, ProcessInvocation, ProgramName, ReportLine,
+    Effect, EffectPlan, ProcessArgument, ProcessInvocation, ProcessInvocations, ProgramName,
+    ReportLine,
 };
 use crate::core::layout::{ModeledWorkflowLayout, ModeledWorkflowLayouts};
 use crate::core::project::ProjectName;
-use crate::core::types::{WorkflowSliceDetail, WorkflowSliceDetails};
+use crate::core::types::WorkflowSliceDetails;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) struct QuintInvariantName(&'static str);
@@ -280,109 +281,129 @@ pub(crate) fn verify_project(
     modeled_workflows: ModeledWorkflowLayouts,
     workflow_slice_details: WorkflowSliceDetails,
 ) -> EffectPlan {
-    EffectPlan::new(
-        verify_project_root(project_name)
-            .into_iter()
-            .chain(
-                modeled_workflows
-                    .into_inner()
-                    .into_iter()
-                    .flat_map(verify_modeled_workflow),
-            )
-            .chain(verify_modeled_slices(workflow_slice_details.into_inner()))
-            .collect(),
-    )
-}
-
-fn verify_project_root(project_name: ProjectName) -> Vec<Effect> {
     let module_name = module_name_from_raw(project_name.as_ref());
-    vec![
-        Effect::RunProcess(ProcessInvocation::new(
-            program_name("lake"),
-            vec![
-                process_argument("env"),
-                process_argument("lean"),
-                process_argument(format!("model/lean/{module_name}.lean")),
-            ],
-            report_line("Lean4 artifacts verified"),
-        )),
-        Effect::RunProcess(ProcessInvocation::new(
-            program_name("quint"),
-            vec![
-                process_argument("typecheck"),
-                process_argument(format!("model/quint/{module_name}.qnt")),
-            ],
-            report_line("Quint artifacts verified"),
-        )),
-        Effect::RunProcess(ProcessInvocation::new(
-            program_name("quint"),
-            vec![
-                process_argument("verify"),
-                process_argument("--invariant"),
-                QuintInvariantSet::project_root().as_process_argument(),
-                process_argument(format!("model/quint/{module_name}.qnt")),
-            ],
-            report_line("Quint artifacts verified"),
-        )),
-    ]
-}
-
-fn verify_modeled_workflow(workflow: ModeledWorkflowLayout) -> Vec<Effect> {
-    vec![
-        Effect::RunProcess(ProcessInvocation::new(
-            program_name("lake"),
-            vec![
-                process_argument("env"),
-                process_argument("lean"),
-                process_argument(workflow.lean_artifact_path().as_ref().to_owned()),
-            ],
-            report_line("Lean4 artifacts verified"),
-        )),
-        Effect::RunProcess(ProcessInvocation::new(
-            program_name("quint"),
-            vec![
-                process_argument("verify"),
-                process_argument("--invariant"),
-                QuintInvariantSet::workflow().as_process_argument(),
-                process_argument(workflow.quint_artifact_path().as_ref().to_owned()),
-            ],
-            report_line("Quint artifacts verified"),
-        )),
-    ]
-}
-
-fn verify_modeled_slices(workflow_slice_details: Vec<WorkflowSliceDetail>) -> Vec<Effect> {
-    workflow_slice_details
+    let modeled_workflows = modeled_workflows.into_inner();
+    let slice_module_names = workflow_slice_details
+        .into_inner()
         .into_iter()
         .map(|slice| module_name_from_raw(slice.name().as_ref()))
         .collect::<BTreeSet<_>>()
         .into_iter()
-        .flat_map(verify_modeled_slice)
-        .collect()
+        .collect::<Vec<_>>();
+
+    let mut effects = vec![
+        Effect::RunProcess(verify_project_root_lean(&module_name)),
+        Effect::RunProcess(verify_project_root_quint_typecheck(&module_name)),
+    ];
+    effects.extend(
+        modeled_workflows
+            .iter()
+            .map(|workflow| Effect::RunProcess(verify_modeled_workflow_lean(workflow))),
+    );
+    effects.extend(
+        slice_module_names
+            .iter()
+            .map(|module_name| Effect::RunProcess(verify_modeled_slice_lean(module_name))),
+    );
+
+    let mut quint_verifications = vec![verify_project_root_quint(&module_name)];
+    quint_verifications.extend(modeled_workflows.iter().map(verify_modeled_workflow_quint));
+    quint_verifications.extend(
+        slice_module_names
+            .iter()
+            .map(|module_name| verify_modeled_slice_quint(module_name)),
+    );
+    effects.push(Effect::RunProcessBatch(ProcessInvocations::new(
+        quint_verifications,
+    )));
+
+    EffectPlan::new(effects)
 }
 
-fn verify_modeled_slice(module_name: String) -> Vec<Effect> {
-    vec![
-        Effect::RunProcess(ProcessInvocation::new(
-            program_name("lake"),
-            vec![
-                process_argument("env"),
-                process_argument("lean"),
-                process_argument(format!("model/lean/slices/{module_name}.lean")),
-            ],
-            report_line("Lean4 artifacts verified"),
-        )),
-        Effect::RunProcess(ProcessInvocation::new(
-            program_name("quint"),
-            vec![
-                process_argument("verify"),
-                process_argument("--invariant"),
-                QuintInvariantSet::slice().as_process_argument(),
-                process_argument(format!("model/quint/slices/{module_name}.qnt")),
-            ],
-            report_line("Quint artifacts verified"),
-        )),
-    ]
+fn verify_project_root_lean(module_name: &str) -> ProcessInvocation {
+    ProcessInvocation::new(
+        program_name("lake"),
+        vec![
+            process_argument("env"),
+            process_argument("lean"),
+            process_argument(format!("model/lean/{module_name}.lean")),
+        ],
+        report_line("Lean4 artifacts verified"),
+    )
+}
+
+fn verify_project_root_quint_typecheck(module_name: &str) -> ProcessInvocation {
+    ProcessInvocation::new(
+        program_name("quint"),
+        vec![
+            process_argument("typecheck"),
+            process_argument(format!("model/quint/{module_name}.qnt")),
+        ],
+        report_line("Quint artifacts verified"),
+    )
+}
+
+fn verify_project_root_quint(module_name: &str) -> ProcessInvocation {
+    ProcessInvocation::new(
+        program_name("quint"),
+        vec![
+            process_argument("verify"),
+            process_argument("--invariant"),
+            QuintInvariantSet::project_root().as_process_argument(),
+            process_argument(format!("model/quint/{module_name}.qnt")),
+        ],
+        report_line("Quint artifacts verified"),
+    )
+}
+
+fn verify_modeled_workflow_lean(workflow: &ModeledWorkflowLayout) -> ProcessInvocation {
+    ProcessInvocation::new(
+        program_name("lake"),
+        vec![
+            process_argument("env"),
+            process_argument("lean"),
+            process_argument(workflow.lean_artifact_path().as_ref().to_owned()),
+        ],
+        report_line("Lean4 artifacts verified"),
+    )
+}
+
+fn verify_modeled_workflow_quint(workflow: &ModeledWorkflowLayout) -> ProcessInvocation {
+    ProcessInvocation::new(
+        program_name("quint"),
+        vec![
+            process_argument("verify"),
+            process_argument("--invariant"),
+            QuintInvariantSet::workflow().as_process_argument(),
+            process_argument(workflow.quint_artifact_path().as_ref().to_owned()),
+        ],
+        report_line("Quint artifacts verified"),
+    )
+}
+
+fn verify_modeled_slice_lean(module_name: &str) -> ProcessInvocation {
+    ProcessInvocation::new(
+        program_name("lake"),
+        vec![
+            process_argument("env"),
+            process_argument("lean"),
+            process_argument(format!("model/lean/slices/{module_name}.lean")),
+        ],
+        report_line("Lean4 artifacts verified"),
+    )
+}
+
+fn verify_modeled_slice_quint(module_name: &str) -> ProcessInvocation {
+    ProcessInvocation::new(
+        program_name("quint"),
+        vec![
+            process_argument("verify"),
+            process_argument("--invariant"),
+            QuintInvariantSet::slice().as_process_argument(),
+            process_argument(format!("model/quint/slices/{module_name}.qnt")),
+        ],
+        report_line("Quint artifacts verified"),
+    )
 }
 
 fn module_name_from_raw(raw: &str) -> String {

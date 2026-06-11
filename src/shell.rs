@@ -11,11 +11,15 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
+use std::thread;
+use std::time::Duration;
+
+use fs4::{FileExt, TryLockError};
 
 use crate::core::connection::{connect_workflow, remove_transition};
 use crate::core::effect::{
     ArtifactDigest, Effect, EffectPlan, FileContents, ModelContentDigest, ProcessInvocation,
-    ProjectPath, ProjectionFingerprint, ReviewEventReference,
+    ProcessInvocations, ProjectPath, ProjectionFingerprint, ReviewEventReference,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_sqlite_event_store, execute_eventcore_command_for_exported_event,
@@ -106,6 +110,9 @@ use crate::core::workflow::{
 };
 use crate::io::dto::parse_project_manifest_name;
 
+const MAX_PARALLEL_VERIFICATION_PROCESSES: usize = 4;
+const VERIFY_PARALLELISM_ENV: &str = "EMC_VERIFY_PARALLELISM";
+
 #[derive(Debug)]
 pub(crate) struct ShellError {
     message: String,
@@ -146,9 +153,7 @@ impl Display for ShellError {
 impl Error for ShellError {}
 
 pub(crate) fn interpret(plan: EffectPlan) -> Result<(), ShellError> {
-    interpret_collect_reports(plan).map(|reports| {
-        reports.into_iter().for_each(|report| println!("{report}"));
-    })
+    interpret_collect_reports_with_progress(plan, &mut |report| println!("{report}")).map(|_| ())
 }
 
 pub(crate) fn interpret_collect_reports(plan: EffectPlan) -> Result<Vec<String>, ShellError> {
@@ -167,6 +172,133 @@ pub(crate) fn interpret_collect_reports(plan: EffectPlan) -> Result<Vec<String>,
             reports.extend(interpret_effect(effect)?);
             Ok(reports)
         })
+}
+
+fn interpret_collect_reports_with_progress(
+    plan: EffectPlan,
+    report: &mut impl FnMut(&str),
+) -> Result<Vec<String>, ShellError> {
+    let runtime_lock = lock_project_runtime_if_needed()?;
+    if runtime_lock.is_some() {
+        if !project_initialization_plan(&plan) {
+            reject_legacy_artifact_only_project().map_err(ShellError::message)?;
+        }
+        ensure_sqlite_event_store_if_needed()?;
+        project_exported_events_into_worktree()?;
+        reject_mutation_when_event_conflicts_exist(&plan)?;
+    }
+    plan.effects()
+        .iter()
+        .try_fold(Vec::new(), |mut reports, effect| {
+            reports.extend(interpret_effect_with_progress(effect, report)?);
+            Ok(reports)
+        })
+}
+
+fn interpret_effect_with_progress(
+    effect: &Effect,
+    report: &mut impl FnMut(&str),
+) -> Result<Vec<String>, ShellError> {
+    match effect {
+        Effect::RunProcess(invocation) => {
+            let progress = process_progress_report(invocation);
+            report(&progress);
+            let reports = run_process(invocation)?;
+            reports.iter().for_each(|line| report(line));
+            Ok(reports)
+        }
+        Effect::RunProcessBatch(invocations) => {
+            let reports = run_process_batch_with_progress(invocations, report)?;
+            Ok(reports)
+        }
+        Effect::VerifyProjectFromIndex => interpret_verify_project_from_index_with_progress(report),
+        _ => {
+            let reports = interpret_effect(effect)?;
+            reports.iter().for_each(|line| report(line));
+            Ok(reports)
+        }
+    }
+}
+
+fn interpret_verify_project_from_index_collecting() -> Result<Vec<String>, ShellError> {
+    let project_name = read_project_manifest_name()?;
+    let formal_workflows = read_synchronized_formal_workflow_graphs()?;
+    let readiness_workflows = formal_workflows
+        .as_slice()
+        .iter()
+        .map(FormalWorkflowGraph::slug)
+        .cloned()
+        .collect::<Vec<_>>();
+    let verified_frontier = current_projection_fingerprint()?;
+    let modeled_slices = formal_workflow_slice_details(formal_workflows.clone());
+    let modeled_workflows = formal_workflow_layouts(formal_workflows);
+    let mut reports = interpret_collect_reports(verify_project(
+        project_name,
+        ModeledWorkflowLayouts::new(modeled_workflows),
+        WorkflowSliceDetails::from_details(modeled_slices),
+    ))?;
+    let current_frontier = current_projection_fingerprint()?;
+    if current_frontier != verified_frontier {
+        return Err(ShellError::message(
+            "event frontier changed during verification; retry `emc verify`",
+        ));
+    }
+    for workflow in readiness_workflows {
+        let model_content_digest = formal_model_content_digest(&workflow)?;
+        reports.extend(interpret_effect(&Effect::declare_workflow_readiness(
+            workflow,
+            verified_frontier.clone(),
+            model_content_digest,
+            readiness_verified_at()?,
+            readiness_verified_by()?,
+            ReviewEventReference::unrecorded(),
+        ))?);
+    }
+    Ok(reports)
+}
+
+fn interpret_verify_project_from_index_with_progress(
+    report: &mut impl FnMut(&str),
+) -> Result<Vec<String>, ShellError> {
+    let project_name = read_project_manifest_name()?;
+    let formal_workflows = read_synchronized_formal_workflow_graphs()?;
+    let readiness_workflows = formal_workflows
+        .as_slice()
+        .iter()
+        .map(FormalWorkflowGraph::slug)
+        .cloned()
+        .collect::<Vec<_>>();
+    let verified_frontier = current_projection_fingerprint()?;
+    let modeled_slices = formal_workflow_slice_details(formal_workflows.clone());
+    let modeled_workflows = formal_workflow_layouts(formal_workflows);
+    let mut reports = interpret_collect_reports_with_progress(
+        verify_project(
+            project_name,
+            ModeledWorkflowLayouts::new(modeled_workflows),
+            WorkflowSliceDetails::from_details(modeled_slices),
+        ),
+        report,
+    )?;
+    let current_frontier = current_projection_fingerprint()?;
+    if current_frontier != verified_frontier {
+        return Err(ShellError::message(
+            "event frontier changed during verification; retry `emc verify`",
+        ));
+    }
+    for workflow in readiness_workflows {
+        let model_content_digest = formal_model_content_digest(&workflow)?;
+        let readiness_reports = interpret_effect(&Effect::declare_workflow_readiness(
+            workflow,
+            verified_frontier.clone(),
+            model_content_digest,
+            readiness_verified_at()?,
+            readiness_verified_by()?,
+            ReviewEventReference::unrecorded(),
+        ))?;
+        readiness_reports.iter().for_each(|line| report(line));
+        reports.extend(readiness_reports);
+    }
+    Ok(reports)
 }
 
 fn project_initialization_plan(plan: &EffectPlan) -> bool {
@@ -1085,6 +1217,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             }
         }
         Effect::RunProcess(invocation) => run_process(invocation),
+        Effect::RunProcessBatch(invocations) => run_process_batch(invocations),
         Effect::DeclareWorkflowReadinessFromWorkflow(readiness) => interpret_effect(
             &Effect::ExportEvent(EventDraft::workflow_readiness_declared(
                 readiness.workflow_slug(),
@@ -1262,42 +1395,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             .map_err(|error| ShellError::message(error.to_string()))?;
             interpret_collect_reports(plan)
         }
-        Effect::VerifyProjectFromIndex => {
-            let project_name = read_project_manifest_name()?;
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?;
-            let readiness_workflows = formal_workflows
-                .as_slice()
-                .iter()
-                .map(FormalWorkflowGraph::slug)
-                .cloned()
-                .collect::<Vec<_>>();
-            let verified_frontier = current_projection_fingerprint()?;
-            let modeled_slices = formal_workflow_slice_details(formal_workflows.clone());
-            let modeled_workflows = formal_workflow_layouts(formal_workflows);
-            let mut reports = interpret_collect_reports(verify_project(
-                project_name,
-                ModeledWorkflowLayouts::new(modeled_workflows),
-                WorkflowSliceDetails::from_details(modeled_slices),
-            ))?;
-            let current_frontier = current_projection_fingerprint()?;
-            if current_frontier != verified_frontier {
-                return Err(ShellError::message(
-                    "event frontier changed during verification; retry `emc verify`",
-                ));
-            }
-            for workflow in readiness_workflows {
-                let model_content_digest = formal_model_content_digest(&workflow)?;
-                reports.extend(interpret_effect(&Effect::declare_workflow_readiness(
-                    workflow,
-                    verified_frontier.clone(),
-                    model_content_digest,
-                    readiness_verified_at()?,
-                    readiness_verified_by()?,
-                    ReviewEventReference::unrecorded(),
-                ))?);
-            }
-            Ok(reports)
-        }
+        Effect::VerifyProjectFromIndex => interpret_verify_project_from_index_collecting(),
         Effect::WriteFile(write) => {
             write_file(write.path().as_ref(), write.contents().as_ref()).map(|()| Vec::new())
         }
@@ -2674,6 +2772,7 @@ fn remove_file_if_present(path: &str) -> Result<(), ShellError> {
 }
 
 fn run_process(invocation: &ProcessInvocation) -> Result<Vec<String>, ShellError> {
+    let _quint_verification_slot = quint_verification_process_slot(invocation)?;
     let ProcessCommand {
         arguments,
         _endpoint_guard,
@@ -2699,6 +2798,112 @@ fn run_process(invocation: &ProcessInvocation) -> Result<Vec<String>, ShellError
             process_diagnostics(&output.stdout, &output.stderr)
         )))
     }
+}
+
+fn run_process_batch(invocations: &ProcessInvocations) -> Result<Vec<String>, ShellError> {
+    run_process_batch_reporting(invocations, &mut |_invocation| {})
+}
+
+fn run_process_batch_with_progress(
+    invocations: &ProcessInvocations,
+    report: &mut impl FnMut(&str),
+) -> Result<Vec<String>, ShellError> {
+    let reports = run_process_batch_reporting(invocations, &mut |invocation| {
+        let progress = process_progress_report(invocation);
+        report(&progress);
+    })?;
+    reports.iter().for_each(|line| report(line));
+    Ok(reports)
+}
+
+fn run_process_batch_reporting(
+    invocations: &ProcessInvocations,
+    started: &mut impl FnMut(&ProcessInvocation),
+) -> Result<Vec<String>, ShellError> {
+    let mut reports = Vec::new();
+    let mut first_error = None;
+    let parallelism = verification_parallelism()?;
+
+    for chunk in invocations
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>()
+        .chunks(parallelism.process_count())
+    {
+        chunk.iter().for_each(&mut *started);
+        let handles = chunk
+            .iter()
+            .cloned()
+            .map(|invocation| thread::spawn(move || run_process(&invocation)))
+            .collect::<Vec<_>>();
+
+        for handle in handles {
+            match handle.join() {
+                Ok(Ok(process_reports)) => {
+                    reports.extend(process_reports);
+                }
+                Ok(Err(error)) => {
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                }
+                Err(_panic) => {
+                    if first_error.is_none() {
+                        first_error = Some(ShellError::message("verification worker panicked"));
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(error) = first_error {
+        Err(error)
+    } else {
+        Ok(reports)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct VerificationParallelism {
+    process_count: usize,
+}
+
+impl VerificationParallelism {
+    fn detect() -> Result<Self, ShellError> {
+        match env::var(VERIFY_PARALLELISM_ENV) {
+            Ok(value) => Self::parse(value),
+            Err(env::VarError::NotPresent) => Ok(Self {
+                process_count: thread::available_parallelism()
+                    .map(|parallelism| parallelism.get().min(MAX_PARALLEL_VERIFICATION_PROCESSES))
+                    .unwrap_or(1),
+            }),
+            Err(env::VarError::NotUnicode(_value)) => Err(ShellError::message(format!(
+                "{VERIFY_PARALLELISM_ENV} must be a positive integer"
+            ))),
+        }
+    }
+
+    fn parse(value: String) -> Result<Self, ShellError> {
+        let process_count = value.parse::<usize>().map_err(|_error| {
+            ShellError::message(format!(
+                "{VERIFY_PARALLELISM_ENV} must be a positive integer"
+            ))
+        })?;
+        if process_count == 0 {
+            return Err(ShellError::message(format!(
+                "{VERIFY_PARALLELISM_ENV} must be a positive integer"
+            )));
+        }
+        Ok(Self { process_count })
+    }
+
+    fn process_count(self) -> usize {
+        self.process_count
+    }
+}
+
+fn verification_parallelism() -> Result<VerificationParallelism, ShellError> {
+    VerificationParallelism::detect()
 }
 
 struct ProcessCommand {
@@ -2731,6 +2936,92 @@ fn process_arguments(invocation: &ProcessInvocation) -> Result<ProcessCommand, S
         arguments,
         _endpoint_guard: endpoint_guard,
     })
+}
+
+struct QuintVerificationProcessSlot {
+    file: fs::File,
+}
+
+impl Drop for QuintVerificationProcessSlot {
+    fn drop(&mut self) {
+        let _ = FileExt::unlock(&self.file);
+    }
+}
+
+#[derive(Clone, Copy)]
+struct QuintVerificationSlotIndex {
+    value: usize,
+}
+
+impl QuintVerificationSlotIndex {
+    fn new(value: usize) -> Self {
+        Self { value }
+    }
+
+    fn as_usize(self) -> usize {
+        self.value
+    }
+}
+
+fn quint_verification_process_slot(
+    invocation: &ProcessInvocation,
+) -> Result<Option<QuintVerificationProcessSlot>, ShellError> {
+    if !quint_verify_invocation(invocation) {
+        return Ok(None);
+    }
+    acquire_quint_verification_process_slot().map(Some)
+}
+
+fn acquire_quint_verification_process_slot() -> Result<QuintVerificationProcessSlot, ShellError> {
+    let parallelism = verification_parallelism()?;
+    loop {
+        for index in 0..parallelism.process_count() {
+            if let Some(slot) =
+                try_acquire_quint_verification_slot(QuintVerificationSlotIndex::new(index))?
+            {
+                return Ok(slot);
+            }
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+fn try_acquire_quint_verification_slot(
+    index: QuintVerificationSlotIndex,
+) -> Result<Option<QuintVerificationProcessSlot>, ShellError> {
+    let lock_directory = quint_verification_lock_directory();
+    fs::create_dir_all(&lock_directory).map_err(ShellError::io)?;
+    let path = lock_directory.join(format!("quint-verification-{}.lock", index.as_usize()));
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&path)
+        .map_err(ShellError::io)?;
+    match FileExt::try_lock(&file) {
+        Ok(()) => Ok(Some(QuintVerificationProcessSlot { file })),
+        Err(TryLockError::WouldBlock) => Ok(None),
+        Err(TryLockError::Error(error)) => Err(ShellError::io(error)),
+    }
+}
+
+fn quint_verify_invocation(invocation: &ProcessInvocation) -> bool {
+    invocation.program().as_ref() == "quint"
+        && invocation
+            .arguments()
+            .iter()
+            .next()
+            .is_some_and(|argument| argument.as_ref() == "verify")
+}
+
+fn quint_verification_lock_directory() -> PathBuf {
+    env::var_os("XDG_STATE_HOME")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(env::temp_dir)
+        .join("emc")
+        .join("verification")
 }
 
 struct ReservedQuintEndpoint {
@@ -2841,5 +3132,29 @@ fn verification_label(invocation: &ProcessInvocation) -> &str {
         "Quint verification"
     } else {
         "verification command"
+    }
+}
+
+fn process_progress_report(invocation: &ProcessInvocation) -> String {
+    let program = invocation.program().as_ref();
+    let arguments = invocation
+        .arguments()
+        .iter()
+        .map(|argument| argument.as_ref())
+        .collect::<Vec<_>>();
+
+    match (program, arguments.as_slice()) {
+        ("lake", ["env", "lean", artifact]) => {
+            format!("Running Lean4 verification for {artifact}")
+        }
+        ("quint", ["typecheck", artifact]) => {
+            format!("Running Quint typecheck for {artifact}")
+        }
+        ("quint", arguments) if arguments.first().copied() == Some("verify") => {
+            let artifact = arguments.last().copied().unwrap_or("unknown artifact");
+            format!("Running Quint verification for {artifact}")
+        }
+        (_, []) => format!("Running {program}"),
+        (_, arguments) => format!("Running {program} {}", arguments.join(" ")),
     }
 }
