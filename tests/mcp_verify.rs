@@ -185,27 +185,41 @@ mod tests {
     }
 
     fn normalize_quint_log(source: &str) -> String {
-        source
+        let mut lines = source
             .lines()
-            .map(|line| {
-                let mut parts = line.split_whitespace().collect::<Vec<_>>();
-                if let Some(endpoint_flag) =
-                    parts.iter().position(|part| *part == "--server-endpoint")
-                {
-                    let endpoint_value = endpoint_flag + 1;
-                    if endpoint_value < parts.len() {
-                        assert_ne!(
-                            parts[endpoint_value], "localhost:8822",
-                            "Quint verification must not use the shared default Apalache endpoint"
-                        );
-                        parts[endpoint_value] = "<endpoint>";
-                    }
-                }
-                parts.join(" ")
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-            + "\n"
+            .map(normalize_quint_log_line)
+            .collect::<Vec<_>>();
+        lines.sort_by_key(|line| quint_log_line_order(line));
+        lines.join("\n") + "\n"
+    }
+
+    fn normalize_quint_log_line(line: &str) -> String {
+        let mut parts = line.split_whitespace().collect::<Vec<_>>();
+        if let Some(endpoint_flag) = parts.iter().position(|part| *part == "--server-endpoint") {
+            let endpoint_value = endpoint_flag + 1;
+            if endpoint_value < parts.len() {
+                assert_ne!(
+                    parts[endpoint_value], "localhost:8822",
+                    "Quint verification must not use the shared default Apalache endpoint"
+                );
+                parts[endpoint_value] = "<endpoint>";
+            }
+        }
+        parts.join(" ")
+    }
+
+    fn quint_log_line_order(line: &str) -> usize {
+        if line.starts_with("typecheck ") {
+            0
+        } else if line.starts_with("verify --invariant modelIdentityStable") {
+            1
+        } else if line.starts_with("verify --invariant workflowIdentityStable") {
+            2
+        } else if line.starts_with("verify --invariant sliceIdentityStable") {
+            3
+        } else {
+            4
+        }
     }
 
     fn create_failing_tool(tool_dir: &Path, tool_name: &str) -> Result<(), Box<dyn Error>> {

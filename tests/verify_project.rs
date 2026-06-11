@@ -8,8 +8,10 @@ mod tests {
     use std::fs::{Permissions, create_dir_all, read_dir, read_to_string, set_permissions, write};
     use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
+    use std::process::{Command as ProcessCommand, Output};
 
     use assert_cmd::Command;
+    use assert_cmd::cargo::cargo_bin;
     use predicates::prelude::predicate;
     use tempfile::TempDir;
 
@@ -45,6 +47,39 @@ mod tests {
             "typecheck model/quint/RepairDesk.qnt\n\
              verify --invariant modelIdentityStable,modelVersionStable,modelDigestStable,modelWorkflowsAreDeclared,modelSlicesAreDeclared,modelSliceModulesAreDeclared,modelScenariosAreDeclared,modelScenarioDefinitionsAreDeclared,modelWorkflowCompositionStructureComplete,modelWorkflowBehaviorSurfaceIsComplete,modelScenarioDefinitionsHaveGwt,modelScenarioKindsAreFirstClass,modelDataFlowsAreDeclared,modelDataFlowsAreBitComplete,modelDataFlowSourceKindsAreModeled,modelDataFlowModeledSourcesResolve,modelDataFlowSourceChainsReachOriginals,modelDataFlowSourceChainsPreserveBitEncodingSemantics,modelDataFlowTransformationsAreModeled,modelMeaningfulDataFlowsAreCovered,modelDataFlowSourceBitEncodingsMatchModeledSources,modelViewFieldBitEncodingsMatchDataFlows,modelExternalPayloadFieldBitEncodingsMatchDataFlows,modelOutcomesAreDeclared,modelCommandErrorsAreDeclared,modelCommandsAreDeclared,modelCommandInputsAreDeclared,modelCommandInputsHaveProvenance,modelCommandInputsTraceToInvocationSources,modelReadModelsAreDeclared,modelReadModelDefinitionsAreDeclared,modelReadModelFieldsAreDeclared,modelReadModelFieldSourcesAreComplete,modelViewFieldSourcesAreComplete,modelViewFieldReadModelFieldSourcesResolve,modelDisplayedDataTraceToOriginalProvenance,modelExternalPayloadFieldsHaveProvenance,modelViewsAreDeclared,modelViewDefinitionsAreDeclared,modelViewControlsAreDeclared,modelBoardElementsAreDeclared,modelBoardConnectionsAreDeclared,modelViewFieldsAreDeclared,modelAutomationsAreDeclared,modelAutomationDefinitionsAreDeclared,modelTranslationsAreDeclared,modelTranslationDefinitionsAreDeclared,modelExternalPayloadsAreDeclared,modelExternalPayloadFieldsAreDeclared,modelStreamsAreDeclared,modelEventsAreDeclared,modelEventAttributesAreDeclared,modelViewControlsProvideCommandInputs --server-endpoint <endpoint> model/quint/RepairDesk.qnt\n"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn verify_reports_formal_tool_progress() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let tool_dir = temp_dir.path().join("tools");
+
+        create_fake_tool(&tool_dir, "lake", "lake.log")?;
+        create_fake_tool(&tool_dir, "quint", "quint.log")?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .arg("verify")
+            .current_dir(temp_dir.path())
+            .env("PATH", path_with_fake_tools(&tool_dir)?)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "Running Lean4 verification for model/lean/RepairDesk.lean",
+            ))
+            .stdout(predicate::str::contains(
+                "Running Quint typecheck for model/quint/RepairDesk.qnt",
+            ))
+            .stdout(predicate::str::contains(
+                "Running Quint verification for model/quint/RepairDesk.qnt",
+            ));
 
         Ok(())
     }
@@ -516,6 +551,116 @@ mod tests {
     }
 
     #[test]
+    fn verify_runs_independent_quint_verifications_in_parallel() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let tool_dir = temp_dir.path().join("tools");
+        let state_home = temp_dir.path().join("state");
+
+        create_fake_tool(&tool_dir, "lake", "lake.log")?;
+        create_parallel_observing_quint_tool(&tool_dir, "quint.events")?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .env("XDG_STATE_HOME", &state_home)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .env("XDG_STATE_HOME", &state_home)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Capture ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .env("XDG_STATE_HOME", &state_home)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .arg("verify")
+            .current_dir(temp_dir.path())
+            .env("PATH", path_with_fake_tools(&tool_dir)?)
+            .env("XDG_STATE_HOME", &state_home)
+            .env("EMC_VERIFY_PARALLELISM", "8")
+            .assert()
+            .success();
+
+        assert_quint_verifications_overlap(&read_to_string(temp_dir.path().join("quint.events"))?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn verify_limits_quint_verification_parallelism_across_processes() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        let tool_dir = temp_dir.path().join("tools");
+        let state_home = temp_dir.path().join("state");
+        let events_path = temp_dir.path().join("quint.events");
+        let first_project = temp_dir.path().join("first");
+        let second_project = temp_dir.path().join("second");
+        let event_log = events_path.to_string_lossy().into_owned();
+
+        create_fake_tool(&tool_dir, "lake", "lake.log")?;
+        create_parallel_observing_quint_tool(&tool_dir, &event_log)?;
+        create_modeled_project(&first_project, &state_home)?;
+        create_modeled_project(&second_project, &state_home)?;
+
+        let emc = cargo_bin("emc");
+        let tool_path = path_with_fake_tools(&tool_dir)?;
+        let first_verify = ProcessCommand::new(&emc)
+            .arg("verify")
+            .current_dir(&first_project)
+            .env("PATH", &tool_path)
+            .env("XDG_STATE_HOME", &state_home)
+            .env("EMC_VERIFY_PARALLELISM", "2")
+            .spawn()?;
+        let second_verify = ProcessCommand::new(&emc)
+            .arg("verify")
+            .current_dir(&second_project)
+            .env("PATH", &tool_path)
+            .env("XDG_STATE_HOME", &state_home)
+            .env("EMC_VERIFY_PARALLELISM", "2")
+            .output()?;
+        let first_verify = first_verify.wait_with_output()?;
+
+        assert_command_success("first verify", &first_verify)?;
+        assert_command_success("second verify", &second_verify)?;
+
+        let events = read_to_string(events_path)?;
+        assert_quint_verify_count(&events, 6);
+        assert_max_quint_verification_parallelism(&events, 2);
+
+        Ok(())
+    }
+
+    #[test]
     fn verify_appends_workflow_readiness_event_after_successful_verification()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -935,6 +1080,77 @@ mod tests {
         Ok(())
     }
 
+    fn create_parallel_observing_quint_tool(
+        tool_dir: &Path,
+        log_file: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        create_dir_all(tool_dir)?;
+        let tool_path = tool_dir.join("quint");
+        write(
+            &tool_path,
+            format!(
+                "#!/bin/sh\n\
+                 if [ \"$1\" = verify ]; then\n\
+                   printf 'start %s\\n' \"$*\" >> {log_file}\n\
+                   sleep 1\n\
+                   printf 'end %s\\n' \"$*\" >> {log_file}\n\
+                 else\n\
+                   printf '%s\\n' \"$*\" >> {log_file}\n\
+                 fi\n"
+            ),
+        )?;
+        set_permissions(&tool_path, Permissions::from_mode(0o755))?;
+        Ok(())
+    }
+
+    fn create_modeled_project(project_dir: &Path, state_home: &Path) -> Result<(), Box<dyn Error>> {
+        create_dir_all(project_dir)?;
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(project_dir)
+            .env("XDG_STATE_HOME", state_home)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(project_dir)
+            .env("XDG_STATE_HOME", state_home)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Capture ticket details.",
+            ])
+            .current_dir(project_dir)
+            .env("XDG_STATE_HOME", state_home)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
     fn create_frontier_mutating_tool(
         tool_dir: &Path,
         tool_name: &str,
@@ -956,27 +1172,41 @@ mod tests {
     }
 
     fn normalize_quint_log(source: &str) -> String {
-        source
+        let mut lines = source
             .lines()
-            .map(|line| {
-                let mut parts = line.split_whitespace().collect::<Vec<_>>();
-                if let Some(endpoint_flag) =
-                    parts.iter().position(|part| *part == "--server-endpoint")
-                {
-                    let endpoint_value = endpoint_flag + 1;
-                    if endpoint_value < parts.len() {
-                        assert_ne!(
-                            parts[endpoint_value], "localhost:8822",
-                            "Quint verification must not use the shared default Apalache endpoint"
-                        );
-                        parts[endpoint_value] = "<endpoint>";
-                    }
-                }
-                parts.join(" ")
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-            + "\n"
+            .map(normalize_quint_log_line)
+            .collect::<Vec<_>>();
+        lines.sort_by_key(|line| quint_log_line_order(line));
+        lines.join("\n") + "\n"
+    }
+
+    fn normalize_quint_log_line(line: &str) -> String {
+        let mut parts = line.split_whitespace().collect::<Vec<_>>();
+        if let Some(endpoint_flag) = parts.iter().position(|part| *part == "--server-endpoint") {
+            let endpoint_value = endpoint_flag + 1;
+            if endpoint_value < parts.len() {
+                assert_ne!(
+                    parts[endpoint_value], "localhost:8822",
+                    "Quint verification must not use the shared default Apalache endpoint"
+                );
+                parts[endpoint_value] = "<endpoint>";
+            }
+        }
+        parts.join(" ")
+    }
+
+    fn quint_log_line_order(line: &str) -> usize {
+        if line.starts_with("typecheck ") {
+            0
+        } else if line.starts_with("verify --invariant modelIdentityStable") {
+            1
+        } else if line.starts_with("verify --invariant workflowIdentityStable") {
+            2
+        } else if line.starts_with("verify --invariant sliceIdentityStable") {
+            3
+        } else {
+            4
+        }
     }
 
     fn assert_quint_verify_endpoints_are_distinct(source: &str) {
@@ -1001,6 +1231,71 @@ mod tests {
             unique_endpoints.len(),
             "each Quint verify invocation must receive its own Apalache endpoint"
         );
+    }
+
+    fn assert_quint_verifications_overlap(source: &str) {
+        let lines = source.lines().collect::<Vec<_>>();
+        let first_end = lines
+            .iter()
+            .position(|line| line.starts_with("end verify "))
+            .unwrap_or(lines.len());
+        let starts_before_first_end = lines
+            .iter()
+            .take(first_end)
+            .filter(|line| line.starts_with("start verify "))
+            .count();
+
+        assert!(
+            starts_before_first_end > 1,
+            "multiple Quint verification processes must be in flight before the first one exits:\n{source}"
+        );
+    }
+
+    fn assert_quint_verify_count(source: &str, expected: usize) {
+        let observed = source
+            .lines()
+            .filter(|line| line.starts_with("start verify "))
+            .count();
+        assert_eq!(
+            observed, expected,
+            "expected {expected} Quint verify starts, got {observed}:\n{source}"
+        );
+    }
+
+    fn assert_max_quint_verification_parallelism(source: &str, expected_maximum: usize) {
+        let mut active = 0usize;
+        let mut observed_maximum = 0usize;
+        for line in source.lines() {
+            if line.starts_with("start verify ") {
+                active += 1;
+                observed_maximum = observed_maximum.max(active);
+            } else if line.starts_with("end verify ") {
+                assert!(
+                    active > 0,
+                    "Quint verification end must follow a start:\n{source}"
+                );
+                active -= 1;
+            }
+        }
+
+        assert_eq!(active, 0, "all Quint verifications must end:\n{source}");
+        assert!(
+            observed_maximum <= expected_maximum,
+            "at most {expected_maximum} Quint verifications may run at once, observed {observed_maximum}:\n{source}"
+        );
+    }
+
+    fn assert_command_success(command_name: &str, output: &Output) -> Result<(), Box<dyn Error>> {
+        if output.status.success() {
+            return Ok(());
+        }
+        Err(format!(
+            "{command_name} failed with {}\nstdout:\n{}\nstderr:\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into())
     }
 
     fn create_failing_tool(tool_dir: &Path, tool_name: &str) -> Result<(), Box<dyn Error>> {
