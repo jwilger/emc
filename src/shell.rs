@@ -22,9 +22,10 @@ use crate::core::event_runtime::{
     lock_project_runtime,
 };
 use crate::core::events::{
-    EventDraft, export_event_file_contents, exported_events_projection_fingerprint,
-    list_event_conflicts, list_stale_workflow_readiness, project_exported_events,
-    reject_legacy_artifact_only_project, resolve_event_conflict, unresolved_event_conflicts_exist,
+    EventDraft, ExportedEventType, export_event_file_contents,
+    exported_events_projection_fingerprint, list_event_conflicts, list_stale_workflow_readiness,
+    project_exported_events, reject_legacy_artifact_only_project, resolve_event_conflict,
+    unresolved_event_conflicts_exist,
 };
 use crate::core::formal_graph::{
     FormalGraphError, FormalWorkflowGraph, FormalWorkflowGraphs, parse_lean_workflow_graph,
@@ -153,7 +154,9 @@ pub(crate) fn interpret(plan: EffectPlan) -> Result<(), ShellError> {
 pub(crate) fn interpret_collect_reports(plan: EffectPlan) -> Result<Vec<String>, ShellError> {
     let runtime_lock = lock_project_runtime_if_needed()?;
     if runtime_lock.is_some() {
-        reject_legacy_artifact_only_project().map_err(ShellError::message)?;
+        if !project_initialization_plan(&plan) {
+            reject_legacy_artifact_only_project().map_err(ShellError::message)?;
+        }
         ensure_sqlite_event_store_if_needed()?;
         project_exported_events_into_worktree()?;
         reject_mutation_when_event_conflicts_exist(&plan)?;
@@ -164,6 +167,16 @@ pub(crate) fn interpret_collect_reports(plan: EffectPlan) -> Result<Vec<String>,
             reports.extend(interpret_effect(effect)?);
             Ok(reports)
         })
+}
+
+fn project_initialization_plan(plan: &EffectPlan) -> bool {
+    plan.effects().iter().any(|effect| {
+        matches!(
+            effect,
+            Effect::ExportEvent(draft)
+                if draft.event_type() == ExportedEventType::ProjectInitialized
+        )
+    })
 }
 
 struct ShellProjectRuntimeLock {
