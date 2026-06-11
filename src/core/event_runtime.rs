@@ -27,6 +27,7 @@ const EVENT_EXPORT_DIRECTORY: &str = "model/events/v1";
 
 const EVENT_STORE_PATH_ENV: &str = "EMC_EVENT_STORE_PATH";
 const XDG_STATE_HOME_ENV: &str = "XDG_STATE_HOME";
+const HOME_ENV: &str = "HOME";
 
 #[cfg(test)]
 #[path = "event_runtime_external_tests.rs"]
@@ -47,7 +48,15 @@ fn sqlite_event_store_path_with_env(
     let state_home = env_var(XDG_STATE_HOME_ENV)
         .filter(|path| !path.is_empty())
         .map(PathBuf::from)
-        .ok_or_else(|| format!("{XDG_STATE_HOME_ENV} is required to resolve event store path"))?;
+        .or_else(|| {
+            env_var(HOME_ENV)
+                .filter(|path| !path.is_empty())
+                .map(PathBuf::from)
+                .map(|home| home.join(".local").join("state"))
+        })
+        .ok_or_else(|| {
+            format!("{XDG_STATE_HOME_ENV} or {HOME_ENV} is required to resolve event store path")
+        })?;
     let project_hash = project_realpath_hash(project_root)?;
 
     Ok(state_home
