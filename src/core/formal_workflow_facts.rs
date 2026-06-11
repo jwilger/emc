@@ -327,11 +327,13 @@ fn quint_workflow_owned_definition_record(definition: &WorkflowOwnedDefinitionRe
 
 fn lean_workflow_transition_evidence_record(evidence: &WorkflowTransitionEvidenceRecord) -> String {
     format!(
-        "{{ source := {}, target := {}, kind := {}, trigger := {}, sourceEvidence := {}, targetEvidence := {} }}",
+        "{{ source := {}, target := {}, kind := {}, trigger := {}, sourceControl := {}, targetView := {}, sourceEvidence := {}, targetEvidence := {} }}",
         quoted(evidence.source().as_ref()),
         quoted(evidence.target().as_ref()),
         lean_workflow_transition_kind(*evidence.kind()),
         quoted(evidence.trigger().as_ref()),
+        quoted(evidence.source_control().map_or("", |name| name.as_ref())),
+        quoted(evidence.target_view().map_or("", |name| name.as_ref())),
         quoted(evidence.source_evidence().as_ref()),
         quoted(evidence.target_evidence().as_ref()),
     )
@@ -341,11 +343,13 @@ fn quint_workflow_transition_evidence_record(
     evidence: &WorkflowTransitionEvidenceRecord,
 ) -> String {
     format!(
-        "{{ source: {}, target: {}, kind: {}, trigger: {}, sourceEvidence: {}, targetEvidence: {} }}",
+        "{{ source: {}, target: {}, kind: {}, trigger: {}, sourceControl: {}, targetView: {}, sourceEvidence: {}, targetEvidence: {} }}",
         quoted(evidence.source().as_ref()),
         quoted(evidence.target().as_ref()),
         quint_workflow_transition_kind(*evidence.kind()),
         quoted(evidence.trigger().as_ref()),
+        quoted(evidence.source_control().map_or("", |name| name.as_ref())),
+        quoted(evidence.target_view().map_or("", |name| name.as_ref())),
         quoted(evidence.source_evidence().as_ref()),
         quoted(evidence.target_evidence().as_ref()),
     )

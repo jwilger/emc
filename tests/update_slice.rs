@@ -224,13 +224,13 @@ mod tests {
         let workflow_quint = read_to_string(temp_dir.path().join("model/quint/IntakeVisit.qnt"))?;
         assert!(
             workflow_lean.contains(
-                "{ source := \"triage-intake\", target := \"schedule-visit\", kind := WorkflowTransitionKind.navigation, trigger := \"schedule-visit-screen\", rationale := \"\", payloadContract := \"\" }"
+                "{ source := \"triage-intake\", target := \"schedule-visit\", kind := WorkflowTransitionKind.navigation, trigger := \"schedule-visit-screen\", sourceControl := \"open-schedule-visit\", targetView := \"schedule-visit-screen\", rationale := \"\", payloadContract := \"\" }"
             ),
             "slice rename must preserve outgoing workflow transitions"
         );
         assert!(
             workflow_quint.contains(
-                "{ source: \"triage-intake\", target: \"schedule-visit\", kind: Navigation, trigger: \"schedule-visit-screen\", rationale: \"\", payloadContract: \"\" }"
+                "{ source: \"triage-intake\", target: \"schedule-visit\", kind: Navigation, trigger: \"schedule-visit-screen\", sourceControl: \"open-schedule-visit\", targetView: \"schedule-visit-screen\", rationale: \"\", payloadContract: \"\" }"
             ),
             "slice rename must preserve outgoing workflow transitions"
         );
@@ -385,6 +385,10 @@ mod tests {
                 "--via",
                 "navigation",
                 "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "open-review-ticket",
+                "--target-view",
                 "review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
@@ -630,11 +634,21 @@ mod tests {
         })?;
 
         [
-            ("capture-intake", "triage-intake", "triage-intake-screen"),
-            ("triage-intake", "schedule-visit", "schedule-visit-screen"),
+            (
+                "capture-intake",
+                "triage-intake",
+                "triage-intake-screen",
+                "open-triage-intake",
+            ),
+            (
+                "triage-intake",
+                "schedule-visit",
+                "schedule-visit-screen",
+                "open-schedule-visit",
+            ),
         ]
         .into_iter()
-        .try_for_each(|(source, target, navigation)| {
+        .try_for_each(|(source, target, navigation, control)| {
             Command::cargo_bin("emc")?
                 .args([
                     "connect",
@@ -648,6 +662,10 @@ mod tests {
                     "--via",
                     "navigation",
                     "--name",
+                    navigation,
+                    "--source-control",
+                    control,
+                    "--target-view",
                     navigation,
                 ])
                 .current_dir(cwd)

@@ -1520,6 +1520,10 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
                 "--source-evidence",
                 "capture-ticket view owns the review-ticket-screen navigation control",
                 "--target-evidence",
@@ -1593,6 +1597,10 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
                 "--source-evidence",
                 "capture-ticket view owns the review-ticket-screen navigation control",
                 "--target-evidence",
@@ -1614,13 +1622,13 @@ mod tests {
 
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?.contains(
-                "def workflowTransitionEvidences : List WorkflowTransitionEvidence := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceEvidence := \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence := \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
+                "def workflowTransitionEvidences : List WorkflowTransitionEvidence := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceControl := \"review-ticket-screen\", targetView := \"review-ticket-screen\", sourceEvidence := \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence := \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
             ),
             "workflow transition evidence must be rebuilt from exported events"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?.contains(
-                "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
+                "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceControl: \"review-ticket-screen\", targetView: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
             ),
             "workflow transition evidence must be rebuilt from exported events"
         );
@@ -1799,6 +1807,10 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
             .assert()
@@ -1860,6 +1872,10 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
             .assert()
@@ -1877,13 +1893,13 @@ mod tests {
 
         assert!(
             fs::read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceControl := \"review-ticket-screen\", targetView := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]"
             ),
             "workflow connection must be rebuilt from exported events"
         );
         assert!(
             fs::read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?.contains(
-                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", rationale: \"\", payloadContract: \"\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceControl: \"review-ticket-screen\", targetView: \"review-ticket-screen\", rationale: \"\", payloadContract: \"\" }]"
             ),
             "workflow connection must be rebuilt from exported events"
         );
@@ -1929,6 +1945,10 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
             .assert()
@@ -1947,6 +1967,10 @@ mod tests {
                 "--via",
                 "navigation",
                 "--name",
+                "alternate-review-ticket-screen",
+                "--source-control",
+                "alternate-review-ticket-screen",
+                "--target-view",
                 "alternate-review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
@@ -2027,6 +2051,10 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
             .assert()
@@ -2045,6 +2073,10 @@ mod tests {
                 "--via",
                 "navigation",
                 "--name",
+                "alternate-review-ticket-screen",
+                "--source-control",
+                "alternate-review-ticket-screen",
+                "--target-view",
                 "alternate-review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
@@ -3160,6 +3192,10 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
             ])
             .env("EMC_EVENT_STORE_PATH", &sqlite_path)
             .current_dir(temp_dir.path())
@@ -3227,6 +3263,10 @@ mod tests {
                     "--via",
                     "navigation",
                     "--name",
+                    trigger,
+                    "--source-control",
+                    trigger,
+                    "--target-view",
                     trigger,
                 ])
                 .env("EMC_EVENT_STORE_PATH", &sqlite_path)
@@ -3331,6 +3371,10 @@ mod tests {
                 "--via",
                 "navigation",
                 "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
                 "review-ticket-screen",
                 "--source-evidence",
                 "capture-ticket view owns the review-ticket-screen navigation control",

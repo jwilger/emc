@@ -14,7 +14,7 @@ const DEFAULT_MCP_PROTOCOL_VERSION: &str = "2025-11-25";
 const SUPPORTED_MCP_PROTOCOL_VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "2024-11-05"];
 
 use crate::command;
-use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
+use crate::core::connection::{ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::effect::{ArtifactDigest, ChosenEventId, EventConflictId};
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, CommandInputSource,
@@ -27,11 +27,14 @@ use crate::core::formal_slice_facts::{
     ReadModelFieldSource, ReadModelRelationshipFields, ScenarioKind, ScenarioStreamNames,
     ViewControls, ViewFilters, ViewLocalStates,
 };
+use crate::core::modeling_enums::MODELING_ENUMS;
 use crate::core::slice::NewSlice;
 use crate::core::types::{
     CommandInputSourceKind, ReadModelFieldSourceKind, SingletonRepeatBehavior,
     WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
-    WorkflowOwnedDefinitionRecord, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecord,
+    WorkflowOwnedDefinitionRecord, WorkflowTransitionEndpoint,
+    WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionKind,
 };
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
@@ -500,6 +503,16 @@ fn tools_list_result() -> Result<Value, ShellError> {
             })),
         ),
         Tool::new(
+            "list_modeling_enums",
+            "List accepted modeled enum strings for constrained EMC tool arguments.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
             "add_workflow",
             "Add a business workflow and regenerate synchronized model artifacts.",
             schema_object(json!({
@@ -620,6 +633,14 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         },
                         "name": {
                             "type": "string"
+                        },
+                        "source_control": {
+                            "type": "string",
+                            "description": "Required when via is navigation; source-slice-owned control that initiates navigation."
+                        },
+                        "target_view": {
+                            "type": "string",
+                            "description": "Required when via is navigation; target-slice-owned entry view reached by navigation."
                         },
                         "source_evidence": {
                             "type": "string"
@@ -1333,6 +1354,14 @@ fn tools_list_result() -> Result<Value, ShellError> {
                         "name": {
                             "type": "string"
                         },
+                        "source_control": {
+                            "type": "string",
+                            "description": "Required when via is navigation; source-slice-owned control that initiates navigation."
+                        },
+                        "target_view": {
+                            "type": "string",
+                            "description": "Required when via is navigation; target-slice-owned entry view reached by navigation."
+                        },
                         "reason": {
                             "type": "string"
                         },
@@ -1407,6 +1436,10 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         "list_conflicts" => Ok(Some(tool_call_result_response(
             id,
             list_conflicts_tool_text(),
+        ))),
+        "list_modeling_enums" => Ok(Some(tool_call_result_response(
+            id,
+            list_modeling_enums_tool_text(),
         ))),
         "resolve_conflict" => Ok(Some(tool_call_result_response(
             id,
@@ -1593,6 +1626,21 @@ fn list_transitions_tool_text() -> Result<String, ShellError> {
 
 fn list_conflicts_tool_text() -> Result<String, ShellError> {
     interpret_collect_reports(command::list_conflicts()).map(|reports| reports.join("\n"))
+}
+
+fn list_modeling_enums_tool_text() -> Result<String, ShellError> {
+    serde_json::to_string_pretty(
+        &MODELING_ENUMS
+            .iter()
+            .map(|modeled_enum| {
+                json!({
+                    "name": modeled_enum.name(),
+                    "values": modeled_enum.values(),
+                })
+            })
+            .collect::<Vec<_>>(),
+    )
+    .map_err(|error| ShellError::message(error.to_string()))
 }
 
 fn resolve_conflict_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -2010,6 +2058,22 @@ fn add_workflow_transition_evidence_tool_text(request: &Value) -> Result<String,
             parse_transition_trigger_name(raw_trigger)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
+    let source_control = arguments
+        .get("source_control")
+        .and_then(Value::as_str)
+        .map(|raw_source_control| {
+            parse_transition_trigger_name(raw_source_control)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .transpose()?;
+    let target_view = arguments
+        .get("target_view")
+        .and_then(Value::as_str)
+        .map(|raw_target_view| {
+            parse_workflow_owned_definition_name(raw_target_view)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .transpose()?;
     let source_evidence = arguments
         .get("source_evidence")
         .and_then(Value::as_str)
@@ -2031,8 +2095,28 @@ fn add_workflow_transition_evidence_tool_text(request: &Value) -> Result<String,
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
 
-    interpret_collect_reports(command::add_workflow_transition_evidence(
-        workflow_slug,
+    let evidence = if kind == WorkflowTransitionKind::Navigation {
+        WorkflowTransitionEvidenceRecord::new_with_navigation_endpoints(
+            source,
+            target,
+            kind,
+            trigger,
+            WorkflowTransitionEvidenceNavigationEndpoints::new(
+                source_control.ok_or_else(|| {
+                    ShellError::message(
+                        "navigation transition evidence requires source_control owned by source slice",
+                    )
+                })?,
+                target_view.ok_or_else(|| {
+                    ShellError::message(
+                        "navigation transition evidence requires target_view owned by target slice",
+                    )
+                })?,
+            ),
+            source_evidence,
+            target_evidence,
+        )
+    } else {
         WorkflowTransitionEvidenceRecord::new(
             source,
             target,
@@ -2040,7 +2124,12 @@ fn add_workflow_transition_evidence_tool_text(request: &Value) -> Result<String,
             trigger,
             source_evidence,
             target_evidence,
-        ),
+        )
+    };
+
+    interpret_collect_reports(command::add_workflow_transition_evidence(
+        workflow_slug,
+        evidence,
     ))
     .map(|reports| reports.join("\n"))
 }
@@ -3722,10 +3811,44 @@ fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_transition_trigger_name(raw_name)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
+    let source_control = arguments
+        .get("source_control")
+        .and_then(Value::as_str)
+        .map(|raw_source_control| {
+            parse_transition_trigger_name(raw_source_control)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .transpose()?;
+    let target_view = arguments
+        .get("target_view")
+        .and_then(Value::as_str)
+        .map(|raw_target_view| {
+            parse_workflow_owned_definition_name(raw_target_view)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .transpose()?;
     let connection = if let Some(raw_target) = arguments.get("to").and_then(Value::as_str) {
         let target_slug =
             parse_slice_slug(raw_target).map_err(|error| ShellError::message(error.to_string()))?;
-        if let Some(raw_payload_contract) =
+        if connection_kind == ConnectionKind::Navigation {
+            WorkflowConnection::new_with_navigation_endpoints(
+                workflow_slug,
+                source_slug,
+                target_slug,
+                connection_kind,
+                trigger,
+                source_control.ok_or_else(|| {
+                    ShellError::message(
+                        "navigation workflow transitions require source_control owned by source slice",
+                    )
+                })?,
+                target_view.ok_or_else(|| {
+                    ShellError::message(
+                        "navigation workflow transitions require target_view owned by target slice",
+                    )
+                })?,
+            )
+        } else if let Some(raw_payload_contract) =
             arguments.get("payload_contract").and_then(Value::as_str)
         {
             let payload_contract = parse_payload_contract_name(raw_payload_contract)

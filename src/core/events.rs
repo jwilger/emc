@@ -62,9 +62,9 @@ use crate::core::types::{
     WorkflowOutcomeRecord, WorkflowOutcomeRecords, WorkflowOwnedDefinitionKind,
     WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords,
     WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSlug, WorkflowStepRelationshipName,
-    WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecord,
-    WorkflowTransitionEvidenceRecords, WorkflowTransitionKind, WorkflowTransitionRecord,
-    WorkflowTransitionRecords, WorkflowTransitionSourceEvidenceText,
+    WorkflowTransitionEndpoint, WorkflowTransitionEvidenceNavigationEndpoints,
+    WorkflowTransitionEvidenceRecord, WorkflowTransitionEvidenceRecords, WorkflowTransitionKind,
+    WorkflowTransitionRecord, WorkflowTransitionRecords, WorkflowTransitionSourceEvidenceText,
     WorkflowTransitionTargetEvidenceText, WorkflowViewRole,
 };
 use crate::core::workflow::NewWorkflow;
@@ -1765,6 +1765,8 @@ struct WorkflowConnectedEventPayload {
     target: WorkflowConnectedEventTarget,
     kind: ConnectionKind,
     trigger: TransitionTriggerName,
+    source_control: Option<TransitionTriggerName>,
+    target_view: Option<WorkflowOwnedDefinitionName>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -1799,6 +1801,8 @@ impl WorkflowConnectedEventPayload {
             target,
             kind: connection.kind(),
             trigger: connection.trigger().clone(),
+            source_control: connection.source_control().cloned(),
+            target_view: connection.target_view().cloned(),
         }
     }
 
@@ -1813,6 +1817,12 @@ impl WorkflowConnectedEventPayload {
         let trigger = transition_trigger_name(required_str(payload, "name")?)?;
         let payload_contract = optional_str(payload, "payload_contract")?
             .map(payload_contract_name)
+            .transpose()?;
+        let source_control = optional_str(payload, "source_control")?
+            .map(transition_trigger_name)
+            .transpose()?;
+        let target_view = optional_str(payload, "target_view")?
+            .map(workflow_owned_definition_name)
             .transpose()?;
         let reason = optional_str(payload, "reason")?
             .map(model_description)
@@ -1835,6 +1845,8 @@ impl WorkflowConnectedEventPayload {
             target,
             kind,
             trigger,
+            source_control,
+            target_view,
         })
     }
 
@@ -1843,13 +1855,29 @@ impl WorkflowConnectedEventPayload {
             WorkflowConnectedEventTarget::Slice {
                 slug,
                 payload_contract: None,
-            } => WorkflowConnection::new(
-                self.workflow_slug,
-                self.source,
-                slug,
-                self.kind,
-                self.trigger,
-            ),
+            } => {
+                if let (Some(source_control), Some(target_view)) =
+                    (self.source_control, self.target_view)
+                {
+                    WorkflowConnection::new_with_navigation_endpoints(
+                        self.workflow_slug,
+                        self.source,
+                        slug,
+                        self.kind,
+                        self.trigger,
+                        source_control,
+                        target_view,
+                    )
+                } else {
+                    WorkflowConnection::new(
+                        self.workflow_slug,
+                        self.source,
+                        slug,
+                        self.kind,
+                        self.trigger,
+                    )
+                }
+            }
             WorkflowConnectedEventTarget::Slice {
                 slug,
                 payload_contract: Some(payload_contract),
@@ -1895,7 +1923,7 @@ impl WorkflowConnectedEventPayload {
             }
         };
 
-        json!({
+        let mut payload = json!({
             "workflow": self.workflow_slug.as_ref(),
             "from": self.source.as_ref(),
             "to": to,
@@ -1904,7 +1932,22 @@ impl WorkflowConnectedEventPayload {
             "name": self.trigger.as_ref(),
             "payload_contract": payload_contract,
             "reason": reason,
-        })
+        });
+        if let Value::Object(fields) = &mut payload {
+            if let Some(source_control) = &self.source_control {
+                fields.insert(
+                    "source_control".to_owned(),
+                    Value::String(source_control.as_ref().to_owned()),
+                );
+            }
+            if let Some(target_view) = &self.target_view {
+                fields.insert(
+                    "target_view".to_owned(),
+                    Value::String(target_view.as_ref().to_owned()),
+                );
+            }
+        }
+        payload
     }
 }
 
@@ -2209,22 +2252,44 @@ impl WorkflowTransitionEvidenceEventPayload {
     }
 
     fn from_json_value(payload: &Value) -> Result<Self, String> {
+        let source_control = optional_str(payload, "source_control")?
+            .map(transition_trigger_name)
+            .transpose()?;
+        let target_view = optional_str(payload, "target_view")?
+            .map(workflow_owned_definition_name)
+            .transpose()?;
+        let source = workflow_transition_endpoint(required_str(payload, "from")?)?;
+        let target = workflow_transition_endpoint(required_str(payload, "to")?)?;
+        let kind = workflow_transition_kind(required_str(payload, "via")?)?;
+        let trigger = transition_trigger_name(required_str(payload, "name")?)?;
+        let source_evidence =
+            workflow_transition_source_evidence_text(required_str(payload, "source_evidence")?)?;
+        let target_evidence =
+            workflow_transition_target_evidence_text(required_str(payload, "target_evidence")?)?;
+        let evidence =
+            if let (Some(source_control), Some(target_view)) = (source_control, target_view) {
+                WorkflowTransitionEvidenceRecord::new_with_navigation_endpoints(
+                    source,
+                    target,
+                    kind,
+                    trigger,
+                    WorkflowTransitionEvidenceNavigationEndpoints::new(source_control, target_view),
+                    source_evidence,
+                    target_evidence,
+                )
+            } else {
+                WorkflowTransitionEvidenceRecord::new(
+                    source,
+                    target,
+                    kind,
+                    trigger,
+                    source_evidence,
+                    target_evidence,
+                )
+            };
         Ok(Self {
             workflow: workflow_slug(required_str(payload, "workflow")?)?,
-            evidence: WorkflowTransitionEvidenceRecord::new(
-                workflow_transition_endpoint(required_str(payload, "from")?)?,
-                workflow_transition_endpoint(required_str(payload, "to")?)?,
-                workflow_transition_kind(required_str(payload, "via")?)?,
-                transition_trigger_name(required_str(payload, "name")?)?,
-                workflow_transition_source_evidence_text(required_str(
-                    payload,
-                    "source_evidence",
-                )?)?,
-                workflow_transition_target_evidence_text(required_str(
-                    payload,
-                    "target_evidence",
-                )?)?,
-            ),
+            evidence,
         })
     }
 
@@ -2233,7 +2298,7 @@ impl WorkflowTransitionEvidenceEventPayload {
     }
 
     fn to_json_value(&self) -> Value {
-        json!({
+        let mut payload = json!({
             "workflow": self.workflow.as_ref(),
             "from": self.evidence.source().as_ref(),
             "to": self.evidence.target().as_ref(),
@@ -2241,7 +2306,22 @@ impl WorkflowTransitionEvidenceEventPayload {
             "name": self.evidence.trigger().as_ref(),
             "source_evidence": self.evidence.source_evidence().as_ref(),
             "target_evidence": self.evidence.target_evidence().as_ref(),
-        })
+        });
+        if let Value::Object(fields) = &mut payload {
+            if let Some(source_control) = self.evidence.source_control() {
+                fields.insert(
+                    "source_control".to_owned(),
+                    Value::String(source_control.as_ref().to_owned()),
+                );
+            }
+            if let Some(target_view) = self.evidence.target_view() {
+                fields.insert(
+                    "target_view".to_owned(),
+                    Value::String(target_view.as_ref().to_owned()),
+                );
+            }
+        }
+        payload
     }
 }
 
@@ -4833,12 +4913,27 @@ fn workflow_transition_record_from_connection(
             connection.trigger().clone(),
             reason.clone(),
         )),
-        (None, None) => Ok(WorkflowTransitionRecord::new(
-            source,
-            target,
-            kind,
-            connection.trigger().clone(),
-        )),
+        (None, None) => {
+            if kind == WorkflowTransitionKind::Navigation
+                && let (Some(source_control), Some(target_view)) =
+                    (connection.source_control(), connection.target_view())
+            {
+                return Ok(WorkflowTransitionRecord::new_with_navigation_endpoints(
+                    source,
+                    target,
+                    kind,
+                    connection.trigger().clone(),
+                    source_control.clone(),
+                    target_view.clone(),
+                ));
+            }
+            Ok(WorkflowTransitionRecord::new(
+                source,
+                target,
+                kind,
+                connection.trigger().clone(),
+            ))
+        }
         (Some(_), Some(_)) => {
             Err("WorkflowConnected cannot project both rationale and payload contract".to_owned())
         }

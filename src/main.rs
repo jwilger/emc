@@ -12,7 +12,7 @@ mod io;
 mod mcp;
 mod shell;
 
-use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
+use crate::core::connection::{ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::effect::{ArtifactDigest, ChosenEventId, EventConflictId};
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, CommandInputSource,
@@ -26,13 +26,15 @@ use crate::core::formal_slice_facts::{
     ViewControls, ViewFilters, ViewLocalStates,
 };
 use crate::core::gherkin::GherkinSuite;
+use crate::core::modeling_enums::MODELING_ENUMS;
 use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     CommandInputSourceKind, ModelDescription, ModelName, ReadModelFieldSourceKind, ReviewTimestamp,
     ReviewerId, SliceSlug, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
     WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionKind,
 };
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
@@ -146,6 +148,7 @@ enum Command {
     },
     GherkinRunAll,
     Help,
+    HelpEnums,
     Init {
         name: ProjectName,
     },
@@ -290,6 +293,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::GherkinRunAll => interpret(command::gherkin_run_all()),
         Command::GherkinRun { suite } => interpret(command::gherkin_run(suite)),
         Command::Help => print_help(),
+        Command::HelpEnums => print_enum_help(),
         Command::Init { name } => interpret(command::init(name)),
         Command::ListConflicts => interpret(command::list_conflicts()),
         Command::ListSlices => interpret(command::list_slices()),
@@ -359,6 +363,9 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
         }),
         [flag] if flag == "--help" || flag == "-h" => Ok(Cli {
             command: Command::Help,
+        }),
+        [command, subject] if command == "help" && subject == "enums" => Ok(Cli {
+            command: Command::HelpEnums,
         }),
         [
             command,
@@ -3463,6 +3470,11 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let kind = parse_workflow_transition_kind(kind)
                 .map_err(|error| ShellError::message(error.to_string()))?;
+            if kind == WorkflowTransitionKind::Navigation {
+                return Err(ShellError::message(
+                    "navigation transition evidence requires --source-control and --target-view",
+                ));
+            }
             let trigger = parse_transition_trigger_name(trigger)
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let source_evidence = parse_workflow_transition_source_evidence_text(source_evidence)
@@ -3477,6 +3489,75 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                         target,
                         kind,
                         trigger,
+                        source_evidence,
+                        target_evidence,
+                    ),
+                },
+            })
+        }
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            source_flag,
+            source,
+            target_flag,
+            target,
+            kind_flag,
+            kind,
+            trigger_flag,
+            trigger,
+            source_control_flag,
+            source_control,
+            target_view_flag,
+            target_view,
+            source_evidence_flag,
+            source_evidence,
+            target_evidence_flag,
+            target_evidence,
+        ] if command == "add"
+            && subject == "workflow-transition-evidence"
+            && workflow_flag == "--workflow"
+            && source_flag == "--from"
+            && target_flag == "--to"
+            && kind_flag == "--via"
+            && trigger_flag == "--name"
+            && source_control_flag == "--source-control"
+            && target_view_flag == "--target-view"
+            && source_evidence_flag == "--source-evidence"
+            && target_evidence_flag == "--target-evidence" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source = parse_workflow_transition_endpoint(source)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let target = parse_workflow_transition_endpoint(target)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let kind = parse_workflow_transition_kind(kind)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let trigger = parse_transition_trigger_name(trigger)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_control = parse_transition_trigger_name(source_control)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let target_view = parse_workflow_owned_definition_name(target_view)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_evidence = parse_workflow_transition_source_evidence_text(source_evidence)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let target_evidence = parse_workflow_transition_target_evidence_text(target_evidence)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::AddWorkflowTransitionEvidence {
+                    workflow_slug,
+                    evidence: WorkflowTransitionEvidenceRecord::new_with_navigation_endpoints(
+                        source,
+                        target,
+                        kind,
+                        trigger,
+                        WorkflowTransitionEvidenceNavigationEndpoints::new(
+                            source_control,
+                            target_view,
+                        ),
                         source_evidence,
                         target_evidence,
                     ),
@@ -3550,6 +3631,11 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let trigger = parse_transition_trigger_name(name)
                 .map_err(|error| ShellError::message(error.to_string()))?;
+            if connection_kind == ConnectionKind::Navigation {
+                return Err(ShellError::message(
+                    "navigation workflow transitions require --source-control and --target-view",
+                ));
+            }
             Ok(Cli {
                 command: Command::ConnectWorkflow {
                     connection: WorkflowConnection::new(
@@ -3558,6 +3644,61 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                         target_slug,
                         connection_kind,
                         trigger,
+                    ),
+                },
+            })
+        }
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            from_flag,
+            source,
+            to_flag,
+            target,
+            via_flag,
+            via,
+            name_flag,
+            name,
+            source_control_flag,
+            source_control,
+            target_view_flag,
+            target_view,
+        ] if command == "connect"
+            && subject == "workflow"
+            && workflow_flag == "--workflow"
+            && from_flag == "--from"
+            && to_flag == "--to"
+            && via_flag == "--via"
+            && name_flag == "--name"
+            && source_control_flag == "--source-control"
+            && target_view_flag == "--target-view" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_slug =
+                parse_slice_slug(source).map_err(|error| ShellError::message(error.to_string()))?;
+            let target_slug =
+                parse_slice_slug(target).map_err(|error| ShellError::message(error.to_string()))?;
+            let connection_kind = parse_connection_kind(via)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let trigger = parse_transition_trigger_name(name)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let source_control = parse_transition_trigger_name(source_control)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let target_view = parse_workflow_owned_definition_name(target_view)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::ConnectWorkflow {
+                    connection: WorkflowConnection::new_with_navigation_endpoints(
+                        workflow_slug,
+                        source_slug,
+                        target_slug,
+                        connection_kind,
+                        trigger,
+                        source_control,
+                        target_view,
                     ),
                 },
             })
@@ -4165,6 +4306,17 @@ fn print_help() -> Result<(), ShellError> {
     Ok(())
 }
 
+fn print_enum_help() -> Result<(), ShellError> {
+    for modeled_enum in MODELING_ENUMS {
+        println!(
+            "{}: {}",
+            modeled_enum.name(),
+            modeled_enum.values().join(", ")
+        );
+    }
+    Ok(())
+}
+
 fn parse_basic_scenario(
     slice_slug: SliceSlug,
     scenario_kind: &str,
@@ -4220,6 +4372,11 @@ fn help_command() -> ClapCommand {
             ClapCommand::new("init")
                 .about("Create a deterministic EMC project")
                 .arg(Arg::new("name").long("name").value_name("PROJECT_NAME")),
+        )
+        .subcommand(
+            ClapCommand::new("help")
+                .about("Show modeling reference material")
+                .subcommand(ClapCommand::new("enums").about("List accepted modeled enum values")),
         )
         .subcommand(
             ClapCommand::new("list").about("Read model indexes").subcommand(
@@ -4349,6 +4506,7 @@ fn help_command() -> ClapCommand {
         .after_help(
             "Common commands:
   emc init --name <project-name>
+  emc help enums
   emc add workflow --slug <slug> --name <name> --description <text>
   emc update workflow --slug <workflow> --name <name>
   emc remove workflow --slug <workflow>

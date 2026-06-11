@@ -14,6 +14,7 @@ pub(crate) mod formal_slice_facts;
 pub(crate) mod formal_workflow_facts;
 pub(crate) mod gherkin;
 pub(crate) mod layout;
+pub(crate) mod modeling_enums;
 pub(crate) mod project;
 pub(crate) mod review_gate;
 pub(crate) mod review_record;

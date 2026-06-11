@@ -14,9 +14,9 @@ use crate::core::formal_graph::FormalWorkflowGraph;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, PayloadContractName, QuintModuleName, SliceSlug,
     TransitionTriggerName, WorkflowCommandErrorRecords, WorkflowModuleData, WorkflowOutcomeRecords,
-    WorkflowOwnedDefinitionRecords, WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSlug,
-    WorkflowTransitionEndpoint, WorkflowTransitionKind, WorkflowTransitionRecord,
-    WorkflowTransitionRecords,
+    WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
+    WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionKind,
+    WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -169,6 +169,8 @@ pub struct WorkflowConnection {
     target: WorkflowConnectionTarget,
     kind: ConnectionKind,
     trigger: TransitionTriggerName,
+    source_control: Option<TransitionTriggerName>,
+    target_view: Option<WorkflowOwnedDefinitionName>,
     payload_contract: Option<PayloadContractName>,
 }
 
@@ -186,6 +188,29 @@ impl WorkflowConnection {
             target: WorkflowConnectionTarget::Slice(target),
             kind,
             trigger,
+            source_control: None,
+            target_view: None,
+            payload_contract: None,
+        }
+    }
+
+    pub fn new_with_navigation_endpoints(
+        workflow_slug: WorkflowSlug,
+        source: SliceSlug,
+        target: SliceSlug,
+        kind: ConnectionKind,
+        trigger: TransitionTriggerName,
+        source_control: TransitionTriggerName,
+        target_view: WorkflowOwnedDefinitionName,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            source,
+            target: WorkflowConnectionTarget::Slice(target),
+            kind,
+            trigger,
+            source_control: Some(source_control),
+            target_view: Some(target_view),
             payload_contract: None,
         }
     }
@@ -204,6 +229,8 @@ impl WorkflowConnection {
             target: WorkflowConnectionTarget::Slice(target),
             kind,
             trigger,
+            source_control: None,
+            target_view: None,
             payload_contract: Some(payload_contract),
         }
     }
@@ -225,6 +252,8 @@ impl WorkflowConnection {
             },
             kind,
             trigger,
+            source_control: None,
+            target_view: None,
             payload_contract: None,
         }
     }
@@ -247,6 +276,14 @@ impl WorkflowConnection {
 
     pub fn trigger(&self) -> &TransitionTriggerName {
         &self.trigger
+    }
+
+    pub fn source_control(&self) -> Option<&TransitionTriggerName> {
+        self.source_control.as_ref()
+    }
+
+    pub fn target_view(&self) -> Option<&WorkflowOwnedDefinitionName> {
+        self.target_view.as_ref()
     }
 
     pub fn payload_contract(&self) -> Option<&PayloadContractName> {
@@ -649,6 +686,19 @@ fn connection_transition_record(
     };
     match &connection.target {
         WorkflowConnectionTarget::Slice(_) => {
+            if kind == WorkflowTransitionKind::Navigation
+                && let (Some(source_control), Some(target_view)) =
+                    (&connection.source_control, &connection.target_view)
+            {
+                return Ok(WorkflowTransitionRecord::new_with_navigation_endpoints(
+                    source,
+                    target,
+                    kind,
+                    connection.trigger.clone(),
+                    source_control.clone(),
+                    target_view.clone(),
+                ));
+            }
             if let Some(payload_contract) = &connection.payload_contract {
                 Ok(WorkflowTransitionRecord::new_with_payload_contract(
                     source,

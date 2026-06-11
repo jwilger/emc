@@ -133,7 +133,7 @@ mod tests {
             "type WorkflowOwnedDefinitionKind = OwnedCommand | OwnedEvent | OwnedView | OwnedControl | OwnedReadModel | OwnedOutcome | OwnedError | OwnedAutomation | OwnedTranslation | OwnedExternalPayload"
         ));
         assert!(quint.contains(
-            "type WorkflowTransition = { source: str, target: str, kind: WorkflowTransitionKind, trigger: str, rationale: str, payloadContract: str }"
+            "type WorkflowTransition = { source: str, target: str, kind: WorkflowTransitionKind, trigger: str, sourceControl: str, targetView: str, rationale: str, payloadContract: str }"
         ));
         assert!(quint.contains(
             "type WorkflowOutcome = { sourceSlice: str, label: str, externallyRelevant: bool }"
@@ -167,7 +167,7 @@ mod tests {
         );
         assert!(
             quint.contains(
-                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: ExternalTrigger, trigger: \"callback_received\", rationale: \"\", payloadContract: \"CallbackReceivedPayload\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: ExternalTrigger, trigger: \"callback_received\", sourceControl: \"\", targetView: \"\", rationale: \"\", payloadContract: \"CallbackReceivedPayload\" }]"
             )
         );
         assert!(quint.contains(
@@ -382,10 +382,10 @@ mod tests {
             "val workflowEventTransitionsHaveParticipatingEndpointEvents = workflowTransitions.select(transition => workflowEventTransitionSourceParticipates(transition) and workflowEventTransitionTargetParticipates(transition)).length() == workflowTransitions.length()"
         ));
         assert!(quint.contains(
-            "def workflowNavigationTransitionSourceOwnsControl(transition) = transition.kind != Navigation or workflowOwnsDefinition(transition.source, OwnedControl, transition.trigger)"
+            "def workflowNavigationTransitionSourceOwnsControl(transition) = transition.kind != Navigation or workflowOwnsDefinition(transition.source, OwnedControl, workflowNavigationSourceControl(transition))"
         ));
         assert!(quint.contains(
-            "def workflowNavigationTransitionTargetsOwnedView(transition) = transition.kind != Navigation or workflowOwnsDefinition(transition.target, OwnedView, transition.trigger)"
+            "def workflowNavigationTransitionTargetsOwnedView(transition) = transition.kind != Navigation or workflowOwnsDefinition(transition.target, OwnedView, workflowNavigationTargetView(transition))"
         ));
         assert!(quint.contains(
             "val workflowNavigationTransitionsResolveControlsAndViews = workflowTransitions.select(transition => workflowNavigationTransitionSourceOwnsControl(transition) and workflowNavigationTransitionTargetsOwnedView(transition)).length() == workflowTransitions.length()"
@@ -394,7 +394,7 @@ mod tests {
             "def workflowOwnsEntryView(sourceSlice, viewName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == OwnedView and definition.definitionName == viewName and workflowViewRoleIsEntry(definition)).length() > 0"
         ));
         assert!(quint.contains(
-            "def workflowNavigationTransitionTargetsEntryView(transition) = transition.kind != Navigation or workflowOwnsEntryView(transition.target, transition.trigger)"
+            "def workflowNavigationTransitionTargetsEntryView(transition) = transition.kind != Navigation or workflowOwnsEntryView(transition.target, workflowNavigationTargetView(transition))"
         ));
         assert!(quint.contains(
             "val workflowNavigationTransitionsResolveToEntryViews = workflowTransitions.select(transition => workflowNavigationTransitionTargetsEntryView(transition)).length() == workflowTransitions.length()"

@@ -3871,11 +3871,13 @@ fn lean_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> CanonicalD
             .iter()
             .map(|transition| {
                 format!(
-                    "{{ source := {}, target := {}, kind := {}, trigger := {}, rationale := {}, payloadContract := {} }}",
+                    "{{ source := {}, target := {}, kind := {}, trigger := {}, sourceControl := {}, targetView := {}, rationale := {}, payloadContract := {} }}",
                     json_string(transition.source().as_ref()),
                     json_string(transition.target().as_ref()),
                     lean_workflow_transition_kind(*transition.kind()),
                     json_string(transition.trigger().as_ref()),
+                    json_string(transition.source_control().map_or("", |name| name.as_ref())),
+                    json_string(transition.target_view().map_or("", |name| name.as_ref())),
                     json_string(
                         transition
                             .rationale()
@@ -3966,11 +3968,13 @@ fn quint_workflow_transition_marker(workflow: &FormalWorkflowGraph) -> Canonical
             .iter()
             .map(|transition| {
                 format!(
-                    "{{ source: {}, target: {}, kind: {}, trigger: {}, rationale: {}, payloadContract: {} }}",
+                    "{{ source: {}, target: {}, kind: {}, trigger: {}, sourceControl: {}, targetView: {}, rationale: {}, payloadContract: {} }}",
                     json_string(transition.source().as_ref()),
                     json_string(transition.target().as_ref()),
                     quint_workflow_transition_kind(*transition.kind()),
                     json_string(transition.trigger().as_ref()),
+                    json_string(transition.source_control().map_or("", |name| name.as_ref())),
+                    json_string(transition.target_view().map_or("", |name| name.as_ref())),
                     json_string(
                         transition
                             .rationale()

@@ -162,7 +162,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "structure WorkflowTransition where\n  source : String\n  target : String\n  kind : WorkflowTransitionKind\n  trigger : String\n  rationale : String\n  payloadContract : String"
+                "structure WorkflowTransition where\n  source : String\n  target : String\n  kind : WorkflowTransitionKind\n  trigger : String\n  sourceControl : String\n  targetView : String\n  rationale : String\n  payloadContract : String"
             ),
             "Lean workflow artifacts must use the closed transition-kind domain type"
         );
@@ -204,7 +204,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.externalTrigger, trigger := \"callback_received\", rationale := \"\", payloadContract := \"CallbackReceivedPayload\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.externalTrigger, trigger := \"callback_received\", sourceControl := \"\", targetView := \"\", rationale := \"\", payloadContract := \"CallbackReceivedPayload\" }]"
             ),
             "Lean artifact must model transitions as named business records, not anonymous tuples"
         );
@@ -572,13 +572,13 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.source WorkflowOwnedDefinitionKind.control transition.trigger"
+                "def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.source WorkflowOwnedDefinitionKind.control (workflowNavigationSourceControl transition)"
             ),
             "Lean workflow artifacts must require navigation transitions to come from source-owned controls"
         );
         assert!(
             lean.contains(
-                "def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.target WorkflowOwnedDefinitionKind.view transition.trigger"
+                "def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.target WorkflowOwnedDefinitionKind.view (workflowNavigationTargetView transition)"
             ),
             "Lean workflow artifacts must require navigation transitions to resolve to target-owned views"
         );
@@ -590,7 +590,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "def workflowNavigationTransitionTargetsEntryView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsEntryView transition.target transition.trigger"
+                "def workflowNavigationTransitionTargetsEntryView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsEntryView transition.target (workflowNavigationTargetView transition)"
             ),
             "Lean workflow artifacts must require navigation transitions to target entry views"
         );
