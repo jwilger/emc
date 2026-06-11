@@ -13,9 +13,10 @@ mod tests {
         SliceKindName, TransitionTriggerName, WorkflowCommandErrorRecords,
         WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
         WorkflowEntryLifecycleStateRecord, WorkflowEntryLifecycleStateRecords, WorkflowModuleData,
-        WorkflowOutcomeRecords, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
-        WorkflowSliceDetails, WorkflowStepRelationshipName, WorkflowTransitionEndpoint,
-        WorkflowTransitionKind, WorkflowTransitionRecord, WorkflowTransitionRecords,
+        WorkflowOutcomeRecords, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecords,
+        WorkflowSliceDetail, WorkflowSliceDetails, WorkflowStepRelationshipName,
+        WorkflowTransitionEndpoint, WorkflowTransitionKind, WorkflowTransitionRecord,
+        WorkflowTransitionRecords,
     };
     use crate::io::dto::{
         parse_lean_module_name, parse_model_description, parse_model_name, parse_quint_module_name,
@@ -66,11 +67,13 @@ mod tests {
             parse_lean_module_name("OpenTicket")?,
             workflow_module_data(
                 workflow_slice_details()?,
-                vec![WorkflowTransitionRecord::new(
+                vec![WorkflowTransitionRecord::new_with_navigation_endpoints(
                     WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
                     WorkflowTransitionEndpoint::try_new("review-ticket".to_owned())?,
                     WorkflowTransitionKind::try_new("navigation".to_owned())?,
                     TransitionTriggerName::try_new("stale-screen".to_owned())?,
+                    TransitionTriggerName::try_new("stale-screen".to_owned())?,
+                    WorkflowOwnedDefinitionName::try_new("stale-screen".to_owned())?,
                 )],
             )?,
         );
@@ -111,7 +114,7 @@ mod tests {
             workflow_module_data(workflow_slice_details()?, workflow_transitions()?)?,
         );
         let malformed = artifact.as_ref().replace(
-            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]",
+            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceControl := \"review-ticket-screen\", targetView := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]",
             "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation }]",
         );
 
@@ -325,12 +328,16 @@ mod tests {
     }
 
     fn workflow_transitions() -> Result<Vec<WorkflowTransitionRecord>, Box<dyn Error>> {
-        Ok(vec![WorkflowTransitionRecord::new(
-            WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
-            WorkflowTransitionEndpoint::try_new("review-ticket".to_owned())?,
-            WorkflowTransitionKind::try_new("navigation".to_owned())?,
-            TransitionTriggerName::try_new("review-ticket-screen".to_owned())?,
-        )])
+        Ok(vec![
+            WorkflowTransitionRecord::new_with_navigation_endpoints(
+                WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
+                WorkflowTransitionEndpoint::try_new("review-ticket".to_owned())?,
+                WorkflowTransitionKind::try_new("navigation".to_owned())?,
+                TransitionTriggerName::try_new("review-ticket-screen".to_owned())?,
+                TransitionTriggerName::try_new("review-ticket-screen".to_owned())?,
+                WorkflowOwnedDefinitionName::try_new("review-ticket-screen".to_owned())?,
+            ),
+        ])
     }
 
     fn workflow_exit_transitions() -> Result<Vec<WorkflowTransitionRecord>, Box<dyn Error>> {

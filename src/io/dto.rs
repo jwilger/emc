@@ -6,6 +6,7 @@ use std::fmt::{Display, Formatter, Result as FormatResult};
 use crate::core::connection::ConnectionKind;
 use crate::core::formal_slice_facts::ScenarioKind;
 use crate::core::gherkin::GherkinSuite;
+use crate::core::modeling_enums::{WORKFLOW_ENTRY_LIFECYCLE_STATES, accepted_values};
 use crate::core::project::ProjectName;
 use crate::core::slice::SliceKind;
 use crate::core::types::{
@@ -566,7 +567,8 @@ pub(crate) fn parse_workflow_entry_lifecycle_state_name(
 ) -> Result<WorkflowEntryLifecycleStateName, BoundaryParseError> {
     WorkflowEntryLifecycleStateName::try_new(raw.to_owned()).map_err(|error| {
         BoundaryParseError::new(format!(
-            "invalid workflow entry lifecycle state name: {error}"
+            "invalid workflow entry lifecycle state name '{raw}': {error}; expected one of: {}",
+            accepted_values(WORKFLOW_ENTRY_LIFECYCLE_STATES)
         ))
     })
 }

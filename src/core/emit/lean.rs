@@ -132,6 +132,8 @@ structure WorkflowTransition where
   target : String
   kind : WorkflowTransitionKind
   trigger : String
+  sourceControl : String
+  targetView : String
   rationale : String
   payloadContract : String
 
@@ -159,6 +161,8 @@ structure WorkflowTransitionEvidence where
   target : String
   kind : WorkflowTransitionKind
   trigger : String
+  sourceControl : String
+  targetView : String
   sourceEvidence : String
   targetEvidence : String
 
@@ -273,6 +277,10 @@ def workflowViewRoleIsEntry (definition : WorkflowOwnedDefinition) : Bool := def
 
 def workflowOwnsEntryView (sourceSlice : String) (viewName : String) : Bool := workflowOwnedDefinitions.any (fun definition => definition.sourceSlice == sourceSlice && definition.definitionKind == WorkflowOwnedDefinitionKind.view && definition.definitionName == viewName && workflowViewRoleIsEntry definition)
 
+def workflowNavigationSourceControl (transition : WorkflowTransition) : String := transition.sourceControl
+
+def workflowNavigationTargetView (transition : WorkflowTransition) : String := transition.targetView
+
 def workflowCommandTransitionTargetsOwnedCommand (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.command || workflowOwnsDefinition transition.target WorkflowOwnedDefinitionKind.command transition.trigger
 
 def workflowCommandTransitionsTargetOwnedCommands : Bool := workflowTransitions.all workflowCommandTransitionTargetsOwnedCommand
@@ -297,11 +305,11 @@ def workflowEventTransitionTargetParticipates (transition : WorkflowTransition) 
 
 def workflowEventTransitionsHaveParticipatingEndpointEvents : Bool := workflowTransitions.all (fun transition => workflowEventTransitionSourceParticipates transition && workflowEventTransitionTargetParticipates transition)
 
-def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.source WorkflowOwnedDefinitionKind.control transition.trigger
+def workflowNavigationTransitionSourceOwnsControl (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.source WorkflowOwnedDefinitionKind.control (workflowNavigationSourceControl transition)
 
-def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.target WorkflowOwnedDefinitionKind.view transition.trigger
+def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.target WorkflowOwnedDefinitionKind.view (workflowNavigationTargetView transition)
 
-def workflowNavigationTransitionTargetsEntryView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsEntryView transition.target transition.trigger
+def workflowNavigationTransitionTargetsEntryView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsEntryView transition.target (workflowNavigationTargetView transition)
 
 def workflowNavigationTransitionsResolveControlsAndViews : Bool := workflowTransitions.all (fun transition => workflowNavigationTransitionSourceOwnsControl transition && workflowNavigationTransitionTargetsOwnedView transition)
 
@@ -317,7 +325,7 @@ def workflowExternalTriggerPayloadContractsHaveProvenance : Bool := workflowTran
 
 def workflowTransitionRequiresEvidence (transition : WorkflowTransition) : Bool := transition.kind == WorkflowTransitionKind.event || transition.kind == WorkflowTransitionKind.command || transition.kind == WorkflowTransitionKind.navigation
 
-def workflowTransitionEvidenceMatches (transition : WorkflowTransition) (evidence : WorkflowTransitionEvidence) : Bool := evidence.source == transition.source && evidence.target == transition.target && evidence.kind == transition.kind && evidence.trigger == transition.trigger && evidence.sourceEvidence.isEmpty == false && evidence.targetEvidence.isEmpty == false
+def workflowTransitionEvidenceMatches (transition : WorkflowTransition) (evidence : WorkflowTransitionEvidence) : Bool := evidence.source == transition.source && evidence.target == transition.target && evidence.kind == transition.kind && evidence.trigger == transition.trigger && (transition.kind != WorkflowTransitionKind.navigation || ((evidence.sourceControl.isEmpty || evidence.sourceControl == workflowNavigationSourceControl transition) && (evidence.targetView.isEmpty || evidence.targetView == workflowNavigationTargetView transition))) && evidence.sourceEvidence.isEmpty == false && evidence.targetEvidence.isEmpty == false
 
 def workflowTransitionHasRequiredEvidence (transition : WorkflowTransition) : Bool := workflowTransitionRequiresEvidence transition == false || workflowTransitionEvidences.any (workflowTransitionEvidenceMatches transition)
 
@@ -1133,11 +1141,13 @@ fn workflow_transition_evidence_list(
 
 fn workflow_transition_evidence_record(evidence: &WorkflowTransitionEvidenceRecord) -> String {
     format!(
-        "{{ source := {}, target := {}, kind := {}, trigger := {}, sourceEvidence := {}, targetEvidence := {} }}",
+        "{{ source := {}, target := {}, kind := {}, trigger := {}, sourceControl := {}, targetView := {}, sourceEvidence := {}, targetEvidence := {} }}",
         quoted(evidence.source().as_ref()),
         quoted(evidence.target().as_ref()),
         lean_workflow_transition_kind(*evidence.kind()),
         quoted(evidence.trigger().as_ref()),
+        quoted(evidence.source_control().map_or("", |name| name.as_ref())),
+        quoted(evidence.target_view().map_or("", |name| name.as_ref())),
         quoted(evidence.source_evidence().as_ref()),
         quoted(evidence.target_evidence().as_ref()),
     )
@@ -1168,11 +1178,13 @@ fn workflow_entry_lifecycle_state_record(coverage: &WorkflowEntryLifecycleStateR
 
 fn transition_record(transition: &WorkflowTransitionRecord) -> String {
     format!(
-        "{{ source := {}, target := {}, kind := {}, trigger := {}, rationale := {}, payloadContract := {} }}",
+        "{{ source := {}, target := {}, kind := {}, trigger := {}, sourceControl := {}, targetView := {}, rationale := {}, payloadContract := {} }}",
         quoted(transition.source().as_ref()),
         quoted(transition.target().as_ref()),
         lean_workflow_transition_kind(*transition.kind()),
         quoted(transition.trigger().as_ref()),
+        quoted(transition.source_control().map_or("", |name| name.as_ref())),
+        quoted(transition.target_view().map_or("", |name| name.as_ref())),
         quoted(
             transition
                 .rationale()

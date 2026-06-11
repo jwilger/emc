@@ -1018,6 +1018,8 @@ pub struct WorkflowTransitionRecord {
     target: WorkflowTransitionEndpoint,
     kind: WorkflowTransitionKind,
     trigger: TransitionTriggerName,
+    source_control: Option<TransitionTriggerName>,
+    target_view: Option<WorkflowOwnedDefinitionName>,
     rationale: Option<ModelDescription>,
     payload_contract: Option<PayloadContractName>,
 }
@@ -1034,6 +1036,28 @@ impl WorkflowTransitionRecord {
             target,
             kind,
             trigger,
+            source_control: None,
+            target_view: None,
+            rationale: None,
+            payload_contract: None,
+        }
+    }
+
+    pub fn new_with_navigation_endpoints(
+        source: WorkflowTransitionEndpoint,
+        target: WorkflowTransitionEndpoint,
+        kind: WorkflowTransitionKind,
+        trigger: TransitionTriggerName,
+        source_control: TransitionTriggerName,
+        target_view: WorkflowOwnedDefinitionName,
+    ) -> Self {
+        Self {
+            source,
+            target,
+            kind,
+            trigger,
+            source_control: Some(source_control),
+            target_view: Some(target_view),
             rationale: None,
             payload_contract: None,
         }
@@ -1051,6 +1075,8 @@ impl WorkflowTransitionRecord {
             target,
             kind,
             trigger,
+            source_control: None,
+            target_view: None,
             rationale: Some(rationale),
             payload_contract: None,
         }
@@ -1068,6 +1094,8 @@ impl WorkflowTransitionRecord {
             target,
             kind,
             trigger,
+            source_control: None,
+            target_view: None,
             rationale: None,
             payload_contract: Some(payload_contract),
         }
@@ -1087,6 +1115,14 @@ impl WorkflowTransitionRecord {
 
     pub fn trigger(&self) -> &TransitionTriggerName {
         &self.trigger
+    }
+
+    pub fn source_control(&self) -> Option<&TransitionTriggerName> {
+        self.source_control.as_ref()
+    }
+
+    pub fn target_view(&self) -> Option<&WorkflowOwnedDefinitionName> {
+        self.target_view.as_ref()
     }
 
     pub fn rationale(&self) -> Option<&ModelDescription> {
@@ -1597,8 +1633,28 @@ pub struct WorkflowTransitionEvidenceRecord {
     target: WorkflowTransitionEndpoint,
     kind: WorkflowTransitionKind,
     trigger: TransitionTriggerName,
+    source_control: Option<TransitionTriggerName>,
+    target_view: Option<WorkflowOwnedDefinitionName>,
     source_evidence: WorkflowTransitionSourceEvidenceText,
     target_evidence: WorkflowTransitionTargetEvidenceText,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct WorkflowTransitionEvidenceNavigationEndpoints {
+    source_control: TransitionTriggerName,
+    target_view: WorkflowOwnedDefinitionName,
+}
+
+impl WorkflowTransitionEvidenceNavigationEndpoints {
+    pub fn new(
+        source_control: TransitionTriggerName,
+        target_view: WorkflowOwnedDefinitionName,
+    ) -> Self {
+        Self {
+            source_control,
+            target_view,
+        }
+    }
 }
 
 impl WorkflowTransitionEvidenceRecord {
@@ -1615,6 +1671,29 @@ impl WorkflowTransitionEvidenceRecord {
             target,
             kind,
             trigger,
+            source_control: None,
+            target_view: None,
+            source_evidence,
+            target_evidence,
+        }
+    }
+
+    pub fn new_with_navigation_endpoints(
+        source: WorkflowTransitionEndpoint,
+        target: WorkflowTransitionEndpoint,
+        kind: WorkflowTransitionKind,
+        trigger: TransitionTriggerName,
+        navigation_endpoints: WorkflowTransitionEvidenceNavigationEndpoints,
+        source_evidence: WorkflowTransitionSourceEvidenceText,
+        target_evidence: WorkflowTransitionTargetEvidenceText,
+    ) -> Self {
+        Self {
+            source,
+            target,
+            kind,
+            trigger,
+            source_control: Some(navigation_endpoints.source_control),
+            target_view: Some(navigation_endpoints.target_view),
             source_evidence,
             target_evidence,
         }
@@ -1634,6 +1713,14 @@ impl WorkflowTransitionEvidenceRecord {
 
     pub fn trigger(&self) -> &TransitionTriggerName {
         &self.trigger
+    }
+
+    pub fn source_control(&self) -> Option<&TransitionTriggerName> {
+        self.source_control.as_ref()
+    }
+
+    pub fn target_view(&self) -> Option<&WorkflowOwnedDefinitionName> {
+        self.target_view.as_ref()
     }
 
     pub fn source_evidence(&self) -> &WorkflowTransitionSourceEvidenceText {

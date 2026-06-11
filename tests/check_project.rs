@@ -876,7 +876,7 @@ mod tests {
 
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let lean = read_to_string(&lean_path)?.replace(
-            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]",
+            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceControl := \"review-ticket-screen\", targetView := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]",
             "def workflowTransitions : List WorkflowTransition := []",
         );
         write(lean_path, lean)?;
@@ -902,7 +902,7 @@ mod tests {
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let mut lean = read_to_string(&lean_path)?;
         lean.push_str(
-            "\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"stale-screen\", rationale := \"\", payloadContract := \"\" }]\n",
+            "\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"stale-screen\", sourceControl := \"stale-screen\", targetView := \"stale-screen\", rationale := \"\", payloadContract := \"\" }]\n",
         );
         write(lean_path, lean)?;
 
@@ -926,7 +926,7 @@ mod tests {
 
         let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
         let lean = read_to_string(&lean_path)?.replace(
-            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := WorkflowTransitionKind.workflowExitOutcome, trigger := \"ticket_closed\", rationale := \"Closed tickets continue to completion.\", payloadContract := \"\" }]",
+            "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := WorkflowTransitionKind.workflowExitOutcome, trigger := \"ticket_closed\", sourceControl := \"\", targetView := \"\", rationale := \"Closed tickets continue to completion.\", payloadContract := \"\" }]",
             "def workflowTransitions : List WorkflowTransition := []",
         );
         write(lean_path, lean)?;
@@ -983,7 +983,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/lean/OpenTicket.lean"),
-            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\nstructure WorkflowSlice where\n  slug : String\n\ndef workflowSlices : List WorkflowSlice := []\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
+            "namespace OpenTicket\n\n-- EMC-DIGEST: workflow:Open ticket\ndef workflowName := \"Open ticket\"\n\ndef workflowSlug := \"open-ticket\"\n\ndef workflowDescription := \"Actor opens a repair ticket.\"\n\nstructure WorkflowSlice where\n  slug : String\n\ndef workflowSlices : List WorkflowSlice := []\n\ndef workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceControl := \"review-ticket-screen\", targetView := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]\n\ntheorem workflowIdentityIsStable : workflowName = \"Open ticket\" := rfl\n\nend OpenTicket\n",
         )?;
 
         Command::cargo_bin("emc")?
@@ -1152,7 +1152,7 @@ mod tests {
 
         let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
         let quint = read_to_string(&quint_path)?.replace(
-            "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", rationale: \"\", payloadContract: \"\" }]",
+            "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceControl: \"review-ticket-screen\", targetView: \"review-ticket-screen\", rationale: \"\", payloadContract: \"\" }]",
             "val workflowTransitions: List[WorkflowTransition] = []",
         );
         write(quint_path, quint)?;
@@ -1178,7 +1178,7 @@ mod tests {
         let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
         let mut quint = read_to_string(&quint_path)?;
         quint.push_str(
-            "  val workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"stale-screen\", rationale: \"\", payloadContract: \"\" }]\n",
+            "  val workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"stale-screen\", sourceControl: \"stale-screen\", targetView: \"stale-screen\", rationale: \"\", payloadContract: \"\" }]\n",
         );
         write(quint_path, quint)?;
 
@@ -1324,7 +1324,7 @@ mod tests {
 
         write(
             temp_dir.path().join("model/quint/OpenTicket.qnt"),
-            "module OpenTicket {\n\n// EMC-DIGEST: workflow:Open ticket\nval workflowName = \"Open ticket\"\n\nval workflowSlug = \"open-ticket\"\n\nval workflowDescription = \"Actor opens a repair ticket.\"\n\nval workflowSlices = []\n\nval workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", rationale: \"\", payloadContract: \"\" }]\n}\n",
+            "module OpenTicket {\n\n// EMC-DIGEST: workflow:Open ticket\nval workflowName = \"Open ticket\"\n\nval workflowSlug = \"open-ticket\"\n\nval workflowDescription = \"Actor opens a repair ticket.\"\n\nval workflowSlices = []\n\nval workflowTransitions = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceControl: \"review-ticket-screen\", targetView: \"review-ticket-screen\", rationale: \"\", payloadContract: \"\" }]\n}\n",
         )?;
 
         Command::cargo_bin("emc")?
@@ -1657,6 +1657,10 @@ mod tests {
                 "--via",
                 "navigation",
                 "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
                 "review-ticket-screen",
             ])
             .current_dir(temp_dir.path())

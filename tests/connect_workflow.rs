@@ -69,6 +69,10 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
             .assert()
@@ -82,13 +86,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceControl := \"review-ticket-screen\", targetView := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]"
             ),
             "Lean artifact must represent the workflow transition"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", rationale: \"\", payloadContract: \"\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceControl: \"review-ticket-screen\", targetView: \"review-ticket-screen\", rationale: \"\", payloadContract: \"\" }]"
             ),
             "Quint artifact must represent the workflow transition"
         );
@@ -451,6 +455,10 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
             .assert()
@@ -469,6 +477,10 @@ mod tests {
                 "--via",
                 "navigation",
                 "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
                 "review-ticket-screen",
                 "--source-evidence",
                 "capture-ticket view owns the review-ticket-screen navigation control",
@@ -501,10 +513,10 @@ mod tests {
         let updated_digest = digest_marker(&lean).ok_or("Lean artifact is missing digest")?;
 
         assert!(lean.contains(
-            "def workflowTransitionEvidences : List WorkflowTransitionEvidence := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceEvidence := \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence := \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
+            "def workflowTransitionEvidences : List WorkflowTransitionEvidence := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceControl := \"review-ticket-screen\", targetView := \"review-ticket-screen\", sourceEvidence := \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence := \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
         ));
         assert!(quint.contains(
-            "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
+            "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceControl: \"review-ticket-screen\", targetView: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
         ));
         assert!(lean.contains(
             "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := WorkflowOwnedDefinitionKind.control, definitionName := \"review-ticket-screen\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"\" },{ sourceSlice := \"review-ticket\", definitionKind := WorkflowOwnedDefinitionKind.view, definitionName := \"review-ticket-screen\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"entry\" }]"
@@ -513,7 +525,7 @@ mod tests {
             "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: OwnedControl, definitionName: \"review-ticket-screen\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"\" },{ sourceSlice: \"review-ticket\", definitionKind: OwnedView, definitionName: \"review-ticket-screen\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"entry\" }]"
         ));
         assert!(lean.contains(
-            "def workflowNavigationTransitionTargetsEntryView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsEntryView transition.target transition.trigger"
+            "def workflowNavigationTransitionTargetsEntryView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsEntryView transition.target (workflowNavigationTargetView transition)"
         ));
         assert!(lean.contains(
             "theorem workflowNavigationTransitionsResolveToEntryViewsIsStable : workflowNavigationTransitionsResolveToEntryViews = true := rfl"
@@ -823,6 +835,10 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
             .assert()
@@ -841,6 +857,10 @@ mod tests {
                 "--via",
                 "navigation",
                 "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
                 "review-ticket-screen",
                 "--source-evidence",
                 "capture-ticket view owns the review-ticket-screen navigation control",
@@ -880,10 +900,10 @@ mod tests {
             "val workflowCommandErrors: List[WorkflowCommandError] = [{ sourceSlice: \"capture-ticket\", commandName: \"CaptureTicket\", errorName: \"DuplicateTicket\" }]"
         ));
         assert!(lean.contains(
-            "def workflowTransitionEvidences : List WorkflowTransitionEvidence := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceEvidence := \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence := \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
+            "def workflowTransitionEvidences : List WorkflowTransitionEvidence := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceControl := \"review-ticket-screen\", targetView := \"review-ticket-screen\", sourceEvidence := \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence := \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
         ));
         assert!(quint.contains(
-            "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
+            "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceControl: \"review-ticket-screen\", targetView: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
         ));
 
         Ok(())
@@ -1057,13 +1077,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"submit-ticket\", kind := WorkflowTransitionKind.command, trigger := \"SubmitTicketForReview\", rationale := \"\", payloadContract := \"\" },{ source := \"submit-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.event, trigger := \"TicketSubmittedForReview\", rationale := \"\", payloadContract := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"submit-ticket\", kind := WorkflowTransitionKind.command, trigger := \"SubmitTicketForReview\", sourceControl := \"\", targetView := \"\", rationale := \"\", payloadContract := \"\" },{ source := \"submit-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.event, trigger := \"TicketSubmittedForReview\", sourceControl := \"\", targetView := \"\", rationale := \"\", payloadContract := \"\" }]"
             ),
             "Lean artifact must represent command and event workflow transitions"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"submit-ticket\", kind: Command, trigger: \"SubmitTicketForReview\", rationale: \"\", payloadContract: \"\" },{ source: \"submit-ticket\", target: \"review-ticket\", kind: Event, trigger: \"TicketSubmittedForReview\", rationale: \"\", payloadContract: \"\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"submit-ticket\", kind: Command, trigger: \"SubmitTicketForReview\", sourceControl: \"\", targetView: \"\", rationale: \"\", payloadContract: \"\" },{ source: \"submit-ticket\", target: \"review-ticket\", kind: Event, trigger: \"TicketSubmittedForReview\", sourceControl: \"\", targetView: \"\", rationale: \"\", payloadContract: \"\" }]"
             ),
             "Quint artifact must represent command and event workflow transitions"
         );
@@ -1130,6 +1150,10 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
             .assert()
@@ -1148,6 +1172,10 @@ mod tests {
                 "--via",
                 "navigation",
                 "--name",
+                "alternate-review-ticket-screen",
+                "--source-control",
+                "alternate-review-ticket-screen",
+                "--target-view",
                 "alternate-review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
@@ -1249,6 +1277,10 @@ mod tests {
                 "--via",
                 "navigation",
                 "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
                 "review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
@@ -1772,13 +1804,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"record-callback\", kind := WorkflowTransitionKind.externalTrigger, trigger := \"callback_received\", rationale := \"\", payloadContract := \"CallbackReceivedPayload\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"record-callback\", kind := WorkflowTransitionKind.externalTrigger, trigger := \"callback_received\", sourceControl := \"\", targetView := \"\", rationale := \"\", payloadContract := \"CallbackReceivedPayload\" }]"
             ),
             "Lean artifact must represent the external trigger workflow transition"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"record-callback\", kind: ExternalTrigger, trigger: \"callback_received\", rationale: \"\", payloadContract: \"CallbackReceivedPayload\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"record-callback\", kind: ExternalTrigger, trigger: \"callback_received\", sourceControl: \"\", targetView: \"\", rationale: \"\", payloadContract: \"CallbackReceivedPayload\" }]"
             ),
             "Quint artifact must represent the external trigger workflow transition"
         );
@@ -1847,13 +1879,13 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := WorkflowTransitionKind.workflowExitOutcome, trigger := \"ticket_closed\", rationale := \"Closed tickets continue to completion.\", payloadContract := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := WorkflowTransitionKind.workflowExitOutcome, trigger := \"ticket_closed\", sourceControl := \"\", targetView := \"\", rationale := \"Closed tickets continue to completion.\", payloadContract := \"\" }]"
             ),
             "Lean artifact must represent the workflow exit"
         );
         assert!(
             quint.contains(
-                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"repair-complete\", kind: WorkflowExitOutcome, trigger: \"ticket_closed\", rationale: \"Closed tickets continue to completion.\", payloadContract: \"\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"repair-complete\", kind: WorkflowExitOutcome, trigger: \"ticket_closed\", sourceControl: \"\", targetView: \"\", rationale: \"Closed tickets continue to completion.\", payloadContract: \"\" }]"
             ),
             "Quint artifact must represent the workflow exit"
         );
@@ -2011,6 +2043,10 @@ mod tests {
                 "--via",
                 "navigation",
                 "--name",
+                "missing-ticket-screen",
+                "--source-control",
+                "missing-ticket-screen",
+                "--target-view",
                 "missing-ticket-screen",
             ])
             .current_dir(temp_dir.path())

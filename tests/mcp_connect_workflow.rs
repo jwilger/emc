@@ -55,12 +55,12 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceControl := \"review-ticket-screen\", targetView := \"review-ticket-screen\", rationale := \"\", payloadContract := \"\" }]"
             )
         );
         assert!(
             quint.contains(
-                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", rationale: \"\", payloadContract: \"\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceControl: \"review-ticket-screen\", targetView: \"review-ticket-screen\", rationale: \"\", payloadContract: \"\" }]"
             )
         );
 
@@ -109,6 +109,10 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
             .assert()
@@ -127,6 +131,10 @@ mod tests {
                 "--via",
                 "navigation",
                 "--name",
+                "alternate-review-ticket-screen",
+                "--source-control",
+                "alternate-review-ticket-screen",
+                "--target-view",
                 "alternate-review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
@@ -200,6 +208,10 @@ mod tests {
                 "--via",
                 "navigation",
                 "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
                 "review-ticket-screen",
             ])
             .current_dir(temp_dir.path())
@@ -282,12 +294,12 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"submit-ticket\", kind := WorkflowTransitionKind.command, trigger := \"SubmitTicketForReview\", rationale := \"\", payloadContract := \"\" },{ source := \"submit-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.event, trigger := \"TicketSubmittedForReview\", rationale := \"\", payloadContract := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"submit-ticket\", kind := WorkflowTransitionKind.command, trigger := \"SubmitTicketForReview\", sourceControl := \"\", targetView := \"\", rationale := \"\", payloadContract := \"\" },{ source := \"submit-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.event, trigger := \"TicketSubmittedForReview\", sourceControl := \"\", targetView := \"\", rationale := \"\", payloadContract := \"\" }]"
             )
         );
         assert!(
             quint.contains(
-                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"submit-ticket\", kind: Command, trigger: \"SubmitTicketForReview\", rationale: \"\", payloadContract: \"\" },{ source: \"submit-ticket\", target: \"review-ticket\", kind: Event, trigger: \"TicketSubmittedForReview\", rationale: \"\", payloadContract: \"\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"submit-ticket\", kind: Command, trigger: \"SubmitTicketForReview\", sourceControl: \"\", targetView: \"\", rationale: \"\", payloadContract: \"\" },{ source: \"submit-ticket\", target: \"review-ticket\", kind: Event, trigger: \"TicketSubmittedForReview\", sourceControl: \"\", targetView: \"\", rationale: \"\", payloadContract: \"\" }]"
             )
         );
 
@@ -337,12 +349,12 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"record-callback\", kind := WorkflowTransitionKind.externalTrigger, trigger := \"callback_received\", rationale := \"\", payloadContract := \"CallbackReceivedPayload\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"record-callback\", kind := WorkflowTransitionKind.externalTrigger, trigger := \"callback_received\", sourceControl := \"\", targetView := \"\", rationale := \"\", payloadContract := \"CallbackReceivedPayload\" }]"
             )
         );
         assert!(
             quint.contains(
-                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"record-callback\", kind: ExternalTrigger, trigger: \"callback_received\", rationale: \"\", payloadContract: \"CallbackReceivedPayload\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"record-callback\", kind: ExternalTrigger, trigger: \"callback_received\", sourceControl: \"\", targetView: \"\", rationale: \"\", payloadContract: \"CallbackReceivedPayload\" }]"
             )
         );
 
@@ -391,12 +403,12 @@ mod tests {
 
         assert!(
             lean.contains(
-                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := WorkflowTransitionKind.workflowExitOutcome, trigger := \"ticket_closed\", rationale := \"Closed tickets continue to completion.\", payloadContract := \"\" }]"
+                "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"repair-complete\", kind := WorkflowTransitionKind.workflowExitOutcome, trigger := \"ticket_closed\", sourceControl := \"\", targetView := \"\", rationale := \"Closed tickets continue to completion.\", payloadContract := \"\" }]"
             )
         );
         assert!(
             quint.contains(
-                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"repair-complete\", kind: WorkflowExitOutcome, trigger: \"ticket_closed\", rationale: \"Closed tickets continue to completion.\", payloadContract: \"\" }]"
+                "val workflowTransitions: List[WorkflowTransition] = [{ source: \"capture-ticket\", target: \"repair-complete\", kind: WorkflowExitOutcome, trigger: \"ticket_closed\", sourceControl: \"\", targetView: \"\", rationale: \"Closed tickets continue to completion.\", payloadContract: \"\" }]"
             )
         );
 
@@ -759,10 +771,10 @@ mod tests {
         let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
         assert!(lean.contains(
-            "def workflowTransitionEvidences : List WorkflowTransitionEvidence := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceEvidence := \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence := \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
+            "def workflowTransitionEvidences : List WorkflowTransitionEvidence := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceControl := \"review-ticket-screen\", targetView := \"review-ticket-screen\", sourceEvidence := \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence := \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
         ));
         assert!(quint.contains(
-            "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
+            "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceControl: \"review-ticket-screen\", targetView: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
         ));
 
         Ok(())
@@ -906,7 +918,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\"}}}\n",
         )
     }
 
@@ -914,7 +926,7 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_transition\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_transition\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\"}}}\n",
         )
     }
 
@@ -991,8 +1003,8 @@ mod tests {
         concat!(
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\"}}}\n",
-            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_transition_evidence\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_evidence\":\"capture-ticket view owns the review-ticket-screen navigation control\",\"target_evidence\":\"review-ticket workflow step exposes review-ticket-screen as its entry view\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_transition_evidence\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\",\"source_evidence\":\"capture-ticket view owns the review-ticket-screen navigation control\",\"target_evidence\":\"review-ticket workflow step exposes review-ticket-screen as its entry view\"}}}\n",
         )
     }
 

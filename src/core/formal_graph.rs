@@ -13,8 +13,9 @@ use crate::core::types::{
     WorkflowOutcomeRecords, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
     WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
     WorkflowSliceDetails, WorkflowSlug, WorkflowStepRelationshipName, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceRecord, WorkflowTransitionEvidenceRecords, WorkflowTransitionKind,
-    WorkflowTransitionRecord, WorkflowTransitionRecords, WorkflowTransitionSourceEvidenceText,
+    WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionEvidenceRecords, WorkflowTransitionKind, WorkflowTransitionRecord,
+    WorkflowTransitionRecords, WorkflowTransitionSourceEvidenceText,
     WorkflowTransitionTargetEvidenceText, WorkflowViewRole,
 };
 
@@ -456,39 +457,26 @@ fn slice_details_with_relationships(
 fn parse_transitions(value: &str) -> Result<Vec<WorkflowTransitionRecord>, FormalGraphError> {
     let kinds = parse_workflow_transition_kind_field_values(value)?;
     let strings = parse_quoted_strings(value)?;
-    if strings.len() == kinds.len() * 5 {
+    if strings.len() == kinds.len() * 7 {
         strings
-            .chunks_exact(5)
+            .chunks_exact(7)
             .zip(kinds)
             .map(|(chunk, kind)| {
-                transition_record_from_formal_fields(
-                    &chunk[0],
-                    &chunk[1],
-                    kind.as_ref(),
-                    &chunk[2],
-                    Some(&chunk[3]),
-                    Some(&chunk[4]),
-                )
-            })
-            .collect()
-    } else if strings.len() == kinds.len() * 6 {
-        strings
-            .chunks_exact(6)
-            .zip(kinds)
-            .map(|(chunk, kind)| {
-                transition_record_from_formal_fields(
-                    &chunk[0],
-                    &chunk[1],
-                    kind.as_ref(),
-                    &chunk[3],
-                    Some(&chunk[4]),
-                    Some(&chunk[5]),
-                )
+                transition_record_from_formal_fields(FormalTransitionFields {
+                    source: &chunk[0],
+                    target: &chunk[1],
+                    kind: kind.as_ref(),
+                    trigger: &chunk[2],
+                    source_control: &chunk[3],
+                    target_view: &chunk[4],
+                    rationale: Some(&chunk[5]),
+                    payload_contract: Some(&chunk[6]),
+                })
             })
             .collect()
     } else {
         Err(FormalGraphError::new(
-            "formal workflow transition declarations must contain a kind plus source, target, trigger, rationale, and payload contract fields",
+            "formal workflow transition declarations must contain a kind plus source, target, trigger, source control, target view, rationale, and payload contract fields",
         ))
     }
 }
@@ -575,39 +563,44 @@ fn parse_workflow_transition_evidences(
 ) -> Result<Vec<WorkflowTransitionEvidenceRecord>, FormalGraphError> {
     let kinds = parse_workflow_transition_kind_field_values(value)?;
     let strings = parse_quoted_strings(value)?;
-    if strings.len() == kinds.len() * 5 {
+    if strings.len() == kinds.len() * 7 {
         strings
-            .chunks_exact(5)
+            .chunks_exact(7)
             .zip(kinds)
             .map(|(chunk, kind)| {
-                Ok(WorkflowTransitionEvidenceRecord::new(
-                    transition_endpoint(&chunk[0])?,
-                    transition_endpoint(&chunk[1])?,
-                    kind,
-                    transition_trigger_name(&chunk[2])?,
-                    workflow_transition_source_evidence_text(&chunk[3])?,
-                    workflow_transition_target_evidence_text(&chunk[4])?,
-                ))
-            })
-            .collect()
-    } else if strings.len() == kinds.len() * 6 {
-        strings
-            .chunks_exact(6)
-            .zip(kinds)
-            .map(|(chunk, kind)| {
-                Ok(WorkflowTransitionEvidenceRecord::new(
-                    transition_endpoint(&chunk[0])?,
-                    transition_endpoint(&chunk[1])?,
-                    kind,
-                    transition_trigger_name(&chunk[3])?,
-                    workflow_transition_source_evidence_text(&chunk[4])?,
-                    workflow_transition_target_evidence_text(&chunk[5])?,
-                ))
+                let source = transition_endpoint(&chunk[0])?;
+                let target = transition_endpoint(&chunk[1])?;
+                let trigger = transition_trigger_name(&chunk[2])?;
+                if kind == WorkflowTransitionKind::Navigation {
+                    Ok(
+                        WorkflowTransitionEvidenceRecord::new_with_navigation_endpoints(
+                            source,
+                            target,
+                            kind,
+                            trigger,
+                            WorkflowTransitionEvidenceNavigationEndpoints::new(
+                                transition_trigger_name(&chunk[3])?,
+                                workflow_owned_definition_name(&chunk[4])?,
+                            ),
+                            workflow_transition_source_evidence_text(&chunk[5])?,
+                            workflow_transition_target_evidence_text(&chunk[6])?,
+                        ),
+                    )
+                } else {
+                    Ok(WorkflowTransitionEvidenceRecord::new(
+                        source,
+                        target,
+                        kind,
+                        trigger,
+                        workflow_transition_source_evidence_text(&chunk[5])?,
+                        workflow_transition_target_evidence_text(&chunk[6])?,
+                    ))
+                }
             })
             .collect()
     } else {
         Err(FormalGraphError::new(
-            "formal workflow transition evidence declarations must contain a kind plus source, target, trigger, source evidence, and target evidence fields",
+            "formal workflow transition evidence declarations must contain a kind plus source, target, trigger, source control, target view, source evidence, and target evidence fields",
         ))
     }
 }
@@ -660,21 +653,37 @@ fn parse_workflow_entry_lifecycle_states(
     }
 }
 
+struct FormalTransitionFields<'a> {
+    source: &'a str,
+    target: &'a str,
+    kind: &'a str,
+    trigger: &'a str,
+    source_control: &'a str,
+    target_view: &'a str,
+    rationale: Option<&'a str>,
+    payload_contract: Option<&'a str>,
+}
+
 fn transition_record_from_formal_fields(
-    source: &str,
-    target: &str,
-    kind: &str,
-    trigger: &str,
-    rationale: Option<&str>,
-    payload_contract: Option<&str>,
+    fields: FormalTransitionFields<'_>,
 ) -> Result<WorkflowTransitionRecord, FormalGraphError> {
-    let source = transition_endpoint(source)?;
-    let target = transition_endpoint(target)?;
-    let kind = workflow_transition_kind(kind)?;
-    let trigger = transition_trigger_name(trigger)?;
+    let source = transition_endpoint(fields.source)?;
+    let target = transition_endpoint(fields.target)?;
+    let kind = workflow_transition_kind(fields.kind)?;
+    let trigger = transition_trigger_name(fields.trigger)?;
+    if kind == WorkflowTransitionKind::Navigation {
+        return Ok(WorkflowTransitionRecord::new_with_navigation_endpoints(
+            source,
+            target,
+            kind,
+            trigger,
+            transition_trigger_name(fields.source_control)?,
+            workflow_owned_definition_name(fields.target_view)?,
+        ));
+    }
     match (
-        rationale.filter(|value| !value.is_empty()),
-        payload_contract.filter(|value| !value.is_empty()),
+        fields.rationale.filter(|value| !value.is_empty()),
+        fields.payload_contract.filter(|value| !value.is_empty()),
     ) {
         (None, Some(payload_contract)) => Ok(WorkflowTransitionRecord::new_with_payload_contract(
             source,

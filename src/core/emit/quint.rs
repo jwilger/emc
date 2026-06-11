@@ -58,11 +58,11 @@ pub(crate) fn emit_workflow_module(
   type WorkflowEntryLifecycleStateName = FreshUninitialized | InitializedUnauthenticated | InitializedAuthenticated | PartiallyConfigured | FullyConfigured
   type WorkflowTransitionKind = Command | Event | Navigation | ExternalTrigger | Outcome | WorkflowExitCommand | WorkflowExitEvent | WorkflowExitNavigation | WorkflowExitExternalTrigger | WorkflowExitOutcome
   type WorkflowOwnedDefinitionKind = OwnedCommand | OwnedEvent | OwnedView | OwnedControl | OwnedReadModel | OwnedOutcome | OwnedError | OwnedAutomation | OwnedTranslation | OwnedExternalPayload
-  type WorkflowTransition = {{ source: str, target: str, kind: WorkflowTransitionKind, trigger: str, rationale: str, payloadContract: str }}
+  type WorkflowTransition = {{ source: str, target: str, kind: WorkflowTransitionKind, trigger: str, sourceControl: str, targetView: str, rationale: str, payloadContract: str }}
   type WorkflowOutcome = {{ sourceSlice: str, label: str, externallyRelevant: bool }}
   type WorkflowCommandError = {{ sourceSlice: str, commandName: str, errorName: str }}
   type WorkflowOwnedDefinition = {{ sourceSlice: str, definitionKind: WorkflowOwnedDefinitionKind, definitionName: str, definitionStream: str, sourceProvenance: str, eventParticipation: str, viewRole: str }}
-  type WorkflowTransitionEvidence = {{ source: str, target: str, kind: WorkflowTransitionKind, trigger: str, sourceEvidence: str, targetEvidence: str }}
+  type WorkflowTransitionEvidence = {{ source: str, target: str, kind: WorkflowTransitionKind, trigger: str, sourceControl: str, targetView: str, sourceEvidence: str, targetEvidence: str }}
   type WorkflowEntryLifecycleState = {{ state: WorkflowEntryLifecycleStateName, step: str, evidence: str }}
   val workflowName = {workflow_name_json}
   val workflowSlug = {workflow_slug_json}
@@ -124,6 +124,8 @@ pub(crate) fn emit_workflow_module(
   def workflowEventDefinitionParticipates(sourceSlice, eventName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == OwnedEvent and definition.definitionName == eventName and workflowEventParticipationIsModeled(definition)).length() > 0
   def workflowViewRoleIsEntry(definition) = definition.viewRole == "entry"
   def workflowOwnsEntryView(sourceSlice, viewName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == OwnedView and definition.definitionName == viewName and workflowViewRoleIsEntry(definition)).length() > 0
+  def workflowNavigationSourceControl(transition) = transition.sourceControl
+  def workflowNavigationTargetView(transition) = transition.targetView
   def workflowCommandTransitionTargetsOwnedCommand(transition) = transition.kind != Command or workflowOwnsDefinition(transition.target, OwnedCommand, transition.trigger)
   val workflowCommandTransitionsTargetOwnedCommands = workflowTransitions.select(transition => workflowCommandTransitionTargetsOwnedCommand(transition)).length() == workflowTransitions.length()
   def workflowCommandTransitionSourceOwnsControl(transition) = transition.kind != Command or workflowOwnsDefinition(transition.source, OwnedControl, transition.trigger)
@@ -137,9 +139,9 @@ pub(crate) fn emit_workflow_module(
   def workflowEventTransitionSourceParticipates(transition) = transition.kind != Event or workflowEventDefinitionParticipates(transition.source, transition.trigger)
   def workflowEventTransitionTargetParticipates(transition) = transition.kind != Event or workflowEventDefinitionParticipates(transition.target, transition.trigger)
   val workflowEventTransitionsHaveParticipatingEndpointEvents = workflowTransitions.select(transition => workflowEventTransitionSourceParticipates(transition) and workflowEventTransitionTargetParticipates(transition)).length() == workflowTransitions.length()
-  def workflowNavigationTransitionSourceOwnsControl(transition) = transition.kind != Navigation or workflowOwnsDefinition(transition.source, OwnedControl, transition.trigger)
-  def workflowNavigationTransitionTargetsOwnedView(transition) = transition.kind != Navigation or workflowOwnsDefinition(transition.target, OwnedView, transition.trigger)
-  def workflowNavigationTransitionTargetsEntryView(transition) = transition.kind != Navigation or workflowOwnsEntryView(transition.target, transition.trigger)
+  def workflowNavigationTransitionSourceOwnsControl(transition) = transition.kind != Navigation or workflowOwnsDefinition(transition.source, OwnedControl, workflowNavigationSourceControl(transition))
+  def workflowNavigationTransitionTargetsOwnedView(transition) = transition.kind != Navigation or workflowOwnsDefinition(transition.target, OwnedView, workflowNavigationTargetView(transition))
+  def workflowNavigationTransitionTargetsEntryView(transition) = transition.kind != Navigation or workflowOwnsEntryView(transition.target, workflowNavigationTargetView(transition))
   val workflowNavigationTransitionsResolveControlsAndViews = workflowTransitions.select(transition => workflowNavigationTransitionSourceOwnsControl(transition) and workflowNavigationTransitionTargetsOwnedView(transition)).length() == workflowTransitions.length()
   val workflowNavigationTransitionsResolveToEntryViews = workflowTransitions.select(transition => workflowNavigationTransitionTargetsEntryView(transition)).length() == workflowTransitions.length()
   def workflowExternalTriggerDeclaresPayloadContract(transition) = transition.kind != ExternalTrigger or (transition.payloadContract != "" and workflowOwnsDefinition(transition.source, OwnedExternalPayload, transition.payloadContract))
@@ -147,7 +149,7 @@ pub(crate) fn emit_workflow_module(
   def workflowExternalTriggerPayloadContractHasProvenance(transition) = transition.kind != ExternalTrigger or workflowOwnedDefinitions.select(definition => definition.sourceSlice == transition.source and definition.definitionKind == OwnedExternalPayload and definition.definitionName == transition.payloadContract and definition.sourceProvenance != "").length() > 0
   val workflowExternalTriggerPayloadContractsHaveProvenance = workflowTransitions.select(transition => workflowExternalTriggerPayloadContractHasProvenance(transition)).length() == workflowTransitions.length()
   def workflowTransitionRequiresEvidence(transition) = transition.kind == Event or transition.kind == Command or transition.kind == Navigation
-  def workflowTransitionEvidenceMatches(transition, evidence) = evidence.source == transition.source and evidence.target == transition.target and evidence.kind == transition.kind and evidence.trigger == transition.trigger and evidence.sourceEvidence != "" and evidence.targetEvidence != ""
+  def workflowTransitionEvidenceMatches(transition, evidence) = evidence.source == transition.source and evidence.target == transition.target and evidence.kind == transition.kind and evidence.trigger == transition.trigger and (transition.kind != Navigation or ((evidence.sourceControl == "" or evidence.sourceControl == workflowNavigationSourceControl(transition)) and (evidence.targetView == "" or evidence.targetView == workflowNavigationTargetView(transition)))) and evidence.sourceEvidence != "" and evidence.targetEvidence != ""
   def workflowTransitionHasRequiredEvidence(transition) = not(workflowTransitionRequiresEvidence(transition)) or workflowTransitionEvidences.select(evidence => workflowTransitionEvidenceMatches(transition, evidence)).length() > 0
   val workflowTransitionsHaveRequiredEvidence = workflowTransitions.select(transition => workflowTransitionHasRequiredEvidence(transition)).length() == workflowTransitions.length()
   def workflowEntryLifecycleStateCovered(state) = workflowEntryLifecycleStates.select(coverage => coverage.state == state and workflowSliceSlugs.select(step => step == coverage.step).length() > 0 and coverage.evidence != "").length() > 0
@@ -840,11 +842,13 @@ fn workflow_transition_evidence_list(
 
 fn workflow_transition_evidence_record(evidence: &WorkflowTransitionEvidenceRecord) -> String {
     format!(
-        "{{ source: {}, target: {}, kind: {}, trigger: {}, sourceEvidence: {}, targetEvidence: {} }}",
+        "{{ source: {}, target: {}, kind: {}, trigger: {}, sourceControl: {}, targetView: {}, sourceEvidence: {}, targetEvidence: {} }}",
         quoted(evidence.source().as_ref()),
         quoted(evidence.target().as_ref()),
         quint_workflow_transition_kind(*evidence.kind()),
         quoted(evidence.trigger().as_ref()),
+        quoted(evidence.source_control().map_or("", |name| name.as_ref())),
+        quoted(evidence.target_view().map_or("", |name| name.as_ref())),
         quoted(evidence.source_evidence().as_ref()),
         quoted(evidence.target_evidence().as_ref()),
     )
@@ -875,11 +879,13 @@ fn workflow_entry_lifecycle_state_record(coverage: &WorkflowEntryLifecycleStateR
 
 fn transition_record(transition: &WorkflowTransitionRecord) -> String {
     format!(
-        "{{ source: {}, target: {}, kind: {}, trigger: {}, rationale: {}, payloadContract: {} }}",
+        "{{ source: {}, target: {}, kind: {}, trigger: {}, sourceControl: {}, targetView: {}, rationale: {}, payloadContract: {} }}",
         quoted(transition.source().as_ref()),
         quoted(transition.target().as_ref()),
         quint_workflow_transition_kind(*transition.kind()),
         quoted(transition.trigger().as_ref()),
+        quoted(transition.source_control().map_or("", |name| name.as_ref())),
+        quoted(transition.target_view().map_or("", |name| name.as_ref())),
         quoted(
             transition
                 .rationale()
