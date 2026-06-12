@@ -61,33 +61,35 @@ jobs:
       cancel-in-progress: false
     env:
       GIT_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+      RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
     steps:
-      - name: Skip when release PR secret is not available
-        if: ${{ env.GIT_TOKEN == '' }}
+      - name: Skip when release PR secrets are not available
+        if: ${{ env.GIT_TOKEN == '' || env.RELEASE_SIGNING_KEY == '' }}
         run: |
-          echo "release-plz release PR skipped: configure RELEASE_PLZ_TOKEN repository secret to create release PRs"
+          echo "release-plz release PR skipped: configure RELEASE_PLZ_TOKEN and RELEASE_SIGNING_KEY repository secrets to create signed release PRs"
 
       - name: Checkout repository
-        if: ${{ env.GIT_TOKEN != '' }}
+        if: ${{ env.GIT_TOKEN != '' && env.RELEASE_SIGNING_KEY != '' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Install or reuse Nix
-        if: ${{ env.GIT_TOKEN != '' }}
+        if: ${{ env.GIT_TOKEN != '' && env.RELEASE_SIGNING_KEY != '' }}
         run: ./.forgejo/scripts/install-nix.sh
 
       - name: Configure release-plz author
-        if: ${{ env.GIT_TOKEN != '' }}
+        if: ${{ env.GIT_TOKEN != '' && env.RELEASE_SIGNING_KEY != '' }}
         run: |
-          git config user.name "release-plz"
-          git config user.email "release-plz@noreply.git.johnwilger.com"
+          git config --global user.name "release-plz"
+          git config --global user.email "release-plz@noreply.git.johnwilger.com"
 
       - name: Open release PR
-        if: ${{ env.GIT_TOKEN != '' }}
+        if: ${{ env.GIT_TOKEN != '' && env.RELEASE_SIGNING_KEY != '' }}
         run: |
           set -euo pipefail
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
           . ./.forgejo/scripts/configure-release-plz-git-auth.sh
+          . ./.forgejo/scripts/configure-release-plz-git-signing.sh
           nix develop --command release-plz release-pr --forge gitea

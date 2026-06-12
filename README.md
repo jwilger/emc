@@ -381,6 +381,8 @@ The Forgejo repository must provide these secrets:
 - `RELEASE_PLZ_TOKEN`: Forgejo application token with repository read/write
   access and issue read/write access so release-plz can create tags, releases,
   labels, and release PRs.
+- `RELEASE_SIGNING_KEY`: private SSH or GPG signing key whose public key is
+  trusted by Forgejo for verified release-plz commits.
 - `CARGO_REGISTRY_TOKEN`: crates.io token with `publish-new` and
   `publish-update` scopes.
 
@@ -388,7 +390,9 @@ If `RELEASE_PLZ_TOKEN` is absent, the release-plz workflow exits successfully
 after logging that release work was skipped. No release PRs, git tags, or
 Forgejo releases are created until it is configured. If `CARGO_REGISTRY_TOKEN`
 is absent, release PRs can still be created and updated, but merged release PRs
-will not publish crates until the crates.io token is configured.
+will not publish crates until the crates.io token is configured. If
+`RELEASE_SIGNING_KEY` is absent, release PR creation is skipped because the
+release branch protection requires verified commits.
 
 `release-plz.toml` sets `release_always = false`, so publishing is tied to the
 merged release PR. The Forgejo server must support the commit-to-PR API used by
