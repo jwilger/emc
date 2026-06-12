@@ -79,12 +79,6 @@ jobs:
         if: ${{ env.GIT_TOKEN != '' && env.RELEASE_SIGNING_KEY != '' }}
         run: ./.forgejo/scripts/install-nix.sh
 
-      - name: Configure release-plz author
-        if: ${{ env.GIT_TOKEN != '' && env.RELEASE_SIGNING_KEY != '' }}
-        run: |
-          git config --global user.name "release-plz"
-          git config --global user.email "release-plz@noreply.git.johnwilger.com"
-
       - name: Open release PR
         if: ${{ env.GIT_TOKEN != '' && env.RELEASE_SIGNING_KEY != '' }}
         run: |
@@ -92,4 +86,6 @@ jobs:
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
           . ./.forgejo/scripts/configure-release-plz-git-auth.sh
           . ./.forgejo/scripts/configure-release-plz-git-signing.sh
+          git config --global user.name "release-plz"
+          git config --global user.email "release-plz@noreply.git.johnwilger.com"
           nix develop --command release-plz release-pr --forge gitea
