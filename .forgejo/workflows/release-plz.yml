@@ -88,4 +88,4 @@ jobs:
           . ./.forgejo/scripts/configure-release-plz-git-signing.sh
           git config --global user.name "release-plz"
           git config --global user.email "release-plz@noreply.git.johnwilger.com"
-          nix develop --command release-plz release-pr --forge gitea
+          nix develop --command sh ./.forgejo/scripts/create-release-plz-release-pr.sh
