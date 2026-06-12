@@ -12,6 +12,9 @@ signing_dir="${RUNNER_TEMP:-/tmp}/release-plz-signing"
 mkdir -p "$signing_dir"
 chmod 700 "$signing_dir"
 
+GIT_CONFIG_GLOBAL="${GIT_CONFIG_GLOBAL:-$signing_dir/gitconfig}"
+export GIT_CONFIG_GLOBAL
+
 signing_key_path="$signing_dir/release-signing-key"
 printf '%s\n' "$RELEASE_SIGNING_KEY" | sed 's/\\n/\
 /g' > "$signing_key_path"
