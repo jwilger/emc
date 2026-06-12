@@ -386,6 +386,10 @@ The Forgejo repository must provide these secrets:
 - `CARGO_REGISTRY_TOKEN`: crates.io token with `publish-new` and
   `publish-update` scopes.
 
+The optional `RELEASE_SIGNING_NAME` and `RELEASE_SIGNING_EMAIL` repository or
+organization variables override the release PR commit identity. They default to
+the identity associated with the current release signing key.
+
 If `RELEASE_PLZ_TOKEN` is absent, the release-plz workflow exits successfully
 after logging that release work was skipped. No release PRs, git tags, or
 Forgejo releases are created until it is configured. If `CARGO_REGISTRY_TOKEN`
