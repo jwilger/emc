@@ -388,7 +388,8 @@ The Forgejo repository must provide these secrets:
 
 The optional `RELEASE_SIGNING_NAME` and `RELEASE_SIGNING_EMAIL` repository or
 organization variables override the release PR commit identity. They default to
-the identity associated with the current release signing key.
+`release-plz-bot <release-plz-bot@noreply.git.johnwilger.com>`, matching the
+bot account that owns the release signing key.
 
 If `RELEASE_PLZ_TOKEN` is absent, the release-plz workflow exits successfully
 after logging that release work was skipped. No release PRs, git tags, or

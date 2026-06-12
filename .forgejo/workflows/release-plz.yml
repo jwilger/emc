@@ -88,6 +88,6 @@ jobs:
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
           . ./.forgejo/scripts/configure-release-plz-git-auth.sh
           . ./.forgejo/scripts/configure-release-plz-git-signing.sh
-          git config --global user.name "${RELEASE_SIGNING_NAME:-John Wilger}"
-          git config --global user.email "${RELEASE_SIGNING_EMAIL:-john@johnwilger.com}"
+          git config --global user.name "${RELEASE_SIGNING_NAME:-release-plz-bot}"
+          git config --global user.email "${RELEASE_SIGNING_EMAIL:-release-plz-bot@noreply.git.johnwilger.com}"
           nix develop --command sh ./.forgejo/scripts/create-release-plz-release-pr.sh
