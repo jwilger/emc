@@ -44,6 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          . ./.forgejo/scripts/configure-release-plz-git-auth.sh
           nix develop --command release-plz release --forge gitea
 
   release-plz-pr:
@@ -88,4 +89,5 @@ jobs:
         run: |
           set -euo pipefail
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+          . ./.forgejo/scripts/configure-release-plz-git-auth.sh
           nix develop --command release-plz release-pr --forge gitea
