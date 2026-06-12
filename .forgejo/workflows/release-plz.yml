@@ -62,6 +62,8 @@ jobs:
     env:
       GIT_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
       RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+      RELEASE_SIGNING_NAME: ${{ vars.RELEASE_SIGNING_NAME }}
+      RELEASE_SIGNING_EMAIL: ${{ vars.RELEASE_SIGNING_EMAIL }}
     steps:
       - name: Skip when release PR secrets are not available
         if: ${{ env.GIT_TOKEN == '' || env.RELEASE_SIGNING_KEY == '' }}
@@ -86,6 +88,6 @@ jobs:
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
           . ./.forgejo/scripts/configure-release-plz-git-auth.sh
           . ./.forgejo/scripts/configure-release-plz-git-signing.sh
-          git config --global user.name "release-plz"
-          git config --global user.email "release-plz@noreply.git.johnwilger.com"
+          git config --global user.name "${RELEASE_SIGNING_NAME:-John Wilger}"
+          git config --global user.email "${RELEASE_SIGNING_EMAIL:-john@johnwilger.com}"
           nix develop --command sh ./.forgejo/scripts/create-release-plz-release-pr.sh
