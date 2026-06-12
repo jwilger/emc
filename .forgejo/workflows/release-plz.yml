@@ -23,16 +23,24 @@ jobs:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       GIT_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
     steps:
+      - name: Skip when release secrets are not available
+        if: ${{ env.GIT_TOKEN == '' || env.CARGO_REGISTRY_TOKEN == '' }}
+        run: |
+          echo "release-plz release skipped: configure RELEASE_PLZ_TOKEN and CARGO_REGISTRY_TOKEN repository secrets to publish crates"
+
       - name: Checkout repository
+        if: ${{ env.GIT_TOKEN != '' && env.CARGO_REGISTRY_TOKEN != '' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Install or reuse Nix
+        if: ${{ env.GIT_TOKEN != '' && env.CARGO_REGISTRY_TOKEN != '' }}
         run: ./.forgejo/scripts/install-nix.sh
 
       - name: Publish unpublished crates
+        if: ${{ env.GIT_TOKEN != '' && env.CARGO_REGISTRY_TOKEN != '' }}
         run: |
           set -euo pipefail
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"
@@ -54,21 +62,30 @@ jobs:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       GIT_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
     steps:
+      - name: Skip when release secrets are not available
+        if: ${{ env.GIT_TOKEN == '' || env.CARGO_REGISTRY_TOKEN == '' }}
+        run: |
+          echo "release-plz release PR skipped: configure RELEASE_PLZ_TOKEN and CARGO_REGISTRY_TOKEN repository secrets to create release PRs"
+
       - name: Checkout repository
+        if: ${{ env.GIT_TOKEN != '' && env.CARGO_REGISTRY_TOKEN != '' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Install or reuse Nix
+        if: ${{ env.GIT_TOKEN != '' && env.CARGO_REGISTRY_TOKEN != '' }}
         run: ./.forgejo/scripts/install-nix.sh
 
       - name: Configure release-plz author
+        if: ${{ env.GIT_TOKEN != '' && env.CARGO_REGISTRY_TOKEN != '' }}
         run: |
           git config user.name "release-plz"
           git config user.email "release-plz@noreply.git.johnwilger.com"
 
       - name: Open release PR
+        if: ${{ env.GIT_TOKEN != '' && env.CARGO_REGISTRY_TOKEN != '' }}
         run: |
           set -euo pipefail
           export PATH="/nix/var/nix/profiles/default/bin:$PATH"

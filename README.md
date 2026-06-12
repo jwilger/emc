@@ -384,6 +384,10 @@ The Forgejo repository must provide these secrets:
 - `CARGO_REGISTRY_TOKEN`: crates.io token with `publish-new` and
   `publish-update` scopes.
 
+If either secret is absent, the release-plz workflow exits successfully after
+logging that release work was skipped. No release PRs are created and no crates
+are published until both secrets are configured.
+
 `release-plz.toml` sets `release_always = false`, so publishing is tied to the
 merged release PR. The Forgejo server must support the commit-to-PR API used by
 release-plz to recognize release PR merge commits.
