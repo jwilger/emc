@@ -6,3 +6,20 @@ repo_url = "https://git.johnwilger.com/Slipstream/emc"
 pr_branch_prefix = "release-plz-"
 pr_name = "chore: release"
 publish = true
+
+# Keep the project copyright header as the first line of the regenerated
+# CHANGELOG.md. Without this, release-plz rewrites the file with its default
+# `# Changelog` preamble, dropping the `<!-- Copyright 2026 John Wilger -->`
+# line that `scripts/copyright-headers.sh --check` (run by `just
+# copyright-headers` in CI) requires within the first five lines, which fails CI
+# on every release PR.
+[changelog]
+header = """<!-- Copyright 2026 John Wilger -->
+
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+"""
