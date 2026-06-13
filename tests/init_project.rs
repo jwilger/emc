@@ -950,15 +950,23 @@ mod tests {
                 "EMC project Eddy layout is present",
             ));
 
-        let exported_events_dir = temp_dir.path().join("model/events/v1");
+        let committed_events_dir = temp_dir.path().join("model/events/events");
         assert!(
-            exported_events_dir.exists(),
-            "init must create the exported event directory for artifact-only recovery"
+            committed_events_dir.exists(),
+            "init must create the committed event store for artifact-only recovery"
         );
-        let exported_event_count = fs::read_dir(exported_events_dir)?.count();
+        let transaction_count = fs::read_dir(committed_events_dir)?
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .path()
+                    .extension()
+                    .is_some_and(|extension| extension == "jsonl")
+            })
+            .count();
         assert!(
-            exported_event_count > 0,
-            "init must export the initial project event for artifact-only recovery"
+            transaction_count > 0,
+            "init must append the initial project event to the store for artifact-only recovery"
         );
 
         Command::cargo_bin("emc")?

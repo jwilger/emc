@@ -117,7 +117,6 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         ),
         Effect::EnsureDirectory(project_path("reviews")),
         Effect::write_file_if_missing(project_path("reviews/.gitkeep"), file_contents("\n")),
-        Effect::EnsureDirectory(project_path("model/events/v1")),
         Effect::ExportEvent(EventDraft::project_initialized(&project_name)),
         Effect::Report(report_line(format!(
             "EMC project {project_name} layout is present"

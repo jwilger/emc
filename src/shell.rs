@@ -22,14 +22,13 @@ use crate::core::effect::{
     ProcessInvocations, ProjectPath, ProjectionFingerprint, ReviewEventReference,
 };
 use crate::core::event_runtime::{
-    ProjectRuntimeLock, ensure_sqlite_event_store, execute_eventcore_command_for_exported_event,
+    ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
     lock_project_runtime,
 };
 use crate::core::events::{
-    EventDraft, ExportedEventType, export_event_file_contents,
-    exported_events_projection_fingerprint, list_event_conflicts, list_stale_workflow_readiness,
-    project_exported_events, reject_legacy_artifact_only_project, resolve_event_conflict,
-    unresolved_event_conflicts_exist,
+    EventDraft, ExportedEventType, exported_events_projection_fingerprint, list_event_conflicts,
+    list_stale_workflow_readiness, project_exported_events, reject_legacy_artifact_only_project,
+    resolve_event_conflict, unresolved_event_conflicts_exist,
 };
 use crate::core::formal_graph::{
     FormalGraphError, FormalWorkflowGraph, FormalWorkflowGraphs, parse_lean_workflow_graph,
@@ -162,7 +161,7 @@ pub(crate) fn interpret_collect_reports(plan: EffectPlan) -> Result<Vec<String>,
         if !project_initialization_plan(&plan) {
             reject_legacy_artifact_only_project().map_err(ShellError::message)?;
         }
-        ensure_sqlite_event_store_if_needed()?;
+        ensure_event_store_if_needed()?;
         project_exported_events_into_worktree()?;
         reject_mutation_when_event_conflicts_exist(&plan)?;
     }
@@ -183,7 +182,7 @@ fn interpret_collect_reports_with_progress(
         if !project_initialization_plan(&plan) {
             reject_legacy_artifact_only_project().map_err(ShellError::message)?;
         }
-        ensure_sqlite_event_store_if_needed()?;
+        ensure_event_store_if_needed()?;
         project_exported_events_into_worktree()?;
         reject_mutation_when_event_conflicts_exist(&plan)?;
     }
@@ -343,13 +342,8 @@ fn project_runtime_lock_state() -> &'static Mutex<bool> {
     LOCKING_PROJECT_RUNTIME.get_or_init(|| Mutex::new(false))
 }
 
-fn ensure_sqlite_event_store_if_needed() -> Result<(), ShellError> {
-    if !Path::new("model/events/v1").exists() {
-        return Ok(());
-    }
-    ensure_sqlite_event_store(Path::new("."))
-        .map(|_path| ())
-        .map_err(ShellError::message)
+fn ensure_event_store_if_needed() -> Result<(), ShellError> {
+    ensure_event_store(Path::new(".")).map_err(ShellError::message)
 }
 
 fn reject_mutation_when_event_conflicts_exist(plan: &EffectPlan) -> Result<(), ShellError> {
@@ -1119,9 +1113,7 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             }
             execute_eventcore_command_for_exported_event(Path::new("."), draft)
                 .map_err(ShellError::message)?;
-            let (path, contents) =
-                export_event_file_contents(draft).map_err(ShellError::message)?;
-            write_file(&path, contents.as_ref()).map(|()| Vec::new())
+            Ok(Vec::new())
         }
         Effect::ListConflictsFromEvents => {
             interpret_collect_reports(list_event_conflicts().map_err(ShellError::message)?)

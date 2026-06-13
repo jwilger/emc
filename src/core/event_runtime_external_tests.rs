@@ -3,748 +3,209 @@
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-    use std::ffi::OsString;
     use std::fs;
     use std::path::Path;
 
+    use tempfile::TempDir;
+
     use super::super::{
-        execute_eventcore_command_for_exported_event_at_path_for_test,
-        migrate_eventcore_sqlite_store, sqlite_event_store_path_with_env,
-        sync_exported_events_into_sqlite,
+        event_store_root, execute_eventcore_command_for_exported_event, list_forks,
+        read_all_emc_events, reconcile_choose_branch, transaction_id_string,
     };
-    use crate::core::connection::{ConnectionKind, WorkflowConnection, WorkflowTransitionRemoval};
-    use crate::core::effect::{
-        ArtifactDigest, ModelContentDigest, ProjectionFingerprint, ReviewEventReference,
-    };
-    use crate::core::event_commands::{
-        AddSliceCommand, AddWorkflowCommand, ConnectWorkflowCommand,
-        DeclareWorkflowReadinessCommand, InitializeProjectCommand, RemoveSliceCommand,
-        RemoveWorkflowCommand, RemoveWorkflowTransitionCommand, UpdateSliceCommand,
-        UpdateWorkflowCommand,
-    };
+    use crate::core::event_commands::EmcEvent;
     use crate::core::events::EventDraft;
     use crate::core::project::ProjectName;
-    use crate::core::types::{
-        ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceKindName, SliceSlug,
-        TransitionTriggerName, WorkflowSlug,
-    };
+    use crate::core::types::{ModelDescription, ModelName, WorkflowSlug};
     use crate::core::workflow::NewWorkflow;
-    use eventcore::{RetryPolicy, execute};
-    use eventcore_sqlite::{SqliteConfig, SqliteEventStore, rusqlite};
-    use sha2::{Digest, Sha256};
-    use tempfile::TempDir;
-    use tokio::runtime::Builder;
 
-    #[test]
-    fn sqlite_store_defaults_under_xdg_state_home_by_project_realpath_hash()
-    -> Result<(), Box<dyn Error>> {
-        let state_home = TempDir::new()?;
-        let project = TempDir::new()?;
-        let canonical_project = project.path().canonicalize()?;
-        let project_hash = hex::encode(Sha256::digest(
-            canonical_project.to_string_lossy().as_bytes(),
-        ));
-
-        let path = sqlite_event_store_path_with_env(project.path(), |name| {
-            (name == "XDG_STATE_HOME").then(|| state_home.path().as_os_str().to_os_string())
-        })?;
-
-        assert_eq!(
-            path,
-            state_home
-                .path()
-                .join("emc")
-                .join("projects")
-                .join(project_hash)
-                .join("events.sqlite3")
-        );
-        assert!(
-            !path.starts_with(project.path()),
-            "default SQLite event store must live outside the project repository"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn sqlite_store_defaults_under_home_local_state_when_xdg_state_home_is_absent()
-    -> Result<(), Box<dyn Error>> {
-        let home = TempDir::new()?;
-        let project = TempDir::new()?;
-        let canonical_project = project.path().canonicalize()?;
-        let project_hash = hex::encode(Sha256::digest(
-            canonical_project.to_string_lossy().as_bytes(),
-        ));
-
-        let path = sqlite_event_store_path_with_env(project.path(), |name| {
-            (name == "HOME").then(|| home.path().as_os_str().to_os_string())
-        })?;
-
-        assert_eq!(
-            path,
-            home.path()
-                .join(".local")
-                .join("state")
-                .join("emc")
-                .join("projects")
-                .join(project_hash)
-                .join("events.sqlite3")
-        );
-        assert!(
-            !path.starts_with(project.path()),
-            "default SQLite event store must live outside the project repository"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn sqlite_store_path_honors_env_override() -> Result<(), Box<dyn Error>> {
-        let project = TempDir::new()?;
-        let override_path = Path::new("/tmp/custom-emc-events.sqlite3");
-
-        let path = sqlite_event_store_path_with_env(project.path(), |name| {
-            (name == "EMC_EVENT_STORE_PATH").then(|| OsString::from(override_path))
-        })?;
-
-        assert_eq!(path, override_path);
-
-        Ok(())
-    }
-
-    #[test]
-    fn sqlite_sync_rejects_exported_event_json_that_does_not_match_the_typed_body()
-    -> Result<(), Box<dyn Error>> {
-        let project = TempDir::new()?;
-        let store_dir = TempDir::new()?;
-        let sqlite_path = store_dir.path().join("events.sqlite3");
-        let event_dir = project.path().join("model/events/v1");
-        fs::create_dir_all(&event_dir)?;
-        fs::write(
-            event_dir.join("workflow-added.json"),
-            r#"{
-                "schema_version": "emc.events.v1",
-                "event_id": "workflow-added-1",
-                "command_id": "workflow-added-1",
-                "command_ordinal": 0,
-                "stream_id": "workflow::open-ticket",
-                "parents": [],
-                "type": "WorkflowAdded",
-                "payload": {
-                    "name": "Open ticket",
-                    "description": "Actor opens a repair ticket."
-                }
-            }"#,
-        )?;
-        migrate_eventcore_sqlite_store(&sqlite_path)?;
-
-        let error = match sync_exported_events_into_sqlite(project.path(), &sqlite_path) {
-            Ok(()) => {
-                return Err("runtime sync must parse exported event JSON into typed bodies".into());
+    /// Copy every committed transaction file from one project's store into
+    /// another's, mimicking a `git merge` of the `events/` directory. Only
+    /// `events/*.jsonl` is committed, so this is the entire shared surface.
+    fn union_committed_events(from: &Path, into: &Path) -> Result<(), Box<dyn Error>> {
+        let source = event_store_root(from).join("events");
+        let destination = event_store_root(into).join("events");
+        fs::create_dir_all(&destination)?;
+        for entry in fs::read_dir(source)? {
+            let path = entry?.path();
+            if path
+                .extension()
+                .is_some_and(|extension| extension == "jsonl")
+            {
+                let name = path.file_name().ok_or("transaction file has no name")?;
+                fs::copy(&path, destination.join(name))?;
             }
-            Err(error) => error,
-        };
-
-        assert!(
-            error.contains("missing string field slug"),
-            "typed import should reject WorkflowAdded payloads without slugs, got: {error}"
-        );
-        let conn = rusqlite::Connection::open(sqlite_path)?;
-        let cached_event_count: usize =
-            conn.query_row("SELECT count(*) FROM eventcore_events", [], |row| {
-                row.get(0)
-            })?;
-        assert_eq!(
-            cached_event_count, 0,
-            "invalid exported events must not be cached as raw JSON"
-        );
-
+        }
         Ok(())
     }
 
-    #[test]
-    fn initialize_project_command_appends_eventcore_sqlite_event() -> Result<(), Box<dyn Error>> {
-        let store_dir = TempDir::new()?;
-        let sqlite_path = store_dir.path().join("events.sqlite3");
-        let store = SqliteEventStore::new(SqliteConfig {
-            path: sqlite_path.clone(),
-            encryption_key: None,
-        })?;
+    fn project_name(value: &str) -> Result<ProjectName, Box<dyn Error>> {
+        Ok(ProjectName::try_new(value.to_owned())?)
+    }
 
-        Builder::new_current_thread().build()?.block_on(async {
-            store.migrate().await?;
-            execute(
-                &store,
-                InitializeProjectCommand::from_semantic(model_project_name("Repair Desk")?)?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            Ok::<(), Box<dyn Error>>(())
-        })?;
-
-        let conn = rusqlite::Connection::open(sqlite_path)?;
-        let (stream_id, event_type, event_data): (String, String, String) = conn.query_row(
-            "SELECT stream_id, event_type, event_data FROM eventcore_events",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )?;
-        assert_eq!(stream_id, "project");
-        assert_eq!(event_type, "EmcEvent");
-        assert!(
-            event_data.contains("\"ProjectInitialized\""),
-            "eventcore command must append a ProjectInitialized event"
-        );
-        assert!(
-            event_data.contains("\"Repair Desk\""),
-            "eventcore command must persist the project name"
-        );
-
-        Ok(())
+    fn new_workflow(
+        slug: &str,
+        name: &str,
+        description: &str,
+    ) -> Result<NewWorkflow, Box<dyn Error>> {
+        Ok(NewWorkflow::new(
+            ModelName::try_new(name.to_owned())?,
+            ModelDescription::try_new(description.to_owned())?,
+            WorkflowSlug::try_new(slug.to_owned())?,
+        ))
     }
 
     #[test]
-    fn add_workflow_command_appends_eventcore_sqlite_event() -> Result<(), Box<dyn Error>> {
-        let store_dir = TempDir::new()?;
-        let sqlite_path = store_dir.path().join("events.sqlite3");
-        let store = SqliteEventStore::new(SqliteConfig {
-            path: sqlite_path.clone(),
-            encryption_key: None,
-        })?;
-
-        Builder::new_current_thread().build()?.block_on(async {
-            store.migrate().await?;
-            execute(
-                &store,
-                add_open_ticket_workflow_command()?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            Ok::<(), Box<dyn Error>>(())
-        })?;
-
-        let conn = rusqlite::Connection::open(sqlite_path)?;
-        let (stream_id, event_type, event_data): (String, String, String) = conn.query_row(
-            "SELECT stream_id, event_type, event_data FROM eventcore_events",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )?;
-        assert_eq!(stream_id, "workflow::open-ticket");
-        assert_eq!(event_type, "EmcEvent");
-        assert!(
-            event_data.contains("\"WorkflowAdded\""),
-            "eventcore command must append a WorkflowAdded event"
-        );
-        assert!(
-            event_data.contains("\"Open ticket\""),
-            "eventcore command must persist the workflow name"
-        );
-        assert!(
-            event_data.contains("\"Actor opens a repair ticket.\""),
-            "eventcore command must persist the workflow description"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn exported_workflow_added_event_replay_uses_semantic_draft_body() -> Result<(), Box<dyn Error>>
-    {
+    fn event_store_lives_inside_the_project_repository() -> Result<(), Box<dyn Error>> {
         let project = TempDir::new()?;
-        let store_dir = TempDir::new()?;
-        let sqlite_path = store_dir.path().join("events.sqlite3");
-        let workflow = NewWorkflow::new(
-            ModelName::try_new("Open ticket".to_owned())?,
-            ModelDescription::try_new("Actor opens a repair ticket.".to_owned())?,
-            WorkflowSlug::try_new("open-ticket".to_owned())?,
-        );
-        let draft = EventDraft::workflow_added(&workflow);
-
-        execute_eventcore_command_for_exported_event_at_path_for_test(
+        execute_eventcore_command_for_exported_event(
             project.path(),
-            &sqlite_path,
-            &draft,
+            &EventDraft::project_initialized(&project_name("Repairs")?),
         )?;
 
-        let conn = rusqlite::Connection::open(sqlite_path)?;
-        let (stream_id, event_type, event_data): (String, String, String) = conn.query_row(
-            "SELECT stream_id, event_type, event_data FROM eventcore_events",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )?;
-        assert_eq!(stream_id, "workflow::open-ticket");
-        assert_eq!(event_type, "EmcEvent");
+        let root = event_store_root(project.path());
         assert!(
-            event_data.contains("\"WorkflowAdded\""),
-            "replaying an exported event draft must append the workflow-added event"
+            root.starts_with(project.path()),
+            "the file event store must live in the project repository"
         );
         assert!(
-            event_data.contains("\"Open ticket\""),
-            "replay must preserve the semantic workflow name"
+            root.join("events").is_dir(),
+            "the committed events/ directory must exist after the first append"
         );
         assert!(
-            event_data.contains("\"Actor opens a repair ticket.\""),
-            "replay must preserve the semantic workflow description"
+            root.join(".gitignore").is_file(),
+            "the store must write its own .gitignore"
         );
-
         Ok(())
     }
 
     #[test]
-    fn update_workflow_command_appends_eventcore_sqlite_event() -> Result<(), Box<dyn Error>> {
-        let store_dir = TempDir::new()?;
-        let sqlite_path = store_dir.path().join("events.sqlite3");
-        let store = SqliteEventStore::new(SqliteConfig {
-            path: sqlite_path.clone(),
-            encryption_key: None,
-        })?;
-
-        Builder::new_current_thread().build()?.block_on(async {
-            store.migrate().await?;
-            execute(
-                &store,
-                add_open_ticket_workflow_command()?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            execute(
-                &store,
-                UpdateWorkflowCommand::from_semantic(
-                    workflow_slug("open-ticket")?,
-                    model_name("Open repair ticket")?,
-                    model_description("Actor opens a repair ticket with priority.")?,
-                )?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            Ok::<(), Box<dyn Error>>(())
-        })?;
-
-        let conn = rusqlite::Connection::open(sqlite_path)?;
-        let (stream_id, event_type, event_data): (String, String, String) = conn.query_row(
-            "SELECT stream_id, event_type, event_data FROM eventcore_events
-             WHERE stream_version = 2",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    fn executed_commands_are_appended_and_read_back_in_order() -> Result<(), Box<dyn Error>> {
+        let project = TempDir::new()?;
+        execute_eventcore_command_for_exported_event(
+            project.path(),
+            &EventDraft::project_initialized(&project_name("Repairs")?),
         )?;
-        assert_eq!(stream_id, "workflow::open-ticket");
-        assert_eq!(event_type, "EmcEvent");
-        assert!(
-            event_data.contains("\"WorkflowUpdated\""),
-            "eventcore command must append a WorkflowUpdated event"
-        );
-        assert!(
-            event_data.contains("\"Open repair ticket\""),
-            "eventcore command must persist the updated workflow name"
-        );
-        assert!(
-            event_data.contains("\"Actor opens a repair ticket with priority.\""),
-            "eventcore command must persist the updated workflow description"
-        );
+        execute_eventcore_command_for_exported_event(
+            project.path(),
+            &EventDraft::workflow_added(&new_workflow(
+                "open-ticket",
+                "Open ticket",
+                "Actor opens a repair ticket.",
+            )?),
+        )?;
 
+        let events = read_all_emc_events(project.path())?;
+        assert!(
+            matches!(events.first(), Some(EmcEvent::ProjectInitialized { .. })),
+            "first event must be ProjectInitialized, got {events:?}"
+        );
+        assert!(
+            matches!(
+                events.get(1),
+                Some(EmcEvent::WorkflowAdded { slug, .. }) if slug.as_ref() == "open-ticket"
+            ),
+            "second event must be the added workflow, got {events:?}"
+        );
         Ok(())
     }
 
     #[test]
-    fn remove_workflow_command_appends_eventcore_sqlite_event() -> Result<(), Box<dyn Error>> {
-        let store_dir = TempDir::new()?;
-        let sqlite_path = store_dir.path().join("events.sqlite3");
-        let store = SqliteEventStore::new(SqliteConfig {
-            path: sqlite_path.clone(),
-            encryption_key: None,
-        })?;
-
-        Builder::new_current_thread().build()?.block_on(async {
-            store.migrate().await?;
-            execute(
-                &store,
-                add_open_ticket_workflow_command()?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            execute(
-                &store,
-                RemoveWorkflowCommand::from_semantic(workflow_slug("open-ticket")?)?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            Ok::<(), Box<dyn Error>>(())
-        })?;
-
-        let conn = rusqlite::Connection::open(sqlite_path)?;
-        let (stream_id, event_type, event_data): (String, String, String) = conn.query_row(
-            "SELECT stream_id, event_type, event_data FROM eventcore_events
-             WHERE stream_version = 2",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )?;
-        assert_eq!(stream_id, "workflow::open-ticket");
-        assert_eq!(event_type, "EmcEvent");
-        assert!(
-            event_data.contains("\"WorkflowRemoved\""),
-            "eventcore command must append a WorkflowRemoved event"
-        );
-        assert!(
-            event_data.contains("\"open-ticket\""),
-            "eventcore command must persist the removed workflow slug"
-        );
-
+    fn reading_a_project_without_a_store_returns_no_events() -> Result<(), Box<dyn Error>> {
+        let project = TempDir::new()?;
+        assert!(read_all_emc_events(project.path())?.is_empty());
         Ok(())
     }
 
     #[test]
-    fn connect_workflow_command_appends_eventcore_sqlite_event() -> Result<(), Box<dyn Error>> {
-        let store_dir = TempDir::new()?;
-        let sqlite_path = store_dir.path().join("events.sqlite3");
-        let store = SqliteEventStore::new(SqliteConfig {
-            path: sqlite_path.clone(),
-            encryption_key: None,
-        })?;
-
-        Builder::new_current_thread().build()?.block_on(async {
-            store.migrate().await?;
-            execute(
-                &store,
-                add_open_ticket_workflow_command()?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            execute(
-                &store,
-                ConnectWorkflowCommand::from_connection(WorkflowConnection::new(
-                    WorkflowSlug::try_new("open-ticket".to_owned())?,
-                    SliceSlug::try_new("capture-ticket".to_owned())?,
-                    SliceSlug::try_new("review-ticket".to_owned())?,
-                    ConnectionKind::Navigation,
-                    TransitionTriggerName::try_new("review-ticket-screen".to_owned())?,
-                ))?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            Ok::<(), Box<dyn Error>>(())
-        })?;
-
-        let conn = rusqlite::Connection::open(sqlite_path)?;
-        let (stream_id, event_type, event_data): (String, String, String) = conn.query_row(
-            "SELECT stream_id, event_type, event_data FROM eventcore_events
-             WHERE stream_version = 2",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    fn updating_an_absent_workflow_is_rejected() -> Result<(), Box<dyn Error>> {
+        let project = TempDir::new()?;
+        execute_eventcore_command_for_exported_event(
+            project.path(),
+            &EventDraft::project_initialized(&project_name("Repairs")?),
         )?;
-        assert_eq!(stream_id, "workflow::open-ticket");
-        assert_eq!(event_type, "EmcEvent");
-        assert!(
-            event_data.contains("\"WorkflowConnected\""),
-            "eventcore command must append a WorkflowConnected event"
-        );
-        assert!(
-            event_data.contains("\"review-ticket-screen\""),
-            "eventcore command must persist the connection trigger"
+
+        let result = execute_eventcore_command_for_exported_event(
+            project.path(),
+            &EventDraft::workflow_updated(&new_workflow(
+                "open-ticket",
+                "Open ticket",
+                "Actor opens a repair ticket.",
+            )?),
         );
 
+        assert!(
+            result.is_err(),
+            "updating a workflow that was never added must fail the command invariant"
+        );
         Ok(())
     }
 
     #[test]
-    fn remove_workflow_transition_command_appends_eventcore_sqlite_event()
+    fn concurrent_branches_are_reported_as_a_fork_and_reconciled_by_choosing_one()
     -> Result<(), Box<dyn Error>> {
-        let store_dir = TempDir::new()?;
-        let sqlite_path = store_dir.path().join("events.sqlite3");
-        let store = SqliteEventStore::new(SqliteConfig {
-            path: sqlite_path.clone(),
-            encryption_key: None,
-        })?;
-
-        Builder::new_current_thread().build()?.block_on(async {
-            store.migrate().await?;
-            execute(
-                &store,
-                add_open_ticket_workflow_command()?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            execute(
-                &store,
-                RemoveWorkflowTransitionCommand::from_removal(WorkflowTransitionRemoval::new(
-                    WorkflowSlug::try_new("open-ticket".to_owned())?,
-                    SliceSlug::try_new("capture-ticket".to_owned())?,
-                    SliceSlug::try_new("review-ticket".to_owned())?,
-                    ConnectionKind::Navigation,
-                    TransitionTriggerName::try_new("review-ticket-screen".to_owned())?,
-                ))?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            Ok::<(), Box<dyn Error>>(())
-        })?;
-
-        let conn = rusqlite::Connection::open(sqlite_path)?;
-        let (stream_id, event_type, event_data): (String, String, String) = conn.query_row(
-            "SELECT stream_id, event_type, event_data FROM eventcore_events
-             WHERE stream_version = 2",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        // Replica A builds the shared base: an initialized project with a
+        // workflow.
+        let replica_a = TempDir::new()?;
+        execute_eventcore_command_for_exported_event(
+            replica_a.path(),
+            &EventDraft::project_initialized(&project_name("Repairs")?),
         )?;
-        assert_eq!(stream_id, "workflow::open-ticket");
-        assert_eq!(event_type, "EmcEvent");
-        assert!(
-            event_data.contains("\"WorkflowTransitionRemoved\""),
-            "eventcore command must append a WorkflowTransitionRemoved event"
-        );
-        assert!(
-            event_data.contains("\"review-ticket-screen\""),
-            "eventcore command must persist the removed transition trigger"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn declare_workflow_readiness_command_appends_eventcore_sqlite_event()
-    -> Result<(), Box<dyn Error>> {
-        let store_dir = TempDir::new()?;
-        let sqlite_path = store_dir.path().join("events.sqlite3");
-        let store = SqliteEventStore::new(SqliteConfig {
-            path: sqlite_path.clone(),
-            encryption_key: None,
-        })?;
-
-        Builder::new_current_thread().build()?.block_on(async {
-            store.migrate().await?;
-            execute(
-                &store,
-                add_open_ticket_workflow_command()?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            execute(
-                &store,
-                DeclareWorkflowReadinessCommand::new(
-                    WorkflowSlug::try_new("open-ticket".to_owned())?,
-                    ProjectionFingerprint::new(ArtifactDigest::try_new(
-                        "verified-frontier".to_owned(),
-                    )?),
-                    ModelContentDigest::new(ArtifactDigest::try_new("model-content".to_owned())?),
-                    ReviewTimestamp::try_new("2026-06-07T00:00:00.000Z".to_owned())?,
-                    ReviewerId::try_new("emc verify".to_owned())?,
-                    ReviewEventReference::unrecorded(),
-                )?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            Ok::<(), Box<dyn Error>>(())
-        })?;
-
-        let conn = rusqlite::Connection::open(sqlite_path)?;
-        let (stream_id, event_type, event_data): (String, String, String) = conn.query_row(
-            "SELECT stream_id, event_type, event_data FROM eventcore_events
-             WHERE stream_version = 2",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        execute_eventcore_command_for_exported_event(
+            replica_a.path(),
+            &EventDraft::workflow_added(&new_workflow(
+                "open-ticket",
+                "Open ticket",
+                "Actor opens a repair ticket.",
+            )?),
         )?;
-        assert_eq!(stream_id, "workflow::open-ticket");
-        assert_eq!(event_type, "EmcEvent");
-        assert!(
-            event_data.contains("\"WorkflowReadinessDeclared\""),
-            "eventcore command must append a WorkflowReadinessDeclared event"
-        );
-        assert!(
-            event_data.contains("\"verified-frontier\""),
-            "eventcore command must persist the verified event frontier"
-        );
 
-        Ok(())
-    }
-
-    #[test]
-    fn add_slice_command_appends_eventcore_sqlite_event() -> Result<(), Box<dyn Error>> {
-        let store_dir = TempDir::new()?;
-        let sqlite_path = store_dir.path().join("events.sqlite3");
-        let store = SqliteEventStore::new(SqliteConfig {
-            path: sqlite_path.clone(),
-            encryption_key: None,
-        })?;
-
-        Builder::new_current_thread().build()?.block_on(async {
-            store.migrate().await?;
-            execute(
-                &store,
-                add_capture_ticket_slice_command()?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            Ok::<(), Box<dyn Error>>(())
-        })?;
-
-        let conn = rusqlite::Connection::open(sqlite_path)?;
-        let (stream_id, event_type, event_data): (String, String, String) = conn.query_row(
-            "SELECT stream_id, event_type, event_data FROM eventcore_events",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        // Replica B starts from a clone of the committed events only (a fresh
+        // replica id), then both replicas update the workflow concurrently from
+        // the same base version.
+        let replica_b = TempDir::new()?;
+        union_committed_events(replica_a.path(), replica_b.path())?;
+        execute_eventcore_command_for_exported_event(
+            replica_b.path(),
+            &EventDraft::workflow_updated(&new_workflow(
+                "open-ticket",
+                "Open ticket",
+                "Description authored on replica B.",
+            )?),
         )?;
-        assert_eq!(stream_id, "slice::capture-ticket");
-        assert_eq!(event_type, "EmcEvent");
-        assert!(
-            event_data.contains("\"SliceAdded\""),
-            "eventcore command must append a SliceAdded event"
-        );
-        assert!(
-            event_data.contains("\"open-ticket\""),
-            "eventcore command must persist the owning workflow"
-        );
-        assert!(
-            event_data.contains("\"state_view\""),
-            "eventcore command must persist the slice type"
-        );
-        assert!(
-            event_data.contains("\"Actor enters ticket details.\""),
-            "eventcore command must persist the slice description"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn update_slice_command_appends_eventcore_sqlite_event() -> Result<(), Box<dyn Error>> {
-        let store_dir = TempDir::new()?;
-        let sqlite_path = store_dir.path().join("events.sqlite3");
-        let store = SqliteEventStore::new(SqliteConfig {
-            path: sqlite_path.clone(),
-            encryption_key: None,
-        })?;
-
-        Builder::new_current_thread().build()?.block_on(async {
-            store.migrate().await?;
-            execute(
-                &store,
-                add_capture_ticket_slice_command()?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            execute(
-                &store,
-                UpdateSliceCommand::from_semantic(
-                    slice_slug("capture-ticket")?,
-                    model_name("Capture repair ticket")?,
-                    slice_kind_name("state_change")?,
-                    model_description("Actor enters prioritized ticket details.")?,
-                )?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            Ok::<(), Box<dyn Error>>(())
-        })?;
-
-        let conn = rusqlite::Connection::open(sqlite_path)?;
-        let (stream_id, event_type, event_data): (String, String, String) = conn.query_row(
-            "SELECT stream_id, event_type, event_data FROM eventcore_events
-             WHERE stream_version = 2",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        execute_eventcore_command_for_exported_event(
+            replica_a.path(),
+            &EventDraft::workflow_updated(&new_workflow(
+                "open-ticket",
+                "Open ticket",
+                "Description authored on replica A.",
+            )?),
         )?;
-        assert_eq!(stream_id, "slice::capture-ticket");
-        assert_eq!(event_type, "EmcEvent");
-        assert!(
-            event_data.contains("\"SliceUpdated\""),
-            "eventcore command must append a SliceUpdated event"
+
+        // Merging replica B's events into replica A unions the two divergent
+        // transactions onto one stream from the same base — a fork.
+        union_committed_events(replica_b.path(), replica_a.path())?;
+        let forks = list_forks(replica_a.path())?;
+        assert_eq!(
+            forks.len(),
+            1,
+            "the concurrent updates must surface one fork"
         );
-        assert!(
-            event_data.contains("\"state_change\""),
-            "eventcore command must persist the updated slice type"
-        );
-        assert!(
-            event_data.contains("\"Actor enters prioritized ticket details.\""),
-            "eventcore command must persist the updated slice description"
+        let fork = &forks[0];
+        assert_eq!(fork.stream_id().as_ref(), "workflow::open-ticket");
+        assert_eq!(
+            fork.transactions().len(),
+            2,
+            "both branches must be present"
         );
 
+        // Resolving keeps the chosen branch and collapses the fork.
+        let chosen = transaction_id_string(fork.transactions()[0]);
+        let resolved = reconcile_choose_branch(replica_a.path(), "workflow::open-ticket", &chosen)?;
+        assert_eq!(resolved, 1, "reconcile must resolve the single fork");
+        assert!(
+            list_forks(replica_a.path())?.is_empty(),
+            "no fork must remain after reconciliation"
+        );
         Ok(())
-    }
-
-    #[test]
-    fn remove_slice_command_appends_eventcore_sqlite_event() -> Result<(), Box<dyn Error>> {
-        let store_dir = TempDir::new()?;
-        let sqlite_path = store_dir.path().join("events.sqlite3");
-        let store = SqliteEventStore::new(SqliteConfig {
-            path: sqlite_path.clone(),
-            encryption_key: None,
-        })?;
-
-        Builder::new_current_thread().build()?.block_on(async {
-            store.migrate().await?;
-            execute(
-                &store,
-                add_capture_ticket_slice_command()?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            execute(
-                &store,
-                RemoveSliceCommand::from_semantic(slice_slug("capture-ticket")?)?,
-                RetryPolicy::new(),
-            )
-            .await?;
-            Ok::<(), Box<dyn Error>>(())
-        })?;
-
-        let conn = rusqlite::Connection::open(sqlite_path)?;
-        let (stream_id, event_type, event_data): (String, String, String) = conn.query_row(
-            "SELECT stream_id, event_type, event_data FROM eventcore_events
-             WHERE stream_version = 2",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )?;
-        assert_eq!(stream_id, "slice::capture-ticket");
-        assert_eq!(event_type, "EmcEvent");
-        assert!(
-            event_data.contains("\"SliceRemoved\""),
-            "eventcore command must append a SliceRemoved event"
-        );
-        assert!(
-            event_data.contains("\"capture-ticket\""),
-            "eventcore command must persist the removed slice slug"
-        );
-
-        Ok(())
-    }
-
-    fn add_open_ticket_workflow_command() -> Result<AddWorkflowCommand, String> {
-        AddWorkflowCommand::from_semantic(
-            workflow_slug("open-ticket")?,
-            model_name("Open ticket")?,
-            model_description("Actor opens a repair ticket.")?,
-        )
-    }
-
-    fn add_capture_ticket_slice_command() -> Result<AddSliceCommand, String> {
-        AddSliceCommand::from_semantic(
-            workflow_slug("open-ticket")?,
-            slice_slug("capture-ticket")?,
-            model_name("Capture ticket")?,
-            slice_kind_name("state_view")?,
-            model_description("Actor enters ticket details.")?,
-        )
-    }
-
-    fn model_project_name(value: &str) -> Result<ProjectName, String> {
-        ProjectName::try_new(value.to_owned()).map_err(|error| error.to_string())
-    }
-
-    fn model_name(value: &str) -> Result<ModelName, String> {
-        ModelName::try_new(value.to_owned()).map_err(|error| error.to_string())
-    }
-
-    fn model_description(value: &str) -> Result<ModelDescription, String> {
-        ModelDescription::try_new(value.to_owned()).map_err(|error| error.to_string())
-    }
-
-    fn workflow_slug(value: &str) -> Result<WorkflowSlug, String> {
-        WorkflowSlug::try_new(value.to_owned()).map_err(|error| error.to_string())
-    }
-
-    fn slice_slug(value: &str) -> Result<SliceSlug, String> {
-        SliceSlug::try_new(value.to_owned()).map_err(|error| error.to_string())
-    }
-
-    fn slice_kind_name(value: &str) -> Result<SliceKindName, String> {
-        SliceKindName::try_new(value.to_owned()).map_err(|error| error.to_string())
     }
 }

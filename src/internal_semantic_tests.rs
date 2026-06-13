@@ -10,9 +10,7 @@ mod tests {
         ProjectPath, ProjectionFingerprint, ReviewEventId, ReviewEventReference,
     };
     use crate::core::event_commands::{EmcEvent, SliceFactEvent, SliceFactInput};
-    use crate::core::events::{
-        EventDraft, EventStreamId, ExportedEvent, ExportedEventBody, ExportedEventType,
-    };
+    use crate::core::events::ExportedEventType;
     use crate::core::formal_slice_facts::{NewOutcomeDefinition, OutcomeEventNames};
     use crate::core::review_record::ReviewRecordDocument;
     use crate::core::types::{
@@ -24,7 +22,6 @@ mod tests {
         WorkflowTransitionTargetEvidenceText,
     };
     use crate::core::verify::{QuintInvariantName, QuintInvariantSet};
-    use crate::core::workflow::NewWorkflow;
     use crate::io::dto::{
         parse_board_connection_endpoint_kind, parse_board_element_kind, parse_board_lane_id,
         parse_command_error_recovery_kind, parse_command_input_source_kind,
@@ -817,182 +814,6 @@ mod tests {
     }
 
     #[test]
-    fn exported_event_stream_ids_are_modeled_domain_terms() -> Result<(), Box<dyn Error>> {
-        [
-            ("project", "project"),
-            ("workflow::open-ticket", "workflow::open-ticket"),
-            ("slice::capture-ticket", "slice::capture-ticket"),
-            ("review::open-ticket", "review::open-ticket"),
-        ]
-        .into_iter()
-        .try_for_each(|(raw, expected)| -> Result<(), Box<dyn Error>> {
-            let stream_id = EventStreamId::try_new(raw.to_owned())?;
-
-            assert_eq!(stream_id.to_string(), expected);
-
-            Ok(())
-        })?;
-
-        [
-            "",
-            "artifact::open-ticket",
-            "workflow::",
-            "slice::",
-            "review::",
-            "workflow::open::ticket",
-        ]
-        .into_iter()
-        .for_each(|raw| {
-            assert!(
-                EventStreamId::try_new(raw.to_owned()).is_err(),
-                "{raw:?} must not enter exported events as a stream id"
-            );
-        });
-
-        Ok(())
-    }
-
-    #[test]
-    fn exported_events_preserve_semantic_bodies_until_json_boundaries() -> Result<(), Box<dyn Error>>
-    {
-        let workflow = NewWorkflow::new(
-            parse_model_name("Open ticket")?,
-            parse_model_description("Actor opens a repair ticket.")?,
-            parse_workflow_slug("open-ticket")?,
-        );
-
-        let draft = EventDraft::workflow_added(&workflow);
-
-        assert_eq!(draft.event_type(), ExportedEventType::WorkflowAdded);
-        assert_eq!(
-            draft.body(),
-            &ExportedEventBody::WorkflowAdded {
-                workflow: workflow.clone()
-            },
-            "exported event drafts should use the exported event body ADT, not raw JSON payloads"
-        );
-
-        let exported = ExportedEvent::from_draft_for_test(&draft)?;
-
-        assert_eq!(exported.event_type(), ExportedEventType::WorkflowAdded);
-        assert_eq!(exported.body(), draft.body());
-        assert_eq!(
-            exported.payload_json(),
-            serde_json::json!({
-                "slug": "open-ticket",
-                "name": "Open ticket",
-                "description": "Actor opens a repair ticket."
-            }),
-            "JSON should be produced only at the export boundary"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn exported_event_json_is_parsed_to_a_semantic_body() -> Result<(), Box<dyn Error>> {
-        let exported = ExportedEvent::from_json_for_test(&serde_json::json!({
-            "schema_version": "emc.events.v1",
-            "event_id": "workflow-added-1",
-            "command_id": "workflow-added-1",
-            "command_ordinal": 0,
-            "stream_id": "workflow::open-ticket",
-            "parents": [],
-            "type": "WorkflowAdded",
-            "payload": {
-                "slug": "open-ticket",
-                "name": "Open ticket",
-                "description": "Actor opens a repair ticket."
-            }
-        }))?;
-
-        assert_eq!(exported.event_type(), ExportedEventType::WorkflowAdded);
-        assert_eq!(
-            exported.body(),
-            &ExportedEventBody::WorkflowAdded {
-                workflow: NewWorkflow::new(
-                    parse_model_name("Open ticket")?,
-                    parse_model_description("Actor opens a repair ticket.")?,
-                    parse_workflow_slug("open-ticket")?,
-                )
-            },
-            "exported event JSON should be parsed once into semantic event data"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn exported_event_json_rejects_invalid_metadata_terms() -> Result<(), Box<dyn Error>> {
-        let valid_event = serde_json::json!({
-            "schema_version": "emc.events.v1",
-            "event_id": "workflow-added-1",
-            "command_id": "workflow-added-1",
-            "command_ordinal": 0,
-            "stream_id": "workflow::open-ticket",
-            "parents": ["project-initialized-1"],
-            "type": "WorkflowAdded",
-            "payload": {
-                "slug": "open-ticket",
-                "name": "Open ticket",
-                "description": "Actor opens a repair ticket."
-            }
-        });
-
-        let mut empty_event_id = valid_event.clone();
-        empty_event_id["event_id"] = serde_json::json!("");
-        let empty_event_id_error = match ExportedEvent::from_json_for_test(&empty_event_id) {
-            Ok(_) => return Err("empty event ids must not enter the exported event graph".into()),
-            Err(error) => error,
-        };
-        assert!(
-            empty_event_id_error.contains("event_id")
-                && empty_event_id_error.contains("exported event JSON"),
-            "event id errors should name the invalid metadata field, got: {empty_event_id_error}"
-        );
-
-        let mut empty_command_id = valid_event.clone();
-        empty_command_id["command_id"] = serde_json::json!("");
-        let empty_command_id_error = match ExportedEvent::from_json_for_test(&empty_command_id) {
-            Ok(_) => {
-                return Err("empty command ids must not enter exported event metadata".into());
-            }
-            Err(error) => error,
-        };
-        assert!(
-            empty_command_id_error.contains("command_id")
-                && empty_command_id_error.contains("exported event JSON"),
-            "command id errors should name the invalid metadata field, got: {empty_command_id_error}"
-        );
-
-        let mut empty_parent = valid_event.clone();
-        empty_parent["parents"] = serde_json::json!([""]);
-        let empty_parent_error = match ExportedEvent::from_json_for_test(&empty_parent) {
-            Ok(_) => return Err("empty parent ids must not enter exported event frontiers".into()),
-            Err(error) => error,
-        };
-        assert!(
-            empty_parent_error.contains("parents")
-                && empty_parent_error.contains("exported event JSON"),
-            "parent id errors should name the invalid metadata field, got: {empty_parent_error}"
-        );
-
-        let mut invalid_stream_id = valid_event;
-        invalid_stream_id["stream_id"] = serde_json::json!("artifact::open-ticket");
-        let invalid_stream_id_error = match ExportedEvent::from_json_for_test(&invalid_stream_id) {
-            Ok(_) => return Err("invalid stream ids must not enter exported event metadata".into()),
-            Err(error) => error,
-        };
-        assert!(
-            invalid_stream_id_error.contains("stream_id")
-                && invalid_stream_id_error.contains("exported event JSON"),
-            "stream id errors should name the invalid metadata field, got: {invalid_stream_id_error}"
-        );
-
-        Ok(())
-    }
-
-    #[test]
     fn eventcore_project_initialized_events_serialize_semantic_project_names()
     -> Result<(), Box<dyn Error>> {
         let event = EmcEvent::ProjectInitialized {
@@ -1193,6 +1014,8 @@ mod tests {
             target_evidence: WorkflowTransitionTargetEvidenceText::try_new(
                 "Review screen is reachable.".to_owned(),
             )?,
+            source_control: None,
+            target_view: None,
         };
         let coverage_required = EmcEvent::WorkflowEntryLifecycleCoverageRequired {
             stream_id: eventcore::StreamId::try_new("workflow::open-ticket".to_owned())?,
@@ -1219,7 +1042,9 @@ mod tests {
                     "via": "navigation",
                     "name": "Review ticket",
                     "source_evidence": "Ticket capture is complete.",
-                    "target_evidence": "Review screen is reachable."
+                    "target_evidence": "Review screen is reachable.",
+                    "source_control": null,
+                    "target_view": null
                 }
             })
         );
@@ -1300,6 +1125,8 @@ mod tests {
                 "TicketReviewPayload".to_owned(),
             )?),
             reason: None,
+            source_control: None,
+            target_view: None,
         };
         let removal = EmcEvent::WorkflowTransitionRemoved {
             stream_id: eventcore::StreamId::try_new("workflow::open-ticket".to_owned())?,
@@ -1323,7 +1150,9 @@ mod tests {
                     "via": "navigation",
                     "name": "Open review",
                     "payload_contract": "TicketReviewPayload",
-                    "reason": null
+                    "reason": null,
+                    "source_control": null,
+                    "target_view": null
                 }
             })
         );

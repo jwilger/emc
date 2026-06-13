@@ -41,3 +41,6 @@
 # Ad hoc scratch directories
 /tmp/
 /.tmp/
+
+# Stray event store created if emc runs in the repo root (emc itself is not an emc project)
+/model/

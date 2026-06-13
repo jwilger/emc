@@ -5,7 +5,10 @@ mod tests {
     use std::collections::BTreeSet;
     use std::env;
     use std::error::Error;
-    use std::fs::{Permissions, create_dir_all, read_dir, read_to_string, set_permissions, write};
+    use std::fs::{
+        Permissions, create_dir_all, read_dir, read_to_string, remove_dir_all, remove_file,
+        set_permissions, write,
+    };
     use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
     use std::process::{Command as ProcessCommand, Output};
@@ -706,33 +709,18 @@ mod tests {
             .assert()
             .success();
 
-        let readiness_event = exported_events(temp_dir.path().join("model/events/v1"))?
-            .into_iter()
-            .find(|event| event["type"] == "WorkflowReadinessDeclared")
-            .ok_or("verify must export a WorkflowReadinessDeclared event")?;
+        // A second verify over the same model is idempotent and must also succeed.
+        Command::cargo_bin("emc")?
+            .arg("verify")
+            .current_dir(temp_dir.path())
+            .env("PATH", path_with_fake_tools(&tool_dir)?)
+            .assert()
+            .success();
 
-        assert_eq!(readiness_event["stream_id"], "workflow::open-ticket");
-        assert_eq!(readiness_event["payload"]["workflow"], "open-ticket");
         assert_eq!(
-            readiness_event["payload"]["projection_fingerprint"],
-            verified_frontier.trim()
-        );
-        assert_eq!(readiness_event["payload"]["verified_by"], "emc verify");
-        assert_eq!(
-            readiness_event["payload"]["review_event_id"],
-            serde_json::Value::Null
-        );
-        assert!(
-            readiness_event["payload"]["verified_at"]
-                .as_str()
-                .is_some_and(|value| value.ends_with('Z')),
-            "readiness event must record a UTC verification timestamp"
-        );
-        assert!(
-            readiness_event["payload"]["model_content_digest"]
-                .as_str()
-                .is_some_and(|value| !value.is_empty()),
-            "readiness event must record the verified model content digest"
+            read_to_string(temp_dir.path().join("model/events/projection.fingerprint"))?,
+            verified_frontier,
+            "verifying a workflow must not change the event frontier"
         );
 
         Ok(())
@@ -744,7 +732,6 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let tool_dir = temp_dir.path().join("tools");
 
-        create_frontier_mutating_tool(&tool_dir, "lake", "lake.log")?;
         create_fake_tool(&tool_dir, "quint", "quint.log")?;
 
         Command::cargo_bin("emc")?
@@ -774,6 +761,14 @@ mod tests {
             .assert()
             .success();
 
+        // Pre-mint a real follow-on transaction in a sibling replica so the fake
+        // `lake` tool can graft it into the committed store mid-verification,
+        // moving the event frontier without hand-writing any event JSON.
+        let replica = TempDir::new()?;
+        let staged_transaction =
+            stage_extra_committed_transaction(temp_dir.path(), replica.path())?;
+        create_frontier_mutating_tool(&tool_dir, "lake", "lake.log", &staged_transaction)?;
+
         Command::cargo_bin("emc")?
             .arg("verify")
             .current_dir(temp_dir.path())
@@ -783,13 +778,6 @@ mod tests {
             .stderr(predicate::str::contains(
                 "event frontier changed during verification",
             ));
-
-        assert!(
-            exported_events(temp_dir.path().join("model/events/v1"))?
-                .into_iter()
-                .all(|event| event["type"] != "WorkflowReadinessDeclared"),
-            "verify must not export readiness for a changed event frontier"
-        );
 
         Ok(())
     }
@@ -1155,20 +1143,89 @@ mod tests {
         tool_dir: &Path,
         tool_name: &str,
         log_file: &str,
+        staged_transaction: &Path,
     ) -> Result<(), Box<dyn Error>> {
         create_dir_all(tool_dir)?;
         let tool_path = tool_dir.join(tool_name);
+        let staged = staged_transaction.display();
+        let staged_name = staged_transaction
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or("staged transaction must have a file name")?;
+        // Drop a genuine eventcore-fs transaction into the committed store
+        // mid-verification so the event frontier moves between the snapshot taken
+        // before verification and the post-verify check. The transaction was
+        // produced by a real `emc` mutation in a sibling replica, so no event JSON
+        // is hand-written here.
         write(
             &tool_path,
             format!(
                 "#!/bin/sh\n\
                  printf '%s\\n' \"$*\" >> {log_file}\n\
-                 mkdir -p model/events/v1\n\
-                 printf '%s\\n' '{{\"event_id\":\"frontier-changed\",\"parents\":[],\"type\":\"WorkflowUpdated\"}}' > model/events/v1/frontier-changed.json\n"
+                 if [ ! -f model/events/events/{staged_name} ]; then\n\
+                   cp '{staged}' model/events/events/{staged_name}\n\
+                 fi\n\
+                 exit 0\n"
             ),
         )?;
         set_permissions(&tool_path, Permissions::from_mode(0o755))?;
         Ok(())
+    }
+
+    fn stage_extra_committed_transaction(
+        base_dir: &Path,
+        stage_into: &Path,
+    ) -> Result<PathBuf, Box<dyn Error>> {
+        let base_events = base_dir.join("model/events/events");
+        let before = read_dir(&base_events)?
+            .map(|entry| Ok(entry?.file_name()))
+            .collect::<Result<BTreeSet<_>, Box<dyn Error>>>()?;
+
+        // Clone the project into a sibling replica that does not share the store
+        // lock, then author a real mutation there so eventcore-fs mints a valid
+        // committed transaction we can graft onto the base.
+        let copy_status = ProcessCommand::new("cp")
+            .arg("-a")
+            .arg(format!("{}/.", base_dir.display()))
+            .arg(stage_into)
+            .status()?;
+        assert!(copy_status.success(), "cloning base project must succeed");
+
+        let replica_events = stage_into.join("model/events");
+        let _ = remove_dir_all(replica_events.join(".eventcore"));
+        let _ = remove_dir_all(replica_events.join("locks"));
+        let _ = remove_dir_all(replica_events.join("index"));
+        let _ = remove_dir_all(replica_events.join("tmp"));
+        let _ = remove_file(replica_events.join(".lock"));
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--description",
+                "Mutated mid-verification.",
+            ])
+            .current_dir(stage_into)
+            .assert()
+            .success();
+
+        let replica_transactions = stage_into.join("model/events/events");
+        let new_transaction = read_dir(&replica_transactions)?
+            .map(|entry| Ok(entry?.path()))
+            .collect::<Result<Vec<PathBuf>, Box<dyn Error>>>()?
+            .into_iter()
+            .find(|path| {
+                path.extension().and_then(|ext| ext.to_str()) == Some("jsonl")
+                    && path
+                        .file_name()
+                        .map(|name| !before.contains(name))
+                        .unwrap_or(false)
+            })
+            .ok_or("replica must mint a new committed transaction")?;
+
+        Ok(new_transaction)
     }
 
     fn normalize_quint_log(source: &str) -> String {
@@ -1310,16 +1367,5 @@ mod tests {
         let mut paths = vec![tool_dir.to_path_buf()];
         paths.extend(env::split_paths(&env::var_os("PATH").unwrap_or_default()));
         Ok(env::join_paths(paths)?.to_string_lossy().into_owned())
-    }
-
-    fn exported_events(path: PathBuf) -> Result<Vec<serde_json::Value>, Box<dyn Error>> {
-        let mut events = read_dir(path)?
-            .map(|entry| {
-                let contents = read_to_string(entry?.path())?;
-                serde_json::from_str::<serde_json::Value>(&contents).map_err(Into::into)
-            })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-        events.sort_by_key(|event| event["parents"].as_array().map_or(0, Vec::len));
-        Ok(events)
     }
 }
