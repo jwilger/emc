@@ -1524,6 +1524,28 @@ impl WorkflowOwnedDefinitionRecord {
         }
     }
 
+    /// Reconstruct a record from all its fields, for the event-store read path
+    /// where the persisted `EmcEvent` already carries each field verbatim.
+    pub(crate) fn from_parts(
+        source_slice: WorkflowTransitionEndpoint,
+        definition_kind: WorkflowOwnedDefinitionKind,
+        definition_name: WorkflowOwnedDefinitionName,
+        definition_stream: Option<StreamName>,
+        source_provenance: Option<ModelDescription>,
+        event_participation: Option<WorkflowEventParticipation>,
+        view_role: Option<WorkflowViewRole>,
+    ) -> Self {
+        Self {
+            source_slice,
+            definition_kind,
+            definition_name,
+            definition_stream,
+            source_provenance,
+            event_participation,
+            view_role,
+        }
+    }
+
     pub fn new_with_view_role(
         source_slice: WorkflowTransitionEndpoint,
         definition_kind: WorkflowOwnedDefinitionKind,

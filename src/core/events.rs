@@ -1,10 +1,8 @@
 // Copyright 2026 John Wilger
 
-use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
-use std::fs;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -28,6 +26,8 @@ use crate::core::emit::quint::{
     emit_slice_module as emit_quint_slice_module,
     emit_workflow_module as emit_quint_workflow_module,
 };
+use crate::core::event_commands::EmcEvent;
+use crate::core::event_runtime::{list_forks, read_all_emc_events, reconcile_choose_branch};
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, CommandInputSource,
     CommandObservedStreams, EmittedEventNames, NewAutomationDefinition, NewBitLevelDataFlow,
@@ -69,121 +69,12 @@ use crate::core::types::{
 };
 use crate::core::workflow::NewWorkflow;
 
-const SCHEMA_VERSION: &str = "emc.events.v1";
-const EVENT_EXPORT_DIRECTORY: &str = "model/events/v1";
 const PROJECTION_FINGERPRINT_PATH: &str = "model/events/projection.fingerprint";
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct EventDraft {
     stream_id: EventStreamId,
     body: ExportedEventBody,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct ExportedEventMeta {
-    event_id: ExportedEventId,
-    command_id: ExportedCommandId,
-    command_ordinal: usize,
-    stream_id: EventStreamId,
-    parents: Vec<ExportedEventId>,
-}
-
-impl ExportedEventMeta {
-    fn from_draft(
-        draft: &EventDraft,
-        parents: Vec<ExportedEventId>,
-        command_ordinal: usize,
-    ) -> Result<Self, String> {
-        let event_id = event_id(draft, &parents, command_ordinal)?;
-        let command_id = ExportedCommandId::from_event_id(&event_id);
-        Ok(Self {
-            event_id,
-            command_id,
-            command_ordinal,
-            stream_id: draft.stream_id.clone(),
-            parents,
-        })
-    }
-
-    fn from_json_value(value: &Value) -> Result<Self, String> {
-        Ok(Self {
-            event_id: required_exported_event_id(value, "event_id")?,
-            command_id: required_exported_command_id(value, "command_id")?,
-            command_ordinal: required_usize(value, "command_ordinal")?,
-            stream_id: required_event_stream_id(value, "stream_id")?,
-            parents: parents(value)?,
-        })
-    }
-
-    fn event_id(&self) -> &ExportedEventId {
-        &self.event_id
-    }
-
-    fn stream_id(&self) -> &EventStreamId {
-        &self.stream_id
-    }
-
-    fn parents(&self) -> &[ExportedEventId] {
-        &self.parents
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct ExportedEventId {
-    value: ArtifactDigest,
-}
-
-impl ExportedEventId {
-    fn try_new(value: String) -> Result<Self, String> {
-        ArtifactDigest::try_new(value)
-            .map(|value| Self { value })
-            .map_err(|error| error.to_string())
-    }
-}
-
-impl AsRef<str> for ExportedEventId {
-    fn as_ref(&self) -> &str {
-        self.value.as_ref()
-    }
-}
-
-impl Ord for ExportedEventId {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.as_ref().cmp(other.as_ref())
-    }
-}
-
-impl PartialOrd for ExportedEventId {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct ExportedCommandId {
-    value: ArtifactDigest,
-}
-
-impl ExportedCommandId {
-    fn try_new(value: String) -> Result<Self, String> {
-        ArtifactDigest::try_new(value)
-            .map(|value| Self { value })
-            .map_err(|error| error.to_string())
-    }
-
-    fn from_event_id(event_id: &ExportedEventId) -> Self {
-        Self {
-            value: ArtifactDigest::try_new(event_id.as_ref().to_owned()).unwrap_or_else(|error| {
-                unreachable!("exported event id must be a valid command id: {error}");
-            }),
-        }
-    }
-}
-
-impl AsRef<str> for ExportedCommandId {
-    fn as_ref(&self) -> &str {
-        self.value.as_ref()
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
@@ -215,58 +106,6 @@ impl EventStreamId {
             value: format!("review::{}", workflow.as_ref()),
         }
     }
-
-    pub(crate) fn try_new(value: String) -> Result<Self, EventStreamIdError> {
-        let trimmed = value.trim().to_owned();
-        let trimmed = trimmed.as_str();
-        if trimmed == "project" {
-            return Ok(Self::project());
-        }
-
-        if let Some(slug) = trimmed.strip_prefix("workflow::") {
-            return Self::workflow_stream(value, slug);
-        }
-
-        if let Some(slug) = trimmed.strip_prefix("slice::") {
-            return Self::slice_stream(value, slug);
-        }
-
-        if let Some(workflow) = trimmed.strip_prefix("review::") {
-            return Self::review_stream(value, workflow);
-        }
-
-        Err(EventStreamIdError::new(value))
-    }
-
-    fn workflow_stream(value: String, slug: &str) -> Result<Self, EventStreamIdError> {
-        if slug.contains("::") {
-            return Err(EventStreamIdError::new(value));
-        }
-
-        WorkflowSlug::try_new(slug.to_owned())
-            .map(|slug| Self::workflow(&slug))
-            .map_err(|_error| EventStreamIdError::new(value))
-    }
-
-    fn slice_stream(value: String, slug: &str) -> Result<Self, EventStreamIdError> {
-        if slug.contains("::") {
-            return Err(EventStreamIdError::new(value));
-        }
-
-        SliceSlug::try_new(slug.to_owned())
-            .map(|slug| Self::slice(&slug))
-            .map_err(|_error| EventStreamIdError::new(value))
-    }
-
-    fn review_stream(value: String, workflow: &str) -> Result<Self, EventStreamIdError> {
-        if workflow.contains("::") {
-            return Err(EventStreamIdError::new(value));
-        }
-
-        WorkflowSlug::try_new(workflow.to_owned())
-            .map(|workflow| Self::review(&workflow))
-            .map_err(|_error| EventStreamIdError::new(value))
-    }
 }
 
 impl AsRef<str> for EventStreamId {
@@ -280,29 +119,6 @@ impl Display for EventStreamId {
         formatter.write_str(self.as_ref())
     }
 }
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct EventStreamIdError {
-    message: String,
-}
-
-impl EventStreamIdError {
-    fn new(value: String) -> Self {
-        Self {
-            message: format!(
-                "expected a project, workflow, slice, or review event stream id, got '{value}'"
-            ),
-        }
-    }
-}
-
-impl Display for EventStreamIdError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
-        formatter.write_str(&self.message)
-    }
-}
-
-impl Error for EventStreamIdError {}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) enum ExportedEventType {
@@ -375,24 +191,6 @@ impl ExportedEventType {
             "ConflictResolved" => Ok(Self::ConflictResolved),
             _ => Err(ExportedEventTypeError::new(value)),
         }
-    }
-
-    pub(crate) fn is_slice_fact(self) -> bool {
-        matches!(
-            self,
-            Self::SliceScenarioAdded
-                | Self::SliceOutcomeAdded
-                | Self::SliceExternalPayloadAdded
-                | Self::SliceEventDefinitionAdded
-                | Self::SliceCommandDefinitionAdded
-                | Self::SliceReadModelAdded
-                | Self::SliceViewAdded
-                | Self::SliceBitLevelDataFlowAdded
-                | Self::SliceTranslationAdded
-                | Self::SliceAutomationAdded
-                | Self::SliceBoardElementAdded
-                | Self::SliceBoardConnectionAdded
-        )
     }
 }
 
@@ -2879,16 +2677,8 @@ impl EventDraft {
         self.body.event_type()
     }
 
-    pub(crate) fn stream_id(&self) -> &str {
-        self.stream_id.as_ref()
-    }
-
     pub(crate) fn body(&self) -> &ExportedEventBody {
         &self.body
-    }
-
-    pub(crate) fn payload_json(&self) -> Value {
-        self.body.payload_json()
     }
 
     pub(crate) fn workflow_added(workflow: &NewWorkflow) -> Self {
@@ -3166,19 +2956,6 @@ impl EventDraft {
         }
     }
 
-    pub(crate) fn conflict_resolved(
-        conflict_id: &EventConflictId,
-        chosen_event_id: &ChosenEventId,
-    ) -> Self {
-        Self {
-            stream_id: EventStreamId::project(),
-            body: ExportedEventBody::ConflictResolved {
-                conflict_id: conflict_id.clone(),
-                chosen_event_id: chosen_event_id.clone(),
-            },
-        }
-    }
-
     pub(crate) fn review_recorded(
         workflow_slug: &WorkflowSlug,
         model_content_digest: &ModelContentDigest,
@@ -3199,177 +2976,8 @@ impl EventDraft {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct ExportedEvent {
-    meta: ExportedEventMeta,
-    body: ExportedEventBody,
-}
-
-impl ExportedEvent {
-    pub(crate) fn from_draft(
-        draft: &EventDraft,
-        parents: Vec<ExportedEventId>,
-        command_ordinal: usize,
-    ) -> Result<Self, String> {
-        Ok(Self {
-            meta: ExportedEventMeta::from_draft(draft, parents, command_ordinal)?,
-            body: draft.body.clone(),
-        })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn from_draft_for_test(draft: &EventDraft) -> Result<Self, String> {
-        Self::from_draft(draft, Vec::new(), 0)
-    }
-
-    fn from_json_value(value: &Value) -> Result<Self, String> {
-        let schema_version = required_str(value, "schema_version")?;
-        if schema_version != SCHEMA_VERSION {
-            return Err(format!(
-                "unsupported exported event schema version {schema_version}"
-            ));
-        }
-        let event_type = ExportedEventType::try_new(required_str(value, "type")?.to_owned())
-            .map_err(|error| error.to_string())?;
-        let body = ExportedEventBody::from_event_type_and_payload(
-            event_type,
-            required_object(value, "payload")?,
-        )?;
-        Ok(Self {
-            meta: ExportedEventMeta::from_json_value(value)?,
-            body,
-        })
-    }
-
-    pub(crate) fn from_json_str(contents: &str) -> Result<Self, String> {
-        let value = serde_json::from_str::<Value>(contents).map_err(|error| error.to_string())?;
-        Self::from_json_value(&value)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn from_json_for_test(value: &Value) -> Result<Self, String> {
-        Self::from_json_value(value)
-    }
-
-    pub(crate) fn event_type(&self) -> ExportedEventType {
-        self.body.event_type()
-    }
-
-    pub(crate) fn event_id(&self) -> &ExportedEventId {
-        self.meta.event_id()
-    }
-
-    pub(crate) fn stream_id(&self) -> &EventStreamId {
-        self.meta.stream_id()
-    }
-
-    pub(crate) fn parents(&self) -> &[ExportedEventId] {
-        self.meta.parents()
-    }
-
-    pub(crate) fn body(&self) -> &ExportedEventBody {
-        &self.body
-    }
-
-    pub(crate) fn payload_json(&self) -> Value {
-        self.body.payload_json()
-    }
-
-    fn to_json_value(&self) -> Value {
-        json!({
-            "schema_version": SCHEMA_VERSION,
-            "event_id": self.meta.event_id.as_ref(),
-            "command_id": self.meta.command_id.as_ref(),
-            "command_ordinal": self.meta.command_ordinal,
-            "stream_id": self.meta.stream_id.as_ref(),
-            "parents": self.meta.parents.iter().map(|parent| parent.as_ref()).collect::<Vec<_>>(),
-            "type": self.event_type().as_ref(),
-            "payload": self.payload_json(),
-        })
-    }
-
-    pub(crate) fn to_json_string(&self) -> Result<String, String> {
-        serde_json::to_string(&self.to_json_value()).map_err(|error| error.to_string())
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct ExportedEventHeader {
-    event_id: ExportedEventId,
-    stream_id: Option<EventStreamId>,
-    parents: Vec<ExportedEventId>,
-    event_type: ExportedEventType,
-}
-
-impl ExportedEventHeader {
-    fn from_json_value(value: &Value) -> Result<Self, String> {
-        Ok(Self {
-            event_id: required_exported_event_id(value, "event_id")?,
-            stream_id: optional_str(value, "stream_id")?
-                .map(|stream_id| EventStreamId::try_new(stream_id.to_owned()))
-                .transpose()
-                .map_err(|error| error.to_string())?,
-            parents: parents(value)?,
-            event_type: ExportedEventType::try_new(required_str(value, "type")?.to_owned())
-                .map_err(|error| error.to_string())?,
-        })
-    }
-
-    fn parent_count(&self) -> usize {
-        self.parents.len()
-    }
-}
-
-trait ExportedEventFrontier {
-    fn frontier_event_id(&self) -> &ExportedEventId;
-    fn frontier_event_type(&self) -> ExportedEventType;
-}
-
-impl ExportedEventFrontier for ExportedEvent {
-    fn frontier_event_id(&self) -> &ExportedEventId {
-        self.event_id()
-    }
-
-    fn frontier_event_type(&self) -> ExportedEventType {
-        self.event_type()
-    }
-}
-
-impl ExportedEventFrontier for ExportedEventHeader {
-    fn frontier_event_id(&self) -> &ExportedEventId {
-        &self.event_id
-    }
-
-    fn frontier_event_type(&self) -> ExportedEventType {
-        self.event_type
-    }
-}
-
-pub(crate) fn export_event_file_contents(
-    draft: &EventDraft,
-) -> Result<(String, FileContents), String> {
-    let parents = exported_event_ids()?;
-    let command_ordinal = command_ordinal_for_stream(draft.stream_id.as_ref())?;
-    let exported = ExportedEvent::from_draft(draft, parents, command_ordinal)?;
-    let json = serde_json::to_string_pretty(&exported.to_json_value())
-        .map_err(|error| error.to_string())?;
-    let contents = FileContents::try_new(format!("{json}\n")).map_err(|error| error.to_string())?;
-    Ok((
-        format!(
-            "{EVENT_EXPORT_DIRECTORY}/{}.json",
-            exported.event_id().as_ref()
-        ),
-        contents,
-    ))
-}
-
 pub(crate) fn project_exported_events() -> Result<Option<EffectPlan>, String> {
-    let path = Path::new(EVENT_EXPORT_DIRECTORY);
-    if !path.exists() {
-        return Ok(None);
-    }
-
-    let events = exported_events_in_topological_order(path)?;
+    let events = read_all_emc_events(Path::new("."))?;
     if events.is_empty() {
         return Ok(None);
     }
@@ -3381,12 +2989,7 @@ pub(crate) fn project_exported_events() -> Result<Option<EffectPlan>, String> {
 }
 
 pub(crate) fn exported_events_projection_fingerprint() -> Result<Option<String>, String> {
-    let path = Path::new(EVENT_EXPORT_DIRECTORY);
-    if !path.exists() {
-        return Ok(None);
-    }
-
-    let events = exported_event_headers_in_topological_order(path)?;
+    let events = read_all_emc_events(Path::new("."))?;
     if events.is_empty() {
         return Ok(None);
     }
@@ -3395,36 +2998,27 @@ pub(crate) fn exported_events_projection_fingerprint() -> Result<Option<String>,
 }
 
 pub(crate) fn list_event_conflicts() -> Result<EffectPlan, String> {
-    let path = Path::new(EVENT_EXPORT_DIRECTORY);
-    if !path.exists() {
+    let forks = list_forks(Path::new("."))?;
+    if forks.is_empty() {
         return Ok(EffectPlan::new(vec![Effect::Report(report_line(
             "no event conflicts",
         )?)]));
     }
 
-    let conflicts = event_conflicts(path)?;
-    if conflicts.is_empty() {
-        return Ok(EffectPlan::new(vec![Effect::Report(report_line(
-            "no event conflicts",
-        )?)]));
-    }
-
-    let effects = conflicts
+    let effects = forks
         .into_iter()
-        .map(|conflict| {
-            let event_ids = conflict
-                .event_ids
-                .into_iter()
-                .map(|event_id| event_id.as_ref().to_owned())
+        .map(|fork| {
+            let branches = fork
+                .transactions()
+                .iter()
+                .map(transaction_id_string)
                 .collect::<Vec<_>>()
                 .join(",");
             report_line(format!(
-                "conflict {} {} {} {} id {}",
-                conflict.stream_id,
-                conflict.event_type,
-                conflict.semantic_key,
-                event_ids,
-                conflict.id.as_ref()
+                "conflict {} base {} branches {}",
+                fork.stream_id().as_ref(),
+                usize::from(fork.base_version()),
+                branches
             ))
             .map(Effect::Report)
         })
@@ -3433,39 +3027,31 @@ pub(crate) fn list_event_conflicts() -> Result<EffectPlan, String> {
 }
 
 pub(crate) fn list_stale_workflow_readiness() -> Result<EffectPlan, String> {
-    let path = Path::new(EVENT_EXPORT_DIRECTORY);
-    if !path.exists() {
+    let events = read_all_emc_events(Path::new("."))?;
+    if events.is_empty() {
         return Ok(EffectPlan::new(Vec::new()));
     }
 
-    let events = exported_events_in_topological_order(path)?;
     let current_fingerprint = projection_fingerprint_digest(&events)?;
-    let latest_readiness = events.into_iter().try_fold(
-        BTreeMap::<WorkflowSlug, WorkflowReadinessDeclaration>::new(),
-        |mut declarations, event| -> Result<_, String> {
-            if let ExportedEventBody::WorkflowReadinessDeclared {
-                workflow,
-                projection_fingerprint,
-                ..
-            } = event.body()
-            {
-                let declaration = WorkflowReadinessDeclaration {
-                    workflow: workflow.clone(),
-                    projection_fingerprint: projection_fingerprint.clone(),
-                };
-                declarations.insert(declaration.workflow.clone(), declaration);
-            }
-            Ok(declarations)
-        },
-    )?;
+    let mut latest_readiness = BTreeMap::<WorkflowSlug, ProjectionFingerprint>::new();
+    for event in &events {
+        if let EmcEvent::WorkflowReadinessDeclared {
+            workflow,
+            projection_fingerprint,
+            ..
+        } = event
+        {
+            latest_readiness.insert(workflow.clone(), projection_fingerprint.clone());
+        }
+    }
 
     let effects = latest_readiness
-        .into_values()
-        .filter(|declaration| declaration.projection_fingerprint != current_fingerprint)
-        .map(|declaration| {
+        .into_iter()
+        .filter(|(_, fingerprint)| *fingerprint != current_fingerprint)
+        .map(|(workflow, _)| {
             report_line(format!(
                 "workflow {} readiness is stale for current event frontier",
-                declaration.workflow.as_ref()
+                workflow.as_ref()
             ))
             .map(Effect::Report)
         })
@@ -3477,388 +3063,80 @@ pub(crate) fn resolve_event_conflict(
     conflict_id: EventConflictId,
     chosen_event_id: ChosenEventId,
 ) -> Result<EffectPlan, String> {
-    let path = Path::new(EVENT_EXPORT_DIRECTORY);
-    if !path.exists() {
-        return Err(format!("unknown event conflict {}", conflict_id.as_ref()));
-    }
-
-    let conflict = event_conflicts(path)?
-        .into_iter()
-        .find(|conflict| conflict.id.as_ref() == conflict_id.as_ref())
-        .ok_or_else(|| format!("unknown event conflict {}", conflict_id.as_ref()))?;
-    let chosen_exported_event_id = ExportedEventId::try_new(chosen_event_id.as_ref().to_owned())?;
-    if !conflict.event_ids.contains(&chosen_exported_event_id) {
+    // In the eventcore-fs merge model a "conflict" is a fork on a stream
+    // (`conflict_id` carries the forked stream id) and the resolution chooses
+    // one divergent branch (`chosen_event_id` carries that branch's
+    // transaction id). Reconcile records a merge transaction keeping it.
+    let resolved = reconcile_choose_branch(
+        Path::new("."),
+        conflict_id.as_ref(),
+        chosen_event_id.as_ref(),
+    )?;
+    if resolved == 0 {
         return Err(format!(
-            "event {} is not part of conflict {}",
-            chosen_exported_event_id.as_ref(),
-            conflict_id.as_ref()
+            "no unresolved conflict for stream {} branch {}",
+            conflict_id.as_ref(),
+            chosen_event_id.as_ref()
         ));
     }
 
-    Ok(EffectPlan::new(vec![
-        Effect::ExportEvent(EventDraft::conflict_resolved(
-            &conflict_id,
-            &chosen_event_id,
-        )),
-        Effect::Report(report_line(format!(
-            "resolved conflict {}",
-            conflict_id.as_ref()
-        ))?),
-    ]))
+    Ok(EffectPlan::new(vec![Effect::Report(report_line(
+        format!("resolved conflict {}", conflict_id.as_ref()),
+    )?)]))
 }
 
 pub(crate) fn unresolved_event_conflicts_exist() -> Result<bool, String> {
-    let path = Path::new(EVENT_EXPORT_DIRECTORY);
-    if !path.exists() {
-        return Ok(false);
-    }
-
-    event_conflicts(path).map(|conflicts| !conflicts.is_empty())
+    Ok(!list_forks(Path::new("."))?.is_empty())
 }
 
 pub(crate) fn reject_legacy_artifact_only_project() -> Result<(), String> {
     let has_project_manifest = Path::new("emc.toml").exists();
     let has_generated_artifacts =
         Path::new("model/lean").exists() || Path::new("model/quint").exists();
-    let has_event_export = Path::new(EVENT_EXPORT_DIRECTORY).exists()
-        && exported_event_ids().is_ok_and(|event_ids| !event_ids.is_empty());
+    let has_event_store = !read_all_emc_events(Path::new("."))?.is_empty();
 
-    if has_project_manifest && has_generated_artifacts && !has_event_export {
-        return Err(format!(
-            "pre-release upgrade required: generated artifacts exist without exported events in {EVENT_EXPORT_DIRECTORY}"
-        ));
+    if has_project_manifest && has_generated_artifacts && !has_event_store {
+        return Err(
+            "pre-release upgrade required: generated artifacts exist without a populated event store at model/events"
+                .to_owned(),
+        );
     }
 
     Ok(())
 }
 
-fn exported_event_ids() -> Result<Vec<ExportedEventId>, String> {
-    let path = Path::new(EVENT_EXPORT_DIRECTORY);
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-
-    let mut event_ids = exported_event_headers_in_topological_order(path)?
-        .into_iter()
-        .map(|event| event.event_id)
-        .collect::<Vec<_>>();
-    event_ids.sort();
-    Ok(event_ids)
+fn transaction_id_string(id: &eventcore_fs::TransactionId) -> String {
+    serde_json::to_value(id)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_default()
 }
 
-#[derive(Debug)]
-struct EventConflict {
-    id: EventConflictId,
-    stream_id: EventStreamId,
-    event_type: ExportedEventType,
-    semantic_key: ConflictSemanticKey,
-    event_ids: BTreeSet<ExportedEventId>,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct ConflictKey {
-    stream_id: EventStreamId,
-    event_type: ExportedEventType,
-    semantic_key: ConflictSemanticKey,
-    parents: Vec<ExportedEventId>,
-}
-
-impl Ord for ConflictKey {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.stream_id
-            .cmp(&other.stream_id)
-            .then_with(|| self.event_type.as_ref().cmp(other.event_type.as_ref()))
-            .then_with(|| self.semantic_key.cmp(&other.semantic_key))
-            .then_with(|| self.parents.cmp(&other.parents))
-    }
-}
-
-impl PartialOrd for ConflictKey {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-enum ConflictSemanticKey {
-    Workflow(WorkflowSlug),
-    Slice(SliceSlug),
-}
-
-impl Ord for ConflictSemanticKey {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match (self, other) {
-            (Self::Workflow(left), Self::Workflow(right)) => left.cmp(right),
-            (Self::Slice(left), Self::Slice(right)) => left.as_ref().cmp(right.as_ref()),
-            (Self::Workflow(_), Self::Slice(_)) => Ordering::Less,
-            (Self::Slice(_), Self::Workflow(_)) => Ordering::Greater,
-        }
-    }
-}
-
-impl PartialOrd for ConflictSemanticKey {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl AsRef<str> for ConflictSemanticKey {
-    fn as_ref(&self) -> &str {
-        match self {
-            Self::Workflow(slug) => slug.as_ref(),
-            Self::Slice(slug) => slug.as_ref(),
-        }
-    }
-}
-
-impl Display for ConflictSemanticKey {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
-        formatter.write_str(self.as_ref())
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct ConflictPayload {
-    event_id: ExportedEventId,
-    body: ConflictPayloadBody,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-enum ConflictPayloadBody {
-    WorkflowUpdated(NewWorkflow),
-    SliceUpdated(WorkflowSliceDetail),
-}
-
-fn event_conflicts(path: &Path) -> Result<Vec<EventConflict>, String> {
-    let events = exported_events_in_topological_order(path)?;
-    let resolved_conflicts = resolved_conflict_ids(&events);
-    let mut grouped = BTreeMap::<ConflictKey, Vec<ConflictPayload>>::new();
-
-    for event in events {
-        if let Some((key, payload)) = conflict_entry(&event) {
-            grouped.entry(key).or_default().push(payload);
-        }
-    }
-
-    grouped
-        .into_iter()
-        .filter_map(|(key, payloads)| match conflict_id(&key) {
-            Ok(id)
-                if distinct_payload_count(&payloads) > 1 && !resolved_conflicts.contains(&id) =>
-            {
-                Some(Ok(EventConflict {
-                    id,
-                    stream_id: key.stream_id,
-                    event_type: key.event_type,
-                    semantic_key: key.semantic_key,
-                    event_ids: payloads
-                        .into_iter()
-                        .map(|payload| payload.event_id)
-                        .collect::<BTreeSet<_>>(),
-                }))
-            }
-            Ok(_id) => None,
-            Err(error) => Some(Err(error)),
-        })
-        .collect::<Result<Vec<_>, _>>()
-}
-
-fn resolved_conflict_ids(events: &[ExportedEvent]) -> Vec<EventConflictId> {
-    let mut resolved = Vec::new();
-    for event in events {
-        match event.body() {
-            ExportedEventBody::ConflictResolved { conflict_id, .. }
-                if !resolved.contains(conflict_id) =>
-            {
-                resolved.push(conflict_id.clone());
-            }
-            _ => {}
-        }
-    }
-    resolved
-}
-
-fn conflict_id(key: &ConflictKey) -> Result<EventConflictId, String> {
-    let parent_ids = key
-        .parents
-        .iter()
-        .map(|parent| parent.as_ref())
-        .collect::<Vec<_>>();
-    ArtifactDigest::try_new(hex::encode(Sha256::digest(
-        serde_json::to_vec(&json!({
-            "stream_id": key.stream_id.as_ref(),
-            "type": key.event_type.as_ref(),
-            "semantic_key": key.semantic_key.as_ref(),
-            "parents": parent_ids,
-        }))
-        .map_err(|error| error.to_string())?,
-    )))
-    .map(EventConflictId::new)
-    .map_err(|error| error.to_string())
-}
-
-fn conflict_entry(event: &ExportedEvent) -> Option<(ConflictKey, ConflictPayload)> {
-    let (semantic_key, body) = match event.body() {
-        ExportedEventBody::WorkflowUpdated { workflow } => (
-            ConflictSemanticKey::Workflow(workflow.slug().clone()),
-            ConflictPayloadBody::WorkflowUpdated(workflow.clone()),
-        ),
-        ExportedEventBody::SliceUpdated { slice } => (
-            ConflictSemanticKey::Slice(slice.slug().clone()),
-            ConflictPayloadBody::SliceUpdated(slice.clone()),
-        ),
-        _ => return None,
-    };
-
-    Some((
-        ConflictKey {
-            stream_id: event.stream_id().clone(),
-            event_type: event.event_type(),
-            semantic_key,
-            parents: event.parents().to_vec(),
-        },
-        ConflictPayload {
-            event_id: event.event_id().clone(),
-            body,
-        },
-    ))
-}
-
-fn distinct_payload_count(payloads: &[ConflictPayload]) -> usize {
-    let mut distinct = Vec::<ConflictPayloadBody>::new();
-    for payload in payloads {
-        if !distinct.contains(&payload.body) {
-            distinct.push(payload.body.clone());
-        }
-    }
-    distinct.len()
-}
-
-fn parents(event: &Value) -> Result<Vec<ExportedEventId>, String> {
-    let mut parents = event
-        .get("parents")
-        .and_then(Value::as_array)
-        .ok_or_else(|| "exported event is missing parents".to_owned())?
-        .iter()
-        .map(|parent| {
-            parent
-                .as_str()
-                .ok_or_else(|| "exported event parent must be a string".to_owned())
-                .and_then(|value| exported_event_id(value, "parents"))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    parents.sort();
-    Ok(parents)
-}
-
-fn parent_refs(parents: &[ExportedEventId]) -> Vec<&str> {
-    parents
-        .iter()
-        .map(|parent| parent.as_ref())
-        .collect::<Vec<_>>()
-}
-
-fn exported_events_in_topological_order(path: &Path) -> Result<Vec<ExportedEvent>, String> {
-    let mut events = fs::read_dir(path)
-        .map_err(|error| error.to_string())?
-        .map(|entry| {
-            entry
-                .map_err(|error| error.to_string())
-                .and_then(|entry| read_event_file(&entry.path()))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    events.sort_by(|left, right| {
-        left.parents()
-            .len()
-            .cmp(&right.parents().len())
-            .then(left.event_id().cmp(right.event_id()))
-    });
-    Ok(events)
-}
-
-fn exported_event_headers_in_topological_order(
-    path: &Path,
-) -> Result<Vec<ExportedEventHeader>, String> {
-    let mut events = fs::read_dir(path)
-        .map_err(|error| error.to_string())?
-        .map(|entry| {
-            entry
-                .map_err(|error| error.to_string())
-                .and_then(|entry| read_event_header_file(&entry.path()))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    events.sort_by(|left, right| {
-        left.parent_count()
-            .cmp(&right.parent_count())
-            .then(left.event_id.cmp(&right.event_id))
-    });
-    Ok(events)
-}
-
-fn read_event_file(path: &Path) -> Result<ExportedEvent, String> {
-    let contents = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    ExportedEvent::from_json_str(&contents)
-}
-
-fn read_event_header_file(path: &Path) -> Result<ExportedEventHeader, String> {
-    let contents = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    let value = serde_json::from_str::<Value>(&contents).map_err(|error| error.to_string())?;
-    ExportedEventHeader::from_json_value(&value)
-}
-
-fn projection_fingerprint<T: ExportedEventFrontier>(events: &[T]) -> Result<String, String> {
+fn projection_fingerprint(events: &[EmcEvent]) -> Result<String, String> {
     projection_fingerprint_digest(events).map(|digest| digest.as_ref().to_owned())
 }
 
-fn projection_fingerprint_digest<T: ExportedEventFrontier>(
-    events: &[T],
-) -> Result<ProjectionFingerprint, String> {
-    let event_ids = events
+fn projection_fingerprint_digest(events: &[EmcEvent]) -> Result<ProjectionFingerprint, String> {
+    // The fingerprint identifies the event set behind the current artifacts.
+    // Readiness declarations are excluded so declaring readiness does not make
+    // a workflow immediately stale. Per-event content digests are sorted so the
+    // fingerprint is independent of local-ingestion order (which can differ
+    // across replicas after a git merge).
+    let mut event_digests = events
         .iter()
-        .filter(|event| event.frontier_event_type() != ExportedEventType::WorkflowReadinessDeclared)
-        .map(ExportedEventFrontier::frontier_event_id)
-        .map(|event_id| event_id.as_ref())
-        .collect::<Vec<_>>();
+        .filter(|event| !matches!(event, EmcEvent::WorkflowReadinessDeclared { .. }))
+        .map(|event| {
+            serde_json::to_vec(event)
+                .map(|bytes| hex::encode(Sha256::digest(bytes)))
+                .map_err(|error| error.to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    event_digests.sort();
     ArtifactDigest::try_new(hex::encode(Sha256::digest(
-        serde_json::to_vec(&event_ids).map_err(|error| error.to_string())?,
+        serde_json::to_vec(&event_digests).map_err(|error| error.to_string())?,
     )))
     .map(ProjectionFingerprint::new)
     .map_err(|error| error.to_string())
-}
-
-fn command_ordinal_for_stream(stream_id: &str) -> Result<usize, String> {
-    let path = Path::new(EVENT_EXPORT_DIRECTORY);
-    if !path.exists() {
-        return Ok(0);
-    }
-
-    exported_event_headers_in_topological_order(path)?
-        .into_iter()
-        .try_fold(0_usize, |count, event| {
-            let increments_count = event
-                .stream_id
-                .as_ref()
-                .is_some_and(|event_stream_id| event_stream_id.as_ref() == stream_id);
-            Ok(count + usize::from(increments_count))
-        })
-}
-
-fn event_id(
-    draft: &EventDraft,
-    parents: &[ExportedEventId],
-    command_ordinal: usize,
-) -> Result<ExportedEventId, String> {
-    let payload = draft.payload_json();
-    let canonical = serde_json::to_vec(&json!({
-        "schema_version": SCHEMA_VERSION,
-        "command_ordinal": command_ordinal,
-        "stream_id": draft.stream_id.as_ref(),
-        "parents": parent_refs(parents),
-        "type": draft.event_type().as_ref(),
-        "payload": payload,
-    }))
-    .map_err(|error| error.to_string())?;
-    ExportedEventId::try_new(hex::encode(Sha256::digest(canonical)))
 }
 
 #[derive(Debug)]
@@ -3869,590 +3147,506 @@ struct ProjectedModel {
 }
 
 impl ProjectedModel {
-    fn from_events(events: Vec<ExportedEvent>) -> Result<Self, String> {
+    fn from_events(events: Vec<EmcEvent>) -> Result<Self, String> {
         events
             .into_iter()
-            .try_fold(
-                None::<Self>,
-                |model, event| -> Result<Option<Self>, String> {
-                    match event.body {
-                        ExportedEventBody::ProjectInitialized { name } => {
-                            let (workflows, reviews) = model
-                                .map(|model| (model.workflows, model.reviews))
-                                .unwrap_or_default();
-                            Ok(Some(Self {
-                                project_name: name,
-                                workflows,
-                                reviews,
-                            }))
-                        }
-                        ExportedEventBody::WorkflowAdded { workflow } => {
-                            let mut model = model.ok_or_else(|| {
-                                "WorkflowAdded appeared before project initialization".to_owned()
-                            })?;
-                            model.workflows.push(ProjectedWorkflow {
-                                slug: workflow.slug().clone(),
-                                name: workflow.name().clone(),
-                                description: workflow.description().clone(),
-                                slices: Vec::new(),
-                                command_errors: Vec::new(),
-                                outcomes: Vec::new(),
-                                owned_definitions: Vec::new(),
-                                transitions: Vec::new(),
-                                transition_evidences: Vec::new(),
-                                requires_entry_lifecycle_coverage: false,
-                                entry_lifecycle_states: Vec::new(),
-                            });
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::WorkflowUpdated { workflow } => {
-                            let mut model = model.ok_or_else(|| {
-                                "WorkflowUpdated appeared before project initialization".to_owned()
-                            })?;
-                            let projected_workflow = model
-                                .workflows
-                                .iter_mut()
-                                .find(|existing| existing.slug == *workflow.slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "WorkflowUpdated references unknown workflow {}",
-                                        workflow.slug().as_ref()
-                                    )
-                                })?;
-                            projected_workflow.name = workflow.name().clone();
-                            projected_workflow.description = workflow.description().clone();
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::WorkflowRemoved { slug } => {
-                            let mut model = model.ok_or_else(|| {
-                                "WorkflowRemoved appeared before project initialization".to_owned()
-                            })?;
-                            let before = model.workflows.len();
-                            model
-                                .workflows
-                                .retain(|workflow| workflow.slug != slug);
-                            if model.workflows.len() == before {
-                                return Err(format!(
-                                    "WorkflowRemoved references unknown workflow {}",
-                                    slug.as_ref()
-                                ));
-                            }
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceAdded { slice } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceAdded appeared before project initialization".to_owned()
-                            })?;
-                            let workflow = model
-                                .workflows
-                                .iter_mut()
-                                .find(|workflow| workflow.slug == *slice.workflow_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceAdded references unknown workflow {}",
-                                        slice.workflow_slug().as_ref()
-                                    )
-                                })?;
-                            let relationship = if workflow.slices.is_empty() {
-                                WorkflowStepRelationshipName::Entry
-                            } else {
-                                WorkflowStepRelationshipName::Main
-                            };
-                            workflow.slices.push(ProjectedSlice {
-                                slug: slice.slug().clone(),
-                                name: slice.name().clone(),
-                                kind: slice.kind().into(),
-                                description: slice.description().clone(),
-                                relationship,
-                                scenarios: Vec::new(),
-                                outcomes: Vec::new(),
-                                external_payloads: Vec::new(),
-                                event_definitions: Vec::new(),
-                                command_definitions: Vec::new(),
-                                read_models: Vec::new(),
-                                bit_level_data_flows: Vec::new(),
-                                views: Vec::new(),
-                                translations: Vec::new(),
-                                automations: Vec::new(),
-                                board_elements: Vec::new(),
-                                board_connections: Vec::new(),
-                            });
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceUpdated { slice } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceUpdated appeared before project initialization".to_owned()
-                            })?;
-                            let projected_slice = model
-                                .workflows
-                                .iter_mut()
-                                .flat_map(|workflow| workflow.slices.iter_mut())
-                                .find(|existing| existing.slug == *slice.slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceUpdated references unknown slice {}",
-                                        slice.slug().as_ref()
-                                    )
-                                })?;
-                            projected_slice.name = slice.name().clone();
-                            projected_slice.kind = *slice.kind();
-                            projected_slice.description = slice.description().clone();
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceRemoved { slug } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceRemoved appeared before project initialization".to_owned()
-                            })?;
-                            let removed_count = model
-                                .workflows
-                                .iter_mut()
-                                .map(|workflow| {
-                                    let before = workflow.slices.len();
-                                    workflow
-                                        .slices
-                                        .retain(|slice| slice.slug != slug);
-                                    workflow.transitions.retain(|transition| {
-                                        transition.source().as_ref() != slug.as_ref()
-                                            && transition.target().as_ref() != slug.as_ref()
-                                    });
-                                    before - workflow.slices.len()
-                                })
-                                .sum::<usize>();
-                            if removed_count == 0 {
-                                return Err(format!(
-                                    "SliceRemoved references unknown slice {}",
-                                    slug.as_ref()
-                                ));
-                            }
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceOutcomeAdded { outcome } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceOutcomeAdded appeared before project initialization".to_owned()
-                            })?;
-                            let slice = model
-                                .workflows
-                                .iter_mut()
-                                .flat_map(|workflow| workflow.slices.iter_mut())
-                                .find(|slice| slice.slug == *outcome.slice_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceOutcomeAdded references unknown slice {}",
-                                        outcome.slice_slug().as_ref()
-                                    )
-                                })?;
-                            slice.outcomes.push(outcome);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceScenarioAdded { scenario } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceScenarioAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let slice = model
-                                .workflows
-                                .iter_mut()
-                                .flat_map(|workflow| workflow.slices.iter_mut())
-                                .find(|slice| slice.slug == *scenario.slice_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceScenarioAdded references unknown slice {}",
-                                        scenario.slice_slug().as_ref()
-                                    )
-                                })?;
-                            slice.scenarios.push(scenario);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceExternalPayloadAdded { external_payload } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceExternalPayloadAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let slice = model
-                                .workflows
-                                .iter_mut()
-                                .flat_map(|workflow| workflow.slices.iter_mut())
-                                .find(|slice| slice.slug == *external_payload.slice_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceExternalPayloadAdded references unknown slice {}",
-                                        external_payload.slice_slug().as_ref()
-                                    )
-                                })?;
-                            slice.external_payloads.push(external_payload);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceEventDefinitionAdded { event } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceEventDefinitionAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let slice = model
-                                .workflows
-                                .iter_mut()
-                                .flat_map(|workflow| workflow.slices.iter_mut())
-                                .find(|slice| slice.slug == *event.slice_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceEventDefinitionAdded references unknown slice {}",
-                                        event.slice_slug().as_ref()
-                                    )
-                                })?;
-                            slice.event_definitions.push(event);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceCommandDefinitionAdded { command } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceCommandDefinitionAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let slice = model
-                                .workflows
-                                .iter_mut()
-                                .flat_map(|workflow| workflow.slices.iter_mut())
-                                .find(|slice| slice.slug == *command.slice_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceCommandDefinitionAdded references unknown slice {}",
-                                        command.slice_slug().as_ref()
-                                    )
-                                })?;
-                            slice.command_definitions.push(command);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceReadModelAdded { read_model } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceReadModelAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let slice = model
-                                .workflows
-                                .iter_mut()
-                                .flat_map(|workflow| workflow.slices.iter_mut())
-                                .find(|slice| slice.slug == *read_model.slice_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceReadModelAdded references unknown slice {}",
-                                        read_model.slice_slug().as_ref()
-                                    )
-                                })?;
-                            slice.read_models.push(read_model);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceBitLevelDataFlowAdded { data_flow } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceBitLevelDataFlowAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let slice = model
-                                .workflows
-                                .iter_mut()
-                                .flat_map(|workflow| workflow.slices.iter_mut())
-                                .find(|slice| slice.slug == *data_flow.slice_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceBitLevelDataFlowAdded references unknown slice {}",
-                                        data_flow.slice_slug().as_ref()
-                                    )
-                                })?;
-                            slice.bit_level_data_flows.push(data_flow);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceViewAdded { view } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceViewAdded appeared before project initialization".to_owned()
-                            })?;
-                            let slice = model
-                                .workflows
-                                .iter_mut()
-                                .flat_map(|workflow| workflow.slices.iter_mut())
-                                .find(|slice| slice.slug == *view.slice_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceViewAdded references unknown slice {}",
-                                        view.slice_slug().as_ref()
-                                    )
-                                })?;
-                            slice.views.push(view);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceTranslationAdded { translation } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceTranslationAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let slice = model
-                                .workflows
-                                .iter_mut()
-                                .flat_map(|workflow| workflow.slices.iter_mut())
-                                .find(|slice| slice.slug == *translation.slice_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceTranslationAdded references unknown slice {}",
-                                        translation.slice_slug().as_ref()
-                                    )
-                                })?;
-                            slice.translations.push(translation);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceAutomationAdded { automation } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceAutomationAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let slice = model
-                                .workflows
-                                .iter_mut()
-                                .flat_map(|workflow| workflow.slices.iter_mut())
-                                .find(|slice| slice.slug == *automation.slice_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceAutomationAdded references unknown slice {}",
-                                        automation.slice_slug().as_ref()
-                                    )
-                                })?;
-                            slice.automations.push(automation);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceBoardElementAdded { element } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceBoardElementAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let slice = model
-                                .workflows
-                                .iter_mut()
-                                .flat_map(|workflow| workflow.slices.iter_mut())
-                                .find(|slice| slice.slug == *element.slice_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceBoardElementAdded references unknown slice {}",
-                                        element.slice_slug().as_ref()
-                                    )
-                                })?;
-                            slice.board_elements.push(element);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::SliceBoardConnectionAdded { connection } => {
-                            let mut model = model.ok_or_else(|| {
-                                "SliceBoardConnectionAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let slice = model
-                                .workflows
-                                .iter_mut()
-                                .flat_map(|workflow| workflow.slices.iter_mut())
-                                .find(|slice| slice.slug == *connection.slice_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "SliceBoardConnectionAdded references unknown slice {}",
-                                        connection.slice_slug().as_ref()
-                                    )
-                                })?;
-                            slice.board_connections.push(connection);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::WorkflowReadinessDeclared { .. } => {
-                            let model = model.ok_or_else(|| {
-                                "WorkflowReadinessDeclared appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::WorkflowConnected { connection } => {
-                            let mut model = model.ok_or_else(|| {
-                                "WorkflowConnected appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let workflow = model
-                                .workflows
-                                .iter_mut()
-                                .find(|workflow| workflow.slug == *connection.workflow_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "WorkflowConnected references unknown workflow {}",
-                                        connection.workflow_slug().as_ref()
-                                    )
-                                })?;
-                            workflow
-                                .transitions
-                                .push(workflow_transition_record_from_connection(&connection)?);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::WorkflowOutcomeAdded { workflow, outcome } => {
-                            let mut model = model.ok_or_else(|| {
-                                "WorkflowOutcomeAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let projected_workflow = model
-                                .workflows
-                                .iter_mut()
-                                .find(|existing| existing.slug == workflow)
-                                .ok_or_else(|| {
-                                    format!(
-                                        "WorkflowOutcomeAdded references unknown workflow {}",
-                                        workflow.as_ref()
-                                    )
-                                })?;
-                            projected_workflow.outcomes.push(outcome);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::WorkflowCommandErrorAdded { workflow, error } => {
-                            let mut model = model.ok_or_else(|| {
-                                "WorkflowCommandErrorAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let projected_workflow = model
-                                .workflows
-                                .iter_mut()
-                                .find(|existing| existing.slug == workflow)
-                                .ok_or_else(|| {
-                                    format!(
-                                        "WorkflowCommandErrorAdded references unknown workflow {}",
-                                        workflow.as_ref()
-                                    )
-                                })?;
-                            projected_workflow.command_errors.push(error);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::WorkflowOwnedDefinitionAdded {
-                            workflow,
-                            definition,
-                        } => {
-                            let mut model = model.ok_or_else(|| {
-                                "WorkflowOwnedDefinitionAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let projected_workflow = model
-                                .workflows
-                                .iter_mut()
-                                .find(|existing| existing.slug == workflow)
-                                .ok_or_else(|| {
-                                    format!(
-                                        "WorkflowOwnedDefinitionAdded references unknown workflow {}",
-                                        workflow.as_ref()
-                                    )
-                                })?;
-                            projected_workflow.owned_definitions.push(definition);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::WorkflowTransitionEvidenceAdded { workflow, evidence } => {
-                            let mut model = model.ok_or_else(|| {
-                                "WorkflowTransitionEvidenceAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let projected_workflow = model
-                                .workflows
-                                .iter_mut()
-                                .find(|existing| existing.slug == workflow)
-                                .ok_or_else(|| {
-                                    format!(
-                                        "WorkflowTransitionEvidenceAdded references unknown workflow {}",
-                                        workflow.as_ref()
-                                    )
-                                })?;
-                            projected_workflow.transition_evidences.push(evidence);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::WorkflowEntryLifecycleCoverageRequired { workflow } => {
-                            let mut model = model.ok_or_else(|| {
-                                "WorkflowEntryLifecycleCoverageRequired appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let projected_workflow = model
-                                .workflows
-                                .iter_mut()
-                                .find(|existing| existing.slug == workflow)
-                                .ok_or_else(|| {
-                                    format!(
-                                        "WorkflowEntryLifecycleCoverageRequired references unknown workflow {}",
-                                        workflow.as_ref()
-                                    )
-                                })?;
-                            projected_workflow.requires_entry_lifecycle_coverage = true;
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::WorkflowEntryLifecycleStateAdded { workflow, coverage } => {
-                            let mut model = model.ok_or_else(|| {
-                                "WorkflowEntryLifecycleStateAdded appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let projected_workflow = model
-                                .workflows
-                                .iter_mut()
-                                .find(|existing| existing.slug == workflow)
-                                .ok_or_else(|| {
-                                    format!(
-                                        "WorkflowEntryLifecycleStateAdded references unknown workflow {}",
-                                        workflow.as_ref()
-                                    )
-                                })?;
-                            projected_workflow.entry_lifecycle_states.push(coverage);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::WorkflowTransitionRemoved { removal } => {
-                            let mut model = model.ok_or_else(|| {
-                                "WorkflowTransitionRemoved appeared before project initialization"
-                                    .to_owned()
-                            })?;
-                            let workflow = model
-                                .workflows
-                                .iter_mut()
-                                .find(|workflow| workflow.slug == *removal.workflow_slug())
-                                .ok_or_else(|| {
-                                    format!(
-                                        "WorkflowTransitionRemoved references unknown workflow {}",
-                                        removal.workflow_slug().as_ref()
-                                    )
-                                })?;
-                            let removed_transition =
-                                workflow_transition_record_from_removal(&removal)?;
-                            workflow
-                                .transitions
-                                .retain(|transition| !same_transition(transition, &removed_transition));
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::ReviewRecorded {
-                            workflow_slug,
-                            model_content_digest,
-                            reviewer_id,
-                            reviewed_at,
-                            categories,
-                        } => {
-                            let mut model = model.ok_or_else(|| {
-                                "ReviewRecorded appeared before project initialization".to_owned()
-                            })?;
-                            if !model
-                                .workflows
-                                .iter()
-                                .any(|workflow| workflow.slug == workflow_slug)
-                            {
-                                return Err(format!(
-                                    "ReviewRecorded references unknown workflow {}",
-                                    workflow_slug.as_ref()
-                                ));
-                            }
-                            let review = ProjectedReview {
-                                workflow_slug,
-                                model_content_digest,
-                                reviewer_id: reviewer_id.as_ref().to_owned(),
-                                reviewed_at: reviewed_at.as_ref().to_owned(),
-                                categories: categories
-                                    .into_iter()
-                                    .map(|category| category.as_ref().to_owned())
-                                    .collect(),
-                            };
-                            model.reviews.retain(|existing| {
-                                existing.workflow_slug.as_ref() != review.workflow_slug.as_ref()
-                            });
-                            model.reviews.push(review);
-                            Ok(Some(model))
-                        }
-                        ExportedEventBody::ConflictResolved { .. } => Ok(model),
-                    }
-                },
-            )?
+            .try_fold(None::<Self>, Self::apply_event)?
             .ok_or_else(|| "exported events are missing ProjectInitialized".to_owned())
+    }
+
+    fn require(model: Option<Self>, event: &str) -> Result<Self, String> {
+        model.ok_or_else(|| format!("{event} appeared before project initialization"))
+    }
+
+    fn workflow_mut(
+        &mut self,
+        slug: &WorkflowSlug,
+        event: &str,
+    ) -> Result<&mut ProjectedWorkflow, String> {
+        self.workflows
+            .iter_mut()
+            .find(|workflow| workflow.slug == *slug)
+            .ok_or_else(|| format!("{event} references unknown workflow {}", slug.as_ref()))
+    }
+
+    fn slice_mut(&mut self, slug: &SliceSlug, event: &str) -> Result<&mut ProjectedSlice, String> {
+        self.workflows
+            .iter_mut()
+            .flat_map(|workflow| workflow.slices.iter_mut())
+            .find(|slice| slice.slug == *slug)
+            .ok_or_else(|| format!("{event} references unknown slice {}", slug.as_ref()))
+    }
+
+    fn apply_event(model: Option<Self>, event: EmcEvent) -> Result<Option<Self>, String> {
+        match event {
+            EmcEvent::ProjectInitialized { name, .. } => {
+                let (workflows, reviews) = model
+                    .map(|model| (model.workflows, model.reviews))
+                    .unwrap_or_default();
+                Ok(Some(Self {
+                    project_name: name,
+                    workflows,
+                    reviews,
+                }))
+            }
+            EmcEvent::WorkflowAdded {
+                slug,
+                name,
+                description,
+                ..
+            } => {
+                let mut model = Self::require(model, "WorkflowAdded")?;
+                model.workflows.push(ProjectedWorkflow {
+                    slug,
+                    name,
+                    description,
+                    slices: Vec::new(),
+                    command_errors: Vec::new(),
+                    outcomes: Vec::new(),
+                    owned_definitions: Vec::new(),
+                    transitions: Vec::new(),
+                    transition_evidences: Vec::new(),
+                    requires_entry_lifecycle_coverage: false,
+                    entry_lifecycle_states: Vec::new(),
+                });
+                Ok(Some(model))
+            }
+            EmcEvent::WorkflowUpdated {
+                slug,
+                name,
+                description,
+                ..
+            } => {
+                let mut model = Self::require(model, "WorkflowUpdated")?;
+                let workflow = model.workflow_mut(&slug, "WorkflowUpdated")?;
+                workflow.name = name;
+                workflow.description = description;
+                Ok(Some(model))
+            }
+            EmcEvent::WorkflowRemoved { slug, .. } => {
+                let mut model = Self::require(model, "WorkflowRemoved")?;
+                let before = model.workflows.len();
+                model.workflows.retain(|workflow| workflow.slug != slug);
+                if model.workflows.len() == before {
+                    return Err(format!(
+                        "WorkflowRemoved references unknown workflow {}",
+                        slug.as_ref()
+                    ));
+                }
+                Ok(Some(model))
+            }
+            EmcEvent::SliceAdded {
+                workflow,
+                slug,
+                name,
+                kind,
+                description,
+                ..
+            } => {
+                let mut model = Self::require(model, "SliceAdded")?;
+                let workflow = model.workflow_mut(&workflow, "SliceAdded")?;
+                let relationship = if workflow.slices.is_empty() {
+                    WorkflowStepRelationshipName::Entry
+                } else {
+                    WorkflowStepRelationshipName::Main
+                };
+                workflow.slices.push(ProjectedSlice {
+                    slug,
+                    name,
+                    kind,
+                    description,
+                    relationship,
+                    scenarios: Vec::new(),
+                    outcomes: Vec::new(),
+                    external_payloads: Vec::new(),
+                    event_definitions: Vec::new(),
+                    command_definitions: Vec::new(),
+                    read_models: Vec::new(),
+                    bit_level_data_flows: Vec::new(),
+                    views: Vec::new(),
+                    translations: Vec::new(),
+                    automations: Vec::new(),
+                    board_elements: Vec::new(),
+                    board_connections: Vec::new(),
+                });
+                Ok(Some(model))
+            }
+            EmcEvent::SliceUpdated {
+                slug,
+                name,
+                kind,
+                description,
+                ..
+            } => {
+                let mut model = Self::require(model, "SliceUpdated")?;
+                let projected_slice = model.slice_mut(&slug, "SliceUpdated")?;
+                projected_slice.name = name;
+                projected_slice.kind = kind;
+                projected_slice.description = description;
+                Ok(Some(model))
+            }
+            EmcEvent::SliceRemoved { slug, .. } => {
+                let mut model = Self::require(model, "SliceRemoved")?;
+                let removed_count = model
+                    .workflows
+                    .iter_mut()
+                    .map(|workflow| {
+                        let before = workflow.slices.len();
+                        workflow.slices.retain(|slice| slice.slug != slug);
+                        workflow.transitions.retain(|transition| {
+                            transition.source().as_ref() != slug.as_ref()
+                                && transition.target().as_ref() != slug.as_ref()
+                        });
+                        before - workflow.slices.len()
+                    })
+                    .sum::<usize>();
+                if removed_count == 0 {
+                    return Err(format!(
+                        "SliceRemoved references unknown slice {}",
+                        slug.as_ref()
+                    ));
+                }
+                Ok(Some(model))
+            }
+            EmcEvent::SliceFactAdded { fact, .. } => {
+                let mut model = Self::require(model, "SliceFactAdded")?;
+                model.apply_slice_fact_body(fact.to_event_body())?;
+                Ok(Some(model))
+            }
+            EmcEvent::WorkflowReadinessDeclared { .. } => {
+                Ok(Some(Self::require(model, "WorkflowReadinessDeclared")?))
+            }
+            EmcEvent::WorkflowConnected {
+                workflow,
+                source,
+                target_slice,
+                target_workflow,
+                via,
+                name,
+                payload_contract,
+                reason,
+                source_control,
+                target_view,
+                ..
+            } => {
+                let mut model = Self::require(model, "WorkflowConnected")?;
+                let target_ref = target_slice
+                    .as_ref()
+                    .map(AsRef::as_ref)
+                    .or_else(|| target_workflow.as_ref().map(WorkflowSlug::as_ref))
+                    .ok_or_else(|| "WorkflowConnected is missing a target".to_owned())?;
+                let workflow_exit = target_workflow.is_some();
+                let source_endpoint = workflow_transition_endpoint(source.as_ref())?;
+                let target_endpoint = workflow_transition_endpoint(target_ref)?;
+                let kind = workflow_transition_kind_from_connection(workflow_exit, via)?;
+                let record = match (payload_contract, reason) {
+                    (Some(payload_contract), None) => {
+                        WorkflowTransitionRecord::new_with_payload_contract(
+                            source_endpoint,
+                            target_endpoint,
+                            kind,
+                            name,
+                            payload_contract,
+                        )
+                    }
+                    (None, Some(reason)) => WorkflowTransitionRecord::new_with_rationale(
+                        source_endpoint,
+                        target_endpoint,
+                        kind,
+                        name,
+                        reason,
+                    ),
+                    (None, None) => {
+                        if kind == WorkflowTransitionKind::Navigation
+                            && let (Some(source_control), Some(target_view)) =
+                                (source_control, target_view)
+                        {
+                            WorkflowTransitionRecord::new_with_navigation_endpoints(
+                                source_endpoint,
+                                target_endpoint,
+                                kind,
+                                name,
+                                source_control,
+                                target_view,
+                            )
+                        } else {
+                            WorkflowTransitionRecord::new(
+                                source_endpoint,
+                                target_endpoint,
+                                kind,
+                                name,
+                            )
+                        }
+                    }
+                    (Some(_), Some(_)) => {
+                        return Err(
+                            "WorkflowConnected has both payload contract and rationale".to_owned()
+                        );
+                    }
+                };
+                let workflow = model.workflow_mut(&workflow, "WorkflowConnected")?;
+                workflow.transitions.push(record);
+                Ok(Some(model))
+            }
+            EmcEvent::WorkflowTransitionRemoved {
+                workflow,
+                source,
+                target_slice,
+                target_workflow,
+                via,
+                name,
+                ..
+            } => {
+                let mut model = Self::require(model, "WorkflowTransitionRemoved")?;
+                let target_ref = target_slice
+                    .as_ref()
+                    .map(AsRef::as_ref)
+                    .or_else(|| target_workflow.as_ref().map(WorkflowSlug::as_ref))
+                    .ok_or_else(|| "WorkflowTransitionRemoved is missing a target".to_owned())?;
+                let workflow_exit = target_workflow.is_some();
+                let removed_transition = WorkflowTransitionRecord::new(
+                    workflow_transition_endpoint(source.as_ref())?,
+                    workflow_transition_endpoint(target_ref)?,
+                    workflow_transition_kind_from_connection(workflow_exit, via)?,
+                    name,
+                );
+                let workflow = model.workflow_mut(&workflow, "WorkflowTransitionRemoved")?;
+                workflow
+                    .transitions
+                    .retain(|transition| !same_transition(transition, &removed_transition));
+                Ok(Some(model))
+            }
+            EmcEvent::WorkflowOutcomeAdded {
+                workflow,
+                source_slice,
+                label,
+                externally_relevant,
+                ..
+            } => {
+                let mut model = Self::require(model, "WorkflowOutcomeAdded")?;
+                let outcome = WorkflowOutcomeRecord::new(source_slice, label, externally_relevant);
+                model
+                    .workflow_mut(&workflow, "WorkflowOutcomeAdded")?
+                    .outcomes
+                    .push(outcome);
+                Ok(Some(model))
+            }
+            EmcEvent::WorkflowCommandErrorAdded {
+                workflow,
+                source_slice,
+                command,
+                error,
+                ..
+            } => {
+                let mut model = Self::require(model, "WorkflowCommandErrorAdded")?;
+                let record = WorkflowCommandErrorRecord::new(source_slice, command, error);
+                model
+                    .workflow_mut(&workflow, "WorkflowCommandErrorAdded")?
+                    .command_errors
+                    .push(record);
+                Ok(Some(model))
+            }
+            EmcEvent::WorkflowOwnedDefinitionAdded {
+                workflow,
+                source_slice,
+                definition_kind,
+                definition_name,
+                definition_stream,
+                source_provenance,
+                event_participation,
+                view_role,
+                ..
+            } => {
+                let mut model = Self::require(model, "WorkflowOwnedDefinitionAdded")?;
+                let definition = WorkflowOwnedDefinitionRecord::from_parts(
+                    source_slice,
+                    definition_kind,
+                    definition_name,
+                    definition_stream,
+                    source_provenance,
+                    event_participation,
+                    view_role,
+                );
+                model
+                    .workflow_mut(&workflow, "WorkflowOwnedDefinitionAdded")?
+                    .owned_definitions
+                    .push(definition);
+                Ok(Some(model))
+            }
+            EmcEvent::WorkflowTransitionEvidenceAdded {
+                workflow,
+                source,
+                target,
+                via,
+                name,
+                source_evidence,
+                target_evidence,
+                source_control,
+                target_view,
+                ..
+            } => {
+                let mut model = Self::require(model, "WorkflowTransitionEvidenceAdded")?;
+                let evidence = match (source_control, target_view) {
+                    (Some(source_control), Some(target_view)) => {
+                        WorkflowTransitionEvidenceRecord::new_with_navigation_endpoints(
+                            source,
+                            target,
+                            via,
+                            name,
+                            WorkflowTransitionEvidenceNavigationEndpoints::new(
+                                source_control,
+                                target_view,
+                            ),
+                            source_evidence,
+                            target_evidence,
+                        )
+                    }
+                    _ => WorkflowTransitionEvidenceRecord::new(
+                        source,
+                        target,
+                        via,
+                        name,
+                        source_evidence,
+                        target_evidence,
+                    ),
+                };
+                model
+                    .workflow_mut(&workflow, "WorkflowTransitionEvidenceAdded")?
+                    .transition_evidences
+                    .push(evidence);
+                Ok(Some(model))
+            }
+            EmcEvent::WorkflowEntryLifecycleCoverageRequired { workflow, .. } => {
+                let mut model = Self::require(model, "WorkflowEntryLifecycleCoverageRequired")?;
+                model
+                    .workflow_mut(&workflow, "WorkflowEntryLifecycleCoverageRequired")?
+                    .requires_entry_lifecycle_coverage = true;
+                Ok(Some(model))
+            }
+            EmcEvent::WorkflowEntryLifecycleStateAdded {
+                workflow,
+                state,
+                step,
+                evidence,
+                ..
+            } => {
+                let mut model = Self::require(model, "WorkflowEntryLifecycleStateAdded")?;
+                let record = WorkflowEntryLifecycleStateRecord::new(state, step, evidence);
+                model
+                    .workflow_mut(&workflow, "WorkflowEntryLifecycleStateAdded")?
+                    .entry_lifecycle_states
+                    .push(record);
+                Ok(Some(model))
+            }
+            EmcEvent::ReviewRecorded {
+                workflow,
+                model_content_digest,
+                reviewer_id,
+                reviewed_at,
+                categories,
+                ..
+            } => {
+                let mut model = Self::require(model, "ReviewRecorded")?;
+                if !model
+                    .workflows
+                    .iter()
+                    .any(|existing| existing.slug == workflow)
+                {
+                    return Err(format!(
+                        "ReviewRecorded references unknown workflow {}",
+                        workflow.as_ref()
+                    ));
+                }
+                let review = ProjectedReview {
+                    workflow_slug: workflow,
+                    model_content_digest,
+                    reviewer_id: reviewer_id.as_ref().to_owned(),
+                    reviewed_at: reviewed_at.as_ref().to_owned(),
+                    categories: categories
+                        .into_iter()
+                        .map(|category| category.as_ref().to_owned())
+                        .collect(),
+                };
+                model.reviews.retain(|existing| {
+                    existing.workflow_slug.as_ref() != review.workflow_slug.as_ref()
+                });
+                model.reviews.push(review);
+                Ok(Some(model))
+            }
+            EmcEvent::ConflictResolved { .. } => Ok(model),
+        }
+    }
+
+    fn apply_slice_fact_body(&mut self, body: ExportedEventBody) -> Result<(), String> {
+        match body {
+            ExportedEventBody::SliceOutcomeAdded { outcome } => {
+                self.slice_mut(outcome.slice_slug(), "SliceOutcomeAdded")?
+                    .outcomes
+                    .push(outcome);
+            }
+            ExportedEventBody::SliceScenarioAdded { scenario } => {
+                self.slice_mut(scenario.slice_slug(), "SliceScenarioAdded")?
+                    .scenarios
+                    .push(scenario);
+            }
+            ExportedEventBody::SliceExternalPayloadAdded { external_payload } => {
+                self.slice_mut(external_payload.slice_slug(), "SliceExternalPayloadAdded")?
+                    .external_payloads
+                    .push(external_payload);
+            }
+            ExportedEventBody::SliceEventDefinitionAdded { event } => {
+                self.slice_mut(event.slice_slug(), "SliceEventDefinitionAdded")?
+                    .event_definitions
+                    .push(event);
+            }
+            ExportedEventBody::SliceCommandDefinitionAdded { command } => {
+                self.slice_mut(command.slice_slug(), "SliceCommandDefinitionAdded")?
+                    .command_definitions
+                    .push(command);
+            }
+            ExportedEventBody::SliceReadModelAdded { read_model } => {
+                self.slice_mut(read_model.slice_slug(), "SliceReadModelAdded")?
+                    .read_models
+                    .push(read_model);
+            }
+            ExportedEventBody::SliceBitLevelDataFlowAdded { data_flow } => {
+                self.slice_mut(data_flow.slice_slug(), "SliceBitLevelDataFlowAdded")?
+                    .bit_level_data_flows
+                    .push(data_flow);
+            }
+            ExportedEventBody::SliceViewAdded { view } => {
+                self.slice_mut(view.slice_slug(), "SliceViewAdded")?
+                    .views
+                    .push(view);
+            }
+            ExportedEventBody::SliceTranslationAdded { translation } => {
+                self.slice_mut(translation.slice_slug(), "SliceTranslationAdded")?
+                    .translations
+                    .push(translation);
+            }
+            ExportedEventBody::SliceAutomationAdded { automation } => {
+                self.slice_mut(automation.slice_slug(), "SliceAutomationAdded")?
+                    .automations
+                    .push(automation);
+            }
+            ExportedEventBody::SliceBoardElementAdded { element } => {
+                self.slice_mut(element.slice_slug(), "SliceBoardElementAdded")?
+                    .board_elements
+                    .push(element);
+            }
+            ExportedEventBody::SliceBoardConnectionAdded { connection } => {
+                self.slice_mut(connection.slice_slug(), "SliceBoardConnectionAdded")?
+                    .board_connections
+                    .push(connection);
+            }
+            other => {
+                return Err(format!(
+                    "unexpected slice fact event body {}",
+                    other.event_type()
+                ));
+            }
+        }
+        Ok(())
     }
 
     fn effects(self, projection_fingerprint: String) -> Result<EffectPlan, String> {
@@ -4535,12 +3729,6 @@ struct ProjectedReview {
     reviewer_id: String,
     reviewed_at: String,
     categories: Vec<String>,
-}
-
-#[derive(Debug)]
-struct WorkflowReadinessDeclaration {
-    workflow: WorkflowSlug,
-    projection_fingerprint: ProjectionFingerprint,
 }
 
 impl ProjectedReview {
@@ -4856,102 +4044,6 @@ fn required_bool(event: &Value, field: &str) -> Result<bool, String> {
         .get(field)
         .and_then(Value::as_bool)
         .ok_or_else(|| format!("exported event is missing boolean field {field}"))
-}
-
-fn required_usize(event: &Value, field: &str) -> Result<usize, String> {
-    let value = event
-        .get(field)
-        .and_then(Value::as_u64)
-        .ok_or_else(|| format!("exported event is missing unsigned integer field {field}"))?;
-    usize::try_from(value).map_err(|_| format!("exported event field {field} is too large"))
-}
-
-fn required_event_stream_id(event: &Value, field: &str) -> Result<EventStreamId, String> {
-    EventStreamId::try_new(required_str(event, field)?.to_owned()).map_err(|error| {
-        format!("exported event JSON field {field} contains an invalid stream id: {error}")
-    })
-}
-
-fn required_exported_event_id(event: &Value, field: &str) -> Result<ExportedEventId, String> {
-    exported_event_id(required_str(event, field)?, field)
-}
-
-fn exported_event_id(value: &str, field: &str) -> Result<ExportedEventId, String> {
-    ExportedEventId::try_new(value.to_owned()).map_err(|error| {
-        format!("exported event JSON field {field} contains an invalid id: {error}")
-    })
-}
-
-fn required_exported_command_id(event: &Value, field: &str) -> Result<ExportedCommandId, String> {
-    ExportedCommandId::try_new(required_str(event, field)?.to_owned()).map_err(|error| {
-        format!("exported event JSON field {field} contains an invalid id: {error}")
-    })
-}
-
-fn workflow_transition_record_from_connection(
-    connection: &WorkflowConnection,
-) -> Result<WorkflowTransitionRecord, String> {
-    let source = workflow_transition_endpoint(connection.source().as_ref())?;
-    let target = workflow_transition_endpoint(connection.target().as_ref())?;
-    let kind = workflow_transition_kind_from_connection(
-        connection.target().workflow_slug().is_some(),
-        connection.kind(),
-    )?;
-
-    match (connection.payload_contract(), connection.target().reason()) {
-        (Some(payload_contract), None) => Ok(WorkflowTransitionRecord::new_with_payload_contract(
-            source,
-            target,
-            kind,
-            connection.trigger().clone(),
-            payload_contract.clone(),
-        )),
-        (None, Some(reason)) => Ok(WorkflowTransitionRecord::new_with_rationale(
-            source,
-            target,
-            kind,
-            connection.trigger().clone(),
-            reason.clone(),
-        )),
-        (None, None) => {
-            if kind == WorkflowTransitionKind::Navigation
-                && let (Some(source_control), Some(target_view)) =
-                    (connection.source_control(), connection.target_view())
-            {
-                return Ok(WorkflowTransitionRecord::new_with_navigation_endpoints(
-                    source,
-                    target,
-                    kind,
-                    connection.trigger().clone(),
-                    source_control.clone(),
-                    target_view.clone(),
-                ));
-            }
-            Ok(WorkflowTransitionRecord::new(
-                source,
-                target,
-                kind,
-                connection.trigger().clone(),
-            ))
-        }
-        (Some(_), Some(_)) => {
-            Err("WorkflowConnected cannot project both rationale and payload contract".to_owned())
-        }
-    }
-}
-
-fn workflow_transition_record_from_removal(
-    removal: &WorkflowTransitionRemoval,
-) -> Result<WorkflowTransitionRecord, String> {
-    Ok(WorkflowTransitionRecord::new(
-        workflow_transition_endpoint(removal.source().as_ref())?,
-        workflow_transition_endpoint(removal.target().as_ref())?,
-        workflow_transition_kind_from_connection(
-            removal.target().workflow_slug().is_some(),
-            removal.kind(),
-        )?,
-        removal.trigger().clone(),
-    ))
 }
 
 fn workflow_transition_kind_from_connection(

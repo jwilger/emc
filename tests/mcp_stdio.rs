@@ -4,8 +4,7 @@
 mod tests {
     use std::error::Error;
     use std::fs;
-    use std::io::{BufRead, BufReader, Write};
-    use std::path::PathBuf;
+    use std::io::{self, BufRead, BufReader, ErrorKind, Write};
     use std::process::{Command as ProcessCommand, Stdio};
     use std::sync::mpsc;
     use std::thread;
@@ -451,7 +450,7 @@ mod tests {
     #[test]
     fn mcp_stdio_exposes_list_conflicts_tool() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
-        create_concurrent_slice_update_conflict(&temp_dir)?;
+        create_slice_update_fork(&temp_dir)?;
 
         Command::cargo_bin("emc")?
             .args(["mcp", "stdio"])
@@ -460,9 +459,7 @@ mod tests {
             .assert()
             .success()
             .stdout(predicate::str::contains("\"list_conflicts\""))
-            .stdout(predicate::str::contains(
-                "conflict slice::capture-ticket SliceUpdated capture-ticket",
-            ));
+            .stdout(predicate::str::contains("conflict slice::capture-ticket"));
 
         Ok(())
     }
@@ -470,28 +467,37 @@ mod tests {
     #[test]
     fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
-        let chosen_event_id = create_concurrent_slice_update_conflict(&temp_dir)?;
+        create_slice_update_fork(&temp_dir)?;
+
         let conflict_output = Command::cargo_bin("emc")?
             .args(["list", "conflicts"])
             .current_dir(temp_dir.path())
             .output()?;
         let conflict_stdout = String::from_utf8(conflict_output.stdout)?;
-        let conflict_id = conflict_stdout
-            .split(" id ")
+        let conflict_line = conflict_stdout
+            .lines()
+            .find(|line| line.contains("conflict slice::capture-ticket"))
+            .ok_or("conflict on slice::capture-ticket must be reported")?;
+        let branch_tx = conflict_line
+            .split(" branches ")
             .nth(1)
-            .and_then(|suffix| suffix.split_whitespace().next())
-            .ok_or("conflict id must be reported")?;
+            .and_then(|branches| branches.split(',').next())
+            .map(str::trim)
+            .ok_or("conflict branches must be reported")?;
 
         Command::cargo_bin("emc")?
             .args(["mcp", "stdio"])
             .current_dir(temp_dir.path())
-            .write_stdin(resolve_conflict_mcp_requests(conflict_id, &chosen_event_id))
+            .write_stdin(resolve_conflict_mcp_requests(
+                "slice::capture-ticket",
+                branch_tx,
+            ))
             .assert()
             .success()
             .stdout(predicate::str::contains("\"resolve_conflict\""))
-            .stdout(predicate::str::contains(format!(
-                "resolved conflict {conflict_id}"
-            )));
+            .stdout(predicate::str::contains(
+                "resolved conflict slice::capture-ticket",
+            ));
 
         Command::cargo_bin("emc")?
             .args(["list", "conflicts"])
@@ -552,20 +558,18 @@ mod tests {
         )
     }
 
-    fn resolve_conflict_mcp_requests(conflict_id: &str, chosen_event_id: &str) -> String {
+    fn resolve_conflict_mcp_requests(stream_id: &str, branch_tx: &str) -> String {
         format!(
             "{}{}{}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             format_args!(
-                "{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{{\"name\":\"resolve_conflict\",\"arguments\":{{\"id\":\"{conflict_id}\",\"choose_event\":\"{chosen_event_id}\"}}}}}}"
+                "{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{{\"name\":\"resolve_conflict\",\"arguments\":{{\"id\":\"{stream_id}\",\"choose_event\":\"{branch_tx}\"}}}}}}"
             )
         )
     }
 
-    fn create_concurrent_slice_update_conflict(
-        temp_dir: &TempDir,
-    ) -> Result<String, Box<dyn Error>> {
+    fn create_slice_update_fork(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args(["init", "--name", "Repair Desk"])
             .current_dir(temp_dir.path())
@@ -603,6 +607,25 @@ mod tests {
             .current_dir(temp_dir.path())
             .assert()
             .success();
+
+        // Clone the shared base into a second replica.
+        let replica = TempDir::new()?;
+        let copy_status = ProcessCommand::new("cp")
+            .arg("-a")
+            .arg(format!("{}/.", temp_dir.path().display()))
+            .arg(replica.path())
+            .status()?;
+        assert!(copy_status.success(), "copying base project must succeed");
+
+        // Strip replica-local store metadata so the clone mints a fresh replica id.
+        let replica_events = replica.path().join("model/events");
+        ignore_not_found(fs::remove_dir_all(replica_events.join(".eventcore")))?;
+        ignore_not_found(fs::remove_dir_all(replica_events.join("locks")))?;
+        ignore_not_found(fs::remove_dir_all(replica_events.join("index")))?;
+        ignore_not_found(fs::remove_dir_all(replica_events.join("tmp")))?;
+        ignore_not_found(fs::remove_file(replica_events.join(".lock")))?;
+
+        // Diverge: each replica authors a different description from the shared base.
         Command::cargo_bin("emc")?
             .args([
                 "update",
@@ -610,48 +633,48 @@ mod tests {
                 "--slug",
                 "capture-ticket",
                 "--description",
-                "First merged branch description.",
+                "Description authored on replica A.",
             ])
             .current_dir(temp_dir.path())
             .assert()
             .success();
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "slice",
+                "--slug",
+                "capture-ticket",
+                "--description",
+                "Description authored on replica B.",
+            ])
+            .current_dir(replica.path())
+            .assert()
+            .success();
 
-        let event_dir = temp_dir.path().join("model/events/v1");
-        let mut update_event = exported_events(event_dir.clone())?
-            .into_iter()
-            .find(|event| event["type"] == "SliceUpdated")
-            .ok_or("slice update event must exist")?;
-        let original_event_id = update_event["event_id"]
-            .as_str()
-            .ok_or("slice update event_id must be a string")?
-            .to_owned();
-        let conflicting_event_id = format!("{original_event_id}-conflicting");
-        update_event["event_id"] = Value::String(conflicting_event_id.clone());
-        update_event["command_id"] = Value::String(conflicting_event_id.clone());
-        update_event["payload"]["description"] =
-            Value::String("Second merged branch description.".to_owned());
-        fs::write(
-            event_dir.join(format!("{conflicting_event_id}.json")),
-            serde_json::to_string_pretty(&update_event)?,
-        )?;
+        // Union replica B's transactions into the original to produce the fork.
+        let original_events = temp_dir.path().join("model/events/events");
+        let replica_events_dir = replica.path().join("model/events/events");
+        for entry in fs::read_dir(&replica_events_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+                continue;
+            }
+            let file_name = entry.file_name();
+            let destination = original_events.join(&file_name);
+            if !destination.exists() {
+                fs::copy(&path, &destination)?;
+            }
+        }
 
-        Ok(original_event_id)
+        Ok(())
     }
 
-    fn exported_events(path: PathBuf) -> Result<Vec<Value>, Box<dyn Error>> {
-        let mut event_paths = fs::read_dir(path)?
-            .map(|entry| entry.map(|entry| entry.path()))
-            .collect::<Result<Vec<_>, _>>()?;
-        event_paths.sort();
-
-        event_paths
-            .into_iter()
-            .map(|path| {
-                let contents = fs::read_to_string(path)?;
-                let event = serde_json::from_str::<Value>(&contents)?;
-                Ok(event)
-            })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()
+    fn ignore_not_found(result: io::Result<()>) -> io::Result<()> {
+        match result {
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            other => other,
+        }
     }
 
     fn initialize_request() -> &'static str {

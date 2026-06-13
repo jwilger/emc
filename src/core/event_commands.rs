@@ -102,6 +102,8 @@ pub(crate) enum EmcEvent {
         name: TransitionTriggerName,
         source_evidence: WorkflowTransitionSourceEvidenceText,
         target_evidence: WorkflowTransitionTargetEvidenceText,
+        source_control: Option<TransitionTriggerName>,
+        target_view: Option<WorkflowOwnedDefinitionName>,
     },
     WorkflowEntryLifecycleCoverageRequired {
         stream_id: StreamId,
@@ -134,6 +136,8 @@ pub(crate) enum EmcEvent {
         name: TransitionTriggerName,
         payload_contract: Option<PayloadContractName>,
         reason: Option<ModelDescription>,
+        source_control: Option<TransitionTriggerName>,
+        target_view: Option<WorkflowOwnedDefinitionName>,
     },
     WorkflowTransitionRemoved {
         stream_id: StreamId,
@@ -454,6 +458,8 @@ impl CommandLogic for ConnectWorkflowCommand {
             name: self.connection.trigger().clone(),
             payload_contract: self.connection.payload_contract().cloned(),
             reason: self.connection.target().reason().cloned(),
+            source_control: self.connection.source_control().cloned(),
+            target_view: self.connection.target_view().cloned(),
         }]
         .into())
     }
@@ -586,6 +592,8 @@ impl WorkflowFactInput {
                     name: evidence.trigger().clone(),
                     source_evidence: evidence.source_evidence().clone(),
                     target_evidence: evidence.target_evidence().clone(),
+                    source_control: evidence.source_control().cloned(),
+                    target_view: evidence.target_view().cloned(),
                 }
             }
             Self::EntryLifecycleCoverageRequired { workflow } => {
@@ -801,6 +809,12 @@ impl SliceFactEvent {
         Self {
             fact: Box::new(fact),
         }
+    }
+
+    /// The full-fidelity `ExportedEventBody` this slice fact carries, for the
+    /// projection read path.
+    pub(crate) fn to_event_body(&self) -> ExportedEventBody {
+        self.fact.to_event_body()
     }
 }
 
