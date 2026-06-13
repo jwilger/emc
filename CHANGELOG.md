@@ -7,6 +7,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1](https://git.johnwilger.com/Slipstream/emc/compare/v0.1.0...v0.1.1) - 2026-06-13
+
+### Added
+
+- *(events)* migrate event store to eventcore 0.9 with eventcore-fs ([#117](https://git.johnwilger.com/Slipstream/emc/pulls/117))
+
+### Fixed
+
+- *(release-plz)* keep copyright header atop the generated changelog ([#119](https://git.johnwilger.com/Slipstream/emc/pulls/119))
+- *(release-plz)* supersede release PR instead of force-pushing ([#115](https://git.johnwilger.com/Slipstream/emc/pulls/115))
+
 ## [Unreleased]
 
 ## [0.1.0](https://git.johnwilger.com/Slipstream/emc/releases/tag/v0.1.0) - 2026-06-12
