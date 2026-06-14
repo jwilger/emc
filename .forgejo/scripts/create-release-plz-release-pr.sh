@@ -52,10 +52,28 @@ fi
 # Conventional-commit release title that names the version. The
 # `chore(release):` scope is matched by the Phase 1 loop-prevention guard and
 # the Phase 2 publish trigger, and is skipped by changelog generation (see
-# release-plz.toml). The auto_review "PR metadata quality" check rejects a
-# bare `chore: release` title because it neither follows the release commit
-# convention nor names a version.
-pr_title="${pr_title_override:-chore(release): v$version}"
+# release-plz.toml). The auto_review "PR metadata quality" check also requires
+# the title to describe the release (not merely name the version) and to stay
+# within 72 characters, so the title appends the newest changelog entry's
+# summary and is truncated to 72 characters.
+release_summary="$(
+  awk '
+    /^## \[[0-9]/ { if (started) exit; started = 1 }
+    started && /^- / {
+      sub(/^- /, "")
+      sub(/^\*\([^)]*\)\* /, "")
+      sub(/ \(#[0-9]+\)$/, "")
+      print
+      exit
+    }
+  ' CHANGELOG.md 2>/dev/null
+)"
+release_summary="${release_summary:-version bump and changelog update}"
+if [ -n "$pr_title_override" ]; then
+  pr_title="$pr_title_override"
+else
+  pr_title="$(printf 'chore(release): v%s %s' "$version" "$release_summary" | cut -c1-72)"
+fi
 
 # Print the newest numbered version section from a CHANGELOG, skipping the
 # persistent `## [Unreleased]` header.
@@ -72,7 +90,7 @@ new_changelog_section() {
 # that it exists.
 pr_body="$(
   printf '## Release v%s\n\n' "$version"
-  printf 'Automated release prepared by release-plz. All EventCore workspace crates are bumped to **v%s** in lockstep (shared major.minor per ADR-025) and their changelogs regenerated from the conventional commits merged to `main` since the previous release.\n\n' "$version"
+  printf 'Automated release prepared by release-plz. The `emc` crate is bumped to **v%s** and its changelog regenerated from the conventional commits merged to `main` since the previous release.\n\n' "$version"
   printf '### Changes\n\n'
   changed_changelogs="$(git status --porcelain | grep 'CHANGELOG\.md$' | awk '{ print $NF }')"
   if [ -n "$changed_changelogs" ]; then

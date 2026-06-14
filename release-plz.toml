@@ -6,32 +6,9 @@ repo_url = "https://git.johnwilger.com/Slipstream/emc"
 pr_branch_prefix = "release-plz-"
 publish = true
 
-# Give the generated release PR metadata that satisfies the `auto_review`
-# pre-merge quality gate so release PRs do not require manual title/body edits.
-# The title is a conventional-commit subject that adds a description after the
-# version and stays under 72 characters; the body leads with a Summary and
-# Rationale ("why") before the per-package changelog. `{{ version }}` is only
-# set for single-package / same-version releases, so it is guarded.
-pr_name = "chore: release{% if version %} v{{ version }}{% endif %} (automated version and changelog bump)"
-pr_body = """## Summary
-
-Automated `release-plz` release that bumps the crate version and regenerates
-`CHANGELOG.md` for the work merged to `main` since the previous release.
-
-## Rationale
-
-Cutting this release versions and tags the latest merged changes (and publishes
-to the registry when credentials are configured). The specific changes are
-listed in the per-package changelog below.
-
-## Released changes
-{% for release in releases %}
-### {{ release.package }} {{ release.previous_version }} -> {{ release.next_version }}
-{% if release.changelog %}
-{{ release.changelog }}
-{% endif %}
-{% endfor -%}
-"""
+# NOTE: the release PR title and body are built by
+# `.forgejo/scripts/create-release-plz-release-pr.sh` (which opens the PR via the
+# Forgejo API), so release-plz's own `pr_name`/`pr_body` are not used here.
 
 # Keep the project copyright header as the first line of the regenerated
 # CHANGELOG.md. Without this, release-plz rewrites the file with its default
