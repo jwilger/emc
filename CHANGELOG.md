@@ -7,6 +7,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2](https://git.johnwilger.com/Slipstream/emc/compare/v0.1.1...v0.1.2) - 2026-06-14
+
+### Fixed
+
+- *(release-plz)* describe the release in the PR title and fix body ([#123](https://git.johnwilger.com/Slipstream/emc/pulls/123))
+- *(release-plz)* template compliant release PR title and body ([#121](https://git.johnwilger.com/Slipstream/emc/pulls/121))
+
+### Other
+
+- skip auto_review metadata gate for automated release PRs ([#125](https://git.johnwilger.com/Slipstream/emc/pulls/125))
+
 ## [0.1.1](https://git.johnwilger.com/Slipstream/emc/compare/v0.1.0...v0.1.1) - 2026-06-13
 
 ### Added
