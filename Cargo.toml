@@ -13,9 +13,9 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 clap = { version = "4.6.1", features = ["std", "help", "usage", "error-context", "suggestions"] }
-eventcore = "0.9.0"
-eventcore-fs = "0.9.0"
-eventcore-types = "0.9.0"
+eventcore = "1.0.0"
+eventcore-fs = "1.0.0"
+eventcore-types = "1.0.0"
 fs4 = "1.1.0"
 hex = "0.4.3"
 nutype = { version = "0.6.2", features = ["serde"] }
