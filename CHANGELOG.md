@@ -7,6 +7,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3](https://git.johnwilger.com/Slipstream/emc/compare/v0.1.2...v0.1.3) - 2026-06-15
+
+### Other
+
+- *(deps)* upgrade eventcore workspace to 1.0.0 ([#127](https://git.johnwilger.com/Slipstream/emc/pulls/127))
+
 ## [0.1.2](https://git.johnwilger.com/Slipstream/emc/compare/v0.1.1...v0.1.2) - 2026-06-14
 
 ### Fixed
