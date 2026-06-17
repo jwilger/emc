@@ -1552,7 +1552,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelWorkflowCompositionStructureComplete"),
             canonical_declaration_marker(
-                "theorem modelWorkflowCompositionStructureComplete : (modelSlices.all modelSliceBelongsToDeclaredWorkflow && modelSlices.all modelSliceHasModule && modelSliceModules.all modelSliceModuleBelongsToDeclaredSlice && modelWorkflows.all modelWorkflowHasCompositionStructure) = true := rfl",
+                "theorem modelWorkflowCompositionStructureComplete : (modelSlices.all modelSliceBelongsToDeclaredWorkflow && modelSlices.all modelSliceHasModule && modelSliceModules.all modelSliceModuleBelongsToDeclaredSlice && modelWorkflows.all modelWorkflowHasCompositionStructure) = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1560,7 +1560,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelWorkflowBehaviorSurfaceIsCompleteIsStable"),
             canonical_declaration_marker(
-                "theorem modelWorkflowBehaviorSurfaceIsCompleteIsStable : modelWorkflowBehaviorSurfaceIsComplete = true := rfl",
+                "theorem modelWorkflowBehaviorSurfaceIsCompleteIsStable : modelWorkflowBehaviorSurfaceIsComplete = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1584,7 +1584,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelScenarioDefinitionsHaveGwt"),
             canonical_declaration_marker(
-                "theorem modelScenarioDefinitionsHaveGwt : modelScenarioDefinitions.all modelScenarioDefinitionHasGwt = true := rfl",
+                "theorem modelScenarioDefinitionsHaveGwt : modelScenarioDefinitions.all modelScenarioDefinitionHasGwt = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1592,7 +1592,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelScenarioKindsAreFirstClass"),
             canonical_declaration_marker(
-                "theorem modelScenarioKindsAreFirstClass : modelScenarioDefinitions.all modelScenarioKindIsFirstClass = true := rfl",
+                "theorem modelScenarioKindsAreFirstClass : modelScenarioDefinitions.all modelScenarioKindIsFirstClass = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1608,7 +1608,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelDataFlowsAreBitComplete"),
             canonical_declaration_marker(
-                "theorem modelDataFlowsAreBitComplete : modelDataFlows.all modelDataFlowIsBitComplete = true := rfl",
+                "theorem modelDataFlowsAreBitComplete : modelDataFlows.all modelDataFlowIsBitComplete = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1616,7 +1616,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelDataFlowSourceKindsAreModeled"),
             canonical_declaration_marker(
-                "theorem modelDataFlowSourceKindsAreModeled : modelDataFlows.all modelDataFlowHasModeledSourceKind = true := rfl",
+                "theorem modelDataFlowSourceKindsAreModeled : modelDataFlows.all modelDataFlowHasModeledSourceKind = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1624,7 +1624,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelDataFlowModeledSourcesResolve"),
             canonical_declaration_marker(
-                "theorem modelDataFlowModeledSourcesResolve : modelDataFlows.all modelDataFlowModeledSourceResolves = true := rfl",
+                "theorem modelDataFlowModeledSourcesResolve : modelDataFlows.all modelDataFlowModeledSourceResolves = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1632,7 +1632,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelDataFlowSourceChainsReachOriginals"),
             canonical_declaration_marker(
-                "theorem modelDataFlowSourceChainsReachOriginals : modelDataFlows.all modelDataFlowHasOriginalSourceChain = true := rfl",
+                "theorem modelDataFlowSourceChainsReachOriginals : modelDataFlows.all modelDataFlowHasOriginalSourceChain = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1642,7 +1642,7 @@ fn project_root_effects(
                 "theorem modelDataFlowSourceChainsPreserveBitEncodingSemantics",
             ),
             canonical_declaration_marker(
-                "theorem modelDataFlowSourceChainsPreserveBitEncodingSemantics : modelDataFlows.all modelDataFlowHasBitPreservingOriginalSourceChain = true := rfl",
+                "theorem modelDataFlowSourceChainsPreserveBitEncodingSemantics : modelDataFlows.all modelDataFlowHasBitPreservingOriginalSourceChain = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1650,7 +1650,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelDataFlowTransformationsAreModeled"),
             canonical_declaration_marker(
-                "theorem modelDataFlowTransformationsAreModeled : modelDataFlows.all modelDataFlowHasModeledTransformationSemantics = true := rfl",
+                "theorem modelDataFlowTransformationsAreModeled : modelDataFlows.all modelDataFlowHasModeledTransformationSemantics = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1658,7 +1658,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelMeaningfulDataFlowsAreCovered"),
             canonical_declaration_marker(
-                "theorem modelMeaningfulDataFlowsAreCovered : modelMeaningfulDataHasModeledDataFlows = true := rfl",
+                "theorem modelMeaningfulDataFlowsAreCovered : modelMeaningfulDataHasModeledDataFlows = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1668,7 +1668,7 @@ fn project_root_effects(
                 "theorem modelDataFlowSourceBitEncodingsMatchModeledSources",
             ),
             canonical_declaration_marker(
-                "theorem modelDataFlowSourceBitEncodingsMatchModeledSources : modelDataFlows.all modelDataFlowSourceBitEncodingMatchesModeledSource = true := rfl",
+                "theorem modelDataFlowSourceBitEncodingsMatchModeledSources : modelDataFlows.all modelDataFlowSourceBitEncodingMatchesModeledSource = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1676,7 +1676,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelViewFieldBitEncodingsMatchDataFlows"),
             canonical_declaration_marker(
-                "theorem modelViewFieldBitEncodingsMatchDataFlows : modelViewFields.all modelViewFieldBitEncodingMatchesDataFlow = true := rfl",
+                "theorem modelViewFieldBitEncodingsMatchDataFlows : modelViewFields.all modelViewFieldBitEncodingMatchesDataFlow = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1686,7 +1686,7 @@ fn project_root_effects(
                 "theorem modelExternalPayloadFieldBitEncodingsMatchDataFlows",
             ),
             canonical_declaration_marker(
-                "theorem modelExternalPayloadFieldBitEncodingsMatchDataFlows : modelExternalPayloadFields.all modelExternalPayloadFieldBitEncodingMatchesDataFlow = true := rfl",
+                "theorem modelExternalPayloadFieldBitEncodingsMatchDataFlows : modelExternalPayloadFields.all modelExternalPayloadFieldBitEncodingMatchesDataFlow = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1726,7 +1726,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelCommandInputsHaveProvenance"),
             canonical_declaration_marker(
-                "theorem modelCommandInputsHaveProvenance : modelCommandInputs.all modelCommandInputHasProvenance = true := rfl",
+                "theorem modelCommandInputsHaveProvenance : modelCommandInputs.all modelCommandInputHasProvenance = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1734,7 +1734,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelCommandInputsTraceToInvocationSources"),
             canonical_declaration_marker(
-                "theorem modelCommandInputsTraceToInvocationSources : modelCommandInputs.all modelCommandInputTracesToInvocationSource = true := rfl",
+                "theorem modelCommandInputsTraceToInvocationSources : modelCommandInputs.all modelCommandInputTracesToInvocationSource = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1742,7 +1742,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelEventAttributeSourcesAreComplete"),
             canonical_declaration_marker(
-                "theorem modelEventAttributeSourcesAreComplete : modelEventAttributes.all modelEventAttributeSourceIsComplete = true := rfl",
+                "theorem modelEventAttributeSourcesAreComplete : modelEventAttributes.all modelEventAttributeSourceIsComplete = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1774,7 +1774,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelReadModelFieldSourcesAreComplete"),
             canonical_declaration_marker(
-                "theorem modelReadModelFieldSourcesAreComplete : modelReadModelFields.all modelReadModelFieldSourceIsComplete = true := rfl",
+                "theorem modelReadModelFieldSourcesAreComplete : modelReadModelFields.all modelReadModelFieldSourceIsComplete = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1782,7 +1782,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelViewFieldSourcesAreComplete"),
             canonical_declaration_marker(
-                "theorem modelViewFieldSourcesAreComplete : modelViewFields.all modelViewFieldSourceIsComplete = true := rfl",
+                "theorem modelViewFieldSourcesAreComplete : modelViewFields.all modelViewFieldSourceIsComplete = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1790,7 +1790,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelViewFieldReadModelFieldSourcesResolve"),
             canonical_declaration_marker(
-                "theorem modelViewFieldReadModelFieldSourcesResolve : modelViewFields.all modelViewFieldReadModelFieldSourceResolves = true := rfl",
+                "theorem modelViewFieldReadModelFieldSourcesResolve : modelViewFields.all modelViewFieldReadModelFieldSourceResolves = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1798,7 +1798,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelDisplayedDataTraceToOriginalProvenance"),
             canonical_declaration_marker(
-                "theorem modelDisplayedDataTraceToOriginalProvenance : modelViewFields.all modelDisplayedDatumTracesToOriginalProvenance = true := rfl",
+                "theorem modelDisplayedDataTraceToOriginalProvenance : modelViewFields.all modelDisplayedDatumTracesToOriginalProvenance = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1830,7 +1830,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelViewControlsProvideCommandInputs"),
             canonical_declaration_marker(
-                "theorem modelViewControlsProvideCommandInputs : modelViewControls.all modelViewControlProvidesEveryCommandInput = true := rfl",
+                "theorem modelViewControlsProvideCommandInputs : modelViewControls.all modelViewControlProvidesEveryCommandInput = true := by native_decide",
             ),
             lean_message.clone(),
         ),
@@ -1910,7 +1910,7 @@ fn project_root_effects(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelExternalPayloadFieldsHaveProvenance"),
             canonical_declaration_marker(
-                "theorem modelExternalPayloadFieldsHaveProvenance : modelExternalPayloadFields.all modelExternalPayloadFieldHasProvenance = true := rfl",
+                "theorem modelExternalPayloadFieldsHaveProvenance : modelExternalPayloadFields.all modelExternalPayloadFieldHasProvenance = true := by native_decide",
             ),
             lean_message.clone(),
         ),

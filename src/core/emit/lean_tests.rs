@@ -2571,25 +2571,25 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem sliceBitLevelDataFlowsAreStructured : sliceBitLevelDataFlows.all (fun flow => flow.datum.isEmpty == false && flow.sourceKind.isEmpty == false && flow.source.isEmpty == false && flow.transformationSemantics.isEmpty == false && flow.target.isEmpty == false && flow.bitEncoding.isEmpty == false) = true := rfl"
+                "theorem sliceBitLevelDataFlowsAreStructured : sliceBitLevelDataFlows.all (fun flow => flow.datum.isEmpty == false && flow.sourceKind.isEmpty == false && flow.source.isEmpty == false && flow.transformationSemantics.isEmpty == false && flow.target.isEmpty == false && flow.bitEncoding.isEmpty == false) = true := by native_decide"
             ),
             "Lean slice artifacts must prove represented data-flow rows include source, transformation/projection, target, and bit encoding fields"
         );
         assert!(
             lean.contains(
-                "theorem modeledDataFlowsAreBitCompleteIsStable : modeledDataFlowsAreBitComplete = true := rfl"
+                "theorem modeledDataFlowsAreBitCompleteIsStable : modeledDataFlowsAreBitComplete = true := by native_decide"
             ),
             "Lean slice artifacts must prove current modeled data has bit-level flow coverage"
         );
         assert!(
             lean.contains(
-                "theorem sliceScenariosHaveGwtIsStable : sliceScenariosHaveGwt = true := rfl"
+                "theorem sliceScenariosHaveGwtIsStable : sliceScenariosHaveGwt = true := by native_decide"
             ),
             "Lean slice artifacts must prove current first-class scenarios satisfy GWT completeness"
         );
         assert!(
             lean.contains(
-                "theorem sliceScenarioNamesAreUniqueIsStable : sliceScenarioNamesAreUnique = true := rfl"
+                "theorem sliceScenarioNamesAreUniqueIsStable : sliceScenarioNamesAreUnique = true := by native_decide"
             ),
             "Lean slice artifacts must prove current first-class scenario names are unique"
         );
@@ -2601,7 +2601,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem sliceScenarioStreamsResolveIsStable : sliceScenarioStreamsResolve = true := rfl"
+                "theorem sliceScenarioStreamsResolveIsStable : sliceScenarioStreamsResolve = true := by native_decide"
             ),
             "Lean slice artifacts must prove current scenario stream references resolve"
         );
@@ -2613,473 +2613,473 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem acceptanceScenariosAreUserFacingIsStable : acceptanceScenariosAreUserFacing = true := rfl"
+                "theorem acceptanceScenariosAreUserFacingIsStable : acceptanceScenariosAreUserFacing = true := by native_decide"
             ),
             "Lean slice artifacts must prove acceptance scenarios remain user-facing"
         );
         assert!(
             lean.contains(
-                "theorem stateViewReadModelsHaveProjectorContractsIsStable : stateViewReadModelsHaveProjectorContracts = true := rfl"
+                "theorem stateViewReadModelsHaveProjectorContractsIsStable : stateViewReadModelsHaveProjectorContracts = true := by native_decide"
             ),
             "Lean slice artifacts must prove state-view read models have projector contract scenarios"
         );
         assert!(
             lean.contains(
-                "theorem contractScenariosTargetKnownDefinitionsIsStable : contractScenariosTargetKnownDefinitions = true := rfl"
+                "theorem contractScenariosTargetKnownDefinitionsIsStable : contractScenariosTargetKnownDefinitions = true := by native_decide"
             ),
             "Lean slice artifacts must prove current contract scenarios target known definitions"
         );
         assert!(
             lean.contains(
-                "theorem contractScenariosCoverModeledContractsIsStable : contractScenariosCoverModeledContracts = true := rfl"
+                "theorem contractScenariosCoverModeledContractsIsStable : contractScenariosCoverModeledContracts = true := by native_decide"
             ),
             "Lean slice artifacts must prove modeled contracts have contract scenario coverage"
         );
         assert!(
             lean.contains(
-                "theorem commandInputsHaveAllowedSourcesIsStable : commandInputsHaveAllowedSources = true := rfl"
+                "theorem commandInputsHaveAllowedSourcesIsStable : commandInputsHaveAllowedSources = true := by native_decide"
             ),
             "Lean slice artifacts must prove command inputs do not source from read models"
         );
         assert!(
             lean.contains(
-                "theorem commandInputsHaveProvenanceIsStable : commandInputsHaveProvenance = true := rfl"
+                "theorem commandInputsHaveProvenanceIsStable : commandInputsHaveProvenance = true := by native_decide"
             ),
             "Lean slice artifacts must prove command inputs carry reportable provenance"
         );
         assert!(
             lean.contains(
-                "theorem commandInputsWithoutIssuingControlsHaveProvenanceIsStable : commandInputsWithoutIssuingControlsHaveProvenance = true := rfl"
+                "theorem commandInputsWithoutIssuingControlsHaveProvenanceIsStable : commandInputsWithoutIssuingControlsHaveProvenance = true := by native_decide"
             ),
             "Lean slice artifacts must prove current standalone command inputs carry provenance"
         );
         assert!(
             lean.contains(
-                "theorem commandSessionInputsHaveDescriptionsIsStable : commandSessionInputsHaveDescriptions = true := rfl"
+                "theorem commandSessionInputsHaveDescriptionsIsStable : commandSessionInputsHaveDescriptions = true := by native_decide"
             ),
             "Lean slice artifacts must prove current session command inputs have descriptions"
         );
         assert!(
             lean.contains(
-                "theorem commandInputsTraceToInvocationSourcesIsStable : commandInputsTraceToInvocationSources = true := rfl"
+                "theorem commandInputsTraceToInvocationSourcesIsStable : commandInputsTraceToInvocationSources = true := by native_decide"
             ),
             "Lean slice artifacts must prove current command inputs trace to modeled invocation sources"
         );
         assert!(
             lean.contains(
-                "theorem commandInputsSourcedFromInvocationArgumentsHaveCoordinatesIsStable : commandInputsSourcedFromInvocationArgumentsHaveCoordinates = true := rfl"
+                "theorem commandInputsSourcedFromInvocationArgumentsHaveCoordinatesIsStable : commandInputsSourcedFromInvocationArgumentsHaveCoordinates = true := by native_decide"
             ),
             "Lean slice artifacts must prove current invocation-argument command inputs have source coordinates"
         );
         assert!(
             lean.contains(
-                "theorem commandInputsSourcedFromEventStreamsResolveIsStable : commandInputsSourcedFromEventStreamsResolve = true := rfl"
+                "theorem commandInputsSourcedFromEventStreamsResolveIsStable : commandInputsSourcedFromEventStreamsResolve = true := by native_decide"
             ),
             "Lean slice artifacts must prove current event-stream command input sources resolve"
         );
         assert!(
             lean.contains(
-                "theorem commandErrorsAreDeclaredIsStable : commandErrorsAreDeclared = true := rfl"
+                "theorem commandErrorsAreDeclaredIsStable : commandErrorsAreDeclared = true := by native_decide"
             ),
             "Lean slice artifacts must prove current command-local errors are declared"
         );
         assert!(
             lean.contains(
-                "theorem commandErrorsHaveAllowedRecoveryIsStable : commandErrorsHaveAllowedRecovery = true := rfl"
+                "theorem commandErrorsHaveAllowedRecoveryIsStable : commandErrorsHaveAllowedRecovery = true := by native_decide"
             ),
             "Lean slice artifacts must prove current command-local errors have modeled recovery"
         );
         assert!(
             lean.contains(
-                "theorem commandErrorsHaveScenarioCoverageIsStable : commandErrorsHaveScenarioCoverage = true := rfl"
+                "theorem commandErrorsHaveScenarioCoverageIsStable : commandErrorsHaveScenarioCoverage = true := by native_decide"
             ),
             "Lean slice artifacts must prove current command-local errors have scenario coverage"
         );
         assert!(
             lean.contains(
-                "theorem scenarioErrorReferencesAreDeclaredIsStable : scenarioErrorReferencesAreDeclared = true := rfl"
+                "theorem scenarioErrorReferencesAreDeclaredIsStable : scenarioErrorReferencesAreDeclared = true := by native_decide"
             ),
             "Lean slice artifacts must prove current scenario error references are declared command errors"
         );
         assert!(
             lean.contains(
-                "theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclareRepeatBehavior = true := rfl"
+                "theorem singletonCommandsDeclareRepeatBehaviorIsStable : singletonCommandsDeclareRepeatBehavior = true := by native_decide"
             ),
             "Lean slice artifacts must prove current singleton state changes declare repeat behavior"
         );
         assert!(
             lean.contains(
-                "theorem automationSlicesDeclareTriggersIsStable : automationSlicesDeclareTriggers = true := rfl"
+                "theorem automationSlicesDeclareTriggersIsStable : automationSlicesDeclareTriggers = true := by native_decide"
             ),
             "Lean slice artifacts must prove current automation slices declare triggers"
         );
         assert!(
             lean.contains(
-                "theorem automationSlicesRepresentOneReactionIsStable : automationSlicesRepresentOneReaction = true := rfl"
+                "theorem automationSlicesRepresentOneReactionIsStable : automationSlicesRepresentOneReaction = true := by native_decide"
             ),
             "Lean slice artifacts must prove current automation slices represent one coherent reaction"
         );
         assert!(
             lean.contains(
-                "theorem automationsIssueKnownCommandsIsStable : automationsIssueKnownCommands = true := rfl"
+                "theorem automationsIssueKnownCommandsIsStable : automationsIssueKnownCommands = true := by native_decide"
             ),
             "Lean slice artifacts must prove current automations issue known commands"
         );
         assert!(
             lean.contains(
-                "theorem automationsHandleCommandErrorsIsStable : automationsHandleCommandErrors = true := rfl"
+                "theorem automationsHandleCommandErrorsIsStable : automationsHandleCommandErrors = true := by native_decide"
             ),
             "Lean slice artifacts must prove current automations handle command errors"
         );
         assert!(
             lean.contains(
-                "theorem translationSlicesDeclareExternalContractsIsStable : translationSlicesDeclareExternalContracts = true := rfl"
+                "theorem translationSlicesDeclareExternalContractsIsStable : translationSlicesDeclareExternalContracts = true := by native_decide"
             ),
             "Lean slice artifacts must prove current translation slices declare external contracts"
         );
         assert!(
             lean.contains(
-                "theorem externalBoundariesHavePayloadContractsAndFieldProvenanceIsStable : externalBoundariesHavePayloadContractsAndFieldProvenance = true := rfl"
+                "theorem externalBoundariesHavePayloadContractsAndFieldProvenanceIsStable : externalBoundariesHavePayloadContractsAndFieldProvenance = true := by native_decide"
             ),
             "Lean slice artifacts must prove current external boundaries bind payload contracts with field-level provenance"
         );
         assert!(
             lean.contains(
-                "theorem translationsTargetKnownCommandsIsStable : translationsTargetKnownCommands = true := rfl"
+                "theorem translationsTargetKnownCommandsIsStable : translationsTargetKnownCommands = true := by native_decide"
             ),
             "Lean slice artifacts must prove current translations target known commands"
         );
         assert!(
             lean.contains(
-                "theorem translationsReferenceObservedExternalEventsIsStable : translationsReferenceObservedExternalEvents = true := rfl"
+                "theorem translationsReferenceObservedExternalEventsIsStable : translationsReferenceObservedExternalEvents = true := by native_decide"
             ),
             "Lean slice artifacts must prove current translations reference observed external events"
         );
         assert!(
             lean.contains(
-                "theorem boardLanesAreCanonicalIsStable : boardLanesAreCanonical = true := rfl"
+                "theorem boardLanesAreCanonicalIsStable : boardLanesAreCanonical = true := by native_decide"
             ),
             "Lean slice artifacts must prove current board lane inventory is canonical"
         );
         assert!(
-            lean.contains("theorem boardElementsUseCanonicalLanesIsStable : boardElementsUseCanonicalLanes = true := rfl"),
+            lean.contains("theorem boardElementsUseCanonicalLanesIsStable : boardElementsUseCanonicalLanes = true := by native_decide"),
             "Lean slice artifacts must prove current board elements use canonical lanes"
         );
         assert!(
-            lean.contains("theorem boardElementsReferenceDeclarationsIsStable : boardElementsReferenceDeclarations = true := rfl"),
+            lean.contains("theorem boardElementsReferenceDeclarationsIsStable : boardElementsReferenceDeclarations = true := by native_decide"),
             "Lean slice artifacts must prove current board elements reference declarations"
         );
         assert!(
-            lean.contains("theorem automationBoardElementsAreDeclaredAutomationsIsStable : automationBoardElementsAreDeclaredAutomations = true := rfl"),
+            lean.contains("theorem automationBoardElementsAreDeclaredAutomationsIsStable : automationBoardElementsAreDeclaredAutomations = true := by native_decide"),
             "Lean slice artifacts must prove current automation board elements resolve to declared automations"
         );
         assert!(
-            lean.contains("theorem externalBoardElementsAreObservedEventsIsStable : externalBoardElementsAreObservedEvents = true := rfl"),
+            lean.contains("theorem externalBoardElementsAreObservedEventsIsStable : externalBoardElementsAreObservedEvents = true := by native_decide"),
             "Lean slice artifacts must prove current external-event board elements resolve to observed events"
         );
         assert!(
-            lean.contains("theorem commandEventBoardEdgesMatchEmissionsIsStable : commandEventBoardEdgesMatchEmissions = true := rfl"),
+            lean.contains("theorem commandEventBoardEdgesMatchEmissionsIsStable : commandEventBoardEdgesMatchEmissions = true := by native_decide"),
             "Lean slice artifacts must prove current command-to-event board edges match command emissions"
         );
         assert!(
-            lean.contains("theorem eventReadModelBoardEdgesMatchProjectionSourcesIsStable : eventReadModelBoardEdgesMatchProjectionSources = true := rfl"),
+            lean.contains("theorem eventReadModelBoardEdgesMatchProjectionSourcesIsStable : eventReadModelBoardEdgesMatchProjectionSources = true := by native_decide"),
             "Lean slice artifacts must prove current event-to-read-model board edges match projection sources"
         );
         assert!(
-            lean.contains("theorem viewCommandBoardEdgesMatchControlsIsStable : viewCommandBoardEdgesMatchControls = true := rfl"),
+            lean.contains("theorem viewCommandBoardEdgesMatchControlsIsStable : viewCommandBoardEdgesMatchControls = true := by native_decide"),
             "Lean slice artifacts must prove current view-to-command board edges match controls"
         );
         assert!(
-            lean.contains("theorem boardConnectionsHaveCausalSemanticsIsStable : boardConnectionsHaveCausalSemantics = true := rfl"),
+            lean.contains("theorem boardConnectionsHaveCausalSemanticsIsStable : boardConnectionsHaveCausalSemantics = true := by native_decide"),
             "Lean slice artifacts must prove current board connections have causal semantics"
         );
         assert!(
-            lean.contains("theorem externalEventTriggersMatchTranslationsIsStable : externalEventTriggersMatchTranslations = true := rfl"),
+            lean.contains("theorem externalEventTriggersMatchTranslationsIsStable : externalEventTriggersMatchTranslations = true := by native_decide"),
             "Lean slice artifacts must prove current external-event command triggers match translations"
         );
         assert!(
-            lean.contains("theorem externalEventsDoNotUpdateReadModelsIsStable : externalEventsDoNotUpdateReadModels = true := rfl"),
+            lean.contains("theorem externalEventsDoNotUpdateReadModelsIsStable : externalEventsDoNotUpdateReadModels = true := by native_decide"),
             "Lean slice artifacts must prove current external events do not update read models"
         );
         assert!(
-            lean.contains("theorem readModelsFeedingViewsHaveIncomingEventUpdatesIsStable : readModelsFeedingViewsHaveIncomingEventUpdates = true := rfl"),
+            lean.contains("theorem readModelsFeedingViewsHaveIncomingEventUpdatesIsStable : readModelsFeedingViewsHaveIncomingEventUpdates = true := by native_decide"),
             "Lean slice artifacts must prove current read models feeding views have incoming event updates"
         );
         assert!(
-            lean.contains("theorem commandsHaveIncomingTriggersIsStable : commandsHaveIncomingTriggers = true := rfl"),
+            lean.contains("theorem commandsHaveIncomingTriggersIsStable : commandsHaveIncomingTriggers = true := by native_decide"),
             "Lean slice artifacts must prove current commands have incoming triggers"
         );
         assert!(
-            lean.contains("theorem mainPathBoardHasNoDisconnectedIslandsIsStable : mainPathBoardHasNoDisconnectedIslands = true := rfl"),
+            lean.contains("theorem mainPathBoardHasNoDisconnectedIslandsIsStable : mainPathBoardHasNoDisconnectedIslands = true := by native_decide"),
             "Lean slice artifacts must prove current main-path boards have no disconnected islands"
         );
         assert!(
             lean.contains(
-                "theorem outcomeLabelsAreUniqueIsStable : outcomeLabelsAreUnique = true := rfl"
+                "theorem outcomeLabelsAreUniqueIsStable : outcomeLabelsAreUnique = true := by native_decide"
             ),
             "Lean slice artifacts must prove current outcome labels are unique"
         );
         assert!(
             lean.contains(
-                "theorem outcomeEventSetsAreNonEmptyIsStable : outcomeEventSetsAreNonEmpty = true := rfl"
+                "theorem outcomeEventSetsAreNonEmptyIsStable : outcomeEventSetsAreNonEmpty = true := by native_decide"
             ),
             "Lean slice artifacts must prove current outcomes have non-empty event sets"
         );
         assert!(
             lean.contains(
-                "theorem outcomeEventSetsAreDistinctIsStable : outcomeEventSetsAreDistinct = true := rfl"
+                "theorem outcomeEventSetsAreDistinctIsStable : outcomeEventSetsAreDistinct = true := by native_decide"
             ),
             "Lean slice artifacts must prove current outcome event sets are distinct"
         );
         assert!(
             lean.contains(
-                "theorem outcomeEventsAreKnownToSliceIsStable : outcomeEventsAreKnownToSlice = true := rfl"
+                "theorem outcomeEventsAreKnownToSliceIsStable : outcomeEventsAreKnownToSlice = true := by native_decide"
             ),
             "Lean slice artifacts must prove current outcome events resolve to emitted or observed events"
         );
         assert!(
             lean.contains(
-                "theorem eventsReferenceKnownStreamsIsStable : eventsReferenceKnownStreams = true := rfl"
+                "theorem eventsReferenceKnownStreamsIsStable : eventsReferenceKnownStreams = true := by native_decide"
             ),
             "Lean slice artifacts must prove current events reference known streams"
         );
         assert!(
             lean.contains(
-                "theorem commandEmittedEventsAreKnownIsStable : commandEmittedEventsAreKnown = true := rfl"
+                "theorem commandEmittedEventsAreKnownIsStable : commandEmittedEventsAreKnown = true := by native_decide"
             ),
             "Lean slice artifacts must prove current command-emitted events resolve"
         );
         assert!(
             lean.contains(
-                "theorem locallyEmittedEventsAreProducedByCommandsIsStable : locallyEmittedEventsAreProducedByCommands = true := rfl"
+                "theorem locallyEmittedEventsAreProducedByCommandsIsStable : locallyEmittedEventsAreProducedByCommands = true := by native_decide"
             ),
             "Lean slice artifacts must prove current local events are command-produced unless observed or shared"
         );
         assert!(
             lean.contains(
-                "theorem externalPayloadFieldsHaveProvenanceIsStable : externalPayloadFieldsHaveProvenance = true := rfl"
+                "theorem externalPayloadFieldsHaveProvenanceIsStable : externalPayloadFieldsHaveProvenance = true := by native_decide"
             ),
             "Lean slice artifacts must prove current external payload fields carry provenance and bit encoding"
         );
         assert!(
             lean.contains(
-                "theorem eventAttributesHaveAllowedSourcesIsStable : eventAttributesHaveAllowedSources = true := rfl"
+                "theorem eventAttributesHaveAllowedSourcesIsStable : eventAttributesHaveAllowedSources = true := by native_decide"
             ),
             "Lean slice artifacts must prove current event attributes do not source from read models"
         );
         assert!(
             lean.contains(
-                "theorem eventAttributesHaveProvenanceIsStable : eventAttributesHaveProvenance = true := rfl"
+                "theorem eventAttributesHaveProvenanceIsStable : eventAttributesHaveProvenance = true := by native_decide"
             ),
             "Lean slice artifacts must prove current event attributes carry source provenance"
         );
         assert!(
             lean.contains(
-                "theorem eventAttributeSourcesAreCompleteIsStable : eventAttributeSourcesAreComplete = true := rfl"
+                "theorem eventAttributeSourcesAreCompleteIsStable : eventAttributeSourcesAreComplete = true := by native_decide"
             ),
             "Lean slice artifacts must prove current event attribute source details are complete"
         );
         assert!(
             lean.contains(
-                "theorem storedEventFactsTraceToOriginalSourcesIsStable : storedEventFactsTraceToOriginalSources = true := rfl"
+                "theorem storedEventFactsTraceToOriginalSourcesIsStable : storedEventFactsTraceToOriginalSources = true := by native_decide"
             ),
             "Lean slice artifacts must prove current stored event facts trace to original modeled sources"
         );
         assert!(
             lean.contains(
-                "theorem readModelFieldsHaveAllowedSourcesIsStable : readModelFieldsHaveAllowedSources = true := rfl"
+                "theorem readModelFieldsHaveAllowedSourcesIsStable : readModelFieldsHaveAllowedSources = true := by native_decide"
             ),
             "Lean slice artifacts must prove current read model fields do not source from commands"
         );
         assert!(
             lean.contains(
-                "theorem readModelFieldsHaveProvenanceIsStable : readModelFieldsHaveProvenance = true := rfl"
+                "theorem readModelFieldsHaveProvenanceIsStable : readModelFieldsHaveProvenance = true := by native_decide"
             ),
             "Lean slice artifacts must prove current read model fields carry provenance"
         );
         assert!(
             lean.contains(
-                "theorem readModelFieldSourcesAreCompleteIsStable : readModelFieldSourcesAreComplete = true := rfl"
+                "theorem readModelFieldSourcesAreCompleteIsStable : readModelFieldSourcesAreComplete = true := by native_decide"
             ),
             "Lean slice artifacts must prove current read model fields trace to event facts, derivation, or absence"
         );
         assert!(
             lean.contains(
-                "theorem readModelFieldEventAttributeSourcesResolveIsStable : readModelFieldEventAttributeSourcesResolve = true := rfl"
+                "theorem readModelFieldEventAttributeSourcesResolveIsStable : readModelFieldEventAttributeSourcesResolve = true := by native_decide"
             ),
             "Lean slice artifacts must prove current event-sourced read model fields resolve to declared event attributes"
         );
         assert!(
             lean.contains(
-                "theorem derivedReadModelFieldsHaveScenarioCoverageIsStable : derivedReadModelFieldsHaveScenarioCoverage = true := rfl"
+                "theorem derivedReadModelFieldsHaveScenarioCoverageIsStable : derivedReadModelFieldsHaveScenarioCoverage = true := by native_decide"
             ),
             "Lean slice artifacts must prove current derived read model fields have scenario coverage"
         );
         assert!(
             lean.contains(
-                "theorem absenceReadModelFieldsHaveScenarioCoverageIsStable : absenceReadModelFieldsHaveScenarioCoverage = true := rfl"
+                "theorem absenceReadModelFieldsHaveScenarioCoverageIsStable : absenceReadModelFieldsHaveScenarioCoverage = true := by native_decide"
             ),
             "Lean slice artifacts must prove current absence/default read model fields have scenario coverage"
         );
         assert!(
             lean.contains(
-                "theorem transitiveReadModelsHaveSemanticsIsStable : transitiveReadModelsHaveSemantics = true := rfl"
+                "theorem transitiveReadModelsHaveSemanticsIsStable : transitiveReadModelsHaveSemantics = true := by native_decide"
             ),
             "Lean slice artifacts must prove current transitive read models have complete semantics"
         );
         assert!(
             lean.contains(
-                "theorem viewFieldsHaveAllowedSourcesIsStable : viewFieldsHaveAllowedSources = true := rfl"
+                "theorem viewFieldsHaveAllowedSourcesIsStable : viewFieldsHaveAllowedSources = true := by native_decide"
             ),
             "Lean slice artifacts must prove current view fields source from read models"
         );
         assert!(
             lean.contains(
-                "theorem viewFieldsHaveProvenanceIsStable : viewFieldsHaveProvenance = true := rfl"
+                "theorem viewFieldsHaveProvenanceIsStable : viewFieldsHaveProvenance = true := by native_decide"
             ),
             "Lean slice artifacts must prove current view fields carry provenance"
         );
         assert!(
             lean.contains(
-                "theorem viewFieldSourcesAreCompleteIsStable : viewFieldSourcesAreComplete = true := rfl"
+                "theorem viewFieldSourcesAreCompleteIsStable : viewFieldSourcesAreComplete = true := by native_decide"
             ),
             "Lean slice artifacts must prove current view fields have complete source chains"
         );
         assert!(
             lean.contains(
-                "theorem viewFieldReadModelFieldSourcesResolveIsStable : viewFieldReadModelFieldSourcesResolve = true := rfl"
+                "theorem viewFieldReadModelFieldSourcesResolveIsStable : viewFieldReadModelFieldSourcesResolve = true := by native_decide"
             ),
             "Lean slice artifacts must prove current view fields resolve to declared read model fields"
         );
         assert!(
             lean.contains(
-                "theorem displayedDataTraceToOriginalProvenanceIsStable : displayedDataTraceToOriginalProvenance = true := rfl"
+                "theorem displayedDataTraceToOriginalProvenanceIsStable : displayedDataTraceToOriginalProvenance = true := by native_decide"
             ),
             "Lean slice artifacts must prove current displayed data traces transitively to original provenance"
         );
         assert!(
             lean.contains(
-                "theorem viewFieldsSourceFromUsedReadModelsIsStable : viewFieldsSourceFromUsedReadModels = true := rfl"
+                "theorem viewFieldsSourceFromUsedReadModelsIsStable : viewFieldsSourceFromUsedReadModels = true := by native_decide"
             ),
             "Lean slice artifacts must prove current view fields source from read models used by each view"
         );
         assert!(
             lean.contains(
-                "theorem viewsHaveInformationSketchesIsStable : viewsHaveInformationSketches = true := rfl"
+                "theorem viewsHaveInformationSketchesIsStable : viewsHaveInformationSketches = true := by native_decide"
             ),
             "Lean slice artifacts must prove current views have information sketches"
         );
         assert!(
             lean.contains(
-                "theorem viewFieldsAppearInSketchIsStable : viewFieldsAppearInSketch = true := rfl"
+                "theorem viewFieldsAppearInSketchIsStable : viewFieldsAppearInSketch = true := by native_decide"
             ),
             "Lean slice artifacts must prove current displayed fields appear in their view sketches"
         );
         assert!(
             lean.contains(
-                "theorem viewSketchTokensMapToModeledElementsIsStable : viewSketchTokensMapToModeledElements = true := rfl"
+                "theorem viewSketchTokensMapToModeledElementsIsStable : viewSketchTokensMapToModeledElements = true := by native_decide"
             ),
             "Lean slice artifacts must prove current sketch tokens map to modeled elements"
         );
         assert!(
             lean.contains(
-                "theorem viewControlsHaveSketchTokensIsStable : viewControlsHaveSketchTokens = true := rfl"
+                "theorem viewControlsHaveSketchTokensIsStable : viewControlsHaveSketchTokens = true := by native_decide"
             ),
             "Lean slice artifacts must prove current controls appear in sketches"
         );
         assert!(
             lean.contains(
-                "theorem viewControlsAppearInSketchIsStable : viewControlsAppearInSketch = true := rfl"
+                "theorem viewControlsAppearInSketchIsStable : viewControlsAppearInSketch = true := by native_decide"
             ),
             "Lean slice artifacts must prove current controls appear in their view sketches"
         );
         assert!(
             lean.contains(
-                "theorem viewControlsReferenceKnownCommandsIsStable : viewControlsReferenceKnownCommands = true := rfl"
+                "theorem viewControlsReferenceKnownCommandsIsStable : viewControlsReferenceKnownCommands = true := by native_decide"
             ),
             "Lean slice artifacts must prove current controls reference known commands"
         );
         assert!(
             lean.contains(
-                "theorem viewControlsProvideCommandInputsIsStable : viewControlsProvideCommandInputs = true := rfl"
+                "theorem viewControlsProvideCommandInputsIsStable : viewControlsProvideCommandInputs = true := by native_decide"
             ),
             "Lean slice artifacts must prove current controls provide every invoked command input"
         );
         assert!(
             lean.contains(
-                "theorem viewControlInputsHaveAllowedSourcesIsStable : viewControlInputsHaveAllowedSources = true := rfl"
+                "theorem viewControlInputsHaveAllowedSourcesIsStable : viewControlInputsHaveAllowedSources = true := by native_decide"
             ),
             "Lean slice artifacts must prove current control inputs use allowed sources"
         );
         assert!(
             lean.contains(
-                "theorem viewControlInputsHaveProvenanceIsStable : viewControlInputsHaveProvenance = true := rfl"
+                "theorem viewControlInputsHaveProvenanceIsStable : viewControlInputsHaveProvenance = true := by native_decide"
             ),
             "Lean slice artifacts must prove current control inputs carry provenance"
         );
         assert!(
             lean.contains(
-                "theorem viewControlInputsHaveDescriptionsIsStable : viewControlInputsHaveDescriptions = true := rfl"
+                "theorem viewControlInputsHaveDescriptionsIsStable : viewControlInputsHaveDescriptions = true := by native_decide"
             ),
             "Lean slice artifacts must prove current control inputs have descriptions"
         );
         assert!(
             lean.contains(
-                "theorem viewControlSessionInputsHaveDescriptionsIsStable : viewControlSessionInputsHaveDescriptions = true := rfl"
+                "theorem viewControlSessionInputsHaveDescriptionsIsStable : viewControlSessionInputsHaveDescriptions = true := by native_decide"
             ),
             "Lean slice artifacts must prove current hidden session control inputs have descriptions"
         );
         assert!(
             lean.contains(
-                "theorem viewControlInputVisibilityIsModeledIsStable : viewControlInputVisibilityIsModeled = true := rfl"
+                "theorem viewControlInputVisibilityIsModeledIsStable : viewControlInputVisibilityIsModeled = true := by native_decide"
             ),
             "Lean slice artifacts must prove current actor and decision inputs are visible"
         );
         assert!(
             lean.contains(
-                "theorem viewControlDecisionFieldsAreVisibleIsStable : viewControlDecisionFieldsAreVisible = true := rfl"
+                "theorem viewControlDecisionFieldsAreVisibleIsStable : viewControlDecisionFieldsAreVisible = true := by native_decide"
             ),
             "Lean slice artifacts must prove current decision fields are visible"
         );
         assert!(
             lean.contains(
-                "theorem viewControlActorInputsAreVisibleIsStable : viewControlActorInputsAreVisible = true := rfl"
+                "theorem viewControlActorInputsAreVisibleIsStable : viewControlActorInputsAreVisible = true := by native_decide"
             ),
             "Lean slice artifacts must prove current actor-provided inputs are visible"
         );
         assert!(
             lean.contains(
-                "theorem viewControlsHandleCommandErrorsIsStable : viewControlsHandleCommandErrors = true := rfl"
+                "theorem viewControlsHandleCommandErrorsIsStable : viewControlsHandleCommandErrors = true := by native_decide"
             ),
             "Lean slice artifacts must prove current controls handle returned command errors"
         );
         assert!(
             lean.contains(
-                "theorem viewControlRecoveryBehaviorIsModeledIsStable : viewControlRecoveryBehaviorIsModeled = true := rfl"
+                "theorem viewControlRecoveryBehaviorIsModeledIsStable : viewControlRecoveryBehaviorIsModeled = true := by native_decide"
             ),
             "Lean slice artifacts must prove current control recovery behavior is modeled"
         );
         assert!(
             lean.contains(
-                "theorem stateViewSlicesDoNotOwnCommandsIsStable : stateViewSlicesDoNotOwnCommands = true := rfl"
+                "theorem stateViewSlicesDoNotOwnCommandsIsStable : stateViewSlicesDoNotOwnCommands = true := by native_decide"
             ),
             "Lean slice artifacts must prove current state-view slices do not own commands"
         );
         assert!(
             lean.contains(
-                "theorem stateViewSlicesOwnViewsIsStable : stateViewSlicesOwnViews = true := rfl"
+                "theorem stateViewSlicesOwnViewsIsStable : stateViewSlicesOwnViews = true := by native_decide"
             ),
             "Lean slice artifacts must prove current state-view slices own at least one view"
         );
         assert!(
             lean.contains(
-                "theorem stateViewSlicesOwnReadModelsIsStable : stateViewSlicesOwnReadModels = true := rfl"
+                "theorem stateViewSlicesOwnReadModelsIsStable : stateViewSlicesOwnReadModels = true := by native_decide"
             ),
             "Lean slice artifacts must prove current state-view slices own read models"
         );
         assert!(
             lean.contains(
-                "theorem stateViewSlicesOwnProjectionPathsIsStable : stateViewSlicesOwnProjectionPaths = true := rfl"
+                "theorem stateViewSlicesOwnProjectionPathsIsStable : stateViewSlicesOwnProjectionPaths = true := by native_decide"
             ),
             "Lean slice artifacts must prove current state-view slices own projection paths"
         );
@@ -3091,7 +3091,7 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem stateChangeSlicesOwnCommandsIsStable : stateChangeSlicesOwnCommands = true := rfl"
+                "theorem stateChangeSlicesOwnCommandsIsStable : stateChangeSlicesOwnCommands = true := by native_decide"
             ),
             "Lean slice artifacts must prove current state-change slices own commands"
         );
@@ -3115,25 +3115,25 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem stateChangeSlicesDoNotOwnReadModelsOrViewsIsStable : stateChangeSlicesDoNotOwnReadModelsOrViews = true := rfl"
+                "theorem stateChangeSlicesDoNotOwnReadModelsOrViewsIsStable : stateChangeSlicesDoNotOwnReadModelsOrViews = true := by native_decide"
             ),
             "Lean slice artifacts must prove current state-change slices do not own read models or views"
         );
         assert!(
             lean.contains(
-                "theorem stateChangeSlicesDoNotOwnAutomationsOrTranslationsIsStable : stateChangeSlicesDoNotOwnAutomationsOrTranslations = true := rfl"
+                "theorem stateChangeSlicesDoNotOwnAutomationsOrTranslationsIsStable : stateChangeSlicesDoNotOwnAutomationsOrTranslations = true := by native_decide"
             ),
             "Lean slice artifacts must prove current state-change slices do not own automations or translations"
         );
         assert!(
             lean.contains(
-                "theorem stateChangeSlicesDoNotOwnControlsOrSketchesIsStable : stateChangeSlicesDoNotOwnControlsOrSketches = true := rfl"
+                "theorem stateChangeSlicesDoNotOwnControlsOrSketchesIsStable : stateChangeSlicesDoNotOwnControlsOrSketches = true := by native_decide"
             ),
             "Lean slice artifacts must prove current state-change slices do not own controls or wireframe/sketch tokens"
         );
         assert!(
             lean.contains(
-                "theorem translationSlicesDoNotOwnViewsIsStable : translationSlicesDoNotOwnViews = true := rfl"
+                "theorem translationSlicesDoNotOwnViewsIsStable : translationSlicesDoNotOwnViews = true := by native_decide"
             ),
             "Lean slice artifacts must prove current translation slices do not own views"
         );
@@ -3157,37 +3157,37 @@ mod tests {
         );
         assert!(
             lean.contains(
-                "theorem viewControlNavigationTypesAreModeledIsStable : viewControlNavigationTypesAreModeled = true := rfl"
+                "theorem viewControlNavigationTypesAreModeledIsStable : viewControlNavigationTypesAreModeled = true := by native_decide"
             ),
             "Lean slice artifacts must prove current navigation target types are modeled"
         );
         assert!(
             lean.contains(
-                "theorem viewControlNavigationTypesAreDeclaredIsStable : viewControlNavigationTypesAreDeclared = true := rfl"
+                "theorem viewControlNavigationTypesAreDeclaredIsStable : viewControlNavigationTypesAreDeclared = true := by native_decide"
             ),
             "Lean slice artifacts must prove current navigation controls declare navigation types"
         );
         assert!(
             lean.contains(
-                "theorem viewControlModeledViewNavigationTargetsResolveIsStable : viewControlModeledViewNavigationTargetsResolve = true := rfl"
+                "theorem viewControlModeledViewNavigationTargetsResolveIsStable : viewControlModeledViewNavigationTargetsResolve = true := by native_decide"
             ),
             "Lean slice artifacts must prove current modeled-view navigation targets resolve"
         );
         assert!(
             lean.contains(
-                "theorem viewControlExternalWorkflowNavigationTargetsNamedIsStable : viewControlExternalWorkflowNavigationTargetsNamed = true := rfl"
+                "theorem viewControlExternalWorkflowNavigationTargetsNamedIsStable : viewControlExternalWorkflowNavigationTargetsNamed = true := by native_decide"
             ),
             "Lean slice artifacts must prove current external-workflow navigation targets name the workflow"
         );
         assert!(
             lean.contains(
-                "theorem viewControlExternalSystemNavigationTargetsHaveContractsIsStable : viewControlExternalSystemNavigationTargetsHaveContracts = true := rfl"
+                "theorem viewControlExternalSystemNavigationTargetsHaveContractsIsStable : viewControlExternalSystemNavigationTargetsHaveContracts = true := by native_decide"
             ),
             "Lean slice artifacts must prove current external-system navigation targets name the external system and contract"
         );
         assert!(
             lean.contains(
-                "theorem viewControlNavigationTargetsAreCompleteIsStable : viewControlNavigationTargetsAreComplete = true := rfl"
+                "theorem viewControlNavigationTargetsAreCompleteIsStable : viewControlNavigationTargetsAreComplete = true := by native_decide"
             ),
             "Lean slice artifacts must prove current navigation targets are complete"
         );
