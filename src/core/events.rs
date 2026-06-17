@@ -3249,14 +3249,15 @@ impl ProjectedModel {
             }
             EmcEvent::WorkflowRemoved { slug, .. } => {
                 let mut model = Self::require(model, "WorkflowRemoved")?;
-                let before = model.workflows.len();
+                // Removal is idempotent. A `WorkflowRemoved` whose workflow is
+                // already absent — e.g. introduced into the log by a git-merge
+                // of two replicas, or following another removal — must replay as
+                // a no-op, not abort the projection. The command layer validates
+                // existence before emitting a removal; the projection itself must
+                // stay total over any event history it is handed, so that a
+                // single divergent event can never permanently wedge every
+                // subsequent command that reads the log.
                 model.workflows.retain(|workflow| workflow.slug != slug);
-                if model.workflows.len() == before {
-                    return Err(format!(
-                        "WorkflowRemoved references unknown workflow {}",
-                        slug.as_ref()
-                    ));
-                }
                 Ok(Some(model))
             }
             EmcEvent::SliceAdded {
@@ -3311,24 +3312,21 @@ impl ProjectedModel {
             }
             EmcEvent::SliceRemoved { slug, .. } => {
                 let mut model = Self::require(model, "SliceRemoved")?;
-                let removed_count = model
-                    .workflows
-                    .iter_mut()
-                    .map(|workflow| {
-                        let before = workflow.slices.len();
-                        workflow.slices.retain(|slice| slice.slug != slug);
-                        workflow.transitions.retain(|transition| {
-                            transition.source().as_ref() != slug.as_ref()
-                                && transition.target().as_ref() != slug.as_ref()
-                        });
-                        before - workflow.slices.len()
-                    })
-                    .sum::<usize>();
-                if removed_count == 0 {
-                    return Err(format!(
-                        "SliceRemoved references unknown slice {}",
-                        slug.as_ref()
-                    ));
+                // Removal is idempotent. A `SliceRemoved` whose slice is already
+                // absent — e.g. introduced by a git-merge of two replicas, or
+                // following the removal of its owning workflow — must replay as a
+                // no-op, not abort the projection and wedge every subsequent
+                // command that reads the log. The command layer validates
+                // existence before emitting a removal; the projection itself must
+                // stay total over any event history it is handed. Dangling
+                // transitions that referenced the slug are still pruned whether
+                // or not the slice was present.
+                for workflow in &mut model.workflows {
+                    workflow.slices.retain(|slice| slice.slug != slug);
+                    workflow.transitions.retain(|transition| {
+                        transition.source().as_ref() != slug.as_ref()
+                            && transition.target().as_ref() != slug.as_ref()
+                    });
                 }
                 Ok(Some(model))
             }
@@ -4450,6 +4448,71 @@ fn report_line(value: impl Into<String>) -> Result<ReportLine, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn projection_stays_total_over_idempotent_and_dangling_removals() -> Result<(), String> {
+        use crate::core::event_commands::{project_stream_id, slice_stream_id, workflow_stream_id};
+
+        // A single-writer command flow never emits these events, but a
+        // git-merge of two replicas (or any divergent log) can: removals of a
+        // slice and a workflow that are already absent, and a removal of a slice
+        // that never existed. Replay must stay total — never erroring — so a
+        // single such event can never permanently wedge every subsequent command
+        // that reads the log.
+        let events = vec![
+            EmcEvent::ProjectInitialized {
+                stream_id: project_stream_id()?,
+                name: project_name("Repair Desk")?,
+            },
+            EmcEvent::WorkflowAdded {
+                stream_id: workflow_stream_id("open-ticket")?,
+                slug: workflow_slug("open-ticket")?,
+                name: model_name("Open ticket")?,
+                description: model_description("Actor opens a repair ticket.")?,
+            },
+            EmcEvent::SliceAdded {
+                stream_id: slice_stream_id("capture-ticket")?,
+                workflow: workflow_slug("open-ticket")?,
+                slug: slice_slug("capture-ticket")?,
+                name: model_name("Capture ticket")?,
+                kind: slice_kind_name("state_change")?,
+                description: model_description("Actor captures repair ticket details.")?,
+            },
+            EmcEvent::SliceRemoved {
+                stream_id: slice_stream_id("capture-ticket")?,
+                slug: slice_slug("capture-ticket")?,
+            },
+            // Already-absent slice: must replay as a no-op, not wedge.
+            EmcEvent::SliceRemoved {
+                stream_id: slice_stream_id("capture-ticket")?,
+                slug: slice_slug("capture-ticket")?,
+            },
+            // Slice that never existed: must replay as a no-op, not wedge.
+            EmcEvent::SliceRemoved {
+                stream_id: slice_stream_id("ghost")?,
+                slug: slice_slug("ghost")?,
+            },
+            EmcEvent::WorkflowRemoved {
+                stream_id: workflow_stream_id("open-ticket")?,
+                slug: workflow_slug("open-ticket")?,
+            },
+            // Already-absent workflow: must replay as a no-op, not wedge.
+            EmcEvent::WorkflowRemoved {
+                stream_id: workflow_stream_id("open-ticket")?,
+                slug: workflow_slug("open-ticket")?,
+            },
+        ];
+
+        let model = ProjectedModel::from_events(events).map_err(|error| {
+            format!("projection must stay total over any history, got: {error}")
+        })?;
+        assert!(
+            model.workflows.is_empty(),
+            "every workflow was removed, so the projected model carries none",
+        );
+
+        Ok(())
+    }
 
     #[test]
     fn workflow_event_payload_round_trips_between_semantic_workflow_and_json_boundary()
