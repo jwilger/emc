@@ -1864,7 +1864,7 @@ pub(crate) fn add_event_definition(
     let quint_stream_record = quint_stream_record(event.stream.as_ref());
     let lean_event_record = lean_event_definition_record(&event);
     let quint_event_record = quint_event_definition_record(&event);
-    let lean = append_record(
+    let lean = append_record_if_missing(
         lean_contents.as_ref(),
         "def sliceEvents : List SliceEventReference := ",
         &lean_event_reference,
@@ -1877,13 +1877,19 @@ pub(crate) fn add_event_definition(
         )
     })
     .and_then(|contents| {
-        append_record(
+        merge_or_append_named_record(
             &contents,
             "def sliceEventDefinitions : List EventDefinition := ",
             &lean_event_record,
+            RecordFlavor::Lean,
+            &["stream", "observed", "shared"],
+            &[ChildListField {
+                key: "attributes",
+                mode: ChildMergeMode::Append,
+            }],
         )
     })?;
-    let quint = append_record(
+    let quint = append_record_if_missing(
         quint_contents.as_ref(),
         "val sliceEvents: List[SliceEventReference] = ",
         &quint_event_reference,
@@ -1896,10 +1902,16 @@ pub(crate) fn add_event_definition(
         )
     })
     .and_then(|contents| {
-        append_record(
+        merge_or_append_named_record(
             &contents,
             "val sliceEventDefinitions: List[EventDefinition] = ",
             &quint_event_record,
+            RecordFlavor::Quint,
+            &["stream", "observed", "shared"],
+            &[ChildListField {
+                key: "attributes",
+                mode: ChildMergeMode::Append,
+            }],
         )
     })?;
 
@@ -1954,15 +1966,27 @@ pub(crate) fn add_external_payload_definition(
 ) -> Result<EffectPlan, FormalSliceFactError> {
     let lean_record = lean_external_payload_definition_record(&external_payload);
     let quint_record = quint_external_payload_definition_record(&external_payload);
-    let lean = append_record(
+    let lean = merge_or_append_named_record(
         lean_contents.as_ref(),
         "def sliceExternalPayloads : List ExternalPayloadDefinition := ",
         &lean_record,
+        RecordFlavor::Lean,
+        &[],
+        &[ChildListField {
+            key: "fields",
+            mode: ChildMergeMode::Append,
+        }],
     )?;
-    let quint = append_record(
+    let quint = merge_or_append_named_record(
         quint_contents.as_ref(),
         "val sliceExternalPayloads: List[ExternalPayloadDefinition] = ",
         &quint_record,
+        RecordFlavor::Quint,
+        &[],
+        &[ChildListField {
+            key: "fields",
+            mode: ChildMergeMode::Append,
+        }],
     )?;
 
     Ok(EffectPlan::new(vec![
@@ -2134,28 +2158,34 @@ pub(crate) fn add_command_definition(
 ) -> Result<EffectPlan, FormalSliceFactError> {
     let lean_command_reference = lean_command_reference_record(command.name.as_ref());
     let quint_command_reference = quint_command_reference_record(command.name.as_ref());
-    let lean = append_record(
+    let lean = append_record_if_missing(
         lean_contents.as_ref(),
         "def sliceCommands : List SliceCommandReference := ",
         &lean_command_reference,
     )
     .and_then(|contents| {
-        append_record(
+        merge_or_append_named_record(
             &contents,
             "def sliceCommandDefinitions : List CommandDefinition := ",
             &lean_command_definition_record(&command),
+            RecordFlavor::Lean,
+            &["singleton", "repeatBehavior"],
+            &COMMAND_CHILD_LIST_FIELDS,
         )
     })?;
-    let quint = append_record(
+    let quint = append_record_if_missing(
         quint_contents.as_ref(),
         "val sliceCommands: List[SliceCommandReference] = ",
         &quint_command_reference,
     )
     .and_then(|contents| {
-        append_record(
+        merge_or_append_named_record(
             &contents,
             "val sliceCommandDefinitions: List[CommandDefinition] = ",
             &quint_command_definition_record(&command),
+            RecordFlavor::Quint,
+            &["singleton", "repeatBehavior"],
+            &COMMAND_CHILD_LIST_FIELDS,
         )
     })?;
 
@@ -2179,28 +2209,40 @@ pub(crate) fn add_read_model_definition(
 ) -> Result<EffectPlan, FormalSliceFactError> {
     let lean_read_model_reference = lean_read_model_reference_record(read_model.name.as_ref());
     let quint_read_model_reference = quint_read_model_reference_record(read_model.name.as_ref());
-    let lean = append_record(
+    let lean = append_record_if_missing(
         lean_contents.as_ref(),
         "def sliceReadModels : List SliceReadModelReference := ",
         &lean_read_model_reference,
     )
     .and_then(|contents| {
-        append_record(
+        merge_or_append_named_record(
             &contents,
             "def sliceReadModelDefinitions : List ReadModelDefinition := ",
             &lean_read_model_definition_record(&read_model),
+            RecordFlavor::Lean,
+            &[],
+            &[ChildListField {
+                key: "fields",
+                mode: ChildMergeMode::Append,
+            }],
         )
     })?;
-    let quint = append_record(
+    let quint = append_record_if_missing(
         quint_contents.as_ref(),
         "val sliceReadModels: List[SliceReadModelReference] = ",
         &quint_read_model_reference,
     )
     .and_then(|contents| {
-        append_record(
+        merge_or_append_named_record(
             &contents,
             "val sliceReadModelDefinitions: List[ReadModelDefinition] = ",
             &quint_read_model_definition_record(&read_model),
+            RecordFlavor::Quint,
+            &[],
+            &[ChildListField {
+                key: "fields",
+                mode: ChildMergeMode::Append,
+            }],
         )
     })?;
 
@@ -2224,7 +2266,7 @@ pub(crate) fn add_view_definition(
 ) -> Result<EffectPlan, FormalSliceFactError> {
     let lean_view_reference = lean_view_reference_record(view.name.as_ref());
     let quint_view_reference = quint_view_reference_record(view.name.as_ref());
-    let lean = append_record(
+    let lean = append_record_if_missing(
         lean_contents.as_ref(),
         "def sliceViews : List SliceViewReference := ",
         &lean_view_reference,
@@ -2237,13 +2279,16 @@ pub(crate) fn add_view_definition(
         )
     })
     .and_then(|contents| {
-        append_record(
+        merge_or_append_named_record(
             &contents,
             "def sliceViewDefinitions : List ViewDefinition := ",
             &lean_view_definition_record(&view),
+            RecordFlavor::Lean,
+            &[],
+            &VIEW_CHILD_LIST_FIELDS,
         )
     })?;
-    let quint = append_record(
+    let quint = append_record_if_missing(
         quint_contents.as_ref(),
         "val sliceViews: List[SliceViewReference] = ",
         &quint_view_reference,
@@ -2256,10 +2301,13 @@ pub(crate) fn add_view_definition(
         )
     })
     .and_then(|contents| {
-        append_record(
+        merge_or_append_named_record(
             &contents,
             "val sliceViewDefinitions: List[ViewDefinition] = ",
             &quint_view_definition_record(&view),
+            RecordFlavor::Quint,
+            &[],
+            &VIEW_CHILD_LIST_FIELDS,
         )
     })?;
 
@@ -2442,6 +2490,397 @@ fn append_list_record_if_missing(
     } else {
         Ok(format!("[{existing},{record}]"))
     }
+}
+
+/// Whether the artifact uses Lean (`field := value`) or Quint (`field: value`)
+/// record syntax. The two differ only in the separator between a field key and
+/// its value, so a single merge implementation can serve both by carrying the
+/// flavor along.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum RecordFlavor {
+    Lean,
+    Quint,
+}
+
+impl RecordFlavor {
+    /// The exact byte sequence that separates a field key from its value,
+    /// including the surrounding spaces emitted by the record builders.
+    fn separator(self) -> &'static str {
+        match self {
+            Self::Lean => " := ",
+            Self::Quint => ": ",
+        }
+    }
+}
+
+/// How a single child collection inside a named definition record should be
+/// reconciled when a later same-name `add` call arrives.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum ChildMergeMode {
+    /// Splice the incoming record's items in unconditionally (allows duplicate
+    /// child rows, e.g. command inputs or event attributes which are
+    /// intentionally additive per call).
+    Append,
+    /// Splice the incoming record's items in only when an identical item is not
+    /// already present (e.g. a command's emitted events or observed streams,
+    /// which a repeated call may legitimately re-state).
+    AppendIfMissing,
+}
+
+/// A child list field within a named definition record that participates in the
+/// merge (its items accumulate across same-name `add` calls).
+#[derive(Debug, Clone, Copy)]
+struct ChildListField {
+    key: &'static str,
+    mode: ChildMergeMode,
+}
+
+/// Child collections accumulated when a view is authored across several
+/// `add view` calls. Each call carries one field (and optionally one control);
+/// the read model references, sketch tokens, local states, and filters are
+/// re-stated each call, so they are deduplicated while fields and controls
+/// accumulate.
+const VIEW_CHILD_LIST_FIELDS: [ChildListField; 6] = [
+    ChildListField {
+        key: "readModels",
+        mode: ChildMergeMode::AppendIfMissing,
+    },
+    ChildListField {
+        key: "fields",
+        mode: ChildMergeMode::Append,
+    },
+    ChildListField {
+        key: "controls",
+        mode: ChildMergeMode::Append,
+    },
+    ChildListField {
+        key: "sketchTokens",
+        mode: ChildMergeMode::AppendIfMissing,
+    },
+    ChildListField {
+        key: "localStates",
+        mode: ChildMergeMode::AppendIfMissing,
+    },
+    ChildListField {
+        key: "filters",
+        mode: ChildMergeMode::AppendIfMissing,
+    },
+];
+
+/// Child collections accumulated when a `state_change` slice's single command is
+/// authored across several `add command` calls: each call carries one input plus
+/// optionally repeated emitted events, observed streams, and errors.
+const COMMAND_CHILD_LIST_FIELDS: [ChildListField; 4] = [
+    ChildListField {
+        key: "inputs",
+        mode: ChildMergeMode::Append,
+    },
+    ChildListField {
+        key: "emittedEvents",
+        mode: ChildMergeMode::AppendIfMissing,
+    },
+    ChildListField {
+        key: "observedStreams",
+        mode: ChildMergeMode::AppendIfMissing,
+    },
+    ChildListField {
+        key: "errors",
+        mode: ChildMergeMode::AppendIfMissing,
+    },
+];
+
+/// Merge `new_record` into the list declared by `marker`, accumulating child
+/// rows onto the existing same-`name` record rather than appending a duplicate
+/// definition.
+///
+/// `scalar_consistency_keys` names the fields whose values must agree between an
+/// existing record and a later same-name call (e.g. an event's `stream`); a
+/// disagreement is an authoring error and surfaces as a `FormalSliceFactError`.
+/// `child_list_fields` names the collections whose items accumulate.
+///
+/// When no record with a matching `name` exists yet, the new record is appended
+/// verbatim, preserving the original create-new-definition behavior.
+fn merge_or_append_named_record(
+    contents: &str,
+    marker: &str,
+    new_record: &str,
+    flavor: RecordFlavor,
+    scalar_consistency_keys: &[&str],
+    child_list_fields: &[ChildListField],
+) -> Result<String, FormalSliceFactError> {
+    let mut replaced = false;
+    let lines = contents
+        .lines()
+        .map(|line| {
+            let indentation_length = line.len() - line.trim_start().len();
+            let (indentation, declaration) = line.split_at(indentation_length);
+            if let Some(current_list) = declaration.strip_prefix(marker) {
+                replaced = true;
+                Ok(format!(
+                    "{indentation}{marker}{}",
+                    merge_list_record(
+                        current_list,
+                        new_record,
+                        flavor,
+                        scalar_consistency_keys,
+                        child_list_fields,
+                    )?
+                ))
+            } else {
+                Ok(line.to_owned())
+            }
+        })
+        .collect::<Result<Vec<_>, FormalSliceFactError>>()?;
+
+    if replaced {
+        let mut updated = lines.join("\n");
+        if contents.ends_with('\n') {
+            updated.push('\n');
+        }
+        Ok(updated)
+    } else {
+        Err(FormalSliceFactError::new(format!(
+            "formal slice artifact is missing declaration {marker}"
+        )))
+    }
+}
+
+fn merge_list_record(
+    current_list: &str,
+    new_record: &str,
+    flavor: RecordFlavor,
+    scalar_consistency_keys: &[&str],
+    child_list_fields: &[ChildListField],
+) -> Result<String, FormalSliceFactError> {
+    let trimmed = current_list.trim();
+    if trimmed == "[]" {
+        return Ok(format!("[{new_record}]"));
+    }
+    let inner = trimmed
+        .strip_prefix('[')
+        .and_then(|without_open| without_open.strip_suffix(']'))
+        .ok_or_else(|| FormalSliceFactError::new("formal slice list declaration is malformed"))?;
+
+    let mut records = split_top_level_records(inner)?;
+    let new_name = record_field_value(new_record, "name", flavor)
+        .ok_or_else(|| FormalSliceFactError::new("formal slice record is missing a name field"))?;
+
+    for existing in &mut records {
+        let existing_name = record_field_value(existing, "name", flavor).ok_or_else(|| {
+            FormalSliceFactError::new("formal slice record is missing a name field")
+        })?;
+        if existing_name == new_name {
+            *existing = merge_named_records(
+                existing,
+                new_record,
+                flavor,
+                scalar_consistency_keys,
+                child_list_fields,
+            )?;
+            return Ok(format!("[{}]", records.join(",")));
+        }
+    }
+
+    Ok(format!("[{inner},{new_record}]"))
+}
+
+/// Splice the child collections of `new_record` onto `existing`, after checking
+/// that the scalar consistency fields agree.
+fn merge_named_records(
+    existing: &str,
+    new_record: &str,
+    flavor: RecordFlavor,
+    scalar_consistency_keys: &[&str],
+    child_list_fields: &[ChildListField],
+) -> Result<String, FormalSliceFactError> {
+    for key in scalar_consistency_keys {
+        let existing_value = record_field_value(existing, key, flavor);
+        let new_value = record_field_value(new_record, key, flavor);
+        if existing_value != new_value {
+            return Err(FormalSliceFactError::new(format!(
+                "formal slice definition '{}' was added again with a conflicting {key} value",
+                record_field_value(existing, "name", flavor).unwrap_or_default(),
+            )));
+        }
+    }
+
+    let mut merged = existing.to_owned();
+    for field in child_list_fields {
+        let new_items = record_list_field_items(new_record, field.key, flavor)?;
+        if new_items.is_empty() {
+            continue;
+        }
+        merged = splice_child_list(&merged, field.key, &new_items, field.mode, flavor)?;
+    }
+    Ok(merged)
+}
+
+/// Return the items currently spliced into the `key` child list of `record`.
+fn record_list_field_items(
+    record: &str,
+    key: &str,
+    flavor: RecordFlavor,
+) -> Result<Vec<String>, FormalSliceFactError> {
+    let value = record_field_value(record, key, flavor).ok_or_else(|| {
+        FormalSliceFactError::new(format!("formal slice record is missing field {key}"))
+    })?;
+    let trimmed = value.trim();
+    if trimmed == "[]" {
+        return Ok(Vec::new());
+    }
+    let inner = trimmed
+        .strip_prefix('[')
+        .and_then(|without_open| without_open.strip_suffix(']'))
+        .ok_or_else(|| {
+            FormalSliceFactError::new(format!("formal slice record field {key} is not a list"))
+        })?;
+    split_top_level_records(inner)
+}
+
+/// Append `new_items` into the `key` child list of `record`, honoring `mode`.
+fn splice_child_list(
+    record: &str,
+    key: &str,
+    new_items: &[String],
+    mode: ChildMergeMode,
+    flavor: RecordFlavor,
+) -> Result<String, FormalSliceFactError> {
+    let existing_items = record_list_field_items(record, key, flavor)?;
+    let mut combined = existing_items.clone();
+    for item in new_items {
+        if mode == ChildMergeMode::AppendIfMissing
+            && combined.iter().any(|existing| existing == item)
+        {
+            continue;
+        }
+        combined.push(item.clone());
+    }
+    let rebuilt = format!("[{}]", combined.join(","));
+    replace_record_field_value(record, key, &rebuilt, flavor)
+}
+
+/// Extract the value substring of field `key` from a brace-balanced record body
+/// such as `{ name := "X", attributes := [..] }`. Returns the raw value text
+/// (trimmed of surrounding whitespace) or `None` when the field is absent.
+fn record_field_value(record: &str, key: &str, flavor: RecordFlavor) -> Option<String> {
+    let (start, end) = record_field_value_span(record, key, flavor)?;
+    Some(record[start..end].trim().to_owned())
+}
+
+/// Replace the value of field `key` in `record` with `value`, preserving the
+/// rest of the record verbatim.
+fn replace_record_field_value(
+    record: &str,
+    key: &str,
+    value: &str,
+    flavor: RecordFlavor,
+) -> Result<String, FormalSliceFactError> {
+    let (start, end) = record_field_value_span(record, key, flavor).ok_or_else(|| {
+        FormalSliceFactError::new(format!("formal slice record is missing field {key}"))
+    })?;
+    let mut rebuilt = String::with_capacity(record.len());
+    rebuilt.push_str(&record[..start]);
+    rebuilt.push_str(value);
+    rebuilt.push_str(&record[end..]);
+    Ok(rebuilt)
+}
+
+/// Locate the byte span of field `key`'s value within `record`. The start is the
+/// first byte after the `key<separator>` token; the end is the byte just before
+/// the top-level `,` or closing ` }` that terminates the value. Nested braces
+/// and brackets are tracked so values that are themselves records or lists are
+/// captured whole.
+fn record_field_value_span(
+    record: &str,
+    key: &str,
+    flavor: RecordFlavor,
+) -> Option<(usize, usize)> {
+    let needle = format!("{key}{}", flavor.separator());
+    let mut search_from = 0;
+    while let Some(relative) = record[search_from..].find(&needle) {
+        let key_start = search_from + relative;
+        // Require the match to start at a field boundary ('{' or ',' just
+        // before the key, ignoring surrounding spaces) so that a key which is a
+        // suffix of a longer key cannot be matched by accident.
+        let preceding = record[..key_start].trim_end();
+        let at_boundary = preceding.ends_with('{') || preceding.ends_with(',');
+        if !at_boundary {
+            search_from = key_start + needle.len();
+            continue;
+        }
+        let value_start = key_start + needle.len();
+        let mut depth: i32 = 0;
+        for (offset, character) in record[value_start..].char_indices() {
+            match character {
+                '{' | '[' => depth += 1,
+                '}' | ']' => {
+                    if depth == 0 {
+                        // Closing brace of the enclosing record terminates the
+                        // final field's value.
+                        return Some((value_start, value_start + offset));
+                    }
+                    depth -= 1;
+                }
+                ',' if depth == 0 => return Some((value_start, value_start + offset)),
+                _ => {}
+            }
+        }
+        return Some((value_start, record.len()));
+    }
+    None
+}
+
+/// Split a comma-separated sequence of brace-balanced records (the inner text of
+/// a `[..]` list, with the surrounding brackets already removed) into individual
+/// record strings. Commas nested inside `{}` or `[]` are not split points.
+fn split_top_level_records(inner: &str) -> Result<Vec<String>, FormalSliceFactError> {
+    let mut records = Vec::new();
+    let mut depth: i32 = 0;
+    let mut current = String::new();
+    let mut in_string = false;
+    let mut escaped = false;
+    for character in inner.chars() {
+        if in_string {
+            current.push(character);
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match character {
+            '"' => {
+                in_string = true;
+                current.push(character);
+            }
+            '{' | '[' => {
+                depth += 1;
+                current.push(character);
+            }
+            '}' | ']' => {
+                depth -= 1;
+                current.push(character);
+            }
+            ',' if depth == 0 => {
+                records.push(current.trim().to_owned());
+                current.clear();
+            }
+            _ => current.push(character),
+        }
+    }
+    if depth != 0 || in_string {
+        return Err(FormalSliceFactError::new(
+            "formal slice list declaration is malformed",
+        ));
+    }
+    let trailing = current.trim();
+    if !trailing.is_empty() {
+        records.push(trailing.to_owned());
+    }
+    Ok(records)
 }
 
 fn lean_scenario_record(scenario: &NewSliceScenario) -> String {
