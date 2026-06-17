@@ -2,8 +2,11 @@
 
 #[cfg(test)]
 mod tests {
+    use std::env::{split_paths, var_os};
     use std::error::Error;
     use std::fs::read_to_string;
+    use std::path::PathBuf;
+    use std::process::Command as ProcessCommand;
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -3371,6 +3374,419 @@ mod tests {
     }
 
     #[test]
+    fn repeated_add_event_merges_attributes_into_one_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = initialized_project_with_slice()?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "slice",
+                "--slug",
+                "capture-ticket",
+                "--type",
+                "state_change",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        // Give the command the inputs each merged attribute will trace to, so
+        // the event attribute completeness invariants are satisfied. (The
+        // command-input merge itself is exercised by the sibling test.)
+        for (input, description, provenance) in [
+            (
+                "ticket_title",
+                "title field on the intake form",
+                "actor keystrokes -> form field",
+            ),
+            (
+                "ticket_priority",
+                "priority selector on the intake form",
+                "actor selection -> form field",
+            ),
+            (
+                "ticket_category",
+                "category selector on the intake form",
+                "actor selection -> form field",
+            ),
+        ] {
+            Command::cargo_bin("emc")?
+                .args([
+                    "add",
+                    "command",
+                    "--slice",
+                    "capture-ticket",
+                    "--name",
+                    "CaptureTicket",
+                    "--input",
+                    input,
+                    "--input-source",
+                    "actor",
+                    "--input-description",
+                    description,
+                    "--input-provenance",
+                    provenance,
+                    "--emits",
+                    "TicketCaptured",
+                ])
+                .current_dir(temp_dir.path())
+                .assert()
+                .success();
+        }
+
+        // Author the same event three times, each call carrying one attribute.
+        for (attribute, source_field, provenance) in [
+            ("ticket_title", "value", "CaptureTicket.ticket_title"),
+            ("ticket_priority", "value", "CaptureTicket.ticket_priority"),
+            ("ticket_category", "value", "CaptureTicket.ticket_category"),
+        ] {
+            Command::cargo_bin("emc")?
+                .args([
+                    "add",
+                    "event",
+                    "--slice",
+                    "capture-ticket",
+                    "--name",
+                    "TicketCaptured",
+                    "--stream",
+                    "tickets",
+                    "--attribute",
+                    attribute,
+                    "--attribute-source",
+                    "command_input",
+                    "--attribute-source-name",
+                    attribute,
+                    "--attribute-source-field",
+                    source_field,
+                    "--attribute-provenance",
+                    provenance,
+                ])
+                .current_dir(temp_dir.path())
+                .assert()
+                .success()
+                .stdout(predicate::str::contains(
+                    "added event TicketCaptured to slice capture-ticket",
+                ));
+        }
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+
+        // Exactly one event definition with all three attributes accumulated.
+        assert!(
+            lean.contains(
+                "def sliceEventDefinitions : List EventDefinition := [{ name := \"TicketCaptured\", stream := \"tickets\", attributes := [{ name := \"ticket_title\", sourceKind := \"command_input\", sourceName := \"ticket_title\", sourceField := \"value\", generatedSourceKind := \"\", provenanceDescription := \"CaptureTicket.ticket_title\" },{ name := \"ticket_priority\", sourceKind := \"command_input\", sourceName := \"ticket_priority\", sourceField := \"value\", generatedSourceKind := \"\", provenanceDescription := \"CaptureTicket.ticket_priority\" },{ name := \"ticket_category\", sourceKind := \"command_input\", sourceName := \"ticket_category\", sourceField := \"value\", generatedSourceKind := \"\", provenanceDescription := \"CaptureTicket.ticket_category\" }], observed := false, shared := false }]"
+            ),
+            "repeated add event must merge attributes into a single Lean event definition"
+        );
+        assert!(
+            quint.contains(
+                "val sliceEventDefinitions: List[EventDefinition] = [{ name: \"TicketCaptured\", stream: \"tickets\", attributes: [{ name: \"ticket_title\", sourceKind: \"command_input\", sourceName: \"ticket_title\", sourceField: \"value\", generatedSourceKind: \"\", provenanceDescription: \"CaptureTicket.ticket_title\" },{ name: \"ticket_priority\", sourceKind: \"command_input\", sourceName: \"ticket_priority\", sourceField: \"value\", generatedSourceKind: \"\", provenanceDescription: \"CaptureTicket.ticket_priority\" },{ name: \"ticket_category\", sourceKind: \"command_input\", sourceName: \"ticket_category\", sourceField: \"value\", generatedSourceKind: \"\", provenanceDescription: \"CaptureTicket.ticket_category\" }], observed: false, shared: false }]"
+            ),
+            "repeated add event must merge attributes into a single Quint event definition"
+        );
+
+        // The merged event must appear exactly once in both the definition and
+        // reference lists, so the uniqueness invariant has a single owner.
+        assert_eq!(
+            lean.matches("name := \"TicketCaptured\"").count(),
+            // one definition + one reference + one outcome event mention? No
+            // outcome here, so: one event definition record + one event
+            // reference record + one command emittedEvents reference.
+            3,
+            "TicketCaptured must be named once per list (definition, reference, emitted), never duplicated"
+        );
+
+        // Complete the remaining slice facts so the slice is fully modeled and
+        // its Lean module (including sliceNamedDefinitionsAreUniquelyOwned)
+        // verifies cleanly.
+        author_ticket_captured_outcome(&temp_dir)?;
+        for (datum, source, target) in [
+            (
+                "ticket_title",
+                "title field on the intake form",
+                "CaptureTicket",
+            ),
+            (
+                "ticket_title",
+                "CaptureTicket.ticket_title",
+                "TicketCaptured",
+            ),
+            (
+                "ticket_priority",
+                "priority field on the intake form",
+                "CaptureTicket",
+            ),
+            (
+                "ticket_priority",
+                "CaptureTicket.ticket_priority",
+                "TicketCaptured",
+            ),
+            (
+                "ticket_category",
+                "category field on the intake form",
+                "CaptureTicket",
+            ),
+            (
+                "ticket_category",
+                "CaptureTicket.ticket_category",
+                "TicketCaptured",
+            ),
+        ] {
+            Command::cargo_bin("emc")?
+                .args([
+                    "add",
+                    "data-flow",
+                    "--slice",
+                    "capture-ticket",
+                    "--datum",
+                    datum,
+                    "--source",
+                    source,
+                    "--source-kind",
+                    "original",
+                    "--transformation",
+                    "identity",
+                    "--target",
+                    target,
+                    "--bit-encoding",
+                    "UTF-8 string",
+                ])
+                .current_dir(temp_dir.path())
+                .assert()
+                .success();
+        }
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--kind",
+                "contract",
+                "--name",
+                "CaptureTicket emits TicketCaptured",
+                "--given",
+                "tickets stream is available",
+                "--when",
+                "CaptureTicket handles ticket input",
+                "--then",
+                "TicketCaptured is written",
+                "--contract-kind",
+                "command",
+                "--covered-definition",
+                "CaptureTicket",
+                "--read-streams",
+                "tickets",
+                "--written-streams",
+                "tickets",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        assert_slice_lean_module_verifies(&temp_dir, "CaptureTicket")?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn repeated_add_command_merges_inputs_into_one_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = initialized_project_with_slice()?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "slice",
+                "--slug",
+                "capture-ticket",
+                "--type",
+                "state_change",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        // Author the same command twice, each call carrying one input.
+        for (input, description, provenance) in [
+            (
+                "ticket_title",
+                "title field on the intake form",
+                "actor keystrokes -> form field",
+            ),
+            (
+                "ticket_priority",
+                "priority selector on the intake form",
+                "actor selection -> form field",
+            ),
+        ] {
+            Command::cargo_bin("emc")?
+                .args([
+                    "add",
+                    "command",
+                    "--slice",
+                    "capture-ticket",
+                    "--name",
+                    "CaptureTicket",
+                    "--input",
+                    input,
+                    "--input-source",
+                    "actor",
+                    "--input-description",
+                    description,
+                    "--input-provenance",
+                    provenance,
+                    "--emits",
+                    "TicketCaptured",
+                ])
+                .current_dir(temp_dir.path())
+                .assert()
+                .success()
+                .stdout(predicate::str::contains(
+                    "added command CaptureTicket to slice capture-ticket",
+                ));
+        }
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+
+        // Exactly one command definition with both inputs, and the repeated
+        // emitted event deduplicated to a single reference.
+        assert_eq!(
+            lean.matches("name := \"CaptureTicket\"").count(),
+            // one command definition record + one command reference record.
+            2,
+            "CaptureTicket must be named once per list (definition, reference), never duplicated"
+        );
+        assert!(
+            lean.contains(
+                "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\", inputs := [{ name := \"ticket_title\""
+            ) && lean.contains("name := \"ticket_priority\""),
+            "repeated add command must merge inputs into a single Lean command definition"
+        );
+        assert!(
+            lean.contains("emittedEvents := [{ name := \"TicketCaptured\" }]")
+                && lean
+                    .matches("emittedEvents := [{ name := \"TicketCaptured\" }]")
+                    .count()
+                    == 1,
+            "repeated add command must deduplicate the re-stated emitted event in Lean"
+        );
+        assert!(
+            quint.contains(
+                "val sliceCommandDefinitions: List[CommandDefinition] = [{ name: \"CaptureTicket\", inputs: [{ name: \"ticket_title\""
+            ) && quint.contains("name: \"ticket_priority\""),
+            "repeated add command must merge inputs into a single Quint command definition"
+        );
+        assert!(
+            quint
+                .matches("emittedEvents: [{ name: \"TicketCaptured\" }]")
+                .count()
+                == 1,
+            "repeated add command must deduplicate the re-stated emitted event in Quint"
+        );
+
+        // Complete the slice so its Lean module verifies cleanly.
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "tickets",
+                "--attribute",
+                "ticket_title",
+                "--attribute-source",
+                "command_input",
+                "--attribute-source-name",
+                "ticket_title",
+                "--attribute-source-field",
+                "value",
+                "--attribute-provenance",
+                "CaptureTicket.ticket_title",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        author_ticket_captured_outcome(&temp_dir)?;
+        for (datum, source, target) in [
+            (
+                "ticket_title",
+                "title field on the intake form",
+                "CaptureTicket",
+            ),
+            (
+                "ticket_title",
+                "CaptureTicket.ticket_title",
+                "TicketCaptured",
+            ),
+            (
+                "ticket_priority",
+                "priority field on the intake form",
+                "CaptureTicket",
+            ),
+        ] {
+            Command::cargo_bin("emc")?
+                .args([
+                    "add",
+                    "data-flow",
+                    "--slice",
+                    "capture-ticket",
+                    "--datum",
+                    datum,
+                    "--source",
+                    source,
+                    "--source-kind",
+                    "original",
+                    "--transformation",
+                    "identity",
+                    "--target",
+                    target,
+                    "--bit-encoding",
+                    "UTF-8 string",
+                ])
+                .current_dir(temp_dir.path())
+                .assert()
+                .success();
+        }
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--kind",
+                "contract",
+                "--name",
+                "CaptureTicket emits TicketCaptured",
+                "--given",
+                "tickets stream is available",
+                "--when",
+                "CaptureTicket handles ticket input",
+                "--then",
+                "TicketCaptured is written",
+                "--contract-kind",
+                "command",
+                "--covered-definition",
+                "CaptureTicket",
+                "--read-streams",
+                "tickets",
+                "--written-streams",
+                "tickets",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        assert_slice_lean_module_verifies(&temp_dir, "CaptureTicket")?;
+
+        Ok(())
+    }
+
+    #[test]
     fn add_read_model_definition_completes_projection_data_flow_verification()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
@@ -5706,6 +6122,45 @@ mod tests {
             .success();
 
         Ok(())
+    }
+
+    /// Run the real Lean toolchain over a generated slice module and assert it
+    /// verifies (exit 0). This exercises `sliceNamedDefinitionsAreUniquelyOwned`
+    /// among the slice invariants. When `lake` is not on `PATH` (no Lean
+    /// toolchain in the environment) the check is skipped, mirroring how the
+    /// Quint/Apalache tests degrade without Java.
+    fn assert_slice_lean_module_verifies(
+        temp_dir: &TempDir,
+        module: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        if which_in_path("lake").is_none() {
+            eprintln!("skipping Lean verification for {module}: `lake` not found on PATH");
+            return Ok(());
+        }
+
+        let lean_dir = temp_dir.path().join("model/lean");
+        let output = ProcessCommand::new("lake")
+            .args(["env", "lean", &format!("slices/{module}.lean")])
+            .current_dir(&lean_dir)
+            .output()?;
+
+        assert!(
+            output.status.success(),
+            "lake env lean slices/{module}.lean must exit 0\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+
+        Ok(())
+    }
+
+    /// Locate an executable on `PATH`, returning its full path when found.
+    fn which_in_path(executable: &str) -> Option<PathBuf> {
+        let path = var_os("PATH")?;
+        split_paths(&path).find_map(|directory| {
+            let candidate = directory.join(executable);
+            candidate.is_file().then_some(candidate)
+        })
     }
 
     fn initialized_project_with_slice() -> Result<TempDir, Box<dyn Error>> {
