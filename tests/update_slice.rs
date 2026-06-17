@@ -444,6 +444,102 @@ mod tests {
     }
 
     #[test]
+    fn store_replays_cleanly_after_removing_a_connected_slice() -> Result<(), Box<dyn Error>> {
+        // Regression for the "remove slice wedges the store" failure: once a
+        // slice and its transition are removed, the event-log projection must
+        // still replay cleanly so the very next commands keep working rather
+        // than every subsequent command erroring.
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "review-ticket",
+                "--name",
+                "Review ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor reviews repair ticket details.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "open-review-ticket",
+                "--target-view",
+                "review-ticket-screen",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["remove", "slice", "--slug", "review-ticket"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("removed slice Review ticket"));
+
+        // The very next read must succeed — the store is not wedged.
+        Command::cargo_bin("emc")?
+            .args(["list", "slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Capture ticket"));
+
+        // And a subsequent mutation must succeed and replay cleanly.
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "close-ticket",
+                "--name",
+                "Close ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor closes the repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args(["list", "slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Close ticket"));
+
+        Ok(())
+    }
+
+    #[test]
     fn remove_middle_slice_rejects_outgoing_navigation_dependencies() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;
