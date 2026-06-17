@@ -929,6 +929,70 @@ impl NewEventDefinition {
     }
 }
 
+/// Reject an event attribute that sources a command input no command in the
+/// slice actually provides.
+///
+/// An attribute with [`EventAttributeSourceKind::CommandInput`] names a command
+/// input through its `source_name`; the slice's `eventAttributeSourcesAreComplete`
+/// verification later requires some command that *emits this event* to declare
+/// an input with that exact name. A common authoring mistake is passing the
+/// COMMAND name (or any non-input identifier) to `--attribute-source-name`,
+/// which silently persists and only surfaces much later as a verification
+/// failure — with no per-attribute correction path. This catches that mistake
+/// at write time, answering it cheaply from the projected model.
+///
+/// The check is deliberately conservative so it never blocks legitimate
+/// incremental authoring: it fires only once a command emitting the event
+/// exists. While no emitting command has been declared yet (an event authored
+/// before its command), the reference cannot be judged from the current model
+/// and is allowed — the verification gate still enforces completeness before the
+/// workflow can advance to the next phase.
+pub(crate) fn validate_event_attribute_source(
+    event: &NewEventDefinition,
+    slice_commands: &[NewCommandDefinition],
+) -> Result<(), FormalSliceFactError> {
+    let attribute = event.attribute();
+    if *attribute.source_kind() != EventAttributeSourceKind::CommandInput {
+        return Ok(());
+    }
+
+    let mut available_inputs: Vec<&str> = slice_commands
+        .iter()
+        .filter(|command| {
+            command
+                .emitted_events()
+                .as_slice()
+                .iter()
+                .any(|emitted| emitted == event.name())
+        })
+        .map(|command| command.input().name().as_ref())
+        .collect();
+
+    // No command emits this event yet: the source cannot be judged from the
+    // current model, so defer to the verification gate.
+    if available_inputs.is_empty() {
+        return Ok(());
+    }
+
+    let source_name = attribute.source_name().as_ref();
+    if available_inputs.contains(&source_name) {
+        return Ok(());
+    }
+
+    available_inputs.sort_unstable();
+    available_inputs.dedup();
+    Err(FormalSliceFactError::new(format!(
+        "event '{event_name}' attribute '{attribute_name}' sources command input \
+         '{source_name}', but no command emitting '{event_name}' in slice '{slice}' declares \
+         that input (available inputs: {available}); pass the command INPUT name to \
+         --attribute-source-name",
+        event_name = event.name().as_ref(),
+        attribute_name = attribute.name().as_ref(),
+        slice = event.slice_slug().as_ref(),
+        available = available_inputs.join(", "),
+    )))
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ReadModelEventAttributeSource {
     event: EventName,

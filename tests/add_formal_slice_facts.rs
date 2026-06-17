@@ -3263,6 +3263,120 @@ mod tests {
     }
 
     #[test]
+    fn add_event_definition_rejects_unknown_command_input_source_at_write_time()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = initialized_project_with_slice()?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "slice",
+                "--slug",
+                "capture-ticket",
+                "--type",
+                "state_change",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "command",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "CaptureTicket",
+                "--input",
+                "ticket_title",
+                "--input-source",
+                "actor",
+                "--input-description",
+                "title field on the intake form",
+                "--input-provenance",
+                "actor keystrokes -> form field",
+                "--emits",
+                "TicketCaptured",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        // Passing the COMMAND name (not the INPUT name) to --attribute-source-name
+        // is the canonical "one typo bricks a slice" mistake: it would source a
+        // command input that does not exist. It must be rejected at write time
+        // rather than silently persisting a model that only fails much later at
+        // the verification gate with no per-attribute correction path.
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "tickets",
+                "--attribute",
+                "ticket_title",
+                "--attribute-source",
+                "command_input",
+                "--attribute-source-name",
+                "CaptureTicket",
+                "--attribute-source-field",
+                "value",
+                "--attribute-provenance",
+                "CaptureTicket.ticket_title",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "pass the command INPUT name to --attribute-source-name",
+            ));
+
+        // The rejected write must leave the store usable: authoring the same
+        // event with the correct input name succeeds, proving nothing was
+        // half-persisted.
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "tickets",
+                "--attribute",
+                "ticket_title",
+                "--attribute-source",
+                "command_input",
+                "--attribute-source-name",
+                "ticket_title",
+                "--attribute-source-field",
+                "value",
+                "--attribute-provenance",
+                "CaptureTicket.ticket_title",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added event TicketCaptured to slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .args(["list", "slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    #[test]
     fn add_event_definition_records_shared_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
         author_projected_ticket_title(&temp_dir)?;

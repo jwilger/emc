@@ -2988,6 +2988,21 @@ pub(crate) fn project_exported_events() -> Result<Option<EffectPlan>, String> {
         .map(Some)
 }
 
+/// The command definitions currently projected for `slice_slug` from the
+/// authoritative event log. Empty when the project has no events yet or the
+/// slice is unknown. Used for write-time validation that resolves references
+/// against the source-of-truth model rather than the regenerated artifacts.
+pub(crate) fn projected_slice_command_definitions(
+    slice_slug: &SliceSlug,
+) -> Result<Vec<NewCommandDefinition>, String> {
+    let events = read_all_emc_events(Path::new("."))?;
+    if events.is_empty() {
+        return Ok(Vec::new());
+    }
+    let model = ProjectedModel::from_events(events)?;
+    Ok(model.slice_command_definitions(slice_slug))
+}
+
 pub(crate) fn exported_events_projection_fingerprint() -> Result<Option<String>, String> {
     let events = read_all_emc_events(Path::new("."))?;
     if events.is_empty() {
@@ -3175,6 +3190,15 @@ impl ProjectedModel {
             .flat_map(|workflow| workflow.slices.iter_mut())
             .find(|slice| slice.slug == *slug)
             .ok_or_else(|| format!("{event} references unknown slice {}", slug.as_ref()))
+    }
+
+    fn slice_command_definitions(&self, slug: &SliceSlug) -> Vec<NewCommandDefinition> {
+        self.workflows
+            .iter()
+            .flat_map(|workflow| workflow.slices.iter())
+            .find(|slice| slice.slug == *slug)
+            .map(|slice| slice.command_definitions.clone())
+            .unwrap_or_default()
     }
 
     fn apply_event(model: Option<Self>, event: EmcEvent) -> Result<Option<Self>, String> {

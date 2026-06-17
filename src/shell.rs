@@ -27,8 +27,8 @@ use crate::core::event_runtime::{
 };
 use crate::core::events::{
     EventDraft, ExportedEventType, exported_events_projection_fingerprint, list_event_conflicts,
-    list_stale_workflow_readiness, project_exported_events, reject_legacy_artifact_only_project,
-    resolve_event_conflict, unresolved_event_conflicts_exist,
+    list_stale_workflow_readiness, project_exported_events, projected_slice_command_definitions,
+    reject_legacy_artifact_only_project, resolve_event_conflict, unresolved_event_conflicts_exist,
 };
 use crate::core::formal_graph::{
     FormalGraphError, FormalWorkflowGraph, FormalWorkflowGraphs, parse_lean_workflow_graph,
@@ -78,7 +78,7 @@ use crate::core::formal_slice_facts::{
     add_automation_definition, add_bit_level_data_flow, add_board_connection, add_board_element,
     add_command_definition, add_event_definition, add_external_payload_definition,
     add_outcome_definition, add_read_model_definition, add_slice_scenario,
-    add_translation_definition, add_view_definition,
+    add_translation_definition, add_view_definition, validate_event_attribute_source,
 };
 use crate::core::formal_workflow_facts::{
     add_workflow_command_error, add_workflow_entry_lifecycle_state, add_workflow_outcome,
@@ -626,6 +626,10 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             Ok(reports)
         }
         Effect::AddEventDefinitionFromSlice(event) => {
+            let slice_commands = projected_slice_command_definitions(event.slice_slug())
+                .map_err(ShellError::message)?;
+            validate_event_attribute_source(event, &slice_commands)
+                .map_err(|error| ShellError::message(error.to_string()))?;
             let slice_artifacts =
                 read_formal_slice_artifact_paths_and_contents(event.slice_slug())?;
             let project_name = read_project_manifest_name()?;
