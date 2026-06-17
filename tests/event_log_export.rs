@@ -1323,6 +1323,89 @@ mod tests {
     }
 
     #[test]
+    fn re_add_reconciles_event_index_from_jsonl_after_cache_is_dropped()
+    -> Result<(), Box<dyn Error>> {
+        // Bug #2: the gitignored `model/events/index/` cache (the ingestion log)
+        // is derived state — a fresh `git clone`, a `git clean`, or any tooling
+        // that prunes derived files leaves only the authoritative
+        // `events/*.jsonl`. Loading the store must rebuild the cache from those
+        // files so that re-adding a fact to an existing slice computes the
+        // correct expected stream version, rather than failing with a stale
+        // optimistic-concurrency conflict.
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+
+        // First mutation on the slice stream.
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--kind",
+                "acceptance",
+                "--name",
+                "Actor captures ticket",
+                "--given",
+                "ticket intake screen is open",
+                "--when",
+                "the actor submits ticket details",
+                "--then",
+                "the ticket details are visible for review",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        // Disturb the store: drop the derived index cache, keeping only the
+        // committed authoritative event files.
+        let index_dir = temp_dir.path().join("model/events/index");
+        assert!(
+            index_dir.exists(),
+            "the event store must maintain a derived index cache to drop"
+        );
+        fs::remove_dir_all(&index_dir)?;
+        assert!(
+            temp_dir.path().join("model/events/events").exists(),
+            "the authoritative jsonl event files must remain after dropping the cache"
+        );
+
+        // Re-add another fact to the SAME slice. Loading must reconcile the
+        // cache from the jsonl and compute the correct expected version, so this
+        // re-add succeeds instead of hitting a stale OCC conflict.
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--kind",
+                "acceptance",
+                "--name",
+                "Actor reviews captured ticket",
+                "--given",
+                "the ticket details are captured",
+                "--when",
+                "the actor reopens the ticket",
+                "--then",
+                "the captured details are shown",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        // The store still replays cleanly after the reconciliation.
+        Command::cargo_bin("emc")?
+            .args(["list", "slices"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(contains("Capture ticket"));
+
+        Ok(())
+    }
+
+    #[test]
     fn check_rebuilds_workflow_updates_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
