@@ -83,10 +83,10 @@ impl NewProjectCommand {
             command.name().clone(),
         )
         .with_input(command.input())
-        .with_errors(command.errors().clone())
+        .with_errors(command.errors())
     }
 
-    pub(crate) fn with_errors(mut self, errors: CommandErrorDefinitions) -> Self {
+    pub(crate) fn with_errors(mut self, errors: &CommandErrorDefinitions) -> Self {
         self.command_errors = errors
             .as_slice()
             .iter()

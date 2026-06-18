@@ -560,15 +560,15 @@ mod tests {
         artifact: &'a str,
         prefix: &str,
     ) -> Result<&'a str, Box<dyn Error>> {
-        let start = artifact
-            .find(prefix)
-            .ok_or_else(|| format!("generated artifact must contain {prefix}"))?
-            + prefix.len();
-        let tail = &artifact[start..];
+        let (_, tail) = artifact
+            .split_once(prefix)
+            .ok_or_else(|| format!("generated artifact must contain {prefix}"))?;
         let end = tail
             .find('"')
             .ok_or("generated artifact model digest must terminate with a quote")?;
 
-        Ok(&tail[..end])
+        tail.get(..end).ok_or_else(|| {
+            "digest quote offset must fall on a char boundary within the tail".into()
+        })
     }
 }

@@ -10,6 +10,10 @@ use crate::core::types::{
     WorkflowTransitionEvidenceRecords, WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 
+#[expect(
+    clippy::struct_field_names,
+    reason = "the workflow_ prefix is meaningful domain naming and the struct is constructed at many call sites where renaming would obscure intent"
+)]
 pub(crate) struct WorkflowArtifactDigestInput {
     pub(crate) workflow_name: ModelName,
     pub(crate) workflow_slug: WorkflowSlug,
@@ -24,7 +28,7 @@ pub(crate) struct WorkflowArtifactDigestInput {
     pub(crate) workflow_entry_lifecycle_states: WorkflowEntryLifecycleStateRecords,
 }
 
-pub(crate) fn artifact_digest(input: WorkflowArtifactDigestInput) -> ArtifactDigest {
+pub(crate) fn artifact_digest(input: &WorkflowArtifactDigestInput) -> ArtifactDigest {
     ArtifactDigest::try_new(format!(
         "workflow:name={};slug={};description={};slices={};transitions={};outcomes={};command_errors={};owned_definitions={};transition_evidences={};entry_lifecycle_required={};entry_lifecycle_states={}",
         input.workflow_name,
@@ -45,10 +49,10 @@ pub(crate) fn artifact_digest(input: WorkflowArtifactDigestInput) -> ArtifactDig
 }
 
 pub(crate) fn slice_artifact_digest(
-    slice_name: ModelName,
-    slice_slug: SliceSlug,
+    slice_name: &ModelName,
+    slice_slug: &SliceSlug,
     slice_kind: SliceKindName,
-    slice_description: ModelDescription,
+    slice_description: &ModelDescription,
 ) -> ArtifactDigest {
     ArtifactDigest::try_new(format!(
         "slice:name={slice_name};slug={slice_slug};kind={slice_kind};description={slice_description}"

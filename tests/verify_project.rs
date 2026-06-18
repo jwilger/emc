@@ -1192,11 +1192,14 @@ mod tests {
         assert!(copy_status.success(), "cloning base project must succeed");
 
         let replica_events = stage_into.join("model/events");
-        let _ = remove_dir_all(replica_events.join(".eventcore"));
-        let _ = remove_dir_all(replica_events.join("locks"));
-        let _ = remove_dir_all(replica_events.join("index"));
-        let _ = remove_dir_all(replica_events.join("tmp"));
-        let _ = remove_file(replica_events.join(".lock"));
+        // These paths may or may not exist on the clone; a missing entry is the
+        // desired post-state, so we bind (rather than discard) each removal
+        // result and intentionally ignore it without panicking.
+        let _removed_eventcore = remove_dir_all(replica_events.join(".eventcore"));
+        let _removed_locks = remove_dir_all(replica_events.join("locks"));
+        let _removed_index = remove_dir_all(replica_events.join("index"));
+        let _removed_tmp = remove_dir_all(replica_events.join("tmp"));
+        let _removed_lock_file = remove_file(replica_events.join(".lock"));
 
         Command::cargo_bin("emc")?
             .args([
@@ -1218,10 +1221,7 @@ mod tests {
             .into_iter()
             .find(|path| {
                 path.extension().and_then(|ext| ext.to_str()) == Some("jsonl")
-                    && path
-                        .file_name()
-                        .map(|name| !before.contains(name))
-                        .unwrap_or(false)
+                    && path.file_name().is_some_and(|name| !before.contains(name))
             })
             .ok_or("replica must mint a new committed transaction")?;
 
@@ -1239,15 +1239,15 @@ mod tests {
 
     fn normalize_quint_log_line(line: &str) -> String {
         let mut parts = line.split_whitespace().collect::<Vec<_>>();
-        if let Some(endpoint_flag) = parts.iter().position(|part| *part == "--server-endpoint") {
-            let endpoint_value = endpoint_flag + 1;
-            if endpoint_value < parts.len() {
-                assert_ne!(
-                    parts[endpoint_value], "localhost:8822",
-                    "Quint verification must not use the shared default Apalache endpoint"
-                );
-                parts[endpoint_value] = "<endpoint>";
-            }
+        if let Some(endpoint_flag) = parts.iter().position(|part| *part == "--server-endpoint")
+            && let Some(endpoint_value) = endpoint_flag.checked_add(1)
+            && let Some(slot) = parts.get_mut(endpoint_value)
+        {
+            assert_ne!(
+                *slot, "localhost:8822",
+                "Quint verification must not use the shared default Apalache endpoint"
+            );
+            *slot = "<endpoint>";
         }
         parts.join(" ")
     }
@@ -1275,7 +1275,8 @@ mod tests {
                     parts
                         .iter()
                         .position(|part| *part == "--server-endpoint")
-                        .and_then(|index| parts.get(index + 1))
+                        .and_then(|index| index.checked_add(1))
+                        .and_then(|value_index| parts.get(value_index))
                         .copied()
                         .unwrap_or("")
                         .to_owned()
@@ -1320,18 +1321,22 @@ mod tests {
     }
 
     fn assert_max_quint_verification_parallelism(source: &str, expected_maximum: usize) {
-        let mut active = 0usize;
-        let mut observed_maximum = 0usize;
+        let mut active = 0_usize;
+        let mut observed_maximum = 0_usize;
         for line in source.lines() {
             if line.starts_with("start verify ") {
-                active += 1;
+                // A start/end balance over a log never approaches `usize::MAX`,
+                // so saturation is exact rather than a clamp.
+                active = active.saturating_add(1);
                 observed_maximum = observed_maximum.max(active);
             } else if line.starts_with("end verify ") {
                 assert!(
                     active > 0,
                     "Quint verification end must follow a start:\n{source}"
                 );
-                active -= 1;
+                // Guarded by the `active > 0` assertion above, so the decrement
+                // never underflows.
+                active = active.saturating_sub(1);
             }
         }
 

@@ -140,7 +140,7 @@ pub enum SliceKindName {
 }
 
 impl SliceKindName {
-    pub fn try_new(value: String) -> Result<Self, SliceKindNameError> {
+    pub fn try_new(value: &str) -> Result<Self, SliceKindNameError> {
         match value.trim() {
             "state_view" => Ok(Self::StateView),
             "state_change" => Ok(Self::StateChange),
@@ -183,7 +183,7 @@ impl<'de> Deserialize<'de> for SliceKindName {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        Self::try_new(value).map_err(DeserializeError::custom)
+        Self::try_new(&value).map_err(DeserializeError::custom)
     }
 }
 
@@ -193,7 +193,7 @@ pub struct SliceKindNameError {
 }
 
 impl SliceKindNameError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled slice kind, got '{value}'"),
         }
@@ -328,7 +328,7 @@ pub enum ContractKindName {
 }
 
 impl ContractKindName {
-    pub fn try_new(value: String) -> Result<Self, ContractKindNameError> {
+    pub fn try_new(value: &str) -> Result<Self, ContractKindNameError> {
         match value.trim() {
             "projector" => Ok(Self::Projector),
             "command" => Ok(Self::Command),
@@ -368,7 +368,7 @@ pub struct ContractKindNameError {
 }
 
 impl ContractKindNameError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled contract kind, got '{value}'"),
         }
@@ -411,7 +411,7 @@ pub enum DataFlowSourceKind {
 }
 
 impl DataFlowSourceKind {
-    pub fn try_new(value: String) -> Result<Self, DataFlowSourceKindError> {
+    pub fn try_new(value: &str) -> Result<Self, DataFlowSourceKindError> {
         match value.trim() {
             "original" => Ok(Self::Original),
             "modeled_target" => Ok(Self::ModeledTarget),
@@ -441,7 +441,7 @@ pub struct DataFlowSourceKindError {
 }
 
 impl DataFlowSourceKindError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled data-flow source kind, got '{value}'"),
         }
@@ -467,7 +467,7 @@ pub enum TransformationSemantics {
 }
 
 impl TransformationSemantics {
-    pub fn try_new(value: String) -> Result<Self, TransformationSemanticsError> {
+    pub fn try_new(value: &str) -> Result<Self, TransformationSemanticsError> {
         match value.trim() {
             "identity" => Ok(Self::Identity),
             "projection" => Ok(Self::Projection),
@@ -505,7 +505,7 @@ pub struct TransformationSemanticsError {
 }
 
 impl TransformationSemanticsError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected modeled transformation semantics, got '{value}'"),
         }
@@ -558,7 +558,7 @@ pub enum BoardLaneId {
 impl BoardLaneId {
     pub const CANONICAL: [Self; 3] = [Self::Ux, Self::Actions, Self::Events];
 
-    pub fn try_new(value: String) -> Result<Self, BoardLaneIdError> {
+    pub fn try_new(value: &str) -> Result<Self, BoardLaneIdError> {
         match value.trim() {
             "ux" => Ok(Self::Ux),
             "actions" => Ok(Self::Actions),
@@ -590,7 +590,7 @@ pub struct BoardLaneIdError {
 }
 
 impl BoardLaneIdError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a canonical board lane, got '{value}'"),
         }
@@ -623,7 +623,7 @@ pub enum BoardElementKind {
 }
 
 impl BoardElementKind {
-    pub fn try_new(value: String) -> Result<Self, BoardElementKindError> {
+    pub fn try_new(value: &str) -> Result<Self, BoardElementKindError> {
         match value.trim() {
             "view" => Ok(Self::View),
             "automation" => Ok(Self::Automation),
@@ -661,7 +661,7 @@ pub struct BoardElementKindError {
 }
 
 impl BoardElementKindError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled board element kind, got '{value}'"),
         }
@@ -702,7 +702,7 @@ pub enum BoardConnectionEndpointKind {
 }
 
 impl BoardConnectionEndpointKind {
-    pub fn try_new(value: String) -> Result<Self, BoardConnectionEndpointKindError> {
+    pub fn try_new(value: &str) -> Result<Self, BoardConnectionEndpointKindError> {
         match value.trim() {
             "view" => Ok(Self::View),
             "automation" => Ok(Self::Automation),
@@ -742,7 +742,7 @@ pub struct BoardConnectionEndpointKindError {
 }
 
 impl BoardConnectionEndpointKindError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled board connection endpoint kind, got '{value}'"),
         }
@@ -772,7 +772,7 @@ pub enum WorkflowTransitionKind {
 }
 
 impl WorkflowTransitionKind {
-    pub fn try_new(value: String) -> Result<Self, WorkflowTransitionKindError> {
+    pub fn try_new(value: &str) -> Result<Self, WorkflowTransitionKindError> {
         match value.trim() {
             "command" => Ok(Self::Command),
             "event" => Ok(Self::Event),
@@ -838,7 +838,7 @@ impl<'de> Deserialize<'de> for WorkflowTransitionKind {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        Self::try_new(value).map_err(DeserializeError::custom)
+        Self::try_new(&value).map_err(DeserializeError::custom)
     }
 }
 
@@ -848,7 +848,7 @@ pub struct WorkflowTransitionKindError {
 }
 
 impl WorkflowTransitionKindError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled workflow transition kind, got '{value}'"),
         }
@@ -895,7 +895,7 @@ impl WorkflowEntryLifecycleStateName {
         Self::FullyConfigured,
     ];
 
-    pub fn try_new(value: String) -> Result<Self, WorkflowEntryLifecycleStateNameError> {
+    pub fn try_new(value: &str) -> Result<Self, WorkflowEntryLifecycleStateNameError> {
         match value.trim() {
             "fresh_uninitialized" => Ok(Self::FreshUninitialized),
             "initialized_unauthenticated" => Ok(Self::InitializedUnauthenticated),
@@ -940,7 +940,7 @@ impl<'de> Deserialize<'de> for WorkflowEntryLifecycleStateName {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        Self::try_new(value).map_err(DeserializeError::custom)
+        Self::try_new(&value).map_err(DeserializeError::custom)
     }
 }
 
@@ -950,7 +950,7 @@ pub struct WorkflowEntryLifecycleStateNameError {
 }
 
 impl WorkflowEntryLifecycleStateNameError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled workflow entry lifecycle state, got '{value}'"),
         }
@@ -1226,7 +1226,7 @@ pub enum WorkflowOwnedDefinitionKind {
 }
 
 impl WorkflowOwnedDefinitionKind {
-    pub fn try_new(value: String) -> Result<Self, WorkflowOwnedDefinitionKindError> {
+    pub fn try_new(value: &str) -> Result<Self, WorkflowOwnedDefinitionKindError> {
         match value.trim() {
             "command" => Ok(Self::Command),
             "event" => Ok(Self::Event),
@@ -1285,7 +1285,7 @@ impl<'de> Deserialize<'de> for WorkflowOwnedDefinitionKind {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        Self::try_new(value).map_err(DeserializeError::custom)
+        Self::try_new(&value).map_err(DeserializeError::custom)
     }
 }
 
@@ -1295,7 +1295,7 @@ pub struct WorkflowOwnedDefinitionKindError {
 }
 
 impl WorkflowOwnedDefinitionKindError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled workflow owned-definition kind, got '{value}'"),
         }
@@ -1324,7 +1324,7 @@ pub enum WorkflowEventParticipation {
 }
 
 impl WorkflowEventParticipation {
-    pub fn try_new(value: String) -> Result<Self, WorkflowEventParticipationError> {
+    pub fn try_new(value: &str) -> Result<Self, WorkflowEventParticipationError> {
         match value.trim() {
             "emitted" => Ok(Self::Emitted),
             "observed" => Ok(Self::Observed),
@@ -1363,7 +1363,7 @@ impl<'de> Deserialize<'de> for WorkflowEventParticipation {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        Self::try_new(value).map_err(DeserializeError::custom)
+        Self::try_new(&value).map_err(DeserializeError::custom)
     }
 }
 
@@ -1373,7 +1373,7 @@ pub struct WorkflowEventParticipationError {
 }
 
 impl WorkflowEventParticipationError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled workflow event participation, got '{value}'"),
         }
@@ -1394,7 +1394,7 @@ pub enum WorkflowViewRole {
 }
 
 impl WorkflowViewRole {
-    pub fn try_new(value: String) -> Result<Self, WorkflowViewRoleError> {
+    pub fn try_new(value: &str) -> Result<Self, WorkflowViewRoleError> {
         match value.trim() {
             "entry" => Ok(Self::Entry),
             _ => Err(WorkflowViewRoleError::new(value)),
@@ -1431,7 +1431,7 @@ impl<'de> Deserialize<'de> for WorkflowViewRole {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        Self::try_new(value).map_err(DeserializeError::custom)
+        Self::try_new(&value).map_err(DeserializeError::custom)
     }
 }
 
@@ -1441,7 +1441,7 @@ pub struct WorkflowViewRoleError {
 }
 
 impl WorkflowViewRoleError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled workflow view role, got '{value}'"),
         }
@@ -1948,7 +1948,7 @@ pub enum ReviewStatus {
 }
 
 impl ReviewStatus {
-    pub fn try_new(value: String) -> Result<Self, ReviewStatusError> {
+    pub fn try_new(value: &str) -> Result<Self, ReviewStatusError> {
         match value.trim() {
             "clean" => Ok(Self::Clean),
             "changes_requested" => Ok(Self::ChangesRequested),
@@ -1978,7 +1978,7 @@ pub struct ReviewStatusError {
 }
 
 impl ReviewStatusError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled review status, got '{value}'"),
         }
@@ -2027,7 +2027,7 @@ impl ReviewRuleName {
         Self::TimelineRendering,
     ];
 
-    pub fn try_new(value: String) -> Result<Self, ReviewRuleNameError> {
+    pub fn try_new(value: &str) -> Result<Self, ReviewRuleNameError> {
         match value.trim() {
             "lifecycle-entry" => Ok(Self::LifecycleEntry),
             "canonical-lanes" => Ok(Self::CanonicalLanes),
@@ -2088,7 +2088,7 @@ impl<'de> Deserialize<'de> for ReviewRuleName {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        Self::try_new(value).map_err(DeserializeError::custom)
+        Self::try_new(&value).map_err(DeserializeError::custom)
     }
 }
 
@@ -2098,7 +2098,7 @@ pub struct ReviewRuleNameError {
 }
 
 impl ReviewRuleNameError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled review category, got '{value}'"),
         }
@@ -2122,14 +2122,17 @@ pub struct ReviewerId(String);
 
 fn is_utc_millisecond_timestamp(value: &str) -> bool {
     let bytes = value.as_bytes();
-    bytes.len() == 24
-        && bytes[4] == b'-'
-        && bytes[7] == b'-'
-        && bytes[10] == b'T'
-        && bytes[13] == b':'
-        && bytes[16] == b':'
-        && bytes[19] == b'.'
-        && bytes[23] == b'Z'
+    if bytes.len() != 24 {
+        return false;
+    }
+    let at = |index: usize| bytes.get(index).copied();
+    at(4) == Some(b'-')
+        && at(7) == Some(b'-')
+        && at(10) == Some(b'T')
+        && at(13) == Some(b':')
+        && at(16) == Some(b':')
+        && at(19) == Some(b'.')
+        && at(23) == Some(b'Z')
         && ascii_digits(bytes, 0, 4)
         && ascii_digits(bytes, 5, 2)
         && ascii_digits(bytes, 8, 2)
@@ -2145,16 +2148,25 @@ fn is_utc_millisecond_timestamp(value: &str) -> bool {
 }
 
 fn ascii_digits(bytes: &[u8], start: usize, length: usize) -> bool {
-    bytes[start..start + length].iter().all(u8::is_ascii_digit)
+    bytes
+        .get(start..)
+        .and_then(|rest| rest.get(..length))
+        .is_some_and(|slice| slice.iter().all(u8::is_ascii_digit))
 }
 
 fn numeric_range(bytes: &[u8], start: usize, length: usize, minimum: u32, maximum: u32) -> bool {
     ascii_digits(bytes, start, length)
-        && (minimum..=maximum).contains(
-            &bytes[start..start + length]
-                .iter()
-                .fold(0_u32, |value, byte| (value * 10) + u32::from(byte - b'0')),
-        )
+        && bytes
+            .get(start..)
+            .and_then(|rest| rest.get(..length))
+            .is_some_and(|slice| {
+                let value = slice.iter().fold(0_u32, |value, byte| {
+                    value
+                        .saturating_mul(10)
+                        .saturating_add(u32::from(byte.saturating_sub(b'0')))
+                });
+                (minimum..=maximum).contains(&value)
+            })
 }
 
 #[nutype(
@@ -2194,7 +2206,7 @@ impl CommandErrorRecoveryKind {
         Self::ExplicitRecoveryAction,
     ];
 
-    pub fn try_new(value: String) -> Result<Self, CommandErrorRecoveryKindError> {
+    pub fn try_new(value: &str) -> Result<Self, CommandErrorRecoveryKindError> {
         match value.trim() {
             "retry" => Ok(Self::Retry),
             "stay_on_screen" => Ok(Self::StayOnScreen),
@@ -2228,7 +2240,7 @@ pub struct CommandErrorRecoveryKindError {
 }
 
 impl CommandErrorRecoveryKindError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled command error recovery kind, got '{value}'"),
         }
@@ -2252,7 +2264,7 @@ pub enum SingletonRepeatBehavior {
 impl SingletonRepeatBehavior {
     pub const ALLOWED: [Self; 2] = [Self::AlreadyExistsError, Self::Idempotent];
 
-    pub fn try_new(value: String) -> Result<Self, SingletonRepeatBehaviorError> {
+    pub fn try_new(value: &str) -> Result<Self, SingletonRepeatBehaviorError> {
         match value.trim() {
             "already_exists_error" => Ok(Self::AlreadyExistsError),
             "idempotent" => Ok(Self::Idempotent),
@@ -2282,7 +2294,7 @@ pub struct SingletonRepeatBehaviorError {
 }
 
 impl SingletonRepeatBehaviorError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled singleton repeat behavior, got '{value}'"),
         }
@@ -2334,7 +2346,7 @@ pub enum ControlRecoveryBehavior {
 }
 
 impl ControlRecoveryBehavior {
-    pub fn try_new(value: String) -> Result<Self, ControlRecoveryBehaviorError> {
+    pub fn try_new(value: &str) -> Result<Self, ControlRecoveryBehaviorError> {
         match value.trim() {
             "retry" => Ok(Self::Retry),
             "stay_on_screen" => Ok(Self::StayOnScreen),
@@ -2368,7 +2380,7 @@ pub struct ControlRecoveryBehaviorError {
 }
 
 impl ControlRecoveryBehaviorError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled control recovery behavior, got '{value}'"),
         }
@@ -2399,7 +2411,7 @@ impl NavigationTargetType {
         Self::ExternalWorkflow,
     ];
 
-    pub fn try_new(value: String) -> Result<Self, NavigationTargetTypeError> {
+    pub fn try_new(value: &str) -> Result<Self, NavigationTargetTypeError> {
         match value.trim() {
             "modeled_view" => Ok(Self::ModeledView),
             "local_view_state" => Ok(Self::LocalViewState),
@@ -2433,7 +2445,7 @@ pub struct NavigationTargetTypeError {
 }
 
 impl NavigationTargetTypeError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled navigation target type, got '{value}'"),
         }
@@ -2475,7 +2487,7 @@ impl CommandInputSourceKind {
         Self::InvocationArgument,
     ];
 
-    pub fn try_new(value: String) -> Result<Self, CommandInputSourceKindError> {
+    pub fn try_new(value: &str) -> Result<Self, CommandInputSourceKindError> {
         match value.trim() {
             "actor" => Ok(Self::Actor),
             "session" => Ok(Self::Session),
@@ -2513,7 +2525,7 @@ pub struct CommandInputSourceKindError {
 }
 
 impl CommandInputSourceKindError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled command input source kind, got '{value}'"),
         }
@@ -2574,7 +2586,7 @@ impl EventAttributeSourceKind {
         Self::Derivation,
     ];
 
-    pub fn try_new(value: String) -> Result<Self, EventAttributeSourceKindError> {
+    pub fn try_new(value: &str) -> Result<Self, EventAttributeSourceKindError> {
         match value.trim() {
             "command_input" => Ok(Self::CommandInput),
             "external_payload" => Ok(Self::ExternalPayload),
@@ -2610,7 +2622,7 @@ pub struct EventAttributeSourceKindError {
 }
 
 impl EventAttributeSourceKindError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled event attribute source kind, got '{value}'"),
         }
@@ -2670,7 +2682,7 @@ pub enum ReadModelFieldSourceKind {
 impl ReadModelFieldSourceKind {
     pub const ALLOWED: [Self; 3] = [Self::EventAttribute, Self::Derivation, Self::AbsenceDefault];
 
-    pub fn try_new(value: String) -> Result<Self, ReadModelFieldSourceKindError> {
+    pub fn try_new(value: &str) -> Result<Self, ReadModelFieldSourceKindError> {
         match value.trim() {
             "event_attribute" => Ok(Self::EventAttribute),
             "derivation" => Ok(Self::Derivation),
@@ -2702,7 +2714,7 @@ pub struct ReadModelFieldSourceKindError {
 }
 
 impl ReadModelFieldSourceKindError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled read-model field source kind, got '{value}'"),
         }
@@ -2732,7 +2744,7 @@ pub enum ViewFieldSourceKind {
 impl ViewFieldSourceKind {
     pub const ALLOWED: [Self; 1] = [Self::ReadModel];
 
-    pub fn try_new(value: String) -> Result<Self, ViewFieldSourceKindError> {
+    pub fn try_new(value: &str) -> Result<Self, ViewFieldSourceKindError> {
         match value.trim() {
             "read_model" => Ok(Self::ReadModel),
             _ => Err(ViewFieldSourceKindError::new(value)),
@@ -2760,7 +2772,7 @@ pub struct ViewFieldSourceKindError {
 }
 
 impl ViewFieldSourceKindError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled view field source kind, got '{value}'"),
         }

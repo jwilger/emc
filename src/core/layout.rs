@@ -4,8 +4,8 @@ use std::fmt::Display;
 
 use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest};
 use crate::core::effect::{
-    ArtifactFileExtension, CanonicalDeclarationMarker, CanonicalDeclarationPrefix, Effect,
-    EffectPlan, FileContents, ProjectPath, ReportLine,
+    ArtifactDigest, ArtifactFileExtension, CanonicalDeclarationMarker, CanonicalDeclarationPrefix,
+    Effect, EffectPlan, FileContents, ProjectPath, ReportLine,
 };
 use crate::core::emit::lean::emit_slice_module as emit_lean_slice_module;
 use crate::core::emit::quint::emit_slice_module as emit_quint_slice_module;
@@ -89,12 +89,12 @@ impl ModeledWorkflowLayout {
     }
 
     pub(crate) fn lean_artifact_path(&self) -> ProjectPath {
-        let module_name = module_name_from_model(self.name.clone());
+        let module_name = module_name_from_model(&self.name);
         project_path(format!("model/lean/{module_name}.lean"))
     }
 
     pub(crate) fn quint_artifact_path(&self) -> ProjectPath {
-        let module_name = module_name_from_model(self.name.clone());
+        let module_name = module_name_from_model(&self.name);
         project_path(format!("model/quint/{module_name}.qnt"))
     }
 }
@@ -229,12 +229,44 @@ impl ModeledProjectRootInventories {
     }
 }
 
+fn borrow_project_root_inventories(
+    inventories: &ModeledProjectRootInventories,
+) -> ProjectRootInventories<'_> {
+    ProjectRootInventories {
+        scenarios: &inventories.scenarios,
+        scenario_definitions: &inventories.scenario_definitions,
+        data_flows: &inventories.data_flows,
+        outcomes: &inventories.outcomes,
+        command_errors: &inventories.command_errors,
+        commands: &inventories.commands,
+        command_inputs: &inventories.command_inputs,
+        read_models: &inventories.read_models,
+        read_model_definitions: &inventories.read_model_definitions,
+        read_model_fields: &inventories.read_model_fields,
+        views: &inventories.views,
+        view_definitions: &inventories.view_definitions,
+        view_controls: &inventories.view_controls,
+        board_elements: &inventories.board_elements,
+        board_connections: &inventories.board_connections,
+        view_fields: &inventories.view_fields,
+        automations: &inventories.automations,
+        automation_definitions: &inventories.automation_definitions,
+        translations: &inventories.translations,
+        translation_definitions: &inventories.translation_definitions,
+        external_payloads: &inventories.external_payloads,
+        external_payload_fields: &inventories.external_payload_fields,
+        streams: &inventories.streams,
+        events: &inventories.events,
+        event_attributes: &inventories.event_attributes,
+    }
+}
+
 pub(crate) fn check_project(
-    project_name: ProjectName,
+    project_name: &ProjectName,
     formal_workflows: FormalWorkflowGraphs,
-    project_inventories: ModeledProjectRootInventories,
+    project_inventories: &ModeledProjectRootInventories,
 ) -> EffectPlan {
-    let module_name = module_name(&project_name);
+    let module_name = module_name(project_name);
     let mut formal_workflows = formal_workflows.into_inner();
     formal_workflows.sort_by(|left, right| left.slug().as_ref().cmp(right.slug().as_ref()));
     let modeled_workflows = formal_workflows
@@ -242,37 +274,11 @@ pub(crate) fn check_project(
         .map(modeled_workflow_layout)
         .collect::<Vec<_>>();
     let root_effects = project_root_effects(
-        &project_name,
+        project_name,
         &module_name,
         &modeled_workflows,
         &formal_workflows,
-        &ProjectRootInventories {
-            scenarios: &project_inventories.scenarios,
-            scenario_definitions: &project_inventories.scenario_definitions,
-            data_flows: &project_inventories.data_flows,
-            outcomes: &project_inventories.outcomes,
-            command_errors: &project_inventories.command_errors,
-            commands: &project_inventories.commands,
-            command_inputs: &project_inventories.command_inputs,
-            read_models: &project_inventories.read_models,
-            read_model_definitions: &project_inventories.read_model_definitions,
-            read_model_fields: &project_inventories.read_model_fields,
-            views: &project_inventories.views,
-            view_definitions: &project_inventories.view_definitions,
-            view_controls: &project_inventories.view_controls,
-            board_elements: &project_inventories.board_elements,
-            board_connections: &project_inventories.board_connections,
-            view_fields: &project_inventories.view_fields,
-            automations: &project_inventories.automations,
-            automation_definitions: &project_inventories.automation_definitions,
-            translations: &project_inventories.translations,
-            translation_definitions: &project_inventories.translation_definitions,
-            external_payloads: &project_inventories.external_payloads,
-            external_payload_fields: &project_inventories.external_payload_fields,
-            streams: &project_inventories.streams,
-            events: &project_inventories.events,
-            event_attributes: &project_inventories.event_attributes,
-        },
+        &borrow_project_root_inventories(project_inventories),
     );
     let lean_artifact_paths = modeled_artifact_paths(
         [
@@ -360,7 +366,7 @@ fn modeled_slice_artifact_paths(
                 project_path(format!(
                     "{}/{}{}",
                     artifact_directory,
-                    module_name_from_model(slice.name().clone()),
+                    module_name_from_model(slice.name()),
                     extension
                 ))
             })
@@ -430,9 +436,313 @@ fn replace_quint_count(text: &mut String, declared: &str, var: &str, count: usiz
 /// regeneration never reads or parses the generated artifact back. Byte parity
 /// with the historical `add_project_*` replay is exercised by the project-root
 /// inventory assertions across the suite.
+struct RootBehaviorModels {
+    scenarios: Vec<FormalModelScenario>,
+    scenario_definitions: Vec<FormalModelScenarioDefinition>,
+    data_flows: Vec<FormalModelDataFlow>,
+    outcomes: Vec<FormalModelOutcome>,
+    command_errors: Vec<FormalModelCommandError>,
+    commands: Vec<FormalModelCommand>,
+    command_inputs: Vec<FormalModelCommandInput>,
+}
+
+fn build_root_behavior_models(inventories: &ModeledProjectRootInventories) -> RootBehaviorModels {
+    RootBehaviorModels {
+        scenarios: formal_model_scenarios(&inventories.scenarios),
+        scenario_definitions: formal_model_scenario_definitions(&inventories.scenario_definitions),
+        data_flows: formal_model_data_flows(&inventories.data_flows),
+        outcomes: formal_model_outcomes(&inventories.outcomes),
+        command_errors: formal_model_command_errors(&inventories.command_errors),
+        commands: formal_model_commands(&inventories.commands),
+        command_inputs: formal_model_command_inputs(&inventories.command_inputs),
+    }
+}
+
+fn apply_lean_root_behavior_lists(target: &mut String, models: &RootBehaviorModels) {
+    let model_scenarios = models.scenarios.clone();
+    let model_scenario_definitions = models.scenario_definitions.clone();
+    let model_data_flows = models.data_flows.clone();
+    let model_outcomes = models.outcomes.clone();
+    let model_command_errors = models.command_errors.clone();
+    let model_commands = models.commands.clone();
+    let model_command_inputs = models.command_inputs.clone();
+    replace_lean_list(
+        target,
+        "def modelScenarios : List ModelScenario",
+        &render_lean_model_scenario_list(&model_scenarios),
+    );
+    replace_lean_list(
+        target,
+        "def modelScenarioDefinitions : List ModelScenarioDefinition",
+        &render_lean_model_scenario_definition_list(&model_scenario_definitions),
+    );
+    replace_lean_list(
+        target,
+        "def modelDataFlows : List ModelDataFlow",
+        &render_lean_model_data_flow_list(&model_data_flows),
+    );
+    replace_lean_list(
+        target,
+        "def modelOutcomes : List ModelOutcome",
+        &render_lean_model_outcome_list(&model_outcomes),
+    );
+    replace_lean_list(
+        target,
+        "def modelCommandErrors : List ModelCommandError",
+        &render_lean_model_command_error_list(&model_command_errors),
+    );
+    replace_lean_list(
+        target,
+        "def modelCommands : List ModelCommand",
+        &render_lean_model_command_list(&model_commands),
+    );
+    replace_lean_list(
+        target,
+        "def modelCommandInputs : List ModelCommandInput",
+        &render_lean_model_command_input_list(&model_command_inputs),
+    );
+}
+
+fn apply_lean_root_inventory_lists(
+    target: &mut String,
+    inventories: &ModeledProjectRootInventories,
+) {
+    replace_lean_list(
+        target,
+        "def modelReadModels : List ModelReadModel",
+        &lean_model_read_model_list(&inventories.read_models),
+    );
+    replace_lean_list(
+        target,
+        "def modelReadModelDefinitions : List ModelReadModelDefinition",
+        &lean_model_read_model_definition_list(&inventories.read_model_definitions),
+    );
+    replace_lean_list(
+        target,
+        "def modelReadModelFields : List ModelReadModelField",
+        &lean_model_read_model_field_list(&inventories.read_model_fields),
+    );
+    replace_lean_list(
+        target,
+        "def modelViews : List ModelView",
+        &lean_model_view_list(&inventories.views),
+    );
+    replace_lean_list(
+        target,
+        "def modelViewDefinitions : List ModelViewDefinition",
+        &lean_model_view_definition_list(&inventories.view_definitions),
+    );
+    replace_lean_list(
+        target,
+        "def modelViewControls : List ModelViewControl",
+        &lean_model_view_control_list(&inventories.view_controls),
+    );
+    replace_lean_list(
+        target,
+        "def modelBoardElements : List ModelBoardElement",
+        &lean_model_board_element_list(&inventories.board_elements),
+    );
+    replace_lean_list(
+        target,
+        "def modelBoardConnections : List ModelBoardConnection",
+        &lean_model_board_connection_list(&inventories.board_connections),
+    );
+    replace_lean_list(
+        target,
+        "def modelViewFields : List ModelViewField",
+        &lean_model_view_field_list(&inventories.view_fields),
+    );
+    replace_lean_list(
+        target,
+        "def modelAutomations : List ModelAutomation",
+        &lean_model_automation_list(&inventories.automations),
+    );
+    replace_lean_list(
+        target,
+        "def modelAutomationDefinitions : List ModelAutomationDefinition",
+        &lean_model_automation_definition_list(&inventories.automation_definitions),
+    );
+    replace_lean_list(
+        target,
+        "def modelTranslations : List ModelTranslation",
+        &lean_model_translation_list(&inventories.translations),
+    );
+    replace_lean_list(
+        target,
+        "def modelTranslationDefinitions : List ModelTranslationDefinition",
+        &lean_model_translation_definition_list(&inventories.translation_definitions),
+    );
+    replace_lean_list(
+        target,
+        "def modelExternalPayloads : List ModelExternalPayload",
+        &lean_model_external_payload_list(&inventories.external_payloads),
+    );
+    replace_lean_list(
+        target,
+        "def modelExternalPayloadFields : List ModelExternalPayloadField",
+        &lean_model_external_payload_field_list(&inventories.external_payload_fields),
+    );
+    replace_lean_list(
+        target,
+        "def modelStreams : List ModelStream",
+        &lean_model_stream_list(&inventories.streams),
+    );
+    replace_lean_list(
+        target,
+        "def modelEvents : List ModelEvent",
+        &lean_model_event_list(&inventories.events),
+    );
+    replace_lean_list(
+        target,
+        "def modelEventAttributes : List ModelEventAttribute",
+        &lean_model_event_attribute_list(&inventories.event_attributes),
+    );
+}
+
+fn apply_quint_root_behavior_lists(target: &mut String, models: &RootBehaviorModels) {
+    let model_scenarios = models.scenarios.clone();
+    let model_scenario_definitions = models.scenario_definitions.clone();
+    let model_data_flows = models.data_flows.clone();
+    let model_outcomes = models.outcomes.clone();
+    let model_command_errors = models.command_errors.clone();
+    let model_commands = models.commands.clone();
+    let model_command_inputs = models.command_inputs.clone();
+    replace_quint_list(
+        target,
+        "val modelScenarios: List[ModelScenario]",
+        &render_quint_model_scenario_list(&model_scenarios),
+    );
+    replace_quint_list(
+        target,
+        "val modelScenarioDefinitions: List[ModelScenarioDefinition]",
+        &render_quint_model_scenario_definition_list(&model_scenario_definitions),
+    );
+    replace_quint_list(
+        target,
+        "val modelDataFlows: List[ModelDataFlow]",
+        &render_quint_model_data_flow_list(&model_data_flows),
+    );
+    replace_quint_list(
+        target,
+        "val modelOutcomes: List[ModelOutcome]",
+        &render_quint_model_outcome_list(&model_outcomes),
+    );
+    replace_quint_list(
+        target,
+        "val modelCommandErrors: List[ModelCommandError]",
+        &render_quint_model_command_error_list(&model_command_errors),
+    );
+    replace_quint_list(
+        target,
+        "val modelCommands: List[ModelCommand]",
+        &render_quint_model_command_list(&model_commands),
+    );
+    replace_quint_list(
+        target,
+        "val modelCommandInputs: List[ModelCommandInput]",
+        &render_quint_model_command_input_list(&model_command_inputs),
+    );
+}
+
+fn apply_quint_root_inventory_lists(
+    target: &mut String,
+    inventories: &ModeledProjectRootInventories,
+) {
+    replace_quint_list(
+        target,
+        "val modelReadModels: List[ModelReadModel]",
+        &quint_model_read_model_list(&inventories.read_models),
+    );
+    replace_quint_list(
+        target,
+        "val modelReadModelDefinitions: List[ModelReadModelDefinition]",
+        &quint_model_read_model_definition_list(&inventories.read_model_definitions),
+    );
+    replace_quint_list(
+        target,
+        "val modelReadModelFields: List[ModelReadModelField]",
+        &quint_model_read_model_field_list(&inventories.read_model_fields),
+    );
+    replace_quint_list(
+        target,
+        "val modelViews: List[ModelView]",
+        &quint_model_view_list(&inventories.views),
+    );
+    replace_quint_list(
+        target,
+        "val modelViewDefinitions: List[ModelViewDefinition]",
+        &quint_model_view_definition_list(&inventories.view_definitions),
+    );
+    replace_quint_list(
+        target,
+        "val modelViewControls: List[ModelViewControl]",
+        &quint_model_view_control_list(&inventories.view_controls),
+    );
+    replace_quint_list(
+        target,
+        "val modelBoardElements: List[ModelBoardElement]",
+        &quint_model_board_element_list(&inventories.board_elements),
+    );
+    replace_quint_list(
+        target,
+        "val modelBoardConnections: List[ModelBoardConnection]",
+        &quint_model_board_connection_list(&inventories.board_connections),
+    );
+    replace_quint_list(
+        target,
+        "val modelViewFields: List[ModelViewField]",
+        &quint_model_view_field_list(&inventories.view_fields),
+    );
+    replace_quint_list(
+        target,
+        "val modelAutomations: List[ModelAutomation]",
+        &quint_model_automation_list(&inventories.automations),
+    );
+    replace_quint_list(
+        target,
+        "val modelAutomationDefinitions: List[ModelAutomationDefinition]",
+        &quint_model_automation_definition_list(&inventories.automation_definitions),
+    );
+    replace_quint_list(
+        target,
+        "val modelTranslations: List[ModelTranslation]",
+        &quint_model_translation_list(&inventories.translations),
+    );
+    replace_quint_list(
+        target,
+        "val modelTranslationDefinitions: List[ModelTranslationDefinition]",
+        &quint_model_translation_definition_list(&inventories.translation_definitions),
+    );
+    replace_quint_list(
+        target,
+        "val modelExternalPayloads: List[ModelExternalPayload]",
+        &quint_model_external_payload_list(&inventories.external_payloads),
+    );
+    replace_quint_list(
+        target,
+        "val modelExternalPayloadFields: List[ModelExternalPayloadField]",
+        &quint_model_external_payload_field_list(&inventories.external_payload_fields),
+    );
+    replace_quint_list(
+        target,
+        "val modelStreams: List[ModelStream]",
+        &quint_model_stream_list(&inventories.streams),
+    );
+    replace_quint_list(
+        target,
+        "val modelEvents: List[ModelEvent]",
+        &quint_model_event_list(&inventories.events),
+    );
+    replace_quint_list(
+        target,
+        "val modelEventAttributes: List[ModelEventAttribute]",
+        &quint_model_event_attribute_list(&inventories.event_attributes),
+    );
+}
+
 pub(crate) fn populate_project_root_modules(
-    lean_shell: FileContents,
-    quint_shell: FileContents,
+    lean_shell: &FileContents,
+    quint_shell: &FileContents,
     project_name: &ProjectName,
     workflow_slugs: &[WorkflowSlug],
     slice_memberships: &[ProjectSliceMembership],
@@ -443,273 +753,18 @@ pub(crate) fn populate_project_root_modules(
         .iter()
         .map(modeled_workflow_layout)
         .collect::<Vec<_>>();
-    let model_scenarios = formal_model_scenarios(&inventories.scenarios);
-    let model_scenario_definitions =
-        formal_model_scenario_definitions(&inventories.scenario_definitions);
-    let model_data_flows = formal_model_data_flows(&inventories.data_flows);
-    let model_outcomes = formal_model_outcomes(&inventories.outcomes);
-    let model_command_errors = formal_model_command_errors(&inventories.command_errors);
-    let model_commands = formal_model_commands(&inventories.commands);
-    let model_command_inputs = formal_model_command_inputs(&inventories.command_inputs);
+    let models = build_root_behavior_models(inventories);
 
     let mut lean = lean_shell.as_ref().to_owned();
-    replace_lean_list(
-        &mut lean,
-        "def modelScenarios : List ModelScenario",
-        &render_lean_model_scenario_list(&model_scenarios),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelScenarioDefinitions : List ModelScenarioDefinition",
-        &render_lean_model_scenario_definition_list(&model_scenario_definitions),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelDataFlows : List ModelDataFlow",
-        &render_lean_model_data_flow_list(&model_data_flows),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelOutcomes : List ModelOutcome",
-        &render_lean_model_outcome_list(&model_outcomes),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelCommandErrors : List ModelCommandError",
-        &render_lean_model_command_error_list(&model_command_errors),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelCommands : List ModelCommand",
-        &render_lean_model_command_list(&model_commands),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelCommandInputs : List ModelCommandInput",
-        &render_lean_model_command_input_list(&model_command_inputs),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelReadModels : List ModelReadModel",
-        &lean_model_read_model_list(&inventories.read_models),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelReadModelDefinitions : List ModelReadModelDefinition",
-        &lean_model_read_model_definition_list(&inventories.read_model_definitions),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelReadModelFields : List ModelReadModelField",
-        &lean_model_read_model_field_list(&inventories.read_model_fields),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelViews : List ModelView",
-        &lean_model_view_list(&inventories.views),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelViewDefinitions : List ModelViewDefinition",
-        &lean_model_view_definition_list(&inventories.view_definitions),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelViewControls : List ModelViewControl",
-        &lean_model_view_control_list(&inventories.view_controls),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelBoardElements : List ModelBoardElement",
-        &lean_model_board_element_list(&inventories.board_elements),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelBoardConnections : List ModelBoardConnection",
-        &lean_model_board_connection_list(&inventories.board_connections),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelViewFields : List ModelViewField",
-        &lean_model_view_field_list(&inventories.view_fields),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelAutomations : List ModelAutomation",
-        &lean_model_automation_list(&inventories.automations),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelAutomationDefinitions : List ModelAutomationDefinition",
-        &lean_model_automation_definition_list(&inventories.automation_definitions),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelTranslations : List ModelTranslation",
-        &lean_model_translation_list(&inventories.translations),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelTranslationDefinitions : List ModelTranslationDefinition",
-        &lean_model_translation_definition_list(&inventories.translation_definitions),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelExternalPayloads : List ModelExternalPayload",
-        &lean_model_external_payload_list(&inventories.external_payloads),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelExternalPayloadFields : List ModelExternalPayloadField",
-        &lean_model_external_payload_field_list(&inventories.external_payload_fields),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelStreams : List ModelStream",
-        &lean_model_stream_list(&inventories.streams),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelEvents : List ModelEvent",
-        &lean_model_event_list(&inventories.events),
-    );
-    replace_lean_list(
-        &mut lean,
-        "def modelEventAttributes : List ModelEventAttribute",
-        &lean_model_event_attribute_list(&inventories.event_attributes),
-    );
-
+    apply_lean_root_behavior_lists(&mut lean, &models);
+    apply_lean_root_inventory_lists(&mut lean, inventories);
     for (theorem, var, count) in lean_root_count_theorems(inventories) {
         replace_lean_count(&mut lean, theorem, var, count);
     }
 
     let mut quint = quint_shell.as_ref().to_owned();
-    replace_quint_list(
-        &mut quint,
-        "val modelScenarios: List[ModelScenario]",
-        &render_quint_model_scenario_list(&model_scenarios),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelScenarioDefinitions: List[ModelScenarioDefinition]",
-        &render_quint_model_scenario_definition_list(&model_scenario_definitions),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelDataFlows: List[ModelDataFlow]",
-        &render_quint_model_data_flow_list(&model_data_flows),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelOutcomes: List[ModelOutcome]",
-        &render_quint_model_outcome_list(&model_outcomes),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelCommandErrors: List[ModelCommandError]",
-        &render_quint_model_command_error_list(&model_command_errors),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelCommands: List[ModelCommand]",
-        &render_quint_model_command_list(&model_commands),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelCommandInputs: List[ModelCommandInput]",
-        &render_quint_model_command_input_list(&model_command_inputs),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelReadModels: List[ModelReadModel]",
-        &quint_model_read_model_list(&inventories.read_models),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelReadModelDefinitions: List[ModelReadModelDefinition]",
-        &quint_model_read_model_definition_list(&inventories.read_model_definitions),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelReadModelFields: List[ModelReadModelField]",
-        &quint_model_read_model_field_list(&inventories.read_model_fields),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelViews: List[ModelView]",
-        &quint_model_view_list(&inventories.views),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelViewDefinitions: List[ModelViewDefinition]",
-        &quint_model_view_definition_list(&inventories.view_definitions),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelViewControls: List[ModelViewControl]",
-        &quint_model_view_control_list(&inventories.view_controls),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelBoardElements: List[ModelBoardElement]",
-        &quint_model_board_element_list(&inventories.board_elements),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelBoardConnections: List[ModelBoardConnection]",
-        &quint_model_board_connection_list(&inventories.board_connections),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelViewFields: List[ModelViewField]",
-        &quint_model_view_field_list(&inventories.view_fields),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelAutomations: List[ModelAutomation]",
-        &quint_model_automation_list(&inventories.automations),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelAutomationDefinitions: List[ModelAutomationDefinition]",
-        &quint_model_automation_definition_list(&inventories.automation_definitions),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelTranslations: List[ModelTranslation]",
-        &quint_model_translation_list(&inventories.translations),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelTranslationDefinitions: List[ModelTranslationDefinition]",
-        &quint_model_translation_definition_list(&inventories.translation_definitions),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelExternalPayloads: List[ModelExternalPayload]",
-        &quint_model_external_payload_list(&inventories.external_payloads),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelExternalPayloadFields: List[ModelExternalPayloadField]",
-        &quint_model_external_payload_field_list(&inventories.external_payload_fields),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelStreams: List[ModelStream]",
-        &quint_model_stream_list(&inventories.streams),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelEvents: List[ModelEvent]",
-        &quint_model_event_list(&inventories.events),
-    );
-    replace_quint_list(
-        &mut quint,
-        "val modelEventAttributes: List[ModelEventAttribute]",
-        &quint_model_event_attribute_list(&inventories.event_attributes),
-    );
-
+    apply_quint_root_behavior_lists(&mut quint, &models);
+    apply_quint_root_inventory_lists(&mut quint, inventories);
     for (declared, var, count) in quint_root_count_declarations(inventories) {
         replace_quint_count(&mut quint, declared, var, count);
     }
@@ -728,33 +783,7 @@ pub(crate) fn populate_project_root_modules(
         project_name,
         &modeled_workflows,
         formal_workflows,
-        &ProjectRootInventories {
-            scenarios: &inventories.scenarios,
-            scenario_definitions: &inventories.scenario_definitions,
-            data_flows: &inventories.data_flows,
-            outcomes: &inventories.outcomes,
-            command_errors: &inventories.command_errors,
-            commands: &inventories.commands,
-            command_inputs: &inventories.command_inputs,
-            read_models: &inventories.read_models,
-            read_model_definitions: &inventories.read_model_definitions,
-            read_model_fields: &inventories.read_model_fields,
-            views: &inventories.views,
-            view_definitions: &inventories.view_definitions,
-            view_controls: &inventories.view_controls,
-            board_elements: &inventories.board_elements,
-            board_connections: &inventories.board_connections,
-            view_fields: &inventories.view_fields,
-            automations: &inventories.automations,
-            automation_definitions: &inventories.automation_definitions,
-            translations: &inventories.translations,
-            translation_definitions: &inventories.translation_definitions,
-            external_payloads: &inventories.external_payloads,
-            external_payload_fields: &inventories.external_payload_fields,
-            streams: &inventories.streams,
-            events: &inventories.events,
-            event_attributes: &inventories.event_attributes,
-        },
+        &borrow_project_root_inventories(inventories),
     );
     let lean = lean.replace(&shell_digest, &complete_digest);
     let quint = quint.replace(&shell_digest, &complete_digest);
@@ -762,7 +791,7 @@ pub(crate) fn populate_project_root_modules(
     (file_contents(lean), file_contents(quint))
 }
 
-fn lean_root_count_theorems(
+fn root_count_theorems_behavior(
     inventories: &ModeledProjectRootInventories,
 ) -> Vec<(&'static str, &'static str, usize)> {
     vec![
@@ -801,6 +830,13 @@ fn lean_root_count_theorems(
             "modelCommandInputs",
             inventories.command_inputs.len(),
         ),
+    ]
+}
+
+fn root_count_theorems_read_models_and_views(
+    inventories: &ModeledProjectRootInventories,
+) -> Vec<(&'static str, &'static str, usize)> {
+    vec![
         (
             "modelReadModelsAreDeclared",
             "modelReadModels",
@@ -846,6 +882,13 @@ fn lean_root_count_theorems(
             "modelViewFields",
             inventories.view_fields.len(),
         ),
+    ]
+}
+
+fn root_count_theorems_integrations(
+    inventories: &ModeledProjectRootInventories,
+) -> Vec<(&'static str, &'static str, usize)> {
+    vec![
         (
             "modelAutomationsAreDeclared",
             "modelAutomations",
@@ -894,159 +937,359 @@ fn lean_root_count_theorems(
     ]
 }
 
+fn lean_root_count_theorems(
+    inventories: &ModeledProjectRootInventories,
+) -> Vec<(&'static str, &'static str, usize)> {
+    [
+        root_count_theorems_behavior(inventories),
+        root_count_theorems_read_models_and_views(inventories),
+        root_count_theorems_integrations(inventories),
+    ]
+    .concat()
+}
+
 fn quint_root_count_declarations(
     inventories: &ModeledProjectRootInventories,
 ) -> Vec<(&'static str, &'static str, usize)> {
     lean_root_count_theorems(inventories)
 }
 
-fn project_root_effects(
-    project_name: &ProjectName,
-    module_name: &str,
+struct RootEffectPaths {
+    manifest: ProjectPath,
+    lakefile: ProjectPath,
+    lean_toolchain: ProjectPath,
+    lean: ProjectPath,
+    quint: ProjectPath,
+}
+
+struct RootEffectMessages {
+    manifest: ReportLine,
+    lean_config: ReportLine,
+    lean: ReportLine,
+    quint: ReportLine,
+}
+
+struct RootEffectScalars {
+    module_name: String,
+    project_name_text: String,
+    model_version: String,
+    model_digest: String,
+    workflow_slug_list: String,
+}
+
+struct RootLeanLists {
+    workflow: String,
+    slice: String,
+    slice_module: String,
+    scenario: String,
+    scenario_definition: String,
+    data_flow: String,
+    outcome: String,
+    command_error: String,
+    command: String,
+    command_input: String,
+    read_model: String,
+    read_model_definition: String,
+    read_model_field: String,
+    view: String,
+    view_definition: String,
+    view_control: String,
+    board_element: String,
+    board_connection: String,
+    view_field: String,
+    automation: String,
+    automation_definition: String,
+    translation: String,
+    translation_definition: String,
+    external_payload: String,
+    external_payload_field: String,
+    stream: String,
+    event: String,
+    event_attribute: String,
+}
+
+struct RootQuintLists {
+    slice: String,
+    slice_module: String,
+    scenario: String,
+    scenario_definition: String,
+    data_flow: String,
+    outcome: String,
+    command_error: String,
+    command: String,
+    command_input: String,
+    read_model: String,
+    read_model_definition: String,
+    read_model_field: String,
+    view: String,
+    view_definition: String,
+    view_control: String,
+    board_element: String,
+    board_connection: String,
+    view_field: String,
+    automation: String,
+    automation_definition: String,
+    translation: String,
+    translation_definition: String,
+    external_payload: String,
+    external_payload_field: String,
+    stream: String,
+    event: String,
+    event_attribute: String,
+}
+
+struct RootCounts {
+    workflow: usize,
+    slice: usize,
+    scenario: usize,
+    scenario_definition: usize,
+    data_flow: usize,
+    outcome: usize,
+    command_error: usize,
+    stream: usize,
+    command: usize,
+    command_input: usize,
+    read_model: usize,
+    read_model_definition: usize,
+    read_model_field: usize,
+    view: usize,
+    view_definition: usize,
+    view_control: usize,
+    board_element: usize,
+    board_connection: usize,
+    view_field: usize,
+    automation: usize,
+    automation_definition: usize,
+    translation: usize,
+    translation_definition: usize,
+    external_payload: usize,
+    external_payload_field: usize,
+    event: usize,
+    event_attribute: usize,
+}
+
+struct RootEffectContext {
+    paths: RootEffectPaths,
+    messages: RootEffectMessages,
+    scalars: RootEffectScalars,
+    lean: RootLeanLists,
+    quint: RootQuintLists,
+    counts: RootCounts,
+}
+
+struct RootModels {
+    workflows: Vec<FormalModelWorkflow>,
+    slices: Vec<FormalModelSlice>,
+    slice_modules: Vec<FormalModelSliceModule>,
+    scenarios: Vec<FormalModelScenario>,
+    scenario_definitions: Vec<FormalModelScenarioDefinition>,
+    data_flows: Vec<FormalModelDataFlow>,
+    outcomes: Vec<FormalModelOutcome>,
+    command_errors: Vec<FormalModelCommandError>,
+    commands: Vec<FormalModelCommand>,
+    command_inputs: Vec<FormalModelCommandInput>,
+}
+
+fn build_root_models(
     modeled_workflows: &[ModeledWorkflowLayout],
     formal_workflows: &[FormalWorkflowGraph],
     inventories: &ProjectRootInventories<'_>,
-) -> Vec<Effect> {
-    let project_name_text = project_name.as_ref();
-    let model_version = "0.1.0";
-    let workflow_slug_list = workflow_slug_list(modeled_workflows);
-    let workflow_count = modeled_workflows.len();
-    let model_workflows = formal_model_workflows(modeled_workflows);
-    let model_slices = formal_model_slices(formal_workflows);
-    let model_slice_modules = formal_model_slice_modules(formal_workflows);
-    let model_scenarios = formal_model_scenarios(inventories.scenarios);
-    let model_scenario_definitions =
-        formal_model_scenario_definitions(inventories.scenario_definitions);
-    let model_data_flows = formal_model_data_flows(inventories.data_flows);
-    let model_outcomes = formal_model_outcomes(inventories.outcomes);
-    let model_command_errors = formal_model_command_errors(inventories.command_errors);
-    let model_commands = formal_model_commands(inventories.commands);
-    let model_command_inputs = formal_model_command_inputs(inventories.command_inputs);
-    let lean_model_workflow_list = render_lean_model_workflow_list(&model_workflows);
-    let lean_model_slice_list = render_lean_model_slice_list(&model_slices);
-    let lean_model_slice_module_list = render_lean_model_slice_module_list(&model_slice_modules);
-    let lean_model_scenario_list = render_lean_model_scenario_list(&model_scenarios);
-    let lean_model_scenario_definition_list =
-        render_lean_model_scenario_definition_list(&model_scenario_definitions);
-    let lean_model_data_flow_list = render_lean_model_data_flow_list(&model_data_flows);
-    let lean_model_outcome_list = render_lean_model_outcome_list(&model_outcomes);
-    let lean_model_command_error_list = render_lean_model_command_error_list(&model_command_errors);
-    let lean_model_command_list = render_lean_model_command_list(&model_commands);
-    let lean_model_command_input_list = render_lean_model_command_input_list(&model_command_inputs);
-    let lean_model_read_model_list = lean_model_read_model_list(inventories.read_models);
-    let lean_model_read_model_definition_list =
-        lean_model_read_model_definition_list(inventories.read_model_definitions);
-    let lean_model_read_model_field_list =
-        lean_model_read_model_field_list(inventories.read_model_fields);
-    let lean_model_view_list = lean_model_view_list(inventories.views);
-    let lean_model_view_definition_list =
-        lean_model_view_definition_list(inventories.view_definitions);
-    let lean_model_view_control_list = lean_model_view_control_list(inventories.view_controls);
-    let lean_model_board_element_list = lean_model_board_element_list(inventories.board_elements);
-    let lean_model_board_connection_list =
-        lean_model_board_connection_list(inventories.board_connections);
-    let lean_model_view_field_list = lean_model_view_field_list(inventories.view_fields);
-    let lean_model_automation_list = lean_model_automation_list(inventories.automations);
-    let lean_model_automation_definition_list =
-        lean_model_automation_definition_list(inventories.automation_definitions);
-    let lean_model_translation_list = lean_model_translation_list(inventories.translations);
-    let lean_model_translation_definition_list =
-        lean_model_translation_definition_list(inventories.translation_definitions);
-    let lean_model_external_payload_list =
-        lean_model_external_payload_list(inventories.external_payloads);
-    let lean_model_external_payload_field_list =
-        lean_model_external_payload_field_list(inventories.external_payload_fields);
-    let lean_model_stream_list = lean_model_stream_list(inventories.streams);
-    let lean_model_event_list = lean_model_event_list(inventories.events);
-    let lean_model_event_attribute_list =
-        lean_model_event_attribute_list(inventories.event_attributes);
-    let quint_model_slice_list = render_quint_model_slice_list(&model_slices);
-    let quint_model_slice_module_list = render_quint_model_slice_module_list(&model_slice_modules);
-    let quint_model_scenario_list = render_quint_model_scenario_list(&model_scenarios);
-    let quint_model_scenario_definition_list =
-        render_quint_model_scenario_definition_list(&model_scenario_definitions);
-    let quint_model_data_flow_list = render_quint_model_data_flow_list(&model_data_flows);
-    let quint_model_outcome_list = render_quint_model_outcome_list(&model_outcomes);
-    let quint_model_command_error_list =
-        render_quint_model_command_error_list(&model_command_errors);
-    let quint_model_command_list = render_quint_model_command_list(&model_commands);
-    let quint_model_command_input_list =
-        render_quint_model_command_input_list(&model_command_inputs);
-    let quint_model_read_model_list = quint_model_read_model_list(inventories.read_models);
-    let quint_model_read_model_definition_list =
-        quint_model_read_model_definition_list(inventories.read_model_definitions);
-    let quint_model_read_model_field_list =
-        quint_model_read_model_field_list(inventories.read_model_fields);
-    let quint_model_view_list = quint_model_view_list(inventories.views);
-    let quint_model_view_definition_list =
-        quint_model_view_definition_list(inventories.view_definitions);
-    let quint_model_view_control_list = quint_model_view_control_list(inventories.view_controls);
-    let quint_model_board_element_list = quint_model_board_element_list(inventories.board_elements);
-    let quint_model_board_connection_list =
-        quint_model_board_connection_list(inventories.board_connections);
-    let quint_model_view_field_list = quint_model_view_field_list(inventories.view_fields);
-    let quint_model_automation_list = quint_model_automation_list(inventories.automations);
-    let quint_model_automation_definition_list =
-        quint_model_automation_definition_list(inventories.automation_definitions);
-    let quint_model_translation_list = quint_model_translation_list(inventories.translations);
-    let quint_model_translation_definition_list =
-        quint_model_translation_definition_list(inventories.translation_definitions);
-    let quint_model_external_payload_list =
-        quint_model_external_payload_list(inventories.external_payloads);
-    let quint_model_external_payload_field_list =
-        quint_model_external_payload_field_list(inventories.external_payload_fields);
-    let quint_model_stream_list = quint_model_stream_list(inventories.streams);
-    let quint_model_event_list = quint_model_event_list(inventories.events);
-    let quint_model_event_attribute_list =
-        quint_model_event_attribute_list(inventories.event_attributes);
+) -> RootModels {
+    RootModels {
+        workflows: formal_model_workflows(modeled_workflows),
+        slices: formal_model_slices(formal_workflows),
+        slice_modules: formal_model_slice_modules(formal_workflows),
+        scenarios: formal_model_scenarios(inventories.scenarios),
+        scenario_definitions: formal_model_scenario_definitions(inventories.scenario_definitions),
+        data_flows: formal_model_data_flows(inventories.data_flows),
+        outcomes: formal_model_outcomes(inventories.outcomes),
+        command_errors: formal_model_command_errors(inventories.command_errors),
+        commands: formal_model_commands(inventories.commands),
+        command_inputs: formal_model_command_inputs(inventories.command_inputs),
+    }
+}
+
+fn build_root_effect_paths(module_name: &str) -> RootEffectPaths {
+    RootEffectPaths {
+        manifest: project_path("emc.toml"),
+        lakefile: project_path("model/lean/lakefile.lean"),
+        lean_toolchain: project_path("model/lean/lean-toolchain"),
+        lean: project_path(format!("model/lean/{module_name}.lean")),
+        quint: project_path(format!("model/quint/{module_name}.qnt")),
+    }
+}
+
+fn build_root_effect_messages(project_name_text: &str) -> RootEffectMessages {
+    RootEffectMessages {
+        manifest: report_line(format!("project manifest drift for {project_name_text}")),
+        lean_config: report_line(format!("Lean project config drift for {project_name_text}")),
+        lean: report_line(format!("Lean project root drift for {project_name_text}")),
+        quint: report_line(format!("Quint project root drift for {project_name_text}")),
+    }
+}
+
+fn build_root_effect_scalars(
+    project_name: &ProjectName,
+    modeled_workflows: &[ModeledWorkflowLayout],
+    module_name: &str,
+    formal_workflows: &[FormalWorkflowGraph],
+    inventories: &ProjectRootInventories<'_>,
+) -> RootEffectScalars {
     let model_digest = model_digest(
         project_name,
         modeled_workflows,
         formal_workflows,
         inventories,
     );
+    RootEffectScalars {
+        module_name: module_name.to_owned(),
+        project_name_text: project_name.as_ref().to_owned(),
+        model_version: "0.1.0".to_owned(),
+        model_digest,
+        workflow_slug_list: workflow_slug_list(modeled_workflows),
+    }
+}
+
+fn build_root_lean_lists(
+    models: &RootModels,
+    inventories: &ProjectRootInventories<'_>,
+) -> RootLeanLists {
+    RootLeanLists {
+        workflow: render_lean_model_workflow_list(&models.workflows),
+        slice: render_lean_model_slice_list(&models.slices),
+        slice_module: render_lean_model_slice_module_list(&models.slice_modules),
+        scenario: render_lean_model_scenario_list(&models.scenarios),
+        scenario_definition: render_lean_model_scenario_definition_list(
+            &models.scenario_definitions,
+        ),
+        data_flow: render_lean_model_data_flow_list(&models.data_flows),
+        outcome: render_lean_model_outcome_list(&models.outcomes),
+        command_error: render_lean_model_command_error_list(&models.command_errors),
+        command: render_lean_model_command_list(&models.commands),
+        command_input: render_lean_model_command_input_list(&models.command_inputs),
+        read_model: lean_model_read_model_list(inventories.read_models),
+        read_model_definition: lean_model_read_model_definition_list(
+            inventories.read_model_definitions,
+        ),
+        read_model_field: lean_model_read_model_field_list(inventories.read_model_fields),
+        view: lean_model_view_list(inventories.views),
+        view_definition: lean_model_view_definition_list(inventories.view_definitions),
+        view_control: lean_model_view_control_list(inventories.view_controls),
+        board_element: lean_model_board_element_list(inventories.board_elements),
+        board_connection: lean_model_board_connection_list(inventories.board_connections),
+        view_field: lean_model_view_field_list(inventories.view_fields),
+        automation: lean_model_automation_list(inventories.automations),
+        automation_definition: lean_model_automation_definition_list(
+            inventories.automation_definitions,
+        ),
+        translation: lean_model_translation_list(inventories.translations),
+        translation_definition: lean_model_translation_definition_list(
+            inventories.translation_definitions,
+        ),
+        external_payload: lean_model_external_payload_list(inventories.external_payloads),
+        external_payload_field: lean_model_external_payload_field_list(
+            inventories.external_payload_fields,
+        ),
+        stream: lean_model_stream_list(inventories.streams),
+        event: lean_model_event_list(inventories.events),
+        event_attribute: lean_model_event_attribute_list(inventories.event_attributes),
+    }
+}
+
+fn build_root_quint_lists(
+    models: &RootModels,
+    inventories: &ProjectRootInventories<'_>,
+) -> RootQuintLists {
+    RootQuintLists {
+        slice: render_quint_model_slice_list(&models.slices),
+        slice_module: render_quint_model_slice_module_list(&models.slice_modules),
+        scenario: render_quint_model_scenario_list(&models.scenarios),
+        scenario_definition: render_quint_model_scenario_definition_list(
+            &models.scenario_definitions,
+        ),
+        data_flow: render_quint_model_data_flow_list(&models.data_flows),
+        outcome: render_quint_model_outcome_list(&models.outcomes),
+        command_error: render_quint_model_command_error_list(&models.command_errors),
+        command: render_quint_model_command_list(&models.commands),
+        command_input: render_quint_model_command_input_list(&models.command_inputs),
+        read_model: quint_model_read_model_list(inventories.read_models),
+        read_model_definition: quint_model_read_model_definition_list(
+            inventories.read_model_definitions,
+        ),
+        read_model_field: quint_model_read_model_field_list(inventories.read_model_fields),
+        view: quint_model_view_list(inventories.views),
+        view_definition: quint_model_view_definition_list(inventories.view_definitions),
+        view_control: quint_model_view_control_list(inventories.view_controls),
+        board_element: quint_model_board_element_list(inventories.board_elements),
+        board_connection: quint_model_board_connection_list(inventories.board_connections),
+        view_field: quint_model_view_field_list(inventories.view_fields),
+        automation: quint_model_automation_list(inventories.automations),
+        automation_definition: quint_model_automation_definition_list(
+            inventories.automation_definitions,
+        ),
+        translation: quint_model_translation_list(inventories.translations),
+        translation_definition: quint_model_translation_definition_list(
+            inventories.translation_definitions,
+        ),
+        external_payload: quint_model_external_payload_list(inventories.external_payloads),
+        external_payload_field: quint_model_external_payload_field_list(
+            inventories.external_payload_fields,
+        ),
+        stream: quint_model_stream_list(inventories.streams),
+        event: quint_model_event_list(inventories.events),
+        event_attribute: quint_model_event_attribute_list(inventories.event_attributes),
+    }
+}
+
+fn build_root_counts(
+    workflow_count: usize,
+    formal_workflows: &[FormalWorkflowGraph],
+    inventories: &ProjectRootInventories<'_>,
+) -> RootCounts {
     let slice_count = formal_workflows
         .iter()
         .map(|workflow| workflow.slice_details().as_slice().len())
         .sum::<usize>();
-    let scenario_count = inventories.scenarios.len();
-    let scenario_definition_count = inventories.scenario_definitions.len();
-    let data_flow_count = inventories.data_flows.len();
-    let outcome_count = inventories.outcomes.len();
-    let command_error_count = inventories.command_errors.len();
-    let stream_count = inventories.streams.len();
-    let command_count = inventories.commands.len();
-    let command_input_count = inventories.command_inputs.len();
-    let read_model_count = inventories.read_models.len();
-    let read_model_definition_count = inventories.read_model_definitions.len();
-    let read_model_field_count = inventories.read_model_fields.len();
-    let view_count = inventories.views.len();
-    let view_definition_count = inventories.view_definitions.len();
-    let view_control_count = inventories.view_controls.len();
-    let board_element_count = inventories.board_elements.len();
-    let board_connection_count = inventories.board_connections.len();
-    let view_field_count = inventories.view_fields.len();
-    let automation_count = inventories.automations.len();
-    let automation_definition_count = inventories.automation_definitions.len();
-    let translation_count = inventories.translations.len();
-    let translation_definition_count = inventories.translation_definitions.len();
-    let external_payload_count = inventories.external_payloads.len();
-    let external_payload_field_count = inventories.external_payload_fields.len();
-    let event_count = inventories.events.len();
-    let event_attribute_count = inventories.event_attributes.len();
-    let manifest_path = project_path("emc.toml");
-    let lean_path = project_path(format!("model/lean/{module_name}.lean"));
-    let lakefile_path = project_path("model/lean/lakefile.lean");
-    let lean_toolchain_path = project_path("model/lean/lean-toolchain");
-    let quint_path = project_path(format!("model/quint/{module_name}.qnt"));
-    let manifest_message = report_line(format!("project manifest drift for {project_name_text}"));
-    let lean_message = report_line(format!("Lean project root drift for {project_name_text}"));
-    let lean_config_message =
-        report_line(format!("Lean project config drift for {project_name_text}"));
-    let quint_message = report_line(format!("Quint project root drift for {project_name_text}"));
-    let quint_module_close_prefix = canonical_declaration_prefix("}");
-    let quint_module_close_marker = canonical_declaration_marker("}");
+    RootCounts {
+        workflow: workflow_count,
+        slice: slice_count,
+        scenario: inventories.scenarios.len(),
+        scenario_definition: inventories.scenario_definitions.len(),
+        data_flow: inventories.data_flows.len(),
+        outcome: inventories.outcomes.len(),
+        command_error: inventories.command_errors.len(),
+        stream: inventories.streams.len(),
+        command: inventories.commands.len(),
+        command_input: inventories.command_inputs.len(),
+        read_model: inventories.read_models.len(),
+        read_model_definition: inventories.read_model_definitions.len(),
+        read_model_field: inventories.read_model_fields.len(),
+        view: inventories.views.len(),
+        view_definition: inventories.view_definitions.len(),
+        view_control: inventories.view_controls.len(),
+        board_element: inventories.board_elements.len(),
+        board_connection: inventories.board_connections.len(),
+        view_field: inventories.view_fields.len(),
+        automation: inventories.automations.len(),
+        automation_definition: inventories.automation_definitions.len(),
+        translation: inventories.translations.len(),
+        translation_definition: inventories.translation_definitions.len(),
+        external_payload: inventories.external_payloads.len(),
+        external_payload_field: inventories.external_payload_fields.len(),
+        event: inventories.events.len(),
+        event_attribute: inventories.event_attributes.len(),
+    }
+}
 
+fn project_root_effects_part_00(ctx: &RootEffectContext) -> Vec<Effect> {
+    let manifest_path = &ctx.paths.manifest;
+    let lakefile_path = &ctx.paths.lakefile;
+    let lean_toolchain_path = &ctx.paths.lean_toolchain;
+    let manifest_message = &ctx.messages.manifest;
+    let lean_config_message = &ctx.messages.lean_config;
+    let module_name = ctx.scalars.module_name.as_str();
+    let project_name_text = ctx.scalars.project_name_text.as_str();
+    let model_version = ctx.scalars.model_version.as_str();
     vec![
         Effect::require_canonical_declaration(
             manifest_path.clone(),
@@ -1067,10 +1310,10 @@ fn project_root_effects(
             manifest_message.clone(),
         ),
         Effect::require_canonical_declaration(
-            manifest_path,
+            manifest_path.clone(),
             canonical_declaration_prefix("quint_module ="),
             canonical_declaration_marker(format!("quint_module = \"{module_name}\"")),
-            manifest_message,
+            manifest_message.clone(),
         ),
         Effect::require_canonical_declaration(
             lakefile_path.clone(),
@@ -1085,17 +1328,29 @@ fn project_root_effects(
             lean_config_message.clone(),
         ),
         Effect::require_canonical_declaration(
-            lakefile_path,
+            lakefile_path.clone(),
             canonical_declaration_prefix("package "),
             canonical_declaration_marker("package EMCModel where"),
             lean_config_message.clone(),
         ),
         Effect::require_canonical_declaration(
-            lean_toolchain_path,
+            lean_toolchain_path.clone(),
             canonical_declaration_prefix("leanprover/lean4:"),
             canonical_declaration_marker("leanprover/lean4:4.29.1"),
-            lean_config_message,
+            lean_config_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_01(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    let module_name = ctx.scalars.module_name.as_str();
+    let project_name_text = ctx.scalars.project_name_text.as_str();
+    let model_version = ctx.scalars.model_version.as_str();
+    let model_digest = ctx.scalars.model_digest.clone();
+    let lean_model_workflow_list = ctx.lean.workflow.as_str();
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("namespace "),
@@ -1155,6 +1410,15 @@ fn project_root_effects(
             canonical_declaration_marker("structure ModelSliceModule where"),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_02(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    let lean_model_slice_list = ctx.lean.slice.as_str();
+    let lean_model_slice_module_list = ctx.lean.slice_module.as_str();
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("  formalModule : String"),
@@ -1217,6 +1481,13 @@ fn project_root_effects(
             ),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_03(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("structure ModelScenario where"),
@@ -1265,6 +1536,13 @@ fn project_root_effects(
             canonical_declaration_marker("  sourceKind : ModelDataFlowSourceKind"),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_04(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("  transformation : String"),
@@ -1313,6 +1591,13 @@ fn project_root_effects(
             canonical_declaration_marker("inductive ModelCommandInputSourceKind where"),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_05(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("  sourceKind : ModelCommandInputSourceKind"),
@@ -1361,6 +1646,13 @@ fn project_root_effects(
             canonical_declaration_marker("structure ModelViewDefinition where"),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_06(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("structure ModelViewControl where"),
@@ -1409,6 +1701,15 @@ fn project_root_effects(
             canonical_declaration_marker("  sourceReadModel : String"),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_07(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    let lean_model_scenario_list = ctx.lean.scenario.as_str();
+    let lean_model_scenario_definition_list = ctx.lean.scenario_definition.as_str();
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("structure ModelExternalPayload where"),
@@ -1461,6 +1762,21 @@ fn project_root_effects(
             )),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_08(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    let lean_model_data_flow_list = ctx.lean.data_flow.as_str();
+    let lean_model_outcome_list = ctx.lean.outcome.as_str();
+    let lean_model_command_error_list = ctx.lean.command_error.as_str();
+    let lean_model_command_list = ctx.lean.command.as_str();
+    let lean_model_command_input_list = ctx.lean.command_input.as_str();
+    let lean_model_read_model_list = ctx.lean.read_model.as_str();
+    let lean_model_read_model_definition_list = ctx.lean.read_model_definition.as_str();
+    let lean_model_read_model_field_list = ctx.lean.read_model_field.as_str();
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("def modelDataFlows :"),
@@ -1525,6 +1841,21 @@ fn project_root_effects(
             )),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_09(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    let lean_model_view_list = ctx.lean.view.as_str();
+    let lean_model_view_definition_list = ctx.lean.view_definition.as_str();
+    let lean_model_view_control_list = ctx.lean.view_control.as_str();
+    let lean_model_board_element_list = ctx.lean.board_element.as_str();
+    let lean_model_board_connection_list = ctx.lean.board_connection.as_str();
+    let lean_model_view_field_list = ctx.lean.view_field.as_str();
+    let lean_model_automation_list = ctx.lean.automation.as_str();
+    let lean_model_automation_definition_list = ctx.lean.automation_definition.as_str();
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViews :"),
@@ -1589,6 +1920,20 @@ fn project_root_effects(
             )),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_10(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    let lean_model_translation_list = ctx.lean.translation.as_str();
+    let lean_model_translation_definition_list = ctx.lean.translation_definition.as_str();
+    let lean_model_external_payload_list = ctx.lean.external_payload.as_str();
+    let lean_model_external_payload_field_list = ctx.lean.external_payload_field.as_str();
+    let lean_model_stream_list = ctx.lean.stream.as_str();
+    let lean_model_event_list = ctx.lean.event.as_str();
+    let lean_model_event_attribute_list = ctx.lean.event_attribute.as_str();
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("def modelTranslations :"),
@@ -1653,6 +1998,13 @@ fn project_root_effects(
             ),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_11(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("def modelScenarioKindIsFirstClass"),
@@ -1717,6 +2069,13 @@ fn project_root_effects(
             ),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_12(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("  | ModelDataFlowSourceKind.modeledTarget"),
@@ -1781,6 +2140,13 @@ fn project_root_effects(
             ),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_13(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix(
@@ -1849,6 +2215,13 @@ fn project_root_effects(
             ),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_14(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("def modelExternalPayloadFieldHasModeledDataFlow"),
@@ -1913,6 +2286,13 @@ fn project_root_effects(
             ),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_15(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("def modelReadModelFieldTracesToOriginalProvenance"),
@@ -1977,6 +2357,18 @@ fn project_root_effects(
             ),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_16(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    let project_name_text = ctx.scalars.project_name_text.as_str();
+    let model_version = ctx.scalars.model_version.as_str();
+    let model_digest = ctx.scalars.model_digest.clone();
+    let workflow_count = ctx.counts.workflow;
+    let slice_count = ctx.counts.slice;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("def modelViewControlNavigationTargetIsModeled"),
@@ -2044,6 +2436,17 @@ fn project_root_effects(
             )),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_17(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    let slice_count = ctx.counts.slice;
+    let scenario_count = ctx.counts.scenario;
+    let scenario_definition_count = ctx.counts.scenario_definition;
+    let data_flow_count = ctx.counts.data_flow;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelSliceModulesAreDeclared"),
@@ -2108,6 +2511,13 @@ fn project_root_effects(
             )),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_18(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelDataFlowsAreBitComplete"),
@@ -2176,6 +2586,17 @@ fn project_root_effects(
             ),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_19(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    let outcome_count = ctx.counts.outcome;
+    let command_error_count = ctx.counts.command_error;
+    let command_count = ctx.counts.command;
+    let command_input_count = ctx.counts.command_input;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelViewFieldBitEncodingsMatchDataFlows"),
@@ -2242,6 +2663,16 @@ fn project_root_effects(
             ),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_20(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    let read_model_count = ctx.counts.read_model;
+    let read_model_definition_count = ctx.counts.read_model_definition;
+    let read_model_field_count = ctx.counts.read_model_field;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelEventAttributeSourcesAreComplete"),
@@ -2306,6 +2737,20 @@ fn project_root_effects(
             ),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_21(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    let view_count = ctx.counts.view;
+    let view_definition_count = ctx.counts.view_definition;
+    let view_control_count = ctx.counts.view_control;
+    let board_element_count = ctx.counts.board_element;
+    let board_connection_count = ctx.counts.board_connection;
+    let view_field_count = ctx.counts.view_field;
+    let automation_count = ctx.counts.automation;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelViewsAreDeclared"),
@@ -2370,6 +2815,20 @@ fn project_root_effects(
             )),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_22(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let lean_message = &ctx.messages.lean;
+    let stream_count = ctx.counts.stream;
+    let automation_definition_count = ctx.counts.automation_definition;
+    let translation_count = ctx.counts.translation;
+    let translation_definition_count = ctx.counts.translation_definition;
+    let external_payload_count = ctx.counts.external_payload;
+    let external_payload_field_count = ctx.counts.external_payload_field;
+    let event_count = ctx.counts.event;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelAutomationDefinitionsAreDeclared"),
@@ -2434,6 +2893,17 @@ fn project_root_effects(
             )),
             lean_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_23(ctx: &RootEffectContext) -> Vec<Effect> {
+    let lean_path = &ctx.paths.lean;
+    let quint_path = &ctx.paths.quint;
+    let lean_message = &ctx.messages.lean;
+    let quint_message = &ctx.messages.quint;
+    let module_name = ctx.scalars.module_name.as_str();
+    let event_attribute_count = ctx.counts.event_attribute;
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             canonical_declaration_prefix("theorem modelEventAttributesAreDeclared"),
@@ -2443,10 +2913,10 @@ fn project_root_effects(
             lean_message.clone(),
         ),
         Effect::require_canonical_declaration(
-            lean_path,
+            lean_path.clone(),
             canonical_declaration_prefix("end "),
             canonical_declaration_marker(format!("end {module_name}")),
-            lean_message,
+            lean_message.clone(),
         ),
         Effect::require_canonical_declaration(
             quint_path.clone(),
@@ -2492,6 +2962,13 @@ fn project_root_effects(
             ),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_24(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  type ModelDataFlow ="),
@@ -2556,6 +3033,13 @@ fn project_root_effects(
             ),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_25(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  type ModelReadModelField ="),
@@ -2620,6 +3104,13 @@ fn project_root_effects(
             ),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_26(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  type ModelAutomationDefinition ="),
@@ -2684,6 +3175,21 @@ fn project_root_effects(
             ),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_27(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    let project_name_text = ctx.scalars.project_name_text.as_str();
+    let model_version = ctx.scalars.model_version.as_str();
+    let model_digest = ctx.scalars.model_digest.clone();
+    let workflow_slug_list = ctx.scalars.workflow_slug_list.as_str();
+    let quint_model_slice_list = ctx.quint.slice.as_str();
+    let quint_model_slice_module_list = ctx.quint.slice_module.as_str();
+    let quint_model_scenario_list = ctx.quint.scenario.as_str();
+    let quint_model_scenario_definition_list = ctx.quint.scenario_definition.as_str();
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  val modelVersion ="),
@@ -2751,6 +3257,21 @@ fn project_root_effects(
             )),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_28(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    let quint_model_data_flow_list = ctx.quint.data_flow.as_str();
+    let quint_model_outcome_list = ctx.quint.outcome.as_str();
+    let quint_model_command_error_list = ctx.quint.command_error.as_str();
+    let quint_model_command_list = ctx.quint.command.as_str();
+    let quint_model_command_input_list = ctx.quint.command_input.as_str();
+    let quint_model_read_model_list = ctx.quint.read_model.as_str();
+    let quint_model_read_model_definition_list = ctx.quint.read_model_definition.as_str();
+    let data_flow_count = ctx.counts.data_flow;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  val modelDataFlows:"),
@@ -2813,6 +3334,21 @@ fn project_root_effects(
             )),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_29(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    let quint_model_read_model_field_list = ctx.quint.read_model_field.as_str();
+    let quint_model_view_list = ctx.quint.view.as_str();
+    let quint_model_view_definition_list = ctx.quint.view_definition.as_str();
+    let quint_model_view_control_list = ctx.quint.view_control.as_str();
+    let quint_model_board_element_list = ctx.quint.board_element.as_str();
+    let quint_model_board_connection_list = ctx.quint.board_connection.as_str();
+    let quint_model_view_field_list = ctx.quint.view_field.as_str();
+    let quint_model_automation_list = ctx.quint.automation.as_str();
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  val modelReadModelFields:"),
@@ -2877,6 +3413,21 @@ fn project_root_effects(
             )),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_30(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    let quint_model_automation_definition_list = ctx.quint.automation_definition.as_str();
+    let quint_model_translation_list = ctx.quint.translation.as_str();
+    let quint_model_translation_definition_list = ctx.quint.translation_definition.as_str();
+    let quint_model_external_payload_list = ctx.quint.external_payload.as_str();
+    let quint_model_external_payload_field_list = ctx.quint.external_payload_field.as_str();
+    let quint_model_stream_list = ctx.quint.stream.as_str();
+    let quint_model_event_list = ctx.quint.event.as_str();
+    let quint_model_event_attribute_list = ctx.quint.event_attribute.as_str();
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  val modelAutomationDefinitions:"),
@@ -2941,6 +3492,18 @@ fn project_root_effects(
             )),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_31(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    let project_name_text = ctx.scalars.project_name_text.as_str();
+    let model_version = ctx.scalars.model_version.as_str();
+    let model_digest = ctx.scalars.model_digest.clone();
+    let workflow_count = ctx.counts.workflow;
+    let slice_count = ctx.counts.slice;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  val modelIdentityStable ="),
@@ -3008,6 +3571,15 @@ fn project_root_effects(
             ),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_32(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    let scenario_count = ctx.counts.scenario;
+    let scenario_definition_count = ctx.counts.scenario_definition;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  def modelSliceModuleBelongsToDeclaredSlice"),
@@ -3072,6 +3644,13 @@ fn project_root_effects(
             ),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_33(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  val modelScenarioDefinitionsHaveGwt ="),
@@ -3138,6 +3717,13 @@ fn project_root_effects(
             ),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_34(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  def modelDataFlowModeledSourceResolves"),
@@ -3204,6 +3790,13 @@ fn project_root_effects(
             ),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_35(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix(
@@ -3270,6 +3863,14 @@ fn project_root_effects(
             ),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_36(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    let data_flow_count = ctx.counts.data_flow;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix(
@@ -3338,6 +3939,16 @@ fn project_root_effects(
             ),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_37(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    let outcome_count = ctx.counts.outcome;
+    let command_error_count = ctx.counts.command_error;
+    let command_count = ctx.counts.command;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  val modelMeaningfulDataHasModeledDataFlows ="),
@@ -3406,6 +4017,14 @@ fn project_root_effects(
             )),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_38(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    let command_input_count = ctx.counts.command_input;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  val modelCommandInputsAreDeclared ="),
@@ -3470,6 +4089,15 @@ fn project_root_effects(
             ),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_39(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    let read_model_count = ctx.counts.read_model;
+    let read_model_definition_count = ctx.counts.read_model_definition;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  def modelReadModelFieldTracesToOriginalProvenance"),
@@ -3534,6 +4162,17 @@ fn project_root_effects(
             ),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_40(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    let read_model_field_count = ctx.counts.read_model_field;
+    let view_count = ctx.counts.view;
+    let view_definition_count = ctx.counts.view_definition;
+    let view_control_count = ctx.counts.view_control;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  val modelDisplayedDataTraceToOriginalProvenance ="),
@@ -3598,6 +4237,13 @@ fn project_root_effects(
             )),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_41(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  def modelControlProvidesCommandInput"),
@@ -3662,6 +4308,21 @@ fn project_root_effects(
             ),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_42(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    let board_element_count = ctx.counts.board_element;
+    let board_connection_count = ctx.counts.board_connection;
+    let view_field_count = ctx.counts.view_field;
+    let automation_count = ctx.counts.automation;
+    let automation_definition_count = ctx.counts.automation_definition;
+    let translation_count = ctx.counts.translation;
+    let translation_definition_count = ctx.counts.translation_definition;
+    let external_payload_count = ctx.counts.external_payload;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  val modelBoardElementsAreDeclared ="),
@@ -3726,6 +4387,17 @@ fn project_root_effects(
             )),
             quint_message.clone(),
         ),
+    ]
+}
+
+fn project_root_effects_part_43(ctx: &RootEffectContext) -> Vec<Effect> {
+    let quint_path = &ctx.paths.quint;
+    let quint_message = &ctx.messages.quint;
+    let stream_count = ctx.counts.stream;
+    let external_payload_field_count = ctx.counts.external_payload_field;
+    let event_count = ctx.counts.event;
+    let event_attribute_count = ctx.counts.event_attribute;
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             canonical_declaration_prefix("  val modelExternalPayloadFieldsAreDeclared ="),
@@ -3759,12 +4431,84 @@ fn project_root_effects(
             quint_message.clone(),
         ),
         Effect::require_canonical_declaration(
-            quint_path,
-            quint_module_close_prefix,
-            quint_module_close_marker,
-            quint_message,
+            quint_path.clone(),
+            canonical_declaration_prefix("}"),
+            canonical_declaration_marker("}"),
+            quint_message.clone(),
         ),
     ]
+}
+
+fn project_root_effects(
+    project_name: &ProjectName,
+    module_name: &str,
+    modeled_workflows: &[ModeledWorkflowLayout],
+    formal_workflows: &[FormalWorkflowGraph],
+    inventories: &ProjectRootInventories<'_>,
+) -> Vec<Effect> {
+    let models = build_root_models(modeled_workflows, formal_workflows, inventories);
+    let ctx = RootEffectContext {
+        paths: build_root_effect_paths(module_name),
+        messages: build_root_effect_messages(project_name.as_ref()),
+        scalars: build_root_effect_scalars(
+            project_name,
+            modeled_workflows,
+            module_name,
+            formal_workflows,
+            inventories,
+        ),
+        lean: build_root_lean_lists(&models, inventories),
+        quint: build_root_quint_lists(&models, inventories),
+        counts: build_root_counts(modeled_workflows.len(), formal_workflows, inventories),
+    };
+    let ctx = &ctx;
+    [
+        project_root_effects_part_00(ctx),
+        project_root_effects_part_01(ctx),
+        project_root_effects_part_02(ctx),
+        project_root_effects_part_03(ctx),
+        project_root_effects_part_04(ctx),
+        project_root_effects_part_05(ctx),
+        project_root_effects_part_06(ctx),
+        project_root_effects_part_07(ctx),
+        project_root_effects_part_08(ctx),
+        project_root_effects_part_09(ctx),
+        project_root_effects_part_10(ctx),
+        project_root_effects_part_11(ctx),
+        project_root_effects_part_12(ctx),
+        project_root_effects_part_13(ctx),
+        project_root_effects_part_14(ctx),
+        project_root_effects_part_15(ctx),
+        project_root_effects_part_16(ctx),
+        project_root_effects_part_17(ctx),
+        project_root_effects_part_18(ctx),
+        project_root_effects_part_19(ctx),
+        project_root_effects_part_20(ctx),
+        project_root_effects_part_21(ctx),
+        project_root_effects_part_22(ctx),
+        project_root_effects_part_23(ctx),
+        project_root_effects_part_24(ctx),
+        project_root_effects_part_25(ctx),
+        project_root_effects_part_26(ctx),
+        project_root_effects_part_27(ctx),
+        project_root_effects_part_28(ctx),
+        project_root_effects_part_29(ctx),
+        project_root_effects_part_30(ctx),
+        project_root_effects_part_31(ctx),
+        project_root_effects_part_32(ctx),
+        project_root_effects_part_33(ctx),
+        project_root_effects_part_34(ctx),
+        project_root_effects_part_35(ctx),
+        project_root_effects_part_36(ctx),
+        project_root_effects_part_37(ctx),
+        project_root_effects_part_38(ctx),
+        project_root_effects_part_39(ctx),
+        project_root_effects_part_40(ctx),
+        project_root_effects_part_41(ctx),
+        project_root_effects_part_42(ctx),
+        project_root_effects_part_43(ctx),
+    ]
+    .concat()
 }
 
 fn modeled_artifact_paths<const N: usize>(
@@ -3824,8 +4568,96 @@ pub(crate) fn show_document(document: FileContents) -> EffectPlan {
     EffectPlan::new(vec![Effect::ReportDocument(document)])
 }
 
-fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
-    let workflow_name = workflow.name().as_ref().to_owned();
+struct LeanWorkflowFieldMarkers {
+    name_marker: CanonicalDeclarationMarker,
+    name_prefix: CanonicalDeclarationPrefix,
+    slug_marker: CanonicalDeclarationMarker,
+    slug_prefix: CanonicalDeclarationPrefix,
+    description_marker: CanonicalDeclarationMarker,
+    description_prefix: CanonicalDeclarationPrefix,
+    slice_marker: CanonicalDeclarationMarker,
+    slice_detail_marker: CanonicalDeclarationMarker,
+    transition_marker: CanonicalDeclarationMarker,
+    exit_target_marker: CanonicalDeclarationMarker,
+    slice_prefix: CanonicalDeclarationPrefix,
+    slice_detail_prefix: CanonicalDeclarationPrefix,
+    transition_prefix: CanonicalDeclarationPrefix,
+    exit_target_prefix: CanonicalDeclarationPrefix,
+}
+
+struct LeanWorkflowInvariantMarkers {
+    slice_module_marker: CanonicalDeclarationMarker,
+    slice_module_prefix: CanonicalDeclarationPrefix,
+    identity_invariant_marker: CanonicalDeclarationMarker,
+    identity_invariant_prefix: CanonicalDeclarationPrefix,
+    slice_detail_invariant_marker: CanonicalDeclarationMarker,
+    slice_detail_invariant_prefix: CanonicalDeclarationPrefix,
+    slice_module_invariant_marker: CanonicalDeclarationMarker,
+    slice_module_invariant_prefix: CanonicalDeclarationPrefix,
+    transition_invariant_marker: CanonicalDeclarationMarker,
+    transition_invariant_prefix: CanonicalDeclarationPrefix,
+    transition_source_resolution_marker: CanonicalDeclarationMarker,
+    transition_source_resolution_prefix: CanonicalDeclarationPrefix,
+    transition_target_resolution_marker: CanonicalDeclarationMarker,
+    transition_target_resolution_prefix: CanonicalDeclarationPrefix,
+    module_marker: CanonicalDeclarationMarker,
+    module_prefix: CanonicalDeclarationPrefix,
+    module_end_marker: CanonicalDeclarationMarker,
+    module_end_prefix: CanonicalDeclarationPrefix,
+}
+
+struct QuintWorkflowFieldMarkers {
+    name_marker: CanonicalDeclarationMarker,
+    name_prefix: CanonicalDeclarationPrefix,
+    slug_marker: CanonicalDeclarationMarker,
+    slug_prefix: CanonicalDeclarationPrefix,
+    description_marker: CanonicalDeclarationMarker,
+    description_prefix: CanonicalDeclarationPrefix,
+    slice_marker: CanonicalDeclarationMarker,
+    slice_detail_marker: CanonicalDeclarationMarker,
+    slice_module_marker: CanonicalDeclarationMarker,
+    transition_marker: CanonicalDeclarationMarker,
+    exit_target_marker: CanonicalDeclarationMarker,
+    slice_prefix: CanonicalDeclarationPrefix,
+    slice_detail_prefix: CanonicalDeclarationPrefix,
+    slice_module_prefix: CanonicalDeclarationPrefix,
+    transition_prefix: CanonicalDeclarationPrefix,
+    exit_target_prefix: CanonicalDeclarationPrefix,
+}
+
+struct QuintWorkflowInvariantMarkers {
+    identity_invariant_marker: CanonicalDeclarationMarker,
+    identity_invariant_prefix: CanonicalDeclarationPrefix,
+    slice_detail_invariant_marker: CanonicalDeclarationMarker,
+    slice_detail_invariant_prefix: CanonicalDeclarationPrefix,
+    slice_detail_complete_marker: CanonicalDeclarationMarker,
+    slice_detail_complete_prefix: CanonicalDeclarationPrefix,
+    slice_module_complete_marker: CanonicalDeclarationMarker,
+    slice_module_complete_prefix: CanonicalDeclarationPrefix,
+    transition_invariant_marker: CanonicalDeclarationMarker,
+    transition_invariant_prefix: CanonicalDeclarationPrefix,
+    transition_source_resolution_marker: CanonicalDeclarationMarker,
+    transition_source_resolution_prefix: CanonicalDeclarationPrefix,
+    transition_target_resolution_marker: CanonicalDeclarationMarker,
+    transition_target_resolution_prefix: CanonicalDeclarationPrefix,
+    module_marker: CanonicalDeclarationMarker,
+    module_prefix: CanonicalDeclarationPrefix,
+    module_close_prefix: CanonicalDeclarationPrefix,
+    module_close_marker: CanonicalDeclarationMarker,
+}
+
+struct WorkflowEffectParts {
+    workflow_name: String,
+    lean_path: ProjectPath,
+    quint_path: ProjectPath,
+    digest: ArtifactDigest,
+    lean_fields: LeanWorkflowFieldMarkers,
+    lean_invariants: LeanWorkflowInvariantMarkers,
+    quint_fields: QuintWorkflowFieldMarkers,
+    quint_invariants: QuintWorkflowInvariantMarkers,
+}
+
+fn build_lean_workflow_field_markers(workflow: &FormalWorkflowGraph) -> LeanWorkflowFieldMarkers {
     let lean_name_marker = canonical_declaration_marker(format!(
         "def workflowName := {}",
         json_string(workflow.name().as_ref())
@@ -3841,46 +4673,43 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
         json_string(workflow.description().as_ref())
     ));
     let lean_description_prefix = canonical_declaration_prefix("def workflowDescription :=");
-    let quint_name_marker = canonical_declaration_marker(format!(
-        "val workflowName = {}",
-        json_string(workflow.name().as_ref())
-    ));
-    let quint_name_prefix = canonical_declaration_prefix("val workflowName =");
-    let quint_slug_marker = canonical_declaration_marker(format!(
-        "val workflowSlug = {}",
-        json_string(workflow.slug().as_ref())
-    ));
-    let quint_slug_prefix = canonical_declaration_prefix("val workflowSlug =");
-    let quint_description_marker = canonical_declaration_marker(format!(
-        "val workflowDescription = {}",
-        json_string(workflow.description().as_ref())
-    ));
-    let quint_description_prefix = canonical_declaration_prefix("val workflowDescription =");
     let lean_slice_marker = lean_workflow_slice_marker(workflow);
     let lean_slice_detail_marker = lean_workflow_slice_detail_marker(workflow);
-    let lean_slice_module_marker = lean_workflow_slice_module_marker(workflow);
     let lean_transition_marker = lean_workflow_transition_marker(workflow);
     let lean_exit_target_marker = lean_workflow_exit_target_marker(workflow);
-    let quint_slice_marker = quint_workflow_slice_marker(workflow);
-    let quint_slice_detail_marker = quint_workflow_slice_detail_marker(workflow);
-    let quint_slice_module_marker = quint_workflow_slice_module_marker(workflow);
-    let quint_transition_marker = quint_workflow_transition_marker(workflow);
-    let quint_exit_target_marker = quint_workflow_exit_target_marker(workflow);
     let lean_slice_prefix =
         canonical_declaration_prefix("def workflowSlices : List WorkflowSlice :=");
     let lean_slice_detail_prefix =
         canonical_declaration_prefix("def workflowSliceDetails : List WorkflowSliceDetail :=");
-    let lean_slice_module_prefix =
-        canonical_declaration_prefix("def workflowSliceModules : List WorkflowSliceModule :=");
     let lean_transition_prefix =
         canonical_declaration_prefix("def workflowTransitions : List WorkflowTransition :=");
     let lean_exit_target_prefix =
         canonical_declaration_prefix("def workflowExitTargets : List String :=");
-    let quint_slice_prefix = canonical_declaration_prefix("val workflowSlices:");
-    let quint_slice_detail_prefix = canonical_declaration_prefix("val workflowSliceDetails:");
-    let quint_slice_module_prefix = canonical_declaration_prefix("val workflowSliceModules:");
-    let quint_transition_prefix = canonical_declaration_prefix("val workflowTransitions:");
-    let quint_exit_target_prefix = canonical_declaration_prefix("val workflowExitTargets:");
+    LeanWorkflowFieldMarkers {
+        name_marker: lean_name_marker,
+        name_prefix: lean_name_prefix,
+        slug_marker: lean_slug_marker,
+        slug_prefix: lean_slug_prefix,
+        description_marker: lean_description_marker,
+        description_prefix: lean_description_prefix,
+        slice_marker: lean_slice_marker,
+        slice_detail_marker: lean_slice_detail_marker,
+        transition_marker: lean_transition_marker,
+        exit_target_marker: lean_exit_target_marker,
+        slice_prefix: lean_slice_prefix,
+        slice_detail_prefix: lean_slice_detail_prefix,
+        transition_prefix: lean_transition_prefix,
+        exit_target_prefix: lean_exit_target_prefix,
+    }
+}
+
+fn build_lean_workflow_invariant_markers(
+    workflow: &FormalWorkflowGraph,
+) -> LeanWorkflowInvariantMarkers {
+    let module_name = module_name_from_model(workflow.name());
+    let lean_slice_module_marker = lean_workflow_slice_module_marker(workflow);
+    let lean_slice_module_prefix =
+        canonical_declaration_prefix("def workflowSliceModules : List WorkflowSliceModule :=");
     let lean_identity_invariant_marker = canonical_declaration_marker(format!(
         "theorem workflowIdentityIsStable : workflowName = {} := rfl",
         json_string(workflow.name().as_ref())
@@ -3912,6 +4741,82 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     );
     let lean_transition_target_resolution_prefix =
         canonical_declaration_prefix("theorem workflowTransitionTargetsResolve :");
+    let lean_module_marker = canonical_declaration_marker(format!("namespace {module_name}"));
+    let lean_module_prefix = canonical_declaration_prefix("namespace ");
+    let lean_module_end_marker = canonical_declaration_marker(format!("end {module_name}"));
+    let lean_module_end_prefix = canonical_declaration_prefix("end ");
+    LeanWorkflowInvariantMarkers {
+        slice_module_marker: lean_slice_module_marker,
+        slice_module_prefix: lean_slice_module_prefix,
+        identity_invariant_marker: lean_identity_invariant_marker,
+        identity_invariant_prefix: lean_identity_invariant_prefix,
+        slice_detail_invariant_marker: lean_slice_detail_invariant_marker,
+        slice_detail_invariant_prefix: lean_slice_detail_invariant_prefix,
+        slice_module_invariant_marker: lean_slice_module_invariant_marker,
+        slice_module_invariant_prefix: lean_slice_module_invariant_prefix,
+        transition_invariant_marker: lean_transition_invariant_marker,
+        transition_invariant_prefix: lean_transition_invariant_prefix,
+        transition_source_resolution_marker: lean_transition_source_resolution_marker,
+        transition_source_resolution_prefix: lean_transition_source_resolution_prefix,
+        transition_target_resolution_marker: lean_transition_target_resolution_marker,
+        transition_target_resolution_prefix: lean_transition_target_resolution_prefix,
+        module_marker: lean_module_marker,
+        module_prefix: lean_module_prefix,
+        module_end_marker: lean_module_end_marker,
+        module_end_prefix: lean_module_end_prefix,
+    }
+}
+
+fn build_quint_workflow_field_markers(workflow: &FormalWorkflowGraph) -> QuintWorkflowFieldMarkers {
+    let quint_name_marker = canonical_declaration_marker(format!(
+        "val workflowName = {}",
+        json_string(workflow.name().as_ref())
+    ));
+    let quint_name_prefix = canonical_declaration_prefix("val workflowName =");
+    let quint_slug_marker = canonical_declaration_marker(format!(
+        "val workflowSlug = {}",
+        json_string(workflow.slug().as_ref())
+    ));
+    let quint_slug_prefix = canonical_declaration_prefix("val workflowSlug =");
+    let quint_description_marker = canonical_declaration_marker(format!(
+        "val workflowDescription = {}",
+        json_string(workflow.description().as_ref())
+    ));
+    let quint_description_prefix = canonical_declaration_prefix("val workflowDescription =");
+    let quint_slice_marker = quint_workflow_slice_marker(workflow);
+    let quint_slice_detail_marker = quint_workflow_slice_detail_marker(workflow);
+    let quint_slice_module_marker = quint_workflow_slice_module_marker(workflow);
+    let quint_transition_marker = quint_workflow_transition_marker(workflow);
+    let quint_exit_target_marker = quint_workflow_exit_target_marker(workflow);
+    let quint_slice_prefix = canonical_declaration_prefix("val workflowSlices:");
+    let quint_slice_detail_prefix = canonical_declaration_prefix("val workflowSliceDetails:");
+    let quint_slice_module_prefix = canonical_declaration_prefix("val workflowSliceModules:");
+    let quint_transition_prefix = canonical_declaration_prefix("val workflowTransitions:");
+    let quint_exit_target_prefix = canonical_declaration_prefix("val workflowExitTargets:");
+    QuintWorkflowFieldMarkers {
+        name_marker: quint_name_marker,
+        name_prefix: quint_name_prefix,
+        slug_marker: quint_slug_marker,
+        slug_prefix: quint_slug_prefix,
+        description_marker: quint_description_marker,
+        description_prefix: quint_description_prefix,
+        slice_marker: quint_slice_marker,
+        slice_detail_marker: quint_slice_detail_marker,
+        slice_module_marker: quint_slice_module_marker,
+        transition_marker: quint_transition_marker,
+        exit_target_marker: quint_exit_target_marker,
+        slice_prefix: quint_slice_prefix,
+        slice_detail_prefix: quint_slice_detail_prefix,
+        slice_module_prefix: quint_slice_module_prefix,
+        transition_prefix: quint_transition_prefix,
+        exit_target_prefix: quint_exit_target_prefix,
+    }
+}
+
+fn build_quint_workflow_invariant_markers(
+    workflow: &FormalWorkflowGraph,
+) -> QuintWorkflowInvariantMarkers {
+    let module_name = module_name_from_model(workflow.name());
     let quint_identity_invariant_marker = canonical_declaration_marker(format!(
         "val workflowIdentityStable = workflowName == {}",
         json_string(workflow.name().as_ref())
@@ -3948,18 +4853,37 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
     );
     let quint_transition_target_resolution_prefix =
         canonical_declaration_prefix("val workflowTransitionTargetsResolve =");
-    let module_name = module_name_from_model(workflow.name().clone());
-    let lean_module_marker = canonical_declaration_marker(format!("namespace {module_name}"));
-    let lean_module_prefix = canonical_declaration_prefix("namespace ");
-    let lean_module_end_marker = canonical_declaration_marker(format!("end {module_name}"));
-    let lean_module_end_prefix = canonical_declaration_prefix("end ");
     let quint_module_marker = canonical_declaration_marker(format!("module {module_name} {{"));
     let quint_module_prefix = canonical_declaration_prefix("module ");
     let quint_module_close_prefix = canonical_declaration_prefix("}");
     let quint_module_close_marker = canonical_declaration_marker("}");
+    QuintWorkflowInvariantMarkers {
+        identity_invariant_marker: quint_identity_invariant_marker,
+        identity_invariant_prefix: quint_identity_invariant_prefix,
+        slice_detail_invariant_marker: quint_slice_detail_invariant_marker,
+        slice_detail_invariant_prefix: quint_slice_detail_invariant_prefix,
+        slice_detail_complete_marker: quint_slice_detail_complete_marker,
+        slice_detail_complete_prefix: quint_slice_detail_complete_prefix,
+        slice_module_complete_marker: quint_slice_module_complete_marker,
+        slice_module_complete_prefix: quint_slice_module_complete_prefix,
+        transition_invariant_marker: quint_transition_invariant_marker,
+        transition_invariant_prefix: quint_transition_invariant_prefix,
+        transition_source_resolution_marker: quint_transition_source_resolution_marker,
+        transition_source_resolution_prefix: quint_transition_source_resolution_prefix,
+        transition_target_resolution_marker: quint_transition_target_resolution_marker,
+        transition_target_resolution_prefix: quint_transition_target_resolution_prefix,
+        module_marker: quint_module_marker,
+        module_prefix: quint_module_prefix,
+        module_close_prefix: quint_module_close_prefix,
+        module_close_marker: quint_module_close_marker,
+    }
+}
+
+fn build_workflow_effect_parts(workflow: &FormalWorkflowGraph) -> WorkflowEffectParts {
+    let module_name = module_name_from_model(workflow.name());
     let lean_path = project_path(format!("model/lean/{module_name}.lean"));
     let quint_path = project_path(format!("model/quint/{module_name}.qnt"));
-    let digest = artifact_digest(WorkflowArtifactDigestInput {
+    let digest = artifact_digest(&WorkflowArtifactDigestInput {
         workflow_name: workflow.name().clone(),
         workflow_slug: workflow.slug().clone(),
         workflow_description: workflow.description().clone(),
@@ -3973,7 +4897,35 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
         workflow_entry_lifecycle_states: workflow.entry_lifecycle_states().clone(),
     });
 
-    let workflow_effects = vec![
+    WorkflowEffectParts {
+        workflow_name: workflow.name().as_ref().to_owned(),
+        lean_path,
+        quint_path,
+        digest,
+        lean_fields: build_lean_workflow_field_markers(workflow),
+        lean_invariants: build_lean_workflow_invariant_markers(workflow),
+        quint_fields: build_quint_workflow_field_markers(workflow),
+        quint_invariants: build_quint_workflow_invariant_markers(workflow),
+    }
+}
+
+fn workflow_declaration_effects_00(parts: &WorkflowEffectParts) -> Vec<Effect> {
+    let workflow_name = parts.workflow_name.as_str();
+    let lean_path = parts.lean_path.clone();
+    let quint_path = parts.quint_path.clone();
+    let lean_name_marker = parts.lean_fields.name_marker.clone();
+    let lean_name_prefix = parts.lean_fields.name_prefix.clone();
+    let lean_slug_marker = parts.lean_fields.slug_marker.clone();
+    let lean_slug_prefix = parts.lean_fields.slug_prefix.clone();
+    let lean_module_marker = parts.lean_invariants.module_marker.clone();
+    let lean_module_prefix = parts.lean_invariants.module_prefix.clone();
+    let lean_module_end_marker = parts.lean_invariants.module_end_marker.clone();
+    let lean_module_end_prefix = parts.lean_invariants.module_end_prefix.clone();
+    let quint_module_marker = parts.quint_invariants.module_marker.clone();
+    let quint_module_prefix = parts.quint_invariants.module_prefix.clone();
+    let quint_module_close_prefix = parts.quint_invariants.module_close_prefix.clone();
+    let quint_module_close_marker = parts.quint_invariants.module_close_marker.clone();
+    vec![
         Effect::RequireFile(lean_path.clone()),
         Effect::RequireFile(quint_path.clone()),
         Effect::require_canonical_declaration(
@@ -4024,6 +4976,30 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Lean workflow field drift for workflow {workflow_name}"
             )),
         ),
+    ]
+}
+
+fn workflow_declaration_effects_01(parts: &WorkflowEffectParts) -> Vec<Effect> {
+    let workflow_name = parts.workflow_name.as_str();
+    let lean_path = parts.lean_path.clone();
+    let quint_path = parts.quint_path.clone();
+    let lean_description_marker = parts.lean_fields.description_marker.clone();
+    let lean_description_prefix = parts.lean_fields.description_prefix.clone();
+    let lean_slice_marker = parts.lean_fields.slice_marker.clone();
+    let lean_slice_detail_marker = parts.lean_fields.slice_detail_marker.clone();
+    let lean_slice_prefix = parts.lean_fields.slice_prefix.clone();
+    let lean_slice_detail_prefix = parts.lean_fields.slice_detail_prefix.clone();
+    let lean_slice_module_marker = parts.lean_invariants.slice_module_marker.clone();
+    let lean_slice_module_prefix = parts.lean_invariants.slice_module_prefix.clone();
+    let quint_name_marker = parts.quint_fields.name_marker.clone();
+    let quint_name_prefix = parts.quint_fields.name_prefix.clone();
+    let quint_slug_marker = parts.quint_fields.slug_marker.clone();
+    let quint_slug_prefix = parts.quint_fields.slug_prefix.clone();
+    let quint_description_marker = parts.quint_fields.description_marker.clone();
+    let quint_description_prefix = parts.quint_fields.description_prefix.clone();
+    let quint_slice_marker = parts.quint_fields.slice_marker.clone();
+    let quint_slice_prefix = parts.quint_fields.slice_prefix.clone();
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_description_prefix,
@@ -4088,6 +5064,30 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow slice drift for workflow {workflow_name}"
             )),
         ),
+    ]
+}
+
+fn workflow_declaration_effects_02(parts: &WorkflowEffectParts) -> Vec<Effect> {
+    let workflow_name = parts.workflow_name.as_str();
+    let lean_path = parts.lean_path.clone();
+    let quint_path = parts.quint_path.clone();
+    let lean_transition_marker = parts.lean_fields.transition_marker.clone();
+    let lean_exit_target_marker = parts.lean_fields.exit_target_marker.clone();
+    let lean_transition_prefix = parts.lean_fields.transition_prefix.clone();
+    let lean_exit_target_prefix = parts.lean_fields.exit_target_prefix.clone();
+    let lean_identity_invariant_marker = parts.lean_invariants.identity_invariant_marker.clone();
+    let lean_identity_invariant_prefix = parts.lean_invariants.identity_invariant_prefix.clone();
+    let quint_slice_detail_marker = parts.quint_fields.slice_detail_marker.clone();
+    let quint_slice_module_marker = parts.quint_fields.slice_module_marker.clone();
+    let quint_transition_marker = parts.quint_fields.transition_marker.clone();
+    let quint_exit_target_marker = parts.quint_fields.exit_target_marker.clone();
+    let quint_slice_detail_prefix = parts.quint_fields.slice_detail_prefix.clone();
+    let quint_slice_module_prefix = parts.quint_fields.slice_module_prefix.clone();
+    let quint_transition_prefix = parts.quint_fields.transition_prefix.clone();
+    let quint_exit_target_prefix = parts.quint_fields.exit_target_prefix.clone();
+    let quint_identity_invariant_marker = parts.quint_invariants.identity_invariant_marker.clone();
+    let quint_identity_invariant_prefix = parts.quint_invariants.identity_invariant_prefix.clone();
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_slice_detail_prefix,
@@ -4152,6 +5152,36 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "Quint workflow invariant drift for workflow {workflow_name}"
             )),
         ),
+    ]
+}
+
+fn workflow_declaration_effects_03(parts: &WorkflowEffectParts) -> Vec<Effect> {
+    let mut effects = workflow_declaration_effects_03a(parts);
+    effects.extend(workflow_declaration_effects_03b(parts));
+    effects
+}
+
+fn workflow_declaration_effects_03a(parts: &WorkflowEffectParts) -> Vec<Effect> {
+    let workflow_name = parts.workflow_name.as_str();
+    let lean_path = parts.lean_path.clone();
+    let quint_path = parts.quint_path.clone();
+    let lean_slice_detail_invariant_marker =
+        parts.lean_invariants.slice_detail_invariant_marker.clone();
+    let lean_slice_detail_invariant_prefix =
+        parts.lean_invariants.slice_detail_invariant_prefix.clone();
+    let lean_slice_module_invariant_marker =
+        parts.lean_invariants.slice_module_invariant_marker.clone();
+    let lean_slice_module_invariant_prefix =
+        parts.lean_invariants.slice_module_invariant_prefix.clone();
+    let quint_slice_detail_invariant_marker =
+        parts.quint_invariants.slice_detail_invariant_marker.clone();
+    let quint_slice_detail_invariant_prefix =
+        parts.quint_invariants.slice_detail_invariant_prefix.clone();
+    let quint_slice_detail_complete_marker =
+        parts.quint_invariants.slice_detail_complete_marker.clone();
+    let quint_slice_detail_complete_prefix =
+        parts.quint_invariants.slice_detail_complete_prefix.clone();
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_slice_detail_invariant_prefix,
@@ -4161,7 +5191,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
             )),
         ),
         Effect::require_canonical_declaration(
-            lean_path.clone(),
+            lean_path,
             lean_slice_module_invariant_prefix,
             lean_slice_module_invariant_marker,
             report_line(format!(
@@ -4177,13 +5207,41 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
             )),
         ),
         Effect::require_canonical_declaration(
-            quint_path.clone(),
+            quint_path,
             quint_slice_detail_complete_prefix,
             quint_slice_detail_complete_marker,
             report_line(format!(
                 "Quint workflow invariant drift for workflow {workflow_name}"
             )),
         ),
+    ]
+}
+
+fn workflow_declaration_effects_03b(parts: &WorkflowEffectParts) -> Vec<Effect> {
+    let workflow_name = parts.workflow_name.as_str();
+    let lean_path = parts.lean_path.clone();
+    let quint_path = parts.quint_path.clone();
+    let lean_transition_invariant_marker =
+        parts.lean_invariants.transition_invariant_marker.clone();
+    let lean_transition_invariant_prefix =
+        parts.lean_invariants.transition_invariant_prefix.clone();
+    let lean_transition_source_resolution_marker = parts
+        .lean_invariants
+        .transition_source_resolution_marker
+        .clone();
+    let lean_transition_source_resolution_prefix = parts
+        .lean_invariants
+        .transition_source_resolution_prefix
+        .clone();
+    let quint_slice_module_complete_marker =
+        parts.quint_invariants.slice_module_complete_marker.clone();
+    let quint_slice_module_complete_prefix =
+        parts.quint_invariants.slice_module_complete_prefix.clone();
+    let quint_transition_invariant_marker =
+        parts.quint_invariants.transition_invariant_marker.clone();
+    let quint_transition_invariant_prefix =
+        parts.quint_invariants.transition_invariant_prefix.clone();
+    vec![
         Effect::require_canonical_declaration(
             quint_path.clone(),
             quint_slice_module_complete_prefix,
@@ -4201,7 +5259,7 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
             )),
         ),
         Effect::require_canonical_declaration(
-            quint_path.clone(),
+            quint_path,
             quint_transition_invariant_prefix,
             quint_transition_invariant_marker,
             report_line(format!(
@@ -4209,13 +5267,46 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
             )),
         ),
         Effect::require_canonical_declaration(
-            lean_path.clone(),
+            lean_path,
             lean_transition_source_resolution_prefix,
             lean_transition_source_resolution_marker,
             report_line(format!(
                 "Lean workflow invariant drift for workflow {workflow_name}"
             )),
         ),
+    ]
+}
+
+fn workflow_declaration_effects_04(parts: &WorkflowEffectParts) -> Vec<Effect> {
+    let workflow_name = parts.workflow_name.as_str();
+    let lean_path = parts.lean_path.clone();
+    let quint_path = parts.quint_path.clone();
+    let digest = parts.digest.clone();
+    let lean_transition_target_resolution_marker = parts
+        .lean_invariants
+        .transition_target_resolution_marker
+        .clone();
+    let lean_transition_target_resolution_prefix = parts
+        .lean_invariants
+        .transition_target_resolution_prefix
+        .clone();
+    let quint_transition_source_resolution_marker = parts
+        .quint_invariants
+        .transition_source_resolution_marker
+        .clone();
+    let quint_transition_source_resolution_prefix = parts
+        .quint_invariants
+        .transition_source_resolution_prefix
+        .clone();
+    let quint_transition_target_resolution_marker = parts
+        .quint_invariants
+        .transition_target_resolution_marker
+        .clone();
+    let quint_transition_target_resolution_prefix = parts
+        .quint_invariants
+        .transition_target_resolution_prefix
+        .clone();
+    vec![
         Effect::require_canonical_declaration(
             lean_path.clone(),
             lean_transition_target_resolution_prefix,
@@ -4254,12 +5345,23 @@ fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 "artifact digest mismatch for workflow {workflow_name}"
             )),
         ),
-    ];
+    ]
+}
 
-    workflow_effects
-        .into_iter()
-        .chain(formal_slice_effects(workflow))
-        .collect()
+fn formal_workflow_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
+    let parts = build_workflow_effect_parts(workflow);
+    let parts = &parts;
+    [
+        workflow_declaration_effects_00(parts),
+        workflow_declaration_effects_01(parts),
+        workflow_declaration_effects_02(parts),
+        workflow_declaration_effects_03(parts),
+        workflow_declaration_effects_04(parts),
+    ]
+    .concat()
+    .into_iter()
+    .chain(formal_slice_effects(workflow))
+    .collect()
 }
 
 fn formal_slice_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
@@ -4269,12 +5371,12 @@ fn formal_slice_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
         .as_slice()
         .iter()
         .flat_map(|slice| {
-            let module_name = module_name_from_model(slice.name().clone());
+            let module_name = module_name_from_model(slice.name());
             let slice_digest = slice_artifact_digest(
-                slice.name().clone(),
-                slice.slug().clone(),
+                slice.name(),
+                slice.slug(),
                 *slice.kind(),
-                slice.description().clone(),
+                slice.description(),
             );
             let lean_slice_path = project_path(format!("model/lean/slices/{module_name}.lean"));
             let quint_slice_path = project_path(format!("model/quint/slices/{module_name}.qnt"));
@@ -4283,12 +5385,12 @@ fn formal_slice_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 Effect::require_file_contents_with_authored_formal_facts(
                     lean_slice_path,
                     emit_lean_slice_module(
-                        lean_module_name(module_name.clone()),
-                        slice.name().clone(),
-                        slice.description().clone(),
-                        slice.slug().clone(),
+                        &lean_module_name(module_name.clone()),
+                        slice.name(),
+                        slice.description(),
+                        slice.slug(),
                         *slice.kind(),
-                        slice_digest.clone(),
+                        &slice_digest,
                     ),
                     report_line(format!(
                         "Lean slice artifact drift for workflow {workflow_name}"
@@ -4297,12 +5399,12 @@ fn formal_slice_effects(workflow: &FormalWorkflowGraph) -> Vec<Effect> {
                 Effect::require_file_contents_with_authored_formal_facts(
                     quint_slice_path,
                     emit_quint_slice_module(
-                        quint_module_name(module_name),
-                        slice.name().clone(),
-                        slice.description().clone(),
-                        slice.slug().clone(),
+                        &quint_module_name(module_name),
+                        slice.name(),
+                        slice.description(),
+                        slice.slug(),
                         *slice.kind(),
-                        slice_digest,
+                        &slice_digest,
                     ),
                     report_line(format!(
                         "Quint slice artifact drift for workflow {workflow_name}"
@@ -4358,7 +5460,7 @@ fn lean_workflow_slice_module_marker(workflow: &FormalWorkflowGraph) -> Canonica
                 format!(
                     "{{ slice := {}, formalModule := {} }}",
                     json_string(slice.slug().as_ref()),
-                    json_string(&module_name_from_model(slice.name().clone()))
+                    json_string(&module_name_from_model(slice.name()))
                 )
             })
             .collect::<Vec<_>>()
@@ -4455,7 +5557,7 @@ fn quint_workflow_slice_module_marker(
                 format!(
                     "{{ slice: {}, formalModule: {} }}",
                     json_string(slice.slug().as_ref()),
-                    json_string(&module_name_from_model(slice.name().clone()))
+                    json_string(&module_name_from_model(slice.name()))
                 )
             })
             .collect::<Vec<_>>()
@@ -4554,7 +5656,7 @@ fn formal_model_slice_modules(
                 FormalModelSliceModule::new(
                     workflow.slug().clone(),
                     slice.slug().clone(),
-                    lean_module_name(module_name_from_model(slice.name().clone())),
+                    lean_module_name(module_name_from_model(slice.name())),
                 )
             })
         })
@@ -4572,11 +5674,9 @@ fn formal_model_scenarios(project_scenarios: &[ProjectScenario]) -> Vec<FormalMo
                     WorkflowSlug::try_new,
                 ),
                 semantic_value("slice slug", scenario.slice_slug(), SliceSlug::try_new),
-                semantic_value(
-                    "scenario kind",
-                    scenario.scenario_kind(),
-                    ScenarioKind::try_new,
-                ),
+                semantic_value("scenario kind", scenario.scenario_kind(), |value| {
+                    ScenarioKind::try_new(&value)
+                }),
                 semantic_value("scenario name", scenario.scenario(), ScenarioName::try_new),
             )
         })
@@ -4596,11 +5696,9 @@ fn formal_model_scenario_definitions(
                     WorkflowSlug::try_new,
                 ),
                 slice: semantic_value("slice slug", scenario.slice_slug(), SliceSlug::try_new),
-                scenario_kind: semantic_value(
-                    "scenario kind",
-                    scenario.scenario_kind(),
-                    ScenarioKind::try_new,
-                ),
+                scenario_kind: semantic_value("scenario kind", scenario.scenario_kind(), |value| {
+                    ScenarioKind::try_new(&value)
+                }),
                 scenario: semantic_value(
                     "scenario name",
                     scenario.scenario(),
@@ -4634,7 +5732,7 @@ fn formal_model_scenario_definitions(
                 contract_kind: optional_semantic_value(
                     "scenario contract kind",
                     scenario.contract_kind(),
-                    ContractKindName::try_new,
+                    |value| ContractKindName::try_new(&value),
                 ),
                 covered_definition: optional_semantic_value(
                     "scenario covered definition",
@@ -4672,7 +5770,7 @@ fn formal_model_data_flows(project_data_flows: &[ProjectDataFlow]) -> Vec<Formal
                 transformation: semantic_value(
                     "data-flow transformation",
                     data_flow.transformation(),
-                    TransformationSemantics::try_new,
+                    |value| TransformationSemantics::try_new(&value),
                 ),
                 target: semantic_value(
                     "data-flow target",
@@ -4743,7 +5841,7 @@ fn formal_model_command_errors(
                 semantic_value(
                     "command error recovery",
                     command_error.recovery(),
-                    CommandErrorRecoveryKind::try_new,
+                    |value| CommandErrorRecoveryKind::try_new(&value),
                 ),
             )
         })
@@ -6211,7 +7309,7 @@ fn digest_slices(formal_workflows: &[FormalWorkflowGraph]) -> String {
                 (
                     workflow.slug().as_ref(),
                     slice.slug().as_ref(),
-                    module_name_from_model(slice.name().clone()),
+                    module_name_from_model(slice.name()),
                 )
             })
         })
@@ -6813,7 +7911,7 @@ fn module_name(project_name: &ProjectName) -> String {
     module_name_from_raw(project_name.as_ref())
 }
 
-fn module_name_from_model(model_name: ModelName) -> String {
+fn module_name_from_model(model_name: &ModelName) -> String {
     module_name_from_raw(model_name.as_ref())
 }
 

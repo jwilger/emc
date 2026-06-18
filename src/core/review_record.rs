@@ -26,24 +26,24 @@ impl RequiredReviewCategories {
 }
 
 pub(crate) fn record_clean_review(
-    workflow_slug: WorkflowSlug,
-    model_content_digest: ModelContentDigest,
-    reviewer_id: ReviewerId,
-    reviewed_at: ReviewTimestamp,
-    required_categories: RequiredReviewCategories,
+    workflow_slug: &WorkflowSlug,
+    model_content_digest: &ModelContentDigest,
+    reviewer_id: &ReviewerId,
+    reviewed_at: &ReviewTimestamp,
+    required_categories: &RequiredReviewCategories,
 ) -> Result<EffectPlan, ReviewRecordDocumentError> {
     Ok(EffectPlan::new(vec![
         Effect::write_file(
-            review_record_path(&workflow_slug)?,
+            review_record_path(workflow_slug)?,
             clean_review_record_contents(
-                &workflow_slug,
-                &model_content_digest,
-                &reviewer_id,
-                &reviewed_at,
+                workflow_slug,
+                model_content_digest,
+                reviewer_id,
+                reviewed_at,
                 required_categories.as_slice(),
             )?,
         ),
-        Effect::Report(recorded_clean_review_report(&workflow_slug)?),
+        Effect::Report(recorded_clean_review_report(workflow_slug)?),
     ]))
 }
 
@@ -137,7 +137,7 @@ impl ReviewRecordDocument {
                 .transpose()?,
             status: optional_string_field(object, "status")?
                 .map(|status| {
-                    ReviewStatus::try_new(status.to_owned()).map_err(|error| {
+                    ReviewStatus::try_new(status).map_err(|error| {
                         ReviewRecordDocumentError::new(format!(
                             "invalid review record status: {error}"
                         ))
@@ -233,14 +233,12 @@ fn parse_category_results(
                         ))
                     })?;
                     Ok(ReviewCategoryResult {
-                        category: ReviewRuleName::try_new(category.to_owned()).map_err(
-                            |error| {
-                                ReviewRecordDocumentError::new(format!(
-                                    "invalid review record category: {error}"
-                                ))
-                            },
-                        )?,
-                        status: ReviewStatus::try_new(status.to_owned()).map_err(|error| {
+                        category: ReviewRuleName::try_new(category).map_err(|error| {
+                            ReviewRecordDocumentError::new(format!(
+                                "invalid review record category: {error}"
+                            ))
+                        })?,
+                        status: ReviewStatus::try_new(status).map_err(|error| {
                             ReviewRecordDocumentError::new(format!(
                                 "invalid review record category status: {error}"
                             ))

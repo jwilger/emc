@@ -469,8 +469,10 @@ mod tests {
             .iter()
             .find(|response| response["id"] == 2)
             .ok_or("tools/list response must be present")?;
-        let tools = tools_response["result"]["tools"]
-            .as_array()
+        let tools = tools_response
+            .get("result")
+            .and_then(|result| result.get("tools"))
+            .and_then(Value::as_array)
             .ok_or("tools/list response must include tools")?;
 
         assert_openai_compatible_transition_tool_schema(transition_tool_schema(

@@ -35,7 +35,7 @@ impl ScenarioKind {
         Self::Contract
     }
 
-    pub fn try_new(value: String) -> Result<Self, ScenarioKindError> {
+    pub fn try_new(value: &str) -> Result<Self, ScenarioKindError> {
         match value.trim() {
             "acceptance" => Ok(Self::Acceptance),
             "contract" => Ok(Self::Contract),
@@ -57,7 +57,7 @@ pub struct ScenarioKindError {
 }
 
 impl ScenarioKindError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled scenario kind, got '{value}'"),
         }
@@ -2131,10 +2131,11 @@ fn render_dedup_list<T>(items: &[T], render_record: impl Fn(&T) -> String) -> St
 fn group_named<'a, T>(items: &'a [T], name_of: impl Fn(&'a T) -> &'a str) -> Vec<Vec<&'a T>> {
     let mut groups: Vec<Vec<&'a T>> = Vec::new();
     for item in items {
-        if let Some(group) = groups
-            .iter_mut()
-            .find(|group| name_of(group[0]) == name_of(item))
-        {
+        if let Some(group) = groups.iter_mut().find(|group| {
+            group
+                .first()
+                .is_some_and(|first| name_of(*first) == name_of(item))
+        }) {
             group.push(item);
         } else {
             groups.push(vec![item]);
@@ -2224,7 +2225,11 @@ fn render_read_model_definition_record(
     group: &[&NewReadModelDefinition],
     flavor: RecordFlavor,
 ) -> String {
-    let first = group[0];
+    // `group_named` never yields an empty group; an empty slice renders nothing
+    // rather than panicking.
+    let Some(&first) = group.first() else {
+        return String::new();
+    };
     let fields = group
         .iter()
         .map(|read_model| match flavor {
@@ -2286,12 +2291,17 @@ fn render_external_payload_definition_record(
     group: &[&NewExternalPayloadDefinition],
     flavor: RecordFlavor,
 ) -> String {
+    // `group_named` never yields an empty group; an empty slice renders nothing
+    // rather than panicking.
+    let Some(&first) = group.first() else {
+        return String::new();
+    };
     let fields = group
         .iter()
         .map(|payload| external_payload_field_record(payload, flavor))
         .collect::<Vec<_>>()
         .join(",");
-    let name = quoted(group[0].name.as_ref());
+    let name = quoted(first.name.as_ref());
     // `fields` is the record's final field, so its value span runs up to the
     // closing `}` and includes the space before it. The incremental builder
     // overwrites that span (and thus the space) when it splices a second field
@@ -2368,7 +2378,11 @@ fn render_command_definition_record(
     group: &[&NewCommandDefinition],
     flavor: RecordFlavor,
 ) -> String {
-    let first = group[0];
+    // `group_named` never yields an empty group; an empty slice renders nothing
+    // rather than panicking.
+    let Some(&first) = group.first() else {
+        return String::new();
+    };
     let inputs = group
         .iter()
         .map(|command| match flavor {
@@ -2459,7 +2473,11 @@ fn render_slice_view_definitions(views: &[NewViewDefinition], flavor: RecordFlav
 }
 
 fn render_view_definition_record(group: &[&NewViewDefinition], flavor: RecordFlavor) -> String {
-    let first = group[0];
+    // `group_named` never yields an empty group; an empty slice renders nothing
+    // rather than panicking.
+    let Some(&first) = group.first() else {
+        return String::new();
+    };
     let read_models = union_if_missing(group, |view| {
         vec![quoted(view.field.source_read_model.as_ref())]
     })
@@ -2510,8 +2528,10 @@ fn render_view_definition_record(group: &[&NewViewDefinition], flavor: RecordFla
     // splice fires only when a member after the first contributes a non-empty
     // filters list; otherwise the rendered `] }` survives.
     let filters_spliced = group.len() > 1
-        && group[1..]
-            .iter()
+        && group
+            .get(1..)
+            .into_iter()
+            .flatten()
             .any(|view| !view.filters.as_slice().is_empty());
     let closing = if filters_spliced { "]}" } else { "] }" };
     match flavor {
@@ -2570,20 +2590,45 @@ pub(crate) fn populate_slice_lists(
     facts: &SliceModuleFacts<'_>,
     flavor: RecordFlavor,
 ) -> String {
-    let scenario_body = |kind: ScenarioKind| {
-        let matching: Vec<&NewSliceScenario> = facts
-            .scenarios
-            .iter()
-            .filter(|scenario| scenario.kind == kind)
-            .collect();
-        render_append_list(&matching, |scenario| match flavor {
-            RecordFlavor::Lean => lean_scenario_record(scenario),
-            RecordFlavor::Quint => quint_scenario_record(scenario),
-        })
-    };
-    // sliceReferencedCommands accumulates (no dedup) the views' control command
-    // references first, then one reference per translation, then per automation —
-    // the order `ProjectedSlice::effects` enqueues those handlers.
+    let mut bodies: Vec<SliceListBody> = Vec::new();
+    bodies.extend(scenario_list_bodies(facts, flavor));
+    bodies.extend(outcome_and_payload_list_bodies(facts, flavor));
+    bodies.extend(event_list_bodies(facts, flavor));
+    bodies.extend(command_list_bodies(facts, flavor));
+    bodies.extend(read_model_list_bodies(facts, flavor));
+    bodies.extend(data_flow_and_view_list_bodies(facts, flavor));
+    bodies.extend(translation_and_automation_list_bodies(facts, flavor));
+    bodies.extend(board_list_bodies(facts, flavor));
+    apply_slice_list_bodies(shell, flavor, &bodies)
+}
+
+/// One populated slice-module list: the Lean marker, the Quint marker, and the
+/// rendered body that replaces the `:= []` (resp. `= []`) placeholder following
+/// the flavor-appropriate marker.
+type SliceListBody = (&'static str, &'static str, String);
+
+/// Render the scenario list for one `kind`, in arrival order, using the
+/// flavor-appropriate scenario record renderer.
+fn scenario_list_body(
+    facts: &SliceModuleFacts<'_>,
+    flavor: RecordFlavor,
+    kind: ScenarioKind,
+) -> String {
+    let matching: Vec<&NewSliceScenario> = facts
+        .scenarios
+        .iter()
+        .filter(|scenario| scenario.kind == kind)
+        .collect();
+    render_append_list(&matching, |scenario| match flavor {
+        RecordFlavor::Lean => lean_scenario_record(scenario),
+        RecordFlavor::Quint => quint_scenario_record(scenario),
+    })
+}
+
+/// `sliceReferencedCommands` accumulates (no dedup) the views' control command
+/// references first, then one reference per translation, then per automation —
+/// the order `ProjectedSlice::effects` enqueues those handlers.
+fn referenced_commands_list_body(facts: &SliceModuleFacts<'_>, flavor: RecordFlavor) -> String {
     let mut referenced_commands: Vec<String> = Vec::new();
     for view in facts.views {
         referenced_commands.extend(match flavor {
@@ -2605,19 +2650,29 @@ pub(crate) fn populate_slice_lists(
             RecordFlavor::Quint => quint_command_reference_record(automation.command_name.as_ref()),
         });
     }
-    let referenced_commands_body = format!("[{}]", referenced_commands.join(","));
+    format!("[{}]", referenced_commands.join(","))
+}
 
-    let bodies: [(&str, &str, String); 19] = [
+fn scenario_list_bodies(facts: &SliceModuleFacts<'_>, flavor: RecordFlavor) -> Vec<SliceListBody> {
+    vec![
         (
             "def sliceAcceptanceScenarios : List EventModelScenario := ",
             "val sliceAcceptanceScenarios: List[EventModelScenario] = ",
-            scenario_body(ScenarioKind::Acceptance),
+            scenario_list_body(facts, flavor, ScenarioKind::Acceptance),
         ),
         (
             "def sliceContractScenarios : List EventModelScenario := ",
             "val sliceContractScenarios: List[EventModelScenario] = ",
-            scenario_body(ScenarioKind::Contract),
+            scenario_list_body(facts, flavor, ScenarioKind::Contract),
         ),
+    ]
+}
+
+fn outcome_and_payload_list_bodies(
+    facts: &SliceModuleFacts<'_>,
+    flavor: RecordFlavor,
+) -> Vec<SliceListBody> {
+    vec![
         (
             "def sliceOutcomeDefinitions : List OutcomeDefinition := ",
             "val sliceOutcomeDefinitions: List[OutcomeDefinition] = ",
@@ -2631,6 +2686,11 @@ pub(crate) fn populate_slice_lists(
             "val sliceExternalPayloads: List[ExternalPayloadDefinition] = ",
             render_slice_external_payload_definitions(facts.external_payloads, flavor),
         ),
+    ]
+}
+
+fn event_list_bodies(facts: &SliceModuleFacts<'_>, flavor: RecordFlavor) -> Vec<SliceListBody> {
+    vec![
         (
             "def sliceEvents : List SliceEventReference := ",
             "val sliceEvents: List[SliceEventReference] = ",
@@ -2652,6 +2712,11 @@ pub(crate) fn populate_slice_lists(
             "val sliceEventDefinitions: List[EventDefinition] = ",
             render_slice_event_definitions(facts.event_definitions, flavor),
         ),
+    ]
+}
+
+fn command_list_bodies(facts: &SliceModuleFacts<'_>, flavor: RecordFlavor) -> Vec<SliceListBody> {
+    vec![
         (
             "def sliceCommands : List SliceCommandReference := ",
             "val sliceCommands: List[SliceCommandReference] = ",
@@ -2665,6 +2730,14 @@ pub(crate) fn populate_slice_lists(
             "val sliceCommandDefinitions: List[CommandDefinition] = ",
             render_slice_command_definitions(facts.command_definitions, flavor),
         ),
+    ]
+}
+
+fn read_model_list_bodies(
+    facts: &SliceModuleFacts<'_>,
+    flavor: RecordFlavor,
+) -> Vec<SliceListBody> {
+    vec![
         (
             "def sliceReadModels : List SliceReadModelReference := ",
             "val sliceReadModels: List[SliceReadModelReference] = ",
@@ -2678,6 +2751,14 @@ pub(crate) fn populate_slice_lists(
             "val sliceReadModelDefinitions: List[ReadModelDefinition] = ",
             render_slice_read_model_definitions(facts.read_models, flavor),
         ),
+    ]
+}
+
+fn data_flow_and_view_list_bodies(
+    facts: &SliceModuleFacts<'_>,
+    flavor: RecordFlavor,
+) -> Vec<SliceListBody> {
+    vec![
         (
             "def sliceBitLevelDataFlows : List BitLevelDataFlow := ",
             "val sliceBitLevelDataFlows: List[BitLevelDataFlow] = ",
@@ -2697,13 +2778,21 @@ pub(crate) fn populate_slice_lists(
         (
             "def sliceReferencedCommands : List SliceCommandReference := ",
             "val sliceReferencedCommands: List[SliceCommandReference] = ",
-            referenced_commands_body,
+            referenced_commands_list_body(facts, flavor),
         ),
         (
             "def sliceViewDefinitions : List ViewDefinition := ",
             "val sliceViewDefinitions: List[ViewDefinition] = ",
             render_slice_view_definitions(facts.views, flavor),
         ),
+    ]
+}
+
+fn translation_and_automation_list_bodies(
+    facts: &SliceModuleFacts<'_>,
+    flavor: RecordFlavor,
+) -> Vec<SliceListBody> {
+    vec![
         (
             "def sliceTranslations : List TranslationDefinition := ",
             "val sliceTranslations: List[TranslationDefinition] = ",
@@ -2720,6 +2809,11 @@ pub(crate) fn populate_slice_lists(
                 RecordFlavor::Quint => quint_automation_definition_record(automation),
             }),
         ),
+    ]
+}
+
+fn board_list_bodies(facts: &SliceModuleFacts<'_>, flavor: RecordFlavor) -> Vec<SliceListBody> {
+    vec![
         (
             "def sliceBoardElements : List BoardElement := ",
             "val sliceBoardElements: List[BoardElement] = ",
@@ -2736,10 +2830,14 @@ pub(crate) fn populate_slice_lists(
                 RecordFlavor::Quint => quint_board_connection_record(connection),
             }),
         ),
-    ];
+    ]
+}
 
+/// Replace each list's `:= []` (resp. `= []`) placeholder in `shell` with the
+/// rendered body, in the order the bodies appear.
+fn apply_slice_list_bodies(shell: &str, flavor: RecordFlavor, bodies: &[SliceListBody]) -> String {
     let mut populated = shell.to_owned();
-    for (lean_marker, quint_marker, body) in &bodies {
+    for (lean_marker, quint_marker, body) in bodies {
         let marker = match flavor {
             RecordFlavor::Lean => lean_marker,
             RecordFlavor::Quint => quint_marker,

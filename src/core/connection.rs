@@ -7,15 +7,16 @@ use serde::de::Error as DeserializeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::core::digest::{WorkflowArtifactDigestInput, artifact_digest};
-use crate::core::effect::{Effect, EffectPlan, ProjectPath, ReportLine};
+use crate::core::effect::{ArtifactDigest, Effect, EffectPlan, ProjectPath, ReportLine};
 use crate::core::emit::lean::emit_workflow_module as emit_lean_workflow_module;
 use crate::core::emit::quint::emit_workflow_module as emit_quint_workflow_module;
 use crate::core::formal_graph::FormalWorkflowGraph;
 use crate::core::types::{
     LeanModuleName, ModelDescription, ModelName, PayloadContractName, QuintModuleName, SliceSlug,
-    TransitionTriggerName, WorkflowCommandErrorRecords, WorkflowModuleData, WorkflowOutcomeRecords,
-    WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
-    WorkflowSliceDetails, WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionKind,
+    TransitionTriggerName, WorkflowCommandErrorRecords, WorkflowEntryLifecycleStateRecords,
+    WorkflowModuleData, WorkflowOutcomeRecords, WorkflowOwnedDefinitionName,
+    WorkflowOwnedDefinitionRecords, WorkflowSliceDetail, WorkflowSliceDetails, WorkflowSlug,
+    WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecords, WorkflowTransitionKind,
     WorkflowTransitionRecord, WorkflowTransitionRecords,
 };
 
@@ -49,7 +50,7 @@ impl ConnectionKind {
         Self::Outcome
     }
 
-    pub fn try_new(value: String) -> Result<Self, ConnectionKindError> {
+    pub fn try_new(value: &str) -> Result<Self, ConnectionKindError> {
         match value.trim() {
             "command" => Ok(Self::Command),
             "event" => Ok(Self::Event),
@@ -98,7 +99,7 @@ impl<'de> Deserialize<'de> for ConnectionKind {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        Self::try_new(value).map_err(DeserializeError::custom)
+        Self::try_new(&value).map_err(DeserializeError::custom)
     }
 }
 
@@ -108,7 +109,7 @@ pub struct ConnectionKindError {
 }
 
 impl ConnectionKindError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled workflow connection kind, got '{value}'"),
         }
@@ -384,161 +385,89 @@ impl WorkflowTransitionRemoval {
 }
 
 pub(crate) fn connect_workflow(
-    indexed_workflow_name: ModelName,
-    indexed_workflow_description: ModelDescription,
-    workflow_graph: FormalWorkflowGraph,
-    connection: WorkflowConnection,
+    indexed_workflow_name: &ModelName,
+    indexed_workflow_description: &ModelDescription,
+    workflow_graph: &FormalWorkflowGraph,
+    connection: &WorkflowConnection,
 ) -> Result<EffectPlan, ConnectionMutationError> {
-    let workflow_name = workflow_graph.name().clone();
-    if workflow_name != indexed_workflow_name {
-        return Err(ConnectionMutationError::new(format!(
-            "workflow graph name '{}' does not match index name '{}'",
-            workflow_name.as_ref(),
-            indexed_workflow_name.as_ref()
-        )));
-    }
-    let workflow_description = workflow_graph.description().clone();
-    if workflow_description != indexed_workflow_description {
-        return Err(ConnectionMutationError::new(format!(
-            "workflow graph description '{}' does not match index description '{}'",
-            workflow_description.as_ref(),
-            indexed_workflow_description.as_ref()
-        )));
-    }
-    let module_name = module_name(workflow_name.as_ref());
-    let workflow_slice_details = workflow_graph.slice_details().as_slice().to_owned();
-    let workflow_outcomes = workflow_graph.outcomes().as_slice().to_owned();
-    let workflow_command_errors = workflow_graph.command_errors().as_slice().to_owned();
-    let workflow_owned_definitions = workflow_graph.owned_definitions().as_slice().to_owned();
-    let workflow_transition_evidences = workflow_graph.transition_evidences().clone();
-    let workflow_entry_lifecycle_required = workflow_graph.entry_lifecycle_required();
-    let workflow_entry_lifecycle_states = workflow_graph.entry_lifecycle_states().clone();
-    reject_unknown_transition_source(&workflow_slice_details, &connection.source)?;
-    reject_unknown_transition_target(&workflow_slice_details, &connection.target)?;
-    let mut workflow_transitions = workflow_graph.transitions().as_slice().to_owned();
-    let transition = connection_transition_record(&connection)?;
-    reject_duplicate_transition(&workflow_transitions, &transition)?;
-    workflow_transitions.push(transition);
-    let digest = artifact_digest(WorkflowArtifactDigestInput {
-        workflow_name: workflow_name.clone(),
-        workflow_slug: connection.workflow_slug.clone(),
-        workflow_description: workflow_description.clone(),
-        workflow_slice_details: WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
-        workflow_transitions: WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
-        workflow_outcomes: WorkflowOutcomeRecords::from_records(workflow_outcomes.clone()),
-        workflow_command_errors: WorkflowCommandErrorRecords::from_records(
-            workflow_command_errors.clone(),
-        ),
-        workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records(
-            workflow_owned_definitions.clone(),
-        ),
-        workflow_transition_evidences: workflow_transition_evidences.clone(),
-        workflow_requires_entry_lifecycle_coverage: workflow_entry_lifecycle_required,
-        workflow_entry_lifecycle_states: workflow_entry_lifecycle_states.clone(),
-    });
+    validate_workflow_identity(
+        indexed_workflow_name,
+        indexed_workflow_description,
+        workflow_graph,
+    )?;
+    let mut artifact = WorkflowArtifactInputs::collect(workflow_graph);
+    reject_unknown_transition_source(artifact.slice_details_slice(), &connection.source)?;
+    reject_unknown_transition_target(artifact.slice_details_slice(), &connection.target)?;
+    let transition = connection_transition_record(connection)?;
+    reject_duplicate_transition(artifact.transitions_slice(), &transition)?;
+    artifact.push_transition(transition);
+    let digest = artifact.digest(&connection.workflow_slug);
     let source = connection.source.as_ref();
     let target = connection.target.as_ref();
-    let effects = vec![
-        Effect::write_file(
-            project_path(format!("model/lean/{module_name}.lean")),
-            emit_lean_workflow_module(
-                lean_module_name(module_name.clone()),
-                WorkflowModuleData::new(
-                    workflow_name.clone(),
-                    workflow_description.clone(),
-                    connection.workflow_slug.clone(),
-                    digest.clone(),
-                )
-                .with_slice_details(WorkflowSliceDetails::from_details(
-                    workflow_slice_details.clone(),
-                ))
-                .with_transitions(WorkflowTransitionRecords::from_records(
-                    workflow_transitions.clone(),
-                ))
-                .with_outcomes(WorkflowOutcomeRecords::from_records(
-                    workflow_outcomes.clone(),
-                ))
-                .with_command_errors(WorkflowCommandErrorRecords::from_records(
-                    workflow_command_errors.clone(),
-                ))
-                .with_owned_definitions(WorkflowOwnedDefinitionRecords::from_records(
-                    workflow_owned_definitions.clone(),
-                ))
-                .with_transition_evidences(workflow_transition_evidences.clone())
-                .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
-                .with_entry_lifecycle_states(workflow_entry_lifecycle_states.clone()),
-            ),
-        ),
-        Effect::write_file(
-            project_path(format!("model/quint/{module_name}.qnt")),
-            emit_quint_workflow_module(
-                quint_module_name(module_name),
-                WorkflowModuleData::new(
-                    workflow_name,
-                    workflow_description,
-                    connection.workflow_slug.clone(),
-                    digest,
-                )
-                .with_slice_details(WorkflowSliceDetails::from_details(workflow_slice_details))
-                .with_transitions(WorkflowTransitionRecords::from_records(
-                    workflow_transitions,
-                ))
-                .with_outcomes(WorkflowOutcomeRecords::from_records(workflow_outcomes))
-                .with_command_errors(WorkflowCommandErrorRecords::from_records(
-                    workflow_command_errors,
-                ))
-                .with_owned_definitions(WorkflowOwnedDefinitionRecords::from_records(
-                    workflow_owned_definitions,
-                ))
-                .with_transition_evidences(workflow_transition_evidences)
-                .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
-                .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
-            ),
-        ),
-        Effect::Report(report_line(format!("connected {source} to {target}"))),
-    ];
-
-    Ok(EffectPlan::new(effects))
+    Ok(EffectPlan::new(artifact.module_effects(
+        &connection.workflow_slug,
+        &digest,
+        report_line(format!("connected {source} to {target}")),
+    )))
 }
 
 pub(crate) fn remove_transition(
-    indexed_workflow_name: ModelName,
-    indexed_workflow_description: ModelDescription,
-    workflow_graph: FormalWorkflowGraph,
-    removal: WorkflowTransitionRemoval,
+    indexed_workflow_name: &ModelName,
+    indexed_workflow_description: &ModelDescription,
+    workflow_graph: &FormalWorkflowGraph,
+    removal: &WorkflowTransitionRemoval,
 ) -> Result<EffectPlan, ConnectionMutationError> {
-    let workflow_name = workflow_graph.name().clone();
-    if workflow_name != indexed_workflow_name {
+    validate_workflow_identity(
+        indexed_workflow_name,
+        indexed_workflow_description,
+        workflow_graph,
+    )?;
+    let mut artifact = WorkflowArtifactInputs::collect(workflow_graph);
+    let removal_record = removal_transition_record(removal)?;
+    let remaining = retain_transitions_excluding(artifact.transitions_slice(), &removal_record)?;
+    reject_main_slices_without_incoming_transitions(artifact.slice_details_slice(), &remaining)?;
+    artifact.replace_transitions(remaining);
+    let digest = artifact.digest(&removal.workflow_slug);
+    let source = removal.source.as_ref();
+    let target = removal.target.as_ref();
+    Ok(EffectPlan::new(artifact.module_effects(
+        &removal.workflow_slug,
+        &digest,
+        report_line(format!("removed transition {source} to {target}")),
+    )))
+}
+
+fn validate_workflow_identity(
+    indexed_workflow_name: &ModelName,
+    indexed_workflow_description: &ModelDescription,
+    workflow_graph: &FormalWorkflowGraph,
+) -> Result<(), ConnectionMutationError> {
+    if workflow_graph.name() != indexed_workflow_name {
         return Err(ConnectionMutationError::new(format!(
             "workflow graph name '{}' does not match index name '{}'",
-            workflow_name.as_ref(),
+            workflow_graph.name().as_ref(),
             indexed_workflow_name.as_ref()
         )));
     }
-    let workflow_description = workflow_graph.description().clone();
-    if workflow_description != indexed_workflow_description {
+    if workflow_graph.description() != indexed_workflow_description {
         return Err(ConnectionMutationError::new(format!(
             "workflow graph description '{}' does not match index description '{}'",
-            workflow_description.as_ref(),
+            workflow_graph.description().as_ref(),
             indexed_workflow_description.as_ref()
         )));
     }
-    let module_name = module_name(workflow_name.as_ref());
-    let workflow_slice_details = workflow_graph.slice_details().as_slice().to_owned();
-    let workflow_outcomes = workflow_graph.outcomes().as_slice().to_owned();
-    let workflow_command_errors = workflow_graph.command_errors().as_slice().to_owned();
-    let workflow_owned_definitions = workflow_graph.owned_definitions().as_slice().to_owned();
-    let workflow_transition_evidences = workflow_graph.transition_evidences().clone();
-    let workflow_entry_lifecycle_required = workflow_graph.entry_lifecycle_required();
-    let workflow_entry_lifecycle_states = workflow_graph.entry_lifecycle_states().clone();
-    let removal_record = removal_transition_record(&removal)?;
+    Ok(())
+}
+
+fn retain_transitions_excluding(
+    transitions: &[WorkflowTransitionRecord],
+    removal_record: &WorkflowTransitionRecord,
+) -> Result<Vec<WorkflowTransitionRecord>, ConnectionMutationError> {
     let mut removed_transition = false;
-    let workflow_transitions = workflow_graph
-        .transitions()
-        .as_slice()
+    let remaining = transitions
         .iter()
         .filter_map(|transition| {
-            if same_transition_identity(transition, &removal_record) {
+            if same_transition_identity(transition, removal_record) {
                 removed_transition = true;
                 None
             } else {
@@ -546,97 +475,129 @@ pub(crate) fn remove_transition(
             }
         })
         .collect::<Vec<_>>();
-    if !removed_transition {
-        return Err(ConnectionMutationError::new(format!(
+    if removed_transition {
+        Ok(remaining)
+    } else {
+        Err(ConnectionMutationError::new(format!(
             "workflow transition {} does not exist",
-            transition_record_label(&removal_record)
-        )));
+            transition_record_label(removal_record)
+        )))
     }
-    reject_main_slices_without_incoming_transitions(
-        &workflow_slice_details,
-        &workflow_transitions,
-    )?;
-    let digest = artifact_digest(WorkflowArtifactDigestInput {
-        workflow_name: workflow_name.clone(),
-        workflow_slug: removal.workflow_slug.clone(),
-        workflow_description: workflow_description.clone(),
-        workflow_slice_details: WorkflowSliceDetails::from_details(workflow_slice_details.clone()),
-        workflow_transitions: WorkflowTransitionRecords::from_records(workflow_transitions.clone()),
-        workflow_outcomes: WorkflowOutcomeRecords::from_records(workflow_outcomes.clone()),
-        workflow_command_errors: WorkflowCommandErrorRecords::from_records(
-            workflow_command_errors.clone(),
-        ),
-        workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records(
-            workflow_owned_definitions.clone(),
-        ),
-        workflow_transition_evidences: workflow_transition_evidences.clone(),
-        workflow_requires_entry_lifecycle_coverage: workflow_entry_lifecycle_required,
-        workflow_entry_lifecycle_states: workflow_entry_lifecycle_states.clone(),
-    });
-    let source = removal.source.as_ref();
-    let target = removal.target.as_ref();
+}
 
-    Ok(EffectPlan::new(vec![
-        Effect::write_file(
-            project_path(format!("model/lean/{module_name}.lean")),
-            emit_lean_workflow_module(
-                lean_module_name(module_name.clone()),
-                WorkflowModuleData::new(
-                    workflow_name.clone(),
-                    workflow_description.clone(),
-                    removal.workflow_slug.clone(),
-                    digest.clone(),
-                )
-                .with_slice_details(WorkflowSliceDetails::from_details(
-                    workflow_slice_details.clone(),
-                ))
-                .with_transitions(WorkflowTransitionRecords::from_records(
-                    workflow_transitions.clone(),
-                ))
-                .with_outcomes(WorkflowOutcomeRecords::from_records(
-                    workflow_outcomes.clone(),
-                ))
-                .with_command_errors(WorkflowCommandErrorRecords::from_records(
-                    workflow_command_errors.clone(),
-                ))
-                .with_owned_definitions(WorkflowOwnedDefinitionRecords::from_records(
-                    workflow_owned_definitions.clone(),
-                ))
-                .with_transition_evidences(workflow_transition_evidences.clone())
-                .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
-                .with_entry_lifecycle_states(workflow_entry_lifecycle_states.clone()),
+/// Owned snapshot of the workflow graph fields shared by every artifact emission.
+struct WorkflowArtifactInputs {
+    workflow_name: ModelName,
+    workflow_description: ModelDescription,
+    module_name: String,
+    slice_details: WorkflowSliceDetails,
+    transitions: WorkflowTransitionRecords,
+    outcomes: WorkflowOutcomeRecords,
+    command_errors: WorkflowCommandErrorRecords,
+    owned_definitions: WorkflowOwnedDefinitionRecords,
+    transition_evidences: WorkflowTransitionEvidenceRecords,
+    entry_lifecycle_required: bool,
+    entry_lifecycle_states: WorkflowEntryLifecycleStateRecords,
+}
+
+impl WorkflowArtifactInputs {
+    fn collect(workflow_graph: &FormalWorkflowGraph) -> Self {
+        let workflow_name = workflow_graph.name().clone();
+        let module_name = module_name(workflow_name.as_ref());
+        Self {
+            workflow_name,
+            workflow_description: workflow_graph.description().clone(),
+            module_name,
+            slice_details: workflow_graph.slice_details().clone(),
+            transitions: workflow_graph.transitions().clone(),
+            outcomes: workflow_graph.outcomes().clone(),
+            command_errors: workflow_graph.command_errors().clone(),
+            owned_definitions: workflow_graph.owned_definitions().clone(),
+            transition_evidences: workflow_graph.transition_evidences().clone(),
+            entry_lifecycle_required: workflow_graph.entry_lifecycle_required(),
+            entry_lifecycle_states: workflow_graph.entry_lifecycle_states().clone(),
+        }
+    }
+
+    fn slice_details_slice(&self) -> &[WorkflowSliceDetail] {
+        self.slice_details.as_slice()
+    }
+
+    fn transitions_slice(&self) -> &[WorkflowTransitionRecord] {
+        self.transitions.as_slice()
+    }
+
+    fn push_transition(&mut self, transition: WorkflowTransitionRecord) {
+        let mut records = self.transitions.as_slice().to_owned();
+        records.push(transition);
+        self.transitions = WorkflowTransitionRecords::from_records(records);
+    }
+
+    fn replace_transitions(&mut self, transitions: Vec<WorkflowTransitionRecord>) {
+        self.transitions = WorkflowTransitionRecords::from_records(transitions);
+    }
+
+    fn digest(&self, workflow_slug: &WorkflowSlug) -> ArtifactDigest {
+        artifact_digest(&WorkflowArtifactDigestInput {
+            workflow_name: self.workflow_name.clone(),
+            workflow_slug: workflow_slug.clone(),
+            workflow_description: self.workflow_description.clone(),
+            workflow_slice_details: self.slice_details.clone(),
+            workflow_transitions: self.transitions.clone(),
+            workflow_outcomes: self.outcomes.clone(),
+            workflow_command_errors: self.command_errors.clone(),
+            workflow_owned_definitions: self.owned_definitions.clone(),
+            workflow_transition_evidences: self.transition_evidences.clone(),
+            workflow_requires_entry_lifecycle_coverage: self.entry_lifecycle_required,
+            workflow_entry_lifecycle_states: self.entry_lifecycle_states.clone(),
+        })
+    }
+
+    fn module_data(
+        &self,
+        workflow_slug: &WorkflowSlug,
+        digest: &ArtifactDigest,
+    ) -> WorkflowModuleData {
+        WorkflowModuleData::new(
+            self.workflow_name.clone(),
+            self.workflow_description.clone(),
+            workflow_slug.clone(),
+            digest.clone(),
+        )
+        .with_slice_details(self.slice_details.clone())
+        .with_transitions(self.transitions.clone())
+        .with_outcomes(self.outcomes.clone())
+        .with_command_errors(self.command_errors.clone())
+        .with_owned_definitions(self.owned_definitions.clone())
+        .with_transition_evidences(self.transition_evidences.clone())
+        .with_entry_lifecycle_required(self.entry_lifecycle_required)
+        .with_entry_lifecycle_states(self.entry_lifecycle_states.clone())
+    }
+
+    fn module_effects(
+        &self,
+        workflow_slug: &WorkflowSlug,
+        digest: &ArtifactDigest,
+        report: ReportLine,
+    ) -> Vec<Effect> {
+        vec![
+            Effect::write_file(
+                project_path(format!("model/lean/{}.lean", self.module_name)),
+                emit_lean_workflow_module(
+                    &lean_module_name(self.module_name.clone()),
+                    &self.module_data(workflow_slug, digest),
+                ),
             ),
-        ),
-        Effect::write_file(
-            project_path(format!("model/quint/{module_name}.qnt")),
-            emit_quint_workflow_module(
-                quint_module_name(module_name),
-                WorkflowModuleData::new(
-                    workflow_name,
-                    workflow_description,
-                    removal.workflow_slug.clone(),
-                    digest,
-                )
-                .with_slice_details(WorkflowSliceDetails::from_details(workflow_slice_details))
-                .with_transitions(WorkflowTransitionRecords::from_records(
-                    workflow_transitions,
-                ))
-                .with_outcomes(WorkflowOutcomeRecords::from_records(workflow_outcomes))
-                .with_command_errors(WorkflowCommandErrorRecords::from_records(
-                    workflow_command_errors,
-                ))
-                .with_owned_definitions(WorkflowOwnedDefinitionRecords::from_records(
-                    workflow_owned_definitions,
-                ))
-                .with_transition_evidences(workflow_transition_evidences)
-                .with_entry_lifecycle_required(workflow_entry_lifecycle_required)
-                .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
+            Effect::write_file(
+                project_path(format!("model/quint/{}.qnt", self.module_name)),
+                emit_quint_workflow_module(
+                    &quint_module_name(self.module_name.clone()),
+                    &self.module_data(workflow_slug, digest),
+                ),
             ),
-        ),
-        Effect::Report(report_line(format!(
-            "removed transition {source} to {target}"
-        ))),
-    ]))
+            Effect::Report(report),
+        ]
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

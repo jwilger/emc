@@ -190,25 +190,25 @@ pub(crate) enum EmcEvent {
 impl Event for EmcEvent {
     fn stream_id(&self) -> &StreamId {
         match self {
-            Self::ProjectInitialized { stream_id, .. } => stream_id,
-            Self::WorkflowAdded { stream_id, .. } => stream_id,
-            Self::WorkflowUpdated { stream_id, .. } => stream_id,
-            Self::WorkflowRemoved { stream_id, .. } => stream_id,
-            Self::WorkflowOutcomeAdded { stream_id, .. } => stream_id,
-            Self::WorkflowCommandErrorAdded { stream_id, .. } => stream_id,
-            Self::WorkflowOwnedDefinitionAdded { stream_id, .. } => stream_id,
-            Self::WorkflowTransitionEvidenceAdded { stream_id, .. } => stream_id,
-            Self::WorkflowEntryLifecycleCoverageRequired { stream_id, .. } => stream_id,
-            Self::WorkflowEntryLifecycleStateAdded { stream_id, .. } => stream_id,
-            Self::WorkflowReadinessDeclared { stream_id, .. } => stream_id,
-            Self::WorkflowConnected { stream_id, .. } => stream_id,
-            Self::WorkflowTransitionRemoved { stream_id, .. } => stream_id,
-            Self::SliceAdded { stream_id, .. } => stream_id,
-            Self::SliceUpdated { stream_id, .. } => stream_id,
-            Self::SliceRemoved { stream_id, .. } => stream_id,
-            Self::SliceFactAdded { stream_id, .. } => stream_id,
-            Self::ReviewRecorded { stream_id, .. } => stream_id,
-            Self::ConflictResolved { stream_id, .. } => stream_id,
+            Self::ProjectInitialized { stream_id, .. }
+            | Self::WorkflowAdded { stream_id, .. }
+            | Self::WorkflowUpdated { stream_id, .. }
+            | Self::WorkflowRemoved { stream_id, .. }
+            | Self::WorkflowOutcomeAdded { stream_id, .. }
+            | Self::WorkflowCommandErrorAdded { stream_id, .. }
+            | Self::WorkflowOwnedDefinitionAdded { stream_id, .. }
+            | Self::WorkflowTransitionEvidenceAdded { stream_id, .. }
+            | Self::WorkflowEntryLifecycleCoverageRequired { stream_id, .. }
+            | Self::WorkflowEntryLifecycleStateAdded { stream_id, .. }
+            | Self::WorkflowReadinessDeclared { stream_id, .. }
+            | Self::WorkflowConnected { stream_id, .. }
+            | Self::WorkflowTransitionRemoved { stream_id, .. }
+            | Self::SliceAdded { stream_id, .. }
+            | Self::SliceUpdated { stream_id, .. }
+            | Self::SliceRemoved { stream_id, .. }
+            | Self::SliceFactAdded { stream_id, .. }
+            | Self::ReviewRecorded { stream_id, .. }
+            | Self::ConflictResolved { stream_id, .. } => stream_id,
         }
     }
 
@@ -1064,8 +1064,8 @@ mod tests {
         Ok(SliceFactInput::BoardElement(NewBoardElement::new(
             semantic("capture-ticket", SliceSlug::try_new)?,
             semantic("CaptureTicket", BoardElementName::try_new)?,
-            semantic("command", BoardElementKind::try_new)?,
-            semantic("actions", BoardLaneId::try_new)?,
+            semantic("command", |value| BoardElementKind::try_new(&value))?,
+            semantic("actions", |value| BoardLaneId::try_new(&value))?,
             semantic("CaptureTicket", BoardElementDeclaredName::try_new)?,
             true,
         )))

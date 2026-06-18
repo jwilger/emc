@@ -41,6 +41,13 @@ tempfile = "3.23.0"
 # a containing group such as `clippy::all` or `clippy::restriction`.
 # `clippy::cargo` is capped at `deny` so the exact `multiple_crate_versions`
 # exception below can permit eventcore-sqlite's adapter dependency graph.
+[lints.rust]
+# Deny rustc's own warnings (dead_code, unused, etc.) at the source level so a
+# plain `cargo build`/`cargo test` fails exactly as CI does (CI also sets
+# `RUSTFLAGS=-Dwarnings`). `deny` (not `forbid`) so local `#[expect(...)]`
+# escape hatches still work, mirroring the clippy policy below.
+warnings = "deny"
+
 [lints.clippy]
 # Generated from `clippy-driver -W help` by `scripts/sync-clippy-lints.mjs`.
 # Keep every current `clippy::all` member enumerated exactly rather than
@@ -48,6 +55,69 @@ tempfile = "3.23.0"
 # third-party macro `allow` attributes and emits `forbidden_lint_groups`,
 # a future-incompat warning that `-D warnings` intentionally does not catch.
 cargo = { level = "deny", priority = -1 }
+# Stricter posture (https://billylevin.dev/posts/clippy-config/): turn the
+# `pedantic` and `restriction` categories ON as groups, then decline individual
+# lints below with an explicit `allow` + reason. `nursery` is intentionally left
+# off (unstable lints). Group level is `deny` (not `forbid`) so local
+# `#[expect(...)]` escape hatches keep working, matching the policy above.
+pedantic = { level = "deny", priority = -1 }
+restriction = { level = "deny", priority = -1 }
+#
+# --- declined pedantic/restriction lints (explicit opt-outs, with reasons) ---
+# Contradictory or not our house style:
+implicit_return = "allow"
+question_mark_used = "allow"
+single_call_fn = "allow"
+shadow_reuse = "allow"
+shadow_same = "allow"
+shadow_unrelated = "allow"
+pattern_type_mismatch = "allow"
+renamed_function_params = "allow"
+impl_trait_in_params = "allow"
+inline_trait_bounds = "allow"
+single_char_lifetime_names = "allow"
+unused_trait_names = "allow"
+unneeded_field_pattern = "allow"
+let_underscore_untyped = "allow"
+string_add = "allow"
+else_if_without_else = "allow"
+semicolon_outside_block = "allow"
+# Module/file layout (we use inline modules deliberately):
+mod_module_files = "allow"
+inline_modules = "allow"
+# Literal-suffix style (the two lints contradict; we adopt neither):
+separated_literal_suffix = "allow"
+# Documentation/ordering — too heavy for this crate:
+missing_docs_in_private_items = "allow"
+arbitrary_source_item_ordering = "allow"
+multiple_inherent_impl = "allow"
+# Complexity lints are ENFORCED (kept denied): an over-long or over-complex
+# function is a signal to refactor, not to suppress. `cognitive_complexity` is
+# a nursery lint, enabled explicitly here because the nursery group is off.
+cognitive_complexity = "deny"
+# Visibility style:
+pub_with_shorthand = "allow"
+pub_use = "allow"
+field_scoped_visibility_modifiers = "allow"
+missing_trait_methods = "allow"
+# `emc` is a std binary, not no_std:
+std_instead_of_core = "allow"
+std_instead_of_alloc = "allow"
+# Exhaustiveness:
+wildcard_enum_match_arm = "allow"
+# Permitted ONLY as provably-impossible-state markers / test assertions; all
+# other panicking APIs (unwrap/expect/index/slice/unchecked-arith) stay DENIED
+# because emc code must never panic:
+unreachable = "allow"
+panic_in_result_fn = "allow"
+# Numeric literal-type inference (not a panic concern):
+default_numeric_fallback = "allow"
+# Legitimate CLI I/O:
+print_stdout = "allow"
+print_stderr = "allow"
+create_dir = "allow"
+# --- end declined lints ---
+#
 # Exact restriction-lint opt-ins remain listed here with the same policy.
 absolute_paths = "deny"
 absurd_extreme_comparisons = "forbid"
@@ -64,7 +134,7 @@ await_holding_lock = "forbid"
 await_holding_refcell_ref = "forbid"
 bad_bit_mask = "forbid"
 bind_instead_of_map = "forbid"
-blanket_clippy_restriction_lints = "forbid"
+blanket_clippy_restriction_lints = "allow"
 blocks_in_conditions = "forbid"
 bool_assert_comparison = "forbid"
 bool_comparison = "forbid"

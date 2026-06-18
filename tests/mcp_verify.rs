@@ -195,15 +195,15 @@ mod tests {
 
     fn normalize_quint_log_line(line: &str) -> String {
         let mut parts = line.split_whitespace().collect::<Vec<_>>();
-        if let Some(endpoint_flag) = parts.iter().position(|part| *part == "--server-endpoint") {
-            let endpoint_value = endpoint_flag + 1;
-            if endpoint_value < parts.len() {
-                assert_ne!(
-                    parts[endpoint_value], "localhost:8822",
-                    "Quint verification must not use the shared default Apalache endpoint"
-                );
-                parts[endpoint_value] = "<endpoint>";
-            }
+        if let Some(endpoint_flag) = parts.iter().position(|part| *part == "--server-endpoint")
+            && let Some(endpoint_value) = endpoint_flag.checked_add(1)
+            && let Some(slot) = parts.get_mut(endpoint_value)
+        {
+            assert_ne!(
+                *slot, "localhost:8822",
+                "Quint verification must not use the shared default Apalache endpoint"
+            );
+            *slot = "<endpoint>";
         }
         parts.join(" ")
     }

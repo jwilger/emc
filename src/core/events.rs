@@ -27,7 +27,7 @@ use crate::core::emit::quint::{
     emit_slice_module as emit_quint_slice_module,
     emit_workflow_module as emit_quint_workflow_module,
 };
-use crate::core::event_commands::EmcEvent;
+use crate::core::event_commands::{EmcEvent, SliceFactEvent};
 use crate::core::event_runtime::{list_forks, read_all_emc_events, reconcile_choose_branch};
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphComponents};
 use crate::core::formal_project_facts::{
@@ -162,7 +162,7 @@ pub(crate) enum ExportedEventType {
 }
 
 impl ExportedEventType {
-    pub(crate) fn try_new(value: String) -> Result<Self, ExportedEventTypeError> {
+    pub(crate) fn try_new(value: &str) -> Result<Self, ExportedEventTypeError> {
         match value.trim() {
             "ProjectInitialized" => Ok(Self::ProjectInitialized),
             "WorkflowAdded" => Ok(Self::WorkflowAdded),
@@ -252,7 +252,7 @@ pub(crate) struct ExportedEventTypeError {
 }
 
 impl ExportedEventTypeError {
-    fn new(value: String) -> Self {
+    fn new(value: &str) -> Self {
         Self {
             message: format!("expected a modeled exported event type, got '{value}'"),
         }
@@ -467,26 +467,26 @@ impl SliceScenarioAddedEventPayload {
                 .read_streams()
                 .as_slice()
                 .iter()
-                .map(|stream| stream.as_ref())
+                .map(AsRef::as_ref)
                 .collect::<Vec<_>>(),
             "written_streams": self
                 .scenario
                 .written_streams()
                 .as_slice()
                 .iter()
-                .map(|stream| stream.as_ref())
+                .map(AsRef::as_ref)
                 .collect::<Vec<_>>(),
-            "contract_kind": self.scenario.contract_kind().map(|kind| kind.as_ref()),
+            "contract_kind": self.scenario.contract_kind().map(AsRef::as_ref),
             "covered_definition": self
                 .scenario
                 .covered_definition()
-                .map(|definition| definition.as_ref()),
+                .map(AsRef::as_ref),
             "error_references": self
                 .scenario
                 .error_references()
                 .as_slice()
                 .iter()
-                .map(|error| error.as_ref())
+                .map(AsRef::as_ref)
                 .collect::<Vec<_>>(),
         })
     }
@@ -533,7 +533,7 @@ impl SliceOutcomeAddedEventPayload {
                 .event_set()
                 .as_slice()
                 .iter()
-                .map(|event| event.as_ref())
+                .map(AsRef::as_ref)
                 .collect::<Vec<_>>(),
             "externally_relevant": self.outcome.externally_relevant(),
         })
@@ -651,7 +651,7 @@ impl SliceEventDefinitionAddedEventPayload {
                 "source_field": attribute.source_field().as_ref(),
                 "generated_source_kind": attribute
                     .generated_source_kind()
-                    .map(|source_kind| source_kind.as_ref()),
+                    .map(AsRef::as_ref),
                 "provenance": attribute.provenance_description().as_ref(),
             },
             "observed": self.event.observed(),
@@ -721,14 +721,14 @@ impl SliceCommandDefinitionAddedEventPayload {
                 .emitted_events()
                 .as_slice()
                 .iter()
-                .map(|event| event.as_ref())
+                .map(AsRef::as_ref)
                 .collect::<Vec<_>>(),
             "observed_streams": self
                 .command
                 .observed_streams()
                 .as_slice()
                 .iter()
-                .map(|stream| stream.as_ref())
+                .map(AsRef::as_ref)
                 .collect::<Vec<_>>(),
             "errors": self
                 .command
@@ -740,7 +740,7 @@ impl SliceCommandDefinitionAddedEventPayload {
             "singleton_repeat_behavior": self
                 .command
                 .singleton_repeat_behavior()
-                .map(|repeat_behavior| repeat_behavior.as_ref()),
+                .map(AsRef::as_ref),
         })
     }
 
@@ -768,38 +768,38 @@ impl SliceCommandDefinitionAddedEventPayload {
                 .provenance_chain()
                 .as_slice()
                 .iter()
-                .map(|hop| hop.as_ref())
+                .map(AsRef::as_ref)
                 .collect::<Vec<_>>(),
             "event_stream_source_event": input
                 .event_stream_source_event()
-                .map(|event| event.as_ref()),
+                .map(AsRef::as_ref),
             "event_stream_source_attribute": input
                 .event_stream_source_attribute()
-                .map(|attribute| attribute.as_ref()),
+                .map(AsRef::as_ref),
             "external_payload_source_name": input
                 .external_payload_source_name()
-                .map(|name| name.as_ref()),
+                .map(AsRef::as_ref),
             "external_payload_source_field": input
                 .external_payload_source_field()
-                .map(|field| field.as_ref()),
+                .map(AsRef::as_ref),
             "generated_source_name": input
                 .generated_source_name()
-                .map(|name| name.as_ref()),
+                .map(AsRef::as_ref),
             "generated_source_field": input
                 .generated_source_field()
-                .map(|field| field.as_ref()),
+                .map(AsRef::as_ref),
             "session_source_name": input
                 .session_source_name()
-                .map(|name| name.as_ref()),
+                .map(AsRef::as_ref),
             "session_source_field": input
                 .session_source_field()
-                .map(|field| field.as_ref()),
+                .map(AsRef::as_ref),
             "invocation_argument_source_name": input
                 .invocation_argument_source_name()
-                .map(|name| name.as_ref()),
+                .map(AsRef::as_ref),
             "invocation_argument_source_field": input
                 .invocation_argument_source_field()
-                .map(|field| field.as_ref()),
+                .map(AsRef::as_ref),
         })
     }
 
@@ -993,16 +993,16 @@ impl SliceReadModelAddedEventPayload {
                 .relationship_fields()
                 .as_slice()
                 .iter()
-                .map(|field| field.as_ref())
+                .map(AsRef::as_ref)
                 .collect::<Vec<_>>(),
             "transitive_rule": self
                 .read_model
                 .transitive_rule()
-                .map(|rule| rule.as_ref()),
+                .map(AsRef::as_ref),
             "example_scenario": self
                 .read_model
                 .example_scenario_name()
-                .map(|scenario| scenario.as_ref()),
+                .map(AsRef::as_ref),
         })
     }
 
@@ -1075,24 +1075,24 @@ impl SliceReadModelAddedEventPayload {
         json!({
             "name": field.name().as_ref(),
             "source_kind": field.source_kind().as_ref(),
-            "source_event": field.source_event().map(|event| event.as_ref()),
+            "source_event": field.source_event().map(AsRef::as_ref),
             "source_attribute": field
                 .source_attribute()
-                .map(|attribute| attribute.as_ref()),
-            "derivation_rule": field.derivation_rule().map(|rule| rule.as_ref()),
+                .map(AsRef::as_ref),
+            "derivation_rule": field.derivation_rule().map(AsRef::as_ref),
             "derivation_source_fields": field
                 .derivation_source_fields()
                 .as_slice()
                 .iter()
-                .map(|field| field.as_ref())
+                .map(AsRef::as_ref)
                 .collect::<Vec<_>>(),
-            "absence_event": field.absence_event().map(|event| event.as_ref()),
+            "absence_event": field.absence_event().map(AsRef::as_ref),
             "derivation_scenario": field
                 .derivation_scenario_name()
-                .map(|scenario| scenario.as_ref()),
+                .map(AsRef::as_ref),
             "absence_scenario": field
                 .absence_scenario_name()
-                .map(|scenario| scenario.as_ref()),
+                .map(AsRef::as_ref),
             "provenance": field.provenance_description().as_ref(),
         })
     }
@@ -1156,14 +1156,14 @@ impl SliceViewAddedEventPayload {
                 .local_states()
                 .as_slice()
                 .iter()
-                .map(|state| state.as_ref())
+                .map(AsRef::as_ref)
                 .collect::<Vec<_>>(),
             "filters": self
                 .view
                 .filters()
                 .as_slice()
                 .iter()
-                .map(|filter| filter.as_ref())
+                .map(AsRef::as_ref)
                 .collect::<Vec<_>>(),
         })
     }
@@ -1213,7 +1213,7 @@ impl SliceViewAddedEventPayload {
                 .handled_errors()
                 .as_slice()
                 .iter()
-                .map(|error| error.as_ref())
+                .map(AsRef::as_ref)
                 .collect::<Vec<_>>(),
             "recovery_behavior": control.recovery_behavior().as_ref(),
             "sketch_token": control.sketch_token().as_ref(),
@@ -1272,13 +1272,13 @@ impl SliceViewAddedEventPayload {
             "target": navigation.target_name().as_ref(),
             "external_workflow": navigation
                 .external_workflow_name()
-                .map(|workflow| workflow.as_ref()),
+                .map(AsRef::as_ref),
             "external_system": navigation
                 .external_system_name()
-                .map(|system| system.as_ref()),
+                .map(AsRef::as_ref),
             "handoff_contract": navigation
                 .handoff_contract()
-                .map(|contract| contract.as_ref()),
+                .map(AsRef::as_ref),
         })
     }
 }
@@ -1405,7 +1405,7 @@ impl SliceAutomationAddedEventPayload {
                 .handled_errors()
                 .as_slice()
                 .iter()
-                .map(|error| error.as_ref())
+                .map(AsRef::as_ref)
                 .collect::<Vec<_>>(),
             "reaction": self.automation.reaction_description().as_ref(),
         })
@@ -1534,7 +1534,7 @@ impl ReviewRecordedEventPayload {
     fn categories_from_json_value(payload: &Value) -> Result<Vec<ReviewRuleName>, String> {
         required_string_array(payload, "categories")?
             .into_iter()
-            .map(|category| ReviewRuleName::try_new(category).map_err(|error| error.to_string()))
+            .map(|category| ReviewRuleName::try_new(&category).map_err(|error| error.to_string()))
             .collect()
     }
 
@@ -1720,7 +1720,7 @@ impl WorkflowConnectedEventPayload {
             } => (
                 Some(slug.as_ref()),
                 None,
-                payload_contract.as_ref().map(|contract| contract.as_ref()),
+                payload_contract.as_ref().map(AsRef::as_ref),
                 None,
             ),
             WorkflowConnectedEventTarget::WorkflowExit { slug, reason } => {
@@ -2028,16 +2028,16 @@ impl WorkflowOwnedDefinitionEventPayload {
             "definition_stream": self
                 .definition
                 .definition_stream()
-                .map(|stream| stream.as_ref()),
+                .map(AsRef::as_ref),
             "source_provenance": self
                 .definition
                 .source_provenance()
-                .map(|provenance| provenance.as_ref()),
+                .map(AsRef::as_ref),
             "event_participation": self
                 .definition
                 .event_participation()
-                .map(|participation| participation.as_ref()),
-            "view_role": self.definition.view_role().map(|role| role.as_ref()),
+                .map(AsRef::as_ref),
+            "view_role": self.definition.view_role().map(AsRef::as_ref),
         })
     }
 }
@@ -2229,7 +2229,7 @@ impl WorkflowReadinessDeclaredEventPayload {
             "review_event_id": self
                 .review_event
                 .as_review_event_id()
-                .map(|event_id| event_id.as_ref()),
+                .map(AsRef::as_ref),
         })
     }
 }
@@ -2392,6 +2392,13 @@ impl ExportedEventBody {
     }
 
     pub(crate) fn payload_json(&self) -> Value {
+        self.workflow_payload_json()
+    }
+
+    /// Payload JSON for the workflow-scoped variants; every other variant is
+    /// delegated to [`Self::slice_payload_json`]. The `match` stays exhaustive
+    /// (no catch-all panic) by routing the remainder through the sibling helper.
+    fn workflow_payload_json(&self) -> Value {
         match self {
             Self::ProjectInitialized { name } => json!({ "name": name.as_ref() }),
             Self::WorkflowAdded { workflow } | Self::WorkflowUpdated { workflow } => {
@@ -2442,6 +2449,14 @@ impl ExportedEventBody {
             Self::WorkflowTransitionRemoved { removal } => {
                 WorkflowTransitionRemovedEventPayload::from_removal(removal).to_json_value()
             }
+            _ => self.slice_payload_json(),
+        }
+    }
+
+    /// Payload JSON for the slice-scoped variants; remaining variants are
+    /// delegated to [`Self::misc_payload_json`].
+    fn slice_payload_json(&self) -> Value {
+        match self {
             Self::SliceAdded { slice } => SliceAddedEventPayload::from_slice(slice).to_json_value(),
             Self::SliceUpdated { slice } => {
                 SliceUpdatedEventPayload::from_slice_detail(slice).to_json_value()
@@ -2484,6 +2499,13 @@ impl ExportedEventBody {
             Self::SliceBoardConnectionAdded { connection } => {
                 SliceBoardConnectionAddedEventPayload::from_connection(connection).to_json_value()
             }
+            _ => self.misc_payload_json(),
+        }
+    }
+
+    /// Payload JSON for the remaining (non-workflow, non-slice) variants.
+    fn misc_payload_json(&self) -> Value {
+        match self {
             Self::ReviewRecorded {
                 workflow_slug,
                 model_content_digest,
@@ -2505,6 +2527,7 @@ impl ExportedEventBody {
                 "conflict_id": conflict_id.as_ref(),
                 "chosen_event_id": chosen_event_id.as_ref(),
             }),
+            _ => self.workflow_payload_json(),
         }
     }
 
@@ -2526,11 +2549,22 @@ impl ExportedEventBody {
             return Err("expected exported event body with exactly one event type".to_owned());
         }
         let event_type =
-            ExportedEventType::try_new(event_type.clone()).map_err(|error| error.to_string())?;
+            ExportedEventType::try_new(event_type).map_err(|error| error.to_string())?;
         Self::from_event_type_and_payload(event_type, payload)
     }
 
     pub(crate) fn from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        Self::workflow_from_event_type_and_payload(event_type, payload)
+    }
+
+    /// Reconstruct the workflow-scoped variants from a tagged payload; every
+    /// other event type is delegated to [`Self::slice_from_event_type_and_payload`].
+    /// The `match` stays exhaustive (no catch-all panic) by routing the
+    /// remainder through the sibling helper.
+    fn workflow_from_event_type_and_payload(
         event_type: ExportedEventType,
         payload: &Value,
     ) -> Result<Self, String> {
@@ -2599,6 +2633,17 @@ impl ExportedEventBody {
                 removal: WorkflowTransitionRemovedEventPayload::from_json_value(payload)?
                     .into_removal(),
             }),
+            _ => Self::slice_from_event_type_and_payload(event_type, payload),
+        }
+    }
+
+    /// Reconstruct the slice-scoped variants from a tagged payload; remaining
+    /// event types are delegated to [`Self::misc_from_event_type_and_payload`].
+    fn slice_from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
             ExportedEventType::SliceAdded => Ok(Self::SliceAdded {
                 slice: SliceAddedEventPayload::from_json_value(payload)?.into_slice(),
             }),
@@ -2655,6 +2700,17 @@ impl ExportedEventBody {
                 connection: SliceBoardConnectionAddedEventPayload::from_json_value(payload)?
                     .into_connection(),
             }),
+            _ => Self::misc_from_event_type_and_payload(event_type, payload),
+        }
+    }
+
+    /// Reconstruct the remaining (non-workflow, non-slice) variants from a
+    /// tagged payload.
+    fn misc_from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
             ExportedEventType::ReviewRecorded => {
                 Ok(ReviewRecordedEventPayload::from_json_value(payload)?.into_body())
             }
@@ -2668,6 +2724,7 @@ impl ExportedEventBody {
                     "chosen_event_id",
                 )?)?),
             }),
+            _ => Self::workflow_from_event_type_and_payload(event_type, payload),
         }
     }
 }
@@ -2991,7 +3048,7 @@ pub(crate) fn project_exported_events() -> Result<Option<EffectPlan>, String> {
 
     let fingerprint = projection_fingerprint(&events)?;
     ProjectedModel::from_events(events)
-        .and_then(|model| model.effects(fingerprint))
+        .and_then(|model| model.effects(&fingerprint))
         .map(Some)
 }
 
@@ -3109,8 +3166,8 @@ pub(crate) fn list_stale_workflow_readiness() -> Result<EffectPlan, String> {
 }
 
 pub(crate) fn resolve_event_conflict(
-    conflict_id: EventConflictId,
-    chosen_event_id: ChosenEventId,
+    conflict_id: &EventConflictId,
+    chosen_event_id: &ChosenEventId,
 ) -> Result<EffectPlan, String> {
     // In the eventcore-fs merge model a "conflict" is a fork on a stream
     // (`conflict_id` carries the forked stream id) and the resolution chooses
@@ -3195,6 +3252,15 @@ struct ProjectedModel {
     reviews: Vec<ProjectedReview>,
 }
 
+/// Optional transition metadata carried by a `WorkflowConnected` event, grouped
+/// so the projection helper stays under the argument-count lint.
+struct ConnectionTransitionMetadata {
+    payload_contract: Option<PayloadContractName>,
+    reason: Option<ModelDescription>,
+    source_control: Option<TransitionTriggerName>,
+    target_view: Option<WorkflowOwnedDefinitionName>,
+}
+
 impl ProjectedModel {
     fn from_events(events: Vec<EmcEvent>) -> Result<Self, String> {
         events
@@ -3272,399 +3338,575 @@ impl ProjectedModel {
     fn apply_event(model: Option<Self>, event: EmcEvent) -> Result<Option<Self>, String> {
         match event {
             EmcEvent::ProjectInitialized { name, .. } => {
-                let (workflows, reviews) = model
-                    .map(|model| (model.workflows, model.reviews))
-                    .unwrap_or_default();
-                Ok(Some(Self {
-                    project_name: name,
-                    workflows,
-                    reviews,
-                }))
+                Ok(Some(Self::apply_project_initialized(model, name)))
             }
-            EmcEvent::WorkflowAdded {
-                slug,
-                name,
-                description,
-                ..
-            } => {
-                let mut model = Self::require(model, "WorkflowAdded")?;
-                model.workflows.push(ProjectedWorkflow {
-                    slug,
-                    name,
-                    description,
-                    slices: Vec::new(),
-                    command_errors: Vec::new(),
-                    outcomes: Vec::new(),
-                    owned_definitions: Vec::new(),
-                    transitions: Vec::new(),
-                    transition_evidences: Vec::new(),
-                    requires_entry_lifecycle_coverage: false,
-                    entry_lifecycle_states: Vec::new(),
-                });
-                Ok(Some(model))
-            }
-            EmcEvent::WorkflowUpdated {
-                slug,
-                name,
-                description,
-                ..
-            } => {
-                let mut model = Self::require(model, "WorkflowUpdated")?;
-                let workflow = model.workflow_mut(&slug, "WorkflowUpdated")?;
-                workflow.name = name;
-                workflow.description = description;
-                Ok(Some(model))
-            }
-            EmcEvent::WorkflowRemoved { slug, .. } => {
-                let mut model = Self::require(model, "WorkflowRemoved")?;
-                // Removal is idempotent. A `WorkflowRemoved` whose workflow is
-                // already absent — e.g. introduced into the log by a git-merge
-                // of two replicas, or following another removal — must replay as
-                // a no-op, not abort the projection. The command layer validates
-                // existence before emitting a removal; the projection itself must
-                // stay total over any event history it is handed, so that a
-                // single divergent event can never permanently wedge every
-                // subsequent command that reads the log.
-                model.workflows.retain(|workflow| workflow.slug != slug);
-                Ok(Some(model))
-            }
-            EmcEvent::SliceAdded {
-                workflow,
-                slug,
-                name,
-                kind,
-                description,
-                ..
-            } => {
-                let mut model = Self::require(model, "SliceAdded")?;
-                let workflow = model.workflow_mut(&workflow, "SliceAdded")?;
-                let relationship = if workflow.slices.is_empty() {
-                    WorkflowStepRelationshipName::Entry
-                } else {
-                    WorkflowStepRelationshipName::Main
-                };
-                workflow.slices.push(ProjectedSlice {
-                    slug,
-                    name,
-                    kind,
-                    description,
-                    relationship,
-                    scenarios: Vec::new(),
-                    outcomes: Vec::new(),
-                    external_payloads: Vec::new(),
-                    event_definitions: Vec::new(),
-                    command_definitions: Vec::new(),
-                    read_models: Vec::new(),
-                    bit_level_data_flows: Vec::new(),
-                    views: Vec::new(),
-                    translations: Vec::new(),
-                    automations: Vec::new(),
-                    board_elements: Vec::new(),
-                    board_connections: Vec::new(),
-                });
-                Ok(Some(model))
-            }
-            EmcEvent::SliceUpdated {
-                slug,
-                name,
-                kind,
-                description,
-                ..
-            } => {
-                let mut model = Self::require(model, "SliceUpdated")?;
-                let projected_slice = model.slice_mut(&slug, "SliceUpdated")?;
-                projected_slice.name = name;
-                projected_slice.kind = kind;
-                projected_slice.description = description;
-                Ok(Some(model))
-            }
-            EmcEvent::SliceRemoved { slug, .. } => {
-                let mut model = Self::require(model, "SliceRemoved")?;
-                // Removal is idempotent. A `SliceRemoved` whose slice is already
-                // absent — e.g. introduced by a git-merge of two replicas, or
-                // following the removal of its owning workflow — must replay as a
-                // no-op, not abort the projection and wedge every subsequent
-                // command that reads the log. The command layer validates
-                // existence before emitting a removal; the projection itself must
-                // stay total over any event history it is handed. Dangling
-                // transitions that referenced the slug are still pruned whether
-                // or not the slice was present.
-                for workflow in &mut model.workflows {
-                    workflow.slices.retain(|slice| slice.slug != slug);
-                    workflow.transitions.retain(|transition| {
-                        transition.source().as_ref() != slug.as_ref()
-                            && transition.target().as_ref() != slug.as_ref()
-                    });
-                }
-                Ok(Some(model))
-            }
-            EmcEvent::SliceFactAdded { fact, .. } => {
-                let mut model = Self::require(model, "SliceFactAdded")?;
-                model.apply_slice_fact_body(fact.to_event_body())?;
-                Ok(Some(model))
-            }
+            EmcEvent::WorkflowAdded { .. } => Self::apply_workflow_added(model, event),
+            EmcEvent::WorkflowUpdated { .. } => Self::apply_workflow_updated(model, event),
+            EmcEvent::WorkflowRemoved { slug, .. } => Self::apply_workflow_removed(model, &slug),
+            EmcEvent::SliceAdded { .. } => Self::apply_slice_added(model, event),
+            EmcEvent::SliceUpdated { .. } => Self::apply_slice_updated(model, event),
+            EmcEvent::SliceRemoved { slug, .. } => Self::apply_slice_removed(model, &slug),
+            EmcEvent::SliceFactAdded { fact, .. } => Self::apply_slice_fact_added(model, &fact),
             EmcEvent::WorkflowReadinessDeclared { .. } => {
                 Ok(Some(Self::require(model, "WorkflowReadinessDeclared")?))
             }
-            EmcEvent::WorkflowConnected {
-                workflow,
-                source,
-                target_slice,
-                target_workflow,
-                via,
-                name,
+            EmcEvent::WorkflowConnected { .. } => Self::apply_workflow_connected(model, event),
+            EmcEvent::WorkflowTransitionRemoved { .. } => {
+                Self::apply_workflow_transition_removed(model, event)
+            }
+            EmcEvent::WorkflowOutcomeAdded { .. } => {
+                Self::apply_workflow_outcome_added(model, event)
+            }
+            EmcEvent::WorkflowCommandErrorAdded { .. } => {
+                Self::apply_workflow_command_error_added(model, event)
+            }
+            EmcEvent::WorkflowOwnedDefinitionAdded { .. } => {
+                Self::apply_workflow_owned_definition_added(model, event)
+            }
+            EmcEvent::WorkflowTransitionEvidenceAdded { .. } => {
+                Self::apply_workflow_transition_evidence_added(model, event)
+            }
+            EmcEvent::WorkflowEntryLifecycleCoverageRequired { workflow, .. } => {
+                Self::apply_workflow_entry_lifecycle_coverage_required(model, &workflow)
+            }
+            EmcEvent::WorkflowEntryLifecycleStateAdded { .. } => {
+                Self::apply_workflow_entry_lifecycle_state_added(model, event)
+            }
+            EmcEvent::ReviewRecorded { .. } => Self::apply_review_recorded(model, event),
+            EmcEvent::ConflictResolved { .. } => Ok(model),
+        }
+    }
+
+    fn apply_project_initialized(model: Option<Self>, name: ProjectName) -> Self {
+        let (workflows, reviews) = model
+            .map(|model| (model.workflows, model.reviews))
+            .unwrap_or_default();
+        Self {
+            project_name: name,
+            workflows,
+            reviews,
+        }
+    }
+
+    fn apply_workflow_added(model: Option<Self>, event: EmcEvent) -> Result<Option<Self>, String> {
+        let EmcEvent::WorkflowAdded {
+            slug,
+            name,
+            description,
+            ..
+        } = event
+        else {
+            return Err("apply_workflow_added requires WorkflowAdded".to_owned());
+        };
+        let mut model = Self::require(model, "WorkflowAdded")?;
+        model.workflows.push(ProjectedWorkflow {
+            slug,
+            name,
+            description,
+            slices: Vec::new(),
+            command_errors: Vec::new(),
+            outcomes: Vec::new(),
+            owned_definitions: Vec::new(),
+            transitions: Vec::new(),
+            transition_evidences: Vec::new(),
+            requires_entry_lifecycle_coverage: false,
+            entry_lifecycle_states: Vec::new(),
+        });
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_updated(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        let EmcEvent::WorkflowUpdated {
+            slug,
+            name,
+            description,
+            ..
+        } = event
+        else {
+            return Err("apply_workflow_updated requires WorkflowUpdated".to_owned());
+        };
+        let mut model = Self::require(model, "WorkflowUpdated")?;
+        let workflow = model.workflow_mut(&slug, "WorkflowUpdated")?;
+        workflow.name = name;
+        workflow.description = description;
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_removed(
+        model: Option<Self>,
+        slug: &WorkflowSlug,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "WorkflowRemoved")?;
+        // Removal is idempotent. A `WorkflowRemoved` whose workflow is
+        // already absent — e.g. introduced into the log by a git-merge
+        // of two replicas, or following another removal — must replay as
+        // a no-op, not abort the projection. The command layer validates
+        // existence before emitting a removal; the projection itself must
+        // stay total over any event history it is handed, so that a
+        // single divergent event can never permanently wedge every
+        // subsequent command that reads the log.
+        model.workflows.retain(|workflow| &workflow.slug != slug);
+        Ok(Some(model))
+    }
+
+    fn apply_slice_added(model: Option<Self>, event: EmcEvent) -> Result<Option<Self>, String> {
+        let EmcEvent::SliceAdded {
+            workflow,
+            slug,
+            name,
+            kind,
+            description,
+            ..
+        } = event
+        else {
+            return Err("apply_slice_added requires SliceAdded".to_owned());
+        };
+        let mut model = Self::require(model, "SliceAdded")?;
+        let workflow = model.workflow_mut(&workflow, "SliceAdded")?;
+        let relationship = if workflow.slices.is_empty() {
+            WorkflowStepRelationshipName::Entry
+        } else {
+            WorkflowStepRelationshipName::Main
+        };
+        workflow.slices.push(ProjectedSlice {
+            slug,
+            name,
+            kind,
+            description,
+            relationship,
+            scenarios: Vec::new(),
+            outcomes: Vec::new(),
+            external_payloads: Vec::new(),
+            event_definitions: Vec::new(),
+            command_definitions: Vec::new(),
+            read_models: Vec::new(),
+            bit_level_data_flows: Vec::new(),
+            views: Vec::new(),
+            translations: Vec::new(),
+            automations: Vec::new(),
+            board_elements: Vec::new(),
+            board_connections: Vec::new(),
+        });
+        Ok(Some(model))
+    }
+
+    fn apply_slice_updated(model: Option<Self>, event: EmcEvent) -> Result<Option<Self>, String> {
+        let EmcEvent::SliceUpdated {
+            slug,
+            name,
+            kind,
+            description,
+            ..
+        } = event
+        else {
+            return Err("apply_slice_updated requires SliceUpdated".to_owned());
+        };
+        let mut model = Self::require(model, "SliceUpdated")?;
+        let projected_slice = model.slice_mut(&slug, "SliceUpdated")?;
+        projected_slice.name = name;
+        projected_slice.kind = kind;
+        projected_slice.description = description;
+        Ok(Some(model))
+    }
+
+    fn apply_slice_removed(model: Option<Self>, slug: &SliceSlug) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceRemoved")?;
+        // Removal is idempotent. A `SliceRemoved` whose slice is already
+        // absent — e.g. introduced by a git-merge of two replicas, or
+        // following the removal of its owning workflow — must replay as a
+        // no-op, not abort the projection and wedge every subsequent
+        // command that reads the log. The command layer validates
+        // existence before emitting a removal; the projection itself must
+        // stay total over any event history it is handed. Dangling
+        // transitions that referenced the slug are still pruned whether
+        // or not the slice was present.
+        for workflow in &mut model.workflows {
+            workflow.slices.retain(|slice| &slice.slug != slug);
+            workflow.transitions.retain(|transition| {
+                transition.source().as_ref() != slug.as_ref()
+                    && transition.target().as_ref() != slug.as_ref()
+            });
+        }
+        Ok(Some(model))
+    }
+
+    fn apply_slice_fact_added(
+        model: Option<Self>,
+        fact: &SliceFactEvent,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceFactAdded")?;
+        model.apply_slice_fact_body(fact.to_event_body())?;
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_connected(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        let EmcEvent::WorkflowConnected {
+            workflow,
+            source,
+            target_slice,
+            target_workflow,
+            via,
+            name,
+            payload_contract,
+            reason,
+            source_control,
+            target_view,
+            ..
+        } = event
+        else {
+            return Err("apply_workflow_connected requires WorkflowConnected".to_owned());
+        };
+        let mut model = Self::require(model, "WorkflowConnected")?;
+        let target_ref = target_slice
+            .as_ref()
+            .map(AsRef::as_ref)
+            .or_else(|| target_workflow.as_ref().map(WorkflowSlug::as_ref))
+            .ok_or_else(|| "WorkflowConnected is missing a target".to_owned())?;
+        let workflow_exit = target_workflow.is_some();
+        let source_endpoint = workflow_transition_endpoint(source.as_ref())?;
+        let target_endpoint = workflow_transition_endpoint(target_ref)?;
+        let kind = workflow_transition_kind_from_connection(workflow_exit, via)?;
+        let record = Self::connection_transition_record(
+            source_endpoint,
+            target_endpoint,
+            kind,
+            name,
+            ConnectionTransitionMetadata {
                 payload_contract,
                 reason,
                 source_control,
                 target_view,
-                ..
-            } => {
-                let mut model = Self::require(model, "WorkflowConnected")?;
-                let target_ref = target_slice
-                    .as_ref()
-                    .map(AsRef::as_ref)
-                    .or_else(|| target_workflow.as_ref().map(WorkflowSlug::as_ref))
-                    .ok_or_else(|| "WorkflowConnected is missing a target".to_owned())?;
-                let workflow_exit = target_workflow.is_some();
-                let source_endpoint = workflow_transition_endpoint(source.as_ref())?;
-                let target_endpoint = workflow_transition_endpoint(target_ref)?;
-                let kind = workflow_transition_kind_from_connection(workflow_exit, via)?;
-                let record = match (payload_contract, reason) {
-                    (Some(payload_contract), None) => {
-                        WorkflowTransitionRecord::new_with_payload_contract(
-                            source_endpoint,
-                            target_endpoint,
-                            kind,
-                            name,
-                            payload_contract,
-                        )
-                    }
-                    (None, Some(reason)) => WorkflowTransitionRecord::new_with_rationale(
-                        source_endpoint,
-                        target_endpoint,
-                        kind,
-                        name,
-                        reason,
-                    ),
-                    (None, None) => {
-                        if kind == WorkflowTransitionKind::Navigation
-                            && let (Some(source_control), Some(target_view)) =
-                                (source_control, target_view)
-                        {
-                            WorkflowTransitionRecord::new_with_navigation_endpoints(
-                                source_endpoint,
-                                target_endpoint,
-                                kind,
-                                name,
-                                source_control,
-                                target_view,
-                            )
-                        } else {
-                            WorkflowTransitionRecord::new(
-                                source_endpoint,
-                                target_endpoint,
-                                kind,
-                                name,
-                            )
-                        }
-                    }
-                    (Some(_), Some(_)) => {
-                        return Err(
-                            "WorkflowConnected has both payload contract and rationale".to_owned()
-                        );
-                    }
-                };
-                let workflow = model.workflow_mut(&workflow, "WorkflowConnected")?;
-                workflow.transitions.push(record);
-                Ok(Some(model))
-            }
-            EmcEvent::WorkflowTransitionRemoved {
-                workflow,
-                source,
-                target_slice,
-                target_workflow,
-                via,
-                name,
-                ..
-            } => {
-                let mut model = Self::require(model, "WorkflowTransitionRemoved")?;
-                let target_ref = target_slice
-                    .as_ref()
-                    .map(AsRef::as_ref)
-                    .or_else(|| target_workflow.as_ref().map(WorkflowSlug::as_ref))
-                    .ok_or_else(|| "WorkflowTransitionRemoved is missing a target".to_owned())?;
-                let workflow_exit = target_workflow.is_some();
-                let removed_transition = WorkflowTransitionRecord::new(
-                    workflow_transition_endpoint(source.as_ref())?,
-                    workflow_transition_endpoint(target_ref)?,
-                    workflow_transition_kind_from_connection(workflow_exit, via)?,
+            },
+        )?;
+        let workflow = model.workflow_mut(&workflow, "WorkflowConnected")?;
+        workflow.transitions.push(record);
+        Ok(Some(model))
+    }
+
+    fn connection_transition_record(
+        source_endpoint: WorkflowTransitionEndpoint,
+        target_endpoint: WorkflowTransitionEndpoint,
+        kind: WorkflowTransitionKind,
+        name: TransitionTriggerName,
+        metadata: ConnectionTransitionMetadata,
+    ) -> Result<WorkflowTransitionRecord, String> {
+        let ConnectionTransitionMetadata {
+            payload_contract,
+            reason,
+            source_control,
+            target_view,
+        } = metadata;
+        match (payload_contract, reason) {
+            (Some(payload_contract), None) => {
+                Ok(WorkflowTransitionRecord::new_with_payload_contract(
+                    source_endpoint,
+                    target_endpoint,
+                    kind,
                     name,
-                );
-                let workflow = model.workflow_mut(&workflow, "WorkflowTransitionRemoved")?;
-                workflow
-                    .transitions
-                    .retain(|transition| !same_transition(transition, &removed_transition));
-                Ok(Some(model))
+                    payload_contract,
+                ))
             }
-            EmcEvent::WorkflowOutcomeAdded {
-                workflow,
-                source_slice,
-                label,
-                externally_relevant,
-                ..
-            } => {
-                let mut model = Self::require(model, "WorkflowOutcomeAdded")?;
-                let outcome = WorkflowOutcomeRecord::new(source_slice, label, externally_relevant);
-                model
-                    .workflow_mut(&workflow, "WorkflowOutcomeAdded")?
-                    .outcomes
-                    .push(outcome);
-                Ok(Some(model))
+            (None, Some(reason)) => Ok(WorkflowTransitionRecord::new_with_rationale(
+                source_endpoint,
+                target_endpoint,
+                kind,
+                name,
+                reason,
+            )),
+            (None, None) => Ok(Self::navigation_or_plain_transition_record(
+                source_endpoint,
+                target_endpoint,
+                kind,
+                name,
+                source_control,
+                target_view,
+            )),
+            (Some(_), Some(_)) => {
+                Err("WorkflowConnected has both payload contract and rationale".to_owned())
             }
-            EmcEvent::WorkflowCommandErrorAdded {
-                workflow,
-                source_slice,
-                command,
-                error,
-                ..
-            } => {
-                let mut model = Self::require(model, "WorkflowCommandErrorAdded")?;
-                let record = WorkflowCommandErrorRecord::new(source_slice, command, error);
-                model
-                    .workflow_mut(&workflow, "WorkflowCommandErrorAdded")?
-                    .command_errors
-                    .push(record);
-                Ok(Some(model))
+        }
+    }
+
+    fn navigation_or_plain_transition_record(
+        source_endpoint: WorkflowTransitionEndpoint,
+        target_endpoint: WorkflowTransitionEndpoint,
+        kind: WorkflowTransitionKind,
+        name: TransitionTriggerName,
+        source_control: Option<TransitionTriggerName>,
+        target_view: Option<WorkflowOwnedDefinitionName>,
+    ) -> WorkflowTransitionRecord {
+        if kind == WorkflowTransitionKind::Navigation
+            && let (Some(source_control), Some(target_view)) = (source_control, target_view)
+        {
+            WorkflowTransitionRecord::new_with_navigation_endpoints(
+                source_endpoint,
+                target_endpoint,
+                kind,
+                name,
+                source_control,
+                target_view,
+            )
+        } else {
+            WorkflowTransitionRecord::new(source_endpoint, target_endpoint, kind, name)
+        }
+    }
+
+    fn apply_workflow_transition_removed(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        let EmcEvent::WorkflowTransitionRemoved {
+            workflow,
+            source,
+            target_slice,
+            target_workflow,
+            via,
+            name,
+            ..
+        } = event
+        else {
+            return Err(
+                "apply_workflow_transition_removed requires WorkflowTransitionRemoved".to_owned(),
+            );
+        };
+        let mut model = Self::require(model, "WorkflowTransitionRemoved")?;
+        let target_ref = target_slice
+            .as_ref()
+            .map(AsRef::as_ref)
+            .or_else(|| target_workflow.as_ref().map(WorkflowSlug::as_ref))
+            .ok_or_else(|| "WorkflowTransitionRemoved is missing a target".to_owned())?;
+        let workflow_exit = target_workflow.is_some();
+        let removed_transition = WorkflowTransitionRecord::new(
+            workflow_transition_endpoint(source.as_ref())?,
+            workflow_transition_endpoint(target_ref)?,
+            workflow_transition_kind_from_connection(workflow_exit, via)?,
+            name,
+        );
+        let workflow = model.workflow_mut(&workflow, "WorkflowTransitionRemoved")?;
+        workflow
+            .transitions
+            .retain(|transition| !same_transition(transition, &removed_transition));
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_outcome_added(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        let EmcEvent::WorkflowOutcomeAdded {
+            workflow,
+            source_slice,
+            label,
+            externally_relevant,
+            ..
+        } = event
+        else {
+            return Err("apply_workflow_outcome_added requires WorkflowOutcomeAdded".to_owned());
+        };
+        let mut model = Self::require(model, "WorkflowOutcomeAdded")?;
+        let outcome = WorkflowOutcomeRecord::new(source_slice, label, externally_relevant);
+        model
+            .workflow_mut(&workflow, "WorkflowOutcomeAdded")?
+            .outcomes
+            .push(outcome);
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_command_error_added(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        let EmcEvent::WorkflowCommandErrorAdded {
+            workflow,
+            source_slice,
+            command,
+            error,
+            ..
+        } = event
+        else {
+            return Err(
+                "apply_workflow_command_error_added requires WorkflowCommandErrorAdded".to_owned(),
+            );
+        };
+        let mut model = Self::require(model, "WorkflowCommandErrorAdded")?;
+        let record = WorkflowCommandErrorRecord::new(source_slice, command, error);
+        model
+            .workflow_mut(&workflow, "WorkflowCommandErrorAdded")?
+            .command_errors
+            .push(record);
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_owned_definition_added(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        let EmcEvent::WorkflowOwnedDefinitionAdded {
+            workflow,
+            source_slice,
+            definition_kind,
+            definition_name,
+            definition_stream,
+            source_provenance,
+            event_participation,
+            view_role,
+            ..
+        } = event
+        else {
+            return Err(
+                "apply_workflow_owned_definition_added requires WorkflowOwnedDefinitionAdded"
+                    .to_owned(),
+            );
+        };
+        let mut model = Self::require(model, "WorkflowOwnedDefinitionAdded")?;
+        let definition = WorkflowOwnedDefinitionRecord::from_parts(
+            source_slice,
+            definition_kind,
+            definition_name,
+            definition_stream,
+            source_provenance,
+            event_participation,
+            view_role,
+        );
+        model
+            .workflow_mut(&workflow, "WorkflowOwnedDefinitionAdded")?
+            .owned_definitions
+            .push(definition);
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_transition_evidence_added(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        let EmcEvent::WorkflowTransitionEvidenceAdded {
+            workflow,
+            source,
+            target,
+            via,
+            name,
+            source_evidence,
+            target_evidence,
+            source_control,
+            target_view,
+            ..
+        } = event
+        else {
+            return Err(
+                "apply_workflow_transition_evidence_added requires WorkflowTransitionEvidenceAdded"
+                    .to_owned(),
+            );
+        };
+        let mut model = Self::require(model, "WorkflowTransitionEvidenceAdded")?;
+        let evidence = match (source_control, target_view) {
+            (Some(source_control), Some(target_view)) => {
+                WorkflowTransitionEvidenceRecord::new_with_navigation_endpoints(
+                    source,
+                    target,
+                    via,
+                    name,
+                    WorkflowTransitionEvidenceNavigationEndpoints::new(source_control, target_view),
+                    source_evidence,
+                    target_evidence,
+                )
             }
-            EmcEvent::WorkflowOwnedDefinitionAdded {
-                workflow,
-                source_slice,
-                definition_kind,
-                definition_name,
-                definition_stream,
-                source_provenance,
-                event_participation,
-                view_role,
-                ..
-            } => {
-                let mut model = Self::require(model, "WorkflowOwnedDefinitionAdded")?;
-                let definition = WorkflowOwnedDefinitionRecord::from_parts(
-                    source_slice,
-                    definition_kind,
-                    definition_name,
-                    definition_stream,
-                    source_provenance,
-                    event_participation,
-                    view_role,
-                );
-                model
-                    .workflow_mut(&workflow, "WorkflowOwnedDefinitionAdded")?
-                    .owned_definitions
-                    .push(definition);
-                Ok(Some(model))
-            }
-            EmcEvent::WorkflowTransitionEvidenceAdded {
-                workflow,
+            _ => WorkflowTransitionEvidenceRecord::new(
                 source,
                 target,
                 via,
                 name,
                 source_evidence,
                 target_evidence,
-                source_control,
-                target_view,
-                ..
-            } => {
-                let mut model = Self::require(model, "WorkflowTransitionEvidenceAdded")?;
-                let evidence = match (source_control, target_view) {
-                    (Some(source_control), Some(target_view)) => {
-                        WorkflowTransitionEvidenceRecord::new_with_navigation_endpoints(
-                            source,
-                            target,
-                            via,
-                            name,
-                            WorkflowTransitionEvidenceNavigationEndpoints::new(
-                                source_control,
-                                target_view,
-                            ),
-                            source_evidence,
-                            target_evidence,
-                        )
-                    }
-                    _ => WorkflowTransitionEvidenceRecord::new(
-                        source,
-                        target,
-                        via,
-                        name,
-                        source_evidence,
-                        target_evidence,
-                    ),
-                };
-                model
-                    .workflow_mut(&workflow, "WorkflowTransitionEvidenceAdded")?
-                    .transition_evidences
-                    .push(evidence);
-                Ok(Some(model))
-            }
-            EmcEvent::WorkflowEntryLifecycleCoverageRequired { workflow, .. } => {
-                let mut model = Self::require(model, "WorkflowEntryLifecycleCoverageRequired")?;
-                model
-                    .workflow_mut(&workflow, "WorkflowEntryLifecycleCoverageRequired")?
-                    .requires_entry_lifecycle_coverage = true;
-                Ok(Some(model))
-            }
-            EmcEvent::WorkflowEntryLifecycleStateAdded {
-                workflow,
-                state,
-                step,
-                evidence,
-                ..
-            } => {
-                let mut model = Self::require(model, "WorkflowEntryLifecycleStateAdded")?;
-                let record = WorkflowEntryLifecycleStateRecord::new(state, step, evidence);
-                model
-                    .workflow_mut(&workflow, "WorkflowEntryLifecycleStateAdded")?
-                    .entry_lifecycle_states
-                    .push(record);
-                Ok(Some(model))
-            }
-            EmcEvent::ReviewRecorded {
-                workflow,
-                model_content_digest,
-                reviewer_id,
-                reviewed_at,
-                categories,
-                ..
-            } => {
-                let mut model = Self::require(model, "ReviewRecorded")?;
-                if !model
-                    .workflows
-                    .iter()
-                    .any(|existing| existing.slug == workflow)
-                {
-                    return Err(format!(
-                        "ReviewRecorded references unknown workflow {}",
-                        workflow.as_ref()
-                    ));
-                }
-                let review = ProjectedReview {
-                    workflow_slug: workflow,
-                    model_content_digest,
-                    reviewer_id: reviewer_id.as_ref().to_owned(),
-                    reviewed_at: reviewed_at.as_ref().to_owned(),
-                    categories: categories
-                        .into_iter()
-                        .map(|category| category.as_ref().to_owned())
-                        .collect(),
-                };
-                model.reviews.retain(|existing| {
-                    existing.workflow_slug.as_ref() != review.workflow_slug.as_ref()
-                });
-                model.reviews.push(review);
-                Ok(Some(model))
-            }
-            EmcEvent::ConflictResolved { .. } => Ok(model),
+            ),
+        };
+        model
+            .workflow_mut(&workflow, "WorkflowTransitionEvidenceAdded")?
+            .transition_evidences
+            .push(evidence);
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_entry_lifecycle_coverage_required(
+        model: Option<Self>,
+        workflow: &WorkflowSlug,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "WorkflowEntryLifecycleCoverageRequired")?;
+        model
+            .workflow_mut(workflow, "WorkflowEntryLifecycleCoverageRequired")?
+            .requires_entry_lifecycle_coverage = true;
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_entry_lifecycle_state_added(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        let EmcEvent::WorkflowEntryLifecycleStateAdded {
+            workflow,
+            state,
+            step,
+            evidence,
+            ..
+        } = event
+        else {
+            return Err(
+                "apply_workflow_entry_lifecycle_state_added requires WorkflowEntryLifecycleStateAdded"
+                    .to_owned(),
+            );
+        };
+        let mut model = Self::require(model, "WorkflowEntryLifecycleStateAdded")?;
+        let record = WorkflowEntryLifecycleStateRecord::new(state, step, evidence);
+        model
+            .workflow_mut(&workflow, "WorkflowEntryLifecycleStateAdded")?
+            .entry_lifecycle_states
+            .push(record);
+        Ok(Some(model))
+    }
+
+    fn apply_review_recorded(model: Option<Self>, event: EmcEvent) -> Result<Option<Self>, String> {
+        let EmcEvent::ReviewRecorded {
+            workflow,
+            model_content_digest,
+            reviewer_id,
+            reviewed_at,
+            categories,
+            ..
+        } = event
+        else {
+            return Err("apply_review_recorded requires ReviewRecorded".to_owned());
+        };
+        let mut model = Self::require(model, "ReviewRecorded")?;
+        if !model
+            .workflows
+            .iter()
+            .any(|existing| existing.slug == workflow)
+        {
+            return Err(format!(
+                "ReviewRecorded references unknown workflow {}",
+                workflow.as_ref()
+            ));
         }
+        let review = ProjectedReview {
+            workflow_slug: workflow,
+            model_content_digest,
+            reviewer_id: reviewer_id.as_ref().to_owned(),
+            reviewed_at: reviewed_at.as_ref().to_owned(),
+            categories: categories
+                .into_iter()
+                .map(|category| category.as_ref().to_owned())
+                .collect(),
+        };
+        model
+            .reviews
+            .retain(|existing| existing.workflow_slug.as_ref() != review.workflow_slug.as_ref());
+        model.reviews.push(review);
+        Ok(Some(model))
     }
 
     fn apply_slice_fact_body(&mut self, body: ExportedEventBody) -> Result<(), String> {
@@ -3739,7 +3981,7 @@ impl ProjectedModel {
         Ok(())
     }
 
-    fn effects(self, projection_fingerprint: String) -> Result<EffectPlan, String> {
+    fn effects(self, projection_fingerprint: &str) -> Result<EffectPlan, String> {
         let project_module_name = module_name(self.project_name.as_ref());
         let workflow_slugs = self
             .workflows
@@ -3793,8 +4035,8 @@ impl ProjectedModel {
         let (lean_shell, quint_shell) =
             emit_project_root_shells(&self.project_name, &workflow_slugs, &slice_memberships);
         let (lean_root, quint_root) = populate_project_root_modules(
-            lean_shell,
-            quint_shell,
+            &lean_shell,
+            &quint_shell,
             &self.project_name,
             &workflow_slugs,
             &slice_memberships,
@@ -3933,7 +4175,7 @@ impl ProjectedWorkflow {
     fn effects(self) -> Result<Vec<Effect>, String> {
         let module_name = module_name(self.name.as_ref());
         let slice_details = WorkflowSliceDetails::from_details(self.slice_details());
-        let digest = artifact_digest(WorkflowArtifactDigestInput {
+        let digest = artifact_digest(&WorkflowArtifactDigestInput {
             workflow_name: self.name.clone(),
             workflow_slug: self.slug.clone(),
             workflow_description: self.description.clone(),
@@ -3974,14 +4216,11 @@ impl ProjectedWorkflow {
         let mut effects = vec![
             Effect::write_file(
                 project_path(format!("model/lean/{module_name}.lean"))?,
-                emit_lean_workflow_module(
-                    lean_module_name(module_name.clone()),
-                    workflow_data.clone(),
-                ),
+                emit_lean_workflow_module(&lean_module_name(module_name.clone()), &workflow_data),
             ),
             Effect::write_file(
                 project_path(format!("model/quint/{module_name}.qnt"))?,
-                emit_quint_workflow_module(quint_module_name(module_name), workflow_data),
+                emit_quint_workflow_module(&quint_module_name(module_name), &workflow_data),
             ),
         ];
 
@@ -4036,27 +4275,22 @@ impl ProjectedSlice {
     /// generated slice artifact back — it is a pure function of the event log.
     fn effects(self) -> Result<Vec<Effect>, String> {
         let module_name = module_name(self.name.as_ref());
-        let digest = slice_artifact_digest(
-            self.name.clone(),
-            self.slug.clone(),
-            self.kind,
-            self.description.clone(),
-        );
+        let digest = slice_artifact_digest(&self.name, &self.slug, self.kind, &self.description);
         let lean_shell = emit_lean_slice_module(
-            lean_module_name(module_name.clone()),
-            self.name.clone(),
-            self.description.clone(),
-            self.slug.clone(),
+            &lean_module_name(module_name.clone()),
+            &self.name,
+            &self.description,
+            &self.slug,
             self.kind,
-            digest.clone(),
+            &digest,
         );
         let quint_shell = emit_quint_slice_module(
-            quint_module_name(module_name.clone()),
-            self.name.clone(),
-            self.description.clone(),
-            self.slug.clone(),
+            &quint_module_name(module_name.clone()),
+            &self.name,
+            &self.description,
+            &self.slug,
             self.kind,
-            digest,
+            &digest,
         );
         let facts = SliceModuleFacts {
             scenarios: &self.scenarios,
@@ -4200,7 +4434,7 @@ fn artifact_digest_from_str(value: &str) -> Result<ArtifactDigest, String> {
 }
 
 fn connection_kind(value: &str) -> Result<ConnectionKind, String> {
-    ConnectionKind::try_new(value.to_owned()).map_err(|error| error.to_string())
+    ConnectionKind::try_new(value).map_err(|error| error.to_string())
 }
 
 fn review_timestamp(value: &str) -> Result<ReviewTimestamp, String> {
@@ -4216,7 +4450,7 @@ fn slice_slug(value: &str) -> Result<SliceSlug, String> {
 }
 
 fn slice_kind_name(value: &str) -> Result<SliceKindName, String> {
-    SliceKindName::try_new(value.to_owned()).map_err(|error| error.to_string())
+    SliceKindName::try_new(value).map_err(|error| error.to_string())
 }
 
 fn workflow_transition_endpoint(value: &str) -> Result<WorkflowTransitionEndpoint, String> {
@@ -4224,7 +4458,7 @@ fn workflow_transition_endpoint(value: &str) -> Result<WorkflowTransitionEndpoin
 }
 
 fn workflow_transition_kind(value: &str) -> Result<WorkflowTransitionKind, String> {
-    WorkflowTransitionKind::try_new(value.to_owned()).map_err(|error| error.to_string())
+    WorkflowTransitionKind::try_new(value).map_err(|error| error.to_string())
 }
 
 fn transition_trigger_name(value: &str) -> Result<TransitionTriggerName, String> {
@@ -4272,11 +4506,11 @@ fn board_element_name(value: &str) -> Result<BoardElementName, String> {
 }
 
 fn board_element_kind(value: &str) -> Result<BoardElementKind, String> {
-    BoardElementKind::try_new(value.to_owned()).map_err(|error| error.to_string())
+    BoardElementKind::try_new(value).map_err(|error| error.to_string())
 }
 
 fn board_lane_id(value: &str) -> Result<BoardLaneId, String> {
-    BoardLaneId::try_new(value.to_owned()).map_err(|error| error.to_string())
+    BoardLaneId::try_new(value).map_err(|error| error.to_string())
 }
 
 fn board_element_declared_name(value: &str) -> Result<BoardElementDeclaredName, String> {
@@ -4288,7 +4522,7 @@ fn board_connection_endpoint(value: &str) -> Result<BoardConnectionEndpoint, Str
 }
 
 fn board_connection_endpoint_kind(value: &str) -> Result<BoardConnectionEndpointKind, String> {
-    BoardConnectionEndpointKind::try_new(value.to_owned()).map_err(|error| error.to_string())
+    BoardConnectionEndpointKind::try_new(value).map_err(|error| error.to_string())
 }
 
 fn datum_name(value: &str) -> Result<DatumName, String> {
@@ -4300,7 +4534,7 @@ fn read_model_name(value: &str) -> Result<ReadModelName, String> {
 }
 
 fn read_model_field_source_kind(value: &str) -> Result<ReadModelFieldSourceKind, String> {
-    ReadModelFieldSourceKind::try_new(value.to_owned()).map_err(|error| error.to_string())
+    ReadModelFieldSourceKind::try_new(value).map_err(|error| error.to_string())
 }
 
 fn read_model_derivation_rule(value: &str) -> Result<ReadModelDerivationRule, String> {
@@ -4312,7 +4546,7 @@ fn read_model_transitive_rule(value: &str) -> Result<ReadModelTransitiveRule, St
 }
 
 fn data_flow_source_kind(value: &str) -> Result<DataFlowSourceKind, String> {
-    DataFlowSourceKind::try_new(value.to_owned()).map_err(|error| error.to_string())
+    DataFlowSourceKind::try_new(value).map_err(|error| error.to_string())
 }
 
 fn data_flow_source(value: &str) -> Result<DataFlowSource, String> {
@@ -4320,7 +4554,7 @@ fn data_flow_source(value: &str) -> Result<DataFlowSource, String> {
 }
 
 fn transformation_semantics(value: &str) -> Result<TransformationSemantics, String> {
-    TransformationSemantics::try_new(value.to_owned()).map_err(|error| error.to_string())
+    TransformationSemantics::try_new(value).map_err(|error| error.to_string())
 }
 
 fn data_flow_target(value: &str) -> Result<DataFlowTarget, String> {
@@ -4336,7 +4570,7 @@ fn view_field_name(value: &str) -> Result<ViewFieldName, String> {
 }
 
 fn view_field_source_kind(value: &str) -> Result<ViewFieldSourceKind, String> {
-    ViewFieldSourceKind::try_new(value.to_owned()).map_err(|error| error.to_string())
+    ViewFieldSourceKind::try_new(value).map_err(|error| error.to_string())
 }
 
 fn sketch_token(value: &str) -> Result<SketchToken, String> {
@@ -4348,11 +4582,11 @@ fn control_name(value: &str) -> Result<ControlName, String> {
 }
 
 fn control_recovery_behavior(value: &str) -> Result<ControlRecoveryBehavior, String> {
-    ControlRecoveryBehavior::try_new(value.to_owned()).map_err(|error| error.to_string())
+    ControlRecoveryBehavior::try_new(value).map_err(|error| error.to_string())
 }
 
 fn navigation_target_type(value: &str) -> Result<NavigationTargetType, String> {
-    NavigationTargetType::try_new(value.to_owned()).map_err(|error| error.to_string())
+    NavigationTargetType::try_new(value).map_err(|error| error.to_string())
 }
 
 fn navigation_target_name(value: &str) -> Result<NavigationTargetName, String> {
@@ -4360,7 +4594,7 @@ fn navigation_target_name(value: &str) -> Result<NavigationTargetName, String> {
 }
 
 fn command_input_source_kind(value: &str) -> Result<CommandInputSourceKind, String> {
-    CommandInputSourceKind::try_new(value.to_owned()).map_err(|error| error.to_string())
+    CommandInputSourceKind::try_new(value).map_err(|error| error.to_string())
 }
 
 fn command_input_source_description(value: &str) -> Result<CommandInputSourceDescription, String> {
@@ -4372,15 +4606,15 @@ fn source_chain_hop(value: &str) -> Result<SourceChainHop, String> {
 }
 
 fn command_error_recovery_kind(value: &str) -> Result<CommandErrorRecoveryKind, String> {
-    CommandErrorRecoveryKind::try_new(value.to_owned()).map_err(|error| error.to_string())
+    CommandErrorRecoveryKind::try_new(value).map_err(|error| error.to_string())
 }
 
 fn singleton_repeat_behavior(value: &str) -> Result<SingletonRepeatBehavior, String> {
-    SingletonRepeatBehavior::try_new(value.to_owned()).map_err(|error| error.to_string())
+    SingletonRepeatBehavior::try_new(value).map_err(|error| error.to_string())
 }
 
 fn scenario_kind(value: &str) -> Result<ScenarioKind, String> {
-    ScenarioKind::try_new(value.to_owned()).map_err(|error| error.to_string())
+    ScenarioKind::try_new(value).map_err(|error| error.to_string())
 }
 
 fn scenario_name(value: &str) -> Result<ScenarioName, String> {
@@ -4392,7 +4626,7 @@ fn scenario_step_text(value: &str) -> Result<ScenarioStepText, String> {
 }
 
 fn contract_kind_name(value: &str) -> Result<ContractKindName, String> {
-    ContractKindName::try_new(value.to_owned()).map_err(|error| error.to_string())
+    ContractKindName::try_new(value).map_err(|error| error.to_string())
 }
 
 fn covered_definition_name(value: &str) -> Result<CoveredDefinitionName, String> {
@@ -4404,7 +4638,7 @@ fn event_attribute_name(value: &str) -> Result<EventAttributeName, String> {
 }
 
 fn event_attribute_source_kind(value: &str) -> Result<EventAttributeSourceKind, String> {
-    EventAttributeSourceKind::try_new(value.to_owned()).map_err(|error| error.to_string())
+    EventAttributeSourceKind::try_new(value).map_err(|error| error.to_string())
 }
 
 fn generated_event_attribute_source_kind(
@@ -4450,7 +4684,7 @@ fn command_error_name(value: &str) -> Result<CommandErrorName, String> {
 }
 
 fn workflow_owned_definition_kind(value: &str) -> Result<WorkflowOwnedDefinitionKind, String> {
-    WorkflowOwnedDefinitionKind::try_new(value.to_owned()).map_err(|error| error.to_string())
+    WorkflowOwnedDefinitionKind::try_new(value).map_err(|error| error.to_string())
 }
 
 fn workflow_owned_definition_name(value: &str) -> Result<WorkflowOwnedDefinitionName, String> {
@@ -4462,11 +4696,11 @@ fn stream_name(value: &str) -> Result<StreamName, String> {
 }
 
 fn workflow_event_participation(value: &str) -> Result<WorkflowEventParticipation, String> {
-    WorkflowEventParticipation::try_new(value.to_owned()).map_err(|error| error.to_string())
+    WorkflowEventParticipation::try_new(value).map_err(|error| error.to_string())
 }
 
 fn workflow_view_role(value: &str) -> Result<WorkflowViewRole, String> {
-    WorkflowViewRole::try_new(value.to_owned()).map_err(|error| error.to_string())
+    WorkflowViewRole::try_new(value).map_err(|error| error.to_string())
 }
 
 fn workflow_transition_source_evidence_text(
@@ -4486,7 +4720,7 @@ fn workflow_transition_target_evidence_text(
 fn workflow_entry_lifecycle_state_name(
     value: &str,
 ) -> Result<WorkflowEntryLifecycleStateName, String> {
-    WorkflowEntryLifecycleStateName::try_new(value.to_owned()).map_err(|error| error.to_string())
+    WorkflowEntryLifecycleStateName::try_new(value).map_err(|error| error.to_string())
 }
 
 fn workflow_entry_lifecycle_evidence_text(
@@ -5131,9 +5365,8 @@ mod tests {
             "covered_definition": "CaptureTicket",
             "error_references": [],
         });
-        let error = match SliceScenarioAddedEventPayload::from_json_value(&incompatible_json) {
-            Ok(_) => return Err("acceptance scenario with contract fields must fail".to_owned()),
-            Err(error) => error,
+        let Err(error) = SliceScenarioAddedEventPayload::from_json_value(&incompatible_json) else {
+            return Err("acceptance scenario with contract fields must fail".to_owned());
         };
         assert_eq!(
             error,
@@ -5421,9 +5654,8 @@ mod tests {
             "reason": "Only workflow exits may carry reasons.",
         });
 
-        let error = match WorkflowConnectedEventPayload::from_json_value(&json) {
-            Ok(_) => return Err("mixed slice and workflow targets must be rejected".to_owned()),
-            Err(error) => error,
+        let Err(error) = WorkflowConnectedEventPayload::from_json_value(&json) else {
+            return Err("mixed slice and workflow targets must be rejected".to_owned());
         };
         assert_eq!(error, "WorkflowConnected has incompatible target fields");
 
@@ -5463,16 +5695,33 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn workflow_owned_definition_event_payload_preserves_optional_field_invariants()
-    -> Result<(), String> {
-        let workflow = workflow_slug("open-ticket")?;
-        let basic_definition = WorkflowOwnedDefinitionRecord::new(
+    /// Assert that `definition` serialises to `expected_json` and reconstructs
+    /// back into `(workflow, definition)` across the JSON boundary.
+    fn assert_owned_definition_payload_round_trip(
+        workflow: &WorkflowSlug,
+        definition: &WorkflowOwnedDefinitionRecord,
+        expected_json: &Value,
+    ) -> Result<(), String> {
+        let payload = WorkflowOwnedDefinitionEventPayload::from_parts(workflow, definition);
+        let json = payload.to_json_value();
+        assert_eq!(&json, expected_json);
+        assert_eq!(
+            WorkflowOwnedDefinitionEventPayload::from_json_value(&json)?.into_parts(),
+            (workflow.clone(), definition.clone())
+        );
+        Ok(())
+    }
+
+    fn owned_definition_basic() -> Result<WorkflowOwnedDefinitionRecord, String> {
+        Ok(WorkflowOwnedDefinitionRecord::new(
             workflow_transition_endpoint("capture-ticket")?,
             workflow_owned_definition_kind("command")?,
             workflow_owned_definition_name("CaptureTicket")?,
-        );
-        let event_definition =
+        ))
+    }
+
+    fn owned_definition_event() -> Result<WorkflowOwnedDefinitionRecord, String> {
+        Ok(
             WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
                 workflow_transition_endpoint("capture-ticket")?,
                 workflow_owned_definition_kind("event")?,
@@ -5480,77 +5729,23 @@ mod tests {
                 stream_name("ticket-events")?,
                 model_description("CaptureTicket emits TicketCaptured.")?,
                 workflow_event_participation("emitted")?,
-            );
-        let entry_view = WorkflowOwnedDefinitionRecord::new_with_view_role(
+            ),
+        )
+    }
+
+    fn owned_definition_entry_view() -> Result<WorkflowOwnedDefinitionRecord, String> {
+        WorkflowOwnedDefinitionRecord::new_with_view_role(
             workflow_transition_endpoint("capture-ticket")?,
             workflow_owned_definition_kind("view")?,
             workflow_owned_definition_name("CaptureTicketScreen")?,
             workflow_view_role("entry")?,
         )
-        .ok_or_else(|| "view owned definition should accept entry view role".to_owned())?;
+        .ok_or_else(|| "view owned definition should accept entry view role".to_owned())
+    }
 
-        let basic_payload =
-            WorkflowOwnedDefinitionEventPayload::from_parts(&workflow, &basic_definition);
-        let basic_json = basic_payload.to_json_value();
-        assert_eq!(
-            basic_json,
-            serde_json::json!({
-                "workflow": "open-ticket",
-                "source_slice": "capture-ticket",
-                "definition_kind": "command",
-                "definition_name": "CaptureTicket",
-                "definition_stream": null,
-                "source_provenance": null,
-                "event_participation": null,
-                "view_role": null,
-            })
-        );
-        assert_eq!(
-            WorkflowOwnedDefinitionEventPayload::from_json_value(&basic_json)?.into_parts(),
-            (workflow.clone(), basic_definition)
-        );
-
-        let event_payload =
-            WorkflowOwnedDefinitionEventPayload::from_parts(&workflow, &event_definition);
-        let event_json = event_payload.to_json_value();
-        assert_eq!(
-            event_json,
-            serde_json::json!({
-                "workflow": "open-ticket",
-                "source_slice": "capture-ticket",
-                "definition_kind": "event",
-                "definition_name": "TicketCaptured",
-                "definition_stream": "ticket-events",
-                "source_provenance": "CaptureTicket emits TicketCaptured.",
-                "event_participation": "emitted",
-                "view_role": null,
-            })
-        );
-        assert_eq!(
-            WorkflowOwnedDefinitionEventPayload::from_json_value(&event_json)?.into_parts(),
-            (workflow.clone(), event_definition)
-        );
-
-        let view_payload = WorkflowOwnedDefinitionEventPayload::from_parts(&workflow, &entry_view);
-        let view_json = view_payload.to_json_value();
-        assert_eq!(
-            view_json,
-            serde_json::json!({
-                "workflow": "open-ticket",
-                "source_slice": "capture-ticket",
-                "definition_kind": "view",
-                "definition_name": "CaptureTicketScreen",
-                "definition_stream": null,
-                "source_provenance": null,
-                "event_participation": null,
-                "view_role": "entry",
-            })
-        );
-        assert_eq!(
-            WorkflowOwnedDefinitionEventPayload::from_json_value(&view_json)?.into_parts(),
-            (workflow, entry_view)
-        );
-
+    /// Reconstructing an owned-definition payload whose optional fields are in
+    /// an incompatible combination must be rejected with a stable error.
+    fn assert_owned_definition_incompatible_fields_rejected() -> Result<(), String> {
         let incompatible_json = serde_json::json!({
             "workflow": "open-ticket",
             "source_slice": "capture-ticket",
@@ -5561,20 +5756,68 @@ mod tests {
             "event_participation": null,
             "view_role": null,
         });
-        let error = match WorkflowOwnedDefinitionEventPayload::from_json_value(&incompatible_json) {
-            Ok(_) => {
-                return Err(
-                    "definition stream without source provenance must be rejected".to_owned(),
-                );
-            }
-            Err(error) => error,
+        let Err(error) = WorkflowOwnedDefinitionEventPayload::from_json_value(&incompatible_json)
+        else {
+            return Err("definition stream without source provenance must be rejected".to_owned());
         };
         assert_eq!(
             error,
             "WorkflowOwnedDefinitionAdded has incompatible optional fields"
         );
-
         Ok(())
+    }
+
+    #[test]
+    fn workflow_owned_definition_event_payload_preserves_optional_field_invariants()
+    -> Result<(), String> {
+        let workflow = workflow_slug("open-ticket")?;
+
+        assert_owned_definition_payload_round_trip(
+            &workflow,
+            &owned_definition_basic()?,
+            &serde_json::json!({
+                "workflow": "open-ticket",
+                "source_slice": "capture-ticket",
+                "definition_kind": "command",
+                "definition_name": "CaptureTicket",
+                "definition_stream": null,
+                "source_provenance": null,
+                "event_participation": null,
+                "view_role": null,
+            }),
+        )?;
+
+        assert_owned_definition_payload_round_trip(
+            &workflow,
+            &owned_definition_event()?,
+            &serde_json::json!({
+                "workflow": "open-ticket",
+                "source_slice": "capture-ticket",
+                "definition_kind": "event",
+                "definition_name": "TicketCaptured",
+                "definition_stream": "ticket-events",
+                "source_provenance": "CaptureTicket emits TicketCaptured.",
+                "event_participation": "emitted",
+                "view_role": null,
+            }),
+        )?;
+
+        assert_owned_definition_payload_round_trip(
+            &workflow,
+            &owned_definition_entry_view()?,
+            &serde_json::json!({
+                "workflow": "open-ticket",
+                "source_slice": "capture-ticket",
+                "definition_kind": "view",
+                "definition_name": "CaptureTicketScreen",
+                "definition_stream": null,
+                "source_provenance": null,
+                "event_participation": null,
+                "view_role": "entry",
+            }),
+        )?;
+
+        assert_owned_definition_incompatible_fields_rejected()
     }
 
     #[test]

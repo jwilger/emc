@@ -16,10 +16,17 @@ use std::time::Duration;
 
 use fs4::{FileExt, TryLockError};
 
-use crate::core::connection::{connect_workflow, remove_transition};
+use crate::core::connection::{
+    WorkflowConnection, WorkflowTransitionRemoval, connect_workflow, remove_transition,
+};
 use crate::core::effect::{
-    ArtifactDigest, Effect, EffectPlan, FileContents, ModelContentDigest, ProcessInvocation,
-    ProcessInvocations, ProjectPath, ProjectionFingerprint, ReportLine, ReviewEventReference,
+    ArtifactDigest, ArtifactDigestRequirement, CanonicalDeclarationRequirement, CleanReviewEffect,
+    Effect, EffectPlan, EventConflictResolution, FileContents, FileWriteEffect, ModelContentDigest,
+    ProcessInvocation, ProcessInvocations, ProjectPath, ProjectionFingerprint, ReportLine,
+    ReviewEventReference, ReviewRecordRequirement, SliceDescriptionUpdateEffect,
+    SliceKindUpdateEffect, SliceNameUpdateEffect, WorkflowCommandErrorEffect,
+    WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
+    WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
@@ -32,7 +39,12 @@ use crate::core::events::{
     reject_legacy_artifact_only_project, resolve_event_conflict, unresolved_event_conflicts_exist,
 };
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
-use crate::core::formal_slice_facts::validate_event_attribute_source;
+use crate::core::formal_slice_facts::{
+    NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
+    NewCommandDefinition, NewEventDefinition, NewExternalPayloadDefinition, NewOutcomeDefinition,
+    NewReadModelDefinition, NewSliceScenario, NewTranslationDefinition, NewViewDefinition,
+    validate_event_attribute_source,
+};
 use crate::core::layout::{
     ModeledWorkflowLayout, ModeledWorkflowLayouts, ModeledWorkflowSliceDetails,
     ModeledWorkflowTransitions, check_project, list_slices, list_transitions, list_workflows,
@@ -43,8 +55,8 @@ use crate::core::review_record::{
     RequiredReviewCategories, ReviewCategoryFinding, ReviewRecordDocument, record_clean_review,
 };
 use crate::core::slice::{
-    SliceProjectRootContext, add_slice, remove_slice, update_slice_description, update_slice_kind,
-    update_slice_name,
+    NewSlice, SliceProjectRootContext, add_slice, remove_slice, update_slice_description,
+    update_slice_kind, update_slice_name,
 };
 use crate::core::types::{
     LeanModuleName, ReviewRuleName, ReviewTimestamp, ReviewerId, SliceSlug, WorkflowSliceDetail,
@@ -52,7 +64,7 @@ use crate::core::types::{
 };
 use crate::core::verify::verify_project;
 use crate::core::workflow::{
-    IndexedWorkflowGraph, IndexedWorkflowGraphs, add_workflow, remove_workflow,
+    IndexedWorkflowGraph, IndexedWorkflowGraphs, NewWorkflow, add_workflow, remove_workflow,
     update_workflow_description, update_workflow_name,
 };
 use crate::io::dto::parse_project_manifest_name;
@@ -78,6 +90,10 @@ impl ShellError {
         }
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "used as a `.map_err(ShellError::io)` function-pointer adaptor at ~20 call sites, which requires taking io::Error by value"
+    )]
     fn io(error: io::Error) -> Self {
         Self {
             message: error.to_string(),
@@ -93,19 +109,19 @@ impl Display for ShellError {
 
 impl Error for ShellError {}
 
-pub(crate) fn interpret(plan: EffectPlan) -> Result<(), ShellError> {
+pub(crate) fn interpret(plan: &EffectPlan) -> Result<(), ShellError> {
     interpret_collect_reports_with_progress(plan, &mut |report| println!("{report}")).map(|_| ())
 }
 
-pub(crate) fn interpret_collect_reports(plan: EffectPlan) -> Result<Vec<String>, ShellError> {
+pub(crate) fn interpret_collect_reports(plan: &EffectPlan) -> Result<Vec<String>, ShellError> {
     let runtime_lock = lock_project_runtime_if_needed()?;
     if runtime_lock.is_some() {
-        if !project_initialization_plan(&plan) {
+        if !project_initialization_plan(plan) {
             reject_legacy_artifact_only_project().map_err(ShellError::message)?;
         }
         ensure_event_store_if_needed()?;
         project_exported_events_into_worktree()?;
-        reject_mutation_when_event_conflicts_exist(&plan)?;
+        reject_mutation_when_event_conflicts_exist(plan)?;
     }
     plan.effects()
         .iter()
@@ -116,17 +132,17 @@ pub(crate) fn interpret_collect_reports(plan: EffectPlan) -> Result<Vec<String>,
 }
 
 fn interpret_collect_reports_with_progress(
-    plan: EffectPlan,
+    plan: &EffectPlan,
     report: &mut impl FnMut(&str),
 ) -> Result<Vec<String>, ShellError> {
     let runtime_lock = lock_project_runtime_if_needed()?;
     if runtime_lock.is_some() {
-        if !project_initialization_plan(&plan) {
+        if !project_initialization_plan(plan) {
             reject_legacy_artifact_only_project().map_err(ShellError::message)?;
         }
         ensure_event_store_if_needed()?;
         project_exported_events_into_worktree()?;
-        reject_mutation_when_event_conflicts_exist(&plan)?;
+        reject_mutation_when_event_conflicts_exist(plan)?;
     }
     plan.effects()
         .iter()
@@ -145,7 +161,9 @@ fn interpret_effect_with_progress(
             let progress = process_progress_report(invocation);
             report(&progress);
             let reports = run_process(invocation)?;
-            reports.iter().for_each(|line| report(line));
+            for line in &reports {
+                report(line);
+            }
             Ok(reports)
         }
         Effect::RunProcessBatch(invocations) => {
@@ -155,7 +173,9 @@ fn interpret_effect_with_progress(
         Effect::VerifyProjectFromIndex => interpret_verify_project_from_index_with_progress(report),
         _ => {
             let reports = interpret_effect(effect)?;
-            reports.iter().for_each(|line| report(line));
+            for line in &reports {
+                report(line);
+            }
             Ok(reports)
         }
     }
@@ -173,8 +193,8 @@ fn interpret_verify_project_from_index_collecting() -> Result<Vec<String>, Shell
     let verified_frontier = current_projection_fingerprint()?;
     let modeled_slices = formal_workflow_slice_details(formal_workflows.clone());
     let modeled_workflows = formal_workflow_layouts(formal_workflows);
-    let mut reports = interpret_collect_reports(verify_project(
-        project_name,
+    let mut reports = interpret_collect_reports(&verify_project(
+        &project_name,
         ModeledWorkflowLayouts::new(modeled_workflows),
         WorkflowSliceDetails::from_details(modeled_slices),
     ))?;
@@ -213,8 +233,8 @@ fn interpret_verify_project_from_index_with_progress(
     let modeled_slices = formal_workflow_slice_details(formal_workflows.clone());
     let modeled_workflows = formal_workflow_layouts(formal_workflows);
     let mut reports = interpret_collect_reports_with_progress(
-        verify_project(
-            project_name,
+        &verify_project(
+            &project_name,
             ModeledWorkflowLayouts::new(modeled_workflows),
             WorkflowSliceDetails::from_details(modeled_slices),
         ),
@@ -236,7 +256,9 @@ fn interpret_verify_project_from_index_with_progress(
             readiness_verified_by()?,
             ReviewEventReference::unrecorded(),
         ))?;
-        readiness_reports.iter().for_each(|line| report(line));
+        for line in &readiness_reports {
+            report(line);
+        }
         reports.extend(readiness_reports);
     }
     Ok(reports)
@@ -399,440 +421,751 @@ fn projected_report(value: impl Into<String>) -> Result<String, ShellError> {
 }
 
 fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
-    match effect {
+    if let Some(result) = interpret_slice_fact_effect(effect) {
+        return result;
+    }
+    if let Some(result) = interpret_workflow_fact_effect(effect) {
+        return result;
+    }
+    if let Some(result) = interpret_workflow_structure_effect(effect) {
+        return result;
+    }
+    if let Some(result) = interpret_listing_effect(effect) {
+        return result;
+    }
+    if let Some(result) = interpret_requirement_effect(effect) {
+        return result;
+    }
+    interpret_io_effect(effect)
+}
+
+/// Shared tail for the uniform "add definition to a slice" effects: confirm the
+/// slice is referenced by an indexed workflow, then export the fact and
+/// regenerate the projection. Returns the precomputed slice/project-root
+/// reports unchanged so ordering is preserved.
+fn interpret_slice_addition(
+    slice_slug: &SliceSlug,
+    reports: Vec<String>,
+    draft: EventDraft,
+) -> Result<Vec<String>, ShellError> {
+    let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+    find_formal_workflow_containing_slice_in(&formal_workflows, slice_slug)?;
+    export_and_regenerate(draft)?;
+    Ok(reports)
+}
+
+/// Per-slice fact additions. Each arm builds its slice and project-root report
+/// lines, then delegates the validate/export/regenerate tail to
+/// `interpret_slice_addition`. Returns `None` for non-slice effects.
+fn interpret_slice_fact_effect(effect: &Effect) -> Option<Result<Vec<String>, ShellError>> {
+    Some(match effect {
         Effect::AddAutomationDefinitionFromSlice(automation) => {
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            find_formal_workflow_containing_slice_in(&formal_workflows, automation.slice_slug())?;
-            let reports = vec![
-                projected_report(format!(
-                    "added automation {} to slice {}",
-                    automation.name().as_ref(),
-                    automation.slice_slug().as_ref()
-                ))?,
-                projected_report(format!(
-                    "added automation {} to project root",
-                    automation.name().as_ref()
-                ))?,
-            ];
-            export_and_regenerate(EventDraft::slice_automation_added(automation))?;
-            Ok(reports)
+            interpret_automation_added(automation)
         }
         Effect::AddBitLevelDataFlowFromSlice(data_flow) => {
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            find_formal_workflow_containing_slice_in(&formal_workflows, data_flow.slice_slug())?;
-            let reports = vec![
-                projected_report(format!(
-                    "added bit-level data flow {} to slice {}",
-                    data_flow.datum().as_ref(),
-                    data_flow.slice_slug().as_ref()
-                ))?,
-                projected_report(format!(
-                    "added bit-level data flow {} to project root",
-                    data_flow.datum().as_ref()
-                ))?,
-            ];
-            export_and_regenerate(EventDraft::slice_bit_level_data_flow_added(data_flow))?;
-            Ok(reports)
+            interpret_bit_level_data_flow_added(data_flow)
         }
         Effect::AddBoardConnectionFromSlice(connection) => {
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            find_formal_workflow_containing_slice_in(&formal_workflows, connection.slice_slug())?;
-            let reports = vec![
-                projected_report(format!(
-                    "added board connection {} -> {} to slice {}",
-                    connection.source().as_ref(),
-                    connection.target().as_ref(),
-                    connection.slice_slug().as_ref()
-                ))?,
-                projected_report(format!(
-                    "added board connection {} -> {} to project root",
-                    connection.source().as_ref(),
-                    connection.target().as_ref()
-                ))?,
-            ];
-            export_and_regenerate(EventDraft::slice_board_connection_added(connection))?;
-            Ok(reports)
+            interpret_board_connection_added(connection)
         }
-        Effect::AddBoardElementFromSlice(element) => {
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            find_formal_workflow_containing_slice_in(&formal_workflows, element.slice_slug())?;
-            let reports = vec![
-                projected_report(format!(
-                    "added board element {} to slice {}",
-                    element.name().as_ref(),
-                    element.slice_slug().as_ref()
-                ))?,
-                projected_report(format!(
-                    "added board element {} to project root",
-                    element.name().as_ref()
-                ))?,
-            ];
-            export_and_regenerate(EventDraft::slice_board_element_added(element))?;
-            Ok(reports)
-        }
+        Effect::AddBoardElementFromSlice(element) => interpret_board_element_added(element),
         Effect::AddCommandDefinitionFromSlice(command) => {
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            find_formal_workflow_containing_slice_in(&formal_workflows, command.slice_slug())?;
-            let reports = vec![
-                projected_report(format!(
-                    "added command {} to slice {}",
-                    command.name().as_ref(),
-                    command.slice_slug().as_ref()
-                ))?,
-                projected_report(format!(
-                    "added command {} to project root",
-                    command.name().as_ref()
-                ))?,
-            ];
-            export_and_regenerate(EventDraft::slice_command_definition_added(command))?;
-            Ok(reports)
+            interpret_command_definition_added(command)
         }
-        Effect::AddEventDefinitionFromSlice(event) => {
-            let slice_commands = projected_slice_command_definitions(event.slice_slug())
-                .map_err(ShellError::message)?;
-            validate_event_attribute_source(event, &slice_commands)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            find_formal_workflow_containing_slice_in(&formal_workflows, event.slice_slug())?;
-            let reports = vec![
-                projected_report(format!(
-                    "added event {} to slice {}",
-                    event.name().as_ref(),
-                    event.slice_slug().as_ref()
-                ))?,
-                projected_report(format!(
-                    "added stream {} to project root",
-                    event.stream().as_ref()
-                ))?,
-                projected_report(format!(
-                    "added event {} to project root",
-                    event.name().as_ref()
-                ))?,
-            ];
-            export_and_regenerate(EventDraft::slice_event_definition_added(event))?;
-            Ok(reports)
-        }
+        Effect::AddEventDefinitionFromSlice(event) => interpret_event_definition_added(event),
         Effect::AddExternalPayloadDefinitionFromSlice(external_payload) => {
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            find_formal_workflow_containing_slice_in(
-                &formal_workflows,
-                external_payload.slice_slug(),
-            )?;
-            let reports = vec![
-                projected_report(format!(
-                    "added external payload {} to slice {}",
-                    external_payload.name().as_ref(),
-                    external_payload.slice_slug().as_ref()
-                ))?,
-                projected_report(format!(
-                    "added external payload {} to project root",
-                    external_payload.name().as_ref()
-                ))?,
-            ];
-            export_and_regenerate(EventDraft::slice_external_payload_added(external_payload))?;
-            Ok(reports)
+            interpret_external_payload_added(external_payload)
         }
-        Effect::AddOutcomeDefinitionFromSlice(outcome) => {
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            find_formal_workflow_containing_slice_in(&formal_workflows, outcome.slice_slug())?;
-            let reports = vec![
-                projected_report(format!(
-                    "added outcome {} to slice {}",
-                    outcome.label().as_ref(),
-                    outcome.slice_slug().as_ref()
-                ))?,
-                projected_report(format!(
-                    "added outcome {} to project root",
-                    outcome.label().as_ref()
-                ))?,
-            ];
-            export_and_regenerate(EventDraft::slice_outcome_added(outcome))?;
-            Ok(reports)
-        }
+        Effect::AddOutcomeDefinitionFromSlice(outcome) => interpret_outcome_added(outcome),
         Effect::AddReadModelDefinitionFromSlice(read_model) => {
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            find_formal_workflow_containing_slice_in(&formal_workflows, read_model.slice_slug())?;
-            let reports = vec![
-                projected_report(format!(
-                    "added read model {} to slice {}",
-                    read_model.name().as_ref(),
-                    read_model.slice_slug().as_ref()
-                ))?,
-                projected_report(format!(
-                    "added read model {} to project root",
-                    read_model.name().as_ref()
-                ))?,
-            ];
-            export_and_regenerate(EventDraft::slice_read_model_added(read_model))?;
-            Ok(reports)
+            interpret_read_model_added(read_model)
         }
-        Effect::AddViewDefinitionFromSlice(view) => {
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            find_formal_workflow_containing_slice_in(&formal_workflows, view.slice_slug())?;
-            let reports = vec![
-                projected_report(format!(
-                    "added view {} to slice {}",
-                    view.name().as_ref(),
-                    view.slice_slug().as_ref()
-                ))?,
-                projected_report(format!(
-                    "added view {} to project root",
-                    view.name().as_ref()
-                ))?,
-            ];
-            export_and_regenerate(EventDraft::slice_view_added(view))?;
-            Ok(reports)
-        }
-        Effect::AddSliceFromWorkflow(slice) => {
-            let project_name = read_project_manifest_name()?;
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, workflow_graph) =
-                formal_workflow_layout_and_graph(&formal_workflows, slice.workflow_slug())?;
-            let plan = add_slice(
-                project_name,
-                &formal_workflows,
-                workflow_layout.name().clone(),
-                workflow_layout.description().clone(),
-                workflow_graph,
-                slice.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
-        }
-        Effect::AddSliceScenarioFromSlice(scenario) => {
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            find_formal_workflow_containing_slice_in(&formal_workflows, scenario.slice_slug())?;
-            let reports = vec![
-                projected_report(format!(
-                    "added {} scenario {} to slice {}",
-                    scenario.kind().as_str(),
-                    scenario.name().as_ref(),
-                    scenario.slice_slug().as_ref()
-                ))?,
-                projected_report(format!(
-                    "added {} scenario {} to project root",
-                    scenario.kind().as_str(),
-                    scenario.name().as_ref()
-                ))?,
-            ];
-            export_and_regenerate(EventDraft::slice_scenario_added(scenario))?;
-            Ok(reports)
-        }
+        Effect::AddViewDefinitionFromSlice(view) => interpret_view_added(view),
+        Effect::AddSliceScenarioFromSlice(scenario) => interpret_slice_scenario_added(scenario),
         Effect::AddTranslationDefinitionFromSlice(translation) => {
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            find_formal_workflow_containing_slice_in(&formal_workflows, translation.slice_slug())?;
-            let reports = vec![
-                projected_report(format!(
-                    "added translation {} to slice {}",
-                    translation.name().as_ref(),
-                    translation.slice_slug().as_ref()
-                ))?,
-                projected_report(format!(
-                    "added translation {} to project root",
-                    translation.name().as_ref()
-                ))?,
-            ];
-            export_and_regenerate(EventDraft::slice_translation_added(translation))?;
-            Ok(reports)
+            interpret_translation_added(translation)
         }
-        Effect::AddWorkflowFromIndex(workflow) => {
-            let project_name = read_project_manifest_name()?;
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?;
-            let existing_slice_memberships = formal_project_slice_memberships(&formal_workflows);
-            let existing_workflows = formal_workflow_layouts(formal_workflows);
-            let plan = add_workflow(
-                project_name,
-                ModeledWorkflowLayouts::new(existing_workflows),
-                existing_slice_memberships,
-                workflow.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
-        }
+        _ => return None,
+    })
+}
+
+fn interpret_automation_added(
+    automation: &NewAutomationDefinition,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "added automation {} to slice {}",
+            automation.name().as_ref(),
+            automation.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "added automation {} to project root",
+            automation.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        automation.slice_slug(),
+        reports,
+        EventDraft::slice_automation_added(automation),
+    )
+}
+
+fn interpret_bit_level_data_flow_added(
+    data_flow: &NewBitLevelDataFlow,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "added bit-level data flow {} to slice {}",
+            data_flow.datum().as_ref(),
+            data_flow.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "added bit-level data flow {} to project root",
+            data_flow.datum().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        data_flow.slice_slug(),
+        reports,
+        EventDraft::slice_bit_level_data_flow_added(data_flow),
+    )
+}
+
+fn interpret_board_connection_added(
+    connection: &NewBoardConnection,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "added board connection {} -> {} to slice {}",
+            connection.source().as_ref(),
+            connection.target().as_ref(),
+            connection.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "added board connection {} -> {} to project root",
+            connection.source().as_ref(),
+            connection.target().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        connection.slice_slug(),
+        reports,
+        EventDraft::slice_board_connection_added(connection),
+    )
+}
+
+fn interpret_board_element_added(element: &NewBoardElement) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "added board element {} to slice {}",
+            element.name().as_ref(),
+            element.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "added board element {} to project root",
+            element.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        element.slice_slug(),
+        reports,
+        EventDraft::slice_board_element_added(element),
+    )
+}
+
+fn interpret_command_definition_added(
+    command: &NewCommandDefinition,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "added command {} to slice {}",
+            command.name().as_ref(),
+            command.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "added command {} to project root",
+            command.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        command.slice_slug(),
+        reports,
+        EventDraft::slice_command_definition_added(command),
+    )
+}
+
+fn interpret_event_definition_added(event: &NewEventDefinition) -> Result<Vec<String>, ShellError> {
+    let slice_commands =
+        projected_slice_command_definitions(event.slice_slug()).map_err(ShellError::message)?;
+    validate_event_attribute_source(event, &slice_commands)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let reports = vec![
+        projected_report(format!(
+            "added event {} to slice {}",
+            event.name().as_ref(),
+            event.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "added stream {} to project root",
+            event.stream().as_ref()
+        ))?,
+        projected_report(format!(
+            "added event {} to project root",
+            event.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        event.slice_slug(),
+        reports,
+        EventDraft::slice_event_definition_added(event),
+    )
+}
+
+fn interpret_external_payload_added(
+    external_payload: &NewExternalPayloadDefinition,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "added external payload {} to slice {}",
+            external_payload.name().as_ref(),
+            external_payload.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "added external payload {} to project root",
+            external_payload.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        external_payload.slice_slug(),
+        reports,
+        EventDraft::slice_external_payload_added(external_payload),
+    )
+}
+
+fn interpret_outcome_added(outcome: &NewOutcomeDefinition) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "added outcome {} to slice {}",
+            outcome.label().as_ref(),
+            outcome.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "added outcome {} to project root",
+            outcome.label().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        outcome.slice_slug(),
+        reports,
+        EventDraft::slice_outcome_added(outcome),
+    )
+}
+
+fn interpret_read_model_added(
+    read_model: &NewReadModelDefinition,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "added read model {} to slice {}",
+            read_model.name().as_ref(),
+            read_model.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "added read model {} to project root",
+            read_model.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        read_model.slice_slug(),
+        reports,
+        EventDraft::slice_read_model_added(read_model),
+    )
+}
+
+fn interpret_view_added(view: &NewViewDefinition) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "added view {} to slice {}",
+            view.name().as_ref(),
+            view.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "added view {} to project root",
+            view.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        view.slice_slug(),
+        reports,
+        EventDraft::slice_view_added(view),
+    )
+}
+
+fn interpret_slice_scenario_added(scenario: &NewSliceScenario) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "added {} scenario {} to slice {}",
+            scenario.kind().as_str(),
+            scenario.name().as_ref(),
+            scenario.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "added {} scenario {} to project root",
+            scenario.kind().as_str(),
+            scenario.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        scenario.slice_slug(),
+        reports,
+        EventDraft::slice_scenario_added(scenario),
+    )
+}
+
+fn interpret_translation_added(
+    translation: &NewTranslationDefinition,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "added translation {} to slice {}",
+            translation.name().as_ref(),
+            translation.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "added translation {} to project root",
+            translation.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        translation.slice_slug(),
+        reports,
+        EventDraft::slice_translation_added(translation),
+    )
+}
+
+/// Shared tail for the uniform "add fact to an existing workflow" effects:
+/// confirm the workflow is modeled, then export the fact and regenerate the
+/// projection. Returns the precomputed report unchanged.
+fn interpret_workflow_addition(
+    workflow_slug: &WorkflowSlug,
+    reports: Vec<String>,
+    draft: EventDraft,
+) -> Result<Vec<String>, ShellError> {
+    read_formal_workflow_graph(workflow_slug)?;
+    export_and_regenerate(draft)?;
+    Ok(reports)
+}
+
+/// Per-workflow fact additions that only need the workflow to exist. Returns
+/// `None` for effects handled by other clusters.
+fn interpret_workflow_fact_effect(effect: &Effect) -> Option<Result<Vec<String>, ShellError>> {
+    Some(match effect {
         Effect::AddWorkflowCommandErrorFromWorkflow(effect) => {
-            read_formal_workflow_graph(effect.workflow_slug())?;
-            let reports = vec![projected_report(format!(
-                "added workflow command error {} to workflow {}",
-                effect.error().error_name().as_ref(),
-                effect.workflow_slug().as_ref()
-            ))?];
-            export_and_regenerate(EventDraft::workflow_command_error_added(
-                effect.workflow_slug(),
-                effect.error(),
-            ))?;
-            Ok(reports)
+            interpret_workflow_command_error_added(effect)
         }
         Effect::AddWorkflowOwnedDefinitionFromWorkflow(effect) => {
-            read_formal_workflow_graph(effect.workflow_slug())?;
-            let reports = vec![projected_report(format!(
-                "added workflow owned definition {} {} to workflow {}",
-                effect.definition().definition_kind().as_ref(),
-                effect.definition().definition_name().as_ref(),
-                effect.workflow_slug().as_ref()
-            ))?];
-            export_and_regenerate(EventDraft::workflow_owned_definition_added(
-                effect.workflow_slug(),
-                effect.definition(),
-            ))?;
-            Ok(reports)
+            interpret_workflow_owned_definition_added(effect)
         }
-        Effect::AddWorkflowOutcomeFromWorkflow(effect) => {
-            read_formal_workflow_graph(effect.workflow_slug())?;
-            let reports = vec![projected_report(format!(
-                "added workflow outcome {} to workflow {}",
-                effect.outcome().label().as_ref(),
-                effect.workflow_slug().as_ref()
-            ))?];
-            export_and_regenerate(EventDraft::workflow_outcome_added(
-                effect.workflow_slug(),
-                effect.outcome(),
-            ))?;
-            Ok(reports)
-        }
+        Effect::AddWorkflowOutcomeFromWorkflow(effect) => interpret_workflow_outcome_added(effect),
         Effect::AddWorkflowTransitionEvidenceFromWorkflow(effect) => {
-            read_formal_workflow_graph(effect.workflow_slug())?;
-            let reports = vec![projected_report(format!(
-                "added workflow transition evidence {} {} to workflow {}",
-                effect.evidence().kind().as_ref(),
-                effect.evidence().trigger().as_ref(),
-                effect.workflow_slug().as_ref()
-            ))?];
-            export_and_regenerate(EventDraft::workflow_transition_evidence_added(
-                effect.workflow_slug(),
-                effect.evidence(),
-            ))?;
-            Ok(reports)
+            interpret_workflow_transition_evidence_added(effect)
         }
         Effect::RequireWorkflowEntryLifecycleCoverageFromWorkflow(workflow_slug) => {
-            read_formal_workflow_graph(workflow_slug)?;
-            let reports = vec![projected_report(format!(
-                "marked workflow {} as requiring entry lifecycle coverage",
-                workflow_slug.as_ref()
-            ))?];
-            export_and_regenerate(EventDraft::workflow_entry_lifecycle_coverage_required(
-                workflow_slug,
-            ))?;
-            Ok(reports)
+            interpret_workflow_entry_lifecycle_coverage_required(workflow_slug)
         }
         Effect::AddWorkflowEntryLifecycleStateFromWorkflow(effect) => {
-            read_formal_workflow_graph(effect.workflow_slug())?;
-            let reports = vec![projected_report(format!(
-                "added workflow entry lifecycle state {} to workflow {}",
-                effect.coverage().state().as_ref(),
-                effect.workflow_slug().as_ref()
-            ))?];
-            export_and_regenerate(EventDraft::workflow_entry_lifecycle_state_added(
-                effect.workflow_slug(),
-                effect.coverage(),
-            ))?;
-            Ok(reports)
+            interpret_workflow_entry_lifecycle_state_added(effect)
         }
-        Effect::CheckCurrentProject => {
-            let project_name = read_project_manifest_name()?;
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?;
-            // Project-root inventories are sourced from the authoritative event
-            // log, never parsed back out of the generated Lean/Quint root
-            // artifact. The artifact is a write-only projection; `check_project`
-            // verifies the on-disk artifact matches these log-sourced rows.
-            let project_inventories =
-                projected_project_root_inventories().map_err(ShellError::message)?;
-            interpret_collect_reports(check_project(
-                project_name,
-                formal_workflows,
-                project_inventories,
-            ))
+        _ => return None,
+    })
+}
+
+fn interpret_workflow_command_error_added(
+    effect: &WorkflowCommandErrorEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "added workflow command error {} to workflow {}",
+        effect.error().error_name().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_command_error_added(effect.workflow_slug(), effect.error()),
+    )
+}
+
+fn interpret_workflow_owned_definition_added(
+    effect: &WorkflowOwnedDefinitionEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "added workflow owned definition {} {} to workflow {}",
+        effect.definition().definition_kind().as_ref(),
+        effect.definition().definition_name().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_owned_definition_added(effect.workflow_slug(), effect.definition()),
+    )
+}
+
+fn interpret_workflow_outcome_added(
+    effect: &WorkflowOutcomeEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "added workflow outcome {} to workflow {}",
+        effect.outcome().label().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_outcome_added(effect.workflow_slug(), effect.outcome()),
+    )
+}
+
+fn interpret_workflow_transition_evidence_added(
+    effect: &WorkflowTransitionEvidenceEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "added workflow transition evidence {} {} to workflow {}",
+        effect.evidence().kind().as_ref(),
+        effect.evidence().trigger().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_transition_evidence_added(effect.workflow_slug(), effect.evidence()),
+    )
+}
+
+fn interpret_workflow_entry_lifecycle_coverage_required(
+    workflow_slug: &WorkflowSlug,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "marked workflow {} as requiring entry lifecycle coverage",
+        workflow_slug.as_ref()
+    ))?];
+    interpret_workflow_addition(
+        workflow_slug,
+        reports,
+        EventDraft::workflow_entry_lifecycle_coverage_required(workflow_slug),
+    )
+}
+
+fn interpret_workflow_entry_lifecycle_state_added(
+    effect: &WorkflowEntryLifecycleStateEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "added workflow entry lifecycle state {} to workflow {}",
+        effect.coverage().state().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_entry_lifecycle_state_added(effect.workflow_slug(), effect.coverage()),
+    )
+}
+
+/// Effects that mutate workflow/slice structure by building an `EffectPlan` from
+/// the modeled workflow graphs. Returns `None` for effects handled elsewhere.
+fn interpret_workflow_structure_effect(effect: &Effect) -> Option<Result<Vec<String>, ShellError>> {
+    Some(match effect {
+        Effect::AddSliceFromWorkflow(slice) => interpret_add_slice(slice),
+        Effect::AddWorkflowFromIndex(workflow) => interpret_add_workflow(workflow),
+        Effect::ConnectWorkflowFromWorkflow(connection) => interpret_connect_workflow(connection),
+        Effect::RemoveSliceFromWorkflow(slug) => interpret_remove_slice(slug),
+        Effect::RemoveTransitionFromWorkflow(removal) => interpret_remove_transition(removal),
+        Effect::RemoveWorkflowFromIndex(slug) => interpret_remove_workflow(slug),
+        Effect::UpdateWorkflowDescriptionFromIndexAndWorkflow(effect) => {
+            interpret_update_workflow_description(effect)
         }
-        Effect::ConnectWorkflowFromWorkflow(connection) => {
-            let (workflow_layout, workflow_graph) =
-                read_formal_workflow_layout_and_graph(connection.workflow_slug())?;
-            let plan = connect_workflow(
-                workflow_layout.name().clone(),
-                workflow_layout.description().clone(),
-                workflow_graph,
-                connection.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let reports = interpret_collect_reports(plan)?;
-            interpret_effect(&Effect::ExportEvent(EventDraft::workflow_connected(
-                connection,
-            )))?;
-            Ok(reports)
+        Effect::UpdateWorkflowNameFromIndexAndWorkflow(effect) => {
+            interpret_update_workflow_name(effect)
         }
-        Effect::EnsureDirectory(path) => fs::create_dir_all(Path::new(path.as_ref()))
-            .map(|()| Vec::new())
-            .map_err(ShellError::io),
-        Effect::ExportEvent(draft) => {
-            if exported_events_are_projecting()? {
-                return Ok(Vec::new());
-            }
-            execute_eventcore_command_for_exported_event(Path::new("."), draft)
-                .map_err(ShellError::message)?;
-            Ok(Vec::new())
+        Effect::UpdateSliceDescriptionFromWorkflow(effect) => {
+            interpret_update_slice_description(effect)
         }
+        Effect::UpdateSliceKindFromWorkflow(effect) => interpret_update_slice_kind(effect),
+        Effect::UpdateSliceNameFromWorkflow(effect) => interpret_update_slice_name(effect),
+        _ => return None,
+    })
+}
+
+fn interpret_add_slice(slice: &NewSlice) -> Result<Vec<String>, ShellError> {
+    let project_name = read_project_manifest_name()?;
+    let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+    let (workflow_layout, workflow_graph) =
+        formal_workflow_layout_and_graph(&formal_workflows, slice.workflow_slug())?;
+    let plan = add_slice(
+        &project_name,
+        &formal_workflows,
+        workflow_layout.name(),
+        workflow_layout.description(),
+        &workflow_graph,
+        slice,
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(&plan)
+}
+
+fn interpret_add_workflow(workflow: &NewWorkflow) -> Result<Vec<String>, ShellError> {
+    let project_name = read_project_manifest_name()?;
+    let formal_workflows = read_synchronized_formal_workflow_graphs()?;
+    let existing_slice_memberships = formal_project_slice_memberships(&formal_workflows);
+    let existing_workflows = formal_workflow_layouts(formal_workflows);
+    let plan = add_workflow(
+        &project_name,
+        &ModeledWorkflowLayouts::new(existing_workflows),
+        &existing_slice_memberships,
+        workflow,
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(&plan)
+}
+
+fn interpret_connect_workflow(connection: &WorkflowConnection) -> Result<Vec<String>, ShellError> {
+    let (workflow_layout, workflow_graph) =
+        read_formal_workflow_layout_and_graph(connection.workflow_slug())?;
+    let plan = connect_workflow(
+        workflow_layout.name(),
+        workflow_layout.description(),
+        &workflow_graph,
+        connection,
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    let reports = interpret_collect_reports(&plan)?;
+    interpret_effect(&Effect::ExportEvent(EventDraft::workflow_connected(
+        connection,
+    )))?;
+    Ok(reports)
+}
+
+fn interpret_remove_slice(slug: &SliceSlug) -> Result<Vec<String>, ShellError> {
+    let project_name = read_project_manifest_name()?;
+    let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+    let (workflow_layout, workflow_graph) =
+        find_formal_workflow_containing_slice_in(&formal_workflows, slug)?;
+    let plan = remove_slice(
+        &project_name,
+        &formal_workflows,
+        workflow_layout.name(),
+        workflow_layout.description(),
+        workflow_layout.slug(),
+        &workflow_graph,
+        slug,
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(&plan)
+}
+
+fn interpret_remove_transition(
+    removal: &WorkflowTransitionRemoval,
+) -> Result<Vec<String>, ShellError> {
+    let (workflow_layout, workflow_graph) =
+        read_formal_workflow_layout_and_graph(removal.workflow_slug())?;
+    let plan = remove_transition(
+        workflow_layout.name(),
+        workflow_layout.description(),
+        &workflow_graph,
+        removal,
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    let reports = interpret_collect_reports(&plan)?;
+    interpret_effect(&Effect::ExportEvent(
+        EventDraft::workflow_transition_removed(removal),
+    ))?;
+    Ok(reports)
+}
+
+fn interpret_remove_workflow(slug: &WorkflowSlug) -> Result<Vec<String>, ShellError> {
+    let project_name = read_project_manifest_name()?;
+    let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+    let existing_workflows =
+        formal_workflow_layouts(FormalWorkflowGraphs::from_graphs(formal_workflows.clone()));
+    let workflow_graphs = indexed_formal_workflow_graphs(&formal_workflows);
+    let plan = remove_workflow(
+        &project_name,
+        &ModeledWorkflowLayouts::new(existing_workflows),
+        &IndexedWorkflowGraphs::new(workflow_graphs),
+        slug,
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(&plan)
+}
+
+fn interpret_update_workflow_description(
+    effect: &WorkflowDescriptionUpdateEffect,
+) -> Result<Vec<String>, ShellError> {
+    let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+    let existing_workflows =
+        formal_workflow_layouts(FormalWorkflowGraphs::from_graphs(formal_workflows.clone()));
+    let workflow_graph = read_formal_workflow_graph(effect.workflow_slug())?;
+    let plan = update_workflow_description(
+        ModeledWorkflowLayouts::new(existing_workflows),
+        &workflow_graph,
+        effect.workflow_slug().clone(),
+        effect.description().clone(),
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(&plan)
+}
+
+fn interpret_update_workflow_name(
+    effect: &WorkflowNameUpdateEffect,
+) -> Result<Vec<String>, ShellError> {
+    let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+    let existing_workflows =
+        formal_workflow_layouts(FormalWorkflowGraphs::from_graphs(formal_workflows.clone()));
+    let workflow_graph = read_formal_workflow_graph(effect.workflow_slug())?;
+    let plan = update_workflow_name(
+        ModeledWorkflowLayouts::new(existing_workflows),
+        &workflow_graph,
+        effect.workflow_slug(),
+        effect.name(),
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(&plan)
+}
+
+fn interpret_update_slice_description(
+    effect: &SliceDescriptionUpdateEffect,
+) -> Result<Vec<String>, ShellError> {
+    let (workflow_layout, workflow_graph) =
+        find_formal_workflow_containing_slice(effect.slice_slug())?;
+    let plan = update_slice_description(
+        workflow_layout.name(),
+        workflow_layout.description(),
+        workflow_layout.slug().clone(),
+        &workflow_graph,
+        effect.slice_slug(),
+        effect.description().clone(),
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(&plan)
+}
+
+fn interpret_update_slice_kind(effect: &SliceKindUpdateEffect) -> Result<Vec<String>, ShellError> {
+    let (workflow_layout, workflow_graph) =
+        find_formal_workflow_containing_slice(effect.slice_slug())?;
+    let plan = update_slice_kind(
+        workflow_layout.name(),
+        workflow_layout.description(),
+        workflow_layout.slug().clone(),
+        &workflow_graph,
+        effect.slice_slug(),
+        effect.kind(),
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(&plan)
+}
+
+fn interpret_update_slice_name(effect: &SliceNameUpdateEffect) -> Result<Vec<String>, ShellError> {
+    let project_name = read_project_manifest_name()?;
+    let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
+    let (workflow_layout, workflow_graph) =
+        find_formal_workflow_containing_slice_in(&formal_workflows, effect.slice_slug())?;
+    let plan = update_slice_name(
+        &SliceProjectRootContext::new(project_name, &formal_workflows),
+        workflow_layout.name(),
+        workflow_layout.description(),
+        workflow_layout.slug().clone(),
+        &workflow_graph,
+        effect.slice_slug(),
+        effect.name().clone(),
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    interpret_collect_reports(&plan)
+}
+
+/// Read-only listing / inspection / verification effects. Returns `None` for
+/// effects handled elsewhere.
+fn interpret_listing_effect(effect: &Effect) -> Option<Result<Vec<String>, ShellError>> {
+    Some(match effect {
+        Effect::CheckCurrentProject => interpret_check_current_project(),
         Effect::ListConflictsFromEvents => {
-            interpret_collect_reports(list_event_conflicts().map_err(ShellError::message)?)
+            interpret_collect_reports(&match list_event_conflicts().map_err(ShellError::message) {
+                Ok(plan) => plan,
+                Err(error) => return Some(Err(error)),
+            })
         }
-        Effect::ListWorkflowsFromIndex => {
-            let modeled_workflows =
-                formal_workflow_layouts(read_synchronized_formal_workflow_graphs()?);
-            let mut reports = interpret_collect_reports(list_workflows(
-                ModeledWorkflowLayouts::new(modeled_workflows),
-            ))?;
-            reports.extend(interpret_collect_reports(
-                list_stale_workflow_readiness().map_err(ShellError::message)?,
-            )?);
-            Ok(reports)
-        }
+        Effect::ListWorkflowsFromIndex => interpret_list_workflows(),
         Effect::ListSlicesFromIndex => {
             let modeled_slices =
-                formal_workflow_slice_details(read_synchronized_formal_workflow_graphs()?);
-            interpret_collect_reports(list_slices(ModeledWorkflowSliceDetails::new(
+                formal_workflow_slice_details(match read_synchronized_formal_workflow_graphs() {
+                    Ok(graphs) => graphs,
+                    Err(error) => return Some(Err(error)),
+                });
+            interpret_collect_reports(&list_slices(ModeledWorkflowSliceDetails::new(
                 modeled_slices,
             )))
         }
         Effect::ListTransitionsFromIndex => {
             let modeled_transitions =
-                formal_workflow_transitions(read_synchronized_formal_workflow_graphs()?);
-            interpret_collect_reports(list_transitions(ModeledWorkflowTransitions::new(
+                formal_workflow_transitions(match read_synchronized_formal_workflow_graphs() {
+                    Ok(graphs) => graphs,
+                    Err(error) => return Some(Err(error)),
+                });
+            interpret_collect_reports(&list_transitions(ModeledWorkflowTransitions::new(
                 modeled_transitions,
             )))
         }
+        Effect::ShowSliceFromSlice(slug) => interpret_show_slice(slug),
+        Effect::ShowWorkflowFromWorkflow(slug) => interpret_show_workflow(slug),
+        Effect::VerifyProjectFromIndex => interpret_verify_project_from_index_collecting(),
+        _ => return None,
+    })
+}
+
+fn interpret_check_current_project() -> Result<Vec<String>, ShellError> {
+    let project_name = read_project_manifest_name()?;
+    let formal_workflows = read_synchronized_formal_workflow_graphs()?;
+    // Project-root inventories are sourced from the authoritative event
+    // log, never parsed back out of the generated Lean/Quint root
+    // artifact. The artifact is a write-only projection; `check_project`
+    // verifies the on-disk artifact matches these log-sourced rows.
+    let project_inventories = projected_project_root_inventories().map_err(ShellError::message)?;
+    interpret_collect_reports(&check_project(
+        &project_name,
+        formal_workflows,
+        &project_inventories,
+    ))
+}
+
+fn interpret_list_workflows() -> Result<Vec<String>, ShellError> {
+    let modeled_workflows = formal_workflow_layouts(read_synchronized_formal_workflow_graphs()?);
+    let mut reports = interpret_collect_reports(&list_workflows(ModeledWorkflowLayouts::new(
+        modeled_workflows,
+    )))?;
+    reports.extend(interpret_collect_reports(
+        &list_stale_workflow_readiness().map_err(ShellError::message)?,
+    )?);
+    Ok(reports)
+}
+
+fn interpret_show_slice(slug: &SliceSlug) -> Result<Vec<String>, ShellError> {
+    let slice_document = read_formal_slice_artifacts(slug)?;
+    interpret_collect_reports(&show_document(slice_document))
+}
+
+fn interpret_show_workflow(slug: &WorkflowSlug) -> Result<Vec<String>, ShellError> {
+    let workflow_document = read_formal_workflow_artifacts(slug)?;
+    interpret_collect_reports(&show_workflow(workflow_document))
+}
+
+/// Artifact-precondition requirement effects. Returns `None` for effects
+/// handled elsewhere.
+fn interpret_requirement_effect(effect: &Effect) -> Option<Result<Vec<String>, ShellError>> {
+    Some(match effect {
         Effect::RequireCanonicalDeclaration(requirement) => {
-            let contents = fs::read_to_string(Path::new(requirement.path().as_ref()))
-                .map_err(ShellError::io)?;
-            if artifact_contains_one_canonical_declaration(
-                &contents,
-                requirement.prefix().as_ref(),
-                requirement.marker().as_ref(),
-            ) {
-                Ok(Vec::new())
-            } else {
-                Err(ShellError::message(
-                    requirement.message().as_ref().to_owned(),
-                ))
-            }
+            interpret_require_canonical_declaration(requirement)
         }
-        Effect::RequireDigest(requirement) => {
-            let contents = fs::read_to_string(Path::new(requirement.path().as_ref()))
-                .map_err(ShellError::io)?;
-            if artifact_contains_one_digest_marker(&contents, requirement.digest().as_ref()) {
-                Ok(Vec::new())
-            } else {
-                Err(ShellError::message(
-                    requirement.message().as_ref().to_owned(),
-                ))
-            }
-        }
-        Effect::RequireFile(path) => {
-            if Path::new(path.as_ref()).is_file() {
-                Ok(Vec::new())
-            } else {
-                Err(ShellError::message(format!(
-                    "missing required project artifact {}",
-                    path.as_ref()
-                )))
-            }
-        }
+        Effect::RequireDigest(requirement) => interpret_require_digest(requirement),
+        Effect::RequireFile(path) => interpret_require_file(path),
         Effect::RequireFileContentsWithAuthoredFormalFacts(requirement) => {
             require_file_contents_with_authored_formal_facts(
                 requirement.path().as_ref(),
@@ -848,20 +1181,80 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             requirement.message().as_ref(),
         )
         .map(|()| Vec::new()),
-        Effect::RequireReviewRecord(requirement) => {
-            if Path::new(requirement.path().as_ref()).is_file() {
-                require_clean_review_record(
-                    requirement.path().as_ref(),
-                    requirement.workflow_slug(),
-                    requirement.message().as_ref(),
-                )
-                .map(|()| Vec::new())
-            } else {
-                Err(ShellError::message(
-                    requirement.message().as_ref().to_owned(),
-                ))
-            }
-        }
+        Effect::RequireReviewRecord(requirement) => interpret_require_review_record(requirement),
+        _ => return None,
+    })
+}
+
+fn interpret_require_canonical_declaration(
+    requirement: &CanonicalDeclarationRequirement,
+) -> Result<Vec<String>, ShellError> {
+    let contents =
+        fs::read_to_string(Path::new(requirement.path().as_ref())).map_err(ShellError::io)?;
+    if artifact_contains_one_canonical_declaration(
+        &contents,
+        requirement.prefix().as_ref(),
+        requirement.marker().as_ref(),
+    ) {
+        Ok(Vec::new())
+    } else {
+        Err(ShellError::message(
+            requirement.message().as_ref().to_owned(),
+        ))
+    }
+}
+
+fn interpret_require_digest(
+    requirement: &ArtifactDigestRequirement,
+) -> Result<Vec<String>, ShellError> {
+    let contents =
+        fs::read_to_string(Path::new(requirement.path().as_ref())).map_err(ShellError::io)?;
+    if artifact_contains_one_digest_marker(&contents, requirement.digest().as_ref()) {
+        Ok(Vec::new())
+    } else {
+        Err(ShellError::message(
+            requirement.message().as_ref().to_owned(),
+        ))
+    }
+}
+
+fn interpret_require_file(path: &ProjectPath) -> Result<Vec<String>, ShellError> {
+    if Path::new(path.as_ref()).is_file() {
+        Ok(Vec::new())
+    } else {
+        Err(ShellError::message(format!(
+            "missing required project artifact {}",
+            path.as_ref()
+        )))
+    }
+}
+
+fn interpret_require_review_record(
+    requirement: &ReviewRecordRequirement,
+) -> Result<Vec<String>, ShellError> {
+    if Path::new(requirement.path().as_ref()).is_file() {
+        require_clean_review_record(
+            requirement.path().as_ref(),
+            requirement.workflow_slug(),
+            requirement.message().as_ref(),
+        )
+        .map(|()| Vec::new())
+    } else {
+        Err(ShellError::message(
+            requirement.message().as_ref().to_owned(),
+        ))
+    }
+}
+
+/// Terminal cluster covering filesystem, process, and event-store effects. This
+/// match is total over the remaining `Effect` variants so the dispatcher needs
+/// no fallback.
+fn interpret_io_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
+    match effect {
+        Effect::EnsureDirectory(path) => fs::create_dir_all(Path::new(path.as_ref()))
+            .map(|()| Vec::new())
+            .map_err(ShellError::io),
+        Effect::ExportEvent(draft) => interpret_export_event(draft),
         Effect::RunProcess(invocation) => run_process(invocation),
         Effect::RunProcessBatch(invocations) => run_process_batch(invocations),
         Effect::DeclareWorkflowReadinessFromWorkflow(readiness) => interpret_effect(
@@ -874,174 +1267,9 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 readiness.review_event(),
             )),
         ),
-        Effect::RecordCleanReviewFromWorkflow(effect) => {
-            let current_digest = formal_model_content_digest(effect.workflow_slug())?;
-            let required_categories = required_review_categories()?;
-            let plan = record_clean_review(
-                effect.workflow_slug().clone(),
-                current_digest.clone(),
-                effect.reviewer_id().clone(),
-                effect.reviewed_at().clone(),
-                RequiredReviewCategories::new(required_categories.clone()),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let reports = interpret_collect_reports(plan)?;
-            interpret_effect(&Effect::ExportEvent(EventDraft::review_recorded(
-                effect.workflow_slug(),
-                &current_digest,
-                effect.reviewer_id(),
-                effect.reviewed_at(),
-                &required_categories,
-            )))?;
-            Ok(reports)
-        }
+        Effect::RecordCleanReviewFromWorkflow(effect) => interpret_record_clean_review(effect),
         Effect::RemoveFile(path) => remove_file_if_present(path.as_ref()).map(|()| Vec::new()),
-        Effect::RemoveSliceFromWorkflow(slug) => {
-            let project_name = read_project_manifest_name()?;
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, workflow_graph) =
-                find_formal_workflow_containing_slice_in(&formal_workflows, slug)?;
-            let plan = remove_slice(
-                project_name,
-                &formal_workflows,
-                workflow_layout.name().clone(),
-                workflow_layout.description().clone(),
-                workflow_layout.slug().clone(),
-                workflow_graph,
-                slug.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
-        }
-        Effect::RemoveTransitionFromWorkflow(removal) => {
-            let (workflow_layout, workflow_graph) =
-                read_formal_workflow_layout_and_graph(removal.workflow_slug())?;
-            let plan = remove_transition(
-                workflow_layout.name().clone(),
-                workflow_layout.description().clone(),
-                workflow_graph,
-                removal.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let reports = interpret_collect_reports(plan)?;
-            interpret_effect(&Effect::ExportEvent(
-                EventDraft::workflow_transition_removed(removal),
-            ))?;
-            Ok(reports)
-        }
-        Effect::RemoveWorkflowFromIndex(slug) => {
-            let project_name = read_project_manifest_name()?;
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let existing_workflows = formal_workflow_layouts(FormalWorkflowGraphs::from_graphs(
-                formal_workflows.clone(),
-            ));
-            let workflow_graphs = indexed_formal_workflow_graphs(&formal_workflows);
-            let plan = remove_workflow(
-                project_name,
-                ModeledWorkflowLayouts::new(existing_workflows),
-                IndexedWorkflowGraphs::new(workflow_graphs),
-                slug.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
-        }
-        Effect::ResolveEventConflict(resolution) => {
-            let plan = resolve_event_conflict(
-                resolution.conflict_id().clone(),
-                resolution.chosen_event_id().clone(),
-            )
-            .map_err(ShellError::message)?;
-            plan.effects()
-                .iter()
-                .try_fold(Vec::new(), |mut reports, effect| {
-                    reports.extend(interpret_effect(effect)?);
-                    Ok(reports)
-                })
-        }
-        Effect::ShowSliceFromSlice(slug) => {
-            let slice_document = read_formal_slice_artifacts(slug)?;
-            interpret_collect_reports(show_document(slice_document))
-        }
-        Effect::ShowWorkflowFromWorkflow(slug) => {
-            let workflow_document = read_formal_workflow_artifacts(slug)?;
-            interpret_collect_reports(show_workflow(workflow_document))
-        }
-        Effect::UpdateWorkflowDescriptionFromIndexAndWorkflow(effect) => {
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let existing_workflows = formal_workflow_layouts(FormalWorkflowGraphs::from_graphs(
-                formal_workflows.clone(),
-            ));
-            let workflow_graph = read_formal_workflow_graph(effect.workflow_slug())?;
-            let plan = update_workflow_description(
-                ModeledWorkflowLayouts::new(existing_workflows),
-                workflow_graph,
-                effect.workflow_slug().clone(),
-                effect.description().clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
-        }
-        Effect::UpdateWorkflowNameFromIndexAndWorkflow(effect) => {
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let existing_workflows = formal_workflow_layouts(FormalWorkflowGraphs::from_graphs(
-                formal_workflows.clone(),
-            ));
-            let workflow_graph = read_formal_workflow_graph(effect.workflow_slug())?;
-            let plan = update_workflow_name(
-                ModeledWorkflowLayouts::new(existing_workflows),
-                workflow_graph,
-                effect.workflow_slug().clone(),
-                effect.name().clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
-        }
-        Effect::UpdateSliceDescriptionFromWorkflow(effect) => {
-            let (workflow_layout, workflow_graph) =
-                find_formal_workflow_containing_slice(effect.slice_slug())?;
-            let plan = update_slice_description(
-                workflow_layout.name().clone(),
-                workflow_layout.description().clone(),
-                workflow_layout.slug().clone(),
-                workflow_graph,
-                effect.slice_slug().clone(),
-                effect.description().clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
-        }
-        Effect::UpdateSliceKindFromWorkflow(effect) => {
-            let (workflow_layout, workflow_graph) =
-                find_formal_workflow_containing_slice(effect.slice_slug())?;
-            let plan = update_slice_kind(
-                workflow_layout.name().clone(),
-                workflow_layout.description().clone(),
-                workflow_layout.slug().clone(),
-                workflow_graph,
-                effect.slice_slug().clone(),
-                effect.kind(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
-        }
-        Effect::UpdateSliceNameFromWorkflow(effect) => {
-            let project_name = read_project_manifest_name()?;
-            let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, workflow_graph) =
-                find_formal_workflow_containing_slice_in(&formal_workflows, effect.slice_slug())?;
-            let plan = update_slice_name(
-                SliceProjectRootContext::new(project_name, &formal_workflows),
-                workflow_layout.name().clone(),
-                workflow_layout.description().clone(),
-                workflow_layout.slug().clone(),
-                workflow_graph,
-                effect.slice_slug().clone(),
-                effect.name().clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            interpret_collect_reports(plan)
-        }
-        Effect::VerifyProjectFromIndex => interpret_verify_project_from_index_collecting(),
+        Effect::ResolveEventConflict(resolution) => interpret_resolve_event_conflict(resolution),
         Effect::WriteFile(write) => {
             write_file(write.path().as_ref(), write.contents().as_ref()).map(|()| Vec::new())
         }
@@ -1053,24 +1281,73 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             )
             .map(|()| Vec::new())
         }
-        Effect::WriteFileIfMissing(write) => {
-            if Path::new(write.path().as_ref()).exists() {
-                Ok(Vec::new())
-            } else {
-                write_file(write.path().as_ref(), write.contents().as_ref()).map(|()| Vec::new())
-            }
-        }
+        Effect::WriteFileIfMissing(write) => interpret_write_file_if_missing(write),
         Effect::Report(line) => Ok(vec![line.as_ref().to_owned()]),
         Effect::ReportDocument(contents) => Ok(vec![contents.as_ref().to_owned()]),
+        // Every other `Effect` variant is dispatched by an earlier cluster in
+        // `interpret_effect`, so this arm is never reached; surface a clear
+        // error rather than silently succeeding if routing ever regresses.
+        _ => Err(ShellError::message(
+            "internal error: effect was not routed to an interpreter cluster",
+        )),
+    }
+}
+
+fn interpret_export_event(draft: &EventDraft) -> Result<Vec<String>, ShellError> {
+    if exported_events_are_projecting()? {
+        return Ok(Vec::new());
+    }
+    execute_eventcore_command_for_exported_event(Path::new("."), draft)
+        .map_err(ShellError::message)?;
+    Ok(Vec::new())
+}
+
+fn interpret_record_clean_review(effect: &CleanReviewEffect) -> Result<Vec<String>, ShellError> {
+    let current_digest = formal_model_content_digest(effect.workflow_slug())?;
+    let required_categories = required_review_categories();
+    let plan = record_clean_review(
+        effect.workflow_slug(),
+        &current_digest,
+        effect.reviewer_id(),
+        effect.reviewed_at(),
+        &RequiredReviewCategories::new(required_categories.clone()),
+    )
+    .map_err(|error| ShellError::message(error.to_string()))?;
+    let reports = interpret_collect_reports(&plan)?;
+    interpret_effect(&Effect::ExportEvent(EventDraft::review_recorded(
+        effect.workflow_slug(),
+        &current_digest,
+        effect.reviewer_id(),
+        effect.reviewed_at(),
+        &required_categories,
+    )))?;
+    Ok(reports)
+}
+
+fn interpret_resolve_event_conflict(
+    resolution: &EventConflictResolution,
+) -> Result<Vec<String>, ShellError> {
+    let plan = resolve_event_conflict(resolution.conflict_id(), resolution.chosen_event_id())
+        .map_err(ShellError::message)?;
+    plan.effects()
+        .iter()
+        .try_fold(Vec::new(), |mut reports, effect| {
+            reports.extend(interpret_effect(effect)?);
+            Ok(reports)
+        })
+}
+
+fn interpret_write_file_if_missing(write: &FileWriteEffect) -> Result<Vec<String>, ShellError> {
+    if Path::new(write.path().as_ref()).exists() {
+        Ok(Vec::new())
+    } else {
+        write_file(write.path().as_ref(), write.contents().as_ref()).map(|()| Vec::new())
     }
 }
 
 fn read_project_manifest_name() -> Result<ProjectName, ShellError> {
-    fs::read_to_string("emc.toml")
-        .map_err(ShellError::io)
-        .and_then(|manifest| {
-            parse_project_manifest_name(&manifest).map_err(ShellError::project_name)
-        })
+    let manifest = fs::read_to_string("emc.toml").map_err(ShellError::io)?;
+    parse_project_manifest_name(&manifest).map_err(ShellError::project_name)
 }
 
 /// The workflow graphs that command decisions consume, sourced from the
@@ -1170,18 +1447,20 @@ fn read_formal_slice_artifacts(slug: &SliceSlug) -> Result<FileContents, ShellEr
                 .find(|slice| slice.slug() == slug)
                 .map(|slice| module_name_from_raw(slice.name().as_ref()))
         })
-        .map(|module_name| {
-            formal_artifact_bundle(&[
-                format!("model/lean/slices/{module_name}.lean"),
-                format!("model/quint/slices/{module_name}.qnt"),
-            ])
-        })
-        .unwrap_or_else(|| {
-            Err(ShellError::message(format!(
-                "slice {} is not referenced by any modeled workflow",
-                slug.as_ref()
-            )))
-        })
+        .map_or_else(
+            || {
+                Err(ShellError::message(format!(
+                    "slice {} is not referenced by any modeled workflow",
+                    slug.as_ref()
+                )))
+            },
+            |module_name| {
+                formal_artifact_bundle(&[
+                    format!("model/lean/slices/{module_name}.lean"),
+                    format!("model/quint/slices/{module_name}.qnt"),
+                ])
+            },
+        )
 }
 
 fn formal_artifact_bundle(paths: &[String]) -> Result<FileContents, ShellError> {
@@ -1304,7 +1583,9 @@ fn normalize_authored_formal_fact_lists(contents: &str) -> String {
     let mut normalized = contents
         .lines()
         .map(|line| {
-            let indentation_length = line.len() - line.trim_start().len();
+            // `trim_start` yields a suffix of `line`, so its length never
+            // exceeds `line.len()`; saturation is exact, not a clamp.
+            let indentation_length = line.len().saturating_sub(line.trim_start().len());
             let (indentation, declaration) = line.split_at(indentation_length);
             MARKERS
                 .iter()
@@ -1387,7 +1668,9 @@ fn preserve_authored_formal_fact_lists(existing: &str, generated: &str) -> Strin
     let mut preserved = generated
         .lines()
         .map(|line| {
-            let indentation_length = line.len() - line.trim_start().len();
+            // `trim_start` yields a suffix of `line`, so its length never
+            // exceeds `line.len()`; saturation is exact, not a clamp.
+            let indentation_length = line.len().saturating_sub(line.trim_start().len());
             let (indentation, declaration) = line.split_at(indentation_length);
             existing_declarations
                 .iter()
@@ -1501,7 +1784,7 @@ fn require_clean_review_record(
         return Err(ShellError::message(fallback_message.to_owned()));
     }
 
-    let required_categories = required_review_categories()?;
+    let required_categories = required_review_categories();
     match record.first_non_clean_category(&required_categories) {
         Some(ReviewCategoryFinding::NotClean(category)) => Err(ShellError::message(format!(
             "review category '{category}' is not clean"
@@ -1525,19 +1808,17 @@ fn review_record_workflow_slug(path: &str) -> Result<WorkflowSlug, ShellError> {
         })
 }
 
-fn required_review_categories() -> Result<Vec<ReviewRuleName>, ShellError> {
-    Ok(ReviewRuleName::REQUIRED.to_vec())
+fn required_review_categories() -> Vec<ReviewRuleName> {
+    ReviewRuleName::REQUIRED.to_vec()
 }
 
 fn current_projection_fingerprint() -> Result<ProjectionFingerprint, ShellError> {
-    exported_events_projection_fingerprint()
+    let fingerprint = exported_events_projection_fingerprint()
         .map_err(ShellError::message)?
-        .ok_or_else(|| ShellError::message("event export is required before verification"))
-        .and_then(|fingerprint| {
-            ArtifactDigest::try_new(fingerprint)
-                .map(ProjectionFingerprint::new)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })
+        .ok_or_else(|| ShellError::message("event export is required before verification"))?;
+    ArtifactDigest::try_new(fingerprint)
+        .map(ProjectionFingerprint::new)
+        .map_err(|error| ShellError::message(error.to_string()))
 }
 
 fn readiness_verified_at() -> Result<ReviewTimestamp, ShellError> {
@@ -1747,7 +2028,9 @@ fn run_process_batch_with_progress(
         let progress = process_progress_report(invocation);
         report(&progress);
     })?;
-    reports.iter().for_each(|line| report(line));
+    for line in &reports {
+        report(line);
+    }
     Ok(reports)
 }
 
@@ -1806,11 +2089,11 @@ struct VerificationParallelism {
 impl VerificationParallelism {
     fn detect() -> Result<Self, ShellError> {
         match env::var(VERIFY_PARALLELISM_ENV) {
-            Ok(value) => Self::parse(value),
+            Ok(value) => Self::parse(&value),
             Err(env::VarError::NotPresent) => Ok(Self {
-                process_count: thread::available_parallelism()
-                    .map(|parallelism| parallelism.get().min(MAX_PARALLEL_VERIFICATION_PROCESSES))
-                    .unwrap_or(1),
+                process_count: thread::available_parallelism().map_or(1, |parallelism| {
+                    parallelism.get().min(MAX_PARALLEL_VERIFICATION_PROCESSES)
+                }),
             }),
             Err(env::VarError::NotUnicode(_value)) => Err(ShellError::message(format!(
                 "{VERIFY_PARALLELISM_ENV} must be a positive integer"
@@ -1818,7 +2101,7 @@ impl VerificationParallelism {
         }
     }
 
-    fn parse(value: String) -> Result<Self, ShellError> {
+    fn parse(value: &str) -> Result<Self, ShellError> {
         let process_count = value.parse::<usize>().map_err(|_error| {
             ShellError::message(format!(
                 "{VERIFY_PARALLELISM_ENV} must be a positive integer"
@@ -1863,7 +2146,13 @@ fn process_arguments(invocation: &ProcessInvocation) -> Result<ProcessCommand, S
         let input_position = arguments.len().saturating_sub(1);
         let endpoint = quint_server_endpoint()?;
         arguments.insert(input_position, "--server-endpoint".to_owned());
-        arguments.insert(input_position + 1, endpoint.endpoint().to_owned());
+        // The first insert grew `arguments` by one, so the endpoint value goes
+        // immediately after the flag; `input_position` is a small list index, so
+        // saturation is exact, not a clamp.
+        arguments.insert(
+            input_position.saturating_add(1),
+            endpoint.endpoint().to_owned(),
+        );
         endpoint_guard = Some(endpoint);
     }
 
@@ -1879,7 +2168,7 @@ struct QuintVerificationProcessSlot {
 
 impl Drop for QuintVerificationProcessSlot {
     fn drop(&mut self) {
-        let _ = FileExt::unlock(&self.file);
+        drop(FileExt::unlock(&self.file));
     }
 }
 
@@ -1953,8 +2242,7 @@ fn quint_verify_invocation(invocation: &ProcessInvocation) -> bool {
 fn quint_verification_lock_directory() -> PathBuf {
     env::var_os("XDG_STATE_HOME")
         .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(env::temp_dir)
+        .map_or_else(env::temp_dir, PathBuf::from)
         .join("emc")
         .join("verification")
 }
@@ -1977,7 +2265,7 @@ struct QuintEndpointLock {
 
 impl Drop for QuintEndpointLock {
     fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
+        drop(fs::remove_file(&self.path));
     }
 }
 
@@ -2075,7 +2363,7 @@ fn process_progress_report(invocation: &ProcessInvocation) -> String {
     let arguments = invocation
         .arguments()
         .iter()
-        .map(|argument| argument.as_ref())
+        .map(AsRef::as_ref)
         .collect::<Vec<_>>();
 
     match (program, arguments.as_slice()) {

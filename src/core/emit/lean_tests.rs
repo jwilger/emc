@@ -9,6 +9,7 @@ mod tests {
     use crate::core::digest::{
         WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest,
     };
+    use crate::core::effect::FileContents;
     use crate::core::emit::lean::{emit_slice_module, emit_workflow_module};
     use crate::core::types::{
         CommandErrorName, CommandName, OutcomeLabelName, PayloadContractName, SliceKindName,
@@ -30,6 +31,186 @@ mod tests {
 
     #[test]
     fn lean_workflow_module_represents_business_workflow_fields() -> Result<(), Box<dyn Error>> {
+        let module = build_business_workflow_module()?;
+        let lean = module.as_ref();
+
+        assert_business_workflow_group_01(lean);
+        assert_business_workflow_group_02(lean);
+        assert_business_workflow_group_03(lean);
+        assert_business_workflow_group_04(lean);
+        assert_business_workflow_group_05(lean);
+        assert_business_workflow_group_06(lean);
+        assert_business_workflow_group_07(lean);
+        assert_business_workflow_group_08(lean);
+        assert_business_workflow_group_09(lean);
+        assert_business_workflow_group_10(lean);
+
+        Ok(())
+    }
+
+    #[test]
+    fn lean_workflow_module_types_empty_lists() -> Result<(), Box<dyn Error>> {
+        let workflow_name = parse_model_name("Open ticket")?;
+        let workflow_description = parse_model_description("Actor opens a repair ticket.")?;
+        let workflow_slug = parse_workflow_slug("open-ticket")?;
+        let module = emit_workflow_module(
+            &parse_lean_module_name("OpenTicket")?,
+            &WorkflowModuleData::new(
+                workflow_name.clone(),
+                workflow_description.clone(),
+                workflow_slug.clone(),
+                artifact_digest(&WorkflowArtifactDigestInput {
+                    workflow_name,
+                    workflow_slug,
+                    workflow_description,
+                    workflow_slice_details: WorkflowSliceDetails::from_details([]),
+                    workflow_transitions: WorkflowTransitionRecords::from_records([]),
+                    workflow_outcomes: WorkflowOutcomeRecords::from_records([]),
+                    workflow_command_errors: WorkflowCommandErrorRecords::from_records([]),
+                    workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
+                    workflow_transition_evidences: WorkflowTransitionEvidenceRecords::default(),
+                    workflow_requires_entry_lifecycle_coverage: false,
+                    workflow_entry_lifecycle_states: WorkflowEntryLifecycleStateRecords::default(),
+                }),
+            )
+            .with_slice_details(WorkflowSliceDetails::from_details([]))
+            .with_transitions(WorkflowTransitionRecords::from_records([]))
+            .with_outcomes(WorkflowOutcomeRecords::from_records([]))
+            .with_command_errors(WorkflowCommandErrorRecords::from_records([])),
+        );
+        let lean = module.as_ref();
+
+        assert!(lean.contains("def workflowSlices : List WorkflowSlice := []"));
+        assert!(lean.contains("def workflowSliceDetails : List WorkflowSliceDetail := []"));
+        assert!(lean.contains("def workflowTransitions : List WorkflowTransition := []"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn lean_workflow_module_verifies_large_shared_event_workflow() -> Result<(), Box<dyn Error>> {
+        let temp_dir = tempfile::TempDir::new()?;
+        let workflow_name = parse_model_name("Organization access")?;
+        let workflow_description = parse_model_description("Actor manages organization access.")?;
+        let workflow_slug = parse_workflow_slug("organization-access")?;
+
+        let workflow_slice_details = large_shared_event_slice_details()?;
+
+        let workflow_transitions = large_shared_event_transitions()?;
+
+        let owned_definitions = large_shared_event_owned_definitions()?;
+
+        let transition_evidences = large_shared_event_transition_evidences()?;
+
+        let workflow_owned_definitions =
+            WorkflowOwnedDefinitionRecords::from_records(owned_definitions.clone());
+        let workflow_transition_evidences =
+            WorkflowTransitionEvidenceRecords::from_records(transition_evidences.clone());
+        let workflow_module = WorkflowModuleData::new(
+            workflow_name.clone(),
+            workflow_description.clone(),
+            workflow_slug.clone(),
+            artifact_digest(&WorkflowArtifactDigestInput {
+                workflow_name,
+                workflow_slug,
+                workflow_description,
+                workflow_slice_details: WorkflowSliceDetails::from_details(
+                    workflow_slice_details.clone(),
+                ),
+                workflow_transitions: WorkflowTransitionRecords::from_records(
+                    workflow_transitions.clone(),
+                ),
+                workflow_outcomes: WorkflowOutcomeRecords::from_records([]),
+                workflow_command_errors: WorkflowCommandErrorRecords::from_records([]),
+                workflow_owned_definitions: workflow_owned_definitions.clone(),
+                workflow_transition_evidences: workflow_transition_evidences.clone(),
+                workflow_requires_entry_lifecycle_coverage: false,
+                workflow_entry_lifecycle_states: WorkflowEntryLifecycleStateRecords::default(),
+            }),
+        )
+        .with_slice_details(WorkflowSliceDetails::from_details(workflow_slice_details))
+        .with_transitions(WorkflowTransitionRecords::from_records(
+            workflow_transitions,
+        ))
+        .with_owned_definitions(workflow_owned_definitions)
+        .with_transition_evidences(workflow_transition_evidences);
+
+        let lean_module = emit_workflow_module(
+            &parse_lean_module_name("OrganizationAccess")?,
+            &workflow_module,
+        );
+        let lean_path = temp_dir.path().join("OrganizationAccess.lean");
+        write(&lean_path, lean_module.as_ref())?;
+
+        let output = Command::new("lake")
+            .args(["env", "lean", "OrganizationAccess.lean"])
+            .current_dir(temp_dir.path())
+            .output()?;
+
+        assert!(
+            output.status.success(),
+            "generated large workflow Lean module must verify\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn lean_slice_module_represents_business_slice_fields() -> Result<(), Box<dyn Error>> {
+        let slice_name = parse_model_name("Capture ticket")?;
+        let slice_description = parse_model_description("Actor enters repair ticket details.")?;
+        let slice_slug = parse_slice_slug("capture-ticket")?;
+        let slice_kind = SliceKindName::try_new("state_view")?;
+        let module = emit_slice_module(
+            &parse_lean_module_name("CaptureTicket")?,
+            &slice_name,
+            &slice_description,
+            &slice_slug,
+            slice_kind,
+            &slice_artifact_digest(&slice_name, &slice_slug, slice_kind, &slice_description),
+        );
+        let lean = module.as_ref();
+
+        assert_business_slice_group_01(lean);
+        assert_business_slice_group_02(lean);
+        assert_business_slice_group_03(lean);
+        assert_business_slice_group_04(lean);
+        assert_business_slice_group_05(lean);
+        assert_business_slice_group_06(lean);
+        assert_business_slice_group_07(lean);
+        assert_business_slice_group_08(lean);
+        assert_business_slice_group_09(lean);
+        assert_business_slice_group_10(lean);
+        assert_business_slice_group_11(lean);
+        assert_business_slice_group_12(lean);
+        assert_business_slice_group_13(lean);
+        assert_business_slice_group_14(lean);
+        assert_business_slice_group_15(lean);
+        assert_business_slice_group_16(lean);
+        assert_business_slice_group_17(lean);
+        assert_business_slice_group_18(lean);
+        assert_business_slice_group_19(lean);
+        assert_business_slice_group_20(lean);
+        assert_business_slice_group_21(lean);
+        assert_business_slice_group_22(lean);
+        assert_business_slice_group_23(lean);
+        assert_business_slice_group_24(lean);
+        assert_business_slice_group_25(lean);
+        assert_business_slice_group_26(lean);
+        assert_business_slice_group_27(lean);
+        assert_business_slice_group_28(lean);
+        assert_business_slice_group_29(lean);
+        assert_business_slice_group_30(lean);
+        assert_business_slice_group_31(lean);
+        assert_business_slice_group_32(lean);
+        assert_business_slice_group_33(lean);
+
+        Ok(())
+    }
+
+    fn build_business_workflow_module() -> Result<FileContents, Box<dyn Error>> {
         let workflow_name = parse_model_name("Open ticket")?;
         let workflow_description = parse_model_description("Actor opens a repair ticket.")?;
         let workflow_slug = parse_workflow_slug("open-ticket")?;
@@ -37,14 +218,14 @@ mod tests {
             WorkflowSliceDetail::new_with_relationship(
                 parse_slice_slug("capture-ticket")?,
                 parse_model_name("Capture ticket")?,
-                SliceKindName::try_new("state_view".to_owned())?,
+                SliceKindName::try_new("state_view")?,
                 parse_model_description("Actor enters repair ticket details.")?,
                 WorkflowStepRelationshipName::Entry,
             ),
             WorkflowSliceDetail::new_with_relationship(
                 parse_slice_slug("review-ticket")?,
                 parse_model_name("Review ticket")?,
-                SliceKindName::try_new("state_view".to_owned())?,
+                SliceKindName::try_new("state_view")?,
                 parse_model_description("Actor reviews repair ticket details.")?,
                 WorkflowStepRelationshipName::Main,
             ),
@@ -52,7 +233,7 @@ mod tests {
         let workflow_transitions = vec![WorkflowTransitionRecord::new_with_payload_contract(
             WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
             WorkflowTransitionEndpoint::try_new("review-ticket".to_owned())?,
-            WorkflowTransitionKind::try_new("external_trigger".to_owned())?,
+            WorkflowTransitionKind::try_new("external_trigger")?,
             TransitionTriggerName::try_new("callback_received".to_owned())?,
             PayloadContractName::try_new("CallbackReceivedPayload".to_owned())?,
         )];
@@ -70,7 +251,7 @@ mod tests {
         let workflow_owned_definitions =
             WorkflowOwnedDefinitionRecords::from_records([WorkflowOwnedDefinitionRecord::new(
                 WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
-                WorkflowOwnedDefinitionKind::try_new("external_payload".to_owned())?,
+                WorkflowOwnedDefinitionKind::try_new("external_payload")?,
                 WorkflowOwnedDefinitionName::try_new("CallbackReceivedPayload".to_owned())?,
             )]);
         let workflow_entry_lifecycle_states = WorkflowEntryLifecycleStateRecords::from_records([
@@ -84,12 +265,12 @@ mod tests {
             ),
         ]);
         let module = emit_workflow_module(
-            parse_lean_module_name("OpenTicket")?,
-            WorkflowModuleData::new(
+            &parse_lean_module_name("OpenTicket")?,
+            &WorkflowModuleData::new(
                 workflow_name.clone(),
                 workflow_description.clone(),
                 workflow_slug.clone(),
-                artifact_digest(WorkflowArtifactDigestInput {
+                artifact_digest(&WorkflowArtifactDigestInput {
                     workflow_name,
                     workflow_slug,
                     workflow_description,
@@ -102,7 +283,7 @@ mod tests {
                     workflow_outcomes: workflow_outcomes.clone(),
                     workflow_command_errors: workflow_command_errors.clone(),
                     workflow_owned_definitions: workflow_owned_definitions.clone(),
-                    workflow_transition_evidences: Default::default(),
+                    workflow_transition_evidences: WorkflowTransitionEvidenceRecords::default(),
                     workflow_requires_entry_lifecycle_coverage: false,
                     workflow_entry_lifecycle_states: workflow_entry_lifecycle_states.clone(),
                 }),
@@ -116,8 +297,10 @@ mod tests {
             .with_owned_definitions(workflow_owned_definitions)
             .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
         );
-        let lean = module.as_ref();
+        Ok(module)
+    }
 
+    fn assert_business_workflow_group_01(lean: &str) {
         assert!(lean.contains("namespace OpenTicket"));
         assert!(
             lean.contains(
@@ -170,6 +353,9 @@ mod tests {
             ),
             "Lean workflow artifacts must use the closed transition-kind domain type"
         );
+    }
+
+    fn assert_business_workflow_group_02(lean: &str) {
         assert!(
             lean.contains(
                 "structure WorkflowOutcome where\n  sourceSlice : String\n  label : String\n  externallyRelevant : Bool"
@@ -238,6 +424,9 @@ mod tests {
             ),
             "Lean workflow artifacts must carry authored application-entry lifecycle coverage facts"
         );
+    }
+
+    fn assert_business_workflow_group_03(lean: &str) {
         assert!(
             lean.contains("def workflowExitTargets : List String := []"),
             "Lean workflow artifacts must explicitly model workflow-exit targets for transition target resolution"
@@ -302,6 +491,9 @@ mod tests {
             ),
             "Lean workflow artifacts must bound reachability traversal by the composed workflow size"
         );
+    }
+
+    fn assert_business_workflow_group_04(lean: &str) {
         assert!(
             lean.contains(
                 "def workflowStepIsReachableFromEntry (step : WorkflowStepRelationship) : Bool := step.relationship == WorkflowStepRelationshipName.supporting || step.relationship == WorkflowStepRelationshipName.asyncLifecycle || workflowReachableStepsFromEntry.contains step.step"
@@ -364,6 +556,9 @@ mod tests {
             ),
             "Lean workflow artifacts must prove current workflow step relationships are modeled"
         );
+    }
+
+    fn assert_business_workflow_group_05(lean: &str) {
         assert!(
             lean.contains(
                 "theorem workflowStepSlugsAreUniqueIsStable : workflowStepSlugsAreUnique = true := by native_decide"
@@ -436,6 +631,9 @@ mod tests {
             ),
             "Lean workflow artifacts must require workflow outcome facts to source from composed workflow steps"
         );
+    }
+
+    fn assert_business_workflow_group_06(lean: &str) {
         assert!(
             lean.contains(
                 "def workflowOutcomesSourceResolve : Bool := workflowOutcomes.all workflowOutcomeSourceResolves"
@@ -508,6 +706,9 @@ mod tests {
             ),
             "Lean workflow artifacts must require command transitions to target command-owning slices"
         );
+    }
+
+    fn assert_business_workflow_group_07(lean: &str) {
         assert!(
             lean.contains(
                 "def workflowCommandTransitionsTargetOwnedCommands : Bool := workflowTransitions.all workflowCommandTransitionTargetsOwnedCommand"
@@ -580,6 +781,9 @@ mod tests {
             ),
             "Lean workflow artifacts must require navigation transitions to come from source-owned controls"
         );
+    }
+
+    fn assert_business_workflow_group_08(lean: &str) {
         assert!(
             lean.contains(
                 "def workflowNavigationTransitionTargetsOwnedView (transition : WorkflowTransition) : Bool := transition.kind != WorkflowTransitionKind.navigation || workflowOwnsDefinition transition.target WorkflowOwnedDefinitionKind.view (workflowNavigationTargetView transition)"
@@ -652,6 +856,9 @@ mod tests {
             ),
             "Lean workflow artifacts must prove current workflow exits name their targets and rationale"
         );
+    }
+
+    fn assert_business_workflow_group_09(lean: &str) {
         assert!(
             lean.contains(
                 "theorem workflowTransitionsDoNotUseCommandErrorsAsOutcomesIsStable : workflowTransitionsDoNotUseCommandErrorsAsOutcomes = true := by native_decide"
@@ -724,6 +931,9 @@ mod tests {
             ),
             "Lean workflow artifacts must prove current navigation transitions target entry views"
         );
+    }
+
+    fn assert_business_workflow_group_10(lean: &str) {
         assert!(
             lean.contains(
                 "theorem workflowOutcomesSourceResolveIsStable : workflowOutcomesSourceResolve = true := by native_decide"
@@ -756,65 +966,18 @@ mod tests {
             !lean.contains("workflowTransitions.length = workflowTransitions.length"),
             "Lean transition structure proof must not be a tautological length self-comparison"
         );
-
-        Ok(())
     }
 
-    #[test]
-    fn lean_workflow_module_types_empty_lists() -> Result<(), Box<dyn Error>> {
-        let workflow_name = parse_model_name("Open ticket")?;
-        let workflow_description = parse_model_description("Actor opens a repair ticket.")?;
-        let workflow_slug = parse_workflow_slug("open-ticket")?;
-        let module = emit_workflow_module(
-            parse_lean_module_name("OpenTicket")?,
-            WorkflowModuleData::new(
-                workflow_name.clone(),
-                workflow_description.clone(),
-                workflow_slug.clone(),
-                artifact_digest(WorkflowArtifactDigestInput {
-                    workflow_name,
-                    workflow_slug,
-                    workflow_description,
-                    workflow_slice_details: WorkflowSliceDetails::from_details([]),
-                    workflow_transitions: WorkflowTransitionRecords::from_records([]),
-                    workflow_outcomes: WorkflowOutcomeRecords::from_records([]),
-                    workflow_command_errors: WorkflowCommandErrorRecords::from_records([]),
-                    workflow_owned_definitions: WorkflowOwnedDefinitionRecords::from_records([]),
-                    workflow_transition_evidences: Default::default(),
-                    workflow_requires_entry_lifecycle_coverage: false,
-                    workflow_entry_lifecycle_states: Default::default(),
-                }),
-            )
-            .with_slice_details(WorkflowSliceDetails::from_details([]))
-            .with_transitions(WorkflowTransitionRecords::from_records([]))
-            .with_outcomes(WorkflowOutcomeRecords::from_records([]))
-            .with_command_errors(WorkflowCommandErrorRecords::from_records([])),
-        );
-        let lean = module.as_ref();
-
-        assert!(lean.contains("def workflowSlices : List WorkflowSlice := []"));
-        assert!(lean.contains("def workflowSliceDetails : List WorkflowSliceDetail := []"));
-        assert!(lean.contains("def workflowTransitions : List WorkflowTransition := []"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn lean_workflow_module_verifies_large_shared_event_workflow() -> Result<(), Box<dyn Error>> {
-        let temp_dir = tempfile::TempDir::new()?;
-        let workflow_name = parse_model_name("Organization access")?;
-        let workflow_description = parse_model_description("Actor manages organization access.")?;
-        let workflow_slug = parse_workflow_slug("organization-access")?;
-
-        let workflow_slice_details = (0..40)
+    fn large_shared_event_slice_details() -> Result<Vec<WorkflowSliceDetail>, Box<dyn Error>> {
+        let workflow_slice_details = (0_usize..40)
             .map(|index| {
                 Ok(WorkflowSliceDetail::new_with_relationship(
                     parse_slice_slug(&format!("access-step-{index}"))?,
                     parse_model_name(&format!("Access step {index}"))?,
-                    if index % 2 == 0 {
-                        SliceKindName::try_new("state_view".to_owned())?
+                    if index.checked_rem(2) == Some(0) {
+                        SliceKindName::try_new("state_view")?
                     } else {
-                        SliceKindName::try_new("state_change".to_owned())?
+                        SliceKindName::try_new("state_change")?
                     },
                     parse_model_description(&format!("Access step {index} boundary."))?,
                     if index == 0 {
@@ -825,28 +988,38 @@ mod tests {
                 ))
             })
             .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+        Ok(workflow_slice_details)
+    }
 
-        let workflow_transitions = (0..39)
+    fn large_shared_event_transitions() -> Result<Vec<WorkflowTransitionRecord>, Box<dyn Error>> {
+        let workflow_transitions = (0_usize..39)
             .map(|index| {
                 Ok(WorkflowTransitionRecord::new(
                     WorkflowTransitionEndpoint::try_new(format!("access-step-{index}"))?,
-                    WorkflowTransitionEndpoint::try_new(format!("access-step-{}", index + 1))?,
-                    WorkflowTransitionKind::try_new("command".to_owned())?,
+                    WorkflowTransitionEndpoint::try_new(format!(
+                        "access-step-{}",
+                        index.saturating_add(1)
+                    ))?,
+                    WorkflowTransitionKind::try_new("command")?,
                     TransitionTriggerName::try_new(format!("GrantAccess{index}"))?,
                 ))
             })
             .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+        Ok(workflow_transitions)
+    }
 
+    fn large_shared_event_owned_definitions()
+    -> Result<Vec<WorkflowOwnedDefinitionRecord>, Box<dyn Error>> {
         let mut owned_definitions = Vec::new();
-        for index in 0..40 {
+        for index in 0_usize..40 {
             owned_definitions.push(
                 WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
                     WorkflowTransitionEndpoint::try_new(format!("access-step-{index}"))?,
-                    WorkflowOwnedDefinitionKind::try_new("event".to_owned())?,
+                    WorkflowOwnedDefinitionKind::try_new("event")?,
                     WorkflowOwnedDefinitionName::try_new("AccessChanged".to_owned())?,
                     StreamName::try_new("organization-access-events".to_owned())?,
                     parse_model_description("Shared organization-access event identity.")?,
-                    if index % 2 == 0 {
+                    if index.checked_rem(2) == Some(0) {
                         WorkflowEventParticipation::Emitted
                     } else {
                         WorkflowEventParticipation::Observed
@@ -854,108 +1027,50 @@ mod tests {
                 ),
             );
         }
-        for index in 0..39 {
+        for index in 0_usize..39 {
             owned_definitions.push(WorkflowOwnedDefinitionRecord::new(
                 WorkflowTransitionEndpoint::try_new(format!("access-step-{index}"))?,
-                WorkflowOwnedDefinitionKind::try_new("control".to_owned())?,
+                WorkflowOwnedDefinitionKind::try_new("control")?,
                 WorkflowOwnedDefinitionName::try_new(format!("GrantAccess{index}"))?,
             ));
             owned_definitions.push(WorkflowOwnedDefinitionRecord::new(
-                WorkflowTransitionEndpoint::try_new(format!("access-step-{}", index + 1))?,
-                WorkflowOwnedDefinitionKind::try_new("command".to_owned())?,
+                WorkflowTransitionEndpoint::try_new(format!(
+                    "access-step-{}",
+                    index.saturating_add(1)
+                ))?,
+                WorkflowOwnedDefinitionKind::try_new("command")?,
                 WorkflowOwnedDefinitionName::try_new(format!("GrantAccess{index}"))?,
             ));
         }
+        Ok(owned_definitions)
+    }
 
-        let transition_evidences = (0..39)
+    fn large_shared_event_transition_evidences()
+    -> Result<Vec<WorkflowTransitionEvidenceRecord>, Box<dyn Error>> {
+        let transition_evidences = (0_usize..39)
             .map(|index| {
                 Ok(WorkflowTransitionEvidenceRecord::new(
                     WorkflowTransitionEndpoint::try_new(format!("access-step-{index}"))?,
-                    WorkflowTransitionEndpoint::try_new(format!("access-step-{}", index + 1))?,
-                    WorkflowTransitionKind::try_new("command".to_owned())?,
+                    WorkflowTransitionEndpoint::try_new(format!(
+                        "access-step-{}",
+                        index.saturating_add(1)
+                    ))?,
+                    WorkflowTransitionKind::try_new("command")?,
                     TransitionTriggerName::try_new(format!("GrantAccess{index}"))?,
                     WorkflowTransitionSourceEvidenceText::try_new(format!(
                         "access-step-{index} exposes GrantAccess{index}"
                     ))?,
                     WorkflowTransitionTargetEvidenceText::try_new(format!(
                         "access-step-{} handles GrantAccess{index}",
-                        index + 1
+                        index.saturating_add(1)
                     ))?,
                 ))
             })
             .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-
-        let workflow_owned_definitions =
-            WorkflowOwnedDefinitionRecords::from_records(owned_definitions.clone());
-        let workflow_transition_evidences =
-            WorkflowTransitionEvidenceRecords::from_records(transition_evidences.clone());
-        let workflow_module = WorkflowModuleData::new(
-            workflow_name.clone(),
-            workflow_description.clone(),
-            workflow_slug.clone(),
-            artifact_digest(WorkflowArtifactDigestInput {
-                workflow_name,
-                workflow_slug,
-                workflow_description,
-                workflow_slice_details: WorkflowSliceDetails::from_details(
-                    workflow_slice_details.clone(),
-                ),
-                workflow_transitions: WorkflowTransitionRecords::from_records(
-                    workflow_transitions.clone(),
-                ),
-                workflow_outcomes: WorkflowOutcomeRecords::from_records([]),
-                workflow_command_errors: WorkflowCommandErrorRecords::from_records([]),
-                workflow_owned_definitions: workflow_owned_definitions.clone(),
-                workflow_transition_evidences: workflow_transition_evidences.clone(),
-                workflow_requires_entry_lifecycle_coverage: false,
-                workflow_entry_lifecycle_states: Default::default(),
-            }),
-        )
-        .with_slice_details(WorkflowSliceDetails::from_details(workflow_slice_details))
-        .with_transitions(WorkflowTransitionRecords::from_records(
-            workflow_transitions,
-        ))
-        .with_owned_definitions(workflow_owned_definitions)
-        .with_transition_evidences(workflow_transition_evidences);
-
-        let lean_module = emit_workflow_module(
-            parse_lean_module_name("OrganizationAccess")?,
-            workflow_module,
-        );
-        let lean_path = temp_dir.path().join("OrganizationAccess.lean");
-        write(&lean_path, lean_module.as_ref())?;
-
-        let output = Command::new("lake")
-            .args(["env", "lean", "OrganizationAccess.lean"])
-            .current_dir(temp_dir.path())
-            .output()?;
-
-        assert!(
-            output.status.success(),
-            "generated large workflow Lean module must verify\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-
-        Ok(())
+        Ok(transition_evidences)
     }
 
-    #[test]
-    fn lean_slice_module_represents_business_slice_fields() -> Result<(), Box<dyn Error>> {
-        let slice_name = parse_model_name("Capture ticket")?;
-        let slice_description = parse_model_description("Actor enters repair ticket details.")?;
-        let slice_slug = parse_slice_slug("capture-ticket")?;
-        let slice_kind = SliceKindName::try_new("state_view".to_owned())?;
-        let module = emit_slice_module(
-            parse_lean_module_name("CaptureTicket")?,
-            slice_name.clone(),
-            slice_description.clone(),
-            slice_slug.clone(),
-            slice_kind,
-            slice_artifact_digest(slice_name, slice_slug, slice_kind, slice_description),
-        );
-        let lean = module.as_ref();
-
+    fn assert_business_slice_group_01(lean: &str) {
         assert!(lean.contains("namespace CaptureTicket"));
         assert!(
             lean.contains(
@@ -1002,6 +1117,9 @@ mod tests {
             ),
             "Lean slice artifacts must represent business outcomes as first-class event-backed definitions"
         );
+    }
+
+    fn assert_business_slice_group_02(lean: &str) {
         assert!(
             lean.contains("structure StreamDefinition where\n  name : String"),
             "Lean slice artifacts must represent known event streams"
@@ -1072,6 +1190,9 @@ mod tests {
             ),
             "Lean slice artifacts must represent automation triggers, issued commands, handled errors, and reaction semantics"
         );
+    }
+
+    fn assert_business_slice_group_03(lean: &str) {
         assert!(
             lean.contains(
                 "structure TranslationDefinition where\n  name : String\n  externalEventName : String\n  payloadContractName : String\n  commandName : String"
@@ -1121,6 +1242,9 @@ mod tests {
         assert!(lean.contains("def sliceBoardElements : List BoardElement := []"));
         assert!(lean.contains("def sliceBoardConnections : List BoardConnection := []"));
         assert!(lean.contains("def sliceReferencedCommands : List SliceCommandReference := []"));
+    }
+
+    fn assert_business_slice_group_04(lean: &str) {
         assert!(lean.contains(
             "def sliceReferencedCommandNames : List String := sliceReferencedCommands.map (fun commandRef => commandRef.name)"
         ));
@@ -1194,6 +1318,9 @@ mod tests {
             ),
             "Lean slice artifacts must enumerate allowed navigation target types"
         );
+    }
+
+    fn assert_business_slice_group_05(lean: &str) {
         assert!(lean.contains("def sliceAcceptanceScenarios : List EventModelScenario := []"));
         assert!(lean.contains("def sliceContractScenarios : List EventModelScenario := []"));
         assert!(lean.contains("def sliceBitLevelDataFlows : List BitLevelDataFlow := []"));
@@ -1251,6 +1378,9 @@ mod tests {
             ),
             "Lean slice artifacts must expose owned-definition uniqueness as a proof obligation"
         );
+    }
+
+    fn assert_business_slice_group_06(lean: &str) {
         assert!(
             lean.contains(
                 "def scenarioStreamResolves (streamName : String) : Bool := sliceStreams.any (fun stream => stream.name == streamName)"
@@ -1323,6 +1453,9 @@ mod tests {
             ),
             "Lean slice artifacts must require commands to have contract scenario coverage"
         );
+    }
+
+    fn assert_business_slice_group_07(lean: &str) {
         assert!(
             lean.contains(
                 "def automationHasContractScenario (automation : AutomationDefinition) : Bool := sliceContractScenarios.any (scenarioCoversContract \"automation\" automation.name)"
@@ -1395,6 +1528,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove command inputs have source provenance"
         );
+    }
+
+    fn assert_business_slice_group_08(lean: &str) {
         assert!(
             lean.contains(
                 "def commandInputsWithoutIssuingControlsHaveProvenance : Bool := sliceCommandDefinitions.all (fun command => command.inputs.all (commandInputWithoutIssuingControlHasProvenance command))"
@@ -1467,6 +1603,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove invocation-argument command inputs have source coordinates"
         );
+    }
+
+    fn assert_business_slice_group_09(lean: &str) {
         assert!(
             lean.contains(
                 "def bitLevelFlowCoversTarget (target : String) (datum : String) : Bool := sliceBitLevelDataFlows.any (fun flow => flow.target == target && flow.datum == datum && flow.sourceKind.isEmpty == false && flow.source.isEmpty == false && flow.transformationSemantics.isEmpty == false && flow.bitEncoding.isEmpty == false)"
@@ -1539,6 +1678,9 @@ mod tests {
             ),
             "Lean slice artifacts must expose scenario error-reference declaration as a proof obligation"
         );
+    }
+
+    fn assert_business_slice_group_10(lean: &str) {
         assert!(
             lean.contains(
                 "def singletonCommandDeclaresRepeatBehavior (command : CommandDefinition) : Bool := command.singleton == false || allowedSingletonRepeatBehaviors.contains command.repeatBehavior"
@@ -1611,6 +1753,9 @@ mod tests {
             ),
             "Lean slice artifacts must expose external boundary payload provenance as a proof obligation"
         );
+    }
+
+    fn assert_business_slice_group_11(lean: &str) {
         assert!(
             lean.contains(
                 "def translationTargetsKnownCommand (translation : TranslationDefinition) : Bool := sliceCommandNames.contains translation.commandName || sliceReferencedCommandNames.contains translation.commandName || sliceCommandDefinitions.any (fun command => command.name == translation.commandName)"
@@ -1683,6 +1828,9 @@ mod tests {
             ),
             "Lean slice artifacts must encode causal board connection shapes"
         );
+    }
+
+    fn assert_business_slice_group_12(lean: &str) {
         assert!(
             lean.contains(
                 "def commandEventBoardEdgeMatchesEmission (connection : BoardConnection) : Bool := connection.sourceKind != \"command\" || connection.targetKind != \"event\" || sliceCommandDefinitions.any (fun command => command.name == connection.source && (commandEmittedEventNames command).contains connection.target)"
@@ -1755,6 +1903,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove board elements use canonical lanes by kind"
         );
+    }
+
+    fn assert_business_slice_group_13(lean: &str) {
         assert!(
             lean.contains(
                 "def boardElementsReferenceDeclarations : Bool := sliceBoardElements.all boardElementReferencesDeclaration"
@@ -1827,6 +1978,9 @@ mod tests {
             ),
             "Lean slice artifacts must reject read-model event attribute sources"
         );
+    }
+
+    fn assert_business_slice_group_14(lean: &str) {
         assert!(
             lean.contains(
                 "def eventAttributeHasProvenance (eventAttribute : EventAttribute) : Bool := eventAttribute.name.isEmpty == false && eventAttribute.sourceKind.isEmpty == false && eventAttribute.sourceName.isEmpty == false && eventAttribute.provenanceDescription.isEmpty == false"
@@ -1899,6 +2053,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove event stream references resolve"
         );
+    }
+
+    fn assert_business_slice_group_15(lean: &str) {
         assert!(
             lean.contains(
                 "def commandEmittedEventsAreKnown : Bool := sliceCommandDefinitions.all (fun command => (commandEmittedEventNames command).all commandEmittedEventIsKnown)"
@@ -1971,6 +2128,9 @@ mod tests {
             ),
             "Lean slice artifacts must require event-sourced read model fields to resolve to declared event attributes"
         );
+    }
+
+    fn assert_business_slice_group_16(lean: &str) {
         assert!(
             lean.contains(
                 "def readModelFieldDerivationScenarioIsCovered (field : ReadModelField) : Bool := field.sourceKind != \"derivation\" || (field.derivationScenarioName.isEmpty == false && scenarioNameIsModeled field.derivationScenarioName)"
@@ -2043,6 +2203,9 @@ mod tests {
             ),
             "Lean slice artifacts must reject direct event-sourced displayed fields"
         );
+    }
+
+    fn assert_business_slice_group_17(lean: &str) {
         assert!(
             lean.contains(
                 "def viewFieldHasProvenance (field : ViewField) : Bool := field.name.isEmpty == false && field.sourceKind.isEmpty == false && field.provenanceDescription.isEmpty == false && field.bitEncoding.isEmpty == false"
@@ -2115,6 +2278,9 @@ mod tests {
             ),
             "Lean slice artifacts must require displayed fields to use declared sketch tokens"
         );
+    }
+
+    fn assert_business_slice_group_18(lean: &str) {
         assert!(
             lean.contains(
                 "def viewHasInformationSketch (view : ViewDefinition) : Bool := view.sketchTokens.isEmpty == false"
@@ -2187,6 +2353,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove every displayed field has bit-level flow semantics"
         );
+    }
+
+    fn assert_business_slice_group_19(lean: &str) {
         assert!(
             lean.contains(
                 "def externalPayloadFieldDataFlowsAreComplete : Bool := sliceExternalPayloads.all (fun payload => payload.fields.all (externalPayloadFieldHasBitLevelFlow payload))"
@@ -2259,6 +2428,9 @@ mod tests {
             ),
             "Lean slice artifacts must require controls that handle errors to use modeled recovery behavior"
         );
+    }
+
+    fn assert_business_slice_group_20(lean: &str) {
         assert!(
             lean.contains(
                 "def navigationTargetTypeIsModeled (target : NavigationTarget) : Bool := target.targetType.isEmpty || allowedNavigationTargetTypes.contains target.targetType"
@@ -2331,6 +2503,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove external-workflow navigation targets name the workflow"
         );
+    }
+
+    fn assert_business_slice_group_21(lean: &str) {
         assert!(
             lean.contains(
                 "def viewControlExternalSystemNavigationTargetsHaveContracts : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => navigationExternalSystemTargetsHaveContracts control.navigation))"
@@ -2403,6 +2578,9 @@ mod tests {
             ),
             "Lean slice artifacts must name control-input descriptions as their own proof obligation"
         );
+    }
+
+    fn assert_business_slice_group_22(lean: &str) {
         assert!(
             lean.contains(
                 "def viewControlInputsHaveDescriptions : Bool := sliceViewDefinitions.all (fun view => view.controls.all (fun control => control.inputs.all controlInputHasDescription))"
@@ -2475,6 +2653,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove state-view slices own projection paths"
         );
+    }
+
+    fn assert_business_slice_group_23(lean: &str) {
         assert!(
             lean.contains(
                 "def stateViewSlicesRepresentSingleViewProjectionBoundary : Bool := sliceKind != SliceKindName.stateView || (sliceViewDefinitions.length == 1 && sliceReadModelDefinitions.isEmpty == false)"
@@ -2545,6 +2726,9 @@ mod tests {
             ),
             "Lean slice artifacts must require state-change slices to model one command-level behavior"
         );
+    }
+
+    fn assert_business_slice_group_24(lean: &str) {
         assert!(
             lean.contains(
                 "def sliceRepresentsSmallestUsefulBehaviorBoundary : Bool := sliceRepresentsOneCoherentModelUnit && stateViewSlicesRepresentSingleViewProjectionBoundary && stateChangeSlicesRepresentSingleCommandBoundary && automationSlicesRepresentOneReaction && translationSlicesDeclareExternalContracts"
@@ -2617,6 +2801,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove acceptance scenarios remain user-facing"
         );
+    }
+
+    fn assert_business_slice_group_25(lean: &str) {
         assert!(
             lean.contains(
                 "theorem stateViewReadModelsHaveProjectorContractsIsStable : stateViewReadModelsHaveProjectorContracts = true := by native_decide"
@@ -2689,6 +2876,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove current command-local errors have modeled recovery"
         );
+    }
+
+    fn assert_business_slice_group_26(lean: &str) {
         assert!(
             lean.contains(
                 "theorem commandErrorsHaveScenarioCoverageIsStable : commandErrorsHaveScenarioCoverage = true := by native_decide"
@@ -2761,6 +2951,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove current board lane inventory is canonical"
         );
+    }
+
+    fn assert_business_slice_group_27(lean: &str) {
         assert!(
             lean.contains("theorem boardElementsUseCanonicalLanesIsStable : boardElementsUseCanonicalLanes = true := by native_decide"),
             "Lean slice artifacts must prove current board elements use canonical lanes"
@@ -2809,6 +3002,9 @@ mod tests {
             lean.contains("theorem commandsHaveIncomingTriggersIsStable : commandsHaveIncomingTriggers = true := by native_decide"),
             "Lean slice artifacts must prove current commands have incoming triggers"
         );
+    }
+
+    fn assert_business_slice_group_28(lean: &str) {
         assert!(
             lean.contains("theorem mainPathBoardHasNoDisconnectedIslandsIsStable : mainPathBoardHasNoDisconnectedIslands = true := by native_decide"),
             "Lean slice artifacts must prove current main-path boards have no disconnected islands"
@@ -2879,6 +3075,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove current event attribute source details are complete"
         );
+    }
+
+    fn assert_business_slice_group_29(lean: &str) {
         assert!(
             lean.contains(
                 "theorem storedEventFactsTraceToOriginalSourcesIsStable : storedEventFactsTraceToOriginalSources = true := by native_decide"
@@ -2951,6 +3150,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove current view fields resolve to declared read model fields"
         );
+    }
+
+    fn assert_business_slice_group_30(lean: &str) {
         assert!(
             lean.contains(
                 "theorem displayedDataTraceToOriginalProvenanceIsStable : displayedDataTraceToOriginalProvenance = true := by native_decide"
@@ -3023,6 +3225,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove current control inputs have descriptions"
         );
+    }
+
+    fn assert_business_slice_group_31(lean: &str) {
         assert!(
             lean.contains(
                 "theorem viewControlSessionInputsHaveDescriptionsIsStable : viewControlSessionInputsHaveDescriptions = true := by native_decide"
@@ -3095,6 +3300,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove current state-change slices own commands"
         );
+    }
+
+    fn assert_business_slice_group_32(lean: &str) {
         assert!(
             lean.contains(
                 "theorem stateChangeSlicesOwnEventsIsStable : stateChangeSlicesOwnEvents = true := by\n  native_decide"
@@ -3167,6 +3375,9 @@ mod tests {
             ),
             "Lean slice artifacts must prove current navigation controls declare navigation types"
         );
+    }
+
+    fn assert_business_slice_group_33(lean: &str) {
         assert!(
             lean.contains(
                 "theorem viewControlModeledViewNavigationTargetsResolveIsStable : viewControlModeledViewNavigationTargetsResolve = true := by native_decide"
@@ -3192,7 +3403,5 @@ mod tests {
             "Lean slice artifacts must prove current navigation targets are complete"
         );
         assert!(lean.contains("theorem sliceIdentityIsStable"));
-
-        Ok(())
     }
 }

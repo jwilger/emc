@@ -30,11 +30,16 @@ use crate::core::formal_slice_facts::{
 use crate::core::modeling_enums::MODELING_ENUMS;
 use crate::core::slice::NewSlice;
 use crate::core::types::{
-    CommandInputSourceKind, ReadModelFieldSourceKind, SingletonRepeatBehavior,
-    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
-    WorkflowOwnedDefinitionRecord, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
-    WorkflowTransitionKind,
+    CommandInputSourceDescription, CommandInputSourceKind, CommandName, DatumName,
+    EventAttributeName, EventAttributeSourceField, EventAttributeSourceKind,
+    EventAttributeSourceName, EventName, GeneratedEventAttributeSourceKind, ModelDescription,
+    NavigationTargetName, ProvenanceDescription, ReadModelFieldSourceKind, SingletonRepeatBehavior,
+    SliceSlug, SourceChainHop, StreamName, TransitionTriggerName, WorkflowCommandErrorRecord,
+    WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
+    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceNavigationEndpoints,
+    WorkflowTransitionEvidenceRecord, WorkflowTransitionKind, WorkflowTransitionSourceEvidenceText,
+    WorkflowTransitionTargetEvidenceText, WorkflowViewRole,
 };
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
@@ -71,9 +76,10 @@ use crate::shell::{ShellError, interpret_collect_reports};
 pub(crate) fn serve_stdio() -> Result<(), ShellError> {
     let stdin = io::stdin();
     stdin.lock().lines().try_for_each(|line| {
-        line.map_err(|error| ShellError::message(error.to_string()))
-            .and_then(|line| handle_input_line(&line))
-            .and_then(|response| response.map_or(Ok(()), write_response))
+        let response = line
+            .map_err(|error| ShellError::message(error.to_string()))
+            .and_then(|line| handle_input_line(&line))?;
+        response.map_or(Ok(()), |response| write_response(&response))
     })
 }
 
@@ -106,9 +112,8 @@ pub(crate) fn serve_http(
         handle_http_stream(stream, &authority, &auth_policy)
     } else {
         listener.incoming().try_for_each(|stream| {
-            stream
-                .map_err(|error| ShellError::message(error.to_string()))
-                .and_then(|stream| handle_http_stream(stream, &authority, &auth_policy))
+            let stream = stream.map_err(|error| ShellError::message(error.to_string()))?;
+            handle_http_stream(stream, &authority, &auth_policy)
         })
     }
 }
@@ -149,7 +154,7 @@ fn handle_http_stream(
 ) -> Result<(), ShellError> {
     let mut reader = BufReader::new(stream);
     let request = read_http_request(&mut reader)?;
-    let response = http_response_for_request(request, authority, auth_policy)?;
+    let response = http_response_for_request(&request, authority, auth_policy)?;
     let mut stream = reader.into_inner();
     stream
         .write_all(response.as_bytes())
@@ -227,7 +232,7 @@ fn read_http_request(reader: &mut BufReader<TcpStream>) -> Result<HttpRequest, S
 }
 
 fn http_response_for_request(
-    request: HttpRequest,
+    request: &HttpRequest,
     authority: &str,
     auth_policy: &AuthPolicy<'_>,
 ) -> Result<String, ShellError> {
@@ -314,8 +319,8 @@ fn handle_request(request: &Value) -> Result<Option<Value>, ShellError> {
     };
 
     match request.get("method").and_then(Value::as_str) {
-        Some("initialize") => Ok(Some(success_response(id, initialize_result(request)?))),
-        Some("tools/list") => Ok(Some(success_response(id, tools_list_result()?))),
+        Some("initialize") => Ok(Some(success_response(id, &initialize_result(request)?))),
+        Some("tools/list") => Ok(Some(success_response(id, &tools_list_result()?))),
         Some("tools/call") => tool_call_response(id, request),
         Some(method) => Ok(Some(error_response(
             id,
@@ -337,7 +342,13 @@ fn initialize_result(request: &Value) -> Result<Value, ShellError> {
         InitializeResult::new(capabilities)
             .with_server_info(Implementation::new("emc", env!("CARGO_PKG_VERSION"))),
     )?;
-    result["protocolVersion"] = Value::String(initialize_protocol_version(request).to_owned());
+    result
+        .as_object_mut()
+        .ok_or_else(|| ShellError::message("MCP initialize result is not a JSON object"))?
+        .insert(
+            "protocolVersion".to_owned(),
+            Value::String(initialize_protocol_version(request).to_owned()),
+        );
     Ok(result)
 }
 
@@ -351,7 +362,20 @@ fn initialize_protocol_version(request: &Value) -> &str {
 }
 
 fn tools_list_result() -> Result<Value, ShellError> {
-    mcp_model_value(ListToolsResult::with_all_items(vec![
+    let mut tools = Vec::new();
+    tools.extend(project_lifecycle_tools());
+    tools.extend(project_query_tools());
+    tools.extend(project_status_tools());
+    tools.extend(workflow_composition_tools());
+    tools.extend(workflow_evidence_tools());
+    tools.extend(slice_structure_tools());
+    tools.extend(slice_definition_tools());
+    tools.extend(model_mutation_tools());
+    mcp_model_value(ListToolsResult::with_all_items(tools))
+}
+
+fn project_lifecycle_tools() -> Vec<Tool> {
+    vec![
         Tool::new(
             "init_project",
             "Initialize an EMC project layout and root formal artifacts.",
@@ -393,6 +417,11 @@ fn tools_list_result() -> Result<Value, ShellError> {
                     "additionalProperties": false
             })),
         ),
+    ]
+}
+
+fn project_query_tools() -> Vec<Tool> {
+    vec![
         Tool::new(
             "list_conflicts",
             "List unresolved exported event conflicts.",
@@ -447,6 +476,11 @@ fn tools_list_result() -> Result<Value, ShellError> {
                     "additionalProperties": false
             })),
         ),
+    ]
+}
+
+fn project_status_tools() -> Vec<Tool> {
+    vec![
         Tool::new(
             "check_project",
             "Check required project artifacts and generated model synchronization.",
@@ -512,6 +546,11 @@ fn tools_list_result() -> Result<Value, ShellError> {
                     "additionalProperties": false
             })),
         ),
+    ]
+}
+
+fn workflow_composition_tools() -> Vec<Tool> {
+    vec![
         Tool::new(
             "add_workflow",
             "Add a business workflow and regenerate synchronized model artifacts.",
@@ -578,834 +617,970 @@ fn tools_list_result() -> Result<Value, ShellError> {
                     "additionalProperties": false
             })),
         ),
-        Tool::new(
-            "add_workflow_owned_definition",
-            "Add a workflow composition ownership fact directly to Lean4 and Quint workflow artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "workflow": {
-                            "type": "string"
-                        },
-                        "source_slice": {
-                            "type": "string"
-                        },
-                        "definition_kind": {
-                            "type": "string"
-                        },
-                        "definition_name": {
-                            "type": "string"
-                        },
-                        "definition_stream": {
-                            "type": "string"
-                        },
-                        "source_provenance": {
-                            "type": "string"
-                        },
-                        "event_participation": {
-                            "type": "string"
-                        },
-                        "view_role": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["workflow", "source_slice", "definition_kind", "definition_name"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_workflow_transition_evidence",
-            "Add workflow transition legality evidence directly to Lean4 and Quint workflow artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "workflow": {
-                            "type": "string"
-                        },
-                        "from": {
-                            "type": "string"
-                        },
-                        "to": {
-                            "type": "string"
-                        },
-                        "via": {
-                            "type": "string"
-                        },
-                        "name": {
-                            "type": "string"
-                        },
-                        "source_control": {
-                            "type": "string",
-                            "description": "Required when via is navigation; source-slice-owned control that initiates navigation."
-                        },
-                        "target_view": {
-                            "type": "string",
-                            "description": "Required when via is navigation; target-slice-owned entry view reached by navigation."
-                        },
-                        "source_evidence": {
-                            "type": "string"
-                        },
-                        "target_evidence": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["workflow", "from", "to", "via", "name", "source_evidence", "target_evidence"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "require_workflow_entry_lifecycle_coverage",
-            "Mark a workflow as requiring formal application-entry lifecycle coverage in Lean4 and Quint.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "workflow": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["workflow"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_workflow_entry_lifecycle_state",
-            "Add formal application-entry lifecycle state coverage evidence directly to Lean4 and Quint workflow artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "workflow": {
-                            "type": "string"
-                        },
-                        "state": {
-                            "type": "string"
-                        },
-                        "step": {
-                            "type": "string"
-                        },
-                        "evidence": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["workflow", "state", "step", "evidence"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_slice",
-            "Add a business slice to a workflow composition.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "workflow": {
-                            "type": "string"
-                        },
-                        "slug": {
-                            "type": "string"
-                        },
-                        "name": {
-                            "type": "string"
-                        },
-                        "type": {
-                            "type": "string"
-                        },
-                        "description": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["workflow", "slug", "name", "type", "description"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_slice_scenario",
-            "Add an acceptance or contract GWT scenario directly to Lean4 and Quint slice artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slice": {
-                            "type": "string"
-                        },
-                        "kind": {
-                            "type": "string",
-                            "enum": ["acceptance", "contract"]
-                        },
-                        "name": {
-                            "type": "string"
-                        },
-                        "given": {
-                            "type": "string"
-                        },
-                        "when": {
-                            "type": "string"
-                        },
-                        "then": {
-                            "type": "string"
-                        },
-                        "contract_kind": {
-                            "type": "string"
-                        },
-                        "covered_definition": {
-                            "type": "string"
-                        },
-                        "read_streams": {
-                            "type": "string"
-                        },
-                        "written_streams": {
-                            "type": "string"
-                        },
-                        "error_references": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slice", "kind", "name", "given", "when", "then"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_bit_level_data_flow",
-            "Add source, transformation, target, and bit-encoding semantics directly to Lean4 and Quint slice artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slice": {
-                            "type": "string"
-                        },
-                        "datum": {
-                            "type": "string"
-                        },
-                        "source": {
-                            "type": "string"
-                        },
-                        "source_kind": {
-                            "type": "string"
-                        },
-                        "transformation": {
-                            "type": "string"
-                        },
-                        "target": {
-                            "type": "string"
-                        },
-                        "bit_encoding": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slice", "datum", "source", "source_kind", "transformation", "target", "bit_encoding"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_board_element",
-            "Add a board element causal-shape fact directly to Lean4 and Quint slice artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slice": {
-                            "type": "string"
-                        },
-                        "name": {
-                            "type": "string"
-                        },
-                        "kind": {
-                            "type": "string"
-                        },
-                        "lane": {
-                            "type": "string"
-                        },
-                        "declared_name": {
-                            "type": "string"
-                        },
-                        "main_path": {
-                            "type": "boolean"
-                        }
-                    },
-                    "required": ["slice", "name", "kind", "lane", "declared_name", "main_path"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_board_connection",
-            "Add a board connection causal-shape fact directly to Lean4 and Quint slice artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slice": {
-                            "type": "string"
-                        },
-                        "source": {
-                            "type": "string"
-                        },
-                        "source_kind": {
-                            "type": "string"
-                        },
-                        "target": {
-                            "type": "string"
-                        },
-                        "target_kind": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slice", "source", "source_kind", "target", "target_kind"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_command_definition",
-            "Add a command, input provenance, and emitted events directly to Lean4 and Quint slice artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slice": {
-                            "type": "string"
-                        },
-                        "name": {
-                            "type": "string"
-                        },
-                        "input": {
-                            "type": "string"
-                        },
-                        "input_source": {
-                            "type": "string"
-                        },
-                        "input_description": {
-                            "type": "string"
-                        },
-                        "input_provenance": {
-                            "type": "string"
-                        },
-                        "emits": {
-                            "type": "string"
-                        },
-                        "observes": {
-                            "type": "string"
-                        },
-                        "source_event": {
-                            "type": "string"
-                        },
-                        "source_attribute": {
-                            "type": "string"
-                        },
-                        "source_payload": {
-                            "type": "string"
-                        },
-                        "source_name": {
-                            "type": "string"
-                        },
-                        "source_session": {
-                            "type": "string"
-                        },
-                        "source_argument": {
-                            "type": "string"
-                        },
-                        "source_field": {
-                            "type": "string"
-                        },
-                        "singleton": {
-                            "type": "boolean"
-                        },
-                        "repeat_behavior": {
-                            "type": "string"
-                        },
-                        "error": {
-                            "type": "string"
-                        },
-                        "error_scenario": {
-                            "type": "string"
-                        },
-                        "error_recovery": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slice", "name", "input", "input_source", "input_description", "input_provenance", "emits"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_automation_definition",
-            "Add an automation trigger, issued command, handled errors, and reaction semantics directly to Lean4 and Quint slice artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slice": {
-                            "type": "string"
-                        },
-                        "name": {
-                            "type": "string"
-                        },
-                        "trigger": {
-                            "type": "string"
-                        },
-                        "command": {
-                            "type": "string"
-                        },
-                        "handled_errors": {
-                            "type": "string"
-                        },
-                        "reaction": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slice", "name", "trigger", "command", "handled_errors", "reaction"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_translation_definition",
-            "Add a translation external event, payload contract, and target command directly to Lean4 and Quint slice artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slice": {
-                            "type": "string"
-                        },
-                        "name": {
-                            "type": "string"
-                        },
-                        "external_event": {
-                            "type": "string"
-                        },
-                        "payload_contract": {
-                            "type": "string"
-                        },
-                        "command": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slice", "name", "external_event", "payload_contract", "command"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_external_payload_definition",
-            "Add an external payload field contract directly to Lean4 and Quint slice artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slice": {
-                            "type": "string"
-                        },
-                        "name": {
-                            "type": "string"
-                        },
-                        "field": {
-                            "type": "string"
-                        },
-                        "field_provenance": {
-                            "type": "string"
-                        },
-                        "bit_encoding": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slice", "name", "field", "field_provenance", "bit_encoding"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_event_definition",
-            "Add an event, stream, attribute source, and provenance directly to Lean4 and Quint slice artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slice": {
-                            "type": "string"
-                        },
-                        "name": {
-                            "type": "string"
-                        },
-                        "stream": {
-                            "type": "string"
-                        },
-                        "attribute": {
-                            "type": "string"
-                        },
-                        "attribute_source": {
-                            "type": "string"
-                        },
-                        "attribute_source_name": {
-                            "type": "string"
-                        },
-                        "attribute_source_field": {
-                            "type": "string"
-                        },
-                        "generated_source_kind": {
-                            "type": "string"
-                        },
-                        "attribute_provenance": {
-                            "type": "string"
-                        },
-                        "observed": {
-                            "type": "boolean"
-                        },
-                        "shared": {
-                            "type": "boolean"
-                        }
-                    },
-                    "required": ["slice", "name", "stream", "attribute", "attribute_source", "attribute_source_name", "attribute_source_field", "attribute_provenance"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_outcome_definition",
-            "Add an outcome label and backing event set directly to Lean4 and Quint slice artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slice": {
-                            "type": "string"
-                        },
-                        "label": {
-                            "type": "string"
-                        },
-                        "events": {
-                            "type": "string"
-                        },
-                        "externally_relevant": {
-                            "type": "boolean"
-                        }
-                    },
-                    "required": ["slice", "label", "events", "externally_relevant"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_read_model_definition",
-            "Add a read model, field source, and field provenance directly to Lean4 and Quint slice artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slice": {
-                            "type": "string"
-                        },
-                        "name": {
-                            "type": "string"
-                        },
-                        "field": {
-                            "type": "string"
-                        },
-                        "field_source": {
-                            "type": "string"
-                        },
-                        "source_event": {
-                            "type": "string"
-                        },
-                        "source_attribute": {
-                            "type": "string"
-                        },
-                        "derivation_rule": {
-                            "type": "string"
-                        },
-                        "derivation_source_fields": {
-                            "type": "string"
-                        },
-                        "derivation_scenario": {
-                            "type": "string"
-                        },
-                        "absence_event": {
-                            "type": "string"
-                        },
-                        "absence_scenario": {
-                            "type": "string"
-                        },
-                        "field_provenance": {
-                            "type": "string"
-                        },
-                        "transitive": {
-                            "type": "boolean"
-                        },
-                        "relationship_fields": {
-                            "type": "string"
-                        },
-                        "transitive_rule": {
-                            "type": "string"
-                        },
-                        "example_scenario": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slice", "name", "field", "field_source", "field_provenance"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "add_view_definition",
-            "Add a view field plus command control, input provenance, error handling, and navigation directly to Lean4 and Quint slice artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slice": {
-                            "type": "string"
-                        },
-                        "name": {
-                            "type": "string"
-                        },
-                        "read_model": {
-                            "type": "string"
-                        },
-                        "field": {
-                            "type": "string"
-                        },
-                        "source_field": {
-                            "type": "string"
-                        },
-                        "sketch_token": {
-                            "type": "string"
-                        },
-                        "field_provenance": {
-                            "type": "string"
-                        },
-                        "bit_encoding": {
-                            "type": "string"
-                        },
-                        "control": {
-                            "type": "string"
-                        },
-                        "control_command": {
-                            "type": "string"
-                        },
-                        "control_input": {
-                            "type": "string"
-                        },
-                        "control_input_source": {
-                            "type": "string"
-                        },
-                        "control_input_description": {
-                            "type": "string"
-                        },
-                        "control_input_sketch_token": {
-                            "type": "string"
-                        },
-                        "control_input_visible": {
-                            "type": "boolean"
-                        },
-                        "control_input_decision": {
-                            "type": "boolean"
-                        },
-                        "handled_errors": {
-                            "type": "string"
-                        },
-                        "recovery_behavior": {
-                            "type": "string"
-                        },
-                        "control_sketch_token": {
-                            "type": "string"
-                        },
-                        "navigation_type": {
-                            "type": "string"
-                        },
-                        "navigation_target": {
-                            "type": "string"
-                        },
-                        "local_states": {
-                            "type": "string"
-                        },
-                        "filters": {
-                            "type": "string"
-                        },
-                        "external_workflow": {
-                            "type": "string"
-                        },
-                        "external_system": {
-                            "type": "string"
-                        },
-                        "handoff_contract": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slice", "name", "read_model", "field", "source_field", "sketch_token", "field_provenance", "bit_encoding", "control", "control_command", "control_input", "control_input_source", "control_input_description", "control_input_sketch_token", "control_input_visible", "control_input_decision", "handled_errors", "recovery_behavior", "control_sketch_token", "navigation_type", "navigation_target"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "update_workflow",
-            "Update a business workflow and regenerate synchronized model artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slug": {
-                            "type": "string"
-                        },
-                        "description": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slug", "description"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "update_workflow_name",
-            "Update a business workflow name and regenerate synchronized model artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slug": {
-                            "type": "string"
-                        },
-                        "name": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slug", "name"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "update_slice",
-            "Update a business slice and regenerate synchronized model artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slug": {
-                            "type": "string"
-                        },
-                        "description": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slug", "description"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "update_slice_kind",
-            "Update a business slice kind and regenerate synchronized model artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slug": {
-                            "type": "string"
-                        },
-                        "type": {
-                            "type": "string",
-                            "enum": ["state_view", "state_change", "translation", "automation"]
-                        }
-                    },
-                    "required": ["slug", "type"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "update_slice_name",
-            "Update a business slice name and regenerate synchronized model artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slug": {
-                            "type": "string"
-                        },
-                        "name": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slug", "name"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "remove_slice",
-            "Remove a business slice and regenerate synchronized model artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slug": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slug"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "remove_workflow",
-            "Remove a business workflow and its owned slices, then regenerate synchronized model artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "slug": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["slug"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "connect_workflow",
-            "Connect workflow steps with a transition and regenerate synchronized model artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "workflow": {
-                            "type": "string"
-                        },
-                        "from": {
-                            "type": "string"
-                        },
-                        "to": {
-                            "type": "string"
-                        },
-                        "to_workflow": {
-                            "type": "string"
-                        },
-                        "via": {
-                            "type": "string",
-                            "enum": ["command", "event", "navigation", "external_trigger", "outcome"]
-                        },
-                        "name": {
-                            "type": "string"
-                        },
-                        "source_control": {
-                            "type": "string",
-                            "description": "Required when via is navigation; source-slice-owned control that initiates navigation."
-                        },
-                        "target_view": {
-                            "type": "string",
-                            "description": "Required when via is navigation; target-slice-owned entry view reached by navigation."
-                        },
-                        "reason": {
-                            "type": "string"
-                        },
-                        "payload_contract": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["workflow", "from", "via", "name"],
-                    "additionalProperties": false
-            })),
-        ),
-        Tool::new(
-            "remove_transition",
-            "Remove a workflow transition and regenerate synchronized model artifacts.",
-            schema_object(json!({
-                    "type": "object",
-                    "properties": {
-                        "workflow": {
-                            "type": "string"
-                        },
-                        "from": {
-                            "type": "string"
-                        },
-                        "to": {
-                            "type": "string"
-                        },
-                        "to_workflow": {
-                            "type": "string"
-                        },
-                        "via": {
-                            "type": "string",
-                            "enum": ["command", "event", "navigation", "external_trigger", "outcome"]
-                        },
-                        "name": {
-                            "type": "string"
-                        }
-                    },
-                    "required": ["workflow", "from", "via", "name"],
-                    "additionalProperties": false
-            })),
-        ),
-    ]))
+    ]
 }
 
+fn workflow_evidence_tools() -> Vec<Tool> {
+    vec![
+        add_workflow_owned_definition_tool(),
+        add_workflow_transition_evidence_tool(),
+        require_workflow_entry_lifecycle_coverage_tool(),
+        add_workflow_entry_lifecycle_state_tool(),
+    ]
+}
+
+fn add_workflow_owned_definition_tool() -> Tool {
+    Tool::new(
+        "add_workflow_owned_definition",
+        "Add a workflow composition ownership fact directly to Lean4 and Quint workflow artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "workflow": {
+                        "type": "string"
+                    },
+                    "source_slice": {
+                        "type": "string"
+                    },
+                    "definition_kind": {
+                        "type": "string"
+                    },
+                    "definition_name": {
+                        "type": "string"
+                    },
+                    "definition_stream": {
+                        "type": "string"
+                    },
+                    "source_provenance": {
+                        "type": "string"
+                    },
+                    "event_participation": {
+                        "type": "string"
+                    },
+                    "view_role": {
+                        "type": "string"
+                    }
+                },
+                "required": ["workflow", "source_slice", "definition_kind", "definition_name"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn add_workflow_transition_evidence_tool() -> Tool {
+    Tool::new(
+        "add_workflow_transition_evidence",
+        "Add workflow transition legality evidence directly to Lean4 and Quint workflow artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "workflow": {
+                        "type": "string"
+                    },
+                    "from": {
+                        "type": "string"
+                    },
+                    "to": {
+                        "type": "string"
+                    },
+                    "via": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "source_control": {
+                        "type": "string",
+                        "description": "Required when via is navigation; source-slice-owned control that initiates navigation."
+                    },
+                    "target_view": {
+                        "type": "string",
+                        "description": "Required when via is navigation; target-slice-owned entry view reached by navigation."
+                    },
+                    "source_evidence": {
+                        "type": "string"
+                    },
+                    "target_evidence": {
+                        "type": "string"
+                    }
+                },
+                "required": ["workflow", "from", "to", "via", "name", "source_evidence", "target_evidence"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn require_workflow_entry_lifecycle_coverage_tool() -> Tool {
+    Tool::new(
+        "require_workflow_entry_lifecycle_coverage",
+        "Mark a workflow as requiring formal application-entry lifecycle coverage in Lean4 and Quint.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "workflow": {
+                        "type": "string"
+                    }
+                },
+                "required": ["workflow"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn add_workflow_entry_lifecycle_state_tool() -> Tool {
+    Tool::new(
+        "add_workflow_entry_lifecycle_state",
+        "Add formal application-entry lifecycle state coverage evidence directly to Lean4 and Quint workflow artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "workflow": {
+                        "type": "string"
+                    },
+                    "state": {
+                        "type": "string"
+                    },
+                    "step": {
+                        "type": "string"
+                    },
+                    "evidence": {
+                        "type": "string"
+                    }
+                },
+                "required": ["workflow", "state", "step", "evidence"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn slice_structure_tools() -> Vec<Tool> {
+    vec![
+        add_slice_tool(),
+        add_slice_scenario_tool(),
+        add_bit_level_data_flow_tool(),
+        add_board_element_tool(),
+        add_board_connection_tool(),
+    ]
+}
+
+fn add_slice_tool() -> Tool {
+    Tool::new(
+        "add_slice",
+        "Add a business slice to a workflow composition.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "workflow": {
+                        "type": "string"
+                    },
+                    "slug": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                },
+                "required": ["workflow", "slug", "name", "type", "description"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn add_slice_scenario_tool() -> Tool {
+    Tool::new(
+        "add_slice_scenario",
+        "Add an acceptance or contract GWT scenario directly to Lean4 and Quint slice artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slice": {
+                        "type": "string"
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": ["acceptance", "contract"]
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "given": {
+                        "type": "string"
+                    },
+                    "when": {
+                        "type": "string"
+                    },
+                    "then": {
+                        "type": "string"
+                    },
+                    "contract_kind": {
+                        "type": "string"
+                    },
+                    "covered_definition": {
+                        "type": "string"
+                    },
+                    "read_streams": {
+                        "type": "string"
+                    },
+                    "written_streams": {
+                        "type": "string"
+                    },
+                    "error_references": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slice", "kind", "name", "given", "when", "then"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn add_bit_level_data_flow_tool() -> Tool {
+    Tool::new(
+        "add_bit_level_data_flow",
+        "Add source, transformation, target, and bit-encoding semantics directly to Lean4 and Quint slice artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slice": {
+                        "type": "string"
+                    },
+                    "datum": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "type": "string"
+                    },
+                    "source_kind": {
+                        "type": "string"
+                    },
+                    "transformation": {
+                        "type": "string"
+                    },
+                    "target": {
+                        "type": "string"
+                    },
+                    "bit_encoding": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slice", "datum", "source", "source_kind", "transformation", "target", "bit_encoding"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn add_board_element_tool() -> Tool {
+    Tool::new(
+        "add_board_element",
+        "Add a board element causal-shape fact directly to Lean4 and Quint slice artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slice": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "kind": {
+                        "type": "string"
+                    },
+                    "lane": {
+                        "type": "string"
+                    },
+                    "declared_name": {
+                        "type": "string"
+                    },
+                    "main_path": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["slice", "name", "kind", "lane", "declared_name", "main_path"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn add_board_connection_tool() -> Tool {
+    Tool::new(
+        "add_board_connection",
+        "Add a board connection causal-shape fact directly to Lean4 and Quint slice artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slice": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "type": "string"
+                    },
+                    "source_kind": {
+                        "type": "string"
+                    },
+                    "target": {
+                        "type": "string"
+                    },
+                    "target_kind": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slice", "source", "source_kind", "target", "target_kind"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn slice_definition_tools() -> Vec<Tool> {
+    vec![
+        add_command_definition_tool(),
+        add_automation_definition_tool(),
+        add_translation_definition_tool(),
+        add_external_payload_definition_tool(),
+        add_event_definition_tool(),
+        add_outcome_definition_tool(),
+        add_read_model_definition_tool(),
+        add_view_definition_tool(),
+    ]
+}
+
+fn add_command_definition_tool() -> Tool {
+    Tool::new(
+        "add_command_definition",
+        "Add a command, input provenance, and emitted events directly to Lean4 and Quint slice artifacts.",
+        schema_object(add_command_definition_schema()),
+    )
+}
+
+fn add_command_definition_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "slice": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "input": {
+                "type": "string"
+            },
+            "input_source": {
+                "type": "string"
+            },
+            "input_description": {
+                "type": "string"
+            },
+            "input_provenance": {
+                "type": "string"
+            },
+            "emits": {
+                "type": "string"
+            },
+            "observes": {
+                "type": "string"
+            },
+            "source_event": {
+                "type": "string"
+            },
+            "source_attribute": {
+                "type": "string"
+            },
+            "source_payload": {
+                "type": "string"
+            },
+            "source_name": {
+                "type": "string"
+            },
+            "source_session": {
+                "type": "string"
+            },
+            "source_argument": {
+                "type": "string"
+            },
+            "source_field": {
+                "type": "string"
+            },
+            "singleton": {
+                "type": "boolean"
+            },
+            "repeat_behavior": {
+                "type": "string"
+            },
+            "error": {
+                "type": "string"
+            },
+            "error_scenario": {
+                "type": "string"
+            },
+            "error_recovery": {
+                "type": "string"
+            }
+        },
+        "required": ["slice", "name", "input", "input_source", "input_description", "input_provenance", "emits"],
+        "additionalProperties": false
+    })
+}
+
+fn add_automation_definition_tool() -> Tool {
+    Tool::new(
+        "add_automation_definition",
+        "Add an automation trigger, issued command, handled errors, and reaction semantics directly to Lean4 and Quint slice artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slice": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "trigger": {
+                        "type": "string"
+                    },
+                    "command": {
+                        "type": "string"
+                    },
+                    "handled_errors": {
+                        "type": "string"
+                    },
+                    "reaction": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slice", "name", "trigger", "command", "handled_errors", "reaction"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn add_translation_definition_tool() -> Tool {
+    Tool::new(
+        "add_translation_definition",
+        "Add a translation external event, payload contract, and target command directly to Lean4 and Quint slice artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slice": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "external_event": {
+                        "type": "string"
+                    },
+                    "payload_contract": {
+                        "type": "string"
+                    },
+                    "command": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slice", "name", "external_event", "payload_contract", "command"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn add_external_payload_definition_tool() -> Tool {
+    Tool::new(
+        "add_external_payload_definition",
+        "Add an external payload field contract directly to Lean4 and Quint slice artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slice": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "field": {
+                        "type": "string"
+                    },
+                    "field_provenance": {
+                        "type": "string"
+                    },
+                    "bit_encoding": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slice", "name", "field", "field_provenance", "bit_encoding"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn add_event_definition_tool() -> Tool {
+    Tool::new(
+        "add_event_definition",
+        "Add an event, stream, attribute source, and provenance directly to Lean4 and Quint slice artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slice": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "stream": {
+                        "type": "string"
+                    },
+                    "attribute": {
+                        "type": "string"
+                    },
+                    "attribute_source": {
+                        "type": "string"
+                    },
+                    "attribute_source_name": {
+                        "type": "string"
+                    },
+                    "attribute_source_field": {
+                        "type": "string"
+                    },
+                    "generated_source_kind": {
+                        "type": "string"
+                    },
+                    "attribute_provenance": {
+                        "type": "string"
+                    },
+                    "observed": {
+                        "type": "boolean"
+                    },
+                    "shared": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["slice", "name", "stream", "attribute", "attribute_source", "attribute_source_name", "attribute_source_field", "attribute_provenance"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn add_outcome_definition_tool() -> Tool {
+    Tool::new(
+        "add_outcome_definition",
+        "Add an outcome label and backing event set directly to Lean4 and Quint slice artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slice": {
+                        "type": "string"
+                    },
+                    "label": {
+                        "type": "string"
+                    },
+                    "events": {
+                        "type": "string"
+                    },
+                    "externally_relevant": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["slice", "label", "events", "externally_relevant"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn add_read_model_definition_tool() -> Tool {
+    Tool::new(
+        "add_read_model_definition",
+        "Add a read model, field source, and field provenance directly to Lean4 and Quint slice artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slice": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "field": {
+                        "type": "string"
+                    },
+                    "field_source": {
+                        "type": "string"
+                    },
+                    "source_event": {
+                        "type": "string"
+                    },
+                    "source_attribute": {
+                        "type": "string"
+                    },
+                    "derivation_rule": {
+                        "type": "string"
+                    },
+                    "derivation_source_fields": {
+                        "type": "string"
+                    },
+                    "derivation_scenario": {
+                        "type": "string"
+                    },
+                    "absence_event": {
+                        "type": "string"
+                    },
+                    "absence_scenario": {
+                        "type": "string"
+                    },
+                    "field_provenance": {
+                        "type": "string"
+                    },
+                    "transitive": {
+                        "type": "boolean"
+                    },
+                    "relationship_fields": {
+                        "type": "string"
+                    },
+                    "transitive_rule": {
+                        "type": "string"
+                    },
+                    "example_scenario": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slice", "name", "field", "field_source", "field_provenance"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn add_view_definition_tool() -> Tool {
+    Tool::new(
+        "add_view_definition",
+        "Add a view field plus command control, input provenance, error handling, and navigation directly to Lean4 and Quint slice artifacts.",
+        schema_object(add_view_definition_schema()),
+    )
+}
+
+fn add_view_definition_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "slice": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "read_model": {
+                "type": "string"
+            },
+            "field": {
+                "type": "string"
+            },
+            "source_field": {
+                "type": "string"
+            },
+            "sketch_token": {
+                "type": "string"
+            },
+            "field_provenance": {
+                "type": "string"
+            },
+            "bit_encoding": {
+                "type": "string"
+            },
+            "control": {
+                "type": "string"
+            },
+            "control_command": {
+                "type": "string"
+            },
+            "control_input": {
+                "type": "string"
+            },
+            "control_input_source": {
+                "type": "string"
+            },
+            "control_input_description": {
+                "type": "string"
+            },
+            "control_input_sketch_token": {
+                "type": "string"
+            },
+            "control_input_visible": {
+                "type": "boolean"
+            },
+            "control_input_decision": {
+                "type": "boolean"
+            },
+            "handled_errors": {
+                "type": "string"
+            },
+            "recovery_behavior": {
+                "type": "string"
+            },
+            "control_sketch_token": {
+                "type": "string"
+            },
+            "navigation_type": {
+                "type": "string"
+            },
+            "navigation_target": {
+                "type": "string"
+            },
+            "local_states": {
+                "type": "string"
+            },
+            "filters": {
+                "type": "string"
+            },
+            "external_workflow": {
+                "type": "string"
+            },
+            "external_system": {
+                "type": "string"
+            },
+            "handoff_contract": {
+                "type": "string"
+            }
+        },
+        "required": ["slice", "name", "read_model", "field", "source_field", "sketch_token", "field_provenance", "bit_encoding", "control", "control_command", "control_input", "control_input_source", "control_input_description", "control_input_sketch_token", "control_input_visible", "control_input_decision", "handled_errors", "recovery_behavior", "control_sketch_token", "navigation_type", "navigation_target"],
+        "additionalProperties": false
+    })
+}
+
+fn model_mutation_tools() -> Vec<Tool> {
+    vec![
+        update_workflow_tool(),
+        update_workflow_name_tool(),
+        update_slice_tool(),
+        update_slice_kind_tool(),
+        update_slice_name_tool(),
+        remove_slice_tool(),
+        remove_workflow_tool(),
+        connect_workflow_tool(),
+        remove_transition_tool(),
+    ]
+}
+
+fn update_workflow_tool() -> Tool {
+    Tool::new(
+        "update_workflow",
+        "Update a business workflow and regenerate synchronized model artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slug", "description"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn update_workflow_name_tool() -> Tool {
+    Tool::new(
+        "update_workflow_name",
+        "Update a business workflow name and regenerate synchronized model artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slug", "name"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn update_slice_tool() -> Tool {
+    Tool::new(
+        "update_slice",
+        "Update a business slice and regenerate synchronized model artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slug", "description"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn update_slice_kind_tool() -> Tool {
+    Tool::new(
+        "update_slice_kind",
+        "Update a business slice kind and regenerate synchronized model artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": ["state_view", "state_change", "translation", "automation"]
+                    }
+                },
+                "required": ["slug", "type"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn update_slice_name_tool() -> Tool {
+    Tool::new(
+        "update_slice_name",
+        "Update a business slice name and regenerate synchronized model artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slug", "name"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn remove_slice_tool() -> Tool {
+    Tool::new(
+        "remove_slice",
+        "Remove a business slice and regenerate synchronized model artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slug"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn remove_workflow_tool() -> Tool {
+    Tool::new(
+        "remove_workflow",
+        "Remove a business workflow and its owned slices, then regenerate synchronized model artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slug"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn connect_workflow_tool() -> Tool {
+    Tool::new(
+        "connect_workflow",
+        "Connect workflow steps with a transition and regenerate synchronized model artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "workflow": {
+                        "type": "string"
+                    },
+                    "from": {
+                        "type": "string"
+                    },
+                    "to": {
+                        "type": "string"
+                    },
+                    "to_workflow": {
+                        "type": "string"
+                    },
+                    "via": {
+                        "type": "string",
+                        "enum": ["command", "event", "navigation", "external_trigger", "outcome"]
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "source_control": {
+                        "type": "string",
+                        "description": "Required when via is navigation; source-slice-owned control that initiates navigation."
+                    },
+                    "target_view": {
+                        "type": "string",
+                        "description": "Required when via is navigation; target-slice-owned entry view reached by navigation."
+                    },
+                    "reason": {
+                        "type": "string"
+                    },
+                    "payload_contract": {
+                        "type": "string"
+                    }
+                },
+                "required": ["workflow", "from", "via", "name"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn remove_transition_tool() -> Tool {
+    Tool::new(
+        "remove_transition",
+        "Remove a workflow transition and regenerate synchronized model artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "workflow": {
+                        "type": "string"
+                    },
+                    "from": {
+                        "type": "string"
+                    },
+                    "to": {
+                        "type": "string"
+                    },
+                    "to_workflow": {
+                        "type": "string"
+                    },
+                    "via": {
+                        "type": "string",
+                        "enum": ["command", "event", "navigation", "external_trigger", "outcome"]
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": ["workflow", "from", "via", "name"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "return type mirrors the sibling arms of handle_request's match (which do return Err/None via ?), so the Result<Option<_>> shape is required for arm-type unification"
+)]
 fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, ShellError> {
     let Some(name) = request
         .get("params")
@@ -1419,173 +1594,9 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
         )));
     };
 
-    match name {
-        "init_project" => Ok(Some(tool_call_result_response(
-            id,
-            init_project_tool_text(request),
-        ))),
-        "list_workflows" => Ok(Some(tool_call_result_response(
-            id,
-            list_workflows_tool_text(),
-        ))),
-        "list_slices" => Ok(Some(tool_call_result_response(id, list_slices_tool_text()))),
-        "list_transitions" => Ok(Some(tool_call_result_response(
-            id,
-            list_transitions_tool_text(),
-        ))),
-        "list_conflicts" => Ok(Some(tool_call_result_response(
-            id,
-            list_conflicts_tool_text(),
-        ))),
-        "list_modeling_enums" => Ok(Some(tool_call_result_response(
-            id,
-            list_modeling_enums_tool_text(),
-        ))),
-        "resolve_conflict" => Ok(Some(tool_call_result_response(
-            id,
-            resolve_conflict_tool_text(request),
-        ))),
-        "show_workflow" => Ok(Some(tool_call_result_response(
-            id,
-            show_workflow_tool_text(request),
-        ))),
-        "show_slice" => Ok(Some(tool_call_result_response(
-            id,
-            show_slice_tool_text(request),
-        ))),
-        "check_project" => Ok(Some(tool_call_result_response(
-            id,
-            check_project_tool_text(),
-        ))),
-        "verify_project" => Ok(Some(tool_call_result_response(
-            id,
-            verify_project_tool_text(),
-        ))),
-        "review_gate" => Ok(Some(tool_call_result_response(
-            id,
-            review_gate_tool_text(request),
-        ))),
-        "record_clean_review" => Ok(Some(tool_call_result_response(
-            id,
-            record_clean_review_tool_text(request),
-        ))),
-        "add_workflow" => Ok(Some(tool_call_result_response(
-            id,
-            add_workflow_tool_text(request),
-        ))),
-        "add_workflow_outcome" => Ok(Some(tool_call_result_response(
-            id,
-            add_workflow_outcome_tool_text(request),
-        ))),
-        "add_workflow_command_error" => Ok(Some(tool_call_result_response(
-            id,
-            add_workflow_command_error_tool_text(request),
-        ))),
-        "add_workflow_owned_definition" => Ok(Some(tool_call_result_response(
-            id,
-            add_workflow_owned_definition_tool_text(request),
-        ))),
-        "add_workflow_transition_evidence" => Ok(Some(tool_call_result_response(
-            id,
-            add_workflow_transition_evidence_tool_text(request),
-        ))),
-        "require_workflow_entry_lifecycle_coverage" => Ok(Some(tool_call_result_response(
-            id,
-            require_workflow_entry_lifecycle_coverage_tool_text(request),
-        ))),
-        "add_workflow_entry_lifecycle_state" => Ok(Some(tool_call_result_response(
-            id,
-            add_workflow_entry_lifecycle_state_tool_text(request),
-        ))),
-        "add_slice" => Ok(Some(tool_call_result_response(
-            id,
-            add_slice_tool_text(request),
-        ))),
-        "add_slice_scenario" => Ok(Some(tool_call_result_response(
-            id,
-            add_slice_scenario_tool_text(request),
-        ))),
-        "add_bit_level_data_flow" => Ok(Some(tool_call_result_response(
-            id,
-            add_bit_level_data_flow_tool_text(request),
-        ))),
-        "add_board_element" => Ok(Some(tool_call_result_response(
-            id,
-            add_board_element_tool_text(request),
-        ))),
-        "add_board_connection" => Ok(Some(tool_call_result_response(
-            id,
-            add_board_connection_tool_text(request),
-        ))),
-        "add_command_definition" => Ok(Some(tool_call_result_response(
-            id,
-            add_command_definition_tool_text(request),
-        ))),
-        "add_automation_definition" => Ok(Some(tool_call_result_response(
-            id,
-            add_automation_definition_tool_text(request),
-        ))),
-        "add_translation_definition" => Ok(Some(tool_call_result_response(
-            id,
-            add_translation_definition_tool_text(request),
-        ))),
-        "add_event_definition" => Ok(Some(tool_call_result_response(
-            id,
-            add_event_definition_tool_text(request),
-        ))),
-        "add_outcome_definition" => Ok(Some(tool_call_result_response(
-            id,
-            add_outcome_definition_tool_text(request),
-        ))),
-        "add_external_payload_definition" => Ok(Some(tool_call_result_response(
-            id,
-            add_external_payload_definition_tool_text(request),
-        ))),
-        "add_read_model_definition" => Ok(Some(tool_call_result_response(
-            id,
-            add_read_model_definition_tool_text(request),
-        ))),
-        "add_view_definition" => Ok(Some(tool_call_result_response(
-            id,
-            add_view_definition_tool_text(request),
-        ))),
-        "update_workflow" => Ok(Some(tool_call_result_response(
-            id,
-            update_workflow_tool_text(request),
-        ))),
-        "update_workflow_name" => Ok(Some(tool_call_result_response(
-            id,
-            update_workflow_name_tool_text(request),
-        ))),
-        "update_slice" => Ok(Some(tool_call_result_response(
-            id,
-            update_slice_tool_text(request),
-        ))),
-        "update_slice_kind" => Ok(Some(tool_call_result_response(
-            id,
-            update_slice_kind_tool_text(request),
-        ))),
-        "update_slice_name" => Ok(Some(tool_call_result_response(
-            id,
-            update_slice_name_tool_text(request),
-        ))),
-        "remove_slice" => Ok(Some(tool_call_result_response(
-            id,
-            remove_slice_tool_text(request),
-        ))),
-        "remove_workflow" => Ok(Some(tool_call_result_response(
-            id,
-            remove_workflow_tool_text(request),
-        ))),
-        "connect_workflow" => Ok(Some(tool_call_result_response(
-            id,
-            connect_workflow_tool_text(request),
-        ))),
-        "remove_transition" => Ok(Some(tool_call_result_response(
-            id,
-            remove_transition_tool_text(request),
-        ))),
-        _ => Ok(Some(error_response(
+    match dispatch_tool_text(name, request) {
+        Some(result) => Ok(Some(tool_call_result_response(id, result))),
+        None => Ok(Some(error_response(
             id,
             -32602,
             format!("unknown EMC MCP tool {name}"),
@@ -1593,9 +1604,106 @@ fn tool_call_response(id: &Value, request: &Value) -> Result<Option<Value>, Shel
     }
 }
 
+/// Routes a tool name to its text-producing handler, returning `None` for
+/// unknown tools. Grouped by tool category so each sub-dispatcher stays small.
+fn dispatch_tool_text(name: &str, request: &Value) -> Option<Result<String, ShellError>> {
+    query_tool_text(name, request)
+        .or_else(|| status_tool_text(name, request))
+        .or_else(|| workflow_evidence_tool_text(name, request))
+        .or_else(|| slice_structure_tool_text(name, request))
+        .or_else(|| slice_definition_tool_text(name, request))
+        .or_else(|| mutation_tool_text(name, request))
+}
+
+fn query_tool_text(name: &str, request: &Value) -> Option<Result<String, ShellError>> {
+    match name {
+        "init_project" => Some(init_project_tool_text(request)),
+        "list_workflows" => Some(list_workflows_tool_text()),
+        "list_slices" => Some(list_slices_tool_text()),
+        "list_transitions" => Some(list_transitions_tool_text()),
+        "list_conflicts" => Some(list_conflicts_tool_text()),
+        "list_modeling_enums" => Some(list_modeling_enums_tool_text()),
+        "resolve_conflict" => Some(resolve_conflict_tool_text(request)),
+        "show_workflow" => Some(show_workflow_tool_text(request)),
+        "show_slice" => Some(show_slice_tool_text(request)),
+        _ => None,
+    }
+}
+
+fn status_tool_text(name: &str, request: &Value) -> Option<Result<String, ShellError>> {
+    match name {
+        "check_project" => Some(check_project_tool_text()),
+        "verify_project" => Some(verify_project_tool_text()),
+        "review_gate" => Some(review_gate_tool_text(request)),
+        "record_clean_review" => Some(record_clean_review_tool_text(request)),
+        _ => None,
+    }
+}
+
+fn workflow_evidence_tool_text(name: &str, request: &Value) -> Option<Result<String, ShellError>> {
+    match name {
+        "add_workflow" => Some(add_workflow_tool_text(request)),
+        "add_workflow_outcome" => Some(add_workflow_outcome_tool_text(request)),
+        "add_workflow_command_error" => Some(add_workflow_command_error_tool_text(request)),
+        "add_workflow_owned_definition" => Some(add_workflow_owned_definition_tool_text(request)),
+        "add_workflow_transition_evidence" => {
+            Some(add_workflow_transition_evidence_tool_text(request))
+        }
+        "require_workflow_entry_lifecycle_coverage" => {
+            Some(require_workflow_entry_lifecycle_coverage_tool_text(request))
+        }
+        "add_workflow_entry_lifecycle_state" => {
+            Some(add_workflow_entry_lifecycle_state_tool_text(request))
+        }
+        _ => None,
+    }
+}
+
+fn slice_structure_tool_text(name: &str, request: &Value) -> Option<Result<String, ShellError>> {
+    match name {
+        "add_slice" => Some(add_slice_tool_text(request)),
+        "add_slice_scenario" => Some(add_slice_scenario_tool_text(request)),
+        "add_bit_level_data_flow" => Some(add_bit_level_data_flow_tool_text(request)),
+        "add_board_element" => Some(add_board_element_tool_text(request)),
+        "add_board_connection" => Some(add_board_connection_tool_text(request)),
+        _ => None,
+    }
+}
+
+fn slice_definition_tool_text(name: &str, request: &Value) -> Option<Result<String, ShellError>> {
+    match name {
+        "add_command_definition" => Some(add_command_definition_tool_text(request)),
+        "add_automation_definition" => Some(add_automation_definition_tool_text(request)),
+        "add_translation_definition" => Some(add_translation_definition_tool_text(request)),
+        "add_event_definition" => Some(add_event_definition_tool_text(request)),
+        "add_outcome_definition" => Some(add_outcome_definition_tool_text(request)),
+        "add_external_payload_definition" => {
+            Some(add_external_payload_definition_tool_text(request))
+        }
+        "add_read_model_definition" => Some(add_read_model_definition_tool_text(request)),
+        "add_view_definition" => Some(add_view_definition_tool_text(request)),
+        _ => None,
+    }
+}
+
+fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, ShellError>> {
+    match name {
+        "update_workflow" => Some(update_workflow_tool_text(request)),
+        "update_workflow_name" => Some(update_workflow_name_tool_text(request)),
+        "update_slice" => Some(update_slice_tool_text(request)),
+        "update_slice_kind" => Some(update_slice_kind_tool_text(request)),
+        "update_slice_name" => Some(update_slice_name_tool_text(request)),
+        "remove_slice" => Some(remove_slice_tool_text(request)),
+        "remove_workflow" => Some(remove_workflow_tool_text(request)),
+        "connect_workflow" => Some(connect_workflow_tool_text(request)),
+        "remove_transition" => Some(remove_transition_tool_text(request)),
+        _ => None,
+    }
+}
+
 fn tool_call_result_response(id: &Value, result: Result<String, ShellError>) -> Value {
     match result {
-        Ok(text) => success_response(id, tool_result(text)),
+        Ok(text) => success_response(id, &tool_result(text)),
         Err(error) => error_response(id, -32000, error.to_string()),
     }
 }
@@ -1609,23 +1717,23 @@ fn init_project_tool_text(request: &Value) -> Result<String, ShellError> {
         .ok_or_else(|| ShellError::message("init_project requires name"))?;
     let name =
         parse_project_name(raw_name).map_err(|error| ShellError::message(error.to_string()))?;
-    interpret_collect_reports(command::init(name)).map(|reports| reports.join("\n"))
+    interpret_collect_reports(&command::init(&name)).map(|reports| reports.join("\n"))
 }
 
 fn list_workflows_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(command::list_workflows()).map(|reports| reports.join("\n"))
+    interpret_collect_reports(&command::list_workflows()).map(|reports| reports.join("\n"))
 }
 
 fn list_slices_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(command::list_slices()).map(|reports| reports.join("\n"))
+    interpret_collect_reports(&command::list_slices()).map(|reports| reports.join("\n"))
 }
 
 fn list_transitions_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(command::list_transitions()).map(|reports| reports.join("\n"))
+    interpret_collect_reports(&command::list_transitions()).map(|reports| reports.join("\n"))
 }
 
 fn list_conflicts_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(command::list_conflicts()).map(|reports| reports.join("\n"))
+    interpret_collect_reports(&command::list_conflicts()).map(|reports| reports.join("\n"))
 }
 
 fn list_modeling_enums_tool_text() -> Result<String, ShellError> {
@@ -1656,7 +1764,7 @@ fn resolve_conflict_tool_text(request: &Value) -> Result<String, ShellError> {
         .get("choose_event")
         .and_then(Value::as_str)
         .ok_or_else(|| ShellError::message("resolve_conflict requires choose_event"))?;
-    interpret_collect_reports(command::resolve_conflict(
+    interpret_collect_reports(&command::resolve_conflict(
         parse_event_conflict_id(conflict_id)?,
         parse_chosen_event_id(chosen_event_id)?,
     ))
@@ -1685,7 +1793,7 @@ fn show_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
         .ok_or_else(|| ShellError::message("show_workflow requires slug"))?;
     let slug =
         parse_workflow_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))?;
-    interpret_collect_reports(command::show_workflow(slug)).map(|reports| reports.join("\n"))
+    interpret_collect_reports(&command::show_workflow(slug)).map(|reports| reports.join("\n"))
 }
 
 fn show_slice_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -1697,15 +1805,15 @@ fn show_slice_tool_text(request: &Value) -> Result<String, ShellError> {
         .ok_or_else(|| ShellError::message("show_slice requires slug"))?;
     let slug =
         parse_slice_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))?;
-    interpret_collect_reports(command::show_slice(slug)).map(|reports| reports.join("\n"))
+    interpret_collect_reports(&command::show_slice(slug)).map(|reports| reports.join("\n"))
 }
 
 fn check_project_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(command::check_project()).map(|reports| reports.join("\n"))
+    interpret_collect_reports(&command::check_project()).map(|reports| reports.join("\n"))
 }
 
 fn verify_project_tool_text() -> Result<String, ShellError> {
-    interpret_collect_reports(command::verify()).map(|reports| reports.join("\n"))
+    interpret_collect_reports(&command::verify()).map(|reports| reports.join("\n"))
 }
 
 fn review_gate_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -1719,7 +1827,7 @@ fn review_gate_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_workflow_slug(raw_workflow)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(command::review_gate_for_workflow(workflow_slug))
+    interpret_collect_reports(&command::review_gate_for_workflow(workflow_slug))
         .map(|reports| reports.join("\n"))
 }
 
@@ -1751,7 +1859,7 @@ fn record_clean_review_tool_text(request: &Value) -> Result<String, ShellError> 
             parse_review_timestamp(raw_reviewed_at)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(command::record_clean_review(
+    interpret_collect_reports(&command::record_clean_review(
         workflow_slug,
         reviewer,
         reviewed_at,
@@ -1786,7 +1894,7 @@ fn add_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_model_description(raw_description)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(command::add_workflow(NewWorkflow::new(
+    interpret_collect_reports(&command::add_workflow(NewWorkflow::new(
         name,
         description,
         slug,
@@ -1828,7 +1936,7 @@ fn add_workflow_outcome_tool_text(request: &Value) -> Result<String, ShellError>
         .and_then(Value::as_bool)
         .ok_or_else(|| ShellError::message("add_workflow_outcome requires externally_relevant"))?;
 
-    interpret_collect_reports(command::add_workflow_outcome(
+    interpret_collect_reports(&command::add_workflow_outcome(
         workflow_slug,
         WorkflowOutcomeRecord::new(source_slice, label, externally_relevant),
     ))
@@ -1872,7 +1980,7 @@ fn add_workflow_command_error_tool_text(request: &Value) -> Result<String, Shell
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
 
-    interpret_collect_reports(command::add_workflow_command_error(
+    interpret_collect_reports(&command::add_workflow_command_error(
         workflow_slug,
         WorkflowCommandErrorRecord::new(source_slice, command_name, error_name),
     ))
@@ -1920,39 +2028,89 @@ fn add_workflow_owned_definition_tool_text(request: &Value) -> Result<String, Sh
             parse_workflow_owned_definition_name(raw_definition_name)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    let definition_stream = arguments
+    let definition_stream = parse_optional_owned_definition_stream(arguments)?;
+    let source_provenance = parse_optional_owned_definition_provenance(arguments)?;
+    let event_participation = parse_optional_owned_definition_event_participation(arguments)?;
+    let view_role = parse_optional_owned_definition_view_role(arguments)?;
+    let definition = build_workflow_owned_definition(
+        source_slice,
+        definition_kind,
+        definition_name,
+        definition_stream,
+        source_provenance,
+        event_participation,
+        view_role,
+    )?;
+
+    interpret_collect_reports(&command::add_workflow_owned_definition(
+        workflow_slug,
+        definition,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn parse_optional_owned_definition_stream(
+    arguments: &Value,
+) -> Result<Option<StreamName>, ShellError> {
+    arguments
         .get("definition_stream")
         .and_then(Value::as_str)
         .map(|raw_definition_stream| {
             parse_stream_name(raw_definition_stream)
                 .map_err(|error| ShellError::message(error.to_string()))
         })
-        .transpose()?;
-    let source_provenance = arguments
+        .transpose()
+}
+
+fn parse_optional_owned_definition_provenance(
+    arguments: &Value,
+) -> Result<Option<ModelDescription>, ShellError> {
+    arguments
         .get("source_provenance")
         .and_then(Value::as_str)
         .map(|raw_source_provenance| {
             parse_model_description(raw_source_provenance)
                 .map_err(|error| ShellError::message(error.to_string()))
         })
-        .transpose()?;
-    let event_participation = arguments
+        .transpose()
+}
+
+fn parse_optional_owned_definition_event_participation(
+    arguments: &Value,
+) -> Result<Option<WorkflowEventParticipation>, ShellError> {
+    arguments
         .get("event_participation")
         .and_then(Value::as_str)
         .map(|raw_event_participation| {
             parse_workflow_event_participation(raw_event_participation)
                 .map_err(|error| ShellError::message(error.to_string()))
         })
-        .transpose()?;
-    let view_role = arguments
+        .transpose()
+}
+
+fn parse_optional_owned_definition_view_role(
+    arguments: &Value,
+) -> Result<Option<WorkflowViewRole>, ShellError> {
+    arguments
         .get("view_role")
         .and_then(Value::as_str)
         .map(|raw_view_role| {
             parse_workflow_view_role(raw_view_role)
                 .map_err(|error| ShellError::message(error.to_string()))
         })
-        .transpose()?;
-    let definition = match (
+        .transpose()
+}
+
+fn build_workflow_owned_definition(
+    source_slice: WorkflowTransitionEndpoint,
+    definition_kind: WorkflowOwnedDefinitionKind,
+    definition_name: WorkflowOwnedDefinitionName,
+    definition_stream: Option<StreamName>,
+    source_provenance: Option<ModelDescription>,
+    event_participation: Option<WorkflowEventParticipation>,
+    view_role: Option<WorkflowViewRole>,
+) -> Result<WorkflowOwnedDefinitionRecord, ShellError> {
+    match (
         definition_stream,
         source_provenance,
         event_participation,
@@ -1964,8 +2122,8 @@ fn add_workflow_owned_definition_tool_text(request: &Value) -> Result<String, Sh
             definition_name,
             view_role,
         )
-        .ok_or_else(|| ShellError::message("view_role requires definition_kind view"))?,
-        (Some(definition_stream), Some(source_provenance), Some(event_participation), None) => {
+        .ok_or_else(|| ShellError::message("view_role requires definition_kind view")),
+        (Some(definition_stream), Some(source_provenance), Some(event_participation), None) => Ok(
             WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
                 source_slice,
                 definition_kind,
@@ -1973,42 +2131,32 @@ fn add_workflow_owned_definition_tool_text(request: &Value) -> Result<String, Sh
                 definition_stream,
                 source_provenance,
                 event_participation,
-            )
-        }
+            ),
+        ),
         (Some(definition_stream), Some(source_provenance), None, None) => {
-            WorkflowOwnedDefinitionRecord::new_with_event_identity(
+            Ok(WorkflowOwnedDefinitionRecord::new_with_event_identity(
                 source_slice,
                 definition_kind,
                 definition_name,
                 definition_stream,
                 source_provenance,
-            )
+            ))
         }
-        (None, None, None, None) => {
-            WorkflowOwnedDefinitionRecord::new(source_slice, definition_kind, definition_name)
-        }
-        (_, _, Some(_), _) => {
-            return Err(ShellError::message(
-                "event_participation requires definition_stream and source_provenance",
-            ));
-        }
-        (_, _, _, Some(_)) => {
-            return Err(ShellError::message(
-                "view_role cannot be combined with event identity fields",
-            ));
-        }
-        _ => {
-            return Err(ShellError::message(
-                "definition_stream and source_provenance must be provided together",
-            ));
-        }
-    };
-
-    interpret_collect_reports(command::add_workflow_owned_definition(
-        workflow_slug,
-        definition,
-    ))
-    .map(|reports| reports.join("\n"))
+        (None, None, None, None) => Ok(WorkflowOwnedDefinitionRecord::new(
+            source_slice,
+            definition_kind,
+            definition_name,
+        )),
+        (_, _, Some(_), _) => Err(ShellError::message(
+            "event_participation requires definition_stream and source_provenance",
+        )),
+        (_, _, _, Some(_)) => Err(ShellError::message(
+            "view_role cannot be combined with event identity fields",
+        )),
+        _ => Err(ShellError::message(
+            "definition_stream and source_provenance must be provided together",
+        )),
+    }
 }
 
 fn add_workflow_transition_evidence_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -2058,22 +2206,8 @@ fn add_workflow_transition_evidence_tool_text(request: &Value) -> Result<String,
             parse_transition_trigger_name(raw_trigger)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    let source_control = arguments
-        .get("source_control")
-        .and_then(Value::as_str)
-        .map(|raw_source_control| {
-            parse_transition_trigger_name(raw_source_control)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })
-        .transpose()?;
-    let target_view = arguments
-        .get("target_view")
-        .and_then(Value::as_str)
-        .map(|raw_target_view| {
-            parse_workflow_owned_definition_name(raw_target_view)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })
-        .transpose()?;
+    let source_control = parse_optional_transition_source_control(arguments)?;
+    let target_view = parse_optional_transition_target_view(arguments)?;
     let source_evidence = arguments
         .get("source_evidence")
         .and_then(Value::as_str)
@@ -2095,43 +2229,104 @@ fn add_workflow_transition_evidence_tool_text(request: &Value) -> Result<String,
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
 
-    let evidence = if kind == WorkflowTransitionKind::Navigation {
-        WorkflowTransitionEvidenceRecord::new_with_navigation_endpoints(
-            source,
-            target,
-            kind,
-            trigger,
-            WorkflowTransitionEvidenceNavigationEndpoints::new(
-                source_control.ok_or_else(|| {
-                    ShellError::message(
-                        "navigation transition evidence requires source_control owned by source slice",
-                    )
-                })?,
-                target_view.ok_or_else(|| {
-                    ShellError::message(
-                        "navigation transition evidence requires target_view owned by target slice",
-                    )
-                })?,
-            ),
-            source_evidence,
-            target_evidence,
-        )
-    } else {
-        WorkflowTransitionEvidenceRecord::new(
-            source,
-            target,
-            kind,
-            trigger,
-            source_evidence,
-            target_evidence,
-        )
-    };
+    let navigation_endpoints =
+        resolve_transition_navigation_endpoints(kind, source_control, target_view)?;
+    let evidence = build_workflow_transition_evidence(
+        source,
+        target,
+        kind,
+        trigger,
+        navigation_endpoints,
+        source_evidence,
+        target_evidence,
+    );
 
-    interpret_collect_reports(command::add_workflow_transition_evidence(
+    interpret_collect_reports(&command::add_workflow_transition_evidence(
         workflow_slug,
         evidence,
     ))
     .map(|reports| reports.join("\n"))
+}
+
+fn resolve_transition_navigation_endpoints(
+    kind: WorkflowTransitionKind,
+    source_control: Option<TransitionTriggerName>,
+    target_view: Option<WorkflowOwnedDefinitionName>,
+) -> Result<Option<WorkflowTransitionEvidenceNavigationEndpoints>, ShellError> {
+    if kind == WorkflowTransitionKind::Navigation {
+        Ok(Some(WorkflowTransitionEvidenceNavigationEndpoints::new(
+            source_control.ok_or_else(|| {
+                ShellError::message(
+                    "navigation transition evidence requires source_control owned by source slice",
+                )
+            })?,
+            target_view.ok_or_else(|| {
+                ShellError::message(
+                    "navigation transition evidence requires target_view owned by target slice",
+                )
+            })?,
+        )))
+    } else {
+        Ok(None)
+    }
+}
+
+fn parse_optional_transition_source_control(
+    arguments: &Value,
+) -> Result<Option<TransitionTriggerName>, ShellError> {
+    arguments
+        .get("source_control")
+        .and_then(Value::as_str)
+        .map(|raw_source_control| {
+            parse_transition_trigger_name(raw_source_control)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .transpose()
+}
+
+fn parse_optional_transition_target_view(
+    arguments: &Value,
+) -> Result<Option<WorkflowOwnedDefinitionName>, ShellError> {
+    arguments
+        .get("target_view")
+        .and_then(Value::as_str)
+        .map(|raw_target_view| {
+            parse_workflow_owned_definition_name(raw_target_view)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })
+        .transpose()
+}
+
+fn build_workflow_transition_evidence(
+    source: WorkflowTransitionEndpoint,
+    target: WorkflowTransitionEndpoint,
+    kind: WorkflowTransitionKind,
+    trigger: TransitionTriggerName,
+    navigation_endpoints: Option<WorkflowTransitionEvidenceNavigationEndpoints>,
+    source_evidence: WorkflowTransitionSourceEvidenceText,
+    target_evidence: WorkflowTransitionTargetEvidenceText,
+) -> WorkflowTransitionEvidenceRecord {
+    match navigation_endpoints {
+        Some(navigation_endpoints) => {
+            WorkflowTransitionEvidenceRecord::new_with_navigation_endpoints(
+                source,
+                target,
+                kind,
+                trigger,
+                navigation_endpoints,
+                source_evidence,
+                target_evidence,
+            )
+        }
+        None => WorkflowTransitionEvidenceRecord::new(
+            source,
+            target,
+            kind,
+            trigger,
+            source_evidence,
+            target_evidence,
+        ),
+    }
 }
 
 fn require_workflow_entry_lifecycle_coverage_tool_text(
@@ -2154,7 +2349,7 @@ fn require_workflow_entry_lifecycle_coverage_tool_text(
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
 
-    interpret_collect_reports(command::require_workflow_entry_lifecycle_coverage(
+    interpret_collect_reports(&command::require_workflow_entry_lifecycle_coverage(
         workflow_slug,
     ))
     .map(|reports| reports.join("\n"))
@@ -2200,7 +2395,7 @@ fn add_workflow_entry_lifecycle_state_tool_text(request: &Value) -> Result<Strin
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
 
-    interpret_collect_reports(command::add_workflow_entry_lifecycle_state(
+    interpret_collect_reports(&command::add_workflow_entry_lifecycle_state(
         workflow_slug,
         WorkflowEntryLifecycleStateRecord::new(state, step, evidence),
     ))
@@ -2249,7 +2444,7 @@ fn add_slice_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_model_description(raw_description)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(command::add_slice(NewSlice::new(
+    interpret_collect_reports(&command::add_slice(NewSlice::new(
         workflow_slug,
         slice_slug,
         slice_name,
@@ -2352,7 +2547,7 @@ fn add_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
     let scenario = apply_optional_scenario_streams(arguments, scenario)?;
     let scenario = apply_optional_scenario_error_references(arguments, scenario)?;
 
-    interpret_collect_reports(command::add_slice_scenario(scenario))
+    interpret_collect_reports(&command::add_slice_scenario(scenario))
         .map(|reports| reports.join("\n"))
 }
 
@@ -2454,7 +2649,7 @@ fn add_bit_level_data_flow_tool_text(request: &Value) -> Result<String, ShellErr
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
 
-    interpret_collect_reports(command::add_bit_level_data_flow(NewBitLevelDataFlow::new(
+    interpret_collect_reports(&command::add_bit_level_data_flow(NewBitLevelDataFlow::new(
         slice_slug,
         datum,
         source_kind,
@@ -2514,7 +2709,7 @@ fn add_board_element_tool_text(request: &Value) -> Result<String, ShellError> {
         .and_then(Value::as_bool)
         .ok_or_else(|| ShellError::message("add_board_element requires main_path"))?;
 
-    interpret_collect_reports(command::add_board_element(NewBoardElement::new(
+    interpret_collect_reports(&command::add_board_element(NewBoardElement::new(
         slice_slug,
         name,
         kind,
@@ -2570,7 +2765,7 @@ fn add_board_connection_tool_text(request: &Value) -> Result<String, ShellError>
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
 
-    interpret_collect_reports(command::add_board_connection(NewBoardConnection::new(
+    interpret_collect_reports(&command::add_board_connection(NewBoardConnection::new(
         slice_slug,
         source,
         source_kind,
@@ -2580,11 +2775,73 @@ fn add_board_connection_tool_text(request: &Value) -> Result<String, ShellError>
     .map(|reports| reports.join("\n"))
 }
 
+/// Required scalar fields for a command definition, parsed from MCP arguments.
+struct CommandDefinitionInputs {
+    slice_slug: SliceSlug,
+    command_name: CommandName,
+    input_name: DatumName,
+    input_source: CommandInputSourceKind,
+    input_description: CommandInputSourceDescription,
+    provenance_chain: Vec<SourceChainHop>,
+    emitted_events: Vec<EventName>,
+}
+
+/// Optional source-reference fields that disambiguate a command's input source.
+struct CommandInputSourceRefs {
+    event: Option<EventName>,
+    attribute: Option<EventAttributeName>,
+    payload: Option<EventAttributeSourceName>,
+    name: Option<EventAttributeSourceName>,
+    session: Option<EventAttributeSourceName>,
+    argument: Option<EventAttributeSourceName>,
+    field: Option<EventAttributeSourceField>,
+}
+
 fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellError> {
     let arguments = request
         .get("params")
         .and_then(|params| params.get("arguments"))
         .ok_or_else(|| ShellError::message("add_command_definition requires arguments"))?;
+    let inputs = parse_command_definition_inputs(arguments)?;
+    let observed_streams = arguments
+        .get("observes")
+        .and_then(Value::as_str)
+        .map(parse_stream_names)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let refs = parse_command_input_source_refs(arguments)?;
+    let command_errors = parse_optional_command_errors(arguments)?;
+    let singleton_repeat_behavior = parse_optional_singleton_repeat_behavior(arguments)?;
+
+    let command_input_source = resolve_command_input_source(inputs.input_source, refs)?;
+    let command_input = NewCommandInput::new(
+        inputs.input_name,
+        command_input_source,
+        inputs.input_description,
+        CommandInputProvenanceChain::from_hops(inputs.provenance_chain),
+    );
+    let command_definition = NewCommandDefinition::new(
+        inputs.slice_slug,
+        inputs.command_name,
+        command_input,
+        EmittedEventNames::from_events(inputs.emitted_events),
+    )
+    .with_observed_streams(CommandObservedStreams::from_streams(
+        observed_streams.unwrap_or_default(),
+    ))
+    .with_errors(command_errors);
+    let command_definition = singleton_repeat_behavior
+        .map_or(command_definition.clone(), |behavior| {
+            command_definition.with_singleton_repeat_behavior(behavior)
+        });
+
+    interpret_collect_reports(&command::add_command_definition(command_definition))
+        .map(|reports| reports.join("\n"))
+}
+
+fn parse_command_definition_inputs(
+    arguments: &Value,
+) -> Result<CommandDefinitionInputs, ShellError> {
     let slice_slug = arguments
         .get("slice")
         .and_then(Value::as_str)
@@ -2637,12 +2894,20 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         .and_then(|raw_emits| {
             parse_event_names(raw_emits).map_err(|error| ShellError::message(error.to_string()))
         })?;
-    let observed_streams = arguments
-        .get("observes")
-        .and_then(Value::as_str)
-        .map(parse_stream_names)
-        .transpose()
-        .map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(CommandDefinitionInputs {
+        slice_slug,
+        command_name,
+        input_name,
+        input_source,
+        input_description,
+        provenance_chain,
+        emitted_events,
+    })
+}
+
+fn parse_command_input_source_refs(
+    arguments: &Value,
+) -> Result<CommandInputSourceRefs, ShellError> {
     let source_event = arguments
         .get("source_event")
         .and_then(Value::as_str)
@@ -2685,18 +2950,30 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         .map(parse_event_attribute_source_field)
         .transpose()
         .map_err(|error| ShellError::message(error.to_string()))?;
-    let command_errors = parse_optional_command_errors(arguments)?;
+    Ok(CommandInputSourceRefs {
+        event: source_event,
+        attribute: source_attribute,
+        payload: source_payload,
+        name: source_name,
+        session: source_session,
+        argument: source_argument,
+        field: source_field,
+    })
+}
 
-    let singleton_repeat_behavior = parse_optional_singleton_repeat_behavior(arguments)?;
-    let command_input_source = match (
+fn resolve_command_input_source(
+    input_source: CommandInputSourceKind,
+    refs: CommandInputSourceRefs,
+) -> Result<CommandInputSource, ShellError> {
+    match (
         input_source,
-        source_event,
-        source_attribute,
-        source_payload,
-        source_name,
-        source_session,
-        source_argument,
-        source_field,
+        refs.event,
+        refs.attribute,
+        refs.payload,
+        refs.name,
+        refs.session,
+        refs.argument,
+        refs.field,
     ) {
         (
             CommandInputSourceKind::EventStreamState,
@@ -2707,7 +2984,7 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
             None,
             None,
             None,
-        ) => CommandInputSource::event_stream_state(event, attribute),
+        ) => Ok(CommandInputSource::event_stream_state(event, attribute)),
         (
             CommandInputSourceKind::ExternalPayload,
             None,
@@ -2717,7 +2994,7 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
             None,
             None,
             Some(field),
-        ) => CommandInputSource::external_payload(payload, field),
+        ) => Ok(CommandInputSource::external_payload(payload, field)),
         (
             CommandInputSourceKind::Generated,
             None,
@@ -2727,7 +3004,7 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
             None,
             None,
             Some(field),
-        ) => CommandInputSource::generated(source, field),
+        ) => Ok(CommandInputSource::generated(source, field)),
         (
             CommandInputSourceKind::Session,
             None,
@@ -2737,7 +3014,7 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
             Some(session),
             None,
             Some(field),
-        ) => CommandInputSource::session(session, field),
+        ) => Ok(CommandInputSource::session(session, field)),
         (
             CommandInputSourceKind::InvocationArgument,
             None,
@@ -2747,74 +3024,35 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
             None,
             Some(argument),
             Some(field),
-        ) => CommandInputSource::invocation_argument(argument, field),
+        ) => Ok(CommandInputSource::invocation_argument(argument, field)),
         (CommandInputSourceKind::Actor, None, None, None, None, None, None, None) => {
-            CommandInputSource::actor()
+            Ok(CommandInputSource::actor())
         }
-        (_, Some(_), None, None, None, None, None, None) => {
-            return Err(ShellError::message(
-                "add_command_definition requires source_attribute when source_event is provided",
-            ));
-        }
-        (_, None, Some(_), None, None, None, None, None) => {
-            return Err(ShellError::message(
-                "add_command_definition requires source_event when source_attribute is provided",
-            ));
-        }
-        (_, None, None, Some(_), None, None, None, None) => {
-            return Err(ShellError::message(
-                "add_command_definition requires source_field when source_payload is provided",
-            ));
-        }
-        (_, None, None, None, Some(_), None, None, None) => {
-            return Err(ShellError::message(
-                "add_command_definition requires source_field when source_name is provided",
-            ));
-        }
-        (_, None, None, None, None, Some(_), None, None) => {
-            return Err(ShellError::message(
-                "add_command_definition requires source_field when source_session is provided",
-            ));
-        }
-        (_, None, None, None, None, None, Some(_), None) => {
-            return Err(ShellError::message(
-                "add_command_definition requires source_field when source_argument is provided",
-            ));
-        }
-        (_, None, None, None, None, None, None, Some(_)) => {
-            return Err(ShellError::message(
-                "add_command_definition requires source_payload, source_name, source_session, or source_argument when source_field is provided",
-            ));
-        }
-        _ => {
-            return Err(ShellError::message(
-                "add_command_definition requires input_source and source reference fields to describe the same command input source",
-            ));
-        }
-    };
-    let command_input = NewCommandInput::new(
-        input_name,
-        command_input_source,
-        input_description,
-        CommandInputProvenanceChain::from_hops(provenance_chain),
-    );
-    let command_definition = NewCommandDefinition::new(
-        slice_slug,
-        command_name,
-        command_input,
-        EmittedEventNames::from_events(emitted_events),
-    )
-    .with_observed_streams(CommandObservedStreams::from_streams(
-        observed_streams.unwrap_or_default(),
-    ))
-    .with_errors(command_errors);
-    let command_definition = singleton_repeat_behavior
-        .map_or(command_definition.clone(), |behavior| {
-            command_definition.with_singleton_repeat_behavior(behavior)
-        });
-
-    interpret_collect_reports(command::add_command_definition(command_definition))
-        .map(|reports| reports.join("\n"))
+        (_, Some(_), None, None, None, None, None, None) => Err(ShellError::message(
+            "add_command_definition requires source_attribute when source_event is provided",
+        )),
+        (_, None, Some(_), None, None, None, None, None) => Err(ShellError::message(
+            "add_command_definition requires source_event when source_attribute is provided",
+        )),
+        (_, None, None, Some(_), None, None, None, None) => Err(ShellError::message(
+            "add_command_definition requires source_field when source_payload is provided",
+        )),
+        (_, None, None, None, Some(_), None, None, None) => Err(ShellError::message(
+            "add_command_definition requires source_field when source_name is provided",
+        )),
+        (_, None, None, None, None, Some(_), None, None) => Err(ShellError::message(
+            "add_command_definition requires source_field when source_session is provided",
+        )),
+        (_, None, None, None, None, None, Some(_), None) => Err(ShellError::message(
+            "add_command_definition requires source_field when source_argument is provided",
+        )),
+        (_, None, None, None, None, None, None, Some(_)) => Err(ShellError::message(
+            "add_command_definition requires source_payload, source_name, source_session, or source_argument when source_field is provided",
+        )),
+        _ => Err(ShellError::message(
+            "add_command_definition requires input_source and source reference fields to describe the same command input source",
+        )),
+    }
 }
 
 fn parse_optional_singleton_repeat_behavior(
@@ -2916,7 +3154,7 @@ fn add_automation_definition_tool_text(request: &Value) -> Result<String, ShellE
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
 
-    interpret_collect_reports(command::add_automation_definition(
+    interpret_collect_reports(&command::add_automation_definition(
         NewAutomationDefinition::new(
             slice_slug,
             automation_name,
@@ -2972,7 +3210,7 @@ fn add_translation_definition_tool_text(request: &Value) -> Result<String, Shell
             parse_command_name(raw_command).map_err(|error| ShellError::message(error.to_string()))
         })?;
 
-    interpret_collect_reports(command::add_translation_definition(
+    interpret_collect_reports(&command::add_translation_definition(
         NewTranslationDefinition::new(
             slice_slug,
             translation_name,
@@ -3031,7 +3269,7 @@ fn add_external_payload_definition_tool_text(request: &Value) -> Result<String, 
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
 
-    interpret_collect_reports(command::add_external_payload_definition(
+    interpret_collect_reports(&command::add_external_payload_definition(
         NewExternalPayloadDefinition::new(
             slice_slug,
             payload_name,
@@ -3077,7 +3315,7 @@ fn add_outcome_definition_tool_text(request: &Value) -> Result<String, ShellErro
             ShellError::message("add_outcome_definition requires externally_relevant")
         })?;
 
-    interpret_collect_reports(command::add_outcome_definition(NewOutcomeDefinition::new(
+    interpret_collect_reports(&command::add_outcome_definition(NewOutcomeDefinition::new(
         slice_slug,
         label,
         OutcomeEventNames::from_events(events),
@@ -3159,7 +3397,44 @@ fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError>
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
 
-    let attribute = match generated_source_kind {
+    let attribute = build_event_attribute(
+        attribute_name,
+        attribute_source_kind,
+        attribute_source_name,
+        attribute_source_field,
+        generated_source_kind,
+        provenance_description,
+    );
+    let observed = arguments
+        .get("observed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let shared = arguments
+        .get("shared")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let event = build_event_definition(
+        slice_slug,
+        event_name,
+        stream_name,
+        attribute,
+        observed,
+        shared,
+    );
+
+    interpret_collect_reports(&command::add_event_definition(event))
+        .map(|reports| reports.join("\n"))
+}
+
+fn build_event_attribute(
+    attribute_name: EventAttributeName,
+    attribute_source_kind: EventAttributeSourceKind,
+    attribute_source_name: EventAttributeSourceName,
+    attribute_source_field: EventAttributeSourceField,
+    generated_source_kind: Option<GeneratedEventAttributeSourceKind>,
+    provenance_description: ProvenanceDescription,
+) -> NewEventAttribute {
+    match generated_source_kind {
         Some(generated_source_kind) => NewEventAttribute::new_with_generated_source_kind(
             attribute_name,
             attribute_source_kind,
@@ -3175,25 +3450,24 @@ fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError>
             attribute_source_field,
             provenance_description,
         ),
-    };
-    let observed = arguments
-        .get("observed")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let shared = arguments
-        .get("shared")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let event = if shared {
+    }
+}
+
+fn build_event_definition(
+    slice_slug: SliceSlug,
+    event_name: EventName,
+    stream_name: StreamName,
+    attribute: NewEventAttribute,
+    observed: bool,
+    shared: bool,
+) -> NewEventDefinition {
+    if shared {
         NewEventDefinition::new_shared(slice_slug, event_name, stream_name, attribute)
     } else if observed {
         NewEventDefinition::new_observed(slice_slug, event_name, stream_name, attribute)
     } else {
         NewEventDefinition::new(slice_slug, event_name, stream_name, attribute)
-    };
-
-    interpret_collect_reports(command::add_event_definition(event))
-        .map(|reports| reports.join("\n"))
+    }
 }
 
 fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -3238,6 +3512,20 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
             parse_provenance_description(raw_provenance)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
+    let read_model_source = resolve_read_model_field_source(field_source_kind, arguments)?;
+    let read_model_field =
+        NewReadModelField::new(field_name, read_model_source, provenance_description);
+    let read_model = NewReadModelDefinition::new(slice_slug, read_model_name, read_model_field);
+    let read_model = apply_optional_transitive_semantics(read_model, arguments)?;
+
+    interpret_collect_reports(&command::add_read_model_definition(read_model))
+        .map(|reports| reports.join("\n"))
+}
+
+fn resolve_read_model_field_source(
+    field_source_kind: ReadModelFieldSourceKind,
+    arguments: &Value,
+) -> Result<ReadModelFieldSource, ShellError> {
     let source_event = arguments.get("source_event").and_then(Value::as_str);
     let source_attribute = arguments.get("source_attribute").and_then(Value::as_str);
     let derivation_rule = arguments.get("derivation_rule").and_then(Value::as_str);
@@ -3247,7 +3535,7 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
     let derivation_scenario = arguments.get("derivation_scenario").and_then(Value::as_str);
     let absence_event = arguments.get("absence_event").and_then(Value::as_str);
     let absence_scenario = arguments.get("absence_scenario").and_then(Value::as_str);
-    let read_model_source = match (
+    match (
         field_source_kind,
         source_event,
         source_attribute,
@@ -3266,12 +3554,12 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
             None,
             None,
             None,
-        ) => ReadModelFieldSource::event_attribute(
+        ) => Ok(ReadModelFieldSource::event_attribute(
             parse_event_name(raw_source_event)
                 .map_err(|error| ShellError::message(error.to_string()))?,
             parse_event_attribute_name(raw_source_attribute)
                 .map_err(|error| ShellError::message(error.to_string()))?,
-        ),
+        )),
         (
             ReadModelFieldSourceKind::Derivation,
             None,
@@ -3281,7 +3569,7 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
             Some(raw_derivation_scenario),
             None,
             None,
-        ) => ReadModelFieldSource::derivation(
+        ) => Ok(ReadModelFieldSource::derivation(
             parse_read_model_derivation_rule(raw_derivation_rule)
                 .map_err(|error| ShellError::message(error.to_string()))?,
             ReadModelDerivationSourceFields::from_fields(
@@ -3290,7 +3578,7 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
             ),
             parse_scenario_name(raw_derivation_scenario)
                 .map_err(|error| ShellError::message(error.to_string()))?,
-        ),
+        )),
         (
             ReadModelFieldSourceKind::AbsenceDefault,
             None,
@@ -3300,91 +3588,86 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
             None,
             Some(raw_absence_event),
             Some(raw_absence_scenario),
-        ) => ReadModelFieldSource::absence_default(
+        ) => Ok(ReadModelFieldSource::absence_default(
             parse_event_name(raw_absence_event)
                 .map_err(|error| ShellError::message(error.to_string()))?,
             parse_scenario_name(raw_absence_scenario)
                 .map_err(|error| ShellError::message(error.to_string()))?,
-        ),
+        )),
         (_, Some(_), None, _, _, _, _, _) | (_, None, Some(_), _, _, _, _, _) => {
-            return Err(ShellError::message(
+            Err(ShellError::message(
                 "add_read_model_definition requires source_event and source_attribute together",
-            ));
+            ))
         }
         (_, _, _, Some(_), None, _, _, _)
         | (_, _, _, None, Some(_), _, _, _)
         | (_, _, _, Some(_), _, None, _, _)
-        | (_, _, _, None, _, Some(_), _, _) => {
-            return Err(ShellError::message(
-                "add_read_model_definition requires derivation_rule, derivation_source_fields, and derivation_scenario together",
-            ));
-        }
+        | (_, _, _, None, _, Some(_), _, _) => Err(ShellError::message(
+            "add_read_model_definition requires derivation_rule, derivation_source_fields, and derivation_scenario together",
+        )),
         (_, _, _, _, _, _, Some(_), None) | (_, _, _, _, _, _, None, Some(_)) => {
-            return Err(ShellError::message(
+            Err(ShellError::message(
                 "add_read_model_definition requires absence_event and absence_scenario together",
-            ));
+            ))
         }
-        _ => {
-            return Err(ShellError::message(
-                "add_read_model_definition requires field_source and source fields to describe the same read model field source",
-            ));
-        }
-    };
-    let read_model_field =
-        NewReadModelField::new(field_name, read_model_source, provenance_description);
-    let read_model = NewReadModelDefinition::new(slice_slug, read_model_name, read_model_field);
-    let read_model = if arguments
+        _ => Err(ShellError::message(
+            "add_read_model_definition requires field_source and source fields to describe the same read model field source",
+        )),
+    }
+}
+
+fn apply_optional_transitive_semantics(
+    read_model: NewReadModelDefinition,
+    arguments: &Value,
+) -> Result<NewReadModelDefinition, ShellError> {
+    if !arguments
         .get("transitive")
         .and_then(Value::as_bool)
         .unwrap_or(false)
     {
-        let relationship_fields = arguments
-            .get("relationship_fields")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                ShellError::message(
-                    "add_read_model_definition requires relationship_fields for transitive read models",
-                )
-            })
-            .and_then(|raw_relationship_fields| {
-                parse_datum_names(raw_relationship_fields)
-                    .map_err(|error| ShellError::message(error.to_string()))
-            })?;
-        let transitive_rule = arguments
-            .get("transitive_rule")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                ShellError::message(
-                    "add_read_model_definition requires transitive_rule for transitive read models",
-                )
-            })
-            .and_then(|raw_transitive_rule| {
-                parse_read_model_transitive_rule(raw_transitive_rule)
-                    .map_err(|error| ShellError::message(error.to_string()))
-            })?;
-        let example_scenario = arguments
-            .get("example_scenario")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                ShellError::message(
-                    "add_read_model_definition requires example_scenario for transitive read models",
-                )
-            })
-            .and_then(|raw_example_scenario| {
-                parse_scenario_name(raw_example_scenario)
-                    .map_err(|error| ShellError::message(error.to_string()))
-            })?;
-        read_model.with_transitive_semantics(
-            ReadModelRelationshipFields::from_fields(relationship_fields),
-            transitive_rule,
-            example_scenario,
-        )
-    } else {
-        read_model
-    };
-
-    interpret_collect_reports(command::add_read_model_definition(read_model))
-        .map(|reports| reports.join("\n"))
+        return Ok(read_model);
+    }
+    let relationship_fields = arguments
+        .get("relationship_fields")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ShellError::message(
+                "add_read_model_definition requires relationship_fields for transitive read models",
+            )
+        })
+        .and_then(|raw_relationship_fields| {
+            parse_datum_names(raw_relationship_fields)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let transitive_rule = arguments
+        .get("transitive_rule")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ShellError::message(
+                "add_read_model_definition requires transitive_rule for transitive read models",
+            )
+        })
+        .and_then(|raw_transitive_rule| {
+            parse_read_model_transitive_rule(raw_transitive_rule)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let example_scenario = arguments
+        .get("example_scenario")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ShellError::message(
+                "add_read_model_definition requires example_scenario for transitive read models",
+            )
+        })
+        .and_then(|raw_example_scenario| {
+            parse_scenario_name(raw_example_scenario)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    Ok(read_model.with_transitive_semantics(
+        ReadModelRelationshipFields::from_fields(relationship_fields),
+        transitive_rule,
+        example_scenario,
+    ))
 }
 
 fn add_view_definition_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -3406,6 +3689,24 @@ fn add_view_definition_tool_text(request: &Value) -> Result<String, ShellError> 
         .and_then(|raw_name| {
             parse_view_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
         })?;
+    let view_field = parse_view_definition_field(arguments)?;
+    let navigation = parse_view_definition_navigation(arguments)?;
+    let control = parse_view_definition_control(arguments, navigation)?;
+    let local_states = parse_view_definition_navigation_targets(arguments, "local_states")?;
+    let filters = parse_view_definition_navigation_targets(arguments, "filters")?;
+
+    let view_definition = NewViewDefinition::new(slice_slug, view_name, view_field)
+        .with_local_states(ViewLocalStates::from_targets(
+            local_states.unwrap_or_default(),
+        ))
+        .with_filters(ViewFilters::from_targets(filters.unwrap_or_default()))
+        .with_controls(ViewControls::from_controls([control]));
+
+    interpret_collect_reports(&command::add_view_definition(view_definition))
+        .map(|reports| reports.join("\n"))
+}
+
+fn parse_view_definition_field(arguments: &Value) -> Result<NewViewField, ShellError> {
     let read_model_name = arguments
         .get("read_model")
         .and_then(Value::as_str)
@@ -3453,20 +3754,21 @@ fn add_view_definition_tool_text(request: &Value) -> Result<String, ShellError> 
             parse_bit_encoding_semantics(raw_bit_encoding)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    let control_name = arguments
-        .get("control")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_view_definition requires control"))
-        .and_then(|raw_control| {
-            parse_control_name(raw_control).map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let control_command = arguments
-        .get("control_command")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_view_definition requires control_command"))
-        .and_then(|raw_command| {
-            parse_command_name(raw_command).map_err(|error| ShellError::message(error.to_string()))
-        })?;
+    Ok(NewViewField::new(
+        field_name,
+        parse_view_field_source_kind("read_model")
+            .map_err(|error| ShellError::message(error.to_string()))?,
+        read_model_name,
+        source_field,
+        sketch_token,
+        provenance_description,
+        bit_encoding,
+    ))
+}
+
+fn parse_view_definition_control_input(
+    arguments: &Value,
+) -> Result<NewControlInputProvision, ShellError> {
     let control_input = arguments
         .get("control_input")
         .and_then(Value::as_str)
@@ -3512,6 +3814,35 @@ fn add_view_definition_tool_text(request: &Value) -> Result<String, ShellError> 
         .ok_or_else(|| {
             ShellError::message("add_view_definition requires control_input_decision")
         })?;
+    Ok(NewControlInputProvision::new(
+        control_input,
+        control_input_source,
+        control_input_description,
+        control_input_sketch_token,
+        control_input_visible,
+        control_input_decision,
+    ))
+}
+
+fn parse_view_definition_control(
+    arguments: &Value,
+    navigation: NewNavigationTarget,
+) -> Result<NewControlDefinition, ShellError> {
+    let control_name = arguments
+        .get("control")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires control"))
+        .and_then(|raw_control| {
+            parse_control_name(raw_control).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let control_command = arguments
+        .get("control_command")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("add_view_definition requires control_command"))
+        .and_then(|raw_command| {
+            parse_command_name(raw_command).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let control_input = parse_view_definition_control_input(arguments)?;
     let handled_errors = arguments
         .get("handled_errors")
         .and_then(Value::as_str)
@@ -3536,6 +3867,18 @@ fn add_view_definition_tool_text(request: &Value) -> Result<String, ShellError> 
             parse_sketch_token(raw_sketch_token)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
+    Ok(NewControlDefinition::new(
+        control_name,
+        control_command,
+        control_input,
+        CommandErrorNames::from_names(handled_errors),
+        recovery_behavior,
+        control_sketch_token,
+        navigation,
+    ))
+}
+
+fn parse_view_definition_navigation(arguments: &Value) -> Result<NewNavigationTarget, ShellError> {
     let navigation_type = arguments
         .get("navigation_type")
         .and_then(Value::as_str)
@@ -3555,78 +3898,38 @@ fn add_view_definition_tool_text(request: &Value) -> Result<String, ShellError> 
     let external_workflow = arguments.get("external_workflow").and_then(Value::as_str);
     let external_system = arguments.get("external_system").and_then(Value::as_str);
     let handoff_contract = arguments.get("handoff_contract").and_then(Value::as_str);
-    let navigation = match (external_workflow, external_system, handoff_contract) {
+    match (external_workflow, external_system, handoff_contract) {
         (Some(raw_external_workflow), None, None) => {
             let external_workflow = parse_navigation_target_name(raw_external_workflow)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            NewNavigationTarget::new(navigation_type, navigation_target)
-                .with_external_workflow(external_workflow)
+            Ok(NewNavigationTarget::new(navigation_type, navigation_target)
+                .with_external_workflow(external_workflow))
         }
         (None, Some(raw_external_system), Some(raw_handoff_contract)) => {
             let external_system = parse_navigation_target_name(raw_external_system)
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let handoff_contract = parse_payload_contract_name(raw_handoff_contract)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            NewNavigationTarget::new(navigation_type, navigation_target)
-                .with_external_system(external_system, handoff_contract)
+            Ok(NewNavigationTarget::new(navigation_type, navigation_target)
+                .with_external_system(external_system, handoff_contract))
         }
-        (None, None, None) => NewNavigationTarget::new(navigation_type, navigation_target),
-        _ => {
-            return Err(ShellError::message(
-                "add_view_definition requires either external_workflow alone or external_system and handoff_contract together",
-            ));
-        }
-    };
-    let local_states = arguments
-        .get("local_states")
-        .and_then(Value::as_str)
-        .map(parse_navigation_target_names)
-        .transpose()
-        .map_err(|error| ShellError::message(error.to_string()))?;
-    let filters = arguments
-        .get("filters")
-        .and_then(Value::as_str)
-        .map(parse_navigation_target_names)
-        .transpose()
-        .map_err(|error| ShellError::message(error.to_string()))?;
+        (None, None, None) => Ok(NewNavigationTarget::new(navigation_type, navigation_target)),
+        _ => Err(ShellError::message(
+            "add_view_definition requires either external_workflow alone or external_system and handoff_contract together",
+        )),
+    }
+}
 
-    interpret_collect_reports(command::add_view_definition(
-        NewViewDefinition::new(
-            slice_slug,
-            view_name,
-            NewViewField::new(
-                field_name,
-                parse_view_field_source_kind("read_model")
-                    .map_err(|error| ShellError::message(error.to_string()))?,
-                read_model_name,
-                source_field,
-                sketch_token,
-                provenance_description,
-                bit_encoding,
-            ),
-        )
-        .with_local_states(ViewLocalStates::from_targets(
-            local_states.unwrap_or_default(),
-        ))
-        .with_filters(ViewFilters::from_targets(filters.unwrap_or_default()))
-        .with_controls(ViewControls::from_controls([NewControlDefinition::new(
-            control_name,
-            control_command,
-            NewControlInputProvision::new(
-                control_input,
-                control_input_source,
-                control_input_description,
-                control_input_sketch_token,
-                control_input_visible,
-                control_input_decision,
-            ),
-            CommandErrorNames::from_names(handled_errors),
-            recovery_behavior,
-            control_sketch_token,
-            navigation,
-        )])),
-    ))
-    .map(|reports| reports.join("\n"))
+fn parse_view_definition_navigation_targets(
+    arguments: &Value,
+    key: &str,
+) -> Result<Option<Vec<NavigationTargetName>>, ShellError> {
+    arguments
+        .get(key)
+        .and_then(Value::as_str)
+        .map(parse_navigation_target_names)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))
 }
 
 fn update_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -3649,7 +3952,7 @@ fn update_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_model_description(raw_description)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(command::update_workflow_description(slug, description))
+    interpret_collect_reports(&command::update_workflow_description(slug, description))
         .map(|reports| reports.join("\n"))
 }
 
@@ -3672,7 +3975,7 @@ fn update_workflow_name_tool_text(request: &Value) -> Result<String, ShellError>
         .and_then(|raw_name| {
             parse_model_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(command::update_workflow_name(slug, name))
+    interpret_collect_reports(&command::update_workflow_name(slug, name))
         .map(|reports| reports.join("\n"))
 }
 
@@ -3696,7 +3999,7 @@ fn update_slice_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_model_description(raw_description)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(command::update_slice_description(slug, description))
+    interpret_collect_reports(&command::update_slice_description(slug, description))
         .map(|reports| reports.join("\n"))
 }
 
@@ -3719,7 +4022,7 @@ fn update_slice_kind_tool_text(request: &Value) -> Result<String, ShellError> {
         .and_then(|raw_type| {
             parse_slice_kind(raw_type).map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(command::update_slice_kind(slug, kind))
+    interpret_collect_reports(&command::update_slice_kind(slug, kind))
         .map(|reports| reports.join("\n"))
 }
 
@@ -3742,7 +4045,7 @@ fn update_slice_name_tool_text(request: &Value) -> Result<String, ShellError> {
         .and_then(|raw_name| {
             parse_model_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(command::update_slice_name(slug, name))
+    interpret_collect_reports(&command::update_slice_name(slug, name))
         .map(|reports| reports.join("\n"))
 }
 
@@ -3758,7 +4061,7 @@ fn remove_slice_tool_text(request: &Value) -> Result<String, ShellError> {
         .and_then(|raw_slug| {
             parse_slice_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(command::remove_slice(slug)).map(|reports| reports.join("\n"))
+    interpret_collect_reports(&command::remove_slice(slug)).map(|reports| reports.join("\n"))
 }
 
 fn remove_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -3773,7 +4076,7 @@ fn remove_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
         .and_then(|raw_slug| {
             parse_workflow_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))
         })?;
-    interpret_collect_reports(command::remove_workflow(slug)).map(|reports| reports.join("\n"))
+    interpret_collect_reports(&command::remove_workflow(slug)).map(|reports| reports.join("\n"))
 }
 
 fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -3827,77 +4130,142 @@ fn connect_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))
         })
         .transpose()?;
-    let connection = if let Some(raw_target) = arguments.get("to").and_then(Value::as_str) {
-        let target_slug =
-            parse_slice_slug(raw_target).map_err(|error| ShellError::message(error.to_string()))?;
-        if connection_kind == ConnectionKind::Navigation {
-            WorkflowConnection::new_with_navigation_endpoints(
-                workflow_slug,
-                source_slug,
+    let transition = ConnectionTransition {
+        workflow_slug,
+        source_slug,
+        connection_kind,
+        trigger,
+    };
+    let navigation_endpoints = ConnectionNavigationEndpoints {
+        source_control,
+        target_view,
+    };
+    let connection = build_workflow_connection(arguments, transition, navigation_endpoints)?;
+    interpret_collect_reports(&command::connect_workflow(connection))
+        .map(|reports| reports.join("\n"))
+}
+
+/// Common, already-parsed fields shared by every workflow connection variant.
+struct ConnectionTransition {
+    workflow_slug: WorkflowSlug,
+    source_slug: SliceSlug,
+    connection_kind: ConnectionKind,
+    trigger: TransitionTriggerName,
+}
+
+/// Optional navigation endpoints required only for navigation connections.
+struct ConnectionNavigationEndpoints {
+    source_control: Option<TransitionTriggerName>,
+    target_view: Option<WorkflowOwnedDefinitionName>,
+}
+
+fn build_workflow_connection(
+    arguments: &Value,
+    transition: ConnectionTransition,
+    navigation_endpoints: ConnectionNavigationEndpoints,
+) -> Result<WorkflowConnection, ShellError> {
+    match arguments.get("to").and_then(Value::as_str) {
+        Some(raw_target) => {
+            let target_slug = parse_slice_slug(raw_target)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            build_intra_workflow_connection(
+                arguments,
+                transition,
                 target_slug,
-                connection_kind,
-                trigger,
-                source_control.ok_or_else(|| {
-                    ShellError::message(
-                        "navigation workflow transitions require source_control owned by source slice",
-                    )
-                })?,
-                target_view.ok_or_else(|| {
-                    ShellError::message(
-                        "navigation workflow transitions require target_view owned by target slice",
-                    )
-                })?,
+                navigation_endpoints,
             )
-        } else if let Some(raw_payload_contract) =
-            arguments.get("payload_contract").and_then(Value::as_str)
-        {
+        }
+        None => build_workflow_exit_connection(arguments, transition),
+    }
+}
+
+fn build_intra_workflow_connection(
+    arguments: &Value,
+    transition: ConnectionTransition,
+    target_slug: SliceSlug,
+    navigation_endpoints: ConnectionNavigationEndpoints,
+) -> Result<WorkflowConnection, ShellError> {
+    let ConnectionTransition {
+        workflow_slug,
+        source_slug,
+        connection_kind,
+        trigger,
+    } = transition;
+    if connection_kind == ConnectionKind::Navigation {
+        return Ok(WorkflowConnection::new_with_navigation_endpoints(
+            workflow_slug,
+            source_slug,
+            target_slug,
+            connection_kind,
+            trigger,
+            navigation_endpoints.source_control.ok_or_else(|| {
+                ShellError::message(
+                    "navigation workflow transitions require source_control owned by source slice",
+                )
+            })?,
+            navigation_endpoints.target_view.ok_or_else(|| {
+                ShellError::message(
+                    "navigation workflow transitions require target_view owned by target slice",
+                )
+            })?,
+        ));
+    }
+    match arguments.get("payload_contract").and_then(Value::as_str) {
+        Some(raw_payload_contract) => {
             let payload_contract = parse_payload_contract_name(raw_payload_contract)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            WorkflowConnection::new_with_payload_contract(
+            Ok(WorkflowConnection::new_with_payload_contract(
                 workflow_slug,
                 source_slug,
                 target_slug,
                 connection_kind,
                 trigger,
                 payload_contract,
-            )
-        } else {
-            WorkflowConnection::new(
-                workflow_slug,
-                source_slug,
-                target_slug,
-                connection_kind,
-                trigger,
-            )
+            ))
         }
-    } else {
-        let target_workflow = arguments
-            .get("to_workflow")
-            .and_then(Value::as_str)
-            .ok_or_else(|| ShellError::message("connect_workflow requires to or to_workflow"))
-            .and_then(|raw_target| {
-                parse_workflow_slug(raw_target)
-                    .map_err(|error| ShellError::message(error.to_string()))
-            })?;
-        let reason = arguments
-            .get("reason")
-            .and_then(Value::as_str)
-            .ok_or_else(|| ShellError::message("connect_workflow requires reason"))
-            .and_then(|raw_reason| {
-                parse_model_description(raw_reason)
-                    .map_err(|error| ShellError::message(error.to_string()))
-            })?;
-        WorkflowConnection::new_workflow_exit(
+        None => Ok(WorkflowConnection::new(
             workflow_slug,
             source_slug,
-            target_workflow,
+            target_slug,
             connection_kind,
             trigger,
-            reason,
-        )
-    };
-    interpret_collect_reports(command::connect_workflow(connection))
-        .map(|reports| reports.join("\n"))
+        )),
+    }
+}
+
+fn build_workflow_exit_connection(
+    arguments: &Value,
+    transition: ConnectionTransition,
+) -> Result<WorkflowConnection, ShellError> {
+    let ConnectionTransition {
+        workflow_slug,
+        source_slug,
+        connection_kind,
+        trigger,
+    } = transition;
+    let target_workflow = arguments
+        .get("to_workflow")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("connect_workflow requires to or to_workflow"))
+        .and_then(|raw_target| {
+            parse_workflow_slug(raw_target).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let reason = arguments
+        .get("reason")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("connect_workflow requires reason"))
+        .and_then(|raw_reason| {
+            parse_model_description(raw_reason)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    Ok(WorkflowConnection::new_workflow_exit(
+        workflow_slug,
+        source_slug,
+        target_workflow,
+        connection_kind,
+        trigger,
+        reason,
+    ))
 }
 
 fn remove_transition_tool_text(request: &Value) -> Result<String, ShellError> {
@@ -3962,7 +4330,8 @@ fn remove_transition_tool_text(request: &Value) -> Result<String, ShellError> {
             trigger,
         )
     };
-    interpret_collect_reports(command::remove_transition(removal)).map(|reports| reports.join("\n"))
+    interpret_collect_reports(&command::remove_transition(removal))
+        .map(|reports| reports.join("\n"))
 }
 
 fn tool_result(text: String) -> Value {
@@ -3971,7 +4340,7 @@ fn tool_result(text: String) -> Value {
     })
 }
 
-fn success_response(id: &Value, result: Value) -> Value {
+fn success_response(id: &Value, result: &Value) -> Value {
     json!({
         "jsonrpc": "2.0",
         "id": id,
@@ -3990,10 +4359,10 @@ fn error_response(id: &Value, code: i64, message: impl Into<String>) -> Value {
     })
 }
 
-fn write_response(response: Value) -> Result<(), ShellError> {
+fn write_response(response: &Value) -> Result<(), ShellError> {
     let stdout = io::stdout();
     let mut lock = stdout.lock();
-    serde_json::to_writer(&mut lock, &response)
+    serde_json::to_writer(&mut lock, response)
         .map_err(|error| ShellError::message(error.to_string()))?;
     writeln!(lock).map_err(|error| ShellError::message(error.to_string()))?;
     lock.flush()

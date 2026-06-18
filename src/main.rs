@@ -1,6 +1,12 @@
 // Copyright 2026 John Wilger
 
-#![cfg_attr(test, allow(dead_code))]
+#![cfg_attr(
+    test,
+    allow(
+        dead_code,
+        reason = "items used only by the binary are unused when compiling the test harness"
+    )
+)]
 
 use std::env;
 use std::process::ExitCode;
@@ -30,9 +36,10 @@ use crate::core::modeling_enums::MODELING_ENUMS;
 use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    CommandInputSourceKind, ModelDescription, ModelName, ReadModelFieldSourceKind, ReviewTimestamp,
-    ReviewerId, SliceSlug, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
-    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
+    CommandInputSourceKind, CommandName, ControlName, ControlRecoveryBehavior, ModelDescription,
+    ModelName, ReadModelFieldSourceKind, ReviewTimestamp, ReviewerId, SketchToken, SliceSlug,
+    ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
     WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
     WorkflowTransitionKind,
 };
@@ -217,7 +224,7 @@ enum Command {
 }
 
 fn main() -> ExitCode {
-    match parse_cli(env::args().skip(1).collect()).and_then(run) {
+    match parse_cli(&env::args().skip(1).collect::<Vec<_>>()).and_then(run) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{error}");
@@ -229,78 +236,95 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<(), ShellError> {
     match cli.command {
         Command::AddAutomationDefinition { automation } => {
-            interpret(command::add_automation_definition(automation))
+            interpret(&command::add_automation_definition(automation))
         }
         Command::AddBitLevelDataFlow { data_flow } => {
-            interpret(command::add_bit_level_data_flow(data_flow))
+            interpret(&command::add_bit_level_data_flow(data_flow))
         }
         Command::AddBoardConnection { connection } => {
-            interpret(command::add_board_connection(connection))
+            interpret(&command::add_board_connection(connection))
         }
-        Command::AddBoardElement { element } => interpret(command::add_board_element(element)),
+        Command::AddBoardElement { element } => interpret(&command::add_board_element(element)),
         Command::AddCommandDefinition {
             command: definition,
-        } => interpret(command::add_command_definition(definition)),
-        Command::AddEventDefinition { event } => interpret(command::add_event_definition(event)),
+        } => interpret(&command::add_command_definition(definition)),
+        Command::AddEventDefinition { event } => interpret(&command::add_event_definition(event)),
         Command::AddExternalPayloadDefinition { external_payload } => {
-            interpret(command::add_external_payload_definition(external_payload))
+            interpret(&command::add_external_payload_definition(external_payload))
         }
         Command::AddOutcomeDefinition { outcome } => {
-            interpret(command::add_outcome_definition(outcome))
+            interpret(&command::add_outcome_definition(outcome))
         }
         Command::AddReadModelDefinition { read_model } => {
-            interpret(command::add_read_model_definition(read_model))
+            interpret(&command::add_read_model_definition(read_model))
         }
-        Command::AddViewDefinition { view } => interpret(command::add_view_definition(view)),
-        Command::AddSlice { slice } => interpret(command::add_slice(slice)),
-        Command::AddSliceScenario { scenario } => interpret(command::add_slice_scenario(scenario)),
+        Command::AddViewDefinition { view } => interpret(&command::add_view_definition(view)),
+        Command::AddSlice { slice } => interpret(&command::add_slice(slice)),
+        Command::AddSliceScenario { scenario } => interpret(&command::add_slice_scenario(scenario)),
         Command::AddTranslationDefinition { translation } => {
-            interpret(command::add_translation_definition(translation))
+            interpret(&command::add_translation_definition(translation))
         }
-        Command::AddWorkflow { workflow } => interpret(command::add_workflow(workflow)),
+        other => run_workflow_commands(other),
+    }
+}
+
+fn run_workflow_commands(command: Command) -> Result<(), ShellError> {
+    match command {
+        Command::AddWorkflow { workflow } => interpret(&command::add_workflow(workflow)),
         Command::AddWorkflowCommandError {
             workflow_slug,
             error,
-        } => interpret(command::add_workflow_command_error(workflow_slug, error)),
+        } => interpret(&command::add_workflow_command_error(workflow_slug, error)),
         Command::AddWorkflowOwnedDefinition {
             workflow_slug,
             definition,
-        } => interpret(command::add_workflow_owned_definition(
+        } => interpret(&command::add_workflow_owned_definition(
             workflow_slug,
             definition,
         )),
         Command::AddWorkflowTransitionEvidence {
             workflow_slug,
             evidence,
-        } => interpret(command::add_workflow_transition_evidence(
+        } => interpret(&command::add_workflow_transition_evidence(
             workflow_slug,
             evidence,
         )),
         Command::AddWorkflowEntryLifecycleState {
             workflow_slug,
             coverage,
-        } => interpret(command::add_workflow_entry_lifecycle_state(
+        } => interpret(&command::add_workflow_entry_lifecycle_state(
             workflow_slug,
             coverage,
         )),
         Command::AddWorkflowOutcome {
             workflow_slug,
             outcome,
-        } => interpret(command::add_workflow_outcome(workflow_slug, outcome)),
-        Command::Check => interpret(command::check_project()),
-        Command::ConnectWorkflow { connection } => interpret(command::connect_workflow(connection)),
-        Command::GherkinList { suite } => interpret(command::gherkin_list(suite)),
-        Command::GherkinRunAll => interpret(command::gherkin_run_all()),
-        Command::GherkinRun { suite } => interpret(command::gherkin_run(suite)),
+        } => interpret(&command::add_workflow_outcome(workflow_slug, outcome)),
+        other => run_query_commands(other),
+    }
+}
+
+fn run_query_commands(command: Command) -> Result<(), ShellError> {
+    match command {
+        Command::Check => interpret(&command::check_project()),
+        Command::ConnectWorkflow { connection } => {
+            interpret(&command::connect_workflow(connection))
+        }
+        Command::GherkinList { suite } => interpret(&command::gherkin_list(&suite)),
+        Command::GherkinRunAll => interpret(&command::gherkin_run_all()),
+        Command::GherkinRun { suite } => interpret(&command::gherkin_run(&suite)),
         Command::Help => print_help(),
-        Command::HelpEnums => print_enum_help(),
-        Command::Init { name } => interpret(command::init(name)),
-        Command::ListConflicts => interpret(command::list_conflicts()),
-        Command::ListSlices => interpret(command::list_slices()),
-        Command::ListTransitions => interpret(command::list_transitions()),
-        Command::ListWorkflows => interpret(command::list_workflows()),
+        Command::HelpEnums => {
+            print_enum_help();
+            Ok(())
+        }
+        Command::Init { name } => interpret(&command::init(&name)),
+        Command::ListConflicts => interpret(&command::list_conflicts()),
+        Command::ListSlices => interpret(&command::list_slices()),
+        Command::ListTransitions => interpret(&command::list_transitions()),
+        Command::ListWorkflows => interpret(&command::list_workflows()),
         Command::RequireWorkflowEntryLifecycleCoverage { workflow_slug } => interpret(
-            command::require_workflow_entry_lifecycle_coverage(workflow_slug),
+            &command::require_workflow_entry_lifecycle_coverage(workflow_slug),
         ),
         Command::McpHttp {
             host,
@@ -309,37 +333,44 @@ fn run(cli: Cli) -> Result<(), ShellError> {
             auth_token,
         } => serve_http(&host, port, once, auth_token.as_deref()),
         Command::McpStdio => serve_stdio(),
-        Command::ReviewGate { slug } => interpret(command::review_gate_for_workflow(slug)),
+        other => run_mutation_commands(other),
+    }
+}
+
+fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
+    match command {
+        Command::ReviewGate { slug } => interpret(&command::review_gate_for_workflow(slug)),
         Command::RecordCleanReview {
             slug,
             reviewer,
             reviewed_at,
-        } => interpret(command::record_clean_review(slug, reviewer, reviewed_at)),
-        Command::RemoveSlice { slug } => interpret(command::remove_slice(slug)),
-        Command::RemoveTransition { removal } => interpret(command::remove_transition(removal)),
-        Command::RemoveWorkflow { slug } => interpret(command::remove_workflow(slug)),
+        } => interpret(&command::record_clean_review(slug, reviewer, reviewed_at)),
+        Command::RemoveSlice { slug } => interpret(&command::remove_slice(slug)),
+        Command::RemoveTransition { removal } => interpret(&command::remove_transition(removal)),
+        Command::RemoveWorkflow { slug } => interpret(&command::remove_workflow(slug)),
         Command::ResolveConflict {
             conflict_id,
             chosen_event_id,
-        } => interpret(command::resolve_conflict(conflict_id, chosen_event_id)),
-        Command::ShowSlice { slug } => interpret(command::show_slice(slug)),
-        Command::ShowWorkflow { slug } => interpret(command::show_workflow(slug)),
+        } => interpret(&command::resolve_conflict(conflict_id, chosen_event_id)),
+        Command::ShowSlice { slug } => interpret(&command::show_slice(slug)),
+        Command::ShowWorkflow { slug } => interpret(&command::show_workflow(slug)),
         Command::UpdateSliceDescription { slug, description } => {
-            interpret(command::update_slice_description(slug, description))
+            interpret(&command::update_slice_description(slug, description))
         }
         Command::UpdateSliceKind { slug, kind } => {
-            interpret(command::update_slice_kind(slug, kind))
+            interpret(&command::update_slice_kind(slug, kind))
         }
         Command::UpdateSliceName { slug, name } => {
-            interpret(command::update_slice_name(slug, name))
+            interpret(&command::update_slice_name(slug, name))
         }
         Command::UpdateWorkflowDescription { slug, description } => {
-            interpret(command::update_workflow_description(slug, description))
+            interpret(&command::update_workflow_description(slug, description))
         }
         Command::UpdateWorkflowName { slug, name } => {
-            interpret(command::update_workflow_name(slug, name))
+            interpret(&command::update_workflow_name(slug, name))
         }
-        Command::Verify => interpret(command::verify()),
+        Command::Verify => interpret(&command::verify()),
+        _ => Err(ShellError::message("unsupported command")),
     }
 }
 
@@ -356,8 +387,168 @@ fn parse_chosen_event_id(value: &str) -> Result<ChosenEventId, ShellError> {
     parse_artifact_digest("chosen event id", value.to_owned()).map(ChosenEventId::new)
 }
 
-fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
-    match arguments.as_slice() {
+fn parse_slice_and_view_name(slice: &str, name: &str) -> Result<(SliceSlug, ViewName), ShellError> {
+    let slice_slug =
+        parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+    let view_name =
+        parse_view_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+    Ok((slice_slug, view_name))
+}
+
+fn build_view_read_model_field(
+    read_model: &str,
+    field: &str,
+    source_field: &str,
+    sketch_token: &str,
+    field_provenance: &str,
+    bit_encoding: &str,
+) -> Result<NewViewField, ShellError> {
+    let read_model_name = parse_read_model_name(read_model)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let field_name =
+        parse_view_field_name(field).map_err(|error| ShellError::message(error.to_string()))?;
+    let source_field_name = parse_view_field_name(source_field)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let sketch_token =
+        parse_sketch_token(sketch_token).map_err(|error| ShellError::message(error.to_string()))?;
+    let provenance_description = parse_provenance_description(field_provenance)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let bit_encoding = parse_bit_encoding_semantics(bit_encoding)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let source_kind = parse_view_field_source_kind("read_model")
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(NewViewField::new(
+        field_name,
+        source_kind,
+        read_model_name,
+        source_field_name,
+        sketch_token,
+        provenance_description,
+        bit_encoding,
+    ))
+}
+
+fn parse_control_name_and_command(
+    control: &str,
+    control_command: &str,
+) -> Result<(ControlName, CommandName), ShellError> {
+    let control_name =
+        parse_control_name(control).map_err(|error| ShellError::message(error.to_string()))?;
+    let control_command = parse_command_name(control_command)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    Ok((control_name, control_command))
+}
+
+fn build_control_input_provision(
+    control_input: &str,
+    control_input_source: &str,
+    control_input_description: &str,
+    control_input_sketch_token: &str,
+    control_input_visible: &str,
+    control_input_decision: &str,
+) -> Result<NewControlInputProvision, ShellError> {
+    let control_input =
+        parse_datum_name(control_input).map_err(|error| ShellError::message(error.to_string()))?;
+    let control_input_source = parse_command_input_source_kind(control_input_source)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let control_input_description =
+        parse_command_input_source_description(control_input_description)
+            .map_err(|error| ShellError::message(error.to_string()))?;
+    let control_input_sketch_token = parse_sketch_token(control_input_sketch_token)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let control_input_visible = parse_bool_flag(control_input_visible)?;
+    let control_input_decision = parse_bool_flag(control_input_decision)?;
+    Ok(NewControlInputProvision::new(
+        control_input,
+        control_input_source,
+        control_input_description,
+        control_input_sketch_token,
+        control_input_visible,
+        control_input_decision,
+    ))
+}
+
+fn parse_control_errors_recovery_sketch(
+    handled_errors: &str,
+    recovery_behavior: &str,
+    control_sketch_token: &str,
+) -> Result<(CommandErrorNames, ControlRecoveryBehavior, SketchToken), ShellError> {
+    let handled_errors = parse_command_error_names(handled_errors)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let recovery_behavior = parse_control_recovery_behavior(recovery_behavior)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let control_sketch_token = parse_sketch_token(control_sketch_token)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    Ok((
+        CommandErrorNames::from_names(handled_errors),
+        recovery_behavior,
+        control_sketch_token,
+    ))
+}
+
+fn build_navigation_target(
+    navigation_type: &str,
+    navigation_target: &str,
+) -> Result<NewNavigationTarget, ShellError> {
+    let navigation_type = parse_navigation_target_type(navigation_type)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let navigation_target = parse_navigation_target_name(navigation_target)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(NewNavigationTarget::new(navigation_type, navigation_target))
+}
+
+fn build_navigation_external_system(
+    navigation_type: &str,
+    navigation_target: &str,
+    external_system: &str,
+    handoff_contract: &str,
+) -> Result<NewNavigationTarget, ShellError> {
+    let navigation = build_navigation_target(navigation_type, navigation_target)?;
+    let external_system = parse_navigation_target_name(external_system)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let handoff_contract = parse_payload_contract_name(handoff_contract)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(navigation.with_external_system(external_system, handoff_contract))
+}
+
+fn build_navigation_external_workflow(
+    navigation_type: &str,
+    navigation_target: &str,
+    external_workflow: &str,
+) -> Result<NewNavigationTarget, ShellError> {
+    let navigation = build_navigation_target(navigation_type, navigation_target)?;
+    let external_workflow = parse_navigation_target_name(external_workflow)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(navigation.with_external_workflow(external_workflow))
+}
+
+fn build_add_view_cli(
+    slice_slug: SliceSlug,
+    view_name: ViewName,
+    view_field: NewViewField,
+    controls: [NewControlDefinition; 1],
+    local_states: Option<&str>,
+    filters: Option<&str>,
+) -> Result<Cli, ShellError> {
+    let mut view = NewViewDefinition::new(slice_slug, view_name, view_field);
+    if let Some(local_states) = local_states {
+        let local_states = parse_navigation_target_names(local_states)
+            .map_err(|error| ShellError::message(error.to_string()))?;
+        view = view.with_local_states(ViewLocalStates::from_targets(local_states));
+    }
+    if let Some(filters) = filters {
+        let filters = parse_navigation_target_names(filters)
+            .map_err(|error| ShellError::message(error.to_string()))?;
+        view = view.with_filters(ViewFilters::from_targets(filters));
+    }
+    let view = view.with_controls(ViewControls::from_controls(controls));
+    Ok(Cli {
+        command: Command::AddViewDefinition { view },
+    })
+}
+
+fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [] => Ok(Cli {
             command: Command::Help,
         }),
@@ -422,6 +613,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_2(arguments),
+    }
+}
+
+fn parse_cli_2(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -478,6 +675,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_3(arguments),
+    }
+}
+
+fn parse_cli_3(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -524,6 +727,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_4(arguments),
+    }
+}
+
+fn parse_cli_4(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -573,6 +782,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_5(arguments),
+    }
+}
+
+fn parse_cli_5(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -650,6 +865,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_6(arguments),
+    }
+}
+
+fn parse_cli_6(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -730,6 +951,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_7(arguments),
+    }
+}
+
+fn parse_cli_7(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -807,164 +1034,111 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
-        [
-            command,
-            subject,
-            slice_flag,
-            slice,
-            name_flag,
-            name,
-            read_model_flag,
+        _ => parse_cli_8(arguments),
+    }
+}
+
+fn parse_cli_8(arguments: &[String]) -> Result<Cli, ShellError> {
+    let args: Vec<&str> = arguments.iter().map(String::as_str).collect();
+    if let [
+        "add",
+        "view",
+        "--slice",
+        slice,
+        "--name",
+        name,
+        "--read-model",
+        read_model,
+        "--field",
+        field,
+        "--source-field",
+        source_field,
+        "--sketch-token",
+        sketch_token,
+        "--field-provenance",
+        field_provenance,
+        "--bit-encoding",
+        bit_encoding,
+        "--control",
+        control,
+        "--control-command",
+        control_command,
+        "--control-input",
+        control_input,
+        "--control-input-source",
+        control_input_source,
+        "--control-input-description",
+        control_input_description,
+        "--control-input-sketch-token",
+        control_input_sketch_token,
+        "--control-input-visible",
+        control_input_visible,
+        "--control-input-decision",
+        control_input_decision,
+        "--handled-errors",
+        handled_errors,
+        "--recovery-behavior",
+        recovery_behavior,
+        "--control-sketch-token",
+        control_sketch_token,
+        "--navigation-type",
+        navigation_type,
+        "--navigation-target",
+        navigation_target,
+        "--external-system",
+        external_system,
+        "--handoff-contract",
+        handoff_contract,
+    ] = args.as_slice()
+    {
+        let (slice_slug, view_name) = parse_slice_and_view_name(slice, name)?;
+        let view_field = build_view_read_model_field(
             read_model,
-            field_flag,
             field,
-            source_field_flag,
             source_field,
-            sketch_token_flag,
             sketch_token,
-            field_provenance_flag,
             field_provenance,
-            bit_encoding_flag,
             bit_encoding,
-            control_flag,
-            control,
-            control_command_flag,
-            control_command,
-            control_input_flag,
+        )?;
+        let (control_name, control_command) =
+            parse_control_name_and_command(control, control_command)?;
+        let provision = build_control_input_provision(
             control_input,
-            control_input_source_flag,
             control_input_source,
-            control_input_description_flag,
             control_input_description,
-            control_input_sketch_token_flag,
             control_input_sketch_token,
-            control_input_visible_flag,
             control_input_visible,
-            control_input_decision_flag,
             control_input_decision,
-            handled_errors_flag,
-            handled_errors,
-            recovery_behavior_flag,
-            recovery_behavior,
-            control_sketch_token_flag,
-            control_sketch_token,
-            navigation_type_flag,
+        )?;
+        let (handled_errors, recovery_behavior, control_sketch_token) =
+            parse_control_errors_recovery_sketch(
+                handled_errors,
+                recovery_behavior,
+                control_sketch_token,
+            )?;
+        let navigation = build_navigation_external_system(
             navigation_type,
-            navigation_target_flag,
             navigation_target,
-            external_system_flag,
             external_system,
-            handoff_contract_flag,
             handoff_contract,
-        ] if command == "add"
-            && subject == "view"
-            && slice_flag == "--slice"
-            && name_flag == "--name"
-            && read_model_flag == "--read-model"
-            && field_flag == "--field"
-            && source_field_flag == "--source-field"
-            && sketch_token_flag == "--sketch-token"
-            && field_provenance_flag == "--field-provenance"
-            && bit_encoding_flag == "--bit-encoding"
-            && control_flag == "--control"
-            && control_command_flag == "--control-command"
-            && control_input_flag == "--control-input"
-            && control_input_source_flag == "--control-input-source"
-            && control_input_description_flag == "--control-input-description"
-            && control_input_sketch_token_flag == "--control-input-sketch-token"
-            && control_input_visible_flag == "--control-input-visible"
-            && control_input_decision_flag == "--control-input-decision"
-            && handled_errors_flag == "--handled-errors"
-            && recovery_behavior_flag == "--recovery-behavior"
-            && control_sketch_token_flag == "--control-sketch-token"
-            && navigation_type_flag == "--navigation-type"
-            && navigation_target_flag == "--navigation-target"
-            && external_system_flag == "--external-system"
-            && handoff_contract_flag == "--handoff-contract" =>
-        {
-            let slice_slug =
-                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
-            let view_name =
-                parse_view_name(name).map_err(|error| ShellError::message(error.to_string()))?;
-            let read_model_name = parse_read_model_name(read_model)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let field_name = parse_view_field_name(field)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let source_field = parse_view_field_name(source_field)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let sketch_token = parse_sketch_token(sketch_token)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let provenance_description = parse_provenance_description(field_provenance)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let bit_encoding = parse_bit_encoding_semantics(bit_encoding)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_name = parse_control_name(control)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_command = parse_command_name(control_command)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input = parse_datum_name(control_input)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_source = parse_command_input_source_kind(control_input_source)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_description =
-                parse_command_input_source_description(control_input_description)
-                    .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_sketch_token = parse_sketch_token(control_input_sketch_token)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_visible = parse_bool_flag(control_input_visible)?;
-            let control_input_decision = parse_bool_flag(control_input_decision)?;
-            let handled_errors = parse_command_error_names(handled_errors)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let recovery_behavior = parse_control_recovery_behavior(recovery_behavior)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_sketch_token = parse_sketch_token(control_sketch_token)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let navigation_type = parse_navigation_target_type(navigation_type)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let navigation_target = parse_navigation_target_name(navigation_target)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let external_system = parse_navigation_target_name(external_system)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let handoff_contract = parse_payload_contract_name(handoff_contract)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::AddViewDefinition {
-                    view: NewViewDefinition::new(
-                        slice_slug,
-                        view_name,
-                        NewViewField::new(
-                            field_name,
-                            parse_view_field_source_kind("read_model")
-                                .map_err(|error| ShellError::message(error.to_string()))?,
-                            read_model_name,
-                            source_field,
-                            sketch_token,
-                            provenance_description,
-                            bit_encoding,
-                        ),
-                    )
-                    .with_controls(ViewControls::from_controls([
-                        NewControlDefinition::new(
-                            control_name,
-                            control_command,
-                            NewControlInputProvision::new(
-                                control_input,
-                                control_input_source,
-                                control_input_description,
-                                control_input_sketch_token,
-                                control_input_visible,
-                                control_input_decision,
-                            ),
-                            CommandErrorNames::from_names(handled_errors),
-                            recovery_behavior,
-                            control_sketch_token,
-                            NewNavigationTarget::new(navigation_type, navigation_target)
-                                .with_external_system(external_system, handoff_contract),
-                        ),
-                    ])),
-                },
-            })
-        }
+        )?;
+        let control = NewControlDefinition::new(
+            control_name,
+            control_command,
+            provision,
+            handled_errors,
+            recovery_behavior,
+            control_sketch_token,
+            navigation,
+        );
+        build_add_view_cli(slice_slug, view_name, view_field, [control], None, None)
+    } else {
+        parse_cli_9(arguments)
+    }
+}
+
+fn parse_cli_9(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -1051,6 +1225,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_10(arguments),
+    }
+}
+
+fn parse_cli_10(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -1131,463 +1311,299 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
-        [
-            command,
-            subject,
-            slice_flag,
-            slice,
-            name_flag,
-            name,
-            read_model_flag,
+        _ => parse_cli_11(arguments),
+    }
+}
+
+fn parse_cli_11(arguments: &[String]) -> Result<Cli, ShellError> {
+    let args: Vec<&str> = arguments.iter().map(String::as_str).collect();
+    if let [
+        "add",
+        "view",
+        "--slice",
+        slice,
+        "--name",
+        name,
+        "--read-model",
+        read_model,
+        "--field",
+        field,
+        "--source-field",
+        source_field,
+        "--sketch-token",
+        sketch_token,
+        "--field-provenance",
+        field_provenance,
+        "--bit-encoding",
+        bit_encoding,
+        "--control",
+        control,
+        "--control-command",
+        control_command,
+        "--control-input",
+        control_input,
+        "--control-input-source",
+        control_input_source,
+        "--control-input-description",
+        control_input_description,
+        "--control-input-sketch-token",
+        control_input_sketch_token,
+        "--control-input-visible",
+        control_input_visible,
+        "--control-input-decision",
+        control_input_decision,
+        "--handled-errors",
+        handled_errors,
+        "--recovery-behavior",
+        recovery_behavior,
+        "--control-sketch-token",
+        control_sketch_token,
+        "--navigation-type",
+        navigation_type,
+        "--navigation-target",
+        navigation_target,
+        "--external-workflow",
+        external_workflow,
+    ] = args.as_slice()
+    {
+        let (slice_slug, view_name) = parse_slice_and_view_name(slice, name)?;
+        let view_field = build_view_read_model_field(
             read_model,
-            field_flag,
             field,
-            source_field_flag,
             source_field,
-            sketch_token_flag,
             sketch_token,
-            field_provenance_flag,
             field_provenance,
-            bit_encoding_flag,
             bit_encoding,
-            control_flag,
-            control,
-            control_command_flag,
-            control_command,
-            control_input_flag,
+        )?;
+        let (control_name, control_command) =
+            parse_control_name_and_command(control, control_command)?;
+        let provision = build_control_input_provision(
             control_input,
-            control_input_source_flag,
             control_input_source,
-            control_input_description_flag,
             control_input_description,
-            control_input_sketch_token_flag,
             control_input_sketch_token,
-            control_input_visible_flag,
             control_input_visible,
-            control_input_decision_flag,
             control_input_decision,
-            handled_errors_flag,
-            handled_errors,
-            recovery_behavior_flag,
-            recovery_behavior,
-            control_sketch_token_flag,
-            control_sketch_token,
-            navigation_type_flag,
+        )?;
+        let (handled_errors, recovery_behavior, control_sketch_token) =
+            parse_control_errors_recovery_sketch(
+                handled_errors,
+                recovery_behavior,
+                control_sketch_token,
+            )?;
+        let navigation = build_navigation_external_workflow(
             navigation_type,
-            navigation_target_flag,
             navigation_target,
-            external_workflow_flag,
             external_workflow,
-        ] if command == "add"
-            && subject == "view"
-            && slice_flag == "--slice"
-            && name_flag == "--name"
-            && read_model_flag == "--read-model"
-            && field_flag == "--field"
-            && source_field_flag == "--source-field"
-            && sketch_token_flag == "--sketch-token"
-            && field_provenance_flag == "--field-provenance"
-            && bit_encoding_flag == "--bit-encoding"
-            && control_flag == "--control"
-            && control_command_flag == "--control-command"
-            && control_input_flag == "--control-input"
-            && control_input_source_flag == "--control-input-source"
-            && control_input_description_flag == "--control-input-description"
-            && control_input_sketch_token_flag == "--control-input-sketch-token"
-            && control_input_visible_flag == "--control-input-visible"
-            && control_input_decision_flag == "--control-input-decision"
-            && handled_errors_flag == "--handled-errors"
-            && recovery_behavior_flag == "--recovery-behavior"
-            && control_sketch_token_flag == "--control-sketch-token"
-            && navigation_type_flag == "--navigation-type"
-            && navigation_target_flag == "--navigation-target"
-            && external_workflow_flag == "--external-workflow" =>
-        {
-            let slice_slug =
-                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
-            let view_name =
-                parse_view_name(name).map_err(|error| ShellError::message(error.to_string()))?;
-            let read_model_name = parse_read_model_name(read_model)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let field_name = parse_view_field_name(field)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let source_field = parse_view_field_name(source_field)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let sketch_token = parse_sketch_token(sketch_token)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let provenance_description = parse_provenance_description(field_provenance)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let bit_encoding = parse_bit_encoding_semantics(bit_encoding)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_name = parse_control_name(control)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_command = parse_command_name(control_command)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input = parse_datum_name(control_input)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_source = parse_command_input_source_kind(control_input_source)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_description =
-                parse_command_input_source_description(control_input_description)
-                    .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_sketch_token = parse_sketch_token(control_input_sketch_token)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_visible = parse_bool_flag(control_input_visible)?;
-            let control_input_decision = parse_bool_flag(control_input_decision)?;
-            let handled_errors = parse_command_error_names(handled_errors)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let recovery_behavior = parse_control_recovery_behavior(recovery_behavior)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_sketch_token = parse_sketch_token(control_sketch_token)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let navigation_type = parse_navigation_target_type(navigation_type)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let navigation_target = parse_navigation_target_name(navigation_target)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let external_workflow = parse_navigation_target_name(external_workflow)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::AddViewDefinition {
-                    view: NewViewDefinition::new(
-                        slice_slug,
-                        view_name,
-                        NewViewField::new(
-                            field_name,
-                            parse_view_field_source_kind("read_model")
-                                .map_err(|error| ShellError::message(error.to_string()))?,
-                            read_model_name,
-                            source_field,
-                            sketch_token,
-                            provenance_description,
-                            bit_encoding,
-                        ),
-                    )
-                    .with_controls(ViewControls::from_controls([
-                        NewControlDefinition::new(
-                            control_name,
-                            control_command,
-                            NewControlInputProvision::new(
-                                control_input,
-                                control_input_source,
-                                control_input_description,
-                                control_input_sketch_token,
-                                control_input_visible,
-                                control_input_decision,
-                            ),
-                            CommandErrorNames::from_names(handled_errors),
-                            recovery_behavior,
-                            control_sketch_token,
-                            NewNavigationTarget::new(navigation_type, navigation_target)
-                                .with_external_workflow(external_workflow),
-                        ),
-                    ])),
-                },
-            })
-        }
-        [
-            command,
-            subject,
-            slice_flag,
-            slice,
-            name_flag,
-            name,
-            read_model_flag,
-            read_model,
-            field_flag,
-            field,
-            source_field_flag,
-            source_field,
-            sketch_token_flag,
-            sketch_token,
-            field_provenance_flag,
-            field_provenance,
-            bit_encoding_flag,
-            bit_encoding,
-            control_flag,
-            control,
-            control_command_flag,
+        )?;
+        let control = NewControlDefinition::new(
+            control_name,
             control_command,
-            control_input_flag,
-            control_input,
-            control_input_source_flag,
-            control_input_source,
-            control_input_description_flag,
-            control_input_description,
-            control_input_sketch_token_flag,
-            control_input_sketch_token,
-            control_input_visible_flag,
-            control_input_visible,
-            control_input_decision_flag,
-            control_input_decision,
-            handled_errors_flag,
+            provision,
             handled_errors,
-            recovery_behavior_flag,
             recovery_behavior,
-            control_sketch_token_flag,
             control_sketch_token,
-            navigation_type_flag,
-            navigation_type,
-            navigation_target_flag,
-            navigation_target,
-            local_states_flag,
-            local_states,
-            filters_flag,
-            filters,
-        ] if command == "add"
-            && subject == "view"
-            && slice_flag == "--slice"
-            && name_flag == "--name"
-            && read_model_flag == "--read-model"
-            && field_flag == "--field"
-            && source_field_flag == "--source-field"
-            && sketch_token_flag == "--sketch-token"
-            && field_provenance_flag == "--field-provenance"
-            && bit_encoding_flag == "--bit-encoding"
-            && control_flag == "--control"
-            && control_command_flag == "--control-command"
-            && control_input_flag == "--control-input"
-            && control_input_source_flag == "--control-input-source"
-            && control_input_description_flag == "--control-input-description"
-            && control_input_sketch_token_flag == "--control-input-sketch-token"
-            && control_input_visible_flag == "--control-input-visible"
-            && control_input_decision_flag == "--control-input-decision"
-            && handled_errors_flag == "--handled-errors"
-            && recovery_behavior_flag == "--recovery-behavior"
-            && control_sketch_token_flag == "--control-sketch-token"
-            && navigation_type_flag == "--navigation-type"
-            && navigation_target_flag == "--navigation-target"
-            && local_states_flag == "--local-states"
-            && filters_flag == "--filters" =>
-        {
-            let slice_slug =
-                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
-            let view_name =
-                parse_view_name(name).map_err(|error| ShellError::message(error.to_string()))?;
-            let read_model_name = parse_read_model_name(read_model)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let field_name = parse_view_field_name(field)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let source_field = parse_view_field_name(source_field)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let sketch_token = parse_sketch_token(sketch_token)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let provenance_description = parse_provenance_description(field_provenance)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let bit_encoding = parse_bit_encoding_semantics(bit_encoding)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_name = parse_control_name(control)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_command = parse_command_name(control_command)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input = parse_datum_name(control_input)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_source = parse_command_input_source_kind(control_input_source)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_description =
-                parse_command_input_source_description(control_input_description)
-                    .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_sketch_token = parse_sketch_token(control_input_sketch_token)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_visible = parse_bool_flag(control_input_visible)?;
-            let control_input_decision = parse_bool_flag(control_input_decision)?;
-            let handled_errors = parse_command_error_names(handled_errors)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let recovery_behavior = parse_control_recovery_behavior(recovery_behavior)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_sketch_token = parse_sketch_token(control_sketch_token)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let navigation_type = parse_navigation_target_type(navigation_type)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let navigation_target = parse_navigation_target_name(navigation_target)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let local_states = parse_navigation_target_names(local_states)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let filters = parse_navigation_target_names(filters)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::AddViewDefinition {
-                    view: NewViewDefinition::new(
-                        slice_slug,
-                        view_name,
-                        NewViewField::new(
-                            field_name,
-                            parse_view_field_source_kind("read_model")
-                                .map_err(|error| ShellError::message(error.to_string()))?,
-                            read_model_name,
-                            source_field,
-                            sketch_token,
-                            provenance_description,
-                            bit_encoding,
-                        ),
-                    )
-                    .with_local_states(ViewLocalStates::from_targets(local_states))
-                    .with_filters(ViewFilters::from_targets(filters))
-                    .with_controls(ViewControls::from_controls([NewControlDefinition::new(
-                        control_name,
-                        control_command,
-                        NewControlInputProvision::new(
-                            control_input,
-                            control_input_source,
-                            control_input_description,
-                            control_input_sketch_token,
-                            control_input_visible,
-                            control_input_decision,
-                        ),
-                        CommandErrorNames::from_names(handled_errors),
-                        recovery_behavior,
-                        control_sketch_token,
-                        NewNavigationTarget::new(navigation_type, navigation_target),
-                    )])),
-                },
-            })
-        }
-        [
-            command,
-            subject,
-            slice_flag,
-            slice,
-            name_flag,
-            name,
-            read_model_flag,
+            navigation,
+        );
+        build_add_view_cli(slice_slug, view_name, view_field, [control], None, None)
+    } else {
+        parse_cli_12(arguments)
+    }
+}
+
+fn parse_cli_12(arguments: &[String]) -> Result<Cli, ShellError> {
+    let args: Vec<&str> = arguments.iter().map(String::as_str).collect();
+    if let [
+        "add",
+        "view",
+        "--slice",
+        slice,
+        "--name",
+        name,
+        "--read-model",
+        read_model,
+        "--field",
+        field,
+        "--source-field",
+        source_field,
+        "--sketch-token",
+        sketch_token,
+        "--field-provenance",
+        field_provenance,
+        "--bit-encoding",
+        bit_encoding,
+        "--control",
+        control,
+        "--control-command",
+        control_command,
+        "--control-input",
+        control_input,
+        "--control-input-source",
+        control_input_source,
+        "--control-input-description",
+        control_input_description,
+        "--control-input-sketch-token",
+        control_input_sketch_token,
+        "--control-input-visible",
+        control_input_visible,
+        "--control-input-decision",
+        control_input_decision,
+        "--handled-errors",
+        handled_errors,
+        "--recovery-behavior",
+        recovery_behavior,
+        "--control-sketch-token",
+        control_sketch_token,
+        "--navigation-type",
+        navigation_type,
+        "--navigation-target",
+        navigation_target,
+        "--local-states",
+        local_states,
+        "--filters",
+        filters,
+    ] = args.as_slice()
+    {
+        let (slice_slug, view_name) = parse_slice_and_view_name(slice, name)?;
+        let view_field = build_view_read_model_field(
             read_model,
-            field_flag,
             field,
-            source_field_flag,
             source_field,
-            sketch_token_flag,
             sketch_token,
-            field_provenance_flag,
             field_provenance,
-            bit_encoding_flag,
             bit_encoding,
-            control_flag,
-            control,
-            control_command_flag,
-            control_command,
-            control_input_flag,
+        )?;
+        let (control_name, control_command) =
+            parse_control_name_and_command(control, control_command)?;
+        let provision = build_control_input_provision(
             control_input,
-            control_input_source_flag,
             control_input_source,
-            control_input_description_flag,
             control_input_description,
-            control_input_sketch_token_flag,
             control_input_sketch_token,
-            control_input_visible_flag,
             control_input_visible,
-            control_input_decision_flag,
             control_input_decision,
-            handled_errors_flag,
+        )?;
+        let (handled_errors, recovery_behavior, control_sketch_token) =
+            parse_control_errors_recovery_sketch(
+                handled_errors,
+                recovery_behavior,
+                control_sketch_token,
+            )?;
+        let navigation = build_navigation_target(navigation_type, navigation_target)?;
+        let control = NewControlDefinition::new(
+            control_name,
+            control_command,
+            provision,
             handled_errors,
-            recovery_behavior_flag,
             recovery_behavior,
-            control_sketch_token_flag,
             control_sketch_token,
-            navigation_type_flag,
-            navigation_type,
-            navigation_target_flag,
-            navigation_target,
-        ] if command == "add"
-            && subject == "view"
-            && slice_flag == "--slice"
-            && name_flag == "--name"
-            && read_model_flag == "--read-model"
-            && field_flag == "--field"
-            && source_field_flag == "--source-field"
-            && sketch_token_flag == "--sketch-token"
-            && field_provenance_flag == "--field-provenance"
-            && bit_encoding_flag == "--bit-encoding"
-            && control_flag == "--control"
-            && control_command_flag == "--control-command"
-            && control_input_flag == "--control-input"
-            && control_input_source_flag == "--control-input-source"
-            && control_input_description_flag == "--control-input-description"
-            && control_input_sketch_token_flag == "--control-input-sketch-token"
-            && control_input_visible_flag == "--control-input-visible"
-            && control_input_decision_flag == "--control-input-decision"
-            && handled_errors_flag == "--handled-errors"
-            && recovery_behavior_flag == "--recovery-behavior"
-            && control_sketch_token_flag == "--control-sketch-token"
-            && navigation_type_flag == "--navigation-type"
-            && navigation_target_flag == "--navigation-target" =>
-        {
-            let slice_slug =
-                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
-            let view_name =
-                parse_view_name(name).map_err(|error| ShellError::message(error.to_string()))?;
-            let read_model_name = parse_read_model_name(read_model)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let field_name = parse_view_field_name(field)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let source_field = parse_view_field_name(source_field)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let sketch_token = parse_sketch_token(sketch_token)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let provenance_description = parse_provenance_description(field_provenance)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let bit_encoding = parse_bit_encoding_semantics(bit_encoding)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_name = parse_control_name(control)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_command = parse_command_name(control_command)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input = parse_datum_name(control_input)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_source = parse_command_input_source_kind(control_input_source)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_description =
-                parse_command_input_source_description(control_input_description)
-                    .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_sketch_token = parse_sketch_token(control_input_sketch_token)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_input_visible = parse_bool_flag(control_input_visible)?;
-            let control_input_decision = parse_bool_flag(control_input_decision)?;
-            let handled_errors = parse_command_error_names(handled_errors)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let recovery_behavior = parse_control_recovery_behavior(recovery_behavior)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let control_sketch_token = parse_sketch_token(control_sketch_token)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let navigation_type = parse_navigation_target_type(navigation_type)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let navigation_target = parse_navigation_target_name(navigation_target)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::AddViewDefinition {
-                    view: NewViewDefinition::new(
-                        slice_slug,
-                        view_name,
-                        NewViewField::new(
-                            field_name,
-                            parse_view_field_source_kind("read_model")
-                                .map_err(|error| ShellError::message(error.to_string()))?,
-                            read_model_name,
-                            source_field,
-                            sketch_token,
-                            provenance_description,
-                            bit_encoding,
-                        ),
-                    )
-                    .with_controls(ViewControls::from_controls([
-                        NewControlDefinition::new(
-                            control_name,
-                            control_command,
-                            NewControlInputProvision::new(
-                                control_input,
-                                control_input_source,
-                                control_input_description,
-                                control_input_sketch_token,
-                                control_input_visible,
-                                control_input_decision,
-                            ),
-                            CommandErrorNames::from_names(handled_errors),
-                            recovery_behavior,
-                            control_sketch_token,
-                            NewNavigationTarget::new(navigation_type, navigation_target),
-                        ),
-                    ])),
-                },
-            })
-        }
+            navigation,
+        );
+        build_add_view_cli(
+            slice_slug,
+            view_name,
+            view_field,
+            [control],
+            Some(local_states),
+            Some(filters),
+        )
+    } else {
+        parse_cli_13(arguments)
+    }
+}
+
+fn parse_cli_13(arguments: &[String]) -> Result<Cli, ShellError> {
+    let args: Vec<&str> = arguments.iter().map(String::as_str).collect();
+    if let [
+        "add",
+        "view",
+        "--slice",
+        slice,
+        "--name",
+        name,
+        "--read-model",
+        read_model,
+        "--field",
+        field,
+        "--source-field",
+        source_field,
+        "--sketch-token",
+        sketch_token,
+        "--field-provenance",
+        field_provenance,
+        "--bit-encoding",
+        bit_encoding,
+        "--control",
+        control,
+        "--control-command",
+        control_command,
+        "--control-input",
+        control_input,
+        "--control-input-source",
+        control_input_source,
+        "--control-input-description",
+        control_input_description,
+        "--control-input-sketch-token",
+        control_input_sketch_token,
+        "--control-input-visible",
+        control_input_visible,
+        "--control-input-decision",
+        control_input_decision,
+        "--handled-errors",
+        handled_errors,
+        "--recovery-behavior",
+        recovery_behavior,
+        "--control-sketch-token",
+        control_sketch_token,
+        "--navigation-type",
+        navigation_type,
+        "--navigation-target",
+        navigation_target,
+    ] = args.as_slice()
+    {
+        let (slice_slug, view_name) = parse_slice_and_view_name(slice, name)?;
+        let view_field = build_view_read_model_field(
+            read_model,
+            field,
+            source_field,
+            sketch_token,
+            field_provenance,
+            bit_encoding,
+        )?;
+        let (control_name, control_command) =
+            parse_control_name_and_command(control, control_command)?;
+        let provision = build_control_input_provision(
+            control_input,
+            control_input_source,
+            control_input_description,
+            control_input_sketch_token,
+            control_input_visible,
+            control_input_decision,
+        )?;
+        let (handled_errors, recovery_behavior, control_sketch_token) =
+            parse_control_errors_recovery_sketch(
+                handled_errors,
+                recovery_behavior,
+                control_sketch_token,
+            )?;
+        let navigation = build_navigation_target(navigation_type, navigation_target)?;
+        let control = NewControlDefinition::new(
+            control_name,
+            control_command,
+            provision,
+            handled_errors,
+            recovery_behavior,
+            control_sketch_token,
+            navigation,
+        );
+        build_add_view_cli(slice_slug, view_name, view_field, [control], None, None)
+    } else {
+        parse_cli_14(arguments)
+    }
+}
+
+fn parse_cli_14(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -1680,6 +1696,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 command: Command::AddReadModelDefinition { read_model },
             })
         }
+        _ => parse_cli_15(arguments),
+    }
+}
+
+fn parse_cli_15(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -1754,6 +1776,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_16(arguments),
+    }
+}
+
+fn parse_cli_16(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -1813,6 +1841,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 command: Command::AddEventDefinition { event },
             })
         }
+        _ => parse_cli_17(arguments),
+    }
+}
+
+fn parse_cli_17(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -1872,6 +1906,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 command: Command::AddEventDefinition { event },
             })
         }
+        _ => parse_cli_18(arguments),
+    }
+}
+
+fn parse_cli_18(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -1925,6 +1965,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_19(arguments),
+    }
+}
+
+fn parse_cli_19(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -1993,6 +2039,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_20(arguments),
+    }
+}
+
+fn parse_cli_20(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2041,6 +2093,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_21(arguments),
+    }
+}
+
+fn parse_cli_21(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2127,6 +2185,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_22(arguments),
+    }
+}
+
+fn parse_cli_22(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2163,6 +2227,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_23(arguments),
+    }
+}
+
+fn parse_cli_23(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2228,6 +2298,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_24(arguments),
+    }
+}
+
+fn parse_cli_24(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2296,6 +2372,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_25(arguments),
+    }
+}
+
+fn parse_cli_25(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2361,6 +2443,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 command: Command::AddEventDefinition { event },
             })
         }
+        _ => parse_cli_26(arguments),
+    }
+}
+
+fn parse_cli_26(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2426,6 +2514,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 command: Command::AddEventDefinition { event },
             })
         }
+        _ => parse_cli_27(arguments),
+    }
+}
+
+fn parse_cli_27(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2489,6 +2583,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_28(arguments),
+    }
+}
+
+fn parse_cli_28(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2562,6 +2662,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 command: Command::AddSliceScenario { scenario },
             })
         }
+        _ => parse_cli_29(arguments),
+    }
+}
+
+fn parse_cli_29(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2627,6 +2733,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_30(arguments),
+    }
+}
+
+fn parse_cli_30(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2698,6 +2810,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_31(arguments),
+    }
+}
+
+fn parse_cli_31(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2747,6 +2865,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_32(arguments),
+    }
+}
+
+fn parse_cli_32(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2790,6 +2914,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_33(arguments),
+    }
+}
+
+fn parse_cli_33(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2864,6 +2994,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_34(arguments),
+    }
+}
+
+fn parse_cli_34(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -2944,6 +3080,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_35(arguments),
+    }
+}
+
+fn parse_cli_35(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3023,6 +3165,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_36(arguments),
+    }
+}
+
+fn parse_cli_36(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3094,6 +3242,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_37(arguments),
+    }
+}
+
+fn parse_cli_37(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3157,6 +3311,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_38(arguments),
+    }
+}
+
+fn parse_cli_38(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3214,6 +3374,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_39(arguments),
+    }
+}
+
+fn parse_cli_39(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3257,6 +3423,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_40(arguments),
+    }
+}
+
+fn parse_cli_40(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3333,6 +3505,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_41(arguments),
+    }
+}
+
+fn parse_cli_41(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3398,6 +3576,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_42(arguments),
+    }
+}
+
+fn parse_cli_42(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3435,6 +3619,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_43(arguments),
+    }
+}
+
+fn parse_cli_43(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3495,6 +3685,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_44(arguments),
+    }
+}
+
+fn parse_cli_44(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3564,6 +3760,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_45(arguments),
+    }
+}
+
+fn parse_cli_45(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3648,6 +3850,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_46(arguments),
+    }
+}
+
+fn parse_cli_46(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3703,6 +3911,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_47(arguments),
+    }
+}
+
+fn parse_cli_47(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3752,6 +3966,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_48(arguments),
+    }
+}
+
+fn parse_cli_48(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -3838,6 +4058,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_49(arguments),
+    }
+}
+
+fn parse_cli_49(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [command, subject, suite_flag, suite]
             if command == "gherkin" && subject == "list" && suite_flag == "--suite" =>
         {
@@ -3920,6 +4146,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_50(arguments),
+    }
+}
+
+fn parse_cli_50(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [command, subject, slug_flag, slug]
             if command == "remove" && subject == "workflow" && slug_flag == "--slug" =>
         {
@@ -4004,6 +4236,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_51(arguments),
+    }
+}
+
+fn parse_cli_51(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             transport,
@@ -4089,6 +4327,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 })
                 .map_err(|error| ShellError::message(error.to_string()))
         }
+        _ => parse_cli_52(arguments),
+    }
+}
+
+fn parse_cli_52(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [command, subject, slug_flag, slug]
             if command == "show" && subject == "slice" && slug_flag == "--slug" =>
         {
@@ -4155,6 +4399,12 @@ fn parse_cli(arguments: Vec<String>) -> Result<Cli, ShellError> {
                 },
             })
         }
+        _ => parse_cli_53(arguments),
+    }
+}
+
+fn parse_cli_53(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
@@ -4306,7 +4556,7 @@ fn print_help() -> Result<(), ShellError> {
     Ok(())
 }
 
-fn print_enum_help() -> Result<(), ShellError> {
+fn print_enum_help() {
     for modeled_enum in MODELING_ENUMS {
         println!(
             "{}: {}",
@@ -4314,7 +4564,6 @@ fn print_enum_help() -> Result<(), ShellError> {
             modeled_enum.values().join(", ")
         );
     }
-    Ok(())
 }
 
 fn parse_basic_scenario(
@@ -4364,147 +4613,159 @@ fn parse_scenario_streams(
 }
 
 fn help_command() -> ClapCommand {
-    ClapCommand::new("emc")
+    let command = ClapCommand::new("emc")
         .about("Event Model Compiler")
         .disable_help_subcommand(true)
         .arg_required_else_help(true)
-        .subcommand(
-            ClapCommand::new("init")
-                .about("Create a deterministic EMC project")
-                .arg(Arg::new("name").long("name").value_name("PROJECT_NAME")),
-        )
-        .subcommand(
-            ClapCommand::new("help")
-                .about("Show modeling reference material")
-                .subcommand(ClapCommand::new("enums").about("List accepted modeled enum values")),
-        )
-        .subcommand(
-            ClapCommand::new("list").about("Read model indexes").subcommand(
-                ClapCommand::new("workflows").about("List modeled workflows in the project"),
-            )
-            .subcommand(ClapCommand::new("slices").about("List modeled slices in the project"))
-            .subcommand(
-                ClapCommand::new("transitions")
-                    .about("List modeled workflow transitions in the project"),
-            ),
-        )
-        .subcommand(
-            ClapCommand::new("show")
-                .about("Read modeled artifacts")
-                .subcommand(ClapCommand::new("workflow").about("Show a workflow by slug"))
-                .subcommand(ClapCommand::new("slice").about("Show a slice by slug")),
-        )
-        .subcommand(
-            ClapCommand::new("add")
-                .about("Create modeled business artifacts")
-                .subcommand(
-                    ClapCommand::new("workflow")
-                        .about("Add a workflow and synchronized formal artifacts"),
-                )
-                .subcommand(
-                    ClapCommand::new("workflow-outcome")
-                        .about("Add a workflow composition outcome fact to formal artifacts"),
-                )
-                .subcommand(
-                    ClapCommand::new("workflow-command-error").about(
-                        "Add a workflow composition command-error fact to formal artifacts",
-                    ),
-                )
-                .subcommand(
-                    ClapCommand::new("workflow-owned-definition").about(
-                        "Add a workflow composition ownership fact to formal artifacts",
-                    ),
-                )
-                .subcommand(
-                    ClapCommand::new("workflow-transition-evidence").about(
-                        "Add workflow transition legality evidence to formal artifacts",
-                    ),
-                )
-                .subcommand(
-                    ClapCommand::new("slice")
-                        .about("Add a slice and synchronized formal artifacts"),
-                )
-                .subcommand(
-                    ClapCommand::new("scenario")
-                        .about("Add an acceptance or contract scenario to formal slice artifacts"),
-                )
-                .subcommand(
-                    ClapCommand::new("command")
-                        .about("Add a command definition to formal slice artifacts"),
-                )
-                .subcommand(
-                    ClapCommand::new("event")
-                        .about("Add an event definition to formal slice artifacts"),
-                )
-                .subcommand(
-                    ClapCommand::new("outcome")
-                        .about("Add an outcome definition to formal slice artifacts"),
-                )
-                .subcommand(
-                    ClapCommand::new("read-model")
-                        .about("Add a read-model projection to formal slice artifacts"),
-                )
-                .subcommand(
-                    ClapCommand::new("view")
-                        .about("Add a view field projection to formal slice artifacts"),
-                )
-                .subcommand(
-                    ClapCommand::new("automation")
-                        .about("Add an automation reaction to formal slice artifacts"),
-                )
-                .subcommand(
-                    ClapCommand::new("translation")
-                        .about("Add a translation boundary to formal slice artifacts"),
-                )
-                .subcommand(
-                    ClapCommand::new("data-flow")
-                        .about("Add a bit-level data-flow fact to formal slice artifacts"),
-                ),
-        )
-        .subcommand(
-            ClapCommand::new("update")
-                .about("Modify modeled business artifacts")
-                .subcommand(
-                    ClapCommand::new("workflow")
-                        .about("Update a workflow and synchronized formal artifacts"),
-                )
-                .subcommand(
-                    ClapCommand::new("slice")
-                        .about("Update a slice and synchronized formal artifacts"),
-                ),
-        )
-        .subcommand(
-            ClapCommand::new("connect")
-                .about("Connect modeled workflow steps")
-                .subcommand(
-                    ClapCommand::new("workflow")
-                        .about("Add a workflow transition and synchronized formal artifacts"),
-                ),
-        )
+        .subcommand(help_init_subcommand())
+        .subcommand(help_help_subcommand())
+        .subcommand(help_list_subcommand())
+        .subcommand(help_show_subcommand())
+        .subcommand(help_add_subcommand())
+        .subcommand(help_update_subcommand())
+        .subcommand(help_connect_subcommand())
         .subcommand(ClapCommand::new("verify").about("Run Lean4 and Quint verification"))
         .subcommand(ClapCommand::new("check").about("Check project artifact synchronization"))
+        .subcommand(help_gherkin_subcommand())
+        .subcommand(help_review_subcommand())
+        .subcommand(help_mcp_subcommand());
+    command.after_help(help_after_text())
+}
+
+fn help_init_subcommand() -> ClapCommand {
+    ClapCommand::new("init")
+        .about("Create a deterministic EMC project")
+        .arg(Arg::new("name").long("name").value_name("PROJECT_NAME"))
+}
+
+fn help_help_subcommand() -> ClapCommand {
+    ClapCommand::new("help")
+        .about("Show modeling reference material")
+        .subcommand(ClapCommand::new("enums").about("List accepted modeled enum values"))
+}
+
+fn help_list_subcommand() -> ClapCommand {
+    ClapCommand::new("list")
+        .about("Read model indexes")
+        .subcommand(ClapCommand::new("workflows").about("List modeled workflows in the project"))
+        .subcommand(ClapCommand::new("slices").about("List modeled slices in the project"))
         .subcommand(
-            ClapCommand::new("gherkin")
-                .about("List or run checked-in event-model rule suites")
-                .subcommand(ClapCommand::new("list").about("List configured feature files"))
-                .subcommand(ClapCommand::new("run").about("Run configured rule-suite coverage")),
+            ClapCommand::new("transitions")
+                .about("List modeled workflow transitions in the project"),
+        )
+}
+
+fn help_show_subcommand() -> ClapCommand {
+    ClapCommand::new("show")
+        .about("Read modeled artifacts")
+        .subcommand(ClapCommand::new("workflow").about("Show a workflow by slug"))
+        .subcommand(ClapCommand::new("slice").about("Show a slice by slug"))
+}
+
+fn help_add_subcommand() -> ClapCommand {
+    ClapCommand::new("add")
+        .about("Create modeled business artifacts")
+        .subcommand(
+            ClapCommand::new("workflow").about("Add a workflow and synchronized formal artifacts"),
         )
         .subcommand(
-            ClapCommand::new("review")
-                .about("Evaluate review gates")
-                .subcommand(ClapCommand::new("gate").about("Check a workflow review gate"))
-                .subcommand(
-                    ClapCommand::new("record").about("Record a clean workflow review"),
-                ),
+            ClapCommand::new("workflow-outcome")
+                .about("Add a workflow composition outcome fact to formal artifacts"),
         )
         .subcommand(
-            ClapCommand::new("mcp")
-                .about("Serve EMC tools over MCP")
-                .subcommand(ClapCommand::new("stdio").about("Serve MCP over stdio"))
-                .subcommand(ClapCommand::new("http").about("Serve MCP over HTTP")),
+            ClapCommand::new("workflow-command-error")
+                .about("Add a workflow composition command-error fact to formal artifacts"),
         )
-        .after_help(
-            "Common commands:
+        .subcommand(
+            ClapCommand::new("workflow-owned-definition")
+                .about("Add a workflow composition ownership fact to formal artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("workflow-transition-evidence")
+                .about("Add workflow transition legality evidence to formal artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("slice").about("Add a slice and synchronized formal artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("scenario")
+                .about("Add an acceptance or contract scenario to formal slice artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("command").about("Add a command definition to formal slice artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("event").about("Add an event definition to formal slice artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("outcome")
+                .about("Add an outcome definition to formal slice artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("read-model")
+                .about("Add a read-model projection to formal slice artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("view").about("Add a view field projection to formal slice artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("automation")
+                .about("Add an automation reaction to formal slice artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("translation")
+                .about("Add a translation boundary to formal slice artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("data-flow")
+                .about("Add a bit-level data-flow fact to formal slice artifacts"),
+        )
+}
+
+fn help_update_subcommand() -> ClapCommand {
+    ClapCommand::new("update")
+        .about("Modify modeled business artifacts")
+        .subcommand(
+            ClapCommand::new("workflow")
+                .about("Update a workflow and synchronized formal artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("slice").about("Update a slice and synchronized formal artifacts"),
+        )
+}
+
+fn help_connect_subcommand() -> ClapCommand {
+    ClapCommand::new("connect")
+        .about("Connect modeled workflow steps")
+        .subcommand(
+            ClapCommand::new("workflow")
+                .about("Add a workflow transition and synchronized formal artifacts"),
+        )
+}
+
+fn help_gherkin_subcommand() -> ClapCommand {
+    ClapCommand::new("gherkin")
+        .about("List or run checked-in event-model rule suites")
+        .subcommand(ClapCommand::new("list").about("List configured feature files"))
+        .subcommand(ClapCommand::new("run").about("Run configured rule-suite coverage"))
+}
+
+fn help_review_subcommand() -> ClapCommand {
+    ClapCommand::new("review")
+        .about("Evaluate review gates")
+        .subcommand(ClapCommand::new("gate").about("Check a workflow review gate"))
+        .subcommand(ClapCommand::new("record").about("Record a clean workflow review"))
+}
+
+fn help_mcp_subcommand() -> ClapCommand {
+    ClapCommand::new("mcp")
+        .about("Serve EMC tools over MCP")
+        .subcommand(ClapCommand::new("stdio").about("Serve MCP over stdio"))
+        .subcommand(ClapCommand::new("http").about("Serve MCP over HTTP"))
+}
+
+fn help_after_text() -> &'static str {
+    "Common commands:
   emc init --name <project-name>
   emc help enums
   emc add workflow --slug <slug> --name <name> --description <text>
@@ -4572,8 +4833,7 @@ fn help_command() -> ClapCommand {
   emc review record --workflow <workflow> --reviewer <reviewer> --reviewed-at <timestamp>
   emc mcp stdio
   emc mcp http --host 127.0.0.1 --port 7331
-  emc mcp http --host 0.0.0.0 --port 7331 --auth-token <token>",
-        )
+  emc mcp http --host 0.0.0.0 --port 7331 --auth-token <token>"
 }
 
 fn parse_port(port: &str) -> Result<u16, ShellError> {

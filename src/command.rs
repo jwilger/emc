@@ -162,11 +162,11 @@ pub(crate) fn resolve_conflict(
     )])
 }
 
-pub(crate) fn gherkin_list(suite: GherkinSuite) -> EffectPlan {
+pub(crate) fn gherkin_list(suite: &GherkinSuite) -> EffectPlan {
     list_gherkin_features(suite)
 }
 
-pub(crate) fn gherkin_run(suite: GherkinSuite) -> EffectPlan {
+pub(crate) fn gherkin_run(suite: &GherkinSuite) -> EffectPlan {
     run_gherkin_suite(suite)
 }
 
@@ -174,7 +174,7 @@ pub(crate) fn gherkin_run_all() -> EffectPlan {
     run_all_gherkin_suites()
 }
 
-pub(crate) fn init(name: ProjectName) -> EffectPlan {
+pub(crate) fn init(name: &ProjectName) -> EffectPlan {
     init_project(name)
 }
 

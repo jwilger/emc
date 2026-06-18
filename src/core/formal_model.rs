@@ -896,8 +896,8 @@ fn sorted_command_inputs(
 
 fn compare_semantic_list<T: AsRef<str>>(left: &[T], right: &[T]) -> Ordering {
     left.iter()
-        .map(|value| value.as_ref())
-        .cmp(right.iter().map(|value| value.as_ref()))
+        .map(AsRef::as_ref)
+        .cmp(right.iter().map(AsRef::as_ref))
 }
 
 fn render_list(items: impl Iterator<Item = String>) -> String {
@@ -918,6 +918,10 @@ fn quoted_list<T: AsRef<str>>(values: &[T]) -> String {
     render_list(values.iter().map(|value| quoted(value.as_ref())))
 }
 
+#[expect(
+    clippy::ref_option,
+    reason = "called at ~40 sites that pass struct fields by reference (`&record.field`); taking &Option<T> keeps those call sites borrow-clean without per-site .as_ref() noise"
+)]
 fn optional_text<T: AsRef<str>>(value: &Option<T>) -> &str {
-    value.as_ref().map(AsRef::as_ref).unwrap_or("")
+    value.as_ref().map_or("", AsRef::as_ref)
 }

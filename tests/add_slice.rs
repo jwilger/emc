@@ -14,12 +14,47 @@ mod tests {
     fn add_slice_updates_workflow_composition_and_slice_data() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
+        init_repair_desk_project(temp_dir.path())?;
+        add_open_ticket_workflow(temp_dir.path())?;
+
+        let initial_lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let initial_digest = digest_marker(&initial_lean)
+            .ok_or("generated workflow artifact is missing an initial digest")?;
+
+        add_capture_ticket_slice(temp_dir.path())?;
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+
+        assert_lean_slice_artifact(&slice_lean);
+        assert_quint_slice_artifact(&slice_quint);
+        assert_lean_workflow_composition(&lean);
+        assert_quint_workflow_composition(&quint);
+        assert_lean_project_root_composition(&lean_root);
+        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
+        assert_lean_project_root_declarations(&lean_root);
+        assert_quint_project_root_composition(&quint_root);
+        assert_workflow_digests_changed(&initial_digest, &lean, &quint)?;
+
+        Ok(())
+    }
+
+    fn init_repair_desk_project(cwd: &Path) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
+            .current_dir(cwd)
             .assert()
             .success();
+        Ok(())
+    }
 
+    fn add_open_ticket_workflow(cwd: &Path) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args([
                 "add",
@@ -31,14 +66,13 @@ mod tests {
                 "--description",
                 "Actor opens a repair ticket.",
             ])
-            .current_dir(temp_dir.path())
+            .current_dir(cwd)
             .assert()
             .success();
+        Ok(())
+    }
 
-        let initial_lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
-        let initial_digest = digest_marker(&initial_lean)
-            .ok_or("generated workflow artifact is missing an initial digest")?;
-
+    fn add_capture_ticket_slice(cwd: &Path) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args([
                 "add",
@@ -54,20 +88,14 @@ mod tests {
                 "--description",
                 "Actor enters repair ticket details.",
             ])
-            .current_dir(temp_dir.path())
+            .current_dir(cwd)
             .assert()
             .success()
             .stdout(predicate::str::contains("added slice Capture ticket"));
+        Ok(())
+    }
 
-        let slice_lean =
-            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let slice_quint =
-            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
-        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
-        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
-        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
-
+    fn assert_lean_slice_artifact(slice_lean: &str) {
         assert!(
             slice_lean.contains("namespace CaptureTicket"),
             "Lean slice artifact must use the business slice module name"
@@ -94,6 +122,9 @@ mod tests {
             slice_lean.contains("def sliceDescription := \"Actor enters repair ticket details.\""),
             "Lean slice artifact must represent the business slice description"
         );
+    }
+
+    fn assert_quint_slice_artifact(slice_quint: &str) {
         assert!(
             slice_quint.contains("module CaptureTicket"),
             "Quint slice artifact must use the business slice module name"
@@ -120,6 +151,9 @@ mod tests {
             slice_quint.contains("val sliceDescription = \"Actor enters repair ticket details.\""),
             "Quint slice artifact must represent the business slice description"
         );
+    }
+
+    fn assert_lean_workflow_composition(lean: &str) {
         assert!(
             lean.contains(
                 "def workflowSlices : List WorkflowSlice := [{ slug := \"capture-ticket\" }]"
@@ -144,6 +178,9 @@ mod tests {
             ),
             "Lean artifact must prove every workflow slice has a composed formal module reference"
         );
+    }
+
+    fn assert_quint_workflow_composition(quint: &str) {
         assert!(
             quint.contains(
                 "val workflowSlices: List[WorkflowSlice] = [{ slug: \"capture-ticket\" }]"
@@ -172,6 +209,9 @@ mod tests {
             ),
             "Quint artifact must verify every workflow slice has a composed formal module reference"
         );
+    }
+
+    fn assert_lean_project_root_composition(lean_root: &str) {
         assert!(
             lean_root.contains("structure ModelSlice where\n  workflow : String\n  slice : String"),
             "Lean project root must type composed workflow-to-slice membership as a named record"
@@ -198,7 +238,9 @@ mod tests {
             ),
             "Lean project root must verify composed slice modules through named fields"
         );
-        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
+    }
+
+    fn assert_lean_project_root_declarations(lean_root: &str) {
         assert!(
             lean_root.contains("theorem modelSlicesAreDeclared : modelSlices.length = 1 := rfl"),
             "Lean project root must prove composed slice membership is declared"
@@ -209,6 +251,9 @@ mod tests {
             ),
             "Lean project root must prove composed slice modules are declared"
         );
+    }
+
+    fn assert_quint_project_root_composition(quint_root: &str) {
         assert!(
             quint_root.contains("val modelSlices: List[ModelSlice] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\" }]"),
             "Quint project root must represent composed workflow-to-slice membership"
@@ -232,14 +277,21 @@ mod tests {
                 .contains("val modelSliceModulesAreDeclared = modelSliceModules.length() == 1"),
             "Quint project root must verify composed slice modules are declared"
         );
+    }
+
+    fn assert_workflow_digests_changed(
+        initial_digest: &str,
+        lean: &str,
+        quint: &str,
+    ) -> Result<(), Box<dyn Error>> {
         assert_ne!(
             initial_digest,
-            digest_marker(&lean).ok_or("Lean artifact is missing an updated digest")?,
+            digest_marker(lean).ok_or("Lean artifact is missing an updated digest")?,
             "Lean digest must change when the composed workflow slice details change"
         );
         assert_ne!(
             initial_digest,
-            digest_marker(&quint).ok_or("Quint artifact is missing an updated digest")?,
+            digest_marker(quint).ok_or("Quint artifact is missing an updated digest")?,
             "Quint digest must change when the composed workflow slice details change"
         );
 
@@ -645,16 +697,16 @@ mod tests {
         artifact: &'a str,
         prefix: &str,
     ) -> Result<&'a str, Box<dyn Error>> {
-        let start = artifact
-            .find(prefix)
-            .ok_or_else(|| format!("generated artifact must contain {prefix}"))?
-            + prefix.len();
-        let tail = &artifact[start..];
+        let (_, tail) = artifact
+            .split_once(prefix)
+            .ok_or_else(|| format!("generated artifact must contain {prefix}"))?;
         let end = tail
             .find('"')
             .ok_or("generated artifact model digest must terminate with a quote")?;
 
-        Ok(&tail[..end])
+        tail.get(..end).ok_or_else(|| {
+            "model digest end offset must lie on a char boundary within the tail".into()
+        })
     }
 
     fn is_lowercase_sha256_hex(value: &str) -> bool {

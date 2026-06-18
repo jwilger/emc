@@ -277,7 +277,7 @@ const SLICE_INVARIANTS: &[QuintInvariantName] = &[
 ];
 
 pub(crate) fn verify_project(
-    project_name: ProjectName,
+    project_name: &ProjectName,
     modeled_workflows: ModeledWorkflowLayouts,
     workflow_slice_details: WorkflowSliceDetails,
 ) -> EffectPlan {

@@ -16,249 +16,16 @@ mod tests {
     fn add_scenario_and_data_flow_updates_formal_slice_artifacts() -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "scenario",
-                "--slice",
-                "capture-ticket",
-                "--kind",
-                "acceptance",
-                "--name",
-                "Actor captures ticket",
-                "--given",
-                "ticket intake screen is open",
-                "--when",
-                "the actor submits ticket details",
-                "--then",
-                "the ticket details are visible for review",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added acceptance scenario Actor captures ticket to slice capture-ticket",
-            ))
-            .stdout(predicate::str::contains(
-                "added acceptance scenario Actor captures ticket to project root",
-            ));
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "scenario",
-                "--slice",
-                "capture-ticket",
-                "--kind",
-                "contract",
-                "--name",
-                "Ticket state projector records title",
-                "--given",
-                "TicketCaptured is stored",
-                "--when",
-                "ticket_state projects the event",
-                "--then",
-                "ticket_state.title equals the event title",
-                "--contract-kind",
-                "projector",
-                "--covered-definition",
-                "ticket_state",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added contract scenario Ticket state projector records title to slice capture-ticket",
-            ))
-            .stdout(predicate::str::contains(
-                "added contract scenario Ticket state projector records title to project root",
-            ));
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "data-flow",
-                "--slice",
-                "capture-ticket",
-                "--datum",
-                "ticket_title",
-                "--source",
-                "actor input title field",
-                "--source-kind",
-                "original",
-                "--transformation",
-                "identity",
-                "--target",
-                "Capture ticket.ticket_title",
-                "--bit-encoding",
-                "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added bit-level data flow ticket_title to slice capture-ticket",
-            ))
-            .stdout(predicate::str::contains(
-                "added bit-level data flow ticket_title to project root",
-            ));
+        arrange_scenario_and_data_flow_artifacts(&temp_dir)?;
 
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
         let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
         let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
-        assert!(
-            lean.contains(
-                "def sliceAcceptanceScenarios : List EventModelScenario := [{ name := \"Actor captures ticket\", givenSteps := [\"ticket intake screen is open\"], whenSteps := [\"the actor submits ticket details\"], thenSteps := [\"the ticket details are visible for review\"], readStreams := [], writtenStreams := [], contractKind := \"\", coveredDefinition := \"\", errorReferences := [] }]"
-            ),
-            "Lean slice artifact must carry authored acceptance scenarios"
-        );
-        assert!(
-            lean.contains(
-                "def sliceContractScenarios : List EventModelScenario := [{ name := \"Ticket state projector records title\", givenSteps := [\"TicketCaptured is stored\"], whenSteps := [\"ticket_state projects the event\"], thenSteps := [\"ticket_state.title equals the event title\"], readStreams := [], writtenStreams := [], contractKind := \"projector\", coveredDefinition := \"ticket_state\", errorReferences := [] }]"
-            ),
-            "Lean slice artifact must carry authored contract scenarios"
-        );
-        assert!(
-            lean.contains(
-                "def sliceBitLevelDataFlows : List BitLevelDataFlow := [{ datum := \"ticket_title\", sourceKind := \"original\", source := \"actor input title field\", transformationSemantics := \"identity\", target := \"Capture ticket.ticket_title\", bitEncoding := \"UTF-8 string\" }]"
-            ),
-            "Lean slice artifact must carry authored bit-level data flows"
-        );
-
-        assert!(
-            quint.contains(
-                "val sliceAcceptanceScenarios: List[EventModelScenario] = [{ name: \"Actor captures ticket\", givenSteps: [\"ticket intake screen is open\"], whenSteps: [\"the actor submits ticket details\"], thenSteps: [\"the ticket details are visible for review\"], readStreams: [], writtenStreams: [], contractKind: \"\", coveredDefinition: \"\", errorReferences: [] }]"
-            ),
-            "Quint slice artifact must carry authored acceptance scenarios"
-        );
-        assert!(
-            quint.contains(
-                "val sliceContractScenarios: List[EventModelScenario] = [{ name: \"Ticket state projector records title\", givenSteps: [\"TicketCaptured is stored\"], whenSteps: [\"ticket_state projects the event\"], thenSteps: [\"ticket_state.title equals the event title\"], readStreams: [], writtenStreams: [], contractKind: \"projector\", coveredDefinition: \"ticket_state\", errorReferences: [] }]"
-            ),
-            "Quint slice artifact must carry authored contract scenarios"
-        );
-        assert!(
-            quint.contains(
-                "val sliceBitLevelDataFlows: List[BitLevelDataFlow] = [{ datum: \"ticket_title\", sourceKind: \"original\", source: \"actor input title field\", transformationSemantics: \"identity\", target: \"Capture ticket.ticket_title\", bitEncoding: \"UTF-8 string\" }]"
-            ),
-            "Quint slice artifact must carry authored bit-level data flows"
-        );
-        assert!(
-            lean_root.contains(
-                "structure ModelScenario where\n  workflow : String\n  slice : String\n  scenarioKind : String\n  scenario : String"
-            ),
-            "Lean project root must type authored first-class scenarios as named records"
-        );
-        assert!(
-            lean_root.contains(
-                "def modelScenarios : List ModelScenario := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", scenarioKind := \"acceptance\", scenario := \"Actor captures ticket\" },{ workflow := \"open-ticket\", slice := \"capture-ticket\", scenarioKind := \"contract\", scenario := \"Ticket state projector records title\" }]"
-            ),
-            "Lean project root must inventory authored first-class scenarios as named records"
-        );
-        assert!(
-            lean_root
-                .contains("theorem modelScenariosAreDeclared : modelScenarios.length = 2 := rfl"),
-            "Lean project root must prove authored scenario inventory completeness"
-        );
-        assert!(
-            lean_root.contains(
-                "structure ModelScenarioDefinition where\n  workflow : String\n  slice : String\n  scenarioKind : String\n  scenario : String\n  given : String\n  when : String\n  thenStep : String\n  readStreams : List String\n  writtenStreams : List String\n  contractKind : String\n  coveredDefinition : String\n  errorReferences : List String"
-            ),
-            "Lean project root must type authored scenario definitions as named records"
-        );
-        assert!(
-            lean_root.contains(
-                "def modelScenarioDefinitions : List ModelScenarioDefinition := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", scenarioKind := \"acceptance\", scenario := \"Actor captures ticket\", given := \"ticket intake screen is open\", when := \"the actor submits ticket details\", thenStep := \"the ticket details are visible for review\", readStreams := [], writtenStreams := [], contractKind := \"\", coveredDefinition := \"\", errorReferences := [] },{ workflow := \"open-ticket\", slice := \"capture-ticket\", scenarioKind := \"contract\", scenario := \"Ticket state projector records title\", given := \"TicketCaptured is stored\", when := \"ticket_state projects the event\", thenStep := \"ticket_state.title equals the event title\", readStreams := [], writtenStreams := [], contractKind := \"projector\", coveredDefinition := \"ticket_state\", errorReferences := [] }]"
-            ),
-            "Lean project root must inventory authored scenario GWT and contract definitions as named records"
-        );
-        assert!(
-            lean_root.contains(
-                "def modelScenarioDefinitionHasGwt (scenario : ModelScenarioDefinition) : Bool := scenario.given.isEmpty == false && scenario.when.isEmpty == false && scenario.thenStep.isEmpty == false"
-            ),
-            "Lean project root must prove scenario GWT completeness through named fields"
-        );
-        assert!(
-            lean_root.contains(
-                "theorem modelScenarioDefinitionsAreDeclared : modelScenarioDefinitions.length = 2 := rfl"
-            ),
-            "Lean project root must prove authored scenario definition completeness"
-        );
-        assert!(
-            quint_root.contains(
-                "type ModelScenario = { workflow: str, slice: str, scenarioKind: str, scenario: str }"
-            ),
-            "Quint project root must type authored scenario inventory entries"
-        );
-        assert!(
-            quint_root.contains(
-                "val modelScenarios: List[ModelScenario] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", scenarioKind: \"acceptance\", scenario: \"Actor captures ticket\" },{ workflow: \"open-ticket\", slice: \"capture-ticket\", scenarioKind: \"contract\", scenario: \"Ticket state projector records title\" }]"
-            ),
-            "Quint project root must inventory authored first-class scenarios"
-        );
-        assert!(
-            quint_root.contains("val modelScenariosAreDeclared = modelScenarios.length() == 2"),
-            "Quint project root must verify authored scenario inventory completeness"
-        );
-        assert!(
-            quint_root.contains(
-                "type ModelScenarioDefinition = { workflow: str, slice: str, scenarioKind: str, scenario: str, given: str, when: str, then: str, readStreams: List[str], writtenStreams: List[str], contractKind: str, coveredDefinition: str, errorReferences: List[str] }"
-            ),
-            "Quint project root must type authored scenario definition entries"
-        );
-        assert!(
-            quint_root.contains(
-                "val modelScenarioDefinitions: List[ModelScenarioDefinition] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", scenarioKind: \"acceptance\", scenario: \"Actor captures ticket\", given: \"ticket intake screen is open\", when: \"the actor submits ticket details\", then: \"the ticket details are visible for review\", readStreams: [], writtenStreams: [], contractKind: \"\", coveredDefinition: \"\", errorReferences: [] },{ workflow: \"open-ticket\", slice: \"capture-ticket\", scenarioKind: \"contract\", scenario: \"Ticket state projector records title\", given: \"TicketCaptured is stored\", when: \"ticket_state projects the event\", then: \"ticket_state.title equals the event title\", readStreams: [], writtenStreams: [], contractKind: \"projector\", coveredDefinition: \"ticket_state\", errorReferences: [] }]"
-            ),
-            "Quint project root must inventory authored scenario GWT and contract definitions"
-        );
-        assert!(
-            quint_root.contains(
-                "val modelScenarioDefinitionsAreDeclared = modelScenarioDefinitions.length() == 2"
-            ),
-            "Quint project root must verify authored scenario definition completeness"
-        );
-        assert!(
-            lean_root.contains(
-                "inductive ModelDataFlowSourceKind where\n  | original\n  | modeledTarget\nderiving BEq, DecidableEq, Repr\n\nstructure ModelDataFlow where\n  workflow : String\n  slice : String\n  datum : String\n  sourceKind : ModelDataFlowSourceKind\n  source : String\n  transformation : String\n  target : String\n  bitEncoding : String"
-            ),
-            "Lean project root must type authored bit-level data-flow source kinds as closed semantic values"
-        );
-        assert!(
-            lean_root.contains(
-                "def modelDataFlows : List ModelDataFlow := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", datum := \"ticket_title\", sourceKind := ModelDataFlowSourceKind.original, source := \"actor input title field\", transformation := \"identity\", target := \"Capture ticket.ticket_title\", bitEncoding := \"UTF-8 string\" }]"
-            ),
-            "Lean project root must inventory authored bit-level data-flow source kinds as enum constructors"
-        );
-        assert!(
-            lean_root.contains(
-                "def modelDataFlowIsBitComplete (dataFlow : ModelDataFlow) : Bool := dataFlow.datum.isEmpty == false && dataFlow.source.isEmpty == false && dataFlow.transformation.isEmpty == false && dataFlow.target.isEmpty == false && dataFlow.bitEncoding.isEmpty == false"
-            ),
-            "Lean project root must prove bit-level data-flow completeness without revalidating enum source kinds as strings"
-        );
-        assert!(
-            lean_root
-                .contains("theorem modelDataFlowsAreDeclared : modelDataFlows.length = 1 := rfl"),
-            "Lean project root must prove authored bit-level data-flow inventory completeness"
-        );
-        assert!(
-            quint_root.contains("type ModelDataFlowSourceKind = Original | ModeledTarget")
-                && quint_root.contains(
-                    "type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: ModelDataFlowSourceKind, source: str, transformation: str, target: str, bitEncoding: str }"
-                ),
-            "Quint project root must type authored bit-level data-flow source kinds as closed semantic values"
-        );
-        assert!(
-            quint_root.contains(
-                "val modelDataFlows: List[ModelDataFlow] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", datum: \"ticket_title\", sourceKind: Original, source: \"actor input title field\", transformation: \"identity\", target: \"Capture ticket.ticket_title\", bitEncoding: \"UTF-8 string\" }]"
-            ),
-            "Quint project root must inventory authored bit-level data-flow source kinds as enum constructors"
-        );
-        assert!(
-            quint_root.contains("val modelDataFlowsAreDeclared = modelDataFlows.length() == 1"),
-            "Quint project root must verify authored bit-level data-flow inventory completeness"
-        );
+        assert_scenario_data_flow_slice_artifacts(&lean, &quint);
+        assert_scenario_data_flow_lean_root_scenarios(&lean_root);
+        assert_scenario_data_flow_quint_root_scenarios(&quint_root);
+        assert_scenario_data_flow_root_data_flows(&lean_root, &quint_root);
         assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
 
         Command::cargo_bin("emc")?
@@ -308,163 +75,8 @@ mod tests {
     fn add_state_change_scenario_records_read_and_written_streams() -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
-                "update",
-                "slice",
-                "--slug",
-                "capture-ticket",
-                "--type",
-                "state_change",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "command",
-                "--slice",
-                "capture-ticket",
-                "--name",
-                "CaptureTicket",
-                "--input",
-                "ticket_title",
-                "--input-source",
-                "actor",
-                "--input-description",
-                "title field on the intake form",
-                "--input-provenance",
-                "actor keystrokes -> form field",
-                "--emits",
-                "TicketCaptured",
-                "--singleton",
-                "true",
-                "--repeat-behavior",
-                "idempotent",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "event",
-                "--slice",
-                "capture-ticket",
-                "--name",
-                "TicketCaptured",
-                "--stream",
-                "tickets",
-                "--attribute",
-                "ticket_title",
-                "--attribute-source",
-                "generated",
-                "--attribute-source-name",
-                "actor_input",
-                "--attribute-source-field",
-                "ticket_title",
-                "--generated-source-kind",
-                "actor_input",
-                "--attribute-provenance",
-                "CaptureTicket.ticket_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "outcome",
-                "--slice",
-                "capture-ticket",
-                "--label",
-                "ticket_captured",
-                "--events",
-                "TicketCaptured",
-                "--externally-relevant",
-                "false",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "data-flow",
-                "--slice",
-                "capture-ticket",
-                "--datum",
-                "ticket_title",
-                "--source",
-                "actor input title field",
-                "--source-kind",
-                "original",
-                "--transformation",
-                "identity",
-                "--target",
-                "CaptureTicket",
-                "--bit-encoding",
-                "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "data-flow",
-                "--slice",
-                "capture-ticket",
-                "--datum",
-                "ticket_title",
-                "--source",
-                "CaptureTicket.ticket_title",
-                "--source-kind",
-                "original",
-                "--transformation",
-                "identity",
-                "--target",
-                "TicketCaptured",
-                "--bit-encoding",
-                "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "scenario",
-                "--slice",
-                "capture-ticket",
-                "--kind",
-                "acceptance",
-                "--name",
-                "Actor captures ticket",
-                "--given",
-                "tickets stream is available",
-                "--when",
-                "the actor submits ticket details",
-                "--then",
-                "TicketCaptured is written",
-                "--read-streams",
-                "tickets",
-                "--written-streams",
-                "tickets",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added acceptance scenario Actor captures ticket to slice capture-ticket",
-            ));
+        arrange_state_change_command_and_event(&temp_dir)?;
+        arrange_state_change_data_flows_and_scenario(&temp_dir)?;
 
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
@@ -526,8 +138,9 @@ mod tests {
     fn update_slice_preserves_authored_formal_slice_facts() -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            &temp_dir,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -542,13 +155,12 @@ mod tests {
                 "the actor submits ticket details",
                 "--then",
                 "the ticket details are visible for review",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            &temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -565,27 +177,32 @@ mod tests {
                 "Capture ticket.ticket_title",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            &temp_dir,
+            &[
                 "update",
                 "slice",
                 "--slug",
                 "capture-ticket",
                 "--description",
                 "Actor enters repair ticket details and priority.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
 
+        assert_update_slice_preserved_facts(&lean, &quint);
+
+        emc(&temp_dir, &["check"])?;
+
+        Ok(())
+    }
+
+    fn assert_update_slice_preserved_facts(lean: &str, quint: &str) {
         assert!(
             lean.contains(
                 "def sliceDescription := \"Actor enters repair ticket details and priority.\""
@@ -618,224 +235,22 @@ mod tests {
             ),
             "Quint slice artifact must preserve authored data flows after update"
         );
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
     fn add_command_definition_updates_formal_slice_artifacts() -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
-                "update",
-                "slice",
-                "--slug",
-                "capture-ticket",
-                "--type",
-                "state_change",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "event",
-                "--slice",
-                "capture-ticket",
-                "--name",
-                "TicketCaptured",
-                "--stream",
-                "tickets",
-                "--attribute",
-                "status",
-                "--attribute-source",
-                "generated",
-                "--attribute-source-name",
-                "ticket_feed_snapshot",
-                "--attribute-source-field",
-                "status",
-                "--generated-source-kind",
-                "ticket_feed_snapshot",
-                "--attribute-provenance",
-                "ticket feed status field",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "command",
-                "--slice",
-                "capture-ticket",
-                "--name",
-                "CaptureTicket",
-                "--input",
-                "ticket_title",
-                "--input-source",
-                "actor",
-                "--input-description",
-                "title field on the intake form",
-                "--input-provenance",
-                "actor keystrokes -> form field",
-                "--emits",
-                "TicketCaptured",
-                "--singleton",
-                "true",
-                "--repeat-behavior",
-                "idempotent",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added command CaptureTicket to slice capture-ticket",
-            ));
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "outcome",
-                "--slice",
-                "capture-ticket",
-                "--label",
-                "ticket_captured",
-                "--events",
-                "TicketCaptured",
-                "--externally-relevant",
-                "false",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "data-flow",
-                "--slice",
-                "capture-ticket",
-                "--datum",
-                "ticket_status",
-                "--source",
-                "TicketCaptured.status",
-                "--source-kind",
-                "original",
-                "--transformation",
-                "projection",
-                "--target",
-                "CaptureTicket",
-                "--bit-encoding",
-                "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "data-flow",
-                "--slice",
-                "capture-ticket",
-                "--datum",
-                "status",
-                "--source",
-                "ticket feed snapshot",
-                "--source-kind",
-                "original",
-                "--transformation",
-                "identity",
-                "--target",
-                "TicketCaptured",
-                "--bit-encoding",
-                "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        arrange_state_change_ticket_feed_event(&temp_dir)?;
+        arrange_actor_capture_ticket_command(&temp_dir)?;
+        arrange_ticket_feed_outcome_and_data_flows(&temp_dir)?;
 
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
         let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
         let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
-        assert!(
-            lean.contains(
-                "def sliceCommands : List SliceCommandReference := [{ name := \"CaptureTicket\" }]"
-            ),
-            "Lean slice artifact must carry the authored command name"
-        );
-        assert!(
-            lean.contains(
-                "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\", inputs := [{ name := \"ticket_title\", sourceKind := CommandInputSourceKind.actor, sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\", generatedSourceName := \"\", generatedSourceField := \"\", sessionSourceName := \"\", sessionSourceField := \"\", invocationArgumentSourceName := \"\", invocationArgumentSourceField := \"\" }], emittedEvents := [{ name := \"TicketCaptured\" }], observedStreams := [], errors := [], singleton := true, repeatBehavior := \"idempotent\" }]"
-            ),
-            "Lean slice artifact must carry the authored command definition"
-        );
-        assert!(
-            quint.contains(
-                "val sliceCommands: List[SliceCommandReference] = [{ name: \"CaptureTicket\" }]"
-            ),
-            "Quint slice artifact must carry the authored command name"
-        );
-        assert!(
-            quint.contains(
-                "val sliceCommandDefinitions: List[CommandDefinition] = [{ name: \"CaptureTicket\", inputs: [{ name: \"ticket_title\", sourceKind: CommandInputActor, sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\", externalPayloadSourceName: \"\", externalPayloadSourceField: \"\", generatedSourceName: \"\", generatedSourceField: \"\", sessionSourceName: \"\", sessionSourceField: \"\", invocationArgumentSourceName: \"\", invocationArgumentSourceField: \"\" }], emittedEvents: [{ name: \"TicketCaptured\" }], observedStreams: [], errors: [], singleton: true, repeatBehavior: \"idempotent\" }]"
-            ),
-            "Quint slice artifact must carry the authored command definition"
-        );
-        assert!(
-            lean_root.contains(
-                "inductive ModelCommandInputSourceKind where\n  | actor\n  | session\n  | generated\n  | externalPayload\n  | eventStreamState\n  | invocationArgument\nderiving BEq, DecidableEq, Repr\n\nstructure ModelCommandInput where\n  workflow : String\n  slice : String\n  command : String\n  input : String\n  sourceKind : ModelCommandInputSourceKind\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
-            ),
-            "Lean project root must type authored command input source-chain inventory entries as named records"
-        );
-        assert!(
-            lean_root.contains(
-                "def modelCommandInputs : List ModelCommandInput := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", command := \"CaptureTicket\", input := \"ticket_title\", sourceKind := ModelCommandInputSourceKind.actor, sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\", generatedSourceName := \"\", generatedSourceField := \"\", sessionSourceName := \"\", sessionSourceField := \"\", invocationArgumentSourceName := \"\", invocationArgumentSourceField := \"\" }]"
-            ),
-            "Lean project root must inventory authored command input source chains"
-        );
-        assert!(
-            lean_root.contains(
-                "def modelCommandInputHasProvenance (input : ModelCommandInput) : Bool := input.sourceDescription.isEmpty == false && input.provenanceChain.isEmpty == false"
-            ),
-            "Lean project root must prove command input provenance through named fields"
-        );
-        assert!(
-            lean_root.contains(
-                "theorem modelCommandInputsAreDeclared : modelCommandInputs.length = 1 := rfl"
-            ),
-            "Lean project root must prove authored command input source-chain inventory completeness"
-        );
-        assert!(
-            quint_root.contains(
-                "type ModelCommandInputSourceKind = ModelCommandInputActor | ModelCommandInputSession | ModelCommandInputGenerated | ModelCommandInputExternalPayload | ModelCommandInputEventStreamState | ModelCommandInputInvocationArgument"
-            ) && quint_root.contains(
-                "type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: ModelCommandInputSourceKind, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str, invocationArgumentSourceName: str, invocationArgumentSourceField: str }"
-            ),
-            "Quint project root must type authored command input source-chain inventory entries"
-        );
-        assert!(
-            quint_root.contains(
-                "val modelCommandInputs: List[ModelCommandInput] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", command: \"CaptureTicket\", input: \"ticket_title\", sourceKind: ModelCommandInputActor, sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\", externalPayloadSourceName: \"\", externalPayloadSourceField: \"\", generatedSourceName: \"\", generatedSourceField: \"\", sessionSourceName: \"\", sessionSourceField: \"\", invocationArgumentSourceName: \"\", invocationArgumentSourceField: \"\" }]"
-            ),
-            "Quint project root must inventory authored command input source chains"
-        );
-        assert!(
-            quint_root
-                .contains("val modelCommandInputsAreDeclared = modelCommandInputs.length() == 1"),
-            "Quint project root must verify authored command input source-chain inventory completeness"
-        );
+        assert_command_definition_slice_artifacts(&lean, &quint);
+        assert_command_input_root_inventory(&lean_root, &quint_root);
         assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
 
         Command::cargo_bin("emc")?
@@ -851,140 +266,9 @@ mod tests {
     fn add_command_definition_records_event_stream_input_source() -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
-                "update",
-                "slice",
-                "--slug",
-                "capture-ticket",
-                "--type",
-                "state_change",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "event",
-                "--slice",
-                "capture-ticket",
-                "--name",
-                "TicketCaptured",
-                "--stream",
-                "tickets",
-                "--attribute",
-                "status",
-                "--attribute-source",
-                "generated",
-                "--attribute-source-name",
-                "ticket_feed_snapshot",
-                "--attribute-source-field",
-                "status",
-                "--generated-source-kind",
-                "ticket_feed_snapshot",
-                "--attribute-provenance",
-                "ticket feed status field",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "command",
-                "--slice",
-                "capture-ticket",
-                "--name",
-                "CaptureTicket",
-                "--input",
-                "ticket_status",
-                "--input-source",
-                "event_stream_state",
-                "--input-description",
-                "current ticket status loaded from the ticket stream",
-                "--input-provenance",
-                "TicketCaptured.status -> ticket_status",
-                "--emits",
-                "TicketCaptured",
-                "--observes",
-                "tickets",
-                "--source-event",
-                "TicketCaptured",
-                "--source-attribute",
-                "status",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added command CaptureTicket to slice capture-ticket",
-            ));
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "outcome",
-                "--slice",
-                "capture-ticket",
-                "--label",
-                "ticket_captured",
-                "--events",
-                "TicketCaptured",
-                "--externally-relevant",
-                "false",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "data-flow",
-                "--slice",
-                "capture-ticket",
-                "--datum",
-                "ticket_status",
-                "--source",
-                "TicketCaptured.status",
-                "--source-kind",
-                "original",
-                "--transformation",
-                "projection",
-                "--target",
-                "CaptureTicket",
-                "--bit-encoding",
-                "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "data-flow",
-                "--slice",
-                "capture-ticket",
-                "--datum",
-                "status",
-                "--source",
-                "ticket feed snapshot",
-                "--source-kind",
-                "original",
-                "--transformation",
-                "identity",
-                "--target",
-                "TicketCaptured",
-                "--bit-encoding",
-                "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        arrange_state_change_ticket_feed_event(&temp_dir)?;
+        arrange_event_stream_capture_ticket_command(&temp_dir)?;
+        arrange_ticket_feed_outcome_and_data_flows(&temp_dir)?;
 
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
@@ -1029,178 +313,8 @@ mod tests {
     {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
-                "update",
-                "slice",
-                "--slug",
-                "capture-ticket",
-                "--type",
-                "state_change",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "external-payload",
-                "--slice",
-                "capture-ticket",
-                "--name",
-                "intake_webhook",
-                "--field",
-                "ticket_title",
-                "--field-provenance",
-                "intake_webhook.ticket_title supplied by the external ticket intake system",
-                "--bit-encoding",
-                "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "data-flow",
-                "--slice",
-                "capture-ticket",
-                "--datum",
-                "ticket_title",
-                "--source",
-                "intake_webhook.ticket_title",
-                "--source-kind",
-                "original",
-                "--transformation",
-                "transformation",
-                "--target",
-                "intake_webhook",
-                "--bit-encoding",
-                "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "command",
-                "--slice",
-                "capture-ticket",
-                "--name",
-                "CaptureTicket",
-                "--input",
-                "ticket_title",
-                "--input-source",
-                "external_payload",
-                "--input-description",
-                "ticket title loaded from the intake webhook payload",
-                "--input-provenance",
-                "intake_webhook.ticket_title -> CaptureTicket.ticket_title",
-                "--emits",
-                "TicketCaptured",
-                "--source-payload",
-                "intake_webhook",
-                "--source-field",
-                "ticket_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added command CaptureTicket to slice capture-ticket",
-            ));
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "event",
-                "--slice",
-                "capture-ticket",
-                "--name",
-                "TicketCaptured",
-                "--stream",
-                "tickets",
-                "--attribute",
-                "ticket_title",
-                "--attribute-source",
-                "command_input",
-                "--attribute-source-name",
-                "ticket_title",
-                "--attribute-source-field",
-                "value",
-                "--attribute-provenance",
-                "CaptureTicket.ticket_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "outcome",
-                "--slice",
-                "capture-ticket",
-                "--label",
-                "ticket_captured",
-                "--events",
-                "TicketCaptured",
-                "--externally-relevant",
-                "false",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "data-flow",
-                "--slice",
-                "capture-ticket",
-                "--datum",
-                "ticket_title",
-                "--source",
-                "intake_webhook.ticket_title",
-                "--source-kind",
-                "original",
-                "--transformation",
-                "projection",
-                "--target",
-                "CaptureTicket",
-                "--bit-encoding",
-                "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "data-flow",
-                "--slice",
-                "capture-ticket",
-                "--datum",
-                "ticket_title",
-                "--source",
-                "CaptureTicket.ticket_title",
-                "--source-kind",
-                "original",
-                "--transformation",
-                "identity",
-                "--target",
-                "TicketCaptured",
-                "--bit-encoding",
-                "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        arrange_external_payload_command(&temp_dir)?;
+        arrange_external_payload_event_outcome_data_flows(&temp_dir)?;
 
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
@@ -1247,136 +361,8 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
-                "update",
-                "slice",
-                "--slug",
-                "capture-ticket",
-                "--type",
-                "state_change",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "command",
-                "--slice",
-                "capture-ticket",
-                "--name",
-                "CaptureTicket",
-                "--input",
-                "ticket_id",
-                "--input-source",
-                "generated",
-                "--input-description",
-                "ticket id allocated by the ticket id generator",
-                "--input-provenance",
-                "ticket_id_generator.uuid -> CaptureTicket.ticket_id",
-                "--emits",
-                "TicketCaptured",
-                "--source-name",
-                "ticket_id_generator",
-                "--source-field",
-                "uuid",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added command CaptureTicket to slice capture-ticket",
-            ));
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "event",
-                "--slice",
-                "capture-ticket",
-                "--name",
-                "TicketCaptured",
-                "--stream",
-                "tickets",
-                "--attribute",
-                "ticket_id",
-                "--attribute-source",
-                "command_input",
-                "--attribute-source-name",
-                "ticket_id",
-                "--attribute-source-field",
-                "value",
-                "--attribute-provenance",
-                "CaptureTicket.ticket_id",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "outcome",
-                "--slice",
-                "capture-ticket",
-                "--label",
-                "ticket_captured",
-                "--events",
-                "TicketCaptured",
-                "--externally-relevant",
-                "false",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "data-flow",
-                "--slice",
-                "capture-ticket",
-                "--datum",
-                "ticket_id",
-                "--source",
-                "ticket_id_generator.uuid",
-                "--source-kind",
-                "original",
-                "--transformation",
-                "transformation",
-                "--target",
-                "CaptureTicket",
-                "--bit-encoding",
-                "128-bit UUIDv7 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "data-flow",
-                "--slice",
-                "capture-ticket",
-                "--datum",
-                "ticket_id",
-                "--source",
-                "CaptureTicket.ticket_id",
-                "--source-kind",
-                "original",
-                "--transformation",
-                "identity",
-                "--target",
-                "TicketCaptured",
-                "--bit-encoding",
-                "128-bit UUIDv7 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        arrange_generated_input_command(&temp_dir)?;
+        arrange_generated_input_event_outcome_data_flows(&temp_dir)?;
 
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
@@ -1423,21 +409,38 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_session_input_command(&temp_dir)?;
+        arrange_session_input_event_outcome_data_flows(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert_session_input_source_coordinates(&lean, &quint);
+
+        emc(&temp_dir, &["check"])?;
+
+        complete_contract_scenario_coverage(&temp_dir)?;
+
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn arrange_session_input_command(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "update",
                 "slice",
                 "--slug",
                 "capture-ticket",
                 "--type",
                 "state_change",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc_stdout(
+            temp_dir,
+            &[
                 "add",
                 "command",
                 "--slice",
@@ -1458,16 +461,17 @@ mod tests {
                 "authenticated_session",
                 "--source-field",
                 "organization_id",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added command CaptureTicket to slice capture-ticket",
-            ));
+            ],
+            &["added command CaptureTicket to slice capture-ticket"],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn arrange_session_input_event_outcome_data_flows(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -1486,13 +490,12 @@ mod tests {
                 "value",
                 "--attribute-provenance",
                 "CaptureTicket.organization_id",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "outcome",
                 "--slice",
@@ -1503,13 +506,12 @@ mod tests {
                 "TicketCaptured",
                 "--externally-relevant",
                 "false",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -1526,13 +528,12 @@ mod tests {
                 "CaptureTicket",
                 "--bit-encoding",
                 "128-bit organization UUID string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -1549,13 +550,11 @@ mod tests {
                 "TicketCaptured",
                 "--bit-encoding",
                 "128-bit organization UUID string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+    fn assert_session_input_source_coordinates(lean: &str, quint: &str) {
         assert!(
             lean.contains("sessionSourceName := \"authenticated_session\"")
                 && lean.contains("sessionSourceField := \"organization_id\""),
@@ -1576,22 +575,6 @@ mod tests {
             quint.contains("val commandInputsSourcedFromSessionValuesHaveCoordinates"),
             "Quint slice artifact must verify session command inputs have source coordinates"
         );
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        complete_contract_scenario_coverage(&temp_dir)?;
-
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
@@ -1599,21 +582,42 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_invocation_argument_command(&temp_dir)?;
+        arrange_invocation_argument_event_outcome_data_flows(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+
+        assert_invocation_argument_slice_coordinates(&lean, &quint);
+        assert_invocation_argument_root_coordinates(&lean_root, &quint_root);
+
+        emc(&temp_dir, &["check"])?;
+
+        complete_contract_scenario_coverage(&temp_dir)?;
+
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn arrange_invocation_argument_command(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "update",
                 "slice",
                 "--slug",
                 "capture-ticket",
                 "--type",
                 "state_change",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc_stdout(
+            temp_dir,
+            &[
                 "add",
                 "command",
                 "--slice",
@@ -1634,16 +638,17 @@ mod tests {
                 "CaptureTicket",
                 "--source-field",
                 "title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added command CaptureTicket to slice capture-ticket",
-            ));
+            ],
+            &["added command CaptureTicket to slice capture-ticket"],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn arrange_invocation_argument_event_outcome_data_flows(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -1662,13 +667,12 @@ mod tests {
                 "value",
                 "--attribute-provenance",
                 "CaptureTicket.ticket_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "outcome",
                 "--slice",
@@ -1679,13 +683,12 @@ mod tests {
                 "TicketCaptured",
                 "--externally-relevant",
                 "false",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -1702,13 +705,12 @@ mod tests {
                 "CaptureTicket",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -1725,16 +727,11 @@ mod tests {
                 "TicketCaptured",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
-        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
-        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
-
+    fn assert_invocation_argument_slice_coordinates(lean: &str, quint: &str) {
         assert!(
             lean.contains("invocationArgumentSourceName := \"CaptureTicket\"")
                 && lean.contains("invocationArgumentSourceField := \"title\""),
@@ -1755,6 +752,9 @@ mod tests {
             quint.contains("val commandInputsSourcedFromInvocationArgumentsHaveCoordinates"),
             "Quint slice artifact must verify invocation-argument command inputs have source coordinates"
         );
+    }
+
+    fn assert_invocation_argument_root_coordinates(lean_root: &str, quint_root: &str) {
         assert!(
             lean_root.contains("sourceKind := ModelCommandInputSourceKind.invocationArgument")
                 && lean_root.contains("invocationArgumentSourceName := \"CaptureTicket\"")
@@ -1766,22 +766,6 @@ mod tests {
                 && quint_root.contains("invocationArgumentSourceField: \"title\""),
             "Quint project root must carry invocation-argument command input coordinates"
         );
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        complete_contract_scenario_coverage(&temp_dir)?;
-
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
@@ -1789,21 +773,43 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_command_with_error_scenario(&temp_dir)?;
+        arrange_command_with_error_event_outcome_data_flows(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+
+        assert_command_with_error_slice_artifacts(&lean, &quint);
+        assert_command_with_error_root_inventory(&lean_root, &quint_root);
+        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
+
+        emc(&temp_dir, &["check"])?;
+
+        complete_contract_scenario_coverage(&temp_dir)?;
+
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn arrange_command_with_error_scenario(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "update",
                 "slice",
                 "--slug",
                 "capture-ticket",
                 "--type",
                 "state_change",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -1828,13 +834,12 @@ mod tests {
                 "tickets",
                 "--error-references",
                 "DuplicateTicket",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc_stdout(
+            temp_dir,
+            &[
                 "add",
                 "command",
                 "--slice",
@@ -1857,16 +862,17 @@ mod tests {
                 "Duplicate ticket is rejected",
                 "--error-recovery",
                 "retry",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added command CaptureTicket to slice capture-ticket",
-            ));
+            ],
+            &["added command CaptureTicket to slice capture-ticket"],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn arrange_command_with_error_event_outcome_data_flows(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -1885,13 +891,12 @@ mod tests {
                 "value",
                 "--attribute-provenance",
                 "CaptureTicket.ticket_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "outcome",
                 "--slice",
@@ -1902,13 +907,12 @@ mod tests {
                 "TicketCaptured",
                 "--externally-relevant",
                 "false",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -1925,13 +929,12 @@ mod tests {
                 "CaptureTicket",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -1948,16 +951,11 @@ mod tests {
                 "TicketCaptured",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
-        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
-        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
-
+    fn assert_command_with_error_slice_artifacts(lean: &str, quint: &str) {
         assert!(
             lean.contains(
                 "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\", inputs := [{ name := \"ticket_title\", sourceKind := CommandInputSourceKind.actor, sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\", generatedSourceName := \"\", generatedSourceField := \"\", sessionSourceName := \"\", sessionSourceField := \"\", invocationArgumentSourceName := \"\", invocationArgumentSourceField := \"\" }], emittedEvents := [{ name := \"TicketCaptured\" }], observedStreams := [], errors := [{ name := \"DuplicateTicket\", scenarioName := \"Duplicate ticket is rejected\", recoveryKind := \"retry\" }], singleton := false, repeatBehavior := \"\" }]"
@@ -1970,6 +968,9 @@ mod tests {
             ),
             "Quint slice artifact must carry authored command errors and recovery"
         );
+    }
+
+    fn assert_command_with_error_root_inventory(lean_root: &str, quint_root: &str) {
         assert!(
             lean_root.contains(
                 "structure ModelCommandError where\n  workflow : String\n  slice : String\n  command : String\n  error : String\n  scenario : String\n  recovery : String"
@@ -2005,23 +1006,6 @@ mod tests {
                 .contains("val modelCommandErrorsAreDeclared = modelCommandErrors.length() == 1"),
             "Quint project root must verify authored command error inventory completeness"
         );
-        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        complete_contract_scenario_coverage(&temp_dir)?;
-
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
@@ -2409,8 +1393,9 @@ mod tests {
         author_state_change_ticket_capture(&temp_dir)?;
         author_ticket_captured_outcome(&temp_dir)?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc_stdout(
+            &temp_dir,
+            &[
                 "add",
                 "external-payload",
                 "--slice",
@@ -2423,22 +1408,35 @@ mod tests {
                 "intake_webhook.ticket_title supplied by the external ticket intake system",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
+            ],
+            &[
                 "added external payload intake_webhook to slice capture-ticket",
-            ))
-            .stdout(predicate::str::contains(
                 "added external payload intake_webhook to project root",
-            ));
+            ],
+        )?;
 
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
         let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
         let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
+        assert_external_payload_slice_artifacts(&lean, &quint);
+        assert_external_payload_lean_root_inventory(&lean_root);
+        assert_external_payload_quint_root_inventory(&quint_root);
+        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
+
+        arrange_external_payload_imported_event(&temp_dir)?;
+
+        emc(&temp_dir, &["check"])?;
+
+        complete_contract_scenario_coverage(&temp_dir)?;
+
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn assert_external_payload_slice_artifacts(lean: &str, quint: &str) {
         assert!(
             lean.contains(
                 "def sliceExternalPayloads : List ExternalPayloadDefinition := [{ name := \"intake_webhook\", fields := [{ name := \"ticket_title\", provenanceDescription := \"intake_webhook.ticket_title supplied by the external ticket intake system\", bitEncoding := \"UTF-8 string\" }] }]"
@@ -2451,6 +1449,9 @@ mod tests {
             ),
             "Quint slice artifact must carry authored external payload field provenance and bit encoding"
         );
+    }
+
+    fn assert_external_payload_lean_root_inventory(lean_root: &str) {
         assert!(
             lean_root.contains(
                 "def modelExternalPayloads : List ModelExternalPayload := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", externalPayload := \"intake_webhook\" }]"
@@ -2475,6 +1476,9 @@ mod tests {
             ),
             "Lean project root must prove authored external payload field completeness"
         );
+    }
+
+    fn assert_external_payload_quint_root_inventory(quint_root: &str) {
         assert!(
             quint_root.contains(
                 "type ModelExternalPayload = { workflow: str, slice: str, externalPayload: str }"
@@ -2511,10 +1515,12 @@ mod tests {
             ),
             "Quint project root must verify authored external payload field completeness"
         );
-        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn arrange_external_payload_imported_event(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -2531,13 +1537,12 @@ mod tests {
                 "intake_webhook",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -2558,13 +1563,12 @@ mod tests {
                 "intake_webhook.ticket_title",
                 "--observed",
                 "true",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -2581,26 +1585,8 @@ mod tests {
                 "TicketImported",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        complete_contract_scenario_coverage(&temp_dir)?;
-
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
+            ],
+        )
     }
 
     #[test]
@@ -2782,8 +1768,28 @@ mod tests {
     fn mcp_stdio_authors_formal_read_model_derivations() -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_read_model_derivation_scenarios(&temp_dir)?;
+        arrange_read_model_derivation_view_data_flows(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        assert!(
+            lean.contains(
+                "derivationRule := \"derivation from TicketCaptured.ticket_title\", derivationSourceFields := [\"ticket_title\",\"raw_title\"], absenceEvent := \"\", derivationScenarioName := \"Ticket title is normalized\""
+            ),
+            "MCP-authored read-model derivation source fields and semantics must be represented in the Lean artifact"
+        );
+
+        complete_contract_scenario_coverage(&temp_dir)?;
+
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn arrange_read_model_derivation_scenarios(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -2802,13 +1808,12 @@ mod tests {
                 "projector",
                 "--covered-definition",
                 "ticket_state",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -2827,24 +1832,26 @@ mod tests {
                 "derivation",
                 "--covered-definition",
                 "ticket_state.normalized_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args(["mcp", "stdio"])
-            .current_dir(temp_dir.path())
-            .write_stdin(mcp_read_model_derivation_requests())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains("\"add_read_model_definition\""))
-            .stdout(predicate::str::contains(
+        emc_stdin(
+            temp_dir,
+            &["mcp", "stdio"],
+            mcp_read_model_derivation_requests(),
+            &[
+                "\"add_read_model_definition\"",
                 "added read model ticket_state to slice capture-ticket",
-            ));
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn arrange_read_model_derivation_view_data_flows(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "view",
                 "--slice",
@@ -2863,13 +1870,12 @@ mod tests {
                 "ticket_state.normalized_title",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -2886,13 +1892,12 @@ mod tests {
                 "ticket_state",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -2909,28 +1914,8 @@ mod tests {
                 "ticket_summary",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        assert!(
-            lean.contains(
-                "derivationRule := \"derivation from TicketCaptured.ticket_title\", derivationSourceFields := [\"ticket_title\",\"raw_title\"], absenceEvent := \"\", derivationScenarioName := \"Ticket title is normalized\""
-            ),
-            "MCP-authored read-model derivation source fields and semantics must be represented in the Lean artifact"
-        );
-
-        complete_contract_scenario_coverage(&temp_dir)?;
-
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
+            ],
+        )
     }
 
     #[test]
@@ -2973,21 +1958,44 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_event_command_data_flow_command(&temp_dir)?;
+        arrange_event_command_data_flow_data_flows(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+
+        assert_event_command_data_flow_slice(&lean, &quint);
+        assert_event_command_data_flow_command_inventory(&lean_root, &quint_root);
+        assert_event_command_data_flow_event_inventory(&lean_root, &quint_root);
+        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
+
+        emc(&temp_dir, &["check"])?;
+
+        complete_contract_scenario_coverage(&temp_dir)?;
+
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn arrange_event_command_data_flow_command(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "update",
                 "slice",
                 "--slug",
                 "capture-ticket",
                 "--type",
                 "state_change",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "command",
                 "--slice",
@@ -3004,13 +2012,12 @@ mod tests {
                 "actor keystrokes -> form field",
                 "--emits",
                 "TicketCaptured",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc_stdout(
+            temp_dir,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -3029,18 +2036,19 @@ mod tests {
                 "value",
                 "--attribute-provenance",
                 "CaptureTicket.ticket_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added event TicketCaptured to slice capture-ticket",
-            ));
+            ],
+            &["added event TicketCaptured to slice capture-ticket"],
+        )?;
 
-        author_ticket_captured_outcome(&temp_dir)?;
+        author_ticket_captured_outcome(temp_dir)
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn arrange_event_command_data_flow_data_flows(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -3057,13 +2065,12 @@ mod tests {
                 "CaptureTicket",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -3080,16 +2087,11 @@ mod tests {
                 "TicketCaptured",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
-        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
-        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
-
+    fn assert_event_command_data_flow_slice(lean: &str, quint: &str) {
         assert!(
             lean.contains(
                 "def sliceEvents : List SliceEventReference := [{ name := \"TicketCaptured\" }]"
@@ -3122,6 +2124,9 @@ mod tests {
             ),
             "Quint slice artifact must carry the authored event definition"
         );
+    }
+
+    fn assert_event_command_data_flow_command_inventory(lean_root: &str, quint_root: &str) {
         assert!(
             lean_root.contains(
                 "structure ModelCommand where\n  workflow : String\n  slice : String\n  command : String"
@@ -3179,6 +2184,9 @@ mod tests {
             quint_root.contains("val modelStreamsAreDeclared = modelStreams.length() == 1"),
             "Quint project root must verify authored stream inventory cardinality"
         );
+    }
+
+    fn assert_event_command_data_flow_event_inventory(lean_root: &str, quint_root: &str) {
         assert!(
             lean_root.contains(
                 "structure ModelEvent where\n  workflow : String\n  slice : String\n  event : String\n  stream : String"
@@ -3243,23 +2251,6 @@ mod tests {
             ),
             "Quint project root must verify authored event attribute provenance inventory completeness"
         );
-        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        complete_contract_scenario_coverage(&temp_dir)?;
-
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
@@ -3267,21 +2258,87 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_rejects_command_setup(&temp_dir)?;
+
+        // Passing the COMMAND name (not the INPUT name) to --attribute-source-name
+        // is the canonical "one typo bricks a slice" mistake: it would source a
+        // command input that does not exist. It must be rejected at write time
+        // rather than silently persisting a model that only fails much later at
+        // the verification gate with no per-attribute correction path.
+        emc_failure_stderr(
+            &temp_dir,
+            &[
+                "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "tickets",
+                "--attribute",
+                "ticket_title",
+                "--attribute-source",
+                "command_input",
+                "--attribute-source-name",
+                "CaptureTicket",
+                "--attribute-source-field",
+                "value",
+                "--attribute-provenance",
+                "CaptureTicket.ticket_title",
+            ],
+            "pass the command INPUT name to --attribute-source-name",
+        )?;
+
+        // The rejected write must leave the store usable: authoring the same
+        // event with the correct input name succeeds, proving nothing was
+        // half-persisted.
+        emc_stdout(
+            &temp_dir,
+            &[
+                "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "tickets",
+                "--attribute",
+                "ticket_title",
+                "--attribute-source",
+                "command_input",
+                "--attribute-source-name",
+                "ticket_title",
+                "--attribute-source-field",
+                "value",
+                "--attribute-provenance",
+                "CaptureTicket.ticket_title",
+            ],
+            &["added event TicketCaptured to slice capture-ticket"],
+        )?;
+
+        emc(&temp_dir, &["list", "slices"])?;
+
+        Ok(())
+    }
+
+    fn arrange_rejects_command_setup(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "update",
                 "slice",
                 "--slug",
                 "capture-ticket",
                 "--type",
                 "state_change",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "command",
                 "--slice",
@@ -3298,82 +2355,8 @@ mod tests {
                 "actor keystrokes -> form field",
                 "--emits",
                 "TicketCaptured",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        // Passing the COMMAND name (not the INPUT name) to --attribute-source-name
-        // is the canonical "one typo bricks a slice" mistake: it would source a
-        // command input that does not exist. It must be rejected at write time
-        // rather than silently persisting a model that only fails much later at
-        // the verification gate with no per-attribute correction path.
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "event",
-                "--slice",
-                "capture-ticket",
-                "--name",
-                "TicketCaptured",
-                "--stream",
-                "tickets",
-                "--attribute",
-                "ticket_title",
-                "--attribute-source",
-                "command_input",
-                "--attribute-source-name",
-                "CaptureTicket",
-                "--attribute-source-field",
-                "value",
-                "--attribute-provenance",
-                "CaptureTicket.ticket_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "pass the command INPUT name to --attribute-source-name",
-            ));
-
-        // The rejected write must leave the store usable: authoring the same
-        // event with the correct input name succeeds, proving nothing was
-        // half-persisted.
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "event",
-                "--slice",
-                "capture-ticket",
-                "--name",
-                "TicketCaptured",
-                "--stream",
-                "tickets",
-                "--attribute",
-                "ticket_title",
-                "--attribute-source",
-                "command_input",
-                "--attribute-source-name",
-                "ticket_title",
-                "--attribute-source-field",
-                "value",
-                "--attribute-provenance",
-                "CaptureTicket.ticket_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added event TicketCaptured to slice capture-ticket",
-            ));
-
-        Command::cargo_bin("emc")?
-            .args(["list", "slices"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
+            ],
+        )
     }
 
     #[test]
@@ -3381,8 +2364,9 @@ mod tests {
         let temp_dir = initialized_project_with_slice()?;
         author_projected_ticket_title(&temp_dir)?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            &temp_dir,
+            &[
                 "add",
                 "view",
                 "--slice",
@@ -3401,15 +2385,28 @@ mod tests {
                 "ticket_state.ticket_title",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
         complete_ticket_summary_display_flow(&temp_dir)?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_shared_event_facts(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert_shared_event_semantics(&lean, &quint);
+
+        complete_contract_scenario_coverage(&temp_dir)?;
+
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn arrange_shared_event_facts(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc_stdout(
+            temp_dir,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -3432,16 +2429,13 @@ mod tests {
                 "TicketTagged.tag",
                 "--shared",
                 "true",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added event TicketTagged to slice capture-ticket",
-            ));
+            ],
+            &["added event TicketTagged to slice capture-ticket"],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -3458,13 +2452,11 @@ mod tests {
                 "TicketTagged",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+    fn assert_shared_event_semantics(lean: &str, quint: &str) {
         assert!(
             lean.contains("name := \"TicketTagged\", stream := \"tickets\"")
                 && lean.contains("observed := false, shared := true"),
@@ -3475,35 +2467,40 @@ mod tests {
                 && quint.contains("observed: false, shared: true"),
             "Quint slice artifact must carry authored shared event semantics"
         );
-
-        complete_contract_scenario_coverage(&temp_dir)?;
-
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
     fn repeated_add_event_merges_attributes_into_one_definition() -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            &temp_dir,
+            &[
                 "update",
                 "slice",
                 "--slug",
                 "capture-ticket",
                 "--type",
                 "state_change",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
+        arrange_repeated_event_command_inputs(&temp_dir)?;
+        arrange_repeated_event_attributes(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+
+        assert_repeated_event_merged_definition(&lean, &quint);
+
+        complete_repeated_event_slice_facts(&temp_dir)?;
+
+        assert_slice_lean_module_verifies(&temp_dir, "CaptureTicket")?;
+
+        Ok(())
+    }
+
+    fn arrange_repeated_event_command_inputs(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
         // Give the command the inputs each merged attribute will trace to, so
         // the event attribute completeness invariants are satisfied. (The
         // command-input merge itself is exercised by the sibling test.)
@@ -3524,8 +2521,9 @@ mod tests {
                 "actor selection -> form field",
             ),
         ] {
-            Command::cargo_bin("emc")?
-                .args([
+            emc(
+                temp_dir,
+                &[
                     "add",
                     "command",
                     "--slice",
@@ -3542,20 +2540,22 @@ mod tests {
                     provenance,
                     "--emits",
                     "TicketCaptured",
-                ])
-                .current_dir(temp_dir.path())
-                .assert()
-                .success();
+                ],
+            )?;
         }
+        Ok(())
+    }
 
+    fn arrange_repeated_event_attributes(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
         // Author the same event three times, each call carrying one attribute.
         for (attribute, source_field, provenance) in [
             ("ticket_title", "value", "CaptureTicket.ticket_title"),
             ("ticket_priority", "value", "CaptureTicket.ticket_priority"),
             ("ticket_category", "value", "CaptureTicket.ticket_category"),
         ] {
-            Command::cargo_bin("emc")?
-                .args([
+            emc_stdout(
+                temp_dir,
+                &[
                     "add",
                     "event",
                     "--slice",
@@ -3574,18 +2574,14 @@ mod tests {
                     source_field,
                     "--attribute-provenance",
                     provenance,
-                ])
-                .current_dir(temp_dir.path())
-                .assert()
-                .success()
-                .stdout(predicate::str::contains(
-                    "added event TicketCaptured to slice capture-ticket",
-                ));
+                ],
+                &["added event TicketCaptured to slice capture-ticket"],
+            )?;
         }
+        Ok(())
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
-
+    fn assert_repeated_event_merged_definition(lean: &str, quint: &str) {
         // Exactly one event definition with all three attributes accumulated.
         assert!(
             lean.contains(
@@ -3610,11 +2606,13 @@ mod tests {
             3,
             "TicketCaptured must be named once per list (definition, reference, emitted), never duplicated"
         );
+    }
 
+    fn complete_repeated_event_slice_facts(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
         // Complete the remaining slice facts so the slice is fully modeled and
         // its Lean module (including sliceNamedDefinitionsAreUniquelyOwned)
         // verifies cleanly.
-        author_ticket_captured_outcome(&temp_dir)?;
+        author_ticket_captured_outcome(temp_dir)?;
         for (datum, source, target) in [
             (
                 "ticket_title",
@@ -3647,8 +2645,9 @@ mod tests {
                 "TicketCaptured",
             ),
         ] {
-            Command::cargo_bin("emc")?
-                .args([
+            emc(
+                temp_dir,
+                &[
                     "add",
                     "data-flow",
                     "--slice",
@@ -3665,13 +2664,12 @@ mod tests {
                     target,
                     "--bit-encoding",
                     "UTF-8 string",
-                ])
-                .current_dir(temp_dir.path())
-                .assert()
-                .success();
+                ],
+            )?;
         }
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -3694,33 +2692,41 @@ mod tests {
                 "tickets",
                 "--written-streams",
                 "tickets",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        assert_slice_lean_module_verifies(&temp_dir, "CaptureTicket")?;
-
-        Ok(())
+            ],
+        )
     }
 
     #[test]
     fn repeated_add_command_merges_inputs_into_one_definition() -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            &temp_dir,
+            &[
                 "update",
                 "slice",
                 "--slug",
                 "capture-ticket",
                 "--type",
                 "state_change",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
+        arrange_repeated_command_inputs(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+
+        assert_repeated_command_merged_definition(&lean, &quint);
+
+        complete_repeated_command_slice_facts(&temp_dir)?;
+
+        assert_slice_lean_module_verifies(&temp_dir, "CaptureTicket")?;
+
+        Ok(())
+    }
+
+    fn arrange_repeated_command_inputs(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
         // Author the same command twice, each call carrying one input.
         for (input, description, provenance) in [
             (
@@ -3734,8 +2740,9 @@ mod tests {
                 "actor selection -> form field",
             ),
         ] {
-            Command::cargo_bin("emc")?
-                .args([
+            emc_stdout(
+                temp_dir,
+                &[
                     "add",
                     "command",
                     "--slice",
@@ -3752,18 +2759,14 @@ mod tests {
                     provenance,
                     "--emits",
                     "TicketCaptured",
-                ])
-                .current_dir(temp_dir.path())
-                .assert()
-                .success()
-                .stdout(predicate::str::contains(
-                    "added command CaptureTicket to slice capture-ticket",
-                ));
+                ],
+                &["added command CaptureTicket to slice capture-ticket"],
+            )?;
         }
+        Ok(())
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
-
+    fn assert_repeated_command_merged_definition(lean: &str, quint: &str) {
         // Exactly one command definition with both inputs, and the repeated
         // emitted event deduplicated to a single reference.
         assert_eq!(
@@ -3799,10 +2802,13 @@ mod tests {
                 == 1,
             "repeated add command must deduplicate the re-stated emitted event in Quint"
         );
+    }
 
+    fn complete_repeated_command_slice_facts(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
         // Complete the slice so its Lean module verifies cleanly.
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -3821,11 +2827,9 @@ mod tests {
                 "value",
                 "--attribute-provenance",
                 "CaptureTicket.ticket_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-        author_ticket_captured_outcome(&temp_dir)?;
+            ],
+        )?;
+        author_ticket_captured_outcome(temp_dir)?;
         for (datum, source, target) in [
             (
                 "ticket_title",
@@ -3843,8 +2847,9 @@ mod tests {
                 "CaptureTicket",
             ),
         ] {
-            Command::cargo_bin("emc")?
-                .args([
+            emc(
+                temp_dir,
+                &[
                     "add",
                     "data-flow",
                     "--slice",
@@ -3861,13 +2866,12 @@ mod tests {
                     target,
                     "--bit-encoding",
                     "UTF-8 string",
-                ])
-                .current_dir(temp_dir.path())
-                .assert()
-                .success();
+                ],
+            )?;
         }
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -3890,14 +2894,8 @@ mod tests {
                 "tickets",
                 "--written-streams",
                 "tickets",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        assert_slice_lean_module_verifies(&temp_dir, "CaptureTicket")?;
-
-        Ok(())
+            ],
+        )
     }
 
     #[test]
@@ -3905,8 +2903,32 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_read_model_projection_facts(&temp_dir)?;
+        arrange_read_model_projection_view_data_flows(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+
+        assert_read_model_projection_slice(&lean, &quint);
+        assert_read_model_projection_lean_root(&lean_root);
+        assert_read_model_projection_quint_root(&quint_root);
+        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
+
+        emc(&temp_dir, &["check"])?;
+
+        complete_contract_scenario_coverage(&temp_dir)?;
+
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn arrange_read_model_projection_facts(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -3925,13 +2947,12 @@ mod tests {
                 "projector",
                 "--covered-definition",
                 "ticket_state",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -3954,13 +2975,12 @@ mod tests {
                 "TicketCaptured.ticket_title",
                 "--observed",
                 "true",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc_stdout(
+            temp_dir,
+            &[
                 "add",
                 "read-model",
                 "--slice",
@@ -3977,19 +2997,20 @@ mod tests {
                 "ticket_title",
                 "--field-provenance",
                 "TicketCaptured.ticket_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
+            ],
+            &[
                 "added read model ticket_state to slice capture-ticket",
-            ))
-            .stdout(predicate::str::contains(
                 "added read model ticket_state to project root",
-            ));
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn arrange_read_model_projection_view_data_flows(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "view",
                 "--slice",
@@ -4008,13 +3029,12 @@ mod tests {
                 "ticket_state.ticket_title",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -4031,13 +3051,12 @@ mod tests {
                 "TicketCaptured",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -4054,13 +3073,12 @@ mod tests {
                 "ticket_state",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -4077,16 +3095,11 @@ mod tests {
                 "ticket_summary",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
-        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
-        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
-
+    fn assert_read_model_projection_slice(lean: &str, quint: &str) {
         assert!(
             lean.contains(
                 "def sliceReadModels : List SliceReadModelReference := [{ name := \"ticket_state\" }]"
@@ -4111,6 +3124,9 @@ mod tests {
             ),
             "Quint slice artifact must carry the authored read model field source and provenance"
         );
+    }
+
+    fn assert_read_model_projection_lean_root(lean_root: &str) {
         assert!(
             lean_root.contains(
                 "def modelReadModels : List ModelReadModel := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", readModel := \"ticket_state\" }]"
@@ -4134,6 +3150,9 @@ mod tests {
             ),
             "Lean project root must prove authored read model fields are declared"
         );
+    }
+
+    fn assert_read_model_projection_quint_root(quint_root: &str) {
         assert!(
             quint_root
                 .contains("type ModelReadModel = { workflow: str, slice: str, readModel: str }"),
@@ -4167,23 +3186,6 @@ mod tests {
             ),
             "Quint project root must verify authored read model fields are declared"
         );
-        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        complete_contract_scenario_coverage(&temp_dir)?;
-
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
@@ -4191,8 +3193,28 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_derivation_absence_scenarios(&temp_dir)?;
+        arrange_derivation_absence_models(&temp_dir)?;
+        arrange_derivation_absence_data_flows(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+
+        assert_derivation_absence_semantics(&lean, &quint);
+
+        emc(&temp_dir, &["check"])?;
+
+        complete_contract_scenario_coverage(&temp_dir)?;
+
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn arrange_derivation_absence_scenarios(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -4211,13 +3233,12 @@ mod tests {
                 "projector",
                 "--covered-definition",
                 "ticket_state",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -4236,13 +3257,12 @@ mod tests {
                 "projector",
                 "--covered-definition",
                 "ticket_state_defaults",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -4261,13 +3281,12 @@ mod tests {
                 "derivation",
                 "--covered-definition",
                 "ticket_state.normalized_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -4286,13 +3305,14 @@ mod tests {
                 "absence",
                 "--covered-definition",
                 "ticket_state.has_ticket",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn arrange_derivation_absence_models(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc_stdout(
+            temp_dir,
+            &[
                 "add",
                 "read-model",
                 "--slice",
@@ -4311,16 +3331,13 @@ mod tests {
                 "Ticket title is normalized",
                 "--field-provenance",
                 "TicketCaptured.ticket_title -> trim",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added read model ticket_state to slice capture-ticket",
-            ));
+            ],
+            &["added read model ticket_state to slice capture-ticket"],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "read-model",
                 "--slice",
@@ -4337,13 +3354,12 @@ mod tests {
                 "Ticket state defaults before capture",
                 "--field-provenance",
                 "absence of TicketCaptured in tickets stream",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "view",
                 "--slice",
@@ -4362,13 +3378,14 @@ mod tests {
                 "ticket_state.normalized_title",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn arrange_derivation_absence_data_flows(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -4385,13 +3402,12 @@ mod tests {
                 "ticket_state",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -4408,13 +3424,12 @@ mod tests {
                 "ticket_state_defaults",
                 "--bit-encoding",
                 "boolean",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -4431,14 +3446,11 @@ mod tests {
                 "ticket_summary",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
-
+    fn assert_derivation_absence_semantics(lean: &str, quint: &str) {
         assert!(
             lean.contains(
                 "{ name := \"normalized_title\", sourceKind := \"derivation\", sourceEvent := \"\", sourceAttribute := \"\", derivationRule := \"derivation from TicketCaptured.ticket_title\", derivationSourceFields := [\"ticket_title\",\"raw_title\"], absenceEvent := \"\", derivationScenarioName := \"Ticket title is normalized\", absenceScenarioName := \"\", provenanceDescription := \"TicketCaptured.ticket_title -> trim\" }"
@@ -4463,22 +3475,6 @@ mod tests {
             ),
             "Quint slice artifact must carry read-model absence/default semantics"
         );
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        complete_contract_scenario_coverage(&temp_dir)?;
-
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
@@ -4486,8 +3482,9 @@ mod tests {
         let temp_dir = initialized_project_with_slice()?;
         author_transitive_ticket_hierarchy_context(&temp_dir)?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc_stdout(
+            &temp_dir,
+            &[
                 "add",
                 "read-model",
                 "--slice",
@@ -4512,13 +3509,9 @@ mod tests {
                 "walk TicketLinked parent_ticket_id edges until root",
                 "--example-scenario",
                 "Ticket hierarchy includes grandchild",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added read model ticket_hierarchy to slice capture-ticket",
-            ));
+            ],
+            &["added read model ticket_hierarchy to slice capture-ticket"],
+        )?;
 
         complete_transitive_ticket_hierarchy(&temp_dir)?;
 
@@ -4566,19 +3559,11 @@ mod tests {
             "Quint project root must verify authored read-model definitions are declared"
         );
 
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        emc(&temp_dir, &["check"])?;
 
         complete_contract_scenario_coverage(&temp_dir)?;
 
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        emc(&temp_dir, &["verify"])?;
 
         Ok(())
     }
@@ -4587,8 +3572,32 @@ mod tests {
     fn add_view_definition_completes_displayed_datum_verification() -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_view_displayed_datum_facts(&temp_dir)?;
+        arrange_view_displayed_datum_view_data_flows(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+
+        assert_view_displayed_datum_slice(&lean, &quint);
+        assert_view_displayed_datum_lean_root(&lean_root);
+        assert_view_displayed_datum_quint_root(&quint_root);
+        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
+
+        emc(&temp_dir, &["check"])?;
+
+        complete_contract_scenario_coverage(&temp_dir)?;
+
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn arrange_view_displayed_datum_facts(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -4607,13 +3616,12 @@ mod tests {
                 "projector",
                 "--covered-definition",
                 "ticket_state",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -4636,13 +3644,12 @@ mod tests {
                 "TicketCaptured.ticket_title",
                 "--observed",
                 "true",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "read-model",
                 "--slice",
@@ -4659,13 +3666,12 @@ mod tests {
                 "ticket_title",
                 "--field-provenance",
                 "TicketCaptured.ticket_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -4682,13 +3688,16 @@ mod tests {
                 "TicketCaptured",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn arrange_view_displayed_datum_view_data_flows(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        emc_stdout(
+            temp_dir,
+            &[
                 "add",
                 "view",
                 "--slice",
@@ -4707,19 +3716,16 @@ mod tests {
                 "ticket_state.ticket_title",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
+            ],
+            &[
                 "added view ticket_summary to slice capture-ticket",
-            ))
-            .stdout(predicate::str::contains(
                 "added view ticket_summary to project root",
-            ));
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -4736,13 +3742,12 @@ mod tests {
                 "ticket_state",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -4759,16 +3764,11 @@ mod tests {
                 "ticket_summary",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
-        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
-        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
-
+    fn assert_view_displayed_datum_slice(lean: &str, quint: &str) {
         assert!(
             lean.contains(
                 "def sliceViews : List SliceViewReference := [{ name := \"ticket_summary\" }]"
@@ -4793,6 +3793,9 @@ mod tests {
             ),
             "Quint slice artifact must carry the authored displayed datum source and sketch token"
         );
+    }
+
+    fn assert_view_displayed_datum_lean_root(lean_root: &str) {
         assert!(
             lean_root.contains(
                 "def modelViews : List ModelView := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", view := \"ticket_summary\" }]"
@@ -4826,6 +3829,9 @@ mod tests {
                 .contains("theorem modelViewFieldsAreDeclared : modelViewFields.length = 1 := rfl"),
             "Lean project root must prove authored displayed data are declared"
         );
+    }
+
+    fn assert_view_displayed_datum_quint_root(quint_root: &str) {
         assert!(
             quint_root.contains("type ModelView = { workflow: str, slice: str, view: str }"),
             "Quint project root must type authored view inventory"
@@ -4874,23 +3880,6 @@ mod tests {
             quint_root.contains("val modelViewFieldsAreDeclared = modelViewFields.length() == 1"),
             "Quint project root must verify authored displayed data are declared"
         );
-        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        complete_contract_scenario_coverage(&temp_dir)?;
-
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
@@ -4899,8 +3888,29 @@ mod tests {
         let temp_dir = initialized_project_with_slice()?;
         author_projected_ticket_title(&temp_dir)?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_view_with_control(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+
+        assert_view_with_control_slice(&lean, &quint);
+        assert_view_with_control_root(&lean_root, &quint_root);
+
+        emc(&temp_dir, &["check"])?;
+
+        complete_contract_scenario_coverage(&temp_dir)?;
+
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn arrange_view_with_control(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc_stdout(
+            temp_dir,
+            &[
                 "add",
                 "view",
                 "--slice",
@@ -4945,16 +3955,13 @@ mod tests {
                 "modeled_view",
                 "--navigation-target",
                 "ticket_summary",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added view ticket_summary to slice capture-ticket",
-            ));
+            ],
+            &["added view ticket_summary to slice capture-ticket"],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -4971,16 +3978,11 @@ mod tests {
                 "ticket_summary",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
-        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
-        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
-
+    fn assert_view_with_control_slice(lean: &str, quint: &str) {
         assert!(
             lean.contains(
                 "def sliceReferencedCommands : List SliceCommandReference := [{ name := \"CaptureTicket\" }]"
@@ -5009,6 +4011,9 @@ mod tests {
             ),
             "Quint slice artifact must carry authored control input, error handling, and navigation"
         );
+    }
+
+    fn assert_view_with_control_root(lean_root: &str, quint_root: &str) {
         assert!(
             lean_root.contains(
                 "def modelViewControls : List ModelViewControl := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", view := \"ticket_summary\", control := \"submit-ticket\", command := \"CaptureTicket\", input := \"ticket_title\", inputSourceKind := ModelCommandInputSourceKind.actor, inputSourceDescription := \"title field on the intake form\", inputSketchToken := \"title-input\", inputVisibleToActor := true, inputDecisionField := true, handledErrors := [\"DuplicateTicket\"], recoveryBehavior := \"retry\", controlSketchToken := \"submit-button\", navigationType := \"modeled_view\", navigationTarget := \"ticket_summary\", externalWorkflow := \"\", externalSystem := \"\", handoffContract := \"\" }]"
@@ -5038,22 +4043,6 @@ mod tests {
                 .contains("val modelViewControlsAreDeclared = modelViewControls.length() == 1"),
             "Quint project root must verify authored view controls are declared"
         );
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        complete_contract_scenario_coverage(&temp_dir)?;
-
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
@@ -5061,8 +4050,28 @@ mod tests {
         let temp_dir = initialized_project_with_slice()?;
         author_projected_ticket_title(&temp_dir)?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_view_local_state_navigation(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+
+        assert_view_local_state_navigation(&lean, &quint, &lean_root, &quint_root);
+
+        emc(&temp_dir, &["check"])?;
+
+        complete_contract_scenario_coverage(&temp_dir)?;
+
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn arrange_view_local_state_navigation(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "view",
                 "--slice",
@@ -5111,13 +4120,12 @@ mod tests {
                 "details-expanded",
                 "--filters",
                 "open-only",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -5134,15 +4142,16 @@ mod tests {
                 "ticket_summary",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
-        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
-        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+    fn assert_view_local_state_navigation(
+        lean: &str,
+        quint: &str,
+        lean_root: &str,
+        quint_root: &str,
+    ) {
         assert!(
             lean.contains("localStates := [\"details-expanded\"], filters := [\"open-only\"]"),
             "Lean slice artifact must carry authored local view state and filter declarations"
@@ -5173,22 +4182,6 @@ mod tests {
             ),
             "Quint project root must inventory authored local view state and filter declarations"
         );
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        complete_contract_scenario_coverage(&temp_dir)?;
-
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
@@ -5513,21 +4506,21 @@ mod tests {
     fn add_automation_definition_updates_formal_slice_artifacts() -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            &temp_dir,
+            &[
                 "update",
                 "slice",
                 "--slug",
                 "capture-ticket",
                 "--type",
                 "automation",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc_stdout(
+            &temp_dir,
+            &[
                 "add",
                 "automation",
                 "--slice",
@@ -5542,22 +4535,30 @@ mod tests {
                 "DuplicateTicket",
                 "--reaction",
                 "deduplicates captured titles by reissuing CaptureTicket when needed",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
+            ],
+            &[
                 "added automation title-deduplicator to slice capture-ticket",
-            ))
-            .stdout(predicate::str::contains(
                 "added automation title-deduplicator to project root",
-            ));
+            ],
+        )?;
 
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
         let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
         let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
         let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
 
+        assert_automation_slice_artifacts(&lean, &quint);
+        assert_automation_root_inventory(&lean_root, &quint_root);
+        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
+
+        emc(&temp_dir, &["check"])?;
+        complete_contract_scenario_coverage(&temp_dir)?;
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn assert_automation_slice_artifacts(lean: &str, quint: &str) {
         assert!(
             lean.contains(
                 "def sliceReferencedCommands : List SliceCommandReference := [{ name := \"CaptureTicket\" }]"
@@ -5582,6 +4583,9 @@ mod tests {
             ),
             "Quint slice artifact must carry authored automation definitions"
         );
+    }
+
+    fn assert_automation_root_inventory(lean_root: &str, quint_root: &str) {
         assert!(
             lean_root.contains(
                 "def modelAutomations : List ModelAutomation := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", automation := \"title-deduplicator\" }]"
@@ -5639,21 +4643,6 @@ mod tests {
             ),
             "Quint project root must verify authored automation definitions are declared"
         );
-        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-        complete_contract_scenario_coverage(&temp_dir)?;
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
@@ -5699,21 +4688,43 @@ mod tests {
     fn add_translation_definition_updates_formal_slice_artifacts() -> Result<(), Box<dyn Error>> {
         let temp_dir = initialized_project_with_slice()?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_translation_external_event(&temp_dir)?;
+        arrange_translation_definition(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+
+        assert_translation_slice_artifacts(&lean, &quint);
+        assert_translation_root_inventory(&lean_root, &quint_root);
+        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
+
+        arrange_translation_payload_data_flow(&temp_dir)?;
+
+        emc(&temp_dir, &["check"])?;
+        complete_contract_scenario_coverage(&temp_dir)?;
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn arrange_translation_external_event(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "update",
                 "slice",
                 "--slug",
                 "capture-ticket",
                 "--type",
                 "translation",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "external-payload",
                 "--slice",
@@ -5726,13 +4737,12 @@ mod tests {
                 "intake_webhook.ticket_title supplied by the external ticket intake system",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -5753,13 +4763,14 @@ mod tests {
                 "intake_webhook.ticket_title",
                 "--observed",
                 "true",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn arrange_translation_definition(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -5776,13 +4787,12 @@ mod tests {
                 "intake_webhook_received",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc_stdout(
+            temp_dir,
+            &[
                 "add",
                 "translation",
                 "--slice",
@@ -5795,22 +4805,39 @@ mod tests {
                 "intake_webhook",
                 "--command",
                 "CaptureTicket",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
+            ],
+            &[
                 "added translation intake-webhook-translator to slice capture-ticket",
-            ))
-            .stdout(predicate::str::contains(
                 "added translation intake-webhook-translator to project root",
-            ));
+            ],
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
-        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
-        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+    fn arrange_translation_payload_data_flow(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "intake_webhook.ticket_title",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "transformation",
+                "--target",
+                "intake_webhook",
+                "--bit-encoding",
+                "UTF-8 string",
+            ],
+        )
+    }
 
+    fn assert_translation_slice_artifacts(lean: &str, quint: &str) {
         assert!(
             lean.contains(
                 "def sliceReferencedCommands : List SliceCommandReference := [{ name := \"CaptureTicket\" }]"
@@ -5835,6 +4862,9 @@ mod tests {
             ),
             "Quint slice artifact must carry authored translation definitions"
         );
+    }
+
+    fn assert_translation_root_inventory(lean_root: &str, quint_root: &str) {
         assert!(
             lean_root.contains(
                 "def modelTranslations : List ModelTranslation := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", translation := \"intake-webhook-translator\" }]"
@@ -5894,44 +4924,6 @@ mod tests {
             ),
             "Quint project root must verify authored translation definition completeness"
         );
-        assert_project_root_digests_are_canonical_hashes(&lean_root, &quint_root)?;
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "data-flow",
-                "--slice",
-                "capture-ticket",
-                "--datum",
-                "ticket_title",
-                "--source",
-                "intake_webhook.ticket_title",
-                "--source-kind",
-                "original",
-                "--transformation",
-                "transformation",
-                "--target",
-                "intake_webhook",
-                "--bit-encoding",
-                "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-        complete_contract_scenario_coverage(&temp_dir)?;
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
@@ -5999,8 +4991,29 @@ mod tests {
         author_state_change_ticket_capture(&temp_dir)?;
         author_ticket_captured_outcome(&temp_dir)?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        arrange_board_facts(&temp_dir)?;
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
+        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+
+        assert_board_facts_slice_artifacts(&lean, &quint);
+        assert_board_facts_root_inventory(&lean_root, &quint_root);
+
+        emc(&temp_dir, &["check"])?;
+
+        complete_contract_scenario_coverage(&temp_dir)?;
+
+        emc(&temp_dir, &["verify"])?;
+
+        Ok(())
+    }
+
+    fn arrange_board_facts(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc_stdout(
+            temp_dir,
+            &[
                 "add",
                 "board-element",
                 "--slice",
@@ -6015,16 +5028,13 @@ mod tests {
                 "CaptureTicket",
                 "--main-path",
                 "true",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added board element CaptureTicket to slice capture-ticket",
-            ));
+            ],
+            &["added board element CaptureTicket to slice capture-ticket"],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "board-element",
                 "--slice",
@@ -6039,13 +5049,12 @@ mod tests {
                 "TicketCaptured",
                 "--main-path",
                 "true",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc_stdout(
+            temp_dir,
+            &[
                 "add",
                 "board-connection",
                 "--slice",
@@ -6058,16 +5067,13 @@ mod tests {
                 "CaptureTicket",
                 "--target-kind",
                 "command",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added board connection actor-submit -> CaptureTicket to slice capture-ticket",
-            ));
+            ],
+            &["added board connection actor-submit -> CaptureTicket to slice capture-ticket"],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "board-connection",
                 "--slice",
@@ -6080,16 +5086,11 @@ mod tests {
                 "TicketCaptured",
                 "--target-kind",
                 "event",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
-        let lean_root = read_to_string(temp_dir.path().join("model/lean/RepairDesk.lean"))?;
-        let quint_root = read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
-
+    fn assert_board_facts_slice_artifacts(lean: &str, quint: &str) {
         assert!(
             lean.contains(
                 "def sliceBoardElements : List BoardElement := [{ name := \"CaptureTicket\", kind := \"command\", lane := \"actions\", declaredName := \"CaptureTicket\", mainPath := true },{ name := \"TicketCaptured\", kind := \"event\", lane := \"events\", declaredName := \"TicketCaptured\", mainPath := true }]"
@@ -6114,6 +5115,9 @@ mod tests {
             ),
             "Quint slice artifact must carry authored board connections"
         );
+    }
+
+    fn assert_board_facts_root_inventory(lean_root: &str, quint_root: &str) {
         assert!(
             lean_root.contains(
                 "def modelBoardElements : List ModelBoardElement := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", element := \"CaptureTicket\", kind := \"command\", lane := \"actions\", declaredName := \"CaptureTicket\", mainPath := true },{ workflow := \"open-ticket\", slice := \"capture-ticket\", element := \"TicketCaptured\", kind := \"event\", lane := \"events\", declaredName := \"TicketCaptured\", mainPath := true }]"
@@ -6173,22 +5177,6 @@ mod tests {
             ),
             "Quint project root must expose authored board connection inventory invariant"
         );
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        complete_contract_scenario_coverage(&temp_dir)?;
-
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
     }
 
     #[test]
@@ -6235,6 +5223,70 @@ mod tests {
             .assert()
             .success();
 
+        Ok(())
+    }
+
+    /// Run an `emc` subcommand in the project directory and assert it succeeds.
+    fn emc(temp_dir: &TempDir, args: &[&str]) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(args)
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    /// Run an `emc` subcommand, asserting success and that stdout contains each
+    /// of the provided substrings.
+    fn emc_stdout(
+        temp_dir: &TempDir,
+        args: &[&str],
+        expected: &[&str],
+    ) -> Result<(), Box<dyn Error>> {
+        let mut assertion = Command::cargo_bin("emc")?
+            .args(args)
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+        for fragment in expected {
+            assertion = assertion.stdout(predicate::str::contains(*fragment));
+        }
+        Ok(())
+    }
+
+    /// Run an `emc` subcommand, asserting failure and that stderr contains the
+    /// provided substring.
+    fn emc_failure_stderr(
+        temp_dir: &TempDir,
+        args: &[&str],
+        expected: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(args)
+            .current_dir(temp_dir.path())
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(expected));
+        Ok(())
+    }
+
+    /// Drive `emc mcp stdio` with the supplied request payload, asserting success
+    /// and that stdout contains each of the provided substrings.
+    fn emc_stdin(
+        temp_dir: &TempDir,
+        args: &[&str],
+        stdin: &str,
+        expected: &[&str],
+    ) -> Result<(), Box<dyn Error>> {
+        let mut assertion = Command::cargo_bin("emc")?
+            .args(args)
+            .current_dir(temp_dir.path())
+            .write_stdin(stdin)
+            .assert()
+            .success();
+        for fragment in expected {
+            assertion = assertion.stdout(predicate::str::contains(*fragment));
+        }
         Ok(())
     }
 
@@ -6326,21 +5378,40 @@ mod tests {
     fn complete_contract_scenario_coverage(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
         let lean = read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
 
+        cover_command_contract_scenario(temp_dir, &lean)?;
+        cover_automation_contract_scenario(temp_dir, &lean)?;
+        cover_translation_contract_scenario(temp_dir, &lean)?;
+        cover_derivation_contract_scenario(temp_dir, &lean)?;
+
+        Ok(())
+    }
+
+    fn cover_command_contract_scenario(
+        temp_dir: &TempDir,
+        lean: &str,
+    ) -> Result<(), Box<dyn Error>> {
         if lean.contains(
             "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\"",
         ) && !lean
             .contains("contractKind := \"command\", coveredDefinition := \"CaptureTicket\"")
         {
-            author_capture_ticket_command_contract(temp_dir, &lean)?;
+            author_capture_ticket_command_contract(temp_dir, lean)?;
         }
+        Ok(())
+    }
 
+    fn cover_automation_contract_scenario(
+        temp_dir: &TempDir,
+        lean: &str,
+    ) -> Result<(), Box<dyn Error>> {
         if lean.contains(
             "def sliceAutomations : List AutomationDefinition := [{ name := \"title-deduplicator\"",
         ) && !lean
             .contains("contractKind := \"automation\", coveredDefinition := \"title-deduplicator\"")
         {
-            Command::cargo_bin("emc")?
-                .args([
+            emc(
+                temp_dir,
+                &[
                     "add",
                     "scenario",
                     "--slice",
@@ -6359,19 +5430,24 @@ mod tests {
                     "automation",
                     "--covered-definition",
                     "title-deduplicator",
-                ])
-                .current_dir(temp_dir.path())
-                .assert()
-                .success();
+                ],
+            )?;
         }
+        Ok(())
+    }
 
+    fn cover_translation_contract_scenario(
+        temp_dir: &TempDir,
+        lean: &str,
+    ) -> Result<(), Box<dyn Error>> {
         if lean.contains(
             "def sliceTranslations : List TranslationDefinition := [{ name := \"intake-webhook-translator\"",
         ) && !lean.contains(
             "contractKind := \"translation\", coveredDefinition := \"intake-webhook-translator\"",
         ) {
-            Command::cargo_bin("emc")?
-                .args([
+            emc(
+                temp_dir,
+                &[
                     "add",
                     "scenario",
                     "--slice",
@@ -6390,17 +5466,22 @@ mod tests {
                     "translation",
                     "--covered-definition",
                     "intake-webhook-translator",
-                ])
-                .current_dir(temp_dir.path())
-                .assert()
-                .success();
+                ],
+            )?;
         }
+        Ok(())
+    }
 
+    fn cover_derivation_contract_scenario(
+        temp_dir: &TempDir,
+        lean: &str,
+    ) -> Result<(), Box<dyn Error>> {
         if lean.contains("name := \"normalized_title\", sourceKind := \"derivation\"")
             && !lean.contains("contractKind := \"derivation\"")
         {
-            Command::cargo_bin("emc")?
-                .args([
+            emc(
+                temp_dir,
+                &[
                     "add",
                     "scenario",
                     "--slice",
@@ -6419,12 +5500,9 @@ mod tests {
                     "derivation",
                     "--covered-definition",
                     "normalized_title",
-                ])
-                .current_dir(temp_dir.path())
-                .assert()
-                .success();
+                ],
+            )?;
         }
-
         Ok(())
     }
 
@@ -6491,21 +5569,27 @@ mod tests {
     }
 
     fn author_state_change_ticket_capture(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
-        Command::cargo_bin("emc")?
-            .args([
+        author_state_change_command(temp_dir)?;
+        author_state_change_event_data_flows(temp_dir)?;
+        Ok(())
+    }
+
+    fn author_state_change_command(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "update",
                 "slice",
                 "--slug",
                 "capture-ticket",
                 "--type",
                 "state_change",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "command",
                 "--slice",
@@ -6522,13 +5606,14 @@ mod tests {
                 "actor keystrokes -> form field",
                 "--emits",
                 "TicketCaptured",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn author_state_change_event_data_flows(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -6549,13 +5634,12 @@ mod tests {
                 "actor_input",
                 "--attribute-provenance",
                 "CaptureTicket.ticket_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -6572,13 +5656,12 @@ mod tests {
                 "CaptureTicket",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -6595,17 +5678,20 @@ mod tests {
                 "TicketCaptured",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
+            ],
+        )
     }
 
     fn author_projected_ticket_title(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
-        Command::cargo_bin("emc")?
-            .args([
+        author_projected_scenario_event(temp_dir)?;
+        author_projected_read_model_data_flows(temp_dir)?;
+        Ok(())
+    }
+
+    fn author_projected_scenario_event(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -6624,13 +5710,12 @@ mod tests {
                 "projector",
                 "--covered-definition",
                 "ticket_state",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -6653,13 +5738,14 @@ mod tests {
                 "TicketCaptured.ticket_title",
                 "--observed",
                 "true",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn author_projected_read_model_data_flows(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "read-model",
                 "--slice",
@@ -6676,13 +5762,12 @@ mod tests {
                 "ticket_title",
                 "--field-provenance",
                 "TicketCaptured.ticket_title",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -6699,13 +5784,12 @@ mod tests {
                 "TicketCaptured",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -6722,12 +5806,8 @@ mod tests {
                 "ticket_state",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
+            ],
+        )
     }
 
     fn author_transitive_ticket_hierarchy_context(
@@ -6816,8 +5896,15 @@ mod tests {
     }
 
     fn complete_transitive_ticket_hierarchy(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
-        Command::cargo_bin("emc")?
-            .args([
+        complete_transitive_hierarchy_view(temp_dir)?;
+        complete_transitive_hierarchy_data_flows(temp_dir)?;
+        Ok(())
+    }
+
+    fn complete_transitive_hierarchy_view(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "view",
                 "--slice",
@@ -6836,13 +5923,12 @@ mod tests {
                 "ticket_hierarchy.ancestor_ticket_id",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -6859,13 +5945,14 @@ mod tests {
                 "TicketLinked",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn complete_transitive_hierarchy_data_flows(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -6882,13 +5969,12 @@ mod tests {
                 "ticket_hierarchy",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        emc(
+            temp_dir,
+            &[
                 "add",
                 "data-flow",
                 "--slice",
@@ -6905,12 +5991,8 @@ mod tests {
                 "hierarchy_summary",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Ok(())
+            ],
+        )
     }
 
     fn complete_ticket_summary_display_flow(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
@@ -7162,19 +6244,1025 @@ mod tests {
         artifact: &'a str,
         prefix: &str,
     ) -> Result<&'a str, Box<dyn Error>> {
-        let start = artifact
-            .find(prefix)
-            .ok_or_else(|| format!("generated artifact must contain {prefix}"))?
-            + prefix.len();
-        let tail = &artifact[start..];
+        let (_, tail) = artifact
+            .split_once(prefix)
+            .ok_or_else(|| format!("generated artifact must contain {prefix}"))?;
         let end = tail
             .find('"')
             .ok_or("generated artifact model digest must terminate with a quote")?;
 
-        Ok(&tail[..end])
+        tail.get(..end)
+            .ok_or_else(|| "digest terminating quote offset must lie on a char boundary".into())
     }
 
     fn is_lowercase_sha256_hex(value: &str) -> bool {
         value.len() == 64 && value.chars().all(|character| character.is_ascii_hexdigit())
     }
+
+    fn arrange_scenario_and_data_flow_artifacts(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--kind",
+                "acceptance",
+                "--name",
+                "Actor captures ticket",
+                "--given",
+                "ticket intake screen is open",
+                "--when",
+                "the actor submits ticket details",
+                "--then",
+                "the ticket details are visible for review",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added acceptance scenario Actor captures ticket to slice capture-ticket",
+            ))
+            .stdout(predicate::str::contains(
+                "added acceptance scenario Actor captures ticket to project root",
+            ));
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--kind",
+                "contract",
+                "--name",
+                "Ticket state projector records title",
+                "--given",
+                "TicketCaptured is stored",
+                "--when",
+                "ticket_state projects the event",
+                "--then",
+                "ticket_state.title equals the event title",
+                "--contract-kind",
+                "projector",
+                "--covered-definition",
+                "ticket_state",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added contract scenario Ticket state projector records title to slice capture-ticket",
+            ))
+            .stdout(predicate::str::contains(
+                "added contract scenario Ticket state projector records title to project root",
+            ));
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "actor input title field",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "identity",
+                "--target",
+                "Capture ticket.ticket_title",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added bit-level data flow ticket_title to slice capture-ticket",
+            ))
+            .stdout(predicate::str::contains(
+                "added bit-level data flow ticket_title to project root",
+            ));
+
+        Ok(())
+    }
+
+    fn assert_scenario_data_flow_slice_artifacts(lean: &str, quint: &str) {
+        assert!(
+            lean.contains(
+                "def sliceAcceptanceScenarios : List EventModelScenario := [{ name := \"Actor captures ticket\", givenSteps := [\"ticket intake screen is open\"], whenSteps := [\"the actor submits ticket details\"], thenSteps := [\"the ticket details are visible for review\"], readStreams := [], writtenStreams := [], contractKind := \"\", coveredDefinition := \"\", errorReferences := [] }]"
+            ),
+            "Lean slice artifact must carry authored acceptance scenarios"
+        );
+        assert!(
+            lean.contains(
+                "def sliceContractScenarios : List EventModelScenario := [{ name := \"Ticket state projector records title\", givenSteps := [\"TicketCaptured is stored\"], whenSteps := [\"ticket_state projects the event\"], thenSteps := [\"ticket_state.title equals the event title\"], readStreams := [], writtenStreams := [], contractKind := \"projector\", coveredDefinition := \"ticket_state\", errorReferences := [] }]"
+            ),
+            "Lean slice artifact must carry authored contract scenarios"
+        );
+        assert!(
+            lean.contains(
+                "def sliceBitLevelDataFlows : List BitLevelDataFlow := [{ datum := \"ticket_title\", sourceKind := \"original\", source := \"actor input title field\", transformationSemantics := \"identity\", target := \"Capture ticket.ticket_title\", bitEncoding := \"UTF-8 string\" }]"
+            ),
+            "Lean slice artifact must carry authored bit-level data flows"
+        );
+
+        assert!(
+            quint.contains(
+                "val sliceAcceptanceScenarios: List[EventModelScenario] = [{ name: \"Actor captures ticket\", givenSteps: [\"ticket intake screen is open\"], whenSteps: [\"the actor submits ticket details\"], thenSteps: [\"the ticket details are visible for review\"], readStreams: [], writtenStreams: [], contractKind: \"\", coveredDefinition: \"\", errorReferences: [] }]"
+            ),
+            "Quint slice artifact must carry authored acceptance scenarios"
+        );
+        assert!(
+            quint.contains(
+                "val sliceContractScenarios: List[EventModelScenario] = [{ name: \"Ticket state projector records title\", givenSteps: [\"TicketCaptured is stored\"], whenSteps: [\"ticket_state projects the event\"], thenSteps: [\"ticket_state.title equals the event title\"], readStreams: [], writtenStreams: [], contractKind: \"projector\", coveredDefinition: \"ticket_state\", errorReferences: [] }]"
+            ),
+            "Quint slice artifact must carry authored contract scenarios"
+        );
+        assert!(
+            quint.contains(
+                "val sliceBitLevelDataFlows: List[BitLevelDataFlow] = [{ datum: \"ticket_title\", sourceKind: \"original\", source: \"actor input title field\", transformationSemantics: \"identity\", target: \"Capture ticket.ticket_title\", bitEncoding: \"UTF-8 string\" }]"
+            ),
+            "Quint slice artifact must carry authored bit-level data flows"
+        );
+    }
+
+    fn assert_scenario_data_flow_lean_root_scenarios(lean_root: &str) {
+        assert!(
+            lean_root.contains(
+                "structure ModelScenario where\n  workflow : String\n  slice : String\n  scenarioKind : String\n  scenario : String"
+            ),
+            "Lean project root must type authored first-class scenarios as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelScenarios : List ModelScenario := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", scenarioKind := \"acceptance\", scenario := \"Actor captures ticket\" },{ workflow := \"open-ticket\", slice := \"capture-ticket\", scenarioKind := \"contract\", scenario := \"Ticket state projector records title\" }]"
+            ),
+            "Lean project root must inventory authored first-class scenarios as named records"
+        );
+        assert!(
+            lean_root
+                .contains("theorem modelScenariosAreDeclared : modelScenarios.length = 2 := rfl"),
+            "Lean project root must prove authored scenario inventory completeness"
+        );
+        assert!(
+            lean_root.contains(
+                "structure ModelScenarioDefinition where\n  workflow : String\n  slice : String\n  scenarioKind : String\n  scenario : String\n  given : String\n  when : String\n  thenStep : String\n  readStreams : List String\n  writtenStreams : List String\n  contractKind : String\n  coveredDefinition : String\n  errorReferences : List String"
+            ),
+            "Lean project root must type authored scenario definitions as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelScenarioDefinitions : List ModelScenarioDefinition := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", scenarioKind := \"acceptance\", scenario := \"Actor captures ticket\", given := \"ticket intake screen is open\", when := \"the actor submits ticket details\", thenStep := \"the ticket details are visible for review\", readStreams := [], writtenStreams := [], contractKind := \"\", coveredDefinition := \"\", errorReferences := [] },{ workflow := \"open-ticket\", slice := \"capture-ticket\", scenarioKind := \"contract\", scenario := \"Ticket state projector records title\", given := \"TicketCaptured is stored\", when := \"ticket_state projects the event\", thenStep := \"ticket_state.title equals the event title\", readStreams := [], writtenStreams := [], contractKind := \"projector\", coveredDefinition := \"ticket_state\", errorReferences := [] }]"
+            ),
+            "Lean project root must inventory authored scenario GWT and contract definitions as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelScenarioDefinitionHasGwt (scenario : ModelScenarioDefinition) : Bool := scenario.given.isEmpty == false && scenario.when.isEmpty == false && scenario.thenStep.isEmpty == false"
+            ),
+            "Lean project root must prove scenario GWT completeness through named fields"
+        );
+        assert!(
+            lean_root.contains(
+                "theorem modelScenarioDefinitionsAreDeclared : modelScenarioDefinitions.length = 2 := rfl"
+            ),
+            "Lean project root must prove authored scenario definition completeness"
+        );
+    }
+
+    fn assert_scenario_data_flow_quint_root_scenarios(quint_root: &str) {
+        assert!(
+            quint_root.contains(
+                "type ModelScenario = { workflow: str, slice: str, scenarioKind: str, scenario: str }"
+            ),
+            "Quint project root must type authored scenario inventory entries"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelScenarios: List[ModelScenario] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", scenarioKind: \"acceptance\", scenario: \"Actor captures ticket\" },{ workflow: \"open-ticket\", slice: \"capture-ticket\", scenarioKind: \"contract\", scenario: \"Ticket state projector records title\" }]"
+            ),
+            "Quint project root must inventory authored first-class scenarios"
+        );
+        assert!(
+            quint_root.contains("val modelScenariosAreDeclared = modelScenarios.length() == 2"),
+            "Quint project root must verify authored scenario inventory completeness"
+        );
+        assert!(
+            quint_root.contains(
+                "type ModelScenarioDefinition = { workflow: str, slice: str, scenarioKind: str, scenario: str, given: str, when: str, then: str, readStreams: List[str], writtenStreams: List[str], contractKind: str, coveredDefinition: str, errorReferences: List[str] }"
+            ),
+            "Quint project root must type authored scenario definition entries"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelScenarioDefinitions: List[ModelScenarioDefinition] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", scenarioKind: \"acceptance\", scenario: \"Actor captures ticket\", given: \"ticket intake screen is open\", when: \"the actor submits ticket details\", then: \"the ticket details are visible for review\", readStreams: [], writtenStreams: [], contractKind: \"\", coveredDefinition: \"\", errorReferences: [] },{ workflow: \"open-ticket\", slice: \"capture-ticket\", scenarioKind: \"contract\", scenario: \"Ticket state projector records title\", given: \"TicketCaptured is stored\", when: \"ticket_state projects the event\", then: \"ticket_state.title equals the event title\", readStreams: [], writtenStreams: [], contractKind: \"projector\", coveredDefinition: \"ticket_state\", errorReferences: [] }]"
+            ),
+            "Quint project root must inventory authored scenario GWT and contract definitions"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelScenarioDefinitionsAreDeclared = modelScenarioDefinitions.length() == 2"
+            ),
+            "Quint project root must verify authored scenario definition completeness"
+        );
+    }
+
+    fn assert_scenario_data_flow_root_data_flows(lean_root: &str, quint_root: &str) {
+        assert!(
+            lean_root.contains(
+                "inductive ModelDataFlowSourceKind where\n  | original\n  | modeledTarget\nderiving BEq, DecidableEq, Repr\n\nstructure ModelDataFlow where\n  workflow : String\n  slice : String\n  datum : String\n  sourceKind : ModelDataFlowSourceKind\n  source : String\n  transformation : String\n  target : String\n  bitEncoding : String"
+            ),
+            "Lean project root must type authored bit-level data-flow source kinds as closed semantic values"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelDataFlows : List ModelDataFlow := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", datum := \"ticket_title\", sourceKind := ModelDataFlowSourceKind.original, source := \"actor input title field\", transformation := \"identity\", target := \"Capture ticket.ticket_title\", bitEncoding := \"UTF-8 string\" }]"
+            ),
+            "Lean project root must inventory authored bit-level data-flow source kinds as enum constructors"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelDataFlowIsBitComplete (dataFlow : ModelDataFlow) : Bool := dataFlow.datum.isEmpty == false && dataFlow.source.isEmpty == false && dataFlow.transformation.isEmpty == false && dataFlow.target.isEmpty == false && dataFlow.bitEncoding.isEmpty == false"
+            ),
+            "Lean project root must prove bit-level data-flow completeness without revalidating enum source kinds as strings"
+        );
+        assert!(
+            lean_root
+                .contains("theorem modelDataFlowsAreDeclared : modelDataFlows.length = 1 := rfl"),
+            "Lean project root must prove authored bit-level data-flow inventory completeness"
+        );
+        assert!(
+            quint_root.contains("type ModelDataFlowSourceKind = Original | ModeledTarget")
+                && quint_root.contains(
+                    "type ModelDataFlow = { workflow: str, slice: str, datum: str, sourceKind: ModelDataFlowSourceKind, source: str, transformation: str, target: str, bitEncoding: str }"
+                ),
+            "Quint project root must type authored bit-level data-flow source kinds as closed semantic values"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelDataFlows: List[ModelDataFlow] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", datum: \"ticket_title\", sourceKind: Original, source: \"actor input title field\", transformation: \"identity\", target: \"Capture ticket.ticket_title\", bitEncoding: \"UTF-8 string\" }]"
+            ),
+            "Quint project root must inventory authored bit-level data-flow source kinds as enum constructors"
+        );
+        assert!(
+            quint_root.contains("val modelDataFlowsAreDeclared = modelDataFlows.length() == 1"),
+            "Quint project root must verify authored bit-level data-flow inventory completeness"
+        );
+    }
+
+    fn arrange_state_change_command_and_event(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "slice",
+                "--slug",
+                "capture-ticket",
+                "--type",
+                "state_change",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "command",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "CaptureTicket",
+                "--input",
+                "ticket_title",
+                "--input-source",
+                "actor",
+                "--input-description",
+                "title field on the intake form",
+                "--input-provenance",
+                "actor keystrokes -> form field",
+                "--emits",
+                "TicketCaptured",
+                "--singleton",
+                "true",
+                "--repeat-behavior",
+                "idempotent",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "tickets",
+                "--attribute",
+                "ticket_title",
+                "--attribute-source",
+                "generated",
+                "--attribute-source-name",
+                "actor_input",
+                "--attribute-source-field",
+                "ticket_title",
+                "--generated-source-kind",
+                "actor_input",
+                "--attribute-provenance",
+                "CaptureTicket.ticket_title",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "outcome",
+                "--slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--events",
+                "TicketCaptured",
+                "--externally-relevant",
+                "false",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn arrange_state_change_data_flows_and_scenario(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "actor input title field",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "identity",
+                "--target",
+                "CaptureTicket",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "CaptureTicket.ticket_title",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "identity",
+                "--target",
+                "TicketCaptured",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--kind",
+                "acceptance",
+                "--name",
+                "Actor captures ticket",
+                "--given",
+                "tickets stream is available",
+                "--when",
+                "the actor submits ticket details",
+                "--then",
+                "TicketCaptured is written",
+                "--read-streams",
+                "tickets",
+                "--written-streams",
+                "tickets",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added acceptance scenario Actor captures ticket to slice capture-ticket",
+            ));
+
+        Ok(())
+    }
+
+    fn arrange_state_change_ticket_feed_event(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "slice",
+                "--slug",
+                "capture-ticket",
+                "--type",
+                "state_change",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "tickets",
+                "--attribute",
+                "status",
+                "--attribute-source",
+                "generated",
+                "--attribute-source-name",
+                "ticket_feed_snapshot",
+                "--attribute-source-field",
+                "status",
+                "--generated-source-kind",
+                "ticket_feed_snapshot",
+                "--attribute-provenance",
+                "ticket feed status field",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn arrange_actor_capture_ticket_command(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "command",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "CaptureTicket",
+                "--input",
+                "ticket_title",
+                "--input-source",
+                "actor",
+                "--input-description",
+                "title field on the intake form",
+                "--input-provenance",
+                "actor keystrokes -> form field",
+                "--emits",
+                "TicketCaptured",
+                "--singleton",
+                "true",
+                "--repeat-behavior",
+                "idempotent",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added command CaptureTicket to slice capture-ticket",
+            ));
+
+        Ok(())
+    }
+
+    fn arrange_ticket_feed_outcome_and_data_flows(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "outcome",
+                "--slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--events",
+                "TicketCaptured",
+                "--externally-relevant",
+                "false",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_status",
+                "--source",
+                "TicketCaptured.status",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "projection",
+                "--target",
+                "CaptureTicket",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "status",
+                "--source",
+                "ticket feed snapshot",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "identity",
+                "--target",
+                "TicketCaptured",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn assert_command_definition_slice_artifacts(lean: &str, quint: &str) {
+        assert!(
+            lean.contains(
+                "def sliceCommands : List SliceCommandReference := [{ name := \"CaptureTicket\" }]"
+            ),
+            "Lean slice artifact must carry the authored command name"
+        );
+        assert!(
+            lean.contains(
+                "def sliceCommandDefinitions : List CommandDefinition := [{ name := \"CaptureTicket\", inputs := [{ name := \"ticket_title\", sourceKind := CommandInputSourceKind.actor, sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\", generatedSourceName := \"\", generatedSourceField := \"\", sessionSourceName := \"\", sessionSourceField := \"\", invocationArgumentSourceName := \"\", invocationArgumentSourceField := \"\" }], emittedEvents := [{ name := \"TicketCaptured\" }], observedStreams := [], errors := [], singleton := true, repeatBehavior := \"idempotent\" }]"
+            ),
+            "Lean slice artifact must carry the authored command definition"
+        );
+        assert!(
+            quint.contains(
+                "val sliceCommands: List[SliceCommandReference] = [{ name: \"CaptureTicket\" }]"
+            ),
+            "Quint slice artifact must carry the authored command name"
+        );
+        assert!(
+            quint.contains(
+                "val sliceCommandDefinitions: List[CommandDefinition] = [{ name: \"CaptureTicket\", inputs: [{ name: \"ticket_title\", sourceKind: CommandInputActor, sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\", externalPayloadSourceName: \"\", externalPayloadSourceField: \"\", generatedSourceName: \"\", generatedSourceField: \"\", sessionSourceName: \"\", sessionSourceField: \"\", invocationArgumentSourceName: \"\", invocationArgumentSourceField: \"\" }], emittedEvents: [{ name: \"TicketCaptured\" }], observedStreams: [], errors: [], singleton: true, repeatBehavior: \"idempotent\" }]"
+            ),
+            "Quint slice artifact must carry the authored command definition"
+        );
+    }
+
+    fn assert_command_input_root_inventory(lean_root: &str, quint_root: &str) {
+        assert!(
+            lean_root.contains(
+                "inductive ModelCommandInputSourceKind where\n  | actor\n  | session\n  | generated\n  | externalPayload\n  | eventStreamState\n  | invocationArgument\nderiving BEq, DecidableEq, Repr\n\nstructure ModelCommandInput where\n  workflow : String\n  slice : String\n  command : String\n  input : String\n  sourceKind : ModelCommandInputSourceKind\n  sourceDescription : String\n  provenanceChain : List String\n  eventStreamSourceEvent : String\n  eventStreamSourceAttribute : String\n  externalPayloadSourceName : String\n  externalPayloadSourceField : String\n  generatedSourceName : String\n  generatedSourceField : String\n  sessionSourceName : String\n  sessionSourceField : String\n  invocationArgumentSourceName : String\n  invocationArgumentSourceField : String"
+            ),
+            "Lean project root must type authored command input source-chain inventory entries as named records"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelCommandInputs : List ModelCommandInput := [{ workflow := \"open-ticket\", slice := \"capture-ticket\", command := \"CaptureTicket\", input := \"ticket_title\", sourceKind := ModelCommandInputSourceKind.actor, sourceDescription := \"title field on the intake form\", provenanceChain := [\"actor keystrokes -> form field\"], eventStreamSourceEvent := \"\", eventStreamSourceAttribute := \"\", externalPayloadSourceName := \"\", externalPayloadSourceField := \"\", generatedSourceName := \"\", generatedSourceField := \"\", sessionSourceName := \"\", sessionSourceField := \"\", invocationArgumentSourceName := \"\", invocationArgumentSourceField := \"\" }]"
+            ),
+            "Lean project root must inventory authored command input source chains"
+        );
+        assert!(
+            lean_root.contains(
+                "def modelCommandInputHasProvenance (input : ModelCommandInput) : Bool := input.sourceDescription.isEmpty == false && input.provenanceChain.isEmpty == false"
+            ),
+            "Lean project root must prove command input provenance through named fields"
+        );
+        assert!(
+            lean_root.contains(
+                "theorem modelCommandInputsAreDeclared : modelCommandInputs.length = 1 := rfl"
+            ),
+            "Lean project root must prove authored command input source-chain inventory completeness"
+        );
+        assert!(
+            quint_root.contains(
+                "type ModelCommandInputSourceKind = ModelCommandInputActor | ModelCommandInputSession | ModelCommandInputGenerated | ModelCommandInputExternalPayload | ModelCommandInputEventStreamState | ModelCommandInputInvocationArgument"
+            ) && quint_root.contains(
+                "type ModelCommandInput = { workflow: str, slice: str, command: str, input: str, sourceKind: ModelCommandInputSourceKind, sourceDescription: str, provenanceChain: List[str], eventStreamSourceEvent: str, eventStreamSourceAttribute: str, externalPayloadSourceName: str, externalPayloadSourceField: str, generatedSourceName: str, generatedSourceField: str, sessionSourceName: str, sessionSourceField: str, invocationArgumentSourceName: str, invocationArgumentSourceField: str }"
+            ),
+            "Quint project root must type authored command input source-chain inventory entries"
+        );
+        assert!(
+            quint_root.contains(
+                "val modelCommandInputs: List[ModelCommandInput] = [{ workflow: \"open-ticket\", slice: \"capture-ticket\", command: \"CaptureTicket\", input: \"ticket_title\", sourceKind: ModelCommandInputActor, sourceDescription: \"title field on the intake form\", provenanceChain: [\"actor keystrokes -> form field\"], eventStreamSourceEvent: \"\", eventStreamSourceAttribute: \"\", externalPayloadSourceName: \"\", externalPayloadSourceField: \"\", generatedSourceName: \"\", generatedSourceField: \"\", sessionSourceName: \"\", sessionSourceField: \"\", invocationArgumentSourceName: \"\", invocationArgumentSourceField: \"\" }]"
+            ),
+            "Quint project root must inventory authored command input source chains"
+        );
+        assert!(
+            quint_root
+                .contains("val modelCommandInputsAreDeclared = modelCommandInputs.length() == 1"),
+            "Quint project root must verify authored command input source-chain inventory completeness"
+        );
+    }
+
+    fn arrange_event_stream_capture_ticket_command(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "command",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "CaptureTicket",
+                "--input",
+                "ticket_status",
+                "--input-source",
+                "event_stream_state",
+                "--input-description",
+                "current ticket status loaded from the ticket stream",
+                "--input-provenance",
+                "TicketCaptured.status -> ticket_status",
+                "--emits",
+                "TicketCaptured",
+                "--observes",
+                "tickets",
+                "--source-event",
+                "TicketCaptured",
+                "--source-attribute",
+                "status",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added command CaptureTicket to slice capture-ticket",
+            ));
+
+        Ok(())
+    }
+
+    fn arrange_external_payload_command(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "slice",
+                "--slug",
+                "capture-ticket",
+                "--type",
+                "state_change",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "external-payload",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "intake_webhook",
+                "--field",
+                "ticket_title",
+                "--field-provenance",
+                "intake_webhook.ticket_title supplied by the external ticket intake system",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "intake_webhook.ticket_title",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "transformation",
+                "--target",
+                "intake_webhook",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "command",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "CaptureTicket",
+                "--input",
+                "ticket_title",
+                "--input-source",
+                "external_payload",
+                "--input-description",
+                "ticket title loaded from the intake webhook payload",
+                "--input-provenance",
+                "intake_webhook.ticket_title -> CaptureTicket.ticket_title",
+                "--emits",
+                "TicketCaptured",
+                "--source-payload",
+                "intake_webhook",
+                "--source-field",
+                "ticket_title",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added command CaptureTicket to slice capture-ticket",
+            ));
+
+        Ok(())
+    }
+
+    fn arrange_external_payload_event_outcome_data_flows(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "tickets",
+                "--attribute",
+                "ticket_title",
+                "--attribute-source",
+                "command_input",
+                "--attribute-source-name",
+                "ticket_title",
+                "--attribute-source-field",
+                "value",
+                "--attribute-provenance",
+                "CaptureTicket.ticket_title",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "outcome",
+                "--slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--events",
+                "TicketCaptured",
+                "--externally-relevant",
+                "false",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "intake_webhook.ticket_title",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "projection",
+                "--target",
+                "CaptureTicket",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "CaptureTicket.ticket_title",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "identity",
+                "--target",
+                "TicketCaptured",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn arrange_generated_input_command(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "slice",
+                "--slug",
+                "capture-ticket",
+                "--type",
+                "state_change",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "command",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "CaptureTicket",
+                "--input",
+                "ticket_id",
+                "--input-source",
+                "generated",
+                "--input-description",
+                "ticket id allocated by the ticket id generator",
+                "--input-provenance",
+                "ticket_id_generator.uuid -> CaptureTicket.ticket_id",
+                "--emits",
+                "TicketCaptured",
+                "--source-name",
+                "ticket_id_generator",
+                "--source-field",
+                "uuid",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "added command CaptureTicket to slice capture-ticket",
+            ));
+
+        Ok(())
+    }
+
+    fn arrange_generated_input_event_outcome_data_flows(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "tickets",
+                "--attribute",
+                "ticket_id",
+                "--attribute-source",
+                "command_input",
+                "--attribute-source-name",
+                "ticket_id",
+                "--attribute-source-field",
+                "value",
+                "--attribute-provenance",
+                "CaptureTicket.ticket_id",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "outcome",
+                "--slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--events",
+                "TicketCaptured",
+                "--externally-relevant",
+                "false",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_id",
+                "--source",
+                "ticket_id_generator.uuid",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "transformation",
+                "--target",
+                "CaptureTicket",
+                "--bit-encoding",
+                "128-bit UUIDv7 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_id",
+                "--source",
+                "CaptureTicket.ticket_id",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "identity",
+                "--target",
+                "TicketCaptured",
+                "--bit-encoding",
+                "128-bit UUIDv7 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    // === extracted refactor helpers (appended) ===
 }
