@@ -1327,8 +1327,12 @@ fn interpret_record_clean_review(effect: &CleanReviewEffect) -> Result<Vec<Strin
 fn interpret_resolve_event_conflict(
     resolution: &EventConflictResolution,
 ) -> Result<Vec<String>, ShellError> {
-    let plan = resolve_event_conflict(resolution.conflict_id(), resolution.chosen_event_id())
-        .map_err(ShellError::message)?;
+    let plan = resolve_event_conflict(
+        Path::new("."),
+        resolution.conflict_id(),
+        resolution.chosen_event_id(),
+    )
+    .map_err(ShellError::message)?;
     plan.effects()
         .iter()
         .try_fold(Vec::new(), |mut reports, effect| {
