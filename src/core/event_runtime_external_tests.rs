@@ -79,6 +79,49 @@ mod tests {
     }
 
     #[test]
+    fn store_gitignore_excludes_operational_files_but_commits_the_event_log()
+    -> Result<(), Box<dyn Error>> {
+        let project = TempDir::new()?;
+        execute_eventcore_command_for_exported_event(
+            project.path(),
+            &EventDraft::project_initialized(&project_name("Repairs")?),
+        )?;
+
+        let gitignore = fs::read_to_string(event_store_root(project.path()).join(".gitignore"))?;
+        let ignored: Vec<&str> = gitignore
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .collect();
+
+        // Every operational artifact the runtime relies on staying out of git
+        // must be ignored, so the committed history is exactly the event log.
+        for operational in [
+            "/tmp/",
+            "/checkpoints/",
+            "/locks/",
+            "/index/",
+            "/.eventcore/",
+            "/.lock",
+        ] {
+            assert!(
+                ignored.contains(&operational),
+                "the store .gitignore must exclude {operational} but lists only {ignored:?}"
+            );
+        }
+
+        // The committed events/ directory is the single source of truth and
+        // must never be ignored.
+        for committed in ["events/", "/events/", "events"] {
+            assert!(
+                !ignored.contains(&committed),
+                "the store .gitignore must not ignore the committed event log ({committed})"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn executed_commands_are_appended_and_read_back_in_order() -> Result<(), Box<dyn Error>> {
         let project = TempDir::new()?;
         execute_eventcore_command_for_exported_event(

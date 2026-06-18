@@ -282,7 +282,7 @@ Quint should verify at least:
   during runtime checks. Workflow-readiness events are ignored by artifact
   projection fingerprints so a readiness declaration does not make itself
   stale.
-- 🟡 Runtime checks open the eventcore-fs store at `model/events`; its committed
+- ✅ Runtime checks open the eventcore-fs store at `model/events`; its committed
   `events/` JSONL transactions are the single source of truth, while
   eventcore-fs keeps its operational `index/`, `tmp/`, `.eventcore/`, and lock
   files gitignored.
