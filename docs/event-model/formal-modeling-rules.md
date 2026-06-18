@@ -276,7 +276,7 @@ Quint should verify at least:
   conflict-resolution, clean-review, and workflow-readiness operations export
   domain events with schema version, event id, command id, ordinal, stream id,
   parents, event type, and typed payload data.
-- 🟡 Exported project, workflow, workflow-fact, workflow-transition, slice,
+- ✅ Exported project, workflow, workflow-fact, workflow-transition, slice,
   slice-fact, review, conflict-resolution, and workflow-readiness events
   project into `emc.toml`, Lean4 artifacts, Quint artifacts, and review records
   during runtime checks. Workflow-readiness events are ignored by artifact

@@ -15,7 +15,7 @@ mod tests {
 
     use assert_cmd::Command;
     use assert_cmd::cargo::cargo_bin;
-    use predicates::prelude::predicate;
+    use predicates::prelude::{PredicateBooleanExt, predicate};
     use tempfile::TempDir;
 
     #[test]
@@ -778,6 +778,63 @@ mod tests {
             .stderr(predicate::str::contains(
                 "event frontier changed during verification",
             ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn verify_declared_readiness_is_not_stale_at_unchanged_frontier() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        let tool_dir = temp_dir.path().join("tools");
+
+        create_fake_tool(&tool_dir, "lake", "lake.log")?;
+        create_fake_tool(&tool_dir, "quint", "quint.log")?;
+
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .arg("verify")
+            .current_dir(temp_dir.path())
+            .env("PATH", path_with_fake_tools(&tool_dir)?)
+            .assert()
+            .success();
+
+        // No model-changing event follows the readiness declaration. Because
+        // WorkflowReadinessDeclared events are excluded from the projection
+        // fingerprint, the declaration must not invalidate its own readiness:
+        // the workflow is reported, but not as stale.
+        Command::cargo_bin("emc")?
+            .args(["list", "workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Open ticket"))
+            .stdout(
+                predicate::str::contains(
+                    "workflow open-ticket readiness is stale for current event frontier",
+                )
+                .not(),
+            );
 
         Ok(())
     }
