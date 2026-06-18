@@ -363,7 +363,7 @@ mod tests {
 
         let line = receiver
             .recv_timeout(Duration::from_millis(500))
-            .map_err(|_| "MCP stdio did not respond before stdin EOF")??
+            .map_err(|err| format!("MCP stdio did not respond before stdin EOF: {err}"))??
             .ok_or("MCP stdio closed stdout without a response")?;
 
         server.kill()?;
@@ -405,12 +405,26 @@ mod tests {
             .map(serde_json::from_str::<Value>)
             .collect::<Result<Vec<_>, _>>()?;
 
-        assert_eq!(responses.len(), 3);
+        assert_eq!(responses.len(), 3, "expected three MCP responses");
+        let first_protocol_version = responses
+            .first()
+            .and_then(|response| response.get("result"))
+            .and_then(|result| result.get("protocolVersion"))
+            .ok_or("protocolVersion in first MCP result")?;
         assert_eq!(
-            responses[0]["result"]["protocolVersion"],
-            Value::String("2024-11-05".to_owned())
+            *first_protocol_version,
+            Value::String("2024-11-05".to_owned()),
+            "first MCP result must report the negotiated protocol version"
         );
-        assert!(responses[1]["result"]["tools"].is_array());
+        let second_tools = responses
+            .get(1)
+            .and_then(|response| response.get("result"))
+            .and_then(|result| result.get("tools"))
+            .ok_or("tools in second MCP result")?;
+        assert!(
+            second_tools.is_array(),
+            "second MCP result must list tools as an array"
+        );
         assert!(
             stdout.contains("\"check_project\""),
             "tools/list must remain available after initialize"
@@ -439,9 +453,14 @@ mod tests {
         let stdout = String::from_utf8(output)?;
         let response = serde_json::from_str::<Value>(stdout.trim())?;
 
+        let protocol_version = response
+            .get("result")
+            .and_then(|result| result.get("protocolVersion"))
+            .ok_or("protocolVersion in MCP result")?;
         assert_eq!(
-            response["result"]["protocolVersion"],
-            Value::String("2025-06-18".to_owned())
+            *protocol_version,
+            Value::String("2025-06-18".to_owned()),
+            "MCP result must report the negotiated protocol version"
         );
 
         Ok(())

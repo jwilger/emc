@@ -7,25 +7,38 @@ mod tests {
     use crate::core::digest::{
         WorkflowArtifactDigestInput, artifact_digest, slice_artifact_digest,
     };
+    use crate::core::effect::FileContents;
     use crate::core::emit::quint::{emit_slice_module, emit_workflow_module};
     use crate::core::types::{
-        CommandErrorName, CommandName, OutcomeLabelName, PayloadContractName, SliceKindName,
-        TransitionTriggerName, WorkflowCommandErrorRecord, WorkflowCommandErrorRecords,
-        WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
-        WorkflowEntryLifecycleStateRecord, WorkflowEntryLifecycleStateRecords, WorkflowModuleData,
-        WorkflowOutcomeRecord, WorkflowOutcomeRecords, WorkflowOwnedDefinitionKind,
-        WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords,
-        WorkflowSliceDetail, WorkflowSliceDetails, WorkflowStepRelationshipName,
-        WorkflowTransitionEndpoint, WorkflowTransitionKind, WorkflowTransitionRecord,
-        WorkflowTransitionRecords,
+        CommandErrorName, CommandName, ModelDescription, ModelName, OutcomeLabelName,
+        PayloadContractName, SliceKindName, TransitionTriggerName, WorkflowCommandErrorRecord,
+        WorkflowCommandErrorRecords, WorkflowEntryLifecycleEvidenceText,
+        WorkflowEntryLifecycleStateName, WorkflowEntryLifecycleStateRecord,
+        WorkflowEntryLifecycleStateRecords, WorkflowModuleData, WorkflowOutcomeRecord,
+        WorkflowOutcomeRecords, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
+        WorkflowOwnedDefinitionRecord, WorkflowOwnedDefinitionRecords, WorkflowSliceDetail,
+        WorkflowSliceDetails, WorkflowSlug, WorkflowStepRelationshipName,
+        WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecords, WorkflowTransitionKind,
+        WorkflowTransitionRecord, WorkflowTransitionRecords,
     };
     use crate::io::dto::{
         parse_model_description, parse_model_name, parse_quint_module_name, parse_slice_slug,
         parse_workflow_slug,
     };
 
-    #[test]
-    fn quint_workflow_module_represents_business_workflow_fields() -> Result<(), Box<dyn Error>> {
+    struct WorkflowFixtureData {
+        name: ModelName,
+        description: ModelDescription,
+        slug: WorkflowSlug,
+        slice_details: Vec<WorkflowSliceDetail>,
+        transitions: Vec<WorkflowTransitionRecord>,
+        outcomes: WorkflowOutcomeRecords,
+        command_errors: WorkflowCommandErrorRecords,
+        owned_definitions: WorkflowOwnedDefinitionRecords,
+        entry_lifecycle_states: WorkflowEntryLifecycleStateRecords,
+    }
+
+    fn build_workflow_fixture_data() -> Result<WorkflowFixtureData, Box<dyn Error>> {
         let workflow_name = parse_model_name("Open ticket")?;
         let workflow_description = parse_model_description("Actor opens a repair ticket.")?;
         let workflow_slug = parse_workflow_slug("open-ticket")?;
@@ -33,14 +46,14 @@ mod tests {
             WorkflowSliceDetail::new_with_relationship(
                 parse_slice_slug("capture-ticket")?,
                 parse_model_name("Capture ticket")?,
-                SliceKindName::try_new("state_view".to_owned())?,
+                SliceKindName::try_new("state_view")?,
                 parse_model_description("Actor enters repair ticket details.")?,
                 WorkflowStepRelationshipName::Entry,
             ),
             WorkflowSliceDetail::new_with_relationship(
                 parse_slice_slug("review-ticket")?,
                 parse_model_name("Review ticket")?,
-                SliceKindName::try_new("state_view".to_owned())?,
+                SliceKindName::try_new("state_view")?,
                 parse_model_description("Actor reviews repair ticket details.")?,
                 WorkflowStepRelationshipName::Main,
             ),
@@ -48,7 +61,7 @@ mod tests {
         let workflow_transitions = vec![WorkflowTransitionRecord::new_with_payload_contract(
             WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
             WorkflowTransitionEndpoint::try_new("review-ticket".to_owned())?,
-            WorkflowTransitionKind::try_new("external_trigger".to_owned())?,
+            WorkflowTransitionKind::try_new("external_trigger")?,
             TransitionTriggerName::try_new("callback_received".to_owned())?,
             PayloadContractName::try_new("CallbackReceivedPayload".to_owned())?,
         )];
@@ -66,7 +79,7 @@ mod tests {
         let workflow_owned_definitions =
             WorkflowOwnedDefinitionRecords::from_records([WorkflowOwnedDefinitionRecord::new(
                 WorkflowTransitionEndpoint::try_new("capture-ticket".to_owned())?,
-                WorkflowOwnedDefinitionKind::try_new("external_payload".to_owned())?,
+                WorkflowOwnedDefinitionKind::try_new("external_payload")?,
                 WorkflowOwnedDefinitionName::try_new("CallbackReceivedPayload".to_owned())?,
             )]);
         let workflow_entry_lifecycle_states = WorkflowEntryLifecycleStateRecords::from_records([
@@ -79,13 +92,38 @@ mod tests {
                 )?,
             ),
         ]);
+        Ok(WorkflowFixtureData {
+            name: workflow_name,
+            description: workflow_description,
+            slug: workflow_slug,
+            slice_details: workflow_slice_details,
+            transitions: workflow_transitions,
+            outcomes: workflow_outcomes,
+            command_errors: workflow_command_errors,
+            owned_definitions: workflow_owned_definitions,
+            entry_lifecycle_states: workflow_entry_lifecycle_states,
+        })
+    }
+
+    fn build_workflow_fixture_module() -> Result<FileContents, Box<dyn Error>> {
+        let WorkflowFixtureData {
+            name: workflow_name,
+            description: workflow_description,
+            slug: workflow_slug,
+            slice_details: workflow_slice_details,
+            transitions: workflow_transitions,
+            outcomes: workflow_outcomes,
+            command_errors: workflow_command_errors,
+            owned_definitions: workflow_owned_definitions,
+            entry_lifecycle_states: workflow_entry_lifecycle_states,
+        } = build_workflow_fixture_data()?;
         let module = emit_workflow_module(
-            parse_quint_module_name("OpenTicket")?,
-            WorkflowModuleData::new(
+            &parse_quint_module_name("OpenTicket")?,
+            &WorkflowModuleData::new(
                 workflow_name.clone(),
                 workflow_description.clone(),
                 workflow_slug.clone(),
-                artifact_digest(WorkflowArtifactDigestInput {
+                artifact_digest(&WorkflowArtifactDigestInput {
                     workflow_name,
                     workflow_slug,
                     workflow_description,
@@ -98,7 +136,7 @@ mod tests {
                     workflow_outcomes: workflow_outcomes.clone(),
                     workflow_command_errors: workflow_command_errors.clone(),
                     workflow_owned_definitions: workflow_owned_definitions.clone(),
-                    workflow_transition_evidences: Default::default(),
+                    workflow_transition_evidences: WorkflowTransitionEvidenceRecords::default(),
                     workflow_requires_entry_lifecycle_coverage: false,
                     workflow_entry_lifecycle_states: workflow_entry_lifecycle_states.clone(),
                 }),
@@ -112,17 +150,50 @@ mod tests {
             .with_owned_definitions(workflow_owned_definitions)
             .with_entry_lifecycle_states(workflow_entry_lifecycle_states),
         );
+        Ok(module)
+    }
+
+    #[test]
+    fn quint_workflow_module_represents_business_workflow_fields() -> Result<(), Box<dyn Error>> {
+        let module = build_workflow_fixture_module()?;
         let quint = module.as_ref();
 
+        assert_workflow_header_and_digest(quint);
+        assert_workflow_scalar_values(quint);
+        assert_workflow_type_declarations(quint);
+        assert_workflow_value_declarations(quint);
+        assert_workflow_identity_and_structure(quint);
+        assert_workflow_step_relationship_invariants(quint);
+        assert_workflow_reachability_invariants(quint);
+        assert_workflow_lifecycle_invariants(quint);
+        assert_workflow_transition_resolution_invariants(quint);
+        assert_workflow_outcome_and_error_invariants(quint);
+        assert_workflow_owned_definition_invariants(quint);
+        assert_workflow_command_transition_invariants(quint);
+        assert_workflow_event_transition_invariants(quint);
+        assert_workflow_navigation_invariants(quint);
+        assert_workflow_external_trigger_invariants(quint);
+        assert_workflow_model_state(quint);
+
+        Ok(())
+    }
+
+    fn assert_workflow_header_and_digest(quint: &str) {
         assert!(quint.contains("module OpenTicket"));
         assert!(
             quint.contains(
                 "// EMC-DIGEST: workflow:name=Open ticket;slug=open-ticket;description=Actor opens a repair ticket.;slices=capture-ticket|Capture ticket|state_view|Actor enters repair ticket details.|entry,review-ticket|Review ticket|state_view|Actor reviews repair ticket details.|main;transitions=capture-ticket->review-ticket:external_trigger:callback_received::CallbackReceivedPayload"
             )
         );
+    }
+
+    fn assert_workflow_scalar_values(quint: &str) {
         assert!(quint.contains("val workflowName = \"Open ticket\""));
         assert!(quint.contains("val workflowSlug = \"open-ticket\""));
         assert!(quint.contains("val workflowDescription = \"Actor opens a repair ticket.\""));
+    }
+
+    fn assert_workflow_type_declarations(quint: &str) {
         assert!(quint.contains(
             "type WorkflowSliceDetail = { slug: str, name: str, kind: SliceKindName, description: str }"
         ));
@@ -151,6 +222,9 @@ mod tests {
             "type WorkflowEntryLifecycleState = { state: WorkflowEntryLifecycleStateName, step: str, evidence: str }"
         ));
         assert!(quint.contains("type WorkflowSlice = { slug: str }"));
+    }
+
+    fn assert_workflow_value_declarations(quint: &str) {
         assert!(
             quint
                 .contains("val workflowSlices: List[WorkflowSlice] = [{ slug: \"capture-ticket\" },{ slug: \"review-ticket\" }]")
@@ -183,6 +257,9 @@ mod tests {
                 "val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = [{ state: FreshUninitialized, step: \"capture-ticket\", evidence: \"capture-ticket view distinguishes first arrival before initialization\" }]"
             )
         );
+    }
+
+    fn assert_workflow_identity_and_structure(quint: &str) {
         assert!(quint.contains("val workflowIdentityStable"));
         assert!(quint.contains("val workflowSlicesHaveDetails ="));
         assert!(quint.contains("val workflowSliceDetailsComplete = workflowSlicesHaveDetails"));
@@ -197,6 +274,9 @@ mod tests {
             quint.contains("val requiredEntryLifecycleStates: List[WorkflowEntryLifecycleStateName] = [FreshUninitialized,InitializedUnauthenticated,InitializedAuthenticated,PartiallyConfigured,FullyConfigured]"),
             "Quint workflow artifacts must encode the required application-entry lifecycle states"
         );
+    }
+
+    fn assert_workflow_step_relationship_invariants(quint: &str) {
         assert!(
             quint.contains(
                 "type WorkflowStepRelationshipName = StepEntry | StepMain | StepBranch | StepAlternate | StepAsyncLifecycle | StepSupporting"
@@ -235,6 +315,9 @@ mod tests {
             quint.contains("val workflowMainStepsHaveIncomingReachability = workflowStepRelationships.select(step => workflowMainStepHasIncomingTransition(step)).length() == workflowStepRelationships.length()"),
             "Quint workflow artifacts must verify main workflow steps have incoming reachability"
         );
+    }
+
+    fn assert_workflow_reachability_invariants(quint: &str) {
         assert!(
             quint.contains("def workflowReachableStepsAfterFuel(fuel, reachable) ="),
             "Quint workflow artifacts must compute workflow reachability from the entry step"
@@ -259,6 +342,9 @@ mod tests {
             quint.contains("val workflowBranchAndAlternateStepsHaveTriggerOrRationale = workflowStepRelationships.select(step => workflowBranchOrAlternateStepHasTriggerOrRationale(step)).length() == workflowStepRelationships.length()"),
             "Quint workflow artifacts must verify branch and alternate steps explain why they are reached"
         );
+    }
+
+    fn assert_workflow_lifecycle_invariants(quint: &str) {
         assert!(
             quint.contains("def workflowEntryLifecycleStateCovered(state) = workflowEntryLifecycleStates.select(coverage => coverage.state == state and workflowSliceSlugs.select(step => step == coverage.step).length() > 0 and coverage.evidence != \"\").length() > 0"),
             "Quint workflow artifacts must check lifecycle coverage with the closed lifecycle-state type"
@@ -267,6 +353,9 @@ mod tests {
             quint.contains("val workflowEntryLifecycleStatesCoverRequiredStates = not(workflowRequiresEntryLifecycleCoverage) or requiredEntryLifecycleStates.select(state => workflowEntryLifecycleStateCovered(state)).length() == requiredEntryLifecycleStates.length()"),
             "Quint workflow artifacts must expose application-entry lifecycle coverage as an invariant"
         );
+    }
+
+    fn assert_workflow_transition_resolution_invariants(quint: &str) {
         assert!(
             quint.contains(
                 "val workflowTransitionSourcesResolve = workflowTransitions.select(transition => workflowSliceSlugs.select(step => step == transition.source).length() > 0).length() == workflowTransitions.length()"
@@ -303,6 +392,9 @@ mod tests {
             ),
             "Quint workflow artifacts must expose workflow-exit rationale as an invariant"
         );
+    }
+
+    fn assert_workflow_outcome_and_error_invariants(quint: &str) {
         assert!(quint.contains(
             "def workflowOutcomeHandledByTransition(outcome) = not(outcome.externallyRelevant) or workflowTransitions.select(transition => transition.source == outcome.sourceSlice and transition.kind == Outcome and transition.trigger == outcome.label).length() > 0"
         ));
@@ -324,6 +416,9 @@ mod tests {
         assert!(quint.contains(
             "val workflowTransitionsDoNotUseCommandErrorsAsOutcomes = workflowTransitions.select(transition => transition.kind != Outcome or workflowCommandErrors.select(error => error.sourceSlice == transition.source and error.errorName == transition.trigger).length() == 0).length() == workflowTransitions.length()"
         ));
+    }
+
+    fn assert_workflow_owned_definition_invariants(quint: &str) {
         assert!(quint.contains(
             "def workflowNonEventDefinitionOwnedOnce(definition) = definition.definitionKind == OwnedEvent or workflowOwnedDefinitions.select(other => other.definitionKind == definition.definitionKind and other.definitionName == definition.definitionName).length() == 1"
         ));
@@ -345,6 +440,9 @@ mod tests {
         assert!(quint.contains(
             "def workflowOwnsDefinition(sourceSlice, definitionKind, definitionName) = workflowOwnedDefinitions.select(definition => definition.sourceSlice == sourceSlice and definition.definitionKind == definitionKind and definition.definitionName == definitionName).length() > 0"
         ));
+    }
+
+    fn assert_workflow_command_transition_invariants(quint: &str) {
         assert!(quint.contains(
             "def workflowCommandTransitionTargetsOwnedCommand(transition) = transition.kind != Command or workflowOwnsDefinition(transition.target, OwnedCommand, transition.trigger)"
         ));
@@ -369,6 +467,9 @@ mod tests {
         assert!(quint.contains(
             "val workflowStateViewCommandTransitionsTargetStateChanges = workflowTransitions.select(transition => workflowStateViewCommandTransitionTargetsStateChange(transition)).length() == workflowTransitions.length()"
         ));
+    }
+
+    fn assert_workflow_event_transition_invariants(quint: &str) {
         assert!(quint.contains(
             "def workflowEventTransitionIsSharedByEndpoints(transition) = transition.kind != Event or (workflowOwnsDefinition(transition.source, OwnedEvent, transition.trigger) and workflowOwnsDefinition(transition.target, OwnedEvent, transition.trigger))"
         ));
@@ -381,6 +482,9 @@ mod tests {
         assert!(quint.contains(
             "val workflowEventTransitionsHaveParticipatingEndpointEvents = workflowTransitions.select(transition => workflowEventTransitionSourceParticipates(transition) and workflowEventTransitionTargetParticipates(transition)).length() == workflowTransitions.length()"
         ));
+    }
+
+    fn assert_workflow_navigation_invariants(quint: &str) {
         assert!(quint.contains(
             "def workflowNavigationTransitionSourceOwnsControl(transition) = transition.kind != Navigation or workflowOwnsDefinition(transition.source, OwnedControl, workflowNavigationSourceControl(transition))"
         ));
@@ -399,6 +503,9 @@ mod tests {
         assert!(quint.contains(
             "val workflowNavigationTransitionsResolveToEntryViews = workflowTransitions.select(transition => workflowNavigationTransitionTargetsEntryView(transition)).length() == workflowTransitions.length()"
         ));
+    }
+
+    fn assert_workflow_external_trigger_invariants(quint: &str) {
         assert!(quint.contains(
             "def workflowExternalTriggerDeclaresPayloadContract(transition) = transition.kind != ExternalTrigger or (transition.payloadContract != \"\" and workflowOwnsDefinition(transition.source, OwnedExternalPayload, transition.payloadContract))"
         ));
@@ -419,11 +526,12 @@ mod tests {
             !quint.contains("length(workflowTransitions) == length(workflowTransitions)"),
             "Quint transition invariant must not be a tautological length self-comparison"
         );
+    }
+
+    fn assert_workflow_model_state(quint: &str) {
         assert!(quint.contains("var modelState: int"));
         assert!(quint.contains("action init = modelState' = 0"));
         assert!(quint.contains("action step = modelState' = modelState"));
-
-        Ok(())
     }
 
     #[test]
@@ -431,23 +539,60 @@ mod tests {
         let slice_name = parse_model_name("Capture ticket")?;
         let slice_description = parse_model_description("Actor enters repair ticket details.")?;
         let slice_slug = parse_slice_slug("capture-ticket")?;
-        let slice_kind = SliceKindName::try_new("state_view".to_owned())?;
+        let slice_kind = SliceKindName::try_new("state_view")?;
         let module = emit_slice_module(
-            parse_quint_module_name("CaptureTicket")?,
-            slice_name.clone(),
-            slice_description.clone(),
-            slice_slug.clone(),
+            &parse_quint_module_name("CaptureTicket")?,
+            &slice_name,
+            &slice_description,
+            &slice_slug,
             slice_kind,
-            slice_artifact_digest(slice_name, slice_slug, slice_kind, slice_description),
+            &slice_artifact_digest(&slice_name, &slice_slug, slice_kind, &slice_description),
         );
         let quint = module.as_ref();
 
+        assert_slice_header_and_digest(quint);
+        assert_slice_type_declarations(quint);
+        assert_slice_reference_types(quint);
+        assert_slice_command_value_declarations(quint);
+        assert_slice_event_value_declarations(quint);
+        assert_slice_read_model_value_declarations(quint);
+        assert_slice_view_value_declarations(quint);
+        assert_slice_scenario_value_declarations(quint);
+        assert_slice_scenario_invariants(quint);
+        assert_slice_contract_scenario_invariants(quint);
+        assert_slice_command_input_invariants(quint);
+        assert_slice_command_input_source_invariants(quint);
+        assert_slice_command_error_invariants(quint);
+        assert_slice_automation_invariants(quint);
+        assert_slice_translation_invariants(quint);
+        assert_slice_board_element_invariants(quint);
+        assert_slice_board_connection_invariants(quint);
+        assert_slice_outcome_invariants(quint);
+        assert_slice_event_invariants(quint);
+        assert_slice_event_attribute_invariants(quint);
+        assert_slice_read_model_field_invariants(quint);
+        assert_slice_view_field_invariants(quint);
+        assert_slice_view_provenance_invariants(quint);
+        assert_slice_data_flow_invariants(quint);
+        assert_slice_view_control_invariants(quint);
+        assert_slice_kind_ownership_invariants(quint);
+        assert_slice_coherence_invariants(quint);
+        assert_slice_navigation_invariants(quint);
+        assert_slice_identity_and_model_state(quint);
+
+        Ok(())
+    }
+
+    fn assert_slice_header_and_digest(quint: &str) {
         assert!(quint.contains("module CaptureTicket"));
         assert!(
             quint.contains(
                 "// EMC-DIGEST: slice:name=Capture ticket;slug=capture-ticket;kind=state_view;description=Actor enters repair ticket details."
             )
         );
+    }
+
+    fn assert_slice_type_declarations(quint: &str) {
         assert!(quint.contains(
             "type EventModelScenario = { name: str, givenSteps: List[str], whenSteps: List[str], thenSteps: List[str], readStreams: List[str], writtenStreams: List[str], contractKind: str, coveredDefinition: str, errorReferences: List[str] }"
         ));
@@ -510,6 +655,9 @@ mod tests {
         assert!(quint.contains(
             "type BoardConnection = { source: str, sourceKind: str, target: str, targetKind: str }"
         ));
+    }
+
+    fn assert_slice_reference_types(quint: &str) {
         assert!(
             quint.contains("type SliceEventReference = { name: str }"),
             "Quint slice artifacts must represent referenced event names as typed records"
@@ -526,6 +674,9 @@ mod tests {
             quint.contains("type SliceViewReference = { name: str }"),
             "Quint slice artifacts must represent referenced view names as typed records"
         );
+    }
+
+    fn assert_slice_command_value_declarations(quint: &str) {
         assert!(quint.contains("val sliceCommands: List[SliceCommandReference] = []"));
         assert!(quint.contains(
             "val sliceCommandNames: List[str] = sliceCommands.foldl([], (names, commandRef) => names.append(commandRef.name))"
@@ -552,6 +703,9 @@ mod tests {
         assert!(quint.contains(
             "val allowedSingletonRepeatBehaviors: List[str] = [\"already_exists_error\",\"idempotent\"]"
         ));
+    }
+
+    fn assert_slice_event_value_declarations(quint: &str) {
         assert!(quint.contains("val sliceEvents: List[SliceEventReference] = []"));
         assert!(quint.contains(
             "val sliceEventNames: List[str] = sliceEvents.foldl([], (names, eventRef) => names.append(eventRef.name))"
@@ -565,6 +719,9 @@ mod tests {
         assert!(quint.contains(
             "val allowedEventAttributeSourceKinds: List[str] = storedEventFactSourceKinds"
         ));
+    }
+
+    fn assert_slice_read_model_value_declarations(quint: &str) {
         assert!(quint.contains("val sliceReadModels: List[SliceReadModelReference] = []"));
         assert!(quint.contains(
             "val sliceReadModelNames: List[str] = sliceReadModels.foldl([], (names, readModelRef) => names.append(readModelRef.name))"
@@ -573,6 +730,9 @@ mod tests {
         assert!(quint.contains(
             "val allowedReadModelFieldSourceKinds: List[str] = [\"event_attribute\",\"derivation\",\"absence_default\"]"
         ));
+    }
+
+    fn assert_slice_view_value_declarations(quint: &str) {
         assert!(quint.contains("val sliceViews: List[SliceViewReference] = []"));
         assert!(quint.contains(
             "val sliceViewNames: List[str] = sliceViews.foldl([], (names, viewRef) => names.append(viewRef.name))"
@@ -585,6 +745,9 @@ mod tests {
         assert!(quint.contains(
             "val allowedNavigationTargetTypes: List[str] = [\"modeled_view\",\"local_view_state\",\"external_system\",\"external_workflow\"]"
         ));
+    }
+
+    fn assert_slice_scenario_value_declarations(quint: &str) {
         assert!(quint.contains("val sliceAcceptanceScenarios: List[EventModelScenario] = []"));
         assert!(quint.contains("val sliceContractScenarios: List[EventModelScenario] = []"));
         assert!(quint.contains("val sliceBitLevelDataFlows: List[BitLevelDataFlow] = []"));
@@ -612,6 +775,9 @@ mod tests {
         assert!(quint.contains(
             "val sliceNamedDefinitionsAreUniquelyOwned = definitionNamesAreUnique(sliceCommandNames) and definitionNamesAreUnique(sliceOwnedCommandNames) and definitionNamesAreUnique(sliceEventNames) and definitionNamesAreUnique(sliceOwnedEventNames) and definitionNamesAreUnique(sliceOwnedStreamNames) and definitionNamesAreUnique(sliceOwnedExternalPayloadNames) and definitionNamesAreUnique(sliceReadModelNames) and definitionNamesAreUnique(sliceOwnedReadModelNames) and definitionNamesAreUnique(sliceViewNames) and definitionNamesAreUnique(sliceOwnedViewNames) and definitionNamesAreUnique(sliceOwnedAutomationNames) and definitionNamesAreUnique(sliceOwnedTranslationNames) and definitionNamesAreUnique(sliceOwnedControlNames)"
         ));
+    }
+
+    fn assert_slice_scenario_invariants(quint: &str) {
         assert!(quint.contains(
             "def scenarioStreamResolves(streamName) = sliceStreams.select(stream => stream.name == streamName).length() > 0"
         ));
@@ -639,6 +805,9 @@ mod tests {
         assert!(quint.contains(
             "val stateChangeScenariosNameStreams = stateChangeAcceptanceScenariosNameStreams and stateChangeContractScenariosNameStreams"
         ));
+    }
+
+    fn assert_slice_contract_scenario_invariants(quint: &str) {
         assert!(quint.contains(
             "val acceptanceScenariosAreUserFacing = sliceAcceptanceScenarios.select(scenario => scenario.contractKind == \"\" and scenario.coveredDefinition == \"\").length() == sliceAcceptanceScenarios.length()"
         ));
@@ -672,6 +841,9 @@ mod tests {
         assert!(quint.contains(
             "val contractScenariosCoverModeledContracts = sliceCommandDefinitions.select(command => commandHasContractScenario(command)).length() == sliceCommandDefinitions.length() and sliceAutomations.select(automation => automationHasContractScenario(automation)).length() == sliceAutomations.length() and sliceTranslations.select(translation => translationHasContractScenario(translation)).length() == sliceTranslations.length() and sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => derivationFieldHasContractScenario(readModelField)).length() == readModel.fields.length()).length() == sliceReadModelDefinitions.length()"
         ));
+    }
+
+    fn assert_slice_command_input_invariants(quint: &str) {
         assert!(quint.contains(
             "val commandInputsHaveAllowedSources = sliceCommandDefinitions.select(command => command.inputs.select(input => allowedCommandInputSourceKinds.select(sourceKind => sourceKind == input.sourceKind).length() > 0).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
@@ -699,6 +871,9 @@ mod tests {
         assert!(quint.contains(
             "val commandInputsTraceToInvocationSources = sliceCommandDefinitions.select(command => command.inputs.select(input => commandInputTracesToInvocationSource(input)).length() == command.inputs.length()).length() == sliceCommandDefinitions.length()"
         ));
+    }
+
+    fn assert_slice_command_input_source_invariants(quint: &str) {
         assert!(quint.contains(
             "def commandObservedStreamNames(command) = command.observedStreams.foldl([], (names, streamRef) => names.append(streamRef.name))"
         ));
@@ -732,6 +907,9 @@ mod tests {
         assert!(quint.contains(
             "def commandInputHasBitLevelFlow(command, input) = bitLevelFlowCoversTarget(command.name, input.name)"
         ));
+    }
+
+    fn assert_slice_command_error_invariants(quint: &str) {
         assert!(quint.contains(
             "val commandErrorsAreDeclared = sliceCommandDefinitions.select(command => command.errors.select(error => error.name != \"\" and error.scenarioName != \"\" and error.recoveryKind != \"\").length() == command.errors.length()).length() == sliceCommandDefinitions.length()"
         ));
@@ -762,6 +940,9 @@ mod tests {
         assert!(quint.contains(
             "val singletonCommandsDeclareRepeatBehavior = sliceCommandDefinitions.select(command => singletonCommandDeclaresRepeatBehavior(command)).length() == sliceCommandDefinitions.length()"
         ));
+    }
+
+    fn assert_slice_automation_invariants(quint: &str) {
         assert!(quint.contains(
             "def automationHasTrigger(automation) = automation.name != \"\" and automation.triggerName != \"\" and automation.reactionDescription != \"\""
         ));
@@ -783,6 +964,9 @@ mod tests {
         assert!(quint.contains(
             "val automationsHandleCommandErrors = sliceAutomations.select(automation => sliceCommandDefinitions.select(command => automationHandlesCommandErrors(automation, command)).length() == sliceCommandDefinitions.length()).length() == sliceAutomations.length()"
         ));
+    }
+
+    fn assert_slice_translation_invariants(quint: &str) {
         assert!(quint.contains(
             "def translationHasExternalContract(translation) = translation.name != \"\" and translation.externalEventName != \"\" and translation.payloadContractName != \"\" and sliceExternalPayloads.select(payload => payload.name == translation.payloadContractName).length() > 0"
         ));
@@ -807,6 +991,9 @@ mod tests {
         assert!(quint.contains(
             "val translationsReferenceObservedExternalEvents = sliceTranslations.select(translation => translationReferencesObservedExternalEvent(translation)).length() == sliceTranslations.length()"
         ));
+    }
+
+    fn assert_slice_board_element_invariants(quint: &str) {
         assert!(quint.contains(
             "def boardElementLaneMatchesKind(element) = (element.kind == \"view\" and element.lane == \"ux\") or (element.kind == \"automation\" and element.lane == \"ux\") or (element.kind == \"external_event\" and element.lane == \"ux\") or (element.kind == \"command\" and element.lane == \"actions\") or (element.kind == \"read_model\" and element.lane == \"actions\") or (element.kind == \"event\" and element.lane == \"events\")"
         ));
@@ -825,6 +1012,9 @@ mod tests {
         assert!(quint.contains(
             "val externalBoardElementsAreObservedEvents = sliceBoardElements.select(element => externalBoardElementIsObservedEvent(element)).length() == sliceBoardElements.length()"
         ));
+    }
+
+    fn assert_slice_board_connection_invariants(quint: &str) {
         assert!(quint.contains(
             "def boardConnectionHasAllowedShape(connection) = (connection.sourceKind == \"view\" and connection.targetKind == \"command\") or (connection.sourceKind == \"automation\" and connection.targetKind == \"command\") or (connection.sourceKind == \"external_event\" and connection.targetKind == \"command\") or (connection.sourceKind == \"workflow_trigger\" and connection.targetKind == \"command\") or (connection.sourceKind == \"command\" and connection.targetKind == \"event\") or (connection.sourceKind == \"event\" and connection.targetKind == \"read_model\") or (connection.sourceKind == \"read_model\" and connection.targetKind == \"view\")"
         ));
@@ -882,6 +1072,9 @@ mod tests {
         assert!(quint.contains(
             "val mainPathBoardHasNoDisconnectedIslands = sliceBoardElements.select(element => not(element.mainPath) or sliceBoardConnections.select(connection => connection.source == element.name or connection.target == element.name).length() > 0).length() == sliceBoardElements.length()"
         ));
+    }
+
+    fn assert_slice_outcome_invariants(quint: &str) {
         assert!(quint.contains(
             "val outcomeLabelsAreUnique = sliceOutcomeDefinitions.select(outcome => sliceOutcomeDefinitions.select(other => other.label == outcome.label).length() == 1).length() == sliceOutcomeDefinitions.length()"
         ));
@@ -894,6 +1087,9 @@ mod tests {
         assert!(quint.contains(
             "val outcomeEventsAreKnownToSlice = sliceOutcomeDefinitions.select(outcome => outcome.eventSet.select(eventName => eventIsKnownToSlice(eventName)).length() == outcome.eventSet.length()).length() == sliceOutcomeDefinitions.length()"
         ));
+    }
+
+    fn assert_slice_event_invariants(quint: &str) {
         assert!(quint.contains(
             "val eventsReferenceKnownStreams = sliceEventDefinitions.select(event => sliceStreams.select(stream => stream.name == event.stream).length() > 0).length() == sliceEventDefinitions.length()"
         ));
@@ -912,6 +1108,9 @@ mod tests {
         assert!(quint.contains(
             "val locallyEmittedEventsAreProducedByCommands = sliceEventDefinitions.select(event => eventProducedByCommand(event)).length() == sliceEventDefinitions.length()"
         ));
+    }
+
+    fn assert_slice_event_attribute_invariants(quint: &str) {
         assert!(quint.contains(
             "val eventAttributesHaveAllowedSources = sliceEventDefinitions.select(event => event.attributes.select(attribute => allowedEventAttributeSourceKinds.select(sourceKind => sourceKind == attribute.sourceKind).length() > 0).length() == event.attributes.length()).length() == sliceEventDefinitions.length()"
         ));
@@ -948,6 +1147,9 @@ mod tests {
         assert!(quint.contains(
             "def eventAttributeHasBitLevelFlow(event, attribute) = bitLevelFlowCoversTarget(event.name, attribute.name)"
         ));
+    }
+
+    fn assert_slice_read_model_field_invariants(quint: &str) {
         assert!(quint.contains(
             "val readModelFieldsHaveAllowedSources = sliceReadModelDefinitions.select(readModel => readModel.fields.select(readModelField => allowedReadModelFieldSourceKinds.select(sourceKind => sourceKind == readModelField.sourceKind).length() > 0).length() == readModel.fields.length()).length() == sliceReadModelDefinitions.length()"
         ));
@@ -990,6 +1192,9 @@ mod tests {
         assert!(quint.contains(
             "def readModelFieldHasBitLevelFlow(readModel, readModelField) = bitLevelFlowCoversTarget(readModel.name, readModelField.name)"
         ));
+    }
+
+    fn assert_slice_view_field_invariants(quint: &str) {
         assert!(quint.contains(
             "val viewFieldsHaveAllowedSources = sliceViewDefinitions.select(view => view.fields.select(viewField => allowedViewFieldSourceKinds.select(sourceKind => sourceKind == viewField.sourceKind).length() > 0).length() == view.fields.length()).length() == sliceViewDefinitions.length()"
         ));
@@ -1020,6 +1225,9 @@ mod tests {
         assert!(quint.contains(
             "val viewSketchTokensMapToModeledElements = sliceViewDefinitions.select(view => view.sketchTokens.select(sketchToken => sketchTokenMapsToModeledElement(view, sketchToken)).length() == view.sketchTokens.length()).length() == sliceViewDefinitions.length()"
         ));
+    }
+
+    fn assert_slice_view_provenance_invariants(quint: &str) {
         assert!(quint.contains(
             "def readModelFieldIsDeclared(readModelName, fieldName) = sliceReadModelDefinitions.select(readModel => readModel.name == readModelName and readModel.fields.select(readModelField => readModelField.name == fieldName).length() > 0).length() > 0"
         ));
@@ -1038,6 +1246,9 @@ mod tests {
         assert!(quint.contains(
             "val displayedDataTraceToOriginalProvenance = sliceViewDefinitions.select(view => view.fields.select(viewField => viewFieldTracesToOriginalProvenance(viewField)).length() == view.fields.length()).length() == sliceViewDefinitions.length()"
         ));
+    }
+
+    fn assert_slice_data_flow_invariants(quint: &str) {
         assert!(quint.contains(
             "def viewFieldHasBitLevelFlow(view, viewField) = bitLevelFlowCoversTarget(view.name, viewField.name)"
         ));
@@ -1059,6 +1270,9 @@ mod tests {
         assert!(quint.contains(
             "val modeledDataFlowsAreBitComplete = commandInputDataFlowsAreComplete and eventAttributeDataFlowsAreComplete and readModelFieldDataFlowsAreComplete and viewFieldDataFlowsAreComplete and externalPayloadFieldDataFlowsAreComplete"
         ));
+    }
+
+    fn assert_slice_view_control_invariants(quint: &str) {
         assert!(quint.contains(
             "val viewControlsHaveSketchTokens = sliceViewDefinitions.select(view => view.controls.select(control => control.name != \"\" and control.commandName != \"\" and control.sketchToken != \"\").length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
@@ -1124,6 +1338,9 @@ mod tests {
         assert!(quint.contains(
             "val viewControlRecoveryBehaviorIsModeled = sliceViewDefinitions.select(view => view.controls.select(control => controlRecoveryBehaviorIsModeled(control)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
+    }
+
+    fn assert_slice_kind_ownership_invariants(quint: &str) {
         assert!(quint.contains(
             "val stateViewSlicesDoNotOwnCommands = sliceKind != SliceStateView or (sliceCommands.length() == 0 and sliceCommandDefinitions.length() == 0)"
         ));
@@ -1166,6 +1383,9 @@ mod tests {
         assert!(quint.contains(
             "val translationSlicesDoNotOwnViews = sliceKind != SliceTranslation or (sliceViews.length() == 0 and sliceViewDefinitions.length() == 0)"
         ));
+    }
+
+    fn assert_slice_coherence_invariants(quint: &str) {
         assert!(quint.contains("val recognizedSliceKind = true"));
         assert!(quint.contains(
             "val sliceRepresentsOneCoherentModelUnit = recognizedSliceKind and stateViewSlicesDoNotOwnCommands and stateViewSlicesOwnViews and stateViewSlicesOwnReadModels and stateViewSlicesOwnProjectionPaths and stateChangeSlicesOwnCommands and stateChangeSlicesOwnEvents and stateChangeSlicesOwnOutcomes and stateChangeSlicesOwnErrors and stateChangeSlicesDoNotOwnReadModelsOrViews and stateChangeSlicesDoNotOwnAutomationsOrTranslations and stateChangeSlicesDoNotOwnControlsOrSketches and translationSlicesDeclareExternalContracts and externalBoundariesHavePayloadContractsAndFieldProvenance and translationsTargetKnownCommands and translationsReferenceObservedExternalEvents and translationSlicesDoNotOwnViews and automationSlicesDeclareTriggers and automationSlicesRepresentOneReaction and automationsIssueKnownCommands and automationsHandleCommandErrors"
@@ -1176,6 +1396,9 @@ mod tests {
         assert!(quint.contains(
             "val sliceRepresentsSmallestUsefulBehaviorBoundary = sliceRepresentsOneCoherentModelUnit and stateViewSlicesRepresentSingleViewProjectionBoundary and stateChangeSlicesRepresentSingleCommandBoundary and automationSlicesRepresentOneReaction and translationSlicesDeclareExternalContracts"
         ));
+    }
+
+    fn assert_slice_navigation_invariants(quint: &str) {
         assert!(quint.contains(
             "def navigationTargetTypeIsModeled(target) = target.targetType == \"\" or allowedNavigationTargetTypes.select(targetType => targetType == target.targetType).length() > 0"
         ));
@@ -1218,6 +1441,9 @@ mod tests {
         assert!(quint.contains(
             "val viewControlNavigationTargetsAreComplete = sliceViewDefinitions.select(view => view.controls.select(control => navigationTargetIsComplete(view, control.navigation)).length() == view.controls.length()).length() == sliceViewDefinitions.length()"
         ));
+    }
+
+    fn assert_slice_identity_and_model_state(quint: &str) {
         assert!(quint.contains("val sliceIdentityStable = sliceName == \"Capture ticket\""));
         assert!(
             quint.contains(
@@ -1246,7 +1472,5 @@ mod tests {
         assert!(quint.contains("var modelState: int"));
         assert!(quint.contains("action init = modelState' = 0"));
         assert!(quint.contains("action step = modelState' = modelState"));
-
-        Ok(())
     }
 }

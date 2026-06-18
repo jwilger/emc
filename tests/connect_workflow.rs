@@ -5,6 +5,7 @@ mod tests {
     use std::error::Error;
     use std::fs::read_to_string;
     use std::path::Path;
+    use std::path::PathBuf;
 
     use assert_cmd::Command;
     use predicates::prelude::predicate;
@@ -395,77 +396,22 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn add_workflow_transition_evidence_updates_canonical_workflow_artifacts()
-    -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
+    fn setup_navigation_transition_workflow(cwd: &Path) -> Result<String, Box<dyn Error>> {
+        init_repair_desk(cwd)?;
+        add_open_ticket_workflow(cwd)?;
+        add_capture_ticket_slice(cwd)?;
+        add_complete_state_view_facts(cwd, "capture-ticket")?;
+        add_review_ticket_slice(cwd)?;
+        add_complete_state_view_facts(cwd, "review-ticket")?;
+        let initial_digest = initial_lean_digest(cwd)?;
+        connect_navigation_review_ticket_screen(cwd)?;
+        Ok(initial_digest)
+    }
 
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
-                "open-ticket",
-                "--name",
-                "Open ticket",
-                "--description",
-                "Actor opens a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        add_slice(
-            temp_dir.path(),
-            "capture-ticket",
-            "Capture ticket",
-            "Actor enters repair ticket details.",
-        )?;
-        add_complete_state_view_facts(temp_dir.path(), "capture-ticket")?;
-        add_slice(
-            temp_dir.path(),
-            "review-ticket",
-            "Review ticket",
-            "Actor reviews repair ticket details.",
-        )?;
-        add_complete_state_view_facts(temp_dir.path(), "review-ticket")?;
-
-        let initial_digest = digest_marker(&read_to_string(
-            temp_dir.path().join("model/lean/OpenTicket.lean"),
-        )?)
-        .ok_or("Lean artifact is missing its initial digest")?;
-
-        Command::cargo_bin("emc")?
-            .args([
-                "connect",
-                "workflow",
-                "--workflow",
-                "open-ticket",
-                "--from",
-                "capture-ticket",
-                "--to",
-                "review-ticket",
-                "--via",
-                "navigation",
-                "--name",
-                "review-ticket-screen",
-                "--source-control",
-                "review-ticket-screen",
-                "--target-view",
-                "review-ticket-screen",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_navigation_transition_evidence_and_ownership(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc_stdout(
+            cwd,
+            &[
                 "add",
                 "workflow-transition-evidence",
                 "--workflow",
@@ -486,32 +432,26 @@ mod tests {
                 "capture-ticket view owns the review-ticket-screen navigation control",
                 "--target-evidence",
                 "review-ticket workflow step exposes review-ticket-screen as its entry view",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "added workflow transition evidence navigation review-ticket-screen to workflow open-ticket",
-            ));
+            ],
+            "added workflow transition evidence navigation review-ticket-screen to workflow open-ticket",
+        )?;
 
         add_workflow_owned_definition(
-            temp_dir.path(),
+            cwd,
             "open-ticket",
             "capture-ticket",
             "control",
             "review-ticket-screen",
         )?;
         add_workflow_owned_entry_view_definition(
-            temp_dir.path(),
+            cwd,
             "open-ticket",
             "review-ticket",
             "review-ticket-screen",
-        )?;
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
-        let updated_digest = digest_marker(&lean).ok_or("Lean artifact is missing digest")?;
-
+    fn assert_navigation_transition_evidence_artifacts(lean: &str, quint: &str) {
         assert!(lean.contains(
             "def workflowTransitionEvidences : List WorkflowTransitionEvidence := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceControl := \"review-ticket-screen\", targetView := \"review-ticket-screen\", sourceEvidence := \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence := \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
         ));
@@ -533,32 +473,36 @@ mod tests {
         assert!(quint.contains(
             "val workflowNavigationTransitionsResolveToEntryViews = workflowTransitions.select(transition => workflowNavigationTransitionTargetsEntryView(transition)).length() == workflowTransitions.length()"
         ));
+    }
+
+    #[test]
+    fn add_workflow_transition_evidence_updates_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
+
+        let initial_digest = setup_navigation_transition_workflow(cwd)?;
+        add_navigation_transition_evidence_and_ownership(cwd)?;
+
+        let lean = read_lean(cwd)?;
+        let quint = read_quint(cwd)?;
+        let updated_digest = digest_marker(&lean).ok_or("Lean artifact is missing digest")?;
+
+        assert_navigation_transition_evidence_artifacts(&lean, &quint);
         assert_ne!(
             initial_digest, updated_digest,
             "workflow digest must change when transition evidence and ownership facts are authored"
         );
 
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        run_emc(cwd, &["check"])?;
         Ok(())
     }
 
-    #[test]
-    fn add_workflow_entry_lifecycle_coverage_updates_canonical_workflow_artifacts()
-    -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
+    fn setup_application_entry_workflow(cwd: &Path) -> Result<String, Box<dyn Error>> {
+        init_repair_desk(cwd)?;
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "workflow",
                 "--slug",
@@ -567,13 +511,11 @@ mod tests {
                 "Application entry",
                 "--description",
                 "Actor enters the application.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
+            ],
+        )?;
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "slice",
                 "--workflow",
@@ -586,66 +528,49 @@ mod tests {
                 "state_view",
                 "--description",
                 "Actor sees the correct entry state.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-        add_complete_state_view_facts(temp_dir.path(), "entry-state")?;
-
-        let initial_digest = digest_marker(&read_to_string(
-            temp_dir.path().join("model/lean/ApplicationEntry.lean"),
+            ],
+        )?;
+        add_complete_state_view_facts(cwd, "entry-state")?;
+        digest_marker(&read_to_string(
+            cwd.join("model/lean/ApplicationEntry.lean"),
         )?)
-        .ok_or("Lean artifact is missing its initial digest")?;
+        .ok_or_else(|| "Lean artifact is missing its initial digest".into())
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
-                "mark",
-                "workflow-entry-lifecycle-required",
-                "--workflow",
-                "application-entry",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "marked workflow application-entry as requiring entry lifecycle coverage",
-            ));
-
+    fn add_all_entry_lifecycle_states(cwd: &Path) -> Result<(), Box<dyn Error>> {
         add_entry_lifecycle_state(
-            temp_dir.path(),
+            cwd,
             "fresh_uninitialized",
             "entry-state",
             "entry-state view distinguishes first arrival before initialization",
         )?;
         add_entry_lifecycle_state(
-            temp_dir.path(),
+            cwd,
             "initialized_unauthenticated",
             "entry-state",
             "entry-state view distinguishes initialized unauthenticated sessions",
         )?;
         add_entry_lifecycle_state(
-            temp_dir.path(),
+            cwd,
             "initialized_authenticated",
             "entry-state",
             "entry-state view distinguishes initialized authenticated sessions",
         )?;
         add_entry_lifecycle_state(
-            temp_dir.path(),
+            cwd,
             "partially_configured",
             "entry-state",
             "entry-state view distinguishes partially configured accounts",
         )?;
         add_entry_lifecycle_state(
-            temp_dir.path(),
+            cwd,
             "fully_configured",
             "entry-state",
             "entry-state view distinguishes fully configured accounts",
-        )?;
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/ApplicationEntry.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/ApplicationEntry.qnt"))?;
-        let updated_digest = digest_marker(&lean).ok_or("Lean artifact is missing digest")?;
-
+    fn assert_entry_lifecycle_artifacts(lean: &str, quint: &str) {
         assert!(lean.contains("def workflowRequiresEntryLifecycleCoverage : Bool := true"));
         assert!(quint.contains("val workflowRequiresEntryLifecycleCoverage = true"));
         assert!(lean.contains(
@@ -654,21 +579,41 @@ mod tests {
         assert!(quint.contains(
             "val workflowEntryLifecycleStates: List[WorkflowEntryLifecycleState] = [{ state: FreshUninitialized, step: \"entry-state\", evidence: \"entry-state view distinguishes first arrival before initialization\" },{ state: InitializedUnauthenticated, step: \"entry-state\", evidence: \"entry-state view distinguishes initialized unauthenticated sessions\" },{ state: InitializedAuthenticated, step: \"entry-state\", evidence: \"entry-state view distinguishes initialized authenticated sessions\" },{ state: PartiallyConfigured, step: \"entry-state\", evidence: \"entry-state view distinguishes partially configured accounts\" },{ state: FullyConfigured, step: \"entry-state\", evidence: \"entry-state view distinguishes fully configured accounts\" }]"
         ));
+    }
+
+    #[test]
+    fn add_workflow_entry_lifecycle_coverage_updates_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
+
+        let initial_digest = setup_application_entry_workflow(cwd)?;
+
+        run_emc_stdout(
+            cwd,
+            &[
+                "mark",
+                "workflow-entry-lifecycle-required",
+                "--workflow",
+                "application-entry",
+            ],
+            "marked workflow application-entry as requiring entry lifecycle coverage",
+        )?;
+
+        add_all_entry_lifecycle_states(cwd)?;
+
+        let lean = read_to_string(cwd.join("model/lean/ApplicationEntry.lean"))?;
+        let quint = read_to_string(cwd.join("model/quint/ApplicationEntry.qnt"))?;
+        let updated_digest = digest_marker(&lean).ok_or("Lean artifact is missing digest")?;
+
+        assert_entry_lifecycle_artifacts(&lean, &quint);
         assert_ne!(
             initial_digest, updated_digest,
             "workflow digest must change when entry lifecycle coverage is authored"
         );
 
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-        Command::cargo_bin("emc")?
-            .args(["verify"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        run_emc(cwd, &["check"])?;
+        run_emc(cwd, &["verify"])?;
         Ok(())
     }
 
@@ -749,46 +694,10 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn workflow_updates_preserve_authored_workflow_facts() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
-                "open-ticket",
-                "--name",
-                "Open ticket",
-                "--description",
-                "Actor opens a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        add_slice(
-            temp_dir.path(),
-            "capture-ticket",
-            "Capture ticket",
-            "Actor enters repair ticket details.",
-        )?;
-        add_slice(
-            temp_dir.path(),
-            "review-ticket",
-            "Review ticket",
-            "Actor reviews repair ticket details.",
-        )?;
-
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_ticket_captured_outcome(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "workflow-outcome",
                 "--workflow",
@@ -799,13 +708,14 @@ mod tests {
                 "ticket_captured",
                 "--externally-relevant",
                 "true",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_duplicate_ticket_command_error(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "workflow-command-error",
                 "--workflow",
@@ -816,36 +726,14 @@ mod tests {
                 "CaptureTicket",
                 "--error",
                 "DuplicateTicket",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
-                "connect",
-                "workflow",
-                "--workflow",
-                "open-ticket",
-                "--from",
-                "capture-ticket",
-                "--to",
-                "review-ticket",
-                "--via",
-                "navigation",
-                "--name",
-                "review-ticket-screen",
-                "--source-control",
-                "review-ticket-screen",
-                "--target-view",
-                "review-ticket-screen",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_navigation_review_ticket_screen_evidence(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "workflow-transition-evidence",
                 "--workflow",
@@ -866,27 +754,11 @@ mod tests {
                 "capture-ticket view owns the review-ticket-screen navigation control",
                 "--target-evidence",
                 "review-ticket workflow step exposes review-ticket-screen as its entry view",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
-                "update",
-                "workflow",
-                "--slug",
-                "open-ticket",
-                "--description",
-                "Actor opens and reviews a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
-
+    fn assert_preserved_workflow_facts(lean: &str, quint: &str) {
         assert!(lean.contains(
             "def workflowOutcomes : List WorkflowOutcome := [{ sourceSlice := \"capture-ticket\", label := \"ticket_captured\", externallyRelevant := true }]"
         ));
@@ -905,74 +777,65 @@ mod tests {
         assert!(quint.contains(
             "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceControl: \"review-ticket-screen\", targetView: \"review-ticket-screen\", sourceEvidence: \"capture-ticket view owns the review-ticket-screen navigation control\", targetEvidence: \"review-ticket workflow step exposes review-ticket-screen as its entry view\" }]"
         ));
+    }
+
+    #[test]
+    fn workflow_updates_preserve_authored_workflow_facts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
+
+        init_repair_desk(cwd)?;
+        add_open_ticket_workflow(cwd)?;
+        add_capture_ticket_slice(cwd)?;
+        add_review_ticket_slice(cwd)?;
+
+        add_ticket_captured_outcome(cwd)?;
+        add_duplicate_ticket_command_error(cwd)?;
+        connect_navigation_review_ticket_screen(cwd)?;
+        add_navigation_review_ticket_screen_evidence(cwd)?;
+
+        run_emc(
+            cwd,
+            &[
+                "update",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--description",
+                "Actor opens and reviews a repair ticket.",
+            ],
+        )?;
+
+        let lean = read_lean(cwd)?;
+        let quint = read_quint(cwd)?;
+
+        assert_preserved_workflow_facts(&lean, &quint);
 
         Ok(())
     }
 
-    #[test]
-    fn connect_workflow_adds_command_and_event_transitions_to_canonical_artifacts()
-    -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
-                "open-ticket",
-                "--name",
-                "Open ticket",
-                "--description",
-                "Actor opens a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
+    fn setup_command_event_transition_slices(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        init_repair_desk(cwd)?;
+        add_open_ticket_workflow(cwd)?;
+        add_capture_ticket_slice(cwd)?;
+        add_complete_state_view_facts(cwd, "capture-ticket")?;
         add_slice(
-            temp_dir.path(),
-            "capture-ticket",
-            "Capture ticket",
-            "Actor enters repair ticket details.",
-        )?;
-        add_complete_state_view_facts(temp_dir.path(), "capture-ticket")?;
-        add_slice(
-            temp_dir.path(),
+            cwd,
             "submit-ticket",
             "Submit ticket",
             "Actor submits repair ticket details.",
         )?;
-        add_complete_state_change_facts(temp_dir.path(), "submit-ticket")?;
+        add_complete_state_change_facts(cwd, "submit-ticket")?;
+        run_emc(cwd, &["check"])?;
+        add_review_ticket_slice(cwd)?;
+        run_emc(cwd, &["check"])?;
+        add_review_state_view_facts(cwd)
+    }
 
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        add_slice(
-            temp_dir.path(),
-            "review-ticket",
-            "Review ticket",
-            "Actor reviews repair ticket details.",
-        )?;
-
-        Command::cargo_bin("emc")?
-            .args(["check"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        add_review_state_view_facts(temp_dir.path())?;
-
-        Command::cargo_bin("emc")?
-            .args([
+    fn connect_command_and_event_transitions(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc_stdout(
+            cwd,
+            &[
                 "connect",
                 "workflow",
                 "--workflow",
@@ -985,16 +848,12 @@ mod tests {
                 "command",
                 "--name",
                 "SubmitTicketForReview",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "connected capture-ticket to submit-ticket",
-            ));
-
-        Command::cargo_bin("emc")?
-            .args([
+            ],
+            "connected capture-ticket to submit-ticket",
+        )?;
+        run_emc_stdout(
+            cwd,
+            &[
                 "connect",
                 "workflow",
                 "--workflow",
@@ -1007,17 +866,17 @@ mod tests {
                 "event",
                 "--name",
                 "TicketSubmittedForReview",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "connected submit-ticket to review-ticket",
-            ));
+            ],
+            "connected submit-ticket to review-ticket",
+        )
+    }
 
+    fn add_command_event_transition_evidence_and_ownership(
+        cwd: &Path,
+    ) -> Result<(), Box<dyn Error>> {
         add_workflow_transition_evidence(
-            temp_dir.path(),
-            WorkflowTransitionEvidenceFixture {
+            cwd,
+            &WorkflowTransitionEvidenceFixture {
                 workflow: "open-ticket",
                 source: "capture-ticket",
                 target: "submit-ticket",
@@ -1028,22 +887,22 @@ mod tests {
             },
         )?;
         add_workflow_owned_definition(
-            temp_dir.path(),
+            cwd,
             "open-ticket",
             "capture-ticket",
             "control",
             "SubmitTicketForReview",
         )?;
         add_workflow_owned_definition(
-            temp_dir.path(),
+            cwd,
             "open-ticket",
             "submit-ticket",
             "command",
             "SubmitTicketForReview",
         )?;
         add_workflow_transition_evidence(
-            temp_dir.path(),
-            WorkflowTransitionEvidenceFixture {
+            cwd,
+            &WorkflowTransitionEvidenceFixture {
                 workflow: "open-ticket",
                 source: "submit-ticket",
                 target: "review-ticket",
@@ -1054,7 +913,7 @@ mod tests {
             },
         )?;
         add_workflow_owned_event_definition(
-            temp_dir.path(),
+            cwd,
             "open-ticket",
             "submit-ticket",
             "TicketSubmittedForReview",
@@ -1063,18 +922,17 @@ mod tests {
             "emitted",
         )?;
         add_workflow_owned_event_definition(
-            temp_dir.path(),
+            cwd,
             "open-ticket",
             "review-ticket",
             "TicketSubmittedForReview",
             "tickets",
             "SubmitTicketForReview command output",
             "observed",
-        )?;
+        )
+    }
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
-
+    fn assert_command_event_transition_artifacts(lean: &str, quint: &str) {
         assert!(
             lean.contains(
                 "def workflowTransitions : List WorkflowTransition := [{ source := \"capture-ticket\", target := \"submit-ticket\", kind := WorkflowTransitionKind.command, trigger := \"SubmitTicketForReview\", sourceControl := \"\", targetView := \"\", rationale := \"\", payloadContract := \"\" },{ source := \"submit-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.event, trigger := \"TicketSubmittedForReview\", sourceControl := \"\", targetView := \"\", rationale := \"\", payloadContract := \"\" }]"
@@ -1093,97 +951,67 @@ mod tests {
         assert!(quint.contains(
             "val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = [{ sourceSlice: \"capture-ticket\", definitionKind: OwnedControl, definitionName: \"SubmitTicketForReview\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"\" },{ sourceSlice: \"submit-ticket\", definitionKind: OwnedCommand, definitionName: \"SubmitTicketForReview\", definitionStream: \"\", sourceProvenance: \"\", eventParticipation: \"\", viewRole: \"\" },{ sourceSlice: \"submit-ticket\", definitionKind: OwnedEvent, definitionName: \"TicketSubmittedForReview\", definitionStream: \"tickets\", sourceProvenance: \"SubmitTicketForReview command output\", eventParticipation: \"emitted\", viewRole: \"\" },{ sourceSlice: \"review-ticket\", definitionKind: OwnedEvent, definitionName: \"TicketSubmittedForReview\", definitionStream: \"tickets\", sourceProvenance: \"SubmitTicketForReview command output\", eventParticipation: \"observed\", viewRole: \"\" }]"
         ));
+    }
+
+    #[test]
+    fn connect_workflow_adds_command_and_event_transitions_to_canonical_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
+
+        setup_command_event_transition_slices(cwd)?;
+        connect_command_and_event_transitions(cwd)?;
+        add_command_event_transition_evidence_and_ownership(cwd)?;
+
+        let lean = read_lean(cwd)?;
+        let quint = read_quint(cwd)?;
+
+        assert_command_event_transition_artifacts(&lean, &quint);
 
         Ok(())
+    }
+
+    fn connect_alternate_navigation_review_ticket_screen(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "alternate-review-ticket-screen",
+                "--source-control",
+                "alternate-review-ticket-screen",
+                "--target-view",
+                "alternate-review-ticket-screen",
+            ],
+        )
     }
 
     #[test]
     fn remove_transition_removes_modeled_transition_from_canonical_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
 
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        init_repair_desk(cwd)?;
+        add_open_ticket_workflow(cwd)?;
+        add_capture_ticket_slice(cwd)?;
+        add_review_ticket_slice(cwd)?;
 
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
-                "open-ticket",
-                "--name",
-                "Open ticket",
-                "--description",
-                "Actor opens a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        connect_navigation_review_ticket_screen(cwd)?;
+        connect_alternate_navigation_review_ticket_screen(cwd)?;
 
-        add_slice(
-            temp_dir.path(),
-            "capture-ticket",
-            "Capture ticket",
-            "Actor enters repair ticket details.",
-        )?;
-        add_slice(
-            temp_dir.path(),
-            "review-ticket",
-            "Review ticket",
-            "Actor reviews repair ticket details.",
-        )?;
-
-        Command::cargo_bin("emc")?
-            .args([
-                "connect",
-                "workflow",
-                "--workflow",
-                "open-ticket",
-                "--from",
-                "capture-ticket",
-                "--to",
-                "review-ticket",
-                "--via",
-                "navigation",
-                "--name",
-                "review-ticket-screen",
-                "--source-control",
-                "review-ticket-screen",
-                "--target-view",
-                "review-ticket-screen",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "connect",
-                "workflow",
-                "--workflow",
-                "open-ticket",
-                "--from",
-                "capture-ticket",
-                "--to",
-                "review-ticket",
-                "--via",
-                "navigation",
-                "--name",
-                "alternate-review-ticket-screen",
-                "--source-control",
-                "alternate-review-ticket-screen",
-                "--target-view",
-                "alternate-review-ticket-screen",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
+        run_emc_stdout(
+            cwd,
+            &[
                 "remove",
                 "transition",
                 "--workflow",
@@ -1196,22 +1024,14 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "removed transition capture-ticket to review-ticket",
-            ));
+            ],
+            "removed transition capture-ticket to review-ticket",
+        )?;
 
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        run_emc(cwd, &["check"])?;
 
-        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        let lean = read_lean(cwd)?;
+        let quint = read_quint(cwd)?;
 
         assert!(
             lean.contains("alternate-review-ticket-screen"),
@@ -1229,71 +1049,19 @@ mod tests {
     fn remove_transition_rejects_removing_required_incoming_transition_without_mutating_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
 
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        init_repair_desk(cwd)?;
+        add_open_ticket_workflow(cwd)?;
+        add_capture_ticket_slice(cwd)?;
+        add_review_ticket_slice(cwd)?;
+        connect_navigation_review_ticket_screen(cwd)?;
 
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
-                "open-ticket",
-                "--name",
-                "Open ticket",
-                "--description",
-                "Actor opens a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        let before = capture_open_ticket_artifacts(cwd)?;
 
-        add_slice(
-            temp_dir.path(),
-            "capture-ticket",
-            "Capture ticket",
-            "Actor enters repair ticket details.",
-        )?;
-        add_slice(
-            temp_dir.path(),
-            "review-ticket",
-            "Review ticket",
-            "Actor reviews repair ticket details.",
-        )?;
-
-        Command::cargo_bin("emc")?
-            .args([
-                "connect",
-                "workflow",
-                "--workflow",
-                "open-ticket",
-                "--from",
-                "capture-ticket",
-                "--to",
-                "review-ticket",
-                "--via",
-                "navigation",
-                "--name",
-                "review-ticket-screen",
-                "--source-control",
-                "review-ticket-screen",
-                "--target-view",
-                "review-ticket-screen",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        let lean_path = temp_dir.path().join("model/lean/OpenTicket.lean");
-        let quint_path = temp_dir.path().join("model/quint/OpenTicket.qnt");
-        let lean_before = read_to_string(&lean_path)?;
-        let quint_before = read_to_string(&quint_path)?;
-
-        Command::cargo_bin("emc")?
-            .args([
+        run_emc_failure(
+            cwd,
+            &[
                 "remove",
                 "transition",
                 "--workflow",
@@ -1306,25 +1074,42 @@ mod tests {
                 "navigation",
                 "--name",
                 "review-ticket-screen",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "removing transition would leave workflow step 'review-ticket' without an incoming transition",
-            ));
+            ],
+            "removing transition would leave workflow step 'review-ticket' without an incoming transition",
+        )?;
 
+        assert_open_ticket_artifacts_unchanged(cwd, &before)?;
+
+        Ok(())
+    }
+
+    /// Snapshot of the canonical `OpenTicket` Lean/Quint artifacts at a point in time.
+    struct OpenTicketArtifacts {
+        lean: String,
+        quint: String,
+    }
+
+    fn capture_open_ticket_artifacts(cwd: &Path) -> Result<OpenTicketArtifacts, Box<dyn Error>> {
+        Ok(OpenTicketArtifacts {
+            lean: read_lean(cwd)?,
+            quint: read_quint(cwd)?,
+        })
+    }
+
+    fn assert_open_ticket_artifacts_unchanged(
+        cwd: &Path,
+        before: &OpenTicketArtifacts,
+    ) -> Result<(), Box<dyn Error>> {
         assert_eq!(
-            lean_before,
-            read_to_string(lean_path)?,
+            before.lean,
+            read_lean(cwd)?,
             "rejected transition removal must not mutate Lean workflow data"
         );
         assert_eq!(
-            quint_before,
-            read_to_string(quint_path)?,
+            before.quint,
+            read_quint(cwd)?,
             "rejected transition removal must not mutate Quint workflow data"
         );
-
         Ok(())
     }
 
@@ -1411,30 +1196,54 @@ mod tests {
     #[test]
     fn remove_transition_removes_workflow_exit_transition() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
 
-        Command::cargo_bin("emc")?
-            .args(["init", "--name", "Repair Desk"])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+        init_repair_desk(cwd)?;
+        add_open_ticket_workflow(cwd)?;
+        add_close_ticket_workflow(cwd)?;
+        add_capture_ticket_slice(cwd)?;
+        connect_open_ticket_exit_to_close_ticket(cwd)?;
 
-        Command::cargo_bin("emc")?
-            .args([
-                "add",
-                "workflow",
-                "--slug",
+        run_emc_stdout(
+            cwd,
+            &[
+                "remove",
+                "transition",
+                "--workflow",
                 "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to-workflow",
+                "close-ticket",
+                "--via",
+                "outcome",
                 "--name",
-                "Open ticket",
-                "--description",
-                "Actor opens a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+                "ticket-closed",
+            ],
+            "removed transition capture-ticket to close-ticket",
+        )?;
 
-        Command::cargo_bin("emc")?
-            .args([
+        run_emc(cwd, &["check"])?;
+
+        let lean = read_lean(cwd)?;
+        let quint = read_quint(cwd)?;
+
+        assert!(
+            lean.contains("def workflowTransitions : List WorkflowTransition := []"),
+            "Lean artifact must remove the workflow-exit transition"
+        );
+        assert!(
+            quint.contains("val workflowTransitions: List[WorkflowTransition] = []"),
+            "Quint artifact must remove the workflow-exit transition"
+        );
+
+        Ok(())
+    }
+
+    fn add_close_ticket_workflow(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "workflow",
                 "--slug",
@@ -1443,20 +1252,14 @@ mod tests {
                 "Close ticket",
                 "--description",
                 "Actor closes a repair ticket.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        add_slice(
-            temp_dir.path(),
-            "capture-ticket",
-            "Capture ticket",
-            "Actor enters repair ticket details.",
-        )?;
-
-        Command::cargo_bin("emc")?
-            .args([
+    fn connect_open_ticket_exit_to_close_ticket(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "connect",
                 "workflow",
                 "--workflow",
@@ -1471,56 +1274,11 @@ mod tests {
                 "ticket-closed",
                 "--reason",
                 "Closed tickets continue to completion.",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
-                "remove",
-                "transition",
-                "--workflow",
-                "open-ticket",
-                "--from",
-                "capture-ticket",
-                "--to-workflow",
-                "close-ticket",
-                "--via",
-                "outcome",
-                "--name",
-                "ticket-closed",
-            ])
-            .current_dir(temp_dir.path())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(
-                "removed transition capture-ticket to close-ticket",
-            ));
-
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
-        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
-        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
-
-        assert!(
-            lean.contains("def workflowTransitions : List WorkflowTransition := []"),
-            "Lean artifact must remove the workflow-exit transition"
-        );
-        assert!(
-            quint.contains("val workflowTransitions: List[WorkflowTransition] = []"),
-            "Quint artifact must remove the workflow-exit transition"
-        );
-
-        Ok(())
+            ],
+        )
     }
 
-    #[test]
-    fn remove_transition_requires_exact_in_workflow_command_shape() -> Result<(), Box<dyn Error>> {
+    fn malformed_in_workflow_remove_commands_a() -> [[&'static str; 12]; 4] {
         [
             [
                 "delete",
@@ -1578,6 +1336,11 @@ mod tests {
                 "--name",
                 "review-ticket-screen",
             ],
+        ]
+    }
+
+    fn malformed_in_workflow_remove_commands_b() -> [[&'static str; 12]; 3] {
+        [
             [
                 "remove",
                 "transition",
@@ -1621,15 +1384,19 @@ mod tests {
                 "review-ticket-screen",
             ],
         ]
-        .into_iter()
-        .try_for_each(assert_usage)?;
+    }
+
+    #[test]
+    fn remove_transition_requires_exact_in_workflow_command_shape() -> Result<(), Box<dyn Error>> {
+        malformed_in_workflow_remove_commands_a()
+            .into_iter()
+            .chain(malformed_in_workflow_remove_commands_b())
+            .try_for_each(assert_usage)?;
 
         Ok(())
     }
 
-    #[test]
-    fn remove_transition_requires_exact_workflow_exit_command_shape() -> Result<(), Box<dyn Error>>
-    {
+    fn malformed_workflow_exit_remove_commands_a() -> [[&'static str; 12]; 4] {
         [
             [
                 "delete",
@@ -1687,6 +1454,11 @@ mod tests {
                 "--name",
                 "ticket-closed",
             ],
+        ]
+    }
+
+    fn malformed_workflow_exit_remove_commands_b() -> [[&'static str; 12]; 3] {
+        [
             [
                 "remove",
                 "transition",
@@ -1730,8 +1502,15 @@ mod tests {
                 "ticket-closed",
             ],
         ]
-        .into_iter()
-        .try_for_each(assert_usage)?;
+    }
+
+    #[test]
+    fn remove_transition_requires_exact_workflow_exit_command_shape() -> Result<(), Box<dyn Error>>
+    {
+        malformed_workflow_exit_remove_commands_a()
+            .into_iter()
+            .chain(malformed_workflow_exit_remove_commands_b())
+            .try_for_each(assert_usage)?;
 
         Ok(())
     }
@@ -2070,10 +1849,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn connect_workflow_exit_requires_exact_flag_order() -> Result<(), Box<dyn Error>> {
-        let temp_dir = TempDir::new()?;
-        let malformed_commands = [
+    fn malformed_connect_exit_commands_a() -> [[&'static str; 14]; 4] {
+        [
             [
                 "wrong-command",
                 "workflow",
@@ -2138,6 +1915,11 @@ mod tests {
                 "--reason",
                 "Closed tickets continue to completion.",
             ],
+        ]
+    }
+
+    fn malformed_connect_exit_commands_b() -> [[&'static str; 14]; 4] {
+        [
             [
                 "connect",
                 "workflow",
@@ -2202,17 +1984,23 @@ mod tests {
                 "--wrong-reason",
                 "Closed tickets continue to completion.",
             ],
-        ];
+        ]
+    }
 
-        for malformed_command in malformed_commands {
-            Command::cargo_bin("emc")?
-                .args(malformed_command)
-                .current_dir(temp_dir.path())
-                .assert()
-                .failure()
-                .stderr(predicate::str::contains(
-                    "usage: emc <command> [arguments]; run emc --help",
-                ));
+    #[test]
+    fn connect_workflow_exit_requires_exact_flag_order() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
+
+        for malformed_command in malformed_connect_exit_commands_a()
+            .into_iter()
+            .chain(malformed_connect_exit_commands_b())
+        {
+            run_emc_failure(
+                cwd,
+                &malformed_command,
+                "usage: emc <command> [arguments]; run emc --help",
+            )?;
         }
 
         Ok(())
@@ -2227,6 +2015,126 @@ mod tests {
                 "usage: emc <command> [arguments]; run emc --help",
             ));
         Ok(())
+    }
+
+    fn run_emc(cwd: &Path, args: &[&str]) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(args)
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn run_emc_stdout(
+        cwd: &Path,
+        args: &[&str],
+        expected_stdout: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(args)
+            .current_dir(cwd)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(expected_stdout.to_owned()));
+        Ok(())
+    }
+
+    fn run_emc_failure(
+        cwd: &Path,
+        args: &[&str],
+        expected_stderr: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(args)
+            .current_dir(cwd)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(expected_stderr.to_owned()));
+        Ok(())
+    }
+
+    fn init_repair_desk(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc(cwd, &["init", "--name", "Repair Desk"])
+    }
+
+    fn add_open_ticket_workflow(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ],
+        )
+    }
+
+    fn add_capture_ticket_slice(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        add_slice(
+            cwd,
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )
+    }
+
+    fn add_review_ticket_slice(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        add_slice(
+            cwd,
+            "review-ticket",
+            "Review ticket",
+            "Actor reviews repair ticket details.",
+        )
+    }
+
+    fn lean_path(cwd: &Path) -> PathBuf {
+        cwd.join("model/lean/OpenTicket.lean")
+    }
+
+    fn quint_path(cwd: &Path) -> PathBuf {
+        cwd.join("model/quint/OpenTicket.qnt")
+    }
+
+    fn read_lean(cwd: &Path) -> Result<String, Box<dyn Error>> {
+        Ok(read_to_string(lean_path(cwd))?)
+    }
+
+    fn read_quint(cwd: &Path) -> Result<String, Box<dyn Error>> {
+        Ok(read_to_string(quint_path(cwd))?)
+    }
+
+    fn initial_lean_digest(cwd: &Path) -> Result<String, Box<dyn Error>> {
+        digest_marker(&read_lean(cwd)?)
+            .ok_or_else(|| "Lean artifact is missing its initial digest".into())
+    }
+
+    fn connect_navigation_review_ticket_screen(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
+                "connect",
+                "workflow",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
+            ],
+        )
     }
 
     fn add_slice(
@@ -2256,9 +2164,10 @@ mod tests {
         Ok(())
     }
 
-    fn add_complete_state_view_facts(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_state_view_scenario(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -2277,13 +2186,14 @@ mod tests {
                 "projector",
                 "--covered-definition",
                 "ticket_state",
-            ])
-            .current_dir(cwd)
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_ticket_captured_event(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -2306,13 +2216,14 @@ mod tests {
                 "TicketCaptured.ticket_title",
                 "--observed",
                 "true",
-            ])
-            .current_dir(cwd)
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_ticket_state_read_model(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "read-model",
                 "--slice",
@@ -2329,13 +2240,14 @@ mod tests {
                 "ticket_title",
                 "--field-provenance",
                 "TicketCaptured.ticket_title",
-            ])
-            .current_dir(cwd)
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_ticket_summary_view(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "view",
                 "--slice",
@@ -2354,10 +2266,15 @@ mod tests {
                 "ticket_state.ticket_title",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(cwd)
-            .assert()
-            .success();
+            ],
+        )
+    }
+
+    fn add_complete_state_view_facts(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
+        add_state_view_scenario(cwd, slug)?;
+        add_ticket_captured_event(cwd, slug)?;
+        add_ticket_state_read_model(cwd, slug)?;
+        add_ticket_summary_view(cwd, slug)?;
 
         add_data_flow(
             cwd,
@@ -2382,9 +2299,10 @@ mod tests {
         )
     }
 
-    fn add_review_state_view_facts(cwd: &Path) -> Result<(), Box<dyn Error>> {
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_review_state_view_scenario(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -2403,13 +2321,14 @@ mod tests {
                 "projector",
                 "--covered-definition",
                 "review_ticket_state",
-            ])
-            .current_dir(cwd)
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_review_ticket_captured_event(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -2432,13 +2351,14 @@ mod tests {
                 "ReviewTicketCaptured.ticket_title",
                 "--observed",
                 "true",
-            ])
-            .current_dir(cwd)
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_review_ticket_state_read_model(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "read-model",
                 "--slice",
@@ -2455,13 +2375,14 @@ mod tests {
                 "ticket_title",
                 "--field-provenance",
                 "ReviewTicketCaptured.ticket_title",
-            ])
-            .current_dir(cwd)
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_review_ticket_summary_view(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "view",
                 "--slice",
@@ -2480,10 +2401,15 @@ mod tests {
                 "review_ticket_state.ticket_title",
                 "--bit-encoding",
                 "UTF-8 string",
-            ])
-            .current_dir(cwd)
-            .assert()
-            .success();
+            ],
+        )
+    }
+
+    fn add_review_state_view_facts(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        add_review_state_view_scenario(cwd)?;
+        add_review_ticket_captured_event(cwd)?;
+        add_review_ticket_state_read_model(cwd)?;
+        add_review_ticket_summary_view(cwd)?;
 
         add_data_flow(
             cwd,
@@ -2508,15 +2434,10 @@ mod tests {
         )
     }
 
-    fn add_complete_state_change_facts(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
-        Command::cargo_bin("emc")?
-            .args(["update", "slice", "--slug", slug, "--type", "state_change"])
-            .current_dir(cwd)
-            .assert()
-            .success();
-
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_submit_ticket_event(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "event",
                 "--slice",
@@ -2537,13 +2458,14 @@ mod tests {
                 "actor_input",
                 "--attribute-provenance",
                 "SubmitTicketForReview.ticket_title",
-            ])
-            .current_dir(cwd)
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_submit_ticket_command(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "command",
                 "--slice",
@@ -2560,13 +2482,14 @@ mod tests {
                 "actor confirmation -> form field",
                 "--emits",
                 "TicketSubmittedForReview",
-            ])
-            .current_dir(cwd)
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_submit_ticket_scenario(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "scenario",
                 "--slice",
@@ -2589,13 +2512,14 @@ mod tests {
                 "tickets",
                 "--written-streams",
                 "tickets",
-            ])
-            .current_dir(cwd)
-            .assert()
-            .success();
+            ],
+        )
+    }
 
-        Command::cargo_bin("emc")?
-            .args([
+    fn add_submit_ticket_outcome(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &[
                 "add",
                 "outcome",
                 "--slice",
@@ -2606,10 +2530,19 @@ mod tests {
                 "TicketSubmittedForReview",
                 "--externally-relevant",
                 "false",
-            ])
-            .current_dir(cwd)
-            .assert()
-            .success();
+            ],
+        )
+    }
+
+    fn add_complete_state_change_facts(cwd: &Path, slug: &str) -> Result<(), Box<dyn Error>> {
+        run_emc(
+            cwd,
+            &["update", "slice", "--slug", slug, "--type", "state_change"],
+        )?;
+        add_submit_ticket_event(cwd, slug)?;
+        add_submit_ticket_command(cwd, slug)?;
+        add_submit_ticket_scenario(cwd, slug)?;
+        add_submit_ticket_outcome(cwd, slug)?;
 
         add_data_flow(
             cwd,
@@ -2783,7 +2716,7 @@ mod tests {
 
     fn add_workflow_transition_evidence(
         cwd: &Path,
-        evidence: WorkflowTransitionEvidenceFixture<'_>,
+        evidence: &WorkflowTransitionEvidenceFixture<'_>,
     ) -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args([

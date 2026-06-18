@@ -190,7 +190,7 @@ mod tests {
             1,
             "the concurrent updates must surface one fork"
         );
-        let fork = &forks[0];
+        let fork = forks.first().ok_or("the single fork must be present")?;
         assert_eq!(fork.stream_id().as_ref(), "workflow::open-ticket");
         assert_eq!(
             fork.transactions().len(),
@@ -199,7 +199,12 @@ mod tests {
         );
 
         // Resolving keeps the chosen branch and collapses the fork.
-        let chosen = transaction_id_string(fork.transactions()[0]);
+        let chosen = transaction_id_string(
+            *fork
+                .transactions()
+                .first()
+                .ok_or("the fork must have at least one branch")?,
+        );
         let resolved = reconcile_choose_branch(replica_a.path(), "workflow::open-ticket", &chosen)?;
         assert_eq!(resolved, 1, "reconcile must resolve the single fork");
         assert!(

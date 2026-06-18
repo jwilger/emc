@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn workflow_transition_kinds_are_closed_domain_terms() {
-        [
+        for kind in [
             "command",
             "event",
             "navigation",
@@ -235,14 +235,12 @@ mod tests {
             "workflow_exit:navigation",
             "workflow_exit:external_trigger",
             "workflow_exit:outcome",
-        ]
-        .into_iter()
-        .for_each(|kind| {
+        ] {
             assert!(
                 parse_workflow_transition_kind(kind).is_ok(),
                 "{kind} should be accepted as a modeled transition kind"
             );
-        });
+        }
 
         assert!(
             parse_workflow_transition_kind("screen-flow").is_err(),
@@ -256,7 +254,7 @@ mod tests {
 
     #[test]
     fn workflow_owned_definition_kinds_are_closed_domain_terms() {
-        [
+        for kind in [
             "command",
             "event",
             "view",
@@ -267,14 +265,12 @@ mod tests {
             "automation",
             "translation",
             "external_payload",
-        ]
-        .into_iter()
-        .for_each(|kind| {
+        ] {
             assert!(
                 parse_workflow_owned_definition_kind(kind).is_ok(),
                 "{kind} should be accepted as a modeled owned-definition kind"
             );
-        });
+        }
 
         assert!(
             parse_workflow_owned_definition_kind("spreadsheet").is_err(),
@@ -284,12 +280,12 @@ mod tests {
 
     #[test]
     fn workflow_owned_definition_roles_are_closed_domain_terms() {
-        ["emitted", "observed"].into_iter().for_each(|role| {
+        for role in ["emitted", "observed"] {
             assert!(
                 parse_workflow_event_participation(role).is_ok(),
                 "{role} should be accepted as a modeled event participation"
             );
-        });
+        }
 
         assert!(
             parse_workflow_event_participation("subscribed").is_err(),
@@ -307,37 +303,33 @@ mod tests {
 
     #[test]
     fn slice_kind_names_are_closed_domain_terms() {
-        ["state_view", "state_change", "translation", "automation"]
-            .into_iter()
-            .for_each(|kind| {
-                assert!(
-                    SliceKindName::try_new(kind.to_owned()).is_ok(),
-                    "{kind} should be accepted as a modeled slice kind"
-                );
-            });
+        for kind in ["state_view", "state_change", "translation", "automation"] {
+            assert!(
+                SliceKindName::try_new(kind).is_ok(),
+                "{kind} should be accepted as a modeled slice kind"
+            );
+        }
 
         assert!(
-            SliceKindName::try_new("spreadsheet".to_owned()).is_err(),
+            SliceKindName::try_new("spreadsheet").is_err(),
             "arbitrary slice kind text must not enter formal workflow graphs"
         );
     }
 
     #[test]
     fn workflow_entry_lifecycle_states_are_closed_domain_terms() {
-        [
+        for state in [
             "fresh_uninitialized",
             "initialized_unauthenticated",
             "initialized_authenticated",
             "partially_configured",
             "fully_configured",
-        ]
-        .into_iter()
-        .for_each(|state| {
+        ] {
             assert!(
                 parse_workflow_entry_lifecycle_state_name(state).is_ok(),
                 "{state} should be accepted as a modeled workflow entry lifecycle state"
             );
-        });
+        }
 
         assert!(
             parse_workflow_entry_lifecycle_state_name("logged_in").is_err(),
@@ -347,21 +339,19 @@ mod tests {
 
     #[test]
     fn command_input_source_kinds_are_closed_domain_terms() {
-        [
+        for source_kind in [
             "actor",
             "session",
             "generated",
             "external_payload",
             "event_stream_state",
             "invocation_argument",
-        ]
-        .into_iter()
-        .for_each(|source_kind| {
+        ] {
             assert!(
                 parse_command_input_source_kind(source_kind).is_ok(),
                 "{source_kind} should be accepted as a modeled command input source kind"
             );
-        });
+        }
 
         assert!(
             parse_command_input_source_kind("spreadsheet").is_err(),
@@ -371,19 +361,17 @@ mod tests {
 
     #[test]
     fn command_error_recovery_kinds_are_closed_domain_terms() {
-        [
+        for recovery_kind in [
             "retry",
             "stay_on_screen",
             "navigation",
             "explicit_recovery_action",
-        ]
-        .into_iter()
-        .for_each(|recovery_kind| {
+        ] {
             assert!(
                 parse_command_error_recovery_kind(recovery_kind).is_ok(),
                 "{recovery_kind} should be accepted as a modeled command error recovery kind"
             );
-        });
+        }
 
         assert!(
             parse_command_error_recovery_kind("email_support").is_err(),
@@ -393,19 +381,17 @@ mod tests {
 
     #[test]
     fn control_recovery_behaviors_are_closed_domain_terms() {
-        [
+        for recovery_behavior in [
             "retry",
             "stay_on_screen",
             "navigation",
             "explicit_recovery_action",
-        ]
-        .into_iter()
-        .for_each(|recovery_behavior| {
+        ] {
             assert!(
                 parse_control_recovery_behavior(recovery_behavior).is_ok(),
                 "{recovery_behavior} should be accepted as a modeled control recovery behavior"
             );
-        });
+        }
 
         assert!(
             parse_control_recovery_behavior("email_support").is_err(),
@@ -415,14 +401,12 @@ mod tests {
 
     #[test]
     fn singleton_repeat_behaviors_are_closed_domain_terms() {
-        ["already_exists_error", "idempotent"]
-            .into_iter()
-            .for_each(|repeat_behavior| {
-                assert!(
-                    parse_singleton_repeat_behavior(repeat_behavior).is_ok(),
-                    "{repeat_behavior} should be accepted as a modeled singleton repeat behavior"
-                );
-            });
+        for repeat_behavior in ["already_exists_error", "idempotent"] {
+            assert!(
+                parse_singleton_repeat_behavior(repeat_behavior).is_ok(),
+                "{repeat_behavior} should be accepted as a modeled singleton repeat behavior"
+            );
+        }
 
         assert!(
             parse_singleton_repeat_behavior("replace_existing").is_err(),
@@ -432,14 +416,12 @@ mod tests {
 
     #[test]
     fn read_model_field_source_kinds_are_closed_domain_terms() {
-        ["event_attribute", "derivation", "absence_default"]
-            .into_iter()
-            .for_each(|source_kind| {
-                assert!(
-                    parse_read_model_field_source_kind(source_kind).is_ok(),
-                    "{source_kind} should be accepted as a modeled read-model field source kind"
-                );
-            });
+        for source_kind in ["event_attribute", "derivation", "absence_default"] {
+            assert!(
+                parse_read_model_field_source_kind(source_kind).is_ok(),
+                "{source_kind} should be accepted as a modeled read-model field source kind"
+            );
+        }
 
         assert!(
             parse_read_model_field_source_kind("spreadsheet").is_err(),
@@ -461,19 +443,17 @@ mod tests {
 
     #[test]
     fn navigation_target_types_are_closed_domain_terms() {
-        [
+        for target_type in [
             "modeled_view",
             "local_view_state",
             "external_system",
             "external_workflow",
-        ]
-        .into_iter()
-        .for_each(|target_type| {
+        ] {
             assert!(
                 parse_navigation_target_type(target_type).is_ok(),
                 "{target_type} should be accepted as a modeled navigation target type"
             );
-        });
+        }
 
         assert!(
             parse_navigation_target_type("url").is_err(),
@@ -483,20 +463,18 @@ mod tests {
 
     #[test]
     fn event_attribute_source_kinds_are_closed_domain_terms() {
-        [
+        for source_kind in [
             "command_input",
             "external_payload",
             "generated",
             "session",
             "derivation",
-        ]
-        .into_iter()
-        .for_each(|source_kind| {
+        ] {
             assert!(
                 parse_event_attribute_source_kind(source_kind).is_ok(),
                 "{source_kind} should be accepted as a modeled event attribute source kind"
             );
-        });
+        }
 
         assert!(
             parse_event_attribute_source_kind("spreadsheet").is_err(),
@@ -506,12 +484,12 @@ mod tests {
 
     #[test]
     fn board_lane_ids_are_closed_domain_terms() {
-        ["ux", "actions", "events"].into_iter().for_each(|lane| {
+        for lane in ["ux", "actions", "events"] {
             assert!(
                 parse_board_lane_id(lane).is_ok(),
                 "{lane} should be accepted as a canonical board lane"
             );
-        });
+        }
 
         assert!(
             parse_board_lane_id("support").is_err(),
@@ -521,21 +499,19 @@ mod tests {
 
     #[test]
     fn board_element_kinds_are_closed_domain_terms() {
-        [
+        for kind in [
             "view",
             "automation",
             "external_event",
             "command",
             "read_model",
             "event",
-        ]
-        .into_iter()
-        .for_each(|kind| {
+        ] {
             assert!(
                 parse_board_element_kind(kind).is_ok(),
                 "{kind} should be accepted as a modeled board element kind"
             );
-        });
+        }
 
         assert!(
             parse_board_element_kind("workflow_trigger").is_err(),
@@ -545,7 +521,7 @@ mod tests {
 
     #[test]
     fn board_connection_endpoint_kinds_are_closed_domain_terms() {
-        [
+        for kind in [
             "view",
             "automation",
             "external_event",
@@ -553,14 +529,12 @@ mod tests {
             "command",
             "event",
             "read_model",
-        ]
-        .into_iter()
-        .for_each(|kind| {
+        ] {
             assert!(
                 parse_board_connection_endpoint_kind(kind).is_ok(),
                 "{kind} should be accepted as a modeled board connection endpoint kind"
             );
-        });
+        }
 
         assert!(
             parse_board_connection_endpoint_kind("scheduler").is_err(),
@@ -570,14 +544,12 @@ mod tests {
 
     #[test]
     fn data_flow_source_kinds_are_closed_domain_terms() {
-        ["original", "modeled_target"]
-            .into_iter()
-            .for_each(|source_kind| {
-                assert!(
-                    parse_data_flow_source_kind(source_kind).is_ok(),
-                    "{source_kind} should be accepted as a modeled data-flow source kind"
-                );
-            });
+        for source_kind in ["original", "modeled_target"] {
+            assert!(
+                parse_data_flow_source_kind(source_kind).is_ok(),
+                "{source_kind} should be accepted as a modeled data-flow source kind"
+            );
+        }
 
         assert!(
             parse_data_flow_source_kind("event_attribute").is_err(),
@@ -587,21 +559,19 @@ mod tests {
 
     #[test]
     fn transformation_semantics_are_closed_domain_terms() {
-        [
+        for transformation in [
             "identity",
             "projection",
             "derivation",
             "default",
             "absence",
             "transformation",
-        ]
-        .into_iter()
-        .for_each(|transformation| {
+        ] {
             assert!(
                 parse_transformation_semantics(transformation).is_ok(),
                 "{transformation} should be accepted as modeled transformation semantics"
             );
-        });
+        }
 
         assert!(
             parse_transformation_semantics("custom_mapping").is_err(),
@@ -611,7 +581,7 @@ mod tests {
 
     #[test]
     fn contract_kinds_are_closed_domain_terms() {
-        [
+        for contract_kind in [
             "projector",
             "command",
             "automation",
@@ -619,14 +589,12 @@ mod tests {
             "derivation",
             "absence",
             "transitive",
-        ]
-        .into_iter()
-        .for_each(|contract_kind| {
+        ] {
             assert!(
                 parse_contract_kind_name(contract_kind).is_ok(),
                 "{contract_kind} should be accepted as a modeled contract kind"
             );
-        });
+        }
 
         assert!(
             parse_contract_kind_name("integration").is_err(),
@@ -636,12 +604,12 @@ mod tests {
 
     #[test]
     fn scenario_kinds_are_closed_domain_terms() {
-        ["acceptance", "contract"].into_iter().for_each(|kind| {
+        for kind in ["acceptance", "contract"] {
             assert!(
                 parse_scenario_kind(kind).is_ok(),
                 "{kind} should be accepted as a modeled scenario kind"
             );
-        });
+        }
 
         assert!(
             parse_scenario_kind("journey").is_err(),
@@ -651,17 +619,15 @@ mod tests {
 
     #[test]
     fn review_statuses_are_closed_domain_terms() {
-        ["clean", "changes_requested"]
-            .into_iter()
-            .for_each(|status| {
-                assert!(
-                    ReviewStatus::try_new(status.to_owned()).is_ok(),
-                    "{status} should be accepted as a modeled review status"
-                );
-            });
+        for status in ["clean", "changes_requested"] {
+            assert!(
+                ReviewStatus::try_new(status).is_ok(),
+                "{status} should be accepted as a modeled review status"
+            );
+        }
 
         assert!(
-            ReviewStatus::try_new("approved".to_owned()).is_err(),
+            ReviewStatus::try_new("approved").is_err(),
             "arbitrary review statuses must not enter review records"
         );
     }
@@ -691,7 +657,7 @@ mod tests {
 
     #[test]
     fn review_rule_names_are_closed_domain_terms() {
-        [
+        for category in [
             "lifecycle-entry",
             "canonical-lanes",
             "board-connections",
@@ -705,17 +671,15 @@ mod tests {
             "outcomes-and-errors",
             "scenario-coverage",
             "timeline-rendering",
-        ]
-        .into_iter()
-        .for_each(|category| {
+        ] {
             assert!(
-                ReviewRuleName::try_new(category.to_owned()).is_ok(),
+                ReviewRuleName::try_new(category).is_ok(),
                 "{category} should be accepted as a modeled review category"
             );
-        });
+        }
 
         assert!(
-            ReviewRuleName::try_new("manual-approval".to_owned()).is_err(),
+            ReviewRuleName::try_new("manual-approval").is_err(),
             "arbitrary review categories must not enter review records"
         );
     }
@@ -739,7 +703,7 @@ mod tests {
 
     #[test]
     fn exported_event_types_are_closed_domain_terms() {
-        [
+        for event_type in [
             "ProjectInitialized",
             "WorkflowAdded",
             "WorkflowUpdated",
@@ -770,21 +734,19 @@ mod tests {
             "SliceBoardConnectionAdded",
             "ReviewRecorded",
             "ConflictResolved",
-        ]
-        .into_iter()
-        .for_each(|event_type| {
+        ] {
             assert!(
-                ExportedEventType::try_new(event_type.to_owned()).is_ok(),
+                ExportedEventType::try_new(event_type).is_ok(),
                 "{event_type} should be accepted as a modeled exported event type"
             );
-        });
+        }
 
         assert!(
-            ExportedEventType::try_new("SliceFactAdded".to_owned()).is_err(),
+            ExportedEventType::try_new("SliceFactAdded").is_err(),
             "internal eventcore aggregate events must not be exported event types"
         );
         assert!(
-            ExportedEventType::try_new("WorkflowRenamed".to_owned()).is_err(),
+            ExportedEventType::try_new("WorkflowRenamed").is_err(),
             "arbitrary event type strings must not enter exported events"
         );
     }
@@ -1279,8 +1241,7 @@ mod tests {
     }
 
     #[test]
-    fn verification_invariant_sets_are_composed_from_closed_domain_names()
-    -> Result<(), Box<dyn Error>> {
+    fn verification_invariant_sets_are_composed_from_closed_domain_names() {
         let project_root = QuintInvariantSet::project_root();
         let workflow = QuintInvariantSet::workflow();
         let slice = QuintInvariantSet::slice();
@@ -1301,7 +1262,5 @@ mod tests {
             project_root.as_process_argument().as_ref(),
             "modelIdentityStable,modelVersionStable,modelDigestStable,modelWorkflowsAreDeclared,modelSlicesAreDeclared,modelSliceModulesAreDeclared,modelScenariosAreDeclared,modelScenarioDefinitionsAreDeclared,modelWorkflowCompositionStructureComplete,modelWorkflowBehaviorSurfaceIsComplete,modelScenarioDefinitionsHaveGwt,modelScenarioKindsAreFirstClass,modelDataFlowsAreDeclared,modelDataFlowsAreBitComplete,modelDataFlowSourceKindsAreModeled,modelDataFlowModeledSourcesResolve,modelDataFlowSourceChainsReachOriginals,modelDataFlowSourceChainsPreserveBitEncodingSemantics,modelDataFlowTransformationsAreModeled,modelMeaningfulDataFlowsAreCovered,modelDataFlowSourceBitEncodingsMatchModeledSources,modelViewFieldBitEncodingsMatchDataFlows,modelExternalPayloadFieldBitEncodingsMatchDataFlows,modelOutcomesAreDeclared,modelCommandErrorsAreDeclared,modelCommandsAreDeclared,modelCommandInputsAreDeclared,modelCommandInputsHaveProvenance,modelCommandInputsTraceToInvocationSources,modelReadModelsAreDeclared,modelReadModelDefinitionsAreDeclared,modelReadModelFieldsAreDeclared,modelReadModelFieldSourcesAreComplete,modelViewFieldSourcesAreComplete,modelViewFieldReadModelFieldSourcesResolve,modelDisplayedDataTraceToOriginalProvenance,modelExternalPayloadFieldsHaveProvenance,modelViewsAreDeclared,modelViewDefinitionsAreDeclared,modelViewControlsAreDeclared,modelBoardElementsAreDeclared,modelBoardConnectionsAreDeclared,modelViewFieldsAreDeclared,modelAutomationsAreDeclared,modelAutomationDefinitionsAreDeclared,modelTranslationsAreDeclared,modelTranslationDefinitionsAreDeclared,modelExternalPayloadsAreDeclared,modelExternalPayloadFieldsAreDeclared,modelStreamsAreDeclared,modelEventsAreDeclared,modelEventAttributesAreDeclared,modelViewControlsProvideCommandInputs"
         );
-
-        Ok(())
     }
 }

@@ -10,7 +10,7 @@ pub enum GherkinSuite {
     ReviewGate,
 }
 
-pub(crate) fn list_gherkin_features(suite: GherkinSuite) -> EffectPlan {
+pub(crate) fn list_gherkin_features(suite: &GherkinSuite) -> EffectPlan {
     EffectPlan::new(
         suite
             .feature_paths()
@@ -20,20 +20,15 @@ pub(crate) fn list_gherkin_features(suite: GherkinSuite) -> EffectPlan {
     )
 }
 
-pub(crate) fn run_gherkin_suite(suite: GherkinSuite) -> EffectPlan {
+pub(crate) fn run_gherkin_suite(suite: &GherkinSuite) -> EffectPlan {
     EffectPlan::new(vec![run_suite_effect(suite)])
 }
 
 pub(crate) fn run_all_gherkin_suites() -> EffectPlan {
-    EffectPlan::new(
-        GherkinSuite::all()
-            .into_iter()
-            .map(run_suite_effect)
-            .collect(),
-    )
+    EffectPlan::new(GherkinSuite::all().iter().map(run_suite_effect).collect())
 }
 
-fn run_suite_effect(suite: GherkinSuite) -> Effect {
+fn run_suite_effect(suite: &GherkinSuite) -> Effect {
     let success = report_line(format!(
         "{} Gherkin suite passed; attempted {} configured {} scenarios",
         suite.label(),
@@ -139,7 +134,7 @@ mod tests {
 
     #[test]
     fn meta_suite_reports_configured_feature_scenario_count() -> Result<(), String> {
-        let plan = run_gherkin_suite(GherkinSuite::Meta);
+        let plan = run_gherkin_suite(&GherkinSuite::Meta);
         let effect = plan
             .effects()
             .iter()
@@ -166,7 +161,7 @@ mod tests {
                 invocation
                     .arguments()
                     .iter()
-                    .map(|argument| argument.as_ref())
+                    .map(AsRef::as_ref)
                     .collect::<Vec<_>>()
                     .join(" ")
             )),

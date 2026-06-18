@@ -78,8 +78,8 @@ impl ProjectSliceMemberships {
     }
 }
 
-pub fn init_project(project_name: ProjectName) -> EffectPlan {
-    let module_name = module_name(&project_name);
+pub fn init_project(project_name: &ProjectName) -> EffectPlan {
+    let module_name = module_name(project_name);
     let project_name_text = project_name.as_ref();
 
     EffectPlan::new(vec![
@@ -100,7 +100,7 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         ),
         Effect::write_file_if_missing(
             project_path(format!("model/lean/{module_name}.lean")),
-            emit_lean_project_root(&project_name, &[], &[]),
+            emit_lean_project_root(project_name, &[], &[]),
         ),
         Effect::write_file_if_missing(
             project_path("model/lean/slices/.gitkeep"),
@@ -109,7 +109,7 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         Effect::EnsureDirectory(project_path("model/quint")),
         Effect::write_file_if_missing(
             project_path(format!("model/quint/{module_name}.qnt")),
-            emit_quint_project_root(&project_name, &[], &[]),
+            emit_quint_project_root(project_name, &[], &[]),
         ),
         Effect::write_file_if_missing(
             project_path("model/quint/slices/.gitkeep"),
@@ -117,7 +117,7 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
         ),
         Effect::EnsureDirectory(project_path("reviews")),
         Effect::write_file_if_missing(project_path("reviews/.gitkeep"), file_contents("\n")),
-        Effect::ExportEvent(EventDraft::project_initialized(&project_name)),
+        Effect::ExportEvent(EventDraft::project_initialized(project_name)),
         Effect::Report(report_line(format!(
             "EMC project {project_name} layout is present"
         ))),
@@ -125,19 +125,19 @@ pub fn init_project(project_name: ProjectName) -> EffectPlan {
 }
 
 pub(crate) fn project_root_effects(
-    project_name: ProjectName,
+    project_name: &ProjectName,
     workflow_slugs: &[WorkflowSlug],
     slice_memberships: &[ProjectSliceMembership],
 ) -> [Effect; 2] {
-    let module_name = module_name(&project_name);
+    let module_name = module_name(project_name);
     [
         Effect::write_file(
             project_path(format!("model/lean/{module_name}.lean")),
-            emit_lean_project_root(&project_name, workflow_slugs, slice_memberships),
+            emit_lean_project_root(project_name, workflow_slugs, slice_memberships),
         ),
         Effect::write_file(
             project_path(format!("model/quint/{module_name}.qnt")),
-            emit_quint_project_root(&project_name, workflow_slugs, slice_memberships),
+            emit_quint_project_root(project_name, workflow_slugs, slice_memberships),
         ),
     ]
 }
@@ -310,10 +310,7 @@ fn emit_quint_project_root(
 }
 
 fn quint_workflow_slug_list(workflow_slugs: &[WorkflowSlug]) -> String {
-    let mut workflow_slugs = workflow_slugs
-        .iter()
-        .map(|slug| slug.as_ref())
-        .collect::<Vec<_>>();
+    let mut workflow_slugs = workflow_slugs.iter().map(AsRef::as_ref).collect::<Vec<_>>();
     workflow_slugs.sort_unstable();
     format!(
         "[{}]",
@@ -372,10 +369,7 @@ fn model_digest(
 }
 
 fn digest_workflows(workflow_slugs: &[WorkflowSlug]) -> String {
-    let mut workflow_slugs = workflow_slugs
-        .iter()
-        .map(|slug| slug.as_ref())
-        .collect::<Vec<_>>();
+    let mut workflow_slugs = workflow_slugs.iter().map(AsRef::as_ref).collect::<Vec<_>>();
     workflow_slugs.sort_unstable();
     workflow_slugs.join(",")
 }
