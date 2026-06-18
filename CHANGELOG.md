@@ -7,6 +7,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4](https://git.johnwilger.com/Slipstream/emc/compare/v0.1.3...v0.1.4) - 2026-06-18
+
+### Fixed
+
+- *(events)* keep removal projection total so the store can't wedge ([#132](https://git.johnwilger.com/Slipstream/emc/pulls/132))
+- *(slice)* validate event command-input source at write time ([#131](https://git.johnwilger.com/Slipstream/emc/pulls/131))
+- *(formal-slice)* merge same-name child definitions ([#130](https://git.johnwilger.com/Slipstream/emc/pulls/130))
+- *(verify)* prove content invariants with native_decide ([#129](https://git.johnwilger.com/Slipstream/emc/pulls/129))
+
+### Other
+
+- *(lints)* enable pedantic+restriction, enforce no-panic policy ([#143](https://git.johnwilger.com/Slipstream/emc/pulls/143))
+- *(emit)* Lean/Quint are write-only projections of the event log ([#141](https://git.johnwilger.com/Slipstream/emc/pulls/141))
+- *(events)* reconcile event index from jsonl on load ([#133](https://git.johnwilger.com/Slipstream/emc/pulls/133))
+
 ## [0.1.3](https://git.johnwilger.com/Slipstream/emc/compare/v0.1.2...v0.1.3) - 2026-06-15
 
 ### Other
