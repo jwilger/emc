@@ -180,10 +180,10 @@ development shell provide those tools.
 emc.toml
 model/
   events/
-    .lock
-    projection.fingerprint
-    v1/
-      <event-id>.json
+    .gitignore
+    .gitattributes
+    events/
+      <transaction-id>.jsonl
   lean/
     lakefile.lean
     lean-toolchain
@@ -197,10 +197,11 @@ reviews/
 
 EMC-managed model artifacts live under `model/lean` and `model/quint`.
 Mutating project, workflow, slice, slice-fact, conflict-resolution, and
-clean-review operations export domain events under `model/events/v1`.
-`emc check` can rebuild `emc.toml`, generated Lean4 and Quint artifacts, and
-review records from those exported events. The projection fingerprint records
-the event set used for the latest rebuild.
+clean-review operations append domain events to the eventcore-fs store at
+`model/events`, committed as immutable JSONL transactions under
+`model/events/events/`. `emc check` can rebuild `emc.toml`, generated Lean4 and
+Quint artifacts, and review records from that event history. The projection
+fingerprint records the event set used for the latest rebuild.
 
 `emc verify` runs Lean4/Lake and Quint against the current projected event
 frontier. After successful verification, EMC appends workflow-scoped
@@ -209,11 +210,11 @@ fingerprint, formal model content digest, verifier identity, timestamp, and
 optional review event reference. If the exported event frontier changes during
 verification, readiness is not appended and `emc verify` must be retried.
 
-EMC also initializes an operational SQLite event-store cache outside the
-repository at `$XDG_STATE_HOME/emc/projects/<sha256-realpath>/events.sqlite3`.
-Set `EMC_EVENT_STORE_PATH` to override that location. The exported JSON events
-are the repository-tracked interchange format; the SQLite path is an
-operational cache location.
+The eventcore-fs store at `model/events` is the single source of truth: its
+committed `events/` JSONL transactions are the authoritative event log, and EMC
+regenerates the Lean4 and Quint artifacts from that log on every command, so the
+artifacts are write-only projections. eventcore-fs keeps its own operational
+`index/`, `tmp/`, `.eventcore/`, and lock files, which it gitignores.
 
 ## CLI commands
 

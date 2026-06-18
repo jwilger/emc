@@ -5,10 +5,11 @@
 This document records the current event-modeling rule inventory for the EMC
 Lean4 and Quint direction.
 
-The source of truth for an event model is the Lean4 model and the Quint model.
-For repository interchange, EMC also exports authoring events under
-`model/events/v1` and projects the generated Lean4, Quint, project, and review
-artifacts from that event history.
+The source of truth for an event model is the event log: the eventcore-fs store
+at `model/events` (immutable JSONL transactions under `model/events/events/`).
+The Lean4 and Quint models are write-only projections regenerated from that
+event history; commands never read a generated artifact to make a decision, and
+`emc verify` runs Lean4 and Quint as the completeness gate.
 
 Status markers:
 
@@ -281,14 +282,15 @@ Quint should verify at least:
   during runtime checks. Workflow-readiness events are ignored by artifact
   projection fingerprints so a readiness declaration does not make itself
   stale.
-- 🟡 Runtime checks initialize an eventcore-sqlite operational cache outside
-  the repository, but exported JSON events remain the mechanically exercised
-  interchange path.
+- 🟡 Runtime checks open the eventcore-fs store at `model/events`; its committed
+  `events/` JSONL transactions are the single source of truth, while
+  eventcore-fs keeps its operational `index/`, `tmp/`, `.eventcore/`, and lock
+  files gitignored.
 - 🟡 Independent exported event files merge deterministically, and concurrent
   semantic conflicts for changed workflow or slice fields are listed, blocked,
   and resolved through exported `ConflictResolved` events.
-- 🟡 Mutating operations execute eventcore 0.8 command structs backed by
-  eventcore-sqlite and carry semantic data types internally after CLI/MCP/JSON
+- 🟡 Mutating operations execute eventcore 1.0 command structs backed by
+  eventcore-fs and carry semantic data types internally after CLI/MCP/JSON
   boundary parsing. Project initialization, workflow creation, workflow updates,
   workflow removals, workflow connections, workflow facts, slice creation, slice
   updates, slice removals, slice facts, workflow transition removals, clean
