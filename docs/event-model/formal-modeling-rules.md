@@ -286,7 +286,7 @@ Quint should verify at least:
   `events/` JSONL transactions are the single source of truth, while
   eventcore-fs keeps its operational `index/`, `tmp/`, `.eventcore/`, and lock
   files gitignored.
-- 🟡 Independent exported event files merge deterministically, and concurrent
+- ✅ Independent exported event files merge deterministically, and concurrent
   semantic conflicts for changed workflow or slice fields are listed, blocked,
   and resolved through exported `ConflictResolved` events.
 - 🟡 Mutating operations execute eventcore 1.0 command structs backed by

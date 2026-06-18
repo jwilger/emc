@@ -28,7 +28,10 @@ use crate::core::emit::quint::{
     emit_workflow_module as emit_quint_workflow_module,
 };
 use crate::core::event_commands::{EmcEvent, SliceFactEvent};
-use crate::core::event_runtime::{list_forks, read_all_emc_events, reconcile_choose_branch};
+use crate::core::event_runtime::{
+    execute_eventcore_command_for_exported_event, list_forks, read_all_emc_events,
+    reconcile_choose_branch,
+};
 use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphComponents};
 use crate::core::formal_project_facts::{
     ProjectedSliceInventoryFacts, project_root_inventories_from_slices,
@@ -3038,6 +3041,19 @@ impl EventDraft {
             },
         }
     }
+
+    pub(crate) fn conflict_resolved(
+        conflict_id: &EventConflictId,
+        chosen_event_id: &ChosenEventId,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::project(),
+            body: ExportedEventBody::ConflictResolved {
+                conflict_id: conflict_id.clone(),
+                chosen_event_id: chosen_event_id.clone(),
+            },
+        }
+    }
 }
 
 pub(crate) fn project_exported_events() -> Result<Option<EffectPlan>, String> {
@@ -3166,6 +3182,7 @@ pub(crate) fn list_stale_workflow_readiness() -> Result<EffectPlan, String> {
 }
 
 pub(crate) fn resolve_event_conflict(
+    project_root: &Path,
     conflict_id: &EventConflictId,
     chosen_event_id: &ChosenEventId,
 ) -> Result<EffectPlan, String> {
@@ -3173,11 +3190,8 @@ pub(crate) fn resolve_event_conflict(
     // (`conflict_id` carries the forked stream id) and the resolution chooses
     // one divergent branch (`chosen_event_id` carries that branch's
     // transaction id). Reconcile records a merge transaction keeping it.
-    let resolved = reconcile_choose_branch(
-        Path::new("."),
-        conflict_id.as_ref(),
-        chosen_event_id.as_ref(),
-    )?;
+    let resolved =
+        reconcile_choose_branch(project_root, conflict_id.as_ref(), chosen_event_id.as_ref())?;
     if resolved == 0 {
         return Err(format!(
             "no unresolved conflict for stream {} branch {}",
@@ -3185,6 +3199,14 @@ pub(crate) fn resolve_event_conflict(
             chosen_event_id.as_ref()
         ));
     }
+
+    // Reconcile has collapsed the fork; record the resolution decision as a
+    // replayable domain event in the log (the single source of truth) so the
+    // choice is not lost to the eventcore-fs merge transaction alone.
+    execute_eventcore_command_for_exported_event(
+        project_root,
+        &EventDraft::conflict_resolved(conflict_id, chosen_event_id),
+    )?;
 
     Ok(EffectPlan::new(vec![Effect::Report(report_line(
         format!("resolved conflict {}", conflict_id.as_ref()),

@@ -12,8 +12,9 @@ mod tests {
         event_store_root, execute_eventcore_command_for_exported_event, list_forks,
         read_all_emc_events, reconcile_choose_branch, transaction_id_string,
     };
+    use crate::core::effect::{ArtifactDigest, ChosenEventId, EventConflictId};
     use crate::core::event_commands::EmcEvent;
-    use crate::core::events::EventDraft;
+    use crate::core::events::{EventDraft, resolve_event_conflict};
     use crate::core::project::ProjectName;
     use crate::core::types::{ModelDescription, ModelName, WorkflowSlug};
     use crate::core::workflow::NewWorkflow;
@@ -253,6 +254,85 @@ mod tests {
         assert!(
             list_forks(replica_a.path())?.is_empty(),
             "no fork must remain after reconciliation"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn resolving_a_conflict_records_a_replayable_conflict_resolved_event()
+    -> Result<(), Box<dyn Error>> {
+        // Build the same concurrent-update fork as the reconcile test.
+        let replica_a = TempDir::new()?;
+        execute_eventcore_command_for_exported_event(
+            replica_a.path(),
+            &EventDraft::project_initialized(&project_name("Repairs")?),
+        )?;
+        execute_eventcore_command_for_exported_event(
+            replica_a.path(),
+            &EventDraft::workflow_added(&new_workflow(
+                "open-ticket",
+                "Open ticket",
+                "Actor opens a repair ticket.",
+            )?),
+        )?;
+
+        let replica_b = TempDir::new()?;
+        union_committed_events(replica_a.path(), replica_b.path())?;
+        execute_eventcore_command_for_exported_event(
+            replica_b.path(),
+            &EventDraft::workflow_updated(&new_workflow(
+                "open-ticket",
+                "Open ticket",
+                "Description authored on replica B.",
+            )?),
+        )?;
+        execute_eventcore_command_for_exported_event(
+            replica_a.path(),
+            &EventDraft::workflow_updated(&new_workflow(
+                "open-ticket",
+                "Open ticket",
+                "Description authored on replica A.",
+            )?),
+        )?;
+        union_committed_events(replica_b.path(), replica_a.path())?;
+
+        let fork = list_forks(replica_a.path())?
+            .into_iter()
+            .next()
+            .ok_or("the concurrent updates must surface one fork")?;
+        let chosen = transaction_id_string(
+            *fork
+                .transactions()
+                .first()
+                .ok_or("the fork must have at least one branch")?,
+        );
+
+        // The conflict id is the forked stream; the chosen event id is the kept
+        // branch's transaction id (how the CLI/MCP boundary models them).
+        let conflict_id =
+            EventConflictId::new(ArtifactDigest::try_new("workflow::open-ticket".to_owned())?);
+        let chosen_event_id = ChosenEventId::new(ArtifactDigest::try_new(chosen)?);
+
+        let plan = resolve_event_conflict(replica_a.path(), &conflict_id, &chosen_event_id)
+            .map_err(|error| -> Box<dyn Error> { error.into() })?;
+        assert_eq!(
+            plan.effects().iter().count(),
+            1,
+            "resolution must report exactly once"
+        );
+
+        // The decision is now a replayable domain event in the log, not just an
+        // eventcore-fs merge transaction.
+        let events = read_all_emc_events(replica_a.path())?;
+        assert!(
+            events
+                .iter()
+                .any(|event| matches!(event, EmcEvent::ConflictResolved { .. })),
+            "resolving a conflict must record a replayable ConflictResolved event, got {events:?}"
+        );
+        assert!(
+            list_forks(replica_a.path())?.is_empty(),
+            "no fork must remain after resolution"
         );
         Ok(())
     }
