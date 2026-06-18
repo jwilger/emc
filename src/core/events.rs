@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
+use std::iter::empty;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -28,6 +29,10 @@ use crate::core::emit::quint::{
 };
 use crate::core::event_commands::EmcEvent;
 use crate::core::event_runtime::{list_forks, read_all_emc_events, reconcile_choose_branch};
+use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphComponents};
+use crate::core::formal_project_facts::{
+    ProjectedSliceInventoryFacts, project_root_inventories_from_slices,
+};
 use crate::core::formal_slice_facts::{
     CommandErrorDefinitions, CommandErrorNames, CommandInputProvenanceChain, CommandInputSource,
     CommandObservedStreams, EmittedEventNames, NewAutomationDefinition, NewBitLevelDataFlow,
@@ -36,10 +41,12 @@ use crate::core::formal_slice_facts::{
     NewEventDefinition, NewExternalPayloadDefinition, NewNavigationTarget, NewOutcomeDefinition,
     NewReadModelDefinition, NewReadModelField, NewSliceScenario, NewTranslationDefinition,
     NewViewDefinition, NewViewField, OutcomeEventNames, ReadModelDerivationSourceFields,
-    ReadModelFieldSource, ReadModelRelationshipFields, ScenarioKind, ScenarioStreamNames,
-    ViewControls, ViewFilters, ViewLocalStates,
+    ReadModelFieldSource, ReadModelRelationshipFields, RecordFlavor, ScenarioKind,
+    ScenarioStreamNames, SliceModuleFacts, ViewControls, ViewFilters, ViewLocalStates,
+    populate_slice_lists,
 };
-use crate::core::project::{ProjectName, ProjectSliceMembership, project_root_effects};
+use crate::core::layout::{ModeledProjectRootInventories, populate_project_root_modules};
+use crate::core::project::{ProjectName, ProjectSliceMembership, emit_project_root_shells};
 use crate::core::slice::NewSlice;
 use crate::core::types::{
     AutomationName, AutomationReactionDescription, AutomationTriggerName, BitEncodingSemantics,
@@ -3003,6 +3010,33 @@ pub(crate) fn projected_slice_command_definitions(
     Ok(model.slice_command_definitions(slice_slug))
 }
 
+/// The workflow graphs that command decisions consume, projected from the
+/// authoritative event log rather than parsed from the generated Lean/Quint
+/// artifacts. Empty when the project has no events yet. This is the single
+/// source of truth for command-time decisions; the artifacts are write-only
+/// projections and are never parsed back to drive a decision.
+pub(crate) fn projected_formal_workflow_graphs() -> Result<Vec<FormalWorkflowGraph>, String> {
+    let events = read_all_emc_events(Path::new("."))?;
+    if events.is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(ProjectedModel::from_events(events)?.formal_workflow_graphs())
+}
+
+/// The project-root inventories that `check_project` consumes, projected from
+/// the authoritative event log rather than parsed from the generated Lean/Quint
+/// root artifact. The artifact is a write-only projection of the log and is
+/// never parsed back to drive the completeness check; this projection is the
+/// single source of truth for those inventories.
+pub(crate) fn projected_project_root_inventories() -> Result<ModeledProjectRootInventories, String>
+{
+    let events = read_all_emc_events(Path::new("."))?;
+    if events.is_empty() {
+        return Ok(project_root_inventories_from_slices(empty()));
+    }
+    Ok(ProjectedModel::from_events(events)?.project_root_inventories())
+}
+
 pub(crate) fn exported_events_projection_fingerprint() -> Result<Option<String>, String> {
     let events = read_all_emc_events(Path::new("."))?;
     if events.is_empty() {
@@ -3190,6 +3224,40 @@ impl ProjectedModel {
             .flat_map(|workflow| workflow.slices.iter_mut())
             .find(|slice| slice.slug == *slug)
             .ok_or_else(|| format!("{event} references unknown slice {}", slug.as_ref()))
+    }
+
+    fn formal_workflow_graphs(&self) -> Vec<FormalWorkflowGraph> {
+        self.workflows
+            .iter()
+            .map(ProjectedWorkflow::to_formal_graph)
+            .collect()
+    }
+
+    /// Project the project-root inventories from every slice in the model, in
+    /// projection order. The generated root artifact is never read; the rows
+    /// come straight from the projected slice facts.
+    fn project_root_inventories(&self) -> ModeledProjectRootInventories {
+        let slices = self.workflows.iter().flat_map(|workflow| {
+            workflow
+                .slices
+                .iter()
+                .map(move |slice| ProjectedSliceInventoryFacts {
+                    workflow_slug: &workflow.slug,
+                    scenarios: &slice.scenarios,
+                    outcomes: &slice.outcomes,
+                    external_payloads: &slice.external_payloads,
+                    event_definitions: &slice.event_definitions,
+                    command_definitions: &slice.command_definitions,
+                    read_models: &slice.read_models,
+                    bit_level_data_flows: &slice.bit_level_data_flows,
+                    views: &slice.views,
+                    translations: &slice.translations,
+                    automations: &slice.automations,
+                    board_elements: &slice.board_elements,
+                    board_connections: &slice.board_connections,
+                })
+        });
+        project_root_inventories_from_slices(slices)
     }
 
     fn slice_command_definitions(&self, slug: &SliceSlug) -> Vec<NewCommandDefinition> {
@@ -3720,10 +3788,26 @@ impl ProjectedModel {
             Effect::write_file(project_path("reviews/.gitkeep")?, file_contents("\n")?),
         ];
 
-        effects.extend(project_root_effects(
-            self.project_name,
+        let inventories = self.project_root_inventories();
+        let formal_workflows = self.formal_workflow_graphs();
+        let (lean_shell, quint_shell) =
+            emit_project_root_shells(&self.project_name, &workflow_slugs, &slice_memberships);
+        let (lean_root, quint_root) = populate_project_root_modules(
+            lean_shell,
+            quint_shell,
+            &self.project_name,
             &workflow_slugs,
             &slice_memberships,
+            &formal_workflows,
+            &inventories,
+        );
+        effects.push(Effect::write_file(
+            project_path(format!("model/lean/{project_module_name}.lean"))?,
+            lean_root,
+        ));
+        effects.push(Effect::write_file(
+            project_path(format!("model/quint/{project_module_name}.qnt"))?,
+            quint_root,
         ));
         effects.extend(
             self.workflows
@@ -3804,6 +3888,33 @@ impl ProjectedWorkflow {
             .iter()
             .map(ProjectedSlice::slice_detail)
             .collect()
+    }
+
+    /// Project this workflow into the `FormalWorkflowGraph` shape that command
+    /// decisions consume — sourced from the event log, not parsed from the
+    /// generated Lean/Quint artifacts.
+    fn to_formal_graph(&self) -> FormalWorkflowGraph {
+        FormalWorkflowGraph::from_components(FormalWorkflowGraphComponents {
+            name: self.name.clone(),
+            slug: self.slug.clone(),
+            description: self.description.clone(),
+            slice_details: WorkflowSliceDetails::from_details(self.slice_details()),
+            transitions: WorkflowTransitionRecords::from_records(self.transitions.iter().cloned()),
+            outcomes: WorkflowOutcomeRecords::from_records(self.outcomes.iter().cloned()),
+            command_errors: WorkflowCommandErrorRecords::from_records(
+                self.command_errors.iter().cloned(),
+            ),
+            owned_definitions: WorkflowOwnedDefinitionRecords::from_records(
+                self.owned_definitions.iter().cloned(),
+            ),
+            transition_evidences: WorkflowTransitionEvidenceRecords::from_records(
+                self.transition_evidences.iter().cloned(),
+            ),
+            entry_lifecycle_required: self.requires_entry_lifecycle_coverage,
+            entry_lifecycle_states: WorkflowEntryLifecycleStateRecords::from_records(
+                self.entry_lifecycle_states.iter().cloned(),
+            ),
+        })
     }
 
     fn slice_memberships(&self) -> Vec<ProjectSliceMembership> {
@@ -3919,6 +4030,10 @@ impl ProjectedSlice {
         )
     }
 
+    /// Emit the complete Lean/Quint slice modules directly from the projected
+    /// facts. Each module is rendered in one shot (`populate_slice_lists` fills a
+    /// freshly-emitted shell), so the regeneration never reads or parses the
+    /// generated slice artifact back — it is a pure function of the event log.
     fn effects(self) -> Result<Vec<Effect>, String> {
         let module_name = module_name(self.name.as_ref());
         let digest = slice_artifact_digest(
@@ -3927,91 +4042,48 @@ impl ProjectedSlice {
             self.kind,
             self.description.clone(),
         );
-        let mut effects = vec![
+        let lean_shell = emit_lean_slice_module(
+            lean_module_name(module_name.clone()),
+            self.name.clone(),
+            self.description.clone(),
+            self.slug.clone(),
+            self.kind,
+            digest.clone(),
+        );
+        let quint_shell = emit_quint_slice_module(
+            quint_module_name(module_name.clone()),
+            self.name.clone(),
+            self.description.clone(),
+            self.slug.clone(),
+            self.kind,
+            digest,
+        );
+        let facts = SliceModuleFacts {
+            scenarios: &self.scenarios,
+            outcomes: &self.outcomes,
+            external_payloads: &self.external_payloads,
+            event_definitions: &self.event_definitions,
+            command_definitions: &self.command_definitions,
+            read_models: &self.read_models,
+            bit_level_data_flows: &self.bit_level_data_flows,
+            views: &self.views,
+            translations: &self.translations,
+            automations: &self.automations,
+            board_elements: &self.board_elements,
+            board_connections: &self.board_connections,
+        };
+        let lean = populate_slice_lists(lean_shell.as_ref(), &facts, RecordFlavor::Lean);
+        let quint = populate_slice_lists(quint_shell.as_ref(), &facts, RecordFlavor::Quint);
+        Ok(vec![
             Effect::write_file(
                 project_path(format!("model/lean/slices/{module_name}.lean"))?,
-                emit_lean_slice_module(
-                    lean_module_name(module_name.clone()),
-                    self.name.clone(),
-                    self.description.clone(),
-                    self.slug.clone(),
-                    self.kind,
-                    digest.clone(),
-                ),
+                file_contents(lean)?,
             ),
             Effect::write_file(
                 project_path(format!("model/quint/slices/{module_name}.qnt"))?,
-                emit_quint_slice_module(
-                    quint_module_name(module_name),
-                    self.name,
-                    self.description,
-                    self.slug,
-                    self.kind,
-                    digest,
-                ),
+                file_contents(quint)?,
             ),
-        ];
-        effects.extend(
-            self.scenarios
-                .into_iter()
-                .map(Effect::AddSliceScenarioFromSlice),
-        );
-        effects.extend(
-            self.outcomes
-                .into_iter()
-                .map(Effect::AddOutcomeDefinitionFromSlice),
-        );
-        effects.extend(
-            self.external_payloads
-                .into_iter()
-                .map(Effect::AddExternalPayloadDefinitionFromSlice),
-        );
-        effects.extend(
-            self.event_definitions
-                .into_iter()
-                .map(Effect::AddEventDefinitionFromSlice),
-        );
-        effects.extend(
-            self.command_definitions
-                .into_iter()
-                .map(Effect::AddCommandDefinitionFromSlice),
-        );
-        effects.extend(
-            self.read_models
-                .into_iter()
-                .map(Effect::AddReadModelDefinitionFromSlice),
-        );
-        effects.extend(
-            self.bit_level_data_flows
-                .into_iter()
-                .map(Effect::AddBitLevelDataFlowFromSlice),
-        );
-        effects.extend(
-            self.views
-                .into_iter()
-                .map(Effect::AddViewDefinitionFromSlice),
-        );
-        effects.extend(
-            self.translations
-                .into_iter()
-                .map(Effect::AddTranslationDefinitionFromSlice),
-        );
-        effects.extend(
-            self.automations
-                .into_iter()
-                .map(Effect::AddAutomationDefinitionFromSlice),
-        );
-        effects.extend(
-            self.board_elements
-                .into_iter()
-                .map(Effect::AddBoardElementFromSlice),
-        );
-        effects.extend(
-            self.board_connections
-                .into_iter()
-                .map(Effect::AddBoardConnectionFromSlice),
-        );
-        Ok(effects)
+        ])
     }
 }
 

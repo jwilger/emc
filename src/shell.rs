@@ -1,6 +1,6 @@
 // Copyright 2026 John Wilger
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::env;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
@@ -19,7 +19,7 @@ use fs4::{FileExt, TryLockError};
 use crate::core::connection::{connect_workflow, remove_transition};
 use crate::core::effect::{
     ArtifactDigest, Effect, EffectPlan, FileContents, ModelContentDigest, ProcessInvocation,
-    ProcessInvocations, ProjectPath, ProjectionFingerprint, ReviewEventReference,
+    ProcessInvocations, ProjectPath, ProjectionFingerprint, ReportLine, ReviewEventReference,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
@@ -27,68 +27,16 @@ use crate::core::event_runtime::{
 };
 use crate::core::events::{
     EventDraft, ExportedEventType, exported_events_projection_fingerprint, list_event_conflicts,
-    list_stale_workflow_readiness, project_exported_events, projected_slice_command_definitions,
+    list_stale_workflow_readiness, project_exported_events, projected_formal_workflow_graphs,
+    projected_project_root_inventories, projected_slice_command_definitions,
     reject_legacy_artifact_only_project, resolve_event_conflict, unresolved_event_conflicts_exist,
 };
-use crate::core::formal_graph::{
-    FormalGraphError, FormalWorkflowGraph, FormalWorkflowGraphs, parse_lean_workflow_graph,
-    parse_quint_workflow_graph,
-};
-use crate::core::formal_project_facts::{
-    NewProjectAutomation, NewProjectBoardConnection, NewProjectBoardElement, NewProjectCommand,
-    NewProjectDataFlow, NewProjectEvent, NewProjectExternalPayload, NewProjectOutcome,
-    NewProjectReadModel, NewProjectScenario, NewProjectStream, NewProjectTranslation,
-    NewProjectView, ProjectAutomation, ProjectAutomationDefinition, ProjectBoardConnection,
-    ProjectBoardElement, ProjectCommand, ProjectCommandError, ProjectCommandInput, ProjectDataFlow,
-    ProjectEvent, ProjectEventAttribute, ProjectExternalPayload, ProjectExternalPayloadField,
-    ProjectOutcome, ProjectReadModel, ProjectReadModelDefinition, ProjectReadModelField,
-    ProjectScenario, ProjectScenarioDefinition, ProjectStream, ProjectTranslation,
-    ProjectTranslationDefinition, ProjectView, ProjectViewControl, ProjectViewDefinition,
-    ProjectViewField, add_project_automation, add_project_board_connection,
-    add_project_board_element, add_project_command, add_project_data_flow, add_project_event,
-    add_project_external_payload, add_project_outcome, add_project_read_model,
-    add_project_scenario, add_project_stream, add_project_translation, add_project_view,
-    parse_lean_project_automation_definitions, parse_lean_project_automations,
-    parse_lean_project_board_connections, parse_lean_project_board_elements,
-    parse_lean_project_command_errors, parse_lean_project_command_inputs,
-    parse_lean_project_commands, parse_lean_project_data_flows,
-    parse_lean_project_event_attributes, parse_lean_project_events,
-    parse_lean_project_external_payload_fields, parse_lean_project_external_payloads,
-    parse_lean_project_outcomes, parse_lean_project_read_model_definitions,
-    parse_lean_project_read_model_fields, parse_lean_project_read_models,
-    parse_lean_project_scenario_definitions, parse_lean_project_scenarios,
-    parse_lean_project_streams, parse_lean_project_translation_definitions,
-    parse_lean_project_translations, parse_lean_project_view_controls,
-    parse_lean_project_view_definitions, parse_lean_project_view_fields, parse_lean_project_views,
-    parse_quint_project_automation_definitions, parse_quint_project_automations,
-    parse_quint_project_board_connections, parse_quint_project_board_elements,
-    parse_quint_project_command_errors, parse_quint_project_command_inputs,
-    parse_quint_project_commands, parse_quint_project_data_flows,
-    parse_quint_project_event_attributes, parse_quint_project_events,
-    parse_quint_project_external_payload_fields, parse_quint_project_external_payloads,
-    parse_quint_project_outcomes, parse_quint_project_read_model_definitions,
-    parse_quint_project_read_model_fields, parse_quint_project_read_models,
-    parse_quint_project_scenario_definitions, parse_quint_project_scenarios,
-    parse_quint_project_streams, parse_quint_project_translation_definitions,
-    parse_quint_project_translations, parse_quint_project_view_controls,
-    parse_quint_project_view_definitions, parse_quint_project_view_fields,
-    parse_quint_project_views,
-};
-use crate::core::formal_slice_facts::{
-    add_automation_definition, add_bit_level_data_flow, add_board_connection, add_board_element,
-    add_command_definition, add_event_definition, add_external_payload_definition,
-    add_outcome_definition, add_read_model_definition, add_slice_scenario,
-    add_translation_definition, add_view_definition, validate_event_attribute_source,
-};
-use crate::core::formal_workflow_facts::{
-    add_workflow_command_error, add_workflow_entry_lifecycle_state, add_workflow_outcome,
-    add_workflow_owned_definition, add_workflow_transition_evidence,
-    require_workflow_entry_lifecycle_coverage,
-};
+use crate::core::formal_graph::{FormalWorkflowGraph, FormalWorkflowGraphs};
+use crate::core::formal_slice_facts::validate_event_attribute_source;
 use crate::core::layout::{
-    ModeledProjectRootInventories, ModeledProjectRootInventoryParts, ModeledWorkflowLayout,
-    ModeledWorkflowLayouts, ModeledWorkflowSliceDetails, ModeledWorkflowTransitions, check_project,
-    list_slices, list_transitions, list_workflows, show_document, show_workflow,
+    ModeledWorkflowLayout, ModeledWorkflowLayouts, ModeledWorkflowSliceDetails,
+    ModeledWorkflowTransitions, check_project, list_slices, list_transitions, list_workflows,
+    show_document, show_workflow,
 };
 use crate::core::project::{ProjectName, ProjectSliceMembership, ProjectSliceMemberships};
 use crate::core::review_record::{
@@ -127,12 +75,6 @@ impl ShellError {
     pub(crate) fn project_name(error: impl Display) -> Self {
         Self {
             message: format!("invalid project name: {error}"),
-        }
-    }
-
-    pub(crate) fn project_path(error: impl Display) -> Self {
-        Self {
-            message: format!("invalid project path: {error}"),
         }
     }
 
@@ -395,10 +337,12 @@ fn effect_is_mutation(effect: &Effect) -> bool {
 }
 
 fn project_exported_events_into_worktree() -> Result<(), ShellError> {
-    if !event_projection_is_needed() {
-        return Ok(());
-    }
-
+    // Regenerate the Lean/Quint artifacts from the authoritative event log on
+    // every command. The artifacts are write-only projections of the log: this
+    // self-heals any on-disk drift (a hand edit, a bad merge, a partial write)
+    // by restoring them to exactly what the log projects. `write_file` is
+    // idempotent, so when the artifacts already match the log nothing is
+    // rewritten.
     let projecting = projecting_events_state();
     {
         let mut is_projecting = projecting
@@ -439,190 +383,108 @@ fn exported_events_are_projecting() -> Result<bool, ShellError> {
         .map_err(|error| ShellError::message(error.to_string()))
 }
 
-fn event_projection_is_needed() -> bool {
-    if !Path::new("emc.toml").exists()
-        || !Path::new("model/lean").exists()
-        || !Path::new("model/quint").exists()
-        || !Path::new("reviews").exists()
-    {
-        return true;
-    }
+/// Append a fact event to the authoritative log, then regenerate the Lean/Quint
+/// artifacts as a pure projection of the log. Authoring commands validate against
+/// the log and call this — they never read, parse, or splice the generated
+/// artifacts; the artifacts are write-only projections.
+fn export_and_regenerate(draft: EventDraft) -> Result<(), ShellError> {
+    interpret_effect(&Effect::ExportEvent(draft))?;
+    project_exported_events_into_worktree()
+}
 
-    let Ok(Some(current_fingerprint)) = exported_events_projection_fingerprint() else {
-        return false;
-    };
-    fs::read_to_string("model/events/projection.fingerprint")
-        .map(|fingerprint| fingerprint.trim() != current_fingerprint)
-        .unwrap_or(true)
+fn projected_report(value: impl Into<String>) -> Result<String, ShellError> {
+    ReportLine::try_new(value)
+        .map(|line| line.as_ref().to_owned())
+        .map_err(|error| ShellError::message(error.to_string()))
 }
 
 fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
     match effect {
         Effect::AddAutomationDefinitionFromSlice(automation) => {
-            let slice_artifacts =
-                read_formal_slice_artifact_paths_and_contents(automation.slice_slug())?;
-            let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, _workflow_graph) = find_formal_workflow_containing_slice_in(
-                &formal_workflows,
-                automation.slice_slug(),
-            )?;
-            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
-            let slice_plan = add_automation_definition(
-                slice_artifacts.lean_path,
-                slice_artifacts.lean_contents,
-                slice_artifacts.quint_path,
-                slice_artifacts.quint_contents,
-                automation.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_automation_plan = add_project_automation(
-                project_artifacts.lean_path,
-                project_artifacts.lean_contents,
-                project_artifacts.quint_path,
-                project_artifacts.quint_contents,
-                NewProjectAutomation::from_automation(workflow_layout.slug().clone(), automation),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let mut reports = interpret_collect_reports(slice_plan)?;
-            reports.extend(interpret_collect_reports(project_automation_plan)?);
-            interpret_effect(&Effect::ExportEvent(EventDraft::slice_automation_added(
-                automation,
-            )))?;
+            find_formal_workflow_containing_slice_in(&formal_workflows, automation.slice_slug())?;
+            let reports = vec![
+                projected_report(format!(
+                    "added automation {} to slice {}",
+                    automation.name().as_ref(),
+                    automation.slice_slug().as_ref()
+                ))?,
+                projected_report(format!(
+                    "added automation {} to project root",
+                    automation.name().as_ref()
+                ))?,
+            ];
+            export_and_regenerate(EventDraft::slice_automation_added(automation))?;
             Ok(reports)
         }
         Effect::AddBitLevelDataFlowFromSlice(data_flow) => {
-            let slice_artifacts =
-                read_formal_slice_artifact_paths_and_contents(data_flow.slice_slug())?;
-            let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, _workflow_graph) = find_formal_workflow_containing_slice_in(
-                &formal_workflows,
-                data_flow.slice_slug(),
-            )?;
-            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
-            let slice_plan = add_bit_level_data_flow(
-                slice_artifacts.lean_path,
-                slice_artifacts.lean_contents,
-                slice_artifacts.quint_path,
-                slice_artifacts.quint_contents,
-                data_flow.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_data_flow_plan = add_project_data_flow(
-                project_artifacts.lean_path,
-                project_artifacts.lean_contents,
-                project_artifacts.quint_path,
-                project_artifacts.quint_contents,
-                NewProjectDataFlow::from_slice_data_flow(workflow_layout.slug().clone(), data_flow),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let mut reports = interpret_collect_reports(slice_plan)?;
-            reports.extend(interpret_collect_reports(project_data_flow_plan)?);
-            interpret_effect(&Effect::ExportEvent(
-                EventDraft::slice_bit_level_data_flow_added(data_flow),
-            ))?;
+            find_formal_workflow_containing_slice_in(&formal_workflows, data_flow.slice_slug())?;
+            let reports = vec![
+                projected_report(format!(
+                    "added bit-level data flow {} to slice {}",
+                    data_flow.datum().as_ref(),
+                    data_flow.slice_slug().as_ref()
+                ))?,
+                projected_report(format!(
+                    "added bit-level data flow {} to project root",
+                    data_flow.datum().as_ref()
+                ))?,
+            ];
+            export_and_regenerate(EventDraft::slice_bit_level_data_flow_added(data_flow))?;
             Ok(reports)
         }
         Effect::AddBoardConnectionFromSlice(connection) => {
-            let slice_artifacts =
-                read_formal_slice_artifact_paths_and_contents(connection.slice_slug())?;
-            let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, _workflow_graph) = find_formal_workflow_containing_slice_in(
-                &formal_workflows,
-                connection.slice_slug(),
-            )?;
-            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
-            let slice_plan = add_board_connection(
-                slice_artifacts.lean_path,
-                slice_artifacts.lean_contents,
-                slice_artifacts.quint_path,
-                slice_artifacts.quint_contents,
-                connection.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_board_plan = add_project_board_connection(
-                project_artifacts.lean_path,
-                project_artifacts.lean_contents,
-                project_artifacts.quint_path,
-                project_artifacts.quint_contents,
-                NewProjectBoardConnection::from_slice_board_connection(
-                    workflow_layout.slug().clone(),
-                    connection,
-                ),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let mut reports = interpret_collect_reports(slice_plan)?;
-            reports.extend(interpret_collect_reports(project_board_plan)?);
-            interpret_effect(&Effect::ExportEvent(
-                EventDraft::slice_board_connection_added(connection),
-            ))?;
+            find_formal_workflow_containing_slice_in(&formal_workflows, connection.slice_slug())?;
+            let reports = vec![
+                projected_report(format!(
+                    "added board connection {} -> {} to slice {}",
+                    connection.source().as_ref(),
+                    connection.target().as_ref(),
+                    connection.slice_slug().as_ref()
+                ))?,
+                projected_report(format!(
+                    "added board connection {} -> {} to project root",
+                    connection.source().as_ref(),
+                    connection.target().as_ref()
+                ))?,
+            ];
+            export_and_regenerate(EventDraft::slice_board_connection_added(connection))?;
             Ok(reports)
         }
         Effect::AddBoardElementFromSlice(element) => {
-            let slice_artifacts =
-                read_formal_slice_artifact_paths_and_contents(element.slice_slug())?;
-            let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, _workflow_graph) =
-                find_formal_workflow_containing_slice_in(&formal_workflows, element.slice_slug())?;
-            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
-            let slice_plan = add_board_element(
-                slice_artifacts.lean_path,
-                slice_artifacts.lean_contents,
-                slice_artifacts.quint_path,
-                slice_artifacts.quint_contents,
-                element.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_board_plan = add_project_board_element(
-                project_artifacts.lean_path,
-                project_artifacts.lean_contents,
-                project_artifacts.quint_path,
-                project_artifacts.quint_contents,
-                NewProjectBoardElement::from_slice_board_element(
-                    workflow_layout.slug().clone(),
-                    element,
-                ),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let mut reports = interpret_collect_reports(slice_plan)?;
-            reports.extend(interpret_collect_reports(project_board_plan)?);
-            interpret_effect(&Effect::ExportEvent(EventDraft::slice_board_element_added(
-                element,
-            )))?;
+            find_formal_workflow_containing_slice_in(&formal_workflows, element.slice_slug())?;
+            let reports = vec![
+                projected_report(format!(
+                    "added board element {} to slice {}",
+                    element.name().as_ref(),
+                    element.slice_slug().as_ref()
+                ))?,
+                projected_report(format!(
+                    "added board element {} to project root",
+                    element.name().as_ref()
+                ))?,
+            ];
+            export_and_regenerate(EventDraft::slice_board_element_added(element))?;
             Ok(reports)
         }
         Effect::AddCommandDefinitionFromSlice(command) => {
-            let slice_artifacts =
-                read_formal_slice_artifact_paths_and_contents(command.slice_slug())?;
-            let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, _workflow_graph) =
-                find_formal_workflow_containing_slice_in(&formal_workflows, command.slice_slug())?;
-            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
-            let slice_plan = add_command_definition(
-                slice_artifacts.lean_path,
-                slice_artifacts.lean_contents,
-                slice_artifacts.quint_path,
-                slice_artifacts.quint_contents,
-                command.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_command_plan = add_project_command(
-                project_artifacts.lean_path,
-                project_artifacts.lean_contents,
-                project_artifacts.quint_path,
-                project_artifacts.quint_contents,
-                NewProjectCommand::from_command(workflow_layout.slug().clone(), command),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let mut reports = interpret_collect_reports(slice_plan)?;
-            reports.extend(interpret_collect_reports(project_command_plan)?);
-            interpret_effect(&Effect::ExportEvent(
-                EventDraft::slice_command_definition_added(command),
-            ))?;
+            find_formal_workflow_containing_slice_in(&formal_workflows, command.slice_slug())?;
+            let reports = vec![
+                projected_report(format!(
+                    "added command {} to slice {}",
+                    command.name().as_ref(),
+                    command.slice_slug().as_ref()
+                ))?,
+                projected_report(format!(
+                    "added command {} to project root",
+                    command.name().as_ref()
+                ))?,
+            ];
+            export_and_regenerate(EventDraft::slice_command_definition_added(command))?;
             Ok(reports)
         }
         Effect::AddEventDefinitionFromSlice(event) => {
@@ -630,182 +492,95 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
                 .map_err(ShellError::message)?;
             validate_event_attribute_source(event, &slice_commands)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            let slice_artifacts =
-                read_formal_slice_artifact_paths_and_contents(event.slice_slug())?;
-            let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, _workflow_graph) =
-                find_formal_workflow_containing_slice_in(&formal_workflows, event.slice_slug())?;
-            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
-            let slice_plan = add_event_definition(
-                slice_artifacts.lean_path,
-                slice_artifacts.lean_contents,
-                slice_artifacts.quint_path,
-                slice_artifacts.quint_contents,
-                event.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_stream_plan = add_project_stream(
-                project_artifacts.lean_path,
-                project_artifacts.lean_contents,
-                project_artifacts.quint_path,
-                project_artifacts.quint_contents,
-                NewProjectStream::new(
-                    workflow_layout.slug().clone(),
-                    event.slice_slug().clone(),
-                    event.stream().clone(),
-                ),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let mut reports = interpret_collect_reports(slice_plan)?;
-            reports.extend(interpret_collect_reports(project_stream_plan)?);
-            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
-            let project_event_plan = add_project_event(
-                project_artifacts.lean_path,
-                project_artifacts.lean_contents,
-                project_artifacts.quint_path,
-                project_artifacts.quint_contents,
-                NewProjectEvent::from_event(workflow_layout.slug().clone(), event),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            reports.extend(interpret_collect_reports(project_event_plan)?);
-            interpret_effect(&Effect::ExportEvent(
-                EventDraft::slice_event_definition_added(event),
-            ))?;
+            find_formal_workflow_containing_slice_in(&formal_workflows, event.slice_slug())?;
+            let reports = vec![
+                projected_report(format!(
+                    "added event {} to slice {}",
+                    event.name().as_ref(),
+                    event.slice_slug().as_ref()
+                ))?,
+                projected_report(format!(
+                    "added stream {} to project root",
+                    event.stream().as_ref()
+                ))?,
+                projected_report(format!(
+                    "added event {} to project root",
+                    event.name().as_ref()
+                ))?,
+            ];
+            export_and_regenerate(EventDraft::slice_event_definition_added(event))?;
             Ok(reports)
         }
         Effect::AddExternalPayloadDefinitionFromSlice(external_payload) => {
-            let slice_artifacts =
-                read_formal_slice_artifact_paths_and_contents(external_payload.slice_slug())?;
-            let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, _workflow_graph) = find_formal_workflow_containing_slice_in(
+            find_formal_workflow_containing_slice_in(
                 &formal_workflows,
                 external_payload.slice_slug(),
             )?;
-            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
-            let slice_plan = add_external_payload_definition(
-                slice_artifacts.lean_path,
-                slice_artifacts.lean_contents,
-                slice_artifacts.quint_path,
-                slice_artifacts.quint_contents,
-                external_payload.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_external_payload_plan = add_project_external_payload(
-                project_artifacts.lean_path,
-                project_artifacts.lean_contents,
-                project_artifacts.quint_path,
-                project_artifacts.quint_contents,
-                NewProjectExternalPayload::from_external_payload(
-                    workflow_layout.slug().clone(),
-                    external_payload,
-                ),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let mut reports = interpret_collect_reports(slice_plan)?;
-            reports.extend(interpret_collect_reports(project_external_payload_plan)?);
-            interpret_effect(&Effect::ExportEvent(
-                EventDraft::slice_external_payload_added(external_payload),
-            ))?;
+            let reports = vec![
+                projected_report(format!(
+                    "added external payload {} to slice {}",
+                    external_payload.name().as_ref(),
+                    external_payload.slice_slug().as_ref()
+                ))?,
+                projected_report(format!(
+                    "added external payload {} to project root",
+                    external_payload.name().as_ref()
+                ))?,
+            ];
+            export_and_regenerate(EventDraft::slice_external_payload_added(external_payload))?;
             Ok(reports)
         }
         Effect::AddOutcomeDefinitionFromSlice(outcome) => {
-            let slice_artifacts =
-                read_formal_slice_artifact_paths_and_contents(outcome.slice_slug())?;
-            let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, _workflow_graph) =
-                find_formal_workflow_containing_slice_in(&formal_workflows, outcome.slice_slug())?;
-            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
-            let slice_plan = add_outcome_definition(
-                slice_artifacts.lean_path,
-                slice_artifacts.lean_contents,
-                slice_artifacts.quint_path,
-                slice_artifacts.quint_contents,
-                outcome.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_outcome_plan = add_project_outcome(
-                project_artifacts.lean_path,
-                project_artifacts.lean_contents,
-                project_artifacts.quint_path,
-                project_artifacts.quint_contents,
-                NewProjectOutcome::new(
-                    workflow_layout.slug().clone(),
-                    outcome.slice_slug().clone(),
-                    outcome.label().clone(),
-                    outcome.event_set().clone(),
-                    outcome.externally_relevant(),
-                ),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let mut reports = interpret_collect_reports(slice_plan)?;
-            reports.extend(interpret_collect_reports(project_outcome_plan)?);
-            interpret_effect(&Effect::ExportEvent(EventDraft::slice_outcome_added(
-                outcome,
-            )))?;
+            find_formal_workflow_containing_slice_in(&formal_workflows, outcome.slice_slug())?;
+            let reports = vec![
+                projected_report(format!(
+                    "added outcome {} to slice {}",
+                    outcome.label().as_ref(),
+                    outcome.slice_slug().as_ref()
+                ))?,
+                projected_report(format!(
+                    "added outcome {} to project root",
+                    outcome.label().as_ref()
+                ))?,
+            ];
+            export_and_regenerate(EventDraft::slice_outcome_added(outcome))?;
             Ok(reports)
         }
         Effect::AddReadModelDefinitionFromSlice(read_model) => {
-            let slice_artifacts =
-                read_formal_slice_artifact_paths_and_contents(read_model.slice_slug())?;
-            let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, _workflow_graph) = find_formal_workflow_containing_slice_in(
-                &formal_workflows,
-                read_model.slice_slug(),
-            )?;
-            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
-            let slice_plan = add_read_model_definition(
-                slice_artifacts.lean_path,
-                slice_artifacts.lean_contents,
-                slice_artifacts.quint_path,
-                slice_artifacts.quint_contents,
-                read_model.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_read_model_plan = add_project_read_model(
-                project_artifacts.lean_path,
-                project_artifacts.lean_contents,
-                project_artifacts.quint_path,
-                project_artifacts.quint_contents,
-                NewProjectReadModel::from_read_model(workflow_layout.slug().clone(), read_model),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let mut reports = interpret_collect_reports(slice_plan)?;
-            reports.extend(interpret_collect_reports(project_read_model_plan)?);
-            interpret_effect(&Effect::ExportEvent(EventDraft::slice_read_model_added(
-                read_model,
-            )))?;
+            find_formal_workflow_containing_slice_in(&formal_workflows, read_model.slice_slug())?;
+            let reports = vec![
+                projected_report(format!(
+                    "added read model {} to slice {}",
+                    read_model.name().as_ref(),
+                    read_model.slice_slug().as_ref()
+                ))?,
+                projected_report(format!(
+                    "added read model {} to project root",
+                    read_model.name().as_ref()
+                ))?,
+            ];
+            export_and_regenerate(EventDraft::slice_read_model_added(read_model))?;
             Ok(reports)
         }
         Effect::AddViewDefinitionFromSlice(view) => {
-            let slice_artifacts = read_formal_slice_artifact_paths_and_contents(view.slice_slug())?;
-            let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, _workflow_graph) =
-                find_formal_workflow_containing_slice_in(&formal_workflows, view.slice_slug())?;
-            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
-            let slice_plan = add_view_definition(
-                slice_artifacts.lean_path,
-                slice_artifacts.lean_contents,
-                slice_artifacts.quint_path,
-                slice_artifacts.quint_contents,
-                view.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_view_plan = add_project_view(
-                project_artifacts.lean_path,
-                project_artifacts.lean_contents,
-                project_artifacts.quint_path,
-                project_artifacts.quint_contents,
-                NewProjectView::from_view(workflow_layout.slug().clone(), view),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let mut reports = interpret_collect_reports(slice_plan)?;
-            reports.extend(interpret_collect_reports(project_view_plan)?);
-            interpret_effect(&Effect::ExportEvent(EventDraft::slice_view_added(view)))?;
+            find_formal_workflow_containing_slice_in(&formal_workflows, view.slice_slug())?;
+            let reports = vec![
+                projected_report(format!(
+                    "added view {} to slice {}",
+                    view.name().as_ref(),
+                    view.slice_slug().as_ref()
+                ))?,
+                projected_report(format!(
+                    "added view {} to project root",
+                    view.name().as_ref()
+                ))?,
+            ];
+            export_and_regenerate(EventDraft::slice_view_added(view))?;
             Ok(reports)
         }
         Effect::AddSliceFromWorkflow(slice) => {
@@ -825,70 +600,39 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::AddSliceScenarioFromSlice(scenario) => {
-            let slice_artifacts =
-                read_formal_slice_artifact_paths_and_contents(scenario.slice_slug())?;
-            let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, _workflow_graph) =
-                find_formal_workflow_containing_slice_in(&formal_workflows, scenario.slice_slug())?;
-            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
-            let slice_plan = add_slice_scenario(
-                slice_artifacts.lean_path,
-                slice_artifacts.lean_contents,
-                slice_artifacts.quint_path,
-                slice_artifacts.quint_contents,
-                scenario.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_scenario_plan = add_project_scenario(
-                project_artifacts.lean_path,
-                project_artifacts.lean_contents,
-                project_artifacts.quint_path,
-                project_artifacts.quint_contents,
-                NewProjectScenario::from_slice_scenario(workflow_layout.slug().clone(), scenario),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let mut reports = interpret_collect_reports(slice_plan)?;
-            reports.extend(interpret_collect_reports(project_scenario_plan)?);
-            interpret_effect(&Effect::ExportEvent(EventDraft::slice_scenario_added(
-                scenario,
-            )))?;
+            find_formal_workflow_containing_slice_in(&formal_workflows, scenario.slice_slug())?;
+            let reports = vec![
+                projected_report(format!(
+                    "added {} scenario {} to slice {}",
+                    scenario.kind().as_str(),
+                    scenario.name().as_ref(),
+                    scenario.slice_slug().as_ref()
+                ))?,
+                projected_report(format!(
+                    "added {} scenario {} to project root",
+                    scenario.kind().as_str(),
+                    scenario.name().as_ref()
+                ))?,
+            ];
+            export_and_regenerate(EventDraft::slice_scenario_added(scenario))?;
             Ok(reports)
         }
         Effect::AddTranslationDefinitionFromSlice(translation) => {
-            let slice_artifacts =
-                read_formal_slice_artifact_paths_and_contents(translation.slice_slug())?;
-            let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?.into_inner();
-            let (workflow_layout, _workflow_graph) = find_formal_workflow_containing_slice_in(
-                &formal_workflows,
-                translation.slice_slug(),
-            )?;
-            let project_artifacts = read_project_root_artifact_paths_and_contents(&project_name)?;
-            let slice_plan = add_translation_definition(
-                slice_artifacts.lean_path,
-                slice_artifacts.lean_contents,
-                slice_artifacts.quint_path,
-                slice_artifacts.quint_contents,
-                translation.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let project_translation_plan = add_project_translation(
-                project_artifacts.lean_path,
-                project_artifacts.lean_contents,
-                project_artifacts.quint_path,
-                project_artifacts.quint_contents,
-                NewProjectTranslation::from_translation(
-                    workflow_layout.slug().clone(),
-                    translation,
-                ),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let mut reports = interpret_collect_reports(slice_plan)?;
-            reports.extend(interpret_collect_reports(project_translation_plan)?);
-            interpret_effect(&Effect::ExportEvent(EventDraft::slice_translation_added(
-                translation,
-            )))?;
+            find_formal_workflow_containing_slice_in(&formal_workflows, translation.slice_slug())?;
+            let reports = vec![
+                projected_report(format!(
+                    "added translation {} to slice {}",
+                    translation.name().as_ref(),
+                    translation.slice_slug().as_ref()
+                ))?,
+                projected_report(format!(
+                    "added translation {} to project root",
+                    translation.name().as_ref()
+                ))?,
+            ];
+            export_and_regenerate(EventDraft::slice_translation_added(translation))?;
             Ok(reports)
         }
         Effect::AddWorkflowFromIndex(workflow) => {
@@ -906,190 +650,96 @@ fn interpret_effect(effect: &Effect) -> Result<Vec<String>, ShellError> {
             interpret_collect_reports(plan)
         }
         Effect::AddWorkflowCommandErrorFromWorkflow(effect) => {
-            let workflow_artifacts =
-                read_formal_workflow_artifact_paths_and_contents(effect.workflow_slug())?;
-            let plan = add_workflow_command_error(
-                workflow_artifacts.lean_path,
-                workflow_artifacts.lean_contents,
-                workflow_artifacts.quint_path,
-                workflow_artifacts.quint_contents,
-                effect.workflow_slug().clone(),
-                effect.error().clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let reports = interpret_collect_reports(plan)?;
-            interpret_effect(&Effect::ExportEvent(
-                EventDraft::workflow_command_error_added(effect.workflow_slug(), effect.error()),
+            read_formal_workflow_graph(effect.workflow_slug())?;
+            let reports = vec![projected_report(format!(
+                "added workflow command error {} to workflow {}",
+                effect.error().error_name().as_ref(),
+                effect.workflow_slug().as_ref()
+            ))?];
+            export_and_regenerate(EventDraft::workflow_command_error_added(
+                effect.workflow_slug(),
+                effect.error(),
             ))?;
             Ok(reports)
         }
         Effect::AddWorkflowOwnedDefinitionFromWorkflow(effect) => {
-            let workflow_artifacts =
-                read_formal_workflow_artifact_paths_and_contents(effect.workflow_slug())?;
-            let plan = add_workflow_owned_definition(
-                workflow_artifacts.lean_path,
-                workflow_artifacts.lean_contents,
-                workflow_artifacts.quint_path,
-                workflow_artifacts.quint_contents,
-                effect.workflow_slug().clone(),
-                effect.definition().clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let reports = interpret_collect_reports(plan)?;
-            interpret_effect(&Effect::ExportEvent(
-                EventDraft::workflow_owned_definition_added(
-                    effect.workflow_slug(),
-                    effect.definition(),
-                ),
+            read_formal_workflow_graph(effect.workflow_slug())?;
+            let reports = vec![projected_report(format!(
+                "added workflow owned definition {} {} to workflow {}",
+                effect.definition().definition_kind().as_ref(),
+                effect.definition().definition_name().as_ref(),
+                effect.workflow_slug().as_ref()
+            ))?];
+            export_and_regenerate(EventDraft::workflow_owned_definition_added(
+                effect.workflow_slug(),
+                effect.definition(),
             ))?;
             Ok(reports)
         }
         Effect::AddWorkflowOutcomeFromWorkflow(effect) => {
-            let workflow_artifacts =
-                read_formal_workflow_artifact_paths_and_contents(effect.workflow_slug())?;
-            let plan = add_workflow_outcome(
-                workflow_artifacts.lean_path,
-                workflow_artifacts.lean_contents,
-                workflow_artifacts.quint_path,
-                workflow_artifacts.quint_contents,
-                effect.workflow_slug().clone(),
-                effect.outcome().clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let reports = interpret_collect_reports(plan)?;
-            interpret_effect(&Effect::ExportEvent(EventDraft::workflow_outcome_added(
+            read_formal_workflow_graph(effect.workflow_slug())?;
+            let reports = vec![projected_report(format!(
+                "added workflow outcome {} to workflow {}",
+                effect.outcome().label().as_ref(),
+                effect.workflow_slug().as_ref()
+            ))?];
+            export_and_regenerate(EventDraft::workflow_outcome_added(
                 effect.workflow_slug(),
                 effect.outcome(),
-            )))?;
+            ))?;
             Ok(reports)
         }
         Effect::AddWorkflowTransitionEvidenceFromWorkflow(effect) => {
-            let workflow_artifacts =
-                read_formal_workflow_artifact_paths_and_contents(effect.workflow_slug())?;
-            let plan = add_workflow_transition_evidence(
-                workflow_artifacts.lean_path,
-                workflow_artifacts.lean_contents,
-                workflow_artifacts.quint_path,
-                workflow_artifacts.quint_contents,
-                effect.workflow_slug().clone(),
-                effect.evidence().clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let reports = interpret_collect_reports(plan)?;
-            interpret_effect(&Effect::ExportEvent(
-                EventDraft::workflow_transition_evidence_added(
-                    effect.workflow_slug(),
-                    effect.evidence(),
-                ),
+            read_formal_workflow_graph(effect.workflow_slug())?;
+            let reports = vec![projected_report(format!(
+                "added workflow transition evidence {} {} to workflow {}",
+                effect.evidence().kind().as_ref(),
+                effect.evidence().trigger().as_ref(),
+                effect.workflow_slug().as_ref()
+            ))?];
+            export_and_regenerate(EventDraft::workflow_transition_evidence_added(
+                effect.workflow_slug(),
+                effect.evidence(),
             ))?;
             Ok(reports)
         }
         Effect::RequireWorkflowEntryLifecycleCoverageFromWorkflow(workflow_slug) => {
-            let workflow_artifacts =
-                read_formal_workflow_artifact_paths_and_contents(workflow_slug)?;
-            let plan = require_workflow_entry_lifecycle_coverage(
-                workflow_artifacts.lean_path,
-                workflow_artifacts.lean_contents,
-                workflow_artifacts.quint_path,
-                workflow_artifacts.quint_contents,
-                workflow_slug.clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let reports = interpret_collect_reports(plan)?;
-            interpret_effect(&Effect::ExportEvent(
-                EventDraft::workflow_entry_lifecycle_coverage_required(workflow_slug),
+            read_formal_workflow_graph(workflow_slug)?;
+            let reports = vec![projected_report(format!(
+                "marked workflow {} as requiring entry lifecycle coverage",
+                workflow_slug.as_ref()
+            ))?];
+            export_and_regenerate(EventDraft::workflow_entry_lifecycle_coverage_required(
+                workflow_slug,
             ))?;
             Ok(reports)
         }
         Effect::AddWorkflowEntryLifecycleStateFromWorkflow(effect) => {
-            let workflow_artifacts =
-                read_formal_workflow_artifact_paths_and_contents(effect.workflow_slug())?;
-            let plan = add_workflow_entry_lifecycle_state(
-                workflow_artifacts.lean_path,
-                workflow_artifacts.lean_contents,
-                workflow_artifacts.quint_path,
-                workflow_artifacts.quint_contents,
-                effect.workflow_slug().clone(),
-                effect.coverage().clone(),
-            )
-            .map_err(|error| ShellError::message(error.to_string()))?;
-            let reports = interpret_collect_reports(plan)?;
-            interpret_effect(&Effect::ExportEvent(
-                EventDraft::workflow_entry_lifecycle_state_added(
-                    effect.workflow_slug(),
-                    effect.coverage(),
-                ),
+            read_formal_workflow_graph(effect.workflow_slug())?;
+            let reports = vec![projected_report(format!(
+                "added workflow entry lifecycle state {} to workflow {}",
+                effect.coverage().state().as_ref(),
+                effect.workflow_slug().as_ref()
+            ))?];
+            export_and_regenerate(EventDraft::workflow_entry_lifecycle_state_added(
+                effect.workflow_slug(),
+                effect.coverage(),
             ))?;
             Ok(reports)
         }
         Effect::CheckCurrentProject => {
             let project_name = read_project_manifest_name()?;
             let formal_workflows = read_synchronized_formal_workflow_graphs()?;
-            let project_scenarios = read_synchronized_project_scenarios(&project_name)?;
-            let project_scenario_definitions =
-                read_synchronized_project_scenario_definitions(&project_name)?;
-            let project_data_flows = read_synchronized_project_data_flows(&project_name)?;
-            let project_outcomes = read_synchronized_project_outcomes(&project_name)?;
-            let project_command_errors = read_synchronized_project_command_errors(&project_name)?;
-            let project_commands = read_synchronized_project_commands(&project_name)?;
-            let project_command_inputs = read_synchronized_project_command_inputs(&project_name)?;
-            let project_read_models = read_synchronized_project_read_models(&project_name)?;
-            let project_read_model_definitions =
-                read_synchronized_project_read_model_definitions(&project_name)?;
-            let project_read_model_fields =
-                read_synchronized_project_read_model_fields(&project_name)?;
-            let project_views = read_synchronized_project_views(&project_name)?;
-            let project_view_definitions =
-                read_synchronized_project_view_definitions(&project_name)?;
-            let project_view_controls = read_synchronized_project_view_controls(&project_name)?;
-            let project_board_elements = read_synchronized_project_board_elements(&project_name)?;
-            let project_board_connections =
-                read_synchronized_project_board_connections(&project_name)?;
-            let project_view_fields = read_synchronized_project_view_fields(&project_name)?;
-            let project_automations = read_synchronized_project_automations(&project_name)?;
-            let project_automation_definitions =
-                read_synchronized_project_automation_definitions(&project_name)?;
-            let project_translations = read_synchronized_project_translations(&project_name)?;
-            let project_translation_definitions =
-                read_synchronized_project_translation_definitions(&project_name)?;
-            let project_external_payloads =
-                read_synchronized_project_external_payloads(&project_name)?;
-            let project_external_payload_fields =
-                read_synchronized_project_external_payload_fields(&project_name)?;
-            let project_streams = read_synchronized_project_streams(&project_name)?;
-            let project_events = read_synchronized_project_events(&project_name)?;
-            let project_event_attributes =
-                read_synchronized_project_event_attributes(&project_name)?;
+            // Project-root inventories are sourced from the authoritative event
+            // log, never parsed back out of the generated Lean/Quint root
+            // artifact. The artifact is a write-only projection; `check_project`
+            // verifies the on-disk artifact matches these log-sourced rows.
+            let project_inventories =
+                projected_project_root_inventories().map_err(ShellError::message)?;
             interpret_collect_reports(check_project(
                 project_name,
                 formal_workflows,
-                ModeledProjectRootInventories::from_parts(ModeledProjectRootInventoryParts {
-                    scenarios: project_scenarios,
-                    scenario_definitions: project_scenario_definitions,
-                    data_flows: project_data_flows,
-                    outcomes: project_outcomes,
-                    command_errors: project_command_errors,
-                    commands: project_commands,
-                    command_inputs: project_command_inputs,
-                    read_models: project_read_models,
-                    read_model_definitions: project_read_model_definitions,
-                    read_model_fields: project_read_model_fields,
-                    views: project_views,
-                    view_definitions: project_view_definitions,
-                    view_controls: project_view_controls,
-                    board_elements: project_board_elements,
-                    board_connections: project_board_connections,
-                    view_fields: project_view_fields,
-                    automations: project_automations,
-                    automation_definitions: project_automation_definitions,
-                    translations: project_translations,
-                    translation_definitions: project_translation_definitions,
-                    external_payloads: project_external_payloads,
-                    external_payload_fields: project_external_payload_fields,
-                    streams: project_streams,
-                    events: project_events,
-                    event_attributes: project_event_attributes,
-                }),
+                project_inventories,
             ))
         }
         Effect::ConnectWorkflowFromWorkflow(connection) => {
@@ -1423,639 +1073,15 @@ fn read_project_manifest_name() -> Result<ProjectName, ShellError> {
         })
 }
 
+/// The workflow graphs that command decisions consume, sourced from the
+/// authoritative event log (`ProjectedModel`) rather than parsed from the
+/// generated Lean/Quint artifacts. The event log is the single source of truth;
+/// the Lean/Quint artifacts are write-only projections of it (regenerated by
+/// `project_exported_events`) and are never parsed back to drive a decision.
 fn read_synchronized_formal_workflow_graphs() -> Result<FormalWorkflowGraphs, ShellError> {
-    let lean_graphs = read_formal_workflow_graphs(
-        Path::new("model/lean"),
-        ".lean",
-        "def workflowName :=",
-        parse_lean_workflow_graph,
-    )?;
-    let quint_graphs = read_formal_workflow_graphs(
-        Path::new("model/quint"),
-        ".qnt",
-        "val workflowName =",
-        parse_quint_workflow_graph,
-    )?;
-
-    let quint_by_slug = formal_graphs_by_slug(quint_graphs, "Quint")?;
-    let mut matched_slugs = BTreeSet::new();
-    let synchronized_graphs = lean_graphs
-        .into_iter()
-        .map(|lean_graph| {
-            let quint_graph = quint_by_slug
-                .get(lean_graph.slug().as_ref())
-                .ok_or_else(|| {
-                    ShellError::message(format!(
-                        "Quint workflow artifact is missing for workflow {}",
-                        lean_graph.slug().as_ref()
-                    ))
-                })?;
-            if &lean_graph == quint_graph {
-                Ok(lean_graph)
-            } else {
-                Err(ShellError::message(format!(
-                    "Lean and Quint workflow artifacts disagree for workflow {}",
-                    lean_graph.slug().as_ref()
-                )))
-            }
-        })
-        .inspect(|result| {
-            if let Ok(graph) = result {
-                matched_slugs.insert(graph.slug().as_ref().to_owned());
-            }
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    if let Some(unmatched_slug) = quint_by_slug
-        .keys()
-        .find(|slug| !matched_slugs.contains(*slug))
-    {
-        Err(ShellError::message(format!(
-            "Lean workflow artifact is missing for workflow {unmatched_slug}"
-        )))
-    } else {
-        Ok(FormalWorkflowGraphs::from_graphs(synchronized_graphs))
-    }
-}
-
-fn read_synchronized_project_streams(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectStream>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_streams(&artifacts.lean_contents),
-        parse_quint_project_streams(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_streams), Ok(quint_streams)) if lean_streams == quint_streams => Ok(lean_streams),
-        (Ok(_lean_streams), Ok(_quint_streams)) => Err(ShellError::message(
-            "Lean and Quint project root stream inventories disagree",
-        )),
-        (_lean_streams, _quint_streams) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_commands(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectCommand>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_commands(&artifacts.lean_contents),
-        parse_quint_project_commands(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_commands), Ok(quint_commands)) if lean_commands == quint_commands => {
-            Ok(lean_commands)
-        }
-        (Ok(_lean_commands), Ok(_quint_commands)) => Err(ShellError::message(
-            "Lean and Quint project root command inventories disagree",
-        )),
-        (_lean_commands, _quint_commands) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_command_inputs(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectCommandInput>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_command_inputs(&artifacts.lean_contents),
-        parse_quint_project_command_inputs(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_command_inputs), Ok(quint_command_inputs))
-            if lean_command_inputs == quint_command_inputs =>
-        {
-            Ok(lean_command_inputs)
-        }
-        (Ok(_lean_command_inputs), Ok(_quint_command_inputs)) => Err(ShellError::message(
-            "Lean and Quint project root command input inventories disagree",
-        )),
-        (_lean_command_inputs, _quint_command_inputs) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_command_errors(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectCommandError>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_command_errors(&artifacts.lean_contents),
-        parse_quint_project_command_errors(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_command_errors), Ok(quint_command_errors))
-            if lean_command_errors == quint_command_errors =>
-        {
-            Ok(lean_command_errors)
-        }
-        (Ok(_lean_command_errors), Ok(_quint_command_errors)) => Err(ShellError::message(
-            "Lean and Quint project root command error inventories disagree",
-        )),
-        (_lean_command_errors, _quint_command_errors) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_scenarios(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectScenario>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_scenarios(&artifacts.lean_contents),
-        parse_quint_project_scenarios(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_scenarios), Ok(quint_scenarios)) if lean_scenarios == quint_scenarios => {
-            Ok(lean_scenarios)
-        }
-        (Ok(_lean_scenarios), Ok(_quint_scenarios)) => Err(ShellError::message(
-            "Lean and Quint project root scenario inventories disagree",
-        )),
-        (_lean_scenarios, _quint_scenarios) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_scenario_definitions(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectScenarioDefinition>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_scenario_definitions(&artifacts.lean_contents),
-        parse_quint_project_scenario_definitions(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_scenarios), Ok(quint_scenarios)) if lean_scenarios == quint_scenarios => {
-            Ok(lean_scenarios)
-        }
-        (Ok(_lean_scenarios), Ok(_quint_scenarios)) => Err(ShellError::message(
-            "Lean and Quint project root scenario definition inventories disagree",
-        )),
-        (_lean_scenarios, _quint_scenarios) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_data_flows(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectDataFlow>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_data_flows(&artifacts.lean_contents),
-        parse_quint_project_data_flows(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_data_flows), Ok(quint_data_flows)) if lean_data_flows == quint_data_flows => {
-            Ok(lean_data_flows)
-        }
-        (Ok(_lean_data_flows), Ok(_quint_data_flows)) => Err(ShellError::message(
-            "Lean and Quint project root data-flow inventories disagree",
-        )),
-        (_lean_data_flows, _quint_data_flows) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_outcomes(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectOutcome>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_outcomes(&artifacts.lean_contents),
-        parse_quint_project_outcomes(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_outcomes), Ok(quint_outcomes)) if lean_outcomes == quint_outcomes => {
-            Ok(lean_outcomes)
-        }
-        (Ok(_lean_outcomes), Ok(_quint_outcomes)) => Err(ShellError::message(
-            "Lean and Quint project root outcome inventories disagree",
-        )),
-        (_lean_outcomes, _quint_outcomes) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_read_models(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectReadModel>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_read_models(&artifacts.lean_contents),
-        parse_quint_project_read_models(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_read_models), Ok(quint_read_models)) if lean_read_models == quint_read_models => {
-            Ok(lean_read_models)
-        }
-        (Ok(_lean_read_models), Ok(_quint_read_models)) => Err(ShellError::message(
-            "Lean and Quint project root read model inventories disagree",
-        )),
-        (_lean_read_models, _quint_read_models) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_read_model_definitions(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectReadModelDefinition>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_read_model_definitions(&artifacts.lean_contents),
-        parse_quint_project_read_model_definitions(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_read_model_definitions), Ok(quint_read_model_definitions))
-            if lean_read_model_definitions == quint_read_model_definitions =>
-        {
-            Ok(lean_read_model_definitions)
-        }
-        (Ok(_lean_read_model_definitions), Ok(_quint_read_model_definitions)) => {
-            Err(ShellError::message(
-                "Lean and Quint project root read model definition inventories disagree",
-            ))
-        }
-        (_lean_read_model_definitions, _quint_read_model_definitions) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_read_model_fields(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectReadModelField>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_read_model_fields(&artifacts.lean_contents),
-        parse_quint_project_read_model_fields(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_read_model_fields), Ok(quint_read_model_fields))
-            if lean_read_model_fields == quint_read_model_fields =>
-        {
-            Ok(lean_read_model_fields)
-        }
-        (Ok(_lean_read_model_fields), Ok(_quint_read_model_fields)) => Err(ShellError::message(
-            "Lean and Quint project root read model field inventories disagree",
-        )),
-        (_lean_read_model_fields, _quint_read_model_fields) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_views(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectView>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_views(&artifacts.lean_contents),
-        parse_quint_project_views(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_views), Ok(quint_views)) if lean_views == quint_views => Ok(lean_views),
-        (Ok(_lean_views), Ok(_quint_views)) => Err(ShellError::message(
-            "Lean and Quint project root view inventories disagree",
-        )),
-        (_lean_views, _quint_views) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_view_definitions(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectViewDefinition>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_view_definitions(&artifacts.lean_contents),
-        parse_quint_project_view_definitions(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_view_definitions), Ok(quint_view_definitions))
-            if lean_view_definitions == quint_view_definitions =>
-        {
-            Ok(lean_view_definitions)
-        }
-        (Ok(_lean_view_definitions), Ok(_quint_view_definitions)) => Err(ShellError::message(
-            "Lean and Quint project root view definition inventories disagree",
-        )),
-        (_lean_view_definitions, _quint_view_definitions) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_view_controls(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectViewControl>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_view_controls(&artifacts.lean_contents),
-        parse_quint_project_view_controls(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_view_controls), Ok(quint_view_controls))
-            if lean_view_controls == quint_view_controls =>
-        {
-            Ok(lean_view_controls)
-        }
-        (Ok(_lean_view_controls), Ok(_quint_view_controls)) => Err(ShellError::message(
-            "Lean and Quint project root view control inventories disagree",
-        )),
-        (_lean_view_controls, _quint_view_controls) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_board_elements(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectBoardElement>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_board_elements(&artifacts.lean_contents),
-        parse_quint_project_board_elements(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_board_elements), Ok(quint_board_elements))
-            if lean_board_elements == quint_board_elements =>
-        {
-            Ok(lean_board_elements)
-        }
-        (Ok(_lean_board_elements), Ok(_quint_board_elements)) => Err(ShellError::message(
-            "Lean and Quint project root board element inventories disagree",
-        )),
-        (_lean_board_elements, _quint_board_elements) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_board_connections(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectBoardConnection>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_board_connections(&artifacts.lean_contents),
-        parse_quint_project_board_connections(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_board_connections), Ok(quint_board_connections))
-            if lean_board_connections == quint_board_connections =>
-        {
-            Ok(lean_board_connections)
-        }
-        (Ok(_lean_board_connections), Ok(_quint_board_connections)) => Err(ShellError::message(
-            "Lean and Quint project root board connection inventories disagree",
-        )),
-        (_lean_board_connections, _quint_board_connections) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_view_fields(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectViewField>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_view_fields(&artifacts.lean_contents),
-        parse_quint_project_view_fields(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_view_fields), Ok(quint_view_fields)) if lean_view_fields == quint_view_fields => {
-            Ok(lean_view_fields)
-        }
-        (Ok(_lean_view_fields), Ok(_quint_view_fields)) => Err(ShellError::message(
-            "Lean and Quint project root view field inventories disagree",
-        )),
-        (_lean_view_fields, _quint_view_fields) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_automations(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectAutomation>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_automations(&artifacts.lean_contents),
-        parse_quint_project_automations(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_automations), Ok(quint_automations)) if lean_automations == quint_automations => {
-            Ok(lean_automations)
-        }
-        (Ok(_lean_automations), Ok(_quint_automations)) => Err(ShellError::message(
-            "Lean and Quint project root automation inventories disagree",
-        )),
-        (_lean_automations, _quint_automations) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_automation_definitions(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectAutomationDefinition>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_automation_definitions(&artifacts.lean_contents),
-        parse_quint_project_automation_definitions(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_definitions), Ok(quint_definitions)) if lean_definitions == quint_definitions => {
-            Ok(lean_definitions)
-        }
-        (Ok(_lean_definitions), Ok(_quint_definitions)) => Err(ShellError::message(
-            "Lean and Quint project root automation definition inventories disagree",
-        )),
-        (_lean_definitions, _quint_definitions) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_translations(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectTranslation>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_translations(&artifacts.lean_contents),
-        parse_quint_project_translations(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_translations), Ok(quint_translations))
-            if lean_translations == quint_translations =>
-        {
-            Ok(lean_translations)
-        }
-        (Ok(_lean_translations), Ok(_quint_translations)) => Err(ShellError::message(
-            "Lean and Quint project root translation inventories disagree",
-        )),
-        (_lean_translations, _quint_translations) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_translation_definitions(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectTranslationDefinition>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_translation_definitions(&artifacts.lean_contents),
-        parse_quint_project_translation_definitions(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_definitions), Ok(quint_definitions)) if lean_definitions == quint_definitions => {
-            Ok(lean_definitions)
-        }
-        (Ok(_lean_definitions), Ok(_quint_definitions)) => Err(ShellError::message(
-            "Lean and Quint project root translation definition inventories disagree",
-        )),
-        (_lean_definitions, _quint_definitions) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_external_payloads(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectExternalPayload>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_external_payloads(&artifacts.lean_contents),
-        parse_quint_project_external_payloads(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_external_payloads), Ok(quint_external_payloads))
-            if lean_external_payloads == quint_external_payloads =>
-        {
-            Ok(lean_external_payloads)
-        }
-        (Ok(_lean_external_payloads), Ok(_quint_external_payloads)) => Err(ShellError::message(
-            "Lean and Quint project root external payload inventories disagree",
-        )),
-        (_lean_external_payloads, _quint_external_payloads) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_external_payload_fields(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectExternalPayloadField>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_external_payload_fields(&artifacts.lean_contents),
-        parse_quint_project_external_payload_fields(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_fields), Ok(quint_fields)) if lean_fields == quint_fields => Ok(lean_fields),
-        (Ok(_lean_fields), Ok(_quint_fields)) => Err(ShellError::message(
-            "Lean and Quint project root external payload field inventories disagree",
-        )),
-        (_lean_fields, _quint_fields) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_events(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectEvent>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_events(&artifacts.lean_contents),
-        parse_quint_project_events(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_events), Ok(quint_events)) if lean_events == quint_events => Ok(lean_events),
-        (Ok(_lean_events), Ok(_quint_events)) => Err(ShellError::message(
-            "Lean and Quint project root event inventories disagree",
-        )),
-        (_lean_events, _quint_events) => Ok(Vec::new()),
-    }
-}
-
-fn read_synchronized_project_event_attributes(
-    project_name: &ProjectName,
-) -> Result<Vec<ProjectEventAttribute>, ShellError> {
-    let Ok(artifacts) = read_project_root_artifact_paths_and_contents(project_name) else {
-        return Ok(Vec::new());
-    };
-    match (
-        parse_lean_project_event_attributes(&artifacts.lean_contents),
-        parse_quint_project_event_attributes(&artifacts.quint_contents),
-    ) {
-        (Ok(lean_event_attributes), Ok(quint_event_attributes))
-            if lean_event_attributes == quint_event_attributes =>
-        {
-            Ok(lean_event_attributes)
-        }
-        (Ok(_lean_event_attributes), Ok(_quint_event_attributes)) => Err(ShellError::message(
-            "Lean and Quint project root event attribute inventories disagree",
-        )),
-        (_lean_event_attributes, _quint_event_attributes) => Ok(Vec::new()),
-    }
-}
-
-fn read_formal_workflow_graphs(
-    directory: &Path,
-    extension: &str,
-    workflow_marker: &str,
-    parser: fn(&FileContents) -> Result<FormalWorkflowGraph, FormalGraphError>,
-) -> Result<Vec<FormalWorkflowGraph>, ShellError> {
-    let mut paths = fs::read_dir(directory)
-        .map_err(ShellError::io)?
-        .map(|entry| entry.map(|directory_entry| directory_entry.path()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(ShellError::io)?;
-    paths.sort();
-
-    paths
-        .into_iter()
-        .filter(|path| {
-            path.extension().and_then(|value| value.to_str()) == extension.strip_prefix('.')
-        })
-        .map(|path| {
-            fs::read_to_string(&path)
-                .map_err(ShellError::io)
-                .and_then(|contents| {
-                    let file_contents = FileContents::try_new(contents)
-                        .map_err(|error| ShellError::message(error.to_string()))?;
-                    Ok((path, file_contents))
-                })
-        })
-        .filter_map(|result| match result {
-            Ok((path, contents)) if contents.as_ref().contains(workflow_marker) => {
-                Some(Ok((path, contents)))
-            }
-            Ok((_path, _contents)) => None,
-            Err(error) => Some(Err(error)),
-        })
-        .map(|result| {
-            let (path, contents) = result?;
-            parser(&contents).map_err(|error| {
-                ShellError::message(format!(
-                    "failed to parse formal workflow artifact {}: {error}",
-                    path.display()
-                ))
-            })
-        })
-        .collect()
-}
-
-fn formal_graphs_by_slug(
-    graphs: Vec<FormalWorkflowGraph>,
-    artifact_family: &str,
-) -> Result<BTreeMap<String, FormalWorkflowGraph>, ShellError> {
-    graphs
-        .into_iter()
-        .try_fold(BTreeMap::new(), |mut indexed, graph| {
-            let slug = graph.slug().as_ref().to_owned();
-            if indexed.insert(slug.clone(), graph).is_none() {
-                Ok(indexed)
-            } else {
-                Err(ShellError::message(format!(
-                    "{artifact_family} workflow artifact slug {slug} is duplicated"
-                )))
-            }
-        })
+    projected_formal_workflow_graphs()
+        .map(FormalWorkflowGraphs::from_graphs)
+        .map_err(ShellError::message)
 }
 
 fn formal_workflow_layouts(graphs: FormalWorkflowGraphs) -> Vec<ModeledWorkflowLayout> {
@@ -2156,99 +1182,6 @@ fn read_formal_slice_artifacts(slug: &SliceSlug) -> Result<FileContents, ShellEr
                 slug.as_ref()
             )))
         })
-}
-
-struct FormalSliceArtifactDocuments {
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-}
-
-struct FormalWorkflowArtifactDocuments {
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-}
-
-struct FormalProjectRootArtifactDocuments {
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-}
-
-fn read_project_root_artifact_paths_and_contents(
-    project_name: &ProjectName,
-) -> Result<FormalProjectRootArtifactDocuments, ShellError> {
-    let module_name = module_name_from_raw(project_name.as_ref());
-    let lean_path = format!("model/lean/{module_name}.lean");
-    let quint_path = format!("model/quint/{module_name}.qnt");
-    Ok(FormalProjectRootArtifactDocuments {
-        lean_path: project_path(lean_path.clone())?,
-        lean_contents: read_file_contents(&lean_path)?,
-        quint_path: project_path(quint_path.clone())?,
-        quint_contents: read_file_contents(&quint_path)?,
-    })
-}
-
-fn read_formal_workflow_artifact_paths_and_contents(
-    slug: &WorkflowSlug,
-) -> Result<FormalWorkflowArtifactDocuments, ShellError> {
-    let graph = read_formal_workflow_graph(slug)?;
-    let module_name = module_name_from_raw(graph.name().as_ref());
-    let lean_path = format!("model/lean/{module_name}.lean");
-    let quint_path = format!("model/quint/{module_name}.qnt");
-    Ok(FormalWorkflowArtifactDocuments {
-        lean_path: project_path(lean_path.clone())?,
-        lean_contents: read_file_contents(&lean_path)?,
-        quint_path: project_path(quint_path.clone())?,
-        quint_contents: read_file_contents(&quint_path)?,
-    })
-}
-
-fn read_formal_slice_artifact_paths_and_contents(
-    slug: &SliceSlug,
-) -> Result<FormalSliceArtifactDocuments, ShellError> {
-    let module_name = find_formal_slice_module_name(slug)?;
-    let lean_path = format!("model/lean/slices/{module_name}.lean");
-    let quint_path = format!("model/quint/slices/{module_name}.qnt");
-    Ok(FormalSliceArtifactDocuments {
-        lean_path: project_path(lean_path.clone())?,
-        lean_contents: read_file_contents(&lean_path)?,
-        quint_path: project_path(quint_path.clone())?,
-        quint_contents: read_file_contents(&quint_path)?,
-    })
-}
-
-fn find_formal_slice_module_name(slug: &SliceSlug) -> Result<String, ShellError> {
-    read_synchronized_formal_workflow_graphs()?
-        .into_inner()
-        .into_iter()
-        .find_map(|graph| {
-            graph
-                .slice_details()
-                .as_slice()
-                .iter()
-                .find(|slice| slice.slug() == slug)
-                .map(|slice| module_name_from_raw(slice.name().as_ref()))
-        })
-        .ok_or_else(|| {
-            ShellError::message(format!(
-                "slice {} is not referenced by any modeled workflow",
-                slug.as_ref()
-            ))
-        })
-}
-
-fn project_path(path: String) -> Result<ProjectPath, ShellError> {
-    ProjectPath::try_new(path).map_err(ShellError::project_path)
-}
-
-fn read_file_contents(path: &str) -> Result<FileContents, ShellError> {
-    FileContents::try_new(fs::read_to_string(Path::new(path)).map_err(ShellError::io)?)
-        .map_err(|error| ShellError::message(error.to_string()))
 }
 
 fn formal_artifact_bundle(paths: &[String]) -> Result<FileContents, ShellError> {
@@ -2753,6 +1686,12 @@ fn lean_module_name(value: impl Into<String>) -> LeanModuleName {
 }
 
 fn write_file(path: &str, contents: &str) -> Result<(), ShellError> {
+    // Idempotent: skip the write when the file already holds the intended
+    // contents. This keeps regenerating artifacts from the event log on every
+    // command (the self-healing projection) from churning unchanged files.
+    if fs::read_to_string(Path::new(path)).is_ok_and(|existing| existing == contents) {
+        return Ok(());
+    }
     if let Some(parent) = Path::new(path).parent() {
         fs::create_dir_all(parent).map_err(ShellError::io)?;
     }

@@ -142,6 +142,19 @@ pub(crate) fn project_root_effects(
     ]
 }
 
+/// The Lean/Quint project-root shells (lists still `:= []`), for the complete
+/// emit path to populate from the projected inventories.
+pub(crate) fn emit_project_root_shells(
+    project_name: &ProjectName,
+    workflow_slugs: &[WorkflowSlug],
+    slice_memberships: &[ProjectSliceMembership],
+) -> (FileContents, FileContents) {
+    (
+        emit_lean_project_root(project_name, workflow_slugs, slice_memberships),
+        emit_quint_project_root(project_name, workflow_slugs, slice_memberships),
+    )
+}
+
 fn emit_lean_project_root(
     project_name: &ProjectName,
     workflow_slugs: &[WorkflowSlug],
@@ -334,6 +347,14 @@ fn formal_model_slice_modules(
         .iter()
         .map(ProjectSliceMembership::formal_model_slice_module)
         .collect()
+}
+
+pub(crate) fn shell_model_digest(
+    project_name: &ProjectName,
+    workflow_slugs: &[WorkflowSlug],
+    slice_memberships: &[ProjectSliceMembership],
+) -> String {
+    model_digest(project_name, workflow_slugs, slice_memberships)
 }
 
 fn model_digest(
