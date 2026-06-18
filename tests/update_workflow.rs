@@ -218,7 +218,8 @@ mod tests {
     }
 
     #[test]
-    fn update_workflow_name_rejects_missing_formal_source_modules() -> Result<(), Box<dyn Error>> {
+    fn update_workflow_name_self_heals_missing_formal_source_modules() -> Result<(), Box<dyn Error>>
+    {
         let temp_dir = TempDir::new()?;
 
         Command::cargo_bin("emc")?
@@ -242,12 +243,10 @@ mod tests {
             .assert()
             .success();
 
-        Command::cargo_bin("emc")?
-            .arg("check")
-            .current_dir(temp_dir.path())
-            .assert()
-            .success();
-
+        // The workflow modules are write-only projections of the event log.
+        // Deleting them does not unmodel the workflow: the next command
+        // regenerates them from the log, so the rename still succeeds against
+        // the authoritative model rather than failing on the missing artifacts.
         remove_file(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
         remove_file(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
 
@@ -262,10 +261,16 @@ mod tests {
             ])
             .current_dir(temp_dir.path())
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "workflow open-ticket is not modeled",
+            .success()
+            .stdout(predicate::str::contains(
+                "updated workflow Open repair ticket",
             ));
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenRepairTicket.lean"))?;
+        assert!(
+            lean.contains("def workflowName := \"Open repair ticket\""),
+            "the deleted workflow module must be regenerated from the log under the new name"
+        );
 
         Ok(())
     }

@@ -236,28 +236,13 @@ pub struct ModelDigest(String);
 )]
 pub struct WorkflowTransitionEndpoint(String);
 
+// The workflow-step relationship vocabulary realised by the event-log
+// projection: `Entry` for a workflow's first slice and `Main` for subsequent
+// slices.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum WorkflowStepRelationshipName {
     Entry,
     Main,
-    Branch,
-    Alternate,
-    AsyncLifecycle,
-    Supporting,
-}
-
-impl WorkflowStepRelationshipName {
-    pub fn try_new(value: String) -> Result<Self, WorkflowStepRelationshipNameError> {
-        match value.trim() {
-            "entry" => Ok(Self::Entry),
-            "main" => Ok(Self::Main),
-            "branch" => Ok(Self::Branch),
-            "alternate" => Ok(Self::Alternate),
-            "async_lifecycle" => Ok(Self::AsyncLifecycle),
-            "supporting" => Ok(Self::Supporting),
-            _ => Err(WorkflowStepRelationshipNameError::new(value)),
-        }
-    }
 }
 
 impl AsRef<str> for WorkflowStepRelationshipName {
@@ -265,10 +250,6 @@ impl AsRef<str> for WorkflowStepRelationshipName {
         match self {
             Self::Entry => "entry",
             Self::Main => "main",
-            Self::Branch => "branch",
-            Self::Alternate => "alternate",
-            Self::AsyncLifecycle => "async_lifecycle",
-            Self::Supporting => "supporting",
         }
     }
 }
@@ -278,27 +259,6 @@ impl Display for WorkflowStepRelationshipName {
         formatter.write_str(self.as_ref())
     }
 }
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct WorkflowStepRelationshipNameError {
-    message: String,
-}
-
-impl WorkflowStepRelationshipNameError {
-    fn new(value: String) -> Self {
-        Self {
-            message: format!("expected a modeled workflow step relationship, got '{value}'"),
-        }
-    }
-}
-
-impl Display for WorkflowStepRelationshipNameError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
-        formatter.write_str(&self.message)
-    }
-}
-
-impl Error for WorkflowStepRelationshipNameError {}
 
 #[nutype(
     sanitize(trim),

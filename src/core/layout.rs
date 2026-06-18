@@ -48,7 +48,7 @@ use crate::core::formal_project_facts::{
     ProjectView, ProjectViewControl, ProjectViewDefinition, ProjectViewField,
 };
 use crate::core::formal_slice_facts::ScenarioKind;
-use crate::core::project::ProjectName;
+use crate::core::project::{ProjectName, ProjectSliceMembership, shell_model_digest};
 use crate::core::types::{
     BitEncodingSemantics, CommandErrorName, CommandErrorRecoveryKind,
     CommandInputSourceDescription, CommandName, ContractKindName, CoveredDefinitionName,
@@ -394,6 +394,510 @@ struct ProjectRootInventories<'a> {
     streams: &'a [ProjectStream],
     events: &'a [ProjectEvent],
     event_attributes: &'a [ProjectEventAttribute],
+}
+
+fn file_contents(value: impl Into<String>) -> FileContents {
+    FileContents::try_new(value.into())
+        .unwrap_or_else(|error| unreachable!("EMC projected file contents must be valid: {error}"))
+}
+
+fn replace_lean_list(text: &mut String, prefix: &str, body: &str) {
+    *text = text.replace(&format!("{prefix} := []"), &format!("{prefix} := {body}"));
+}
+
+fn replace_lean_count(text: &mut String, theorem: &str, var: &str, count: usize) {
+    *text = text.replace(
+        &format!("theorem {theorem} : {var}.length = 0 := rfl"),
+        &format!("theorem {theorem} : {var}.length = {count} := rfl"),
+    );
+}
+
+fn replace_quint_list(text: &mut String, prefix: &str, body: &str) {
+    *text = text.replace(&format!("{prefix} = []"), &format!("{prefix} = {body}"));
+}
+
+fn replace_quint_count(text: &mut String, declared: &str, var: &str, count: usize) {
+    *text = text.replace(
+        &format!("val {declared} = {var}.length() == 0"),
+        &format!("val {declared} = {var}.length() == {count}"),
+    );
+}
+
+/// Populate the data-list placeholders (`:= []`), `.length = 0` count theorems,
+/// and the `modelDigest` of a freshly-emitted project-root shell directly from
+/// the projected inventories. This is the pure complete-emit path: the root is a
+/// function of the event-log projection, rendered in one shot, so the
+/// regeneration never reads or parses the generated artifact back. Byte parity
+/// with the historical `add_project_*` replay is exercised by the project-root
+/// inventory assertions across the suite.
+pub(crate) fn populate_project_root_modules(
+    lean_shell: FileContents,
+    quint_shell: FileContents,
+    project_name: &ProjectName,
+    workflow_slugs: &[WorkflowSlug],
+    slice_memberships: &[ProjectSliceMembership],
+    formal_workflows: &[FormalWorkflowGraph],
+    inventories: &ModeledProjectRootInventories,
+) -> (FileContents, FileContents) {
+    let modeled_workflows = formal_workflows
+        .iter()
+        .map(modeled_workflow_layout)
+        .collect::<Vec<_>>();
+    let model_scenarios = formal_model_scenarios(&inventories.scenarios);
+    let model_scenario_definitions =
+        formal_model_scenario_definitions(&inventories.scenario_definitions);
+    let model_data_flows = formal_model_data_flows(&inventories.data_flows);
+    let model_outcomes = formal_model_outcomes(&inventories.outcomes);
+    let model_command_errors = formal_model_command_errors(&inventories.command_errors);
+    let model_commands = formal_model_commands(&inventories.commands);
+    let model_command_inputs = formal_model_command_inputs(&inventories.command_inputs);
+
+    let mut lean = lean_shell.as_ref().to_owned();
+    replace_lean_list(
+        &mut lean,
+        "def modelScenarios : List ModelScenario",
+        &render_lean_model_scenario_list(&model_scenarios),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelScenarioDefinitions : List ModelScenarioDefinition",
+        &render_lean_model_scenario_definition_list(&model_scenario_definitions),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelDataFlows : List ModelDataFlow",
+        &render_lean_model_data_flow_list(&model_data_flows),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelOutcomes : List ModelOutcome",
+        &render_lean_model_outcome_list(&model_outcomes),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelCommandErrors : List ModelCommandError",
+        &render_lean_model_command_error_list(&model_command_errors),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelCommands : List ModelCommand",
+        &render_lean_model_command_list(&model_commands),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelCommandInputs : List ModelCommandInput",
+        &render_lean_model_command_input_list(&model_command_inputs),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelReadModels : List ModelReadModel",
+        &lean_model_read_model_list(&inventories.read_models),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelReadModelDefinitions : List ModelReadModelDefinition",
+        &lean_model_read_model_definition_list(&inventories.read_model_definitions),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelReadModelFields : List ModelReadModelField",
+        &lean_model_read_model_field_list(&inventories.read_model_fields),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelViews : List ModelView",
+        &lean_model_view_list(&inventories.views),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelViewDefinitions : List ModelViewDefinition",
+        &lean_model_view_definition_list(&inventories.view_definitions),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelViewControls : List ModelViewControl",
+        &lean_model_view_control_list(&inventories.view_controls),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelBoardElements : List ModelBoardElement",
+        &lean_model_board_element_list(&inventories.board_elements),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelBoardConnections : List ModelBoardConnection",
+        &lean_model_board_connection_list(&inventories.board_connections),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelViewFields : List ModelViewField",
+        &lean_model_view_field_list(&inventories.view_fields),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelAutomations : List ModelAutomation",
+        &lean_model_automation_list(&inventories.automations),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelAutomationDefinitions : List ModelAutomationDefinition",
+        &lean_model_automation_definition_list(&inventories.automation_definitions),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelTranslations : List ModelTranslation",
+        &lean_model_translation_list(&inventories.translations),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelTranslationDefinitions : List ModelTranslationDefinition",
+        &lean_model_translation_definition_list(&inventories.translation_definitions),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelExternalPayloads : List ModelExternalPayload",
+        &lean_model_external_payload_list(&inventories.external_payloads),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelExternalPayloadFields : List ModelExternalPayloadField",
+        &lean_model_external_payload_field_list(&inventories.external_payload_fields),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelStreams : List ModelStream",
+        &lean_model_stream_list(&inventories.streams),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelEvents : List ModelEvent",
+        &lean_model_event_list(&inventories.events),
+    );
+    replace_lean_list(
+        &mut lean,
+        "def modelEventAttributes : List ModelEventAttribute",
+        &lean_model_event_attribute_list(&inventories.event_attributes),
+    );
+
+    for (theorem, var, count) in lean_root_count_theorems(inventories) {
+        replace_lean_count(&mut lean, theorem, var, count);
+    }
+
+    let mut quint = quint_shell.as_ref().to_owned();
+    replace_quint_list(
+        &mut quint,
+        "val modelScenarios: List[ModelScenario]",
+        &render_quint_model_scenario_list(&model_scenarios),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelScenarioDefinitions: List[ModelScenarioDefinition]",
+        &render_quint_model_scenario_definition_list(&model_scenario_definitions),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelDataFlows: List[ModelDataFlow]",
+        &render_quint_model_data_flow_list(&model_data_flows),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelOutcomes: List[ModelOutcome]",
+        &render_quint_model_outcome_list(&model_outcomes),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelCommandErrors: List[ModelCommandError]",
+        &render_quint_model_command_error_list(&model_command_errors),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelCommands: List[ModelCommand]",
+        &render_quint_model_command_list(&model_commands),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelCommandInputs: List[ModelCommandInput]",
+        &render_quint_model_command_input_list(&model_command_inputs),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelReadModels: List[ModelReadModel]",
+        &quint_model_read_model_list(&inventories.read_models),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelReadModelDefinitions: List[ModelReadModelDefinition]",
+        &quint_model_read_model_definition_list(&inventories.read_model_definitions),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelReadModelFields: List[ModelReadModelField]",
+        &quint_model_read_model_field_list(&inventories.read_model_fields),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelViews: List[ModelView]",
+        &quint_model_view_list(&inventories.views),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelViewDefinitions: List[ModelViewDefinition]",
+        &quint_model_view_definition_list(&inventories.view_definitions),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelViewControls: List[ModelViewControl]",
+        &quint_model_view_control_list(&inventories.view_controls),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelBoardElements: List[ModelBoardElement]",
+        &quint_model_board_element_list(&inventories.board_elements),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelBoardConnections: List[ModelBoardConnection]",
+        &quint_model_board_connection_list(&inventories.board_connections),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelViewFields: List[ModelViewField]",
+        &quint_model_view_field_list(&inventories.view_fields),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelAutomations: List[ModelAutomation]",
+        &quint_model_automation_list(&inventories.automations),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelAutomationDefinitions: List[ModelAutomationDefinition]",
+        &quint_model_automation_definition_list(&inventories.automation_definitions),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelTranslations: List[ModelTranslation]",
+        &quint_model_translation_list(&inventories.translations),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelTranslationDefinitions: List[ModelTranslationDefinition]",
+        &quint_model_translation_definition_list(&inventories.translation_definitions),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelExternalPayloads: List[ModelExternalPayload]",
+        &quint_model_external_payload_list(&inventories.external_payloads),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelExternalPayloadFields: List[ModelExternalPayloadField]",
+        &quint_model_external_payload_field_list(&inventories.external_payload_fields),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelStreams: List[ModelStream]",
+        &quint_model_stream_list(&inventories.streams),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelEvents: List[ModelEvent]",
+        &quint_model_event_list(&inventories.events),
+    );
+    replace_quint_list(
+        &mut quint,
+        "val modelEventAttributes: List[ModelEventAttribute]",
+        &quint_model_event_attribute_list(&inventories.event_attributes),
+    );
+
+    for (declared, var, count) in quint_root_count_declarations(inventories) {
+        replace_quint_count(&mut quint, declared, var, count);
+    }
+    // Quint names the data-flow count separately for the bounded-fuel reachability
+    // recursion (it cannot call `.length()` in that position).
+    quint = quint.replace(
+        "  val modelDataFlowCount = 0",
+        &format!(
+            "  val modelDataFlowCount = {}",
+            inventories.data_flows.len()
+        ),
+    );
+
+    let shell_digest = shell_model_digest(project_name, workflow_slugs, slice_memberships);
+    let complete_digest = model_digest(
+        project_name,
+        &modeled_workflows,
+        formal_workflows,
+        &ProjectRootInventories {
+            scenarios: &inventories.scenarios,
+            scenario_definitions: &inventories.scenario_definitions,
+            data_flows: &inventories.data_flows,
+            outcomes: &inventories.outcomes,
+            command_errors: &inventories.command_errors,
+            commands: &inventories.commands,
+            command_inputs: &inventories.command_inputs,
+            read_models: &inventories.read_models,
+            read_model_definitions: &inventories.read_model_definitions,
+            read_model_fields: &inventories.read_model_fields,
+            views: &inventories.views,
+            view_definitions: &inventories.view_definitions,
+            view_controls: &inventories.view_controls,
+            board_elements: &inventories.board_elements,
+            board_connections: &inventories.board_connections,
+            view_fields: &inventories.view_fields,
+            automations: &inventories.automations,
+            automation_definitions: &inventories.automation_definitions,
+            translations: &inventories.translations,
+            translation_definitions: &inventories.translation_definitions,
+            external_payloads: &inventories.external_payloads,
+            external_payload_fields: &inventories.external_payload_fields,
+            streams: &inventories.streams,
+            events: &inventories.events,
+            event_attributes: &inventories.event_attributes,
+        },
+    );
+    let lean = lean.replace(&shell_digest, &complete_digest);
+    let quint = quint.replace(&shell_digest, &complete_digest);
+
+    (file_contents(lean), file_contents(quint))
+}
+
+fn lean_root_count_theorems(
+    inventories: &ModeledProjectRootInventories,
+) -> Vec<(&'static str, &'static str, usize)> {
+    vec![
+        (
+            "modelScenariosAreDeclared",
+            "modelScenarios",
+            inventories.scenarios.len(),
+        ),
+        (
+            "modelScenarioDefinitionsAreDeclared",
+            "modelScenarioDefinitions",
+            inventories.scenario_definitions.len(),
+        ),
+        (
+            "modelDataFlowsAreDeclared",
+            "modelDataFlows",
+            inventories.data_flows.len(),
+        ),
+        (
+            "modelOutcomesAreDeclared",
+            "modelOutcomes",
+            inventories.outcomes.len(),
+        ),
+        (
+            "modelCommandErrorsAreDeclared",
+            "modelCommandErrors",
+            inventories.command_errors.len(),
+        ),
+        (
+            "modelCommandsAreDeclared",
+            "modelCommands",
+            inventories.commands.len(),
+        ),
+        (
+            "modelCommandInputsAreDeclared",
+            "modelCommandInputs",
+            inventories.command_inputs.len(),
+        ),
+        (
+            "modelReadModelsAreDeclared",
+            "modelReadModels",
+            inventories.read_models.len(),
+        ),
+        (
+            "modelReadModelDefinitionsAreDeclared",
+            "modelReadModelDefinitions",
+            inventories.read_model_definitions.len(),
+        ),
+        (
+            "modelReadModelFieldsAreDeclared",
+            "modelReadModelFields",
+            inventories.read_model_fields.len(),
+        ),
+        (
+            "modelViewsAreDeclared",
+            "modelViews",
+            inventories.views.len(),
+        ),
+        (
+            "modelViewDefinitionsAreDeclared",
+            "modelViewDefinitions",
+            inventories.view_definitions.len(),
+        ),
+        (
+            "modelViewControlsAreDeclared",
+            "modelViewControls",
+            inventories.view_controls.len(),
+        ),
+        (
+            "modelBoardElementsAreDeclared",
+            "modelBoardElements",
+            inventories.board_elements.len(),
+        ),
+        (
+            "modelBoardConnectionsAreDeclared",
+            "modelBoardConnections",
+            inventories.board_connections.len(),
+        ),
+        (
+            "modelViewFieldsAreDeclared",
+            "modelViewFields",
+            inventories.view_fields.len(),
+        ),
+        (
+            "modelAutomationsAreDeclared",
+            "modelAutomations",
+            inventories.automations.len(),
+        ),
+        (
+            "modelAutomationDefinitionsAreDeclared",
+            "modelAutomationDefinitions",
+            inventories.automation_definitions.len(),
+        ),
+        (
+            "modelTranslationsAreDeclared",
+            "modelTranslations",
+            inventories.translations.len(),
+        ),
+        (
+            "modelTranslationDefinitionsAreDeclared",
+            "modelTranslationDefinitions",
+            inventories.translation_definitions.len(),
+        ),
+        (
+            "modelExternalPayloadsAreDeclared",
+            "modelExternalPayloads",
+            inventories.external_payloads.len(),
+        ),
+        (
+            "modelExternalPayloadFieldsAreDeclared",
+            "modelExternalPayloadFields",
+            inventories.external_payload_fields.len(),
+        ),
+        (
+            "modelStreamsAreDeclared",
+            "modelStreams",
+            inventories.streams.len(),
+        ),
+        (
+            "modelEventsAreDeclared",
+            "modelEvents",
+            inventories.events.len(),
+        ),
+        (
+            "modelEventAttributesAreDeclared",
+            "modelEventAttributes",
+            inventories.event_attributes.len(),
+        ),
+    ]
+}
+
+fn quint_root_count_declarations(
+    inventories: &ModeledProjectRootInventories,
+) -> Vec<(&'static str, &'static str, usize)> {
+    lean_root_count_theorems(inventories)
 }
 
 fn project_root_effects(
@@ -5771,8 +6275,10 @@ fn digest_scenario_definitions(scenario_definitions: &[ProjectScenarioDefinition
 }
 
 fn digest_data_flows(project_data_flows: &[ProjectDataFlow]) -> String {
-    project_data_flows
-        .iter()
+    let mut data_flows = project_data_flows.iter().collect::<Vec<_>>();
+    data_flows.sort_unstable();
+    data_flows
+        .into_iter()
         .map(|data_flow| {
             format!(
                 "{}/{}/{}@{}:{}~{}~{}#{}",
@@ -5791,8 +6297,10 @@ fn digest_data_flows(project_data_flows: &[ProjectDataFlow]) -> String {
 }
 
 fn digest_command_errors(project_command_errors: &[ProjectCommandError]) -> String {
-    project_command_errors
-        .iter()
+    let mut command_errors = project_command_errors.iter().collect::<Vec<_>>();
+    command_errors.sort_unstable();
+    command_errors
+        .into_iter()
         .map(|command_error| {
             format!(
                 "{}/{}/{}/{}@{}#{}",

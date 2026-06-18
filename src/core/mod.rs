@@ -11,7 +11,6 @@ pub(crate) mod formal_graph;
 pub(crate) mod formal_model;
 pub(crate) mod formal_project_facts;
 pub(crate) mod formal_slice_facts;
-pub(crate) mod formal_workflow_facts;
 pub(crate) mod gherkin;
 pub(crate) mod layout;
 pub(crate) mod modeling_enums;

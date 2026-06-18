@@ -18,7 +18,7 @@ mod tests {
         ReviewRuleName, ReviewStatus, ReviewTimestamp, ReviewerId, SliceKindName, StreamName,
         TransitionTriggerName, WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
         WorkflowEventParticipation, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
-        WorkflowStepRelationshipName, WorkflowTransitionKind, WorkflowTransitionSourceEvidenceText,
+        WorkflowTransitionKind, WorkflowTransitionSourceEvidenceText,
         WorkflowTransitionTargetEvidenceText,
     };
     use crate::core::verify::{QuintInvariantName, QuintInvariantSet};
@@ -319,30 +319,6 @@ mod tests {
         assert!(
             SliceKindName::try_new("spreadsheet".to_owned()).is_err(),
             "arbitrary slice kind text must not enter formal workflow graphs"
-        );
-    }
-
-    #[test]
-    fn workflow_step_relationships_are_closed_domain_terms() {
-        [
-            "entry",
-            "main",
-            "branch",
-            "alternate",
-            "async_lifecycle",
-            "supporting",
-        ]
-        .into_iter()
-        .for_each(|relationship| {
-            assert!(
-                WorkflowStepRelationshipName::try_new(relationship.to_owned()).is_ok(),
-                "{relationship} should be accepted as a modeled workflow step relationship"
-            );
-        });
-
-        assert!(
-            WorkflowStepRelationshipName::try_new("optional".to_owned()).is_err(),
-            "arbitrary workflow step relationship text must not enter formal workflow graphs"
         );
     }
 

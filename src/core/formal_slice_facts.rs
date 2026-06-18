@@ -3,7 +3,6 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FormatResult};
 
-use crate::core::effect::{Effect, EffectPlan, FileContents, ProjectPath, ReportLine};
 use crate::core::emit::{lean_command_input_source_kind, quint_command_input_source_kind};
 use crate::core::types::{
     AutomationName, AutomationReactionDescription, AutomationTriggerName, BitEncodingSemantics,
@@ -1881,540 +1880,14 @@ impl ViewControls {
     }
 }
 
-pub(crate) fn add_slice_scenario(
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-    scenario: NewSliceScenario,
-) -> Result<EffectPlan, FormalSliceFactError> {
-    let (lean_marker, quint_marker) = match scenario.kind {
-        ScenarioKind::Acceptance => (
-            "def sliceAcceptanceScenarios : List EventModelScenario := ",
-            "val sliceAcceptanceScenarios: List[EventModelScenario] = ",
-        ),
-        ScenarioKind::Contract => (
-            "def sliceContractScenarios : List EventModelScenario := ",
-            "val sliceContractScenarios: List[EventModelScenario] = ",
-        ),
-    };
-    let lean_record = lean_scenario_record(&scenario);
-    let quint_record = quint_scenario_record(&scenario);
-    let lean = append_record(lean_contents.as_ref(), lean_marker, &lean_record)?;
-    let quint = append_record(quint_contents.as_ref(), quint_marker, &quint_record)?;
-
-    Ok(EffectPlan::new(vec![
-        Effect::write_file(lean_path, file_contents(lean)?),
-        Effect::write_file(quint_path, file_contents(quint)?),
-        Effect::Report(report_line(format!(
-            "added {} scenario {} to slice {}",
-            scenario.kind.as_str(),
-            scenario.name.as_ref(),
-            scenario.slice_slug.as_ref()
-        ))?),
-    ]))
-}
-
-pub(crate) fn add_event_definition(
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-    event: NewEventDefinition,
-) -> Result<EffectPlan, FormalSliceFactError> {
-    let lean_event_reference = lean_event_reference_record(event.name.as_ref());
-    let quint_event_reference = quint_event_reference_record(event.name.as_ref());
-    let lean_stream_record = lean_stream_record(event.stream.as_ref());
-    let quint_stream_record = quint_stream_record(event.stream.as_ref());
-    let lean_event_record = lean_event_definition_record(&event);
-    let quint_event_record = quint_event_definition_record(&event);
-    let lean = append_record_if_missing(
-        lean_contents.as_ref(),
-        "def sliceEvents : List SliceEventReference := ",
-        &lean_event_reference,
-    )
-    .and_then(|contents| {
-        append_record_if_missing(
-            &contents,
-            "def sliceStreams : List StreamDefinition := ",
-            &lean_stream_record,
-        )
-    })
-    .and_then(|contents| {
-        merge_or_append_named_record(
-            &contents,
-            "def sliceEventDefinitions : List EventDefinition := ",
-            &lean_event_record,
-            RecordFlavor::Lean,
-            &["stream", "observed", "shared"],
-            &[ChildListField {
-                key: "attributes",
-                mode: ChildMergeMode::Append,
-            }],
-        )
-    })?;
-    let quint = append_record_if_missing(
-        quint_contents.as_ref(),
-        "val sliceEvents: List[SliceEventReference] = ",
-        &quint_event_reference,
-    )
-    .and_then(|contents| {
-        append_record_if_missing(
-            &contents,
-            "val sliceStreams: List[StreamDefinition] = ",
-            &quint_stream_record,
-        )
-    })
-    .and_then(|contents| {
-        merge_or_append_named_record(
-            &contents,
-            "val sliceEventDefinitions: List[EventDefinition] = ",
-            &quint_event_record,
-            RecordFlavor::Quint,
-            &["stream", "observed", "shared"],
-            &[ChildListField {
-                key: "attributes",
-                mode: ChildMergeMode::Append,
-            }],
-        )
-    })?;
-
-    Ok(EffectPlan::new(vec![
-        Effect::write_file(lean_path, file_contents(lean)?),
-        Effect::write_file(quint_path, file_contents(quint)?),
-        Effect::Report(report_line(format!(
-            "added event {} to slice {}",
-            event.name.as_ref(),
-            event.slice_slug.as_ref()
-        ))?),
-    ]))
-}
-
-pub(crate) fn add_outcome_definition(
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-    outcome: NewOutcomeDefinition,
-) -> Result<EffectPlan, FormalSliceFactError> {
-    let lean_record = lean_outcome_definition_record(&outcome);
-    let quint_record = quint_outcome_definition_record(&outcome);
-    let lean = append_record(
-        lean_contents.as_ref(),
-        "def sliceOutcomeDefinitions : List OutcomeDefinition := ",
-        &lean_record,
-    )?;
-    let quint = append_record(
-        quint_contents.as_ref(),
-        "val sliceOutcomeDefinitions: List[OutcomeDefinition] = ",
-        &quint_record,
-    )?;
-
-    Ok(EffectPlan::new(vec![
-        Effect::write_file(lean_path, file_contents(lean)?),
-        Effect::write_file(quint_path, file_contents(quint)?),
-        Effect::Report(report_line(format!(
-            "added outcome {} to slice {}",
-            outcome.label.as_ref(),
-            outcome.slice_slug.as_ref()
-        ))?),
-    ]))
-}
-
-pub(crate) fn add_external_payload_definition(
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-    external_payload: NewExternalPayloadDefinition,
-) -> Result<EffectPlan, FormalSliceFactError> {
-    let lean_record = lean_external_payload_definition_record(&external_payload);
-    let quint_record = quint_external_payload_definition_record(&external_payload);
-    let lean = merge_or_append_named_record(
-        lean_contents.as_ref(),
-        "def sliceExternalPayloads : List ExternalPayloadDefinition := ",
-        &lean_record,
-        RecordFlavor::Lean,
-        &[],
-        &[ChildListField {
-            key: "fields",
-            mode: ChildMergeMode::Append,
-        }],
-    )?;
-    let quint = merge_or_append_named_record(
-        quint_contents.as_ref(),
-        "val sliceExternalPayloads: List[ExternalPayloadDefinition] = ",
-        &quint_record,
-        RecordFlavor::Quint,
-        &[],
-        &[ChildListField {
-            key: "fields",
-            mode: ChildMergeMode::Append,
-        }],
-    )?;
-
-    Ok(EffectPlan::new(vec![
-        Effect::write_file(lean_path, file_contents(lean)?),
-        Effect::write_file(quint_path, file_contents(quint)?),
-        Effect::Report(report_line(format!(
-            "added external payload {} to slice {}",
-            external_payload.name.as_ref(),
-            external_payload.slice_slug.as_ref()
-        ))?),
-    ]))
-}
-
-pub(crate) fn add_automation_definition(
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-    automation: NewAutomationDefinition,
-) -> Result<EffectPlan, FormalSliceFactError> {
-    let lean_command_reference = lean_command_reference_record(automation.command_name.as_ref());
-    let quint_command_reference = quint_command_reference_record(automation.command_name.as_ref());
-    let lean = append_record(
-        lean_contents.as_ref(),
-        "def sliceReferencedCommands : List SliceCommandReference := ",
-        &lean_command_reference,
-    )
-    .and_then(|contents| {
-        append_record(
-            &contents,
-            "def sliceAutomations : List AutomationDefinition := ",
-            &lean_automation_definition_record(&automation),
-        )
-    })?;
-    let quint = append_record(
-        quint_contents.as_ref(),
-        "val sliceReferencedCommands: List[SliceCommandReference] = ",
-        &quint_command_reference,
-    )
-    .and_then(|contents| {
-        append_record(
-            &contents,
-            "val sliceAutomations: List[AutomationDefinition] = ",
-            &quint_automation_definition_record(&automation),
-        )
-    })?;
-
-    Ok(EffectPlan::new(vec![
-        Effect::write_file(lean_path, file_contents(lean)?),
-        Effect::write_file(quint_path, file_contents(quint)?),
-        Effect::Report(report_line(format!(
-            "added automation {} to slice {}",
-            automation.name.as_ref(),
-            automation.slice_slug.as_ref()
-        ))?),
-    ]))
-}
-
-pub(crate) fn add_translation_definition(
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-    translation: NewTranslationDefinition,
-) -> Result<EffectPlan, FormalSliceFactError> {
-    let lean_command_reference = lean_command_reference_record(translation.command_name.as_ref());
-    let quint_command_reference = quint_command_reference_record(translation.command_name.as_ref());
-    let lean = append_record(
-        lean_contents.as_ref(),
-        "def sliceReferencedCommands : List SliceCommandReference := ",
-        &lean_command_reference,
-    )
-    .and_then(|contents| {
-        append_record(
-            &contents,
-            "def sliceTranslations : List TranslationDefinition := ",
-            &lean_translation_definition_record(&translation),
-        )
-    })?;
-    let quint = append_record(
-        quint_contents.as_ref(),
-        "val sliceReferencedCommands: List[SliceCommandReference] = ",
-        &quint_command_reference,
-    )
-    .and_then(|contents| {
-        append_record(
-            &contents,
-            "val sliceTranslations: List[TranslationDefinition] = ",
-            &quint_translation_definition_record(&translation),
-        )
-    })?;
-
-    Ok(EffectPlan::new(vec![
-        Effect::write_file(lean_path, file_contents(lean)?),
-        Effect::write_file(quint_path, file_contents(quint)?),
-        Effect::Report(report_line(format!(
-            "added translation {} to slice {}",
-            translation.name.as_ref(),
-            translation.slice_slug.as_ref()
-        ))?),
-    ]))
-}
-
-pub(crate) fn add_board_element(
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-    element: NewBoardElement,
-) -> Result<EffectPlan, FormalSliceFactError> {
-    let lean = append_record(
-        lean_contents.as_ref(),
-        "def sliceBoardElements : List BoardElement := ",
-        &lean_board_element_record(&element),
-    )?;
-    let quint = append_record(
-        quint_contents.as_ref(),
-        "val sliceBoardElements: List[BoardElement] = ",
-        &quint_board_element_record(&element),
-    )?;
-
-    Ok(EffectPlan::new(vec![
-        Effect::write_file(lean_path, file_contents(lean)?),
-        Effect::write_file(quint_path, file_contents(quint)?),
-        Effect::Report(report_line(format!(
-            "added board element {} to slice {}",
-            element.name.as_ref(),
-            element.slice_slug.as_ref()
-        ))?),
-    ]))
-}
-
-pub(crate) fn add_board_connection(
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-    connection: NewBoardConnection,
-) -> Result<EffectPlan, FormalSliceFactError> {
-    let lean = append_record(
-        lean_contents.as_ref(),
-        "def sliceBoardConnections : List BoardConnection := ",
-        &lean_board_connection_record(&connection),
-    )?;
-    let quint = append_record(
-        quint_contents.as_ref(),
-        "val sliceBoardConnections: List[BoardConnection] = ",
-        &quint_board_connection_record(&connection),
-    )?;
-
-    Ok(EffectPlan::new(vec![
-        Effect::write_file(lean_path, file_contents(lean)?),
-        Effect::write_file(quint_path, file_contents(quint)?),
-        Effect::Report(report_line(format!(
-            "added board connection {} -> {} to slice {}",
-            connection.source.as_ref(),
-            connection.target.as_ref(),
-            connection.slice_slug.as_ref()
-        ))?),
-    ]))
-}
-
-pub(crate) fn add_command_definition(
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-    command: NewCommandDefinition,
-) -> Result<EffectPlan, FormalSliceFactError> {
-    let lean_command_reference = lean_command_reference_record(command.name.as_ref());
-    let quint_command_reference = quint_command_reference_record(command.name.as_ref());
-    let lean = append_record_if_missing(
-        lean_contents.as_ref(),
-        "def sliceCommands : List SliceCommandReference := ",
-        &lean_command_reference,
-    )
-    .and_then(|contents| {
-        merge_or_append_named_record(
-            &contents,
-            "def sliceCommandDefinitions : List CommandDefinition := ",
-            &lean_command_definition_record(&command),
-            RecordFlavor::Lean,
-            &["singleton", "repeatBehavior"],
-            &COMMAND_CHILD_LIST_FIELDS,
-        )
-    })?;
-    let quint = append_record_if_missing(
-        quint_contents.as_ref(),
-        "val sliceCommands: List[SliceCommandReference] = ",
-        &quint_command_reference,
-    )
-    .and_then(|contents| {
-        merge_or_append_named_record(
-            &contents,
-            "val sliceCommandDefinitions: List[CommandDefinition] = ",
-            &quint_command_definition_record(&command),
-            RecordFlavor::Quint,
-            &["singleton", "repeatBehavior"],
-            &COMMAND_CHILD_LIST_FIELDS,
-        )
-    })?;
-
-    Ok(EffectPlan::new(vec![
-        Effect::write_file(lean_path, file_contents(lean)?),
-        Effect::write_file(quint_path, file_contents(quint)?),
-        Effect::Report(report_line(format!(
-            "added command {} to slice {}",
-            command.name.as_ref(),
-            command.slice_slug.as_ref()
-        ))?),
-    ]))
-}
-
-pub(crate) fn add_read_model_definition(
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-    read_model: NewReadModelDefinition,
-) -> Result<EffectPlan, FormalSliceFactError> {
-    let lean_read_model_reference = lean_read_model_reference_record(read_model.name.as_ref());
-    let quint_read_model_reference = quint_read_model_reference_record(read_model.name.as_ref());
-    let lean = append_record_if_missing(
-        lean_contents.as_ref(),
-        "def sliceReadModels : List SliceReadModelReference := ",
-        &lean_read_model_reference,
-    )
-    .and_then(|contents| {
-        merge_or_append_named_record(
-            &contents,
-            "def sliceReadModelDefinitions : List ReadModelDefinition := ",
-            &lean_read_model_definition_record(&read_model),
-            RecordFlavor::Lean,
-            &[],
-            &[ChildListField {
-                key: "fields",
-                mode: ChildMergeMode::Append,
-            }],
-        )
-    })?;
-    let quint = append_record_if_missing(
-        quint_contents.as_ref(),
-        "val sliceReadModels: List[SliceReadModelReference] = ",
-        &quint_read_model_reference,
-    )
-    .and_then(|contents| {
-        merge_or_append_named_record(
-            &contents,
-            "val sliceReadModelDefinitions: List[ReadModelDefinition] = ",
-            &quint_read_model_definition_record(&read_model),
-            RecordFlavor::Quint,
-            &[],
-            &[ChildListField {
-                key: "fields",
-                mode: ChildMergeMode::Append,
-            }],
-        )
-    })?;
-
-    Ok(EffectPlan::new(vec![
-        Effect::write_file(lean_path, file_contents(lean)?),
-        Effect::write_file(quint_path, file_contents(quint)?),
-        Effect::Report(report_line(format!(
-            "added read model {} to slice {}",
-            read_model.name.as_ref(),
-            read_model.slice_slug.as_ref()
-        ))?),
-    ]))
-}
-
-pub(crate) fn add_view_definition(
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-    view: NewViewDefinition,
-) -> Result<EffectPlan, FormalSliceFactError> {
-    let lean_view_reference = lean_view_reference_record(view.name.as_ref());
-    let quint_view_reference = quint_view_reference_record(view.name.as_ref());
-    let lean = append_record_if_missing(
-        lean_contents.as_ref(),
-        "def sliceViews : List SliceViewReference := ",
-        &lean_view_reference,
-    )
-    .and_then(|contents| {
-        append_records(
-            &contents,
-            "def sliceReferencedCommands : List SliceCommandReference := ",
-            &lean_view_referenced_command_records(&view),
-        )
-    })
-    .and_then(|contents| {
-        merge_or_append_named_record(
-            &contents,
-            "def sliceViewDefinitions : List ViewDefinition := ",
-            &lean_view_definition_record(&view),
-            RecordFlavor::Lean,
-            &[],
-            &VIEW_CHILD_LIST_FIELDS,
-        )
-    })?;
-    let quint = append_record_if_missing(
-        quint_contents.as_ref(),
-        "val sliceViews: List[SliceViewReference] = ",
-        &quint_view_reference,
-    )
-    .and_then(|contents| {
-        append_records(
-            &contents,
-            "val sliceReferencedCommands: List[SliceCommandReference] = ",
-            &quint_view_referenced_command_records(&view),
-        )
-    })
-    .and_then(|contents| {
-        merge_or_append_named_record(
-            &contents,
-            "val sliceViewDefinitions: List[ViewDefinition] = ",
-            &quint_view_definition_record(&view),
-            RecordFlavor::Quint,
-            &[],
-            &VIEW_CHILD_LIST_FIELDS,
-        )
-    })?;
-
-    Ok(EffectPlan::new(vec![
-        Effect::write_file(lean_path, file_contents(lean)?),
-        Effect::write_file(quint_path, file_contents(quint)?),
-        Effect::Report(report_line(format!(
-            "added view {} to slice {}",
-            view.name.as_ref(),
-            view.slice_slug.as_ref()
-        ))?),
-    ]))
-}
-
-pub(crate) fn add_bit_level_data_flow(
-    lean_path: ProjectPath,
-    lean_contents: FileContents,
-    quint_path: ProjectPath,
-    quint_contents: FileContents,
-    data_flow: NewBitLevelDataFlow,
-) -> Result<EffectPlan, FormalSliceFactError> {
-    let lean_record = lean_data_flow_record(&data_flow);
-    let quint_record = quint_data_flow_record(&data_flow);
-    let lean = append_record(
-        lean_contents.as_ref(),
-        "def sliceBitLevelDataFlows : List BitLevelDataFlow := ",
-        &lean_record,
-    )?;
-    let quint = append_record(
-        quint_contents.as_ref(),
-        "val sliceBitLevelDataFlows: List[BitLevelDataFlow] = ",
-        &quint_record,
-    )?;
-
-    Ok(EffectPlan::new(vec![
-        Effect::write_file(lean_path, file_contents(lean)?),
-        Effect::write_file(quint_path, file_contents(quint)?),
-        Effect::Report(report_line(format!(
-            "added bit-level data flow {} to slice {}",
-            data_flow.datum.as_ref(),
-            data_flow.slice_slug.as_ref()
-        ))?),
-    ]))
+/// Whether the artifact uses Lean (`field := value`) or Quint (`field: value`)
+/// record syntax. The two differ only in the separator between a field key and
+/// its value, so a single merge implementation can serve both by carrying the
+/// flavor along.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum RecordFlavor {
+    Lean,
+    Quint,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -2437,515 +1910,6 @@ impl Display for FormalSliceFactError {
 }
 
 impl Error for FormalSliceFactError {}
-
-fn append_record(
-    contents: &str,
-    marker: &str,
-    record: &str,
-) -> Result<String, FormalSliceFactError> {
-    let mut replaced = false;
-    let lines = contents
-        .lines()
-        .map(|line| {
-            let indentation_length = line.len() - line.trim_start().len();
-            let (indentation, declaration) = line.split_at(indentation_length);
-            if let Some(current_list) = declaration.strip_prefix(marker) {
-                replaced = true;
-                Ok(format!(
-                    "{indentation}{marker}{}",
-                    append_list_record(current_list, record)?
-                ))
-            } else {
-                Ok(line.to_owned())
-            }
-        })
-        .collect::<Result<Vec<_>, FormalSliceFactError>>()?;
-
-    if replaced {
-        let mut updated = lines.join("\n");
-        if contents.ends_with('\n') {
-            updated.push('\n');
-        }
-        Ok(updated)
-    } else {
-        Err(FormalSliceFactError::new(format!(
-            "formal slice artifact is missing declaration {marker}"
-        )))
-    }
-}
-
-fn append_record_if_missing(
-    contents: &str,
-    marker: &str,
-    record: &str,
-) -> Result<String, FormalSliceFactError> {
-    let mut replaced = false;
-    let lines = contents
-        .lines()
-        .map(|line| {
-            let indentation_length = line.len() - line.trim_start().len();
-            let (indentation, declaration) = line.split_at(indentation_length);
-            if let Some(current_list) = declaration.strip_prefix(marker) {
-                replaced = true;
-                Ok(format!(
-                    "{indentation}{marker}{}",
-                    append_list_record_if_missing(current_list, record)?
-                ))
-            } else {
-                Ok(line.to_owned())
-            }
-        })
-        .collect::<Result<Vec<_>, FormalSliceFactError>>()?;
-
-    if replaced {
-        let mut updated = lines.join("\n");
-        if contents.ends_with('\n') {
-            updated.push('\n');
-        }
-        Ok(updated)
-    } else {
-        Err(FormalSliceFactError::new(format!(
-            "formal slice artifact is missing declaration {marker}"
-        )))
-    }
-}
-
-fn append_records(
-    contents: &str,
-    marker: &str,
-    records: &[String],
-) -> Result<String, FormalSliceFactError> {
-    records
-        .iter()
-        .try_fold(contents.to_owned(), |current, record| {
-            append_record(&current, marker, record)
-        })
-}
-
-fn append_list_record(current_list: &str, record: &str) -> Result<String, FormalSliceFactError> {
-    let trimmed = current_list.trim();
-    if trimmed == "[]" {
-        return Ok(format!("[{record}]"));
-    }
-    trimmed
-        .strip_prefix('[')
-        .and_then(|without_open| without_open.strip_suffix(']'))
-        .map(|existing| format!("[{existing},{record}]"))
-        .ok_or_else(|| FormalSliceFactError::new("formal slice list declaration is malformed"))
-}
-
-fn append_list_record_if_missing(
-    current_list: &str,
-    record: &str,
-) -> Result<String, FormalSliceFactError> {
-    let trimmed = current_list.trim();
-    if trimmed == "[]" {
-        return Ok(format!("[{record}]"));
-    }
-    let existing = trimmed
-        .strip_prefix('[')
-        .and_then(|without_open| without_open.strip_suffix(']'))
-        .ok_or_else(|| FormalSliceFactError::new("formal slice list declaration is malformed"))?;
-    if existing
-        .split(',')
-        .any(|existing_record| existing_record == record)
-    {
-        Ok(trimmed.to_owned())
-    } else {
-        Ok(format!("[{existing},{record}]"))
-    }
-}
-
-/// Whether the artifact uses Lean (`field := value`) or Quint (`field: value`)
-/// record syntax. The two differ only in the separator between a field key and
-/// its value, so a single merge implementation can serve both by carrying the
-/// flavor along.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum RecordFlavor {
-    Lean,
-    Quint,
-}
-
-impl RecordFlavor {
-    /// The exact byte sequence that separates a field key from its value,
-    /// including the surrounding spaces emitted by the record builders.
-    fn separator(self) -> &'static str {
-        match self {
-            Self::Lean => " := ",
-            Self::Quint => ": ",
-        }
-    }
-}
-
-/// How a single child collection inside a named definition record should be
-/// reconciled when a later same-name `add` call arrives.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum ChildMergeMode {
-    /// Splice the incoming record's items in unconditionally (allows duplicate
-    /// child rows, e.g. command inputs or event attributes which are
-    /// intentionally additive per call).
-    Append,
-    /// Splice the incoming record's items in only when an identical item is not
-    /// already present (e.g. a command's emitted events or observed streams,
-    /// which a repeated call may legitimately re-state).
-    AppendIfMissing,
-}
-
-/// A child list field within a named definition record that participates in the
-/// merge (its items accumulate across same-name `add` calls).
-#[derive(Debug, Clone, Copy)]
-struct ChildListField {
-    key: &'static str,
-    mode: ChildMergeMode,
-}
-
-/// Child collections accumulated when a view is authored across several
-/// `add view` calls. Each call carries one field (and optionally one control);
-/// the read model references, sketch tokens, local states, and filters are
-/// re-stated each call, so they are deduplicated while fields and controls
-/// accumulate.
-const VIEW_CHILD_LIST_FIELDS: [ChildListField; 6] = [
-    ChildListField {
-        key: "readModels",
-        mode: ChildMergeMode::AppendIfMissing,
-    },
-    ChildListField {
-        key: "fields",
-        mode: ChildMergeMode::Append,
-    },
-    ChildListField {
-        key: "controls",
-        mode: ChildMergeMode::Append,
-    },
-    ChildListField {
-        key: "sketchTokens",
-        mode: ChildMergeMode::AppendIfMissing,
-    },
-    ChildListField {
-        key: "localStates",
-        mode: ChildMergeMode::AppendIfMissing,
-    },
-    ChildListField {
-        key: "filters",
-        mode: ChildMergeMode::AppendIfMissing,
-    },
-];
-
-/// Child collections accumulated when a `state_change` slice's single command is
-/// authored across several `add command` calls: each call carries one input plus
-/// optionally repeated emitted events, observed streams, and errors.
-const COMMAND_CHILD_LIST_FIELDS: [ChildListField; 4] = [
-    ChildListField {
-        key: "inputs",
-        mode: ChildMergeMode::Append,
-    },
-    ChildListField {
-        key: "emittedEvents",
-        mode: ChildMergeMode::AppendIfMissing,
-    },
-    ChildListField {
-        key: "observedStreams",
-        mode: ChildMergeMode::AppendIfMissing,
-    },
-    ChildListField {
-        key: "errors",
-        mode: ChildMergeMode::AppendIfMissing,
-    },
-];
-
-/// Merge `new_record` into the list declared by `marker`, accumulating child
-/// rows onto the existing same-`name` record rather than appending a duplicate
-/// definition.
-///
-/// `scalar_consistency_keys` names the fields whose values must agree between an
-/// existing record and a later same-name call (e.g. an event's `stream`); a
-/// disagreement is an authoring error and surfaces as a `FormalSliceFactError`.
-/// `child_list_fields` names the collections whose items accumulate.
-///
-/// When no record with a matching `name` exists yet, the new record is appended
-/// verbatim, preserving the original create-new-definition behavior.
-fn merge_or_append_named_record(
-    contents: &str,
-    marker: &str,
-    new_record: &str,
-    flavor: RecordFlavor,
-    scalar_consistency_keys: &[&str],
-    child_list_fields: &[ChildListField],
-) -> Result<String, FormalSliceFactError> {
-    let mut replaced = false;
-    let lines = contents
-        .lines()
-        .map(|line| {
-            let indentation_length = line.len() - line.trim_start().len();
-            let (indentation, declaration) = line.split_at(indentation_length);
-            if let Some(current_list) = declaration.strip_prefix(marker) {
-                replaced = true;
-                Ok(format!(
-                    "{indentation}{marker}{}",
-                    merge_list_record(
-                        current_list,
-                        new_record,
-                        flavor,
-                        scalar_consistency_keys,
-                        child_list_fields,
-                    )?
-                ))
-            } else {
-                Ok(line.to_owned())
-            }
-        })
-        .collect::<Result<Vec<_>, FormalSliceFactError>>()?;
-
-    if replaced {
-        let mut updated = lines.join("\n");
-        if contents.ends_with('\n') {
-            updated.push('\n');
-        }
-        Ok(updated)
-    } else {
-        Err(FormalSliceFactError::new(format!(
-            "formal slice artifact is missing declaration {marker}"
-        )))
-    }
-}
-
-fn merge_list_record(
-    current_list: &str,
-    new_record: &str,
-    flavor: RecordFlavor,
-    scalar_consistency_keys: &[&str],
-    child_list_fields: &[ChildListField],
-) -> Result<String, FormalSliceFactError> {
-    let trimmed = current_list.trim();
-    if trimmed == "[]" {
-        return Ok(format!("[{new_record}]"));
-    }
-    let inner = trimmed
-        .strip_prefix('[')
-        .and_then(|without_open| without_open.strip_suffix(']'))
-        .ok_or_else(|| FormalSliceFactError::new("formal slice list declaration is malformed"))?;
-
-    let mut records = split_top_level_records(inner)?;
-    let new_name = record_field_value(new_record, "name", flavor)
-        .ok_or_else(|| FormalSliceFactError::new("formal slice record is missing a name field"))?;
-
-    for existing in &mut records {
-        let existing_name = record_field_value(existing, "name", flavor).ok_or_else(|| {
-            FormalSliceFactError::new("formal slice record is missing a name field")
-        })?;
-        if existing_name == new_name {
-            *existing = merge_named_records(
-                existing,
-                new_record,
-                flavor,
-                scalar_consistency_keys,
-                child_list_fields,
-            )?;
-            return Ok(format!("[{}]", records.join(",")));
-        }
-    }
-
-    Ok(format!("[{inner},{new_record}]"))
-}
-
-/// Splice the child collections of `new_record` onto `existing`, after checking
-/// that the scalar consistency fields agree.
-fn merge_named_records(
-    existing: &str,
-    new_record: &str,
-    flavor: RecordFlavor,
-    scalar_consistency_keys: &[&str],
-    child_list_fields: &[ChildListField],
-) -> Result<String, FormalSliceFactError> {
-    for key in scalar_consistency_keys {
-        let existing_value = record_field_value(existing, key, flavor);
-        let new_value = record_field_value(new_record, key, flavor);
-        if existing_value != new_value {
-            return Err(FormalSliceFactError::new(format!(
-                "formal slice definition '{}' was added again with a conflicting {key} value",
-                record_field_value(existing, "name", flavor).unwrap_or_default(),
-            )));
-        }
-    }
-
-    let mut merged = existing.to_owned();
-    for field in child_list_fields {
-        let new_items = record_list_field_items(new_record, field.key, flavor)?;
-        if new_items.is_empty() {
-            continue;
-        }
-        merged = splice_child_list(&merged, field.key, &new_items, field.mode, flavor)?;
-    }
-    Ok(merged)
-}
-
-/// Return the items currently spliced into the `key` child list of `record`.
-fn record_list_field_items(
-    record: &str,
-    key: &str,
-    flavor: RecordFlavor,
-) -> Result<Vec<String>, FormalSliceFactError> {
-    let value = record_field_value(record, key, flavor).ok_or_else(|| {
-        FormalSliceFactError::new(format!("formal slice record is missing field {key}"))
-    })?;
-    let trimmed = value.trim();
-    if trimmed == "[]" {
-        return Ok(Vec::new());
-    }
-    let inner = trimmed
-        .strip_prefix('[')
-        .and_then(|without_open| without_open.strip_suffix(']'))
-        .ok_or_else(|| {
-            FormalSliceFactError::new(format!("formal slice record field {key} is not a list"))
-        })?;
-    split_top_level_records(inner)
-}
-
-/// Append `new_items` into the `key` child list of `record`, honoring `mode`.
-fn splice_child_list(
-    record: &str,
-    key: &str,
-    new_items: &[String],
-    mode: ChildMergeMode,
-    flavor: RecordFlavor,
-) -> Result<String, FormalSliceFactError> {
-    let existing_items = record_list_field_items(record, key, flavor)?;
-    let mut combined = existing_items.clone();
-    for item in new_items {
-        if mode == ChildMergeMode::AppendIfMissing
-            && combined.iter().any(|existing| existing == item)
-        {
-            continue;
-        }
-        combined.push(item.clone());
-    }
-    let rebuilt = format!("[{}]", combined.join(","));
-    replace_record_field_value(record, key, &rebuilt, flavor)
-}
-
-/// Extract the value substring of field `key` from a brace-balanced record body
-/// such as `{ name := "X", attributes := [..] }`. Returns the raw value text
-/// (trimmed of surrounding whitespace) or `None` when the field is absent.
-fn record_field_value(record: &str, key: &str, flavor: RecordFlavor) -> Option<String> {
-    let (start, end) = record_field_value_span(record, key, flavor)?;
-    Some(record[start..end].trim().to_owned())
-}
-
-/// Replace the value of field `key` in `record` with `value`, preserving the
-/// rest of the record verbatim.
-fn replace_record_field_value(
-    record: &str,
-    key: &str,
-    value: &str,
-    flavor: RecordFlavor,
-) -> Result<String, FormalSliceFactError> {
-    let (start, end) = record_field_value_span(record, key, flavor).ok_or_else(|| {
-        FormalSliceFactError::new(format!("formal slice record is missing field {key}"))
-    })?;
-    let mut rebuilt = String::with_capacity(record.len());
-    rebuilt.push_str(&record[..start]);
-    rebuilt.push_str(value);
-    rebuilt.push_str(&record[end..]);
-    Ok(rebuilt)
-}
-
-/// Locate the byte span of field `key`'s value within `record`. The start is the
-/// first byte after the `key<separator>` token; the end is the byte just before
-/// the top-level `,` or closing ` }` that terminates the value. Nested braces
-/// and brackets are tracked so values that are themselves records or lists are
-/// captured whole.
-fn record_field_value_span(
-    record: &str,
-    key: &str,
-    flavor: RecordFlavor,
-) -> Option<(usize, usize)> {
-    let needle = format!("{key}{}", flavor.separator());
-    let mut search_from = 0;
-    while let Some(relative) = record[search_from..].find(&needle) {
-        let key_start = search_from + relative;
-        // Require the match to start at a field boundary ('{' or ',' just
-        // before the key, ignoring surrounding spaces) so that a key which is a
-        // suffix of a longer key cannot be matched by accident.
-        let preceding = record[..key_start].trim_end();
-        let at_boundary = preceding.ends_with('{') || preceding.ends_with(',');
-        if !at_boundary {
-            search_from = key_start + needle.len();
-            continue;
-        }
-        let value_start = key_start + needle.len();
-        let mut depth: i32 = 0;
-        for (offset, character) in record[value_start..].char_indices() {
-            match character {
-                '{' | '[' => depth += 1,
-                '}' | ']' => {
-                    if depth == 0 {
-                        // Closing brace of the enclosing record terminates the
-                        // final field's value.
-                        return Some((value_start, value_start + offset));
-                    }
-                    depth -= 1;
-                }
-                ',' if depth == 0 => return Some((value_start, value_start + offset)),
-                _ => {}
-            }
-        }
-        return Some((value_start, record.len()));
-    }
-    None
-}
-
-/// Split a comma-separated sequence of brace-balanced records (the inner text of
-/// a `[..]` list, with the surrounding brackets already removed) into individual
-/// record strings. Commas nested inside `{}` or `[]` are not split points.
-fn split_top_level_records(inner: &str) -> Result<Vec<String>, FormalSliceFactError> {
-    let mut records = Vec::new();
-    let mut depth: i32 = 0;
-    let mut current = String::new();
-    let mut in_string = false;
-    let mut escaped = false;
-    for character in inner.chars() {
-        if in_string {
-            current.push(character);
-            if escaped {
-                escaped = false;
-            } else if character == '\\' {
-                escaped = true;
-            } else if character == '"' {
-                in_string = false;
-            }
-            continue;
-        }
-        match character {
-            '"' => {
-                in_string = true;
-                current.push(character);
-            }
-            '{' | '[' => {
-                depth += 1;
-                current.push(character);
-            }
-            '}' | ']' => {
-                depth -= 1;
-                current.push(character);
-            }
-            ',' if depth == 0 => {
-                records.push(current.trim().to_owned());
-                current.clear();
-            }
-            _ => current.push(character),
-        }
-    }
-    if depth != 0 || in_string {
-        return Err(FormalSliceFactError::new(
-            "formal slice list declaration is malformed",
-        ));
-    }
-    let trailing = current.trim();
-    if !trailing.is_empty() {
-        records.push(trailing.to_owned());
-    }
-    Ok(records)
-}
 
 fn lean_scenario_record(scenario: &NewSliceScenario) -> String {
     format!(
@@ -2994,54 +1958,6 @@ fn quint_scenario_record(scenario: &NewSliceScenario) -> String {
                 .map(CoveredDefinitionName::as_ref)
         )),
         quint_list(scenario.error_references.as_slice()),
-    )
-}
-
-fn lean_command_definition_record(command: &NewCommandDefinition) -> String {
-    format!(
-        "{{ name := {}, inputs := [{}], emittedEvents := [{}], observedStreams := [{}], errors := [{}], singleton := {}, repeatBehavior := {} }}",
-        quoted(command.name.as_ref()),
-        lean_command_input_record(&command.input),
-        lean_event_reference_records(command.emitted_events.as_slice()),
-        lean_stream_reference_records(command.observed_streams.as_slice()),
-        command
-            .errors
-            .as_slice()
-            .iter()
-            .map(lean_command_error_record)
-            .collect::<Vec<_>>()
-            .join(","),
-        command.singleton_repeat_behavior.is_some(),
-        quoted(
-            command
-                .singleton_repeat_behavior
-                .as_ref()
-                .map_or("", |repeat_behavior| repeat_behavior.as_ref()),
-        ),
-    )
-}
-
-fn quint_command_definition_record(command: &NewCommandDefinition) -> String {
-    format!(
-        "{{ name: {}, inputs: [{}], emittedEvents: [{}], observedStreams: [{}], errors: [{}], singleton: {}, repeatBehavior: {} }}",
-        quoted(command.name.as_ref()),
-        quint_command_input_record(&command.input),
-        quint_event_reference_records(command.emitted_events.as_slice()),
-        quint_stream_reference_records(command.observed_streams.as_slice()),
-        command
-            .errors
-            .as_slice()
-            .iter()
-            .map(quint_command_error_record)
-            .collect::<Vec<_>>()
-            .join(","),
-        command.singleton_repeat_behavior.is_some(),
-        quoted(
-            command
-                .singleton_repeat_behavior
-                .as_ref()
-                .map_or("", |repeat_behavior| repeat_behavior.as_ref()),
-        ),
     )
 }
 
@@ -3181,44 +2097,664 @@ fn quint_stream_reference_record(stream_name: &str) -> String {
     format!("{{ name: {} }}", quoted(stream_name))
 }
 
+/// Render a definition list body (`[..]`) by rendering every item in order — the
+/// pure equivalent of folding `append_record` over the items (used for the lists
+/// that append unconditionally).
+fn render_append_list<T>(items: &[T], render_record: impl Fn(&T) -> String) -> String {
+    let records = items
+        .iter()
+        .map(render_record)
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{records}]")
+}
+
+/// Render a definition list body keeping only the first occurrence of each
+/// distinct rendered record — the pure equivalent of folding
+/// `append_record_if_missing` over the items (used for the reference lists).
+fn render_dedup_list<T>(items: &[T], render_record: impl Fn(&T) -> String) -> String {
+    let mut records: Vec<String> = Vec::new();
+    for item in items {
+        let record = render_record(item);
+        if !records.contains(&record) {
+            records.push(record);
+        }
+    }
+    format!("[{}]", records.join(","))
+}
+
+/// Group `items` by name, preserving the first-seen order of both the groups and
+/// the members within each group — the ordering the incremental merge builder
+/// produces (a new same-name record merges into the first occurrence; a new name
+/// appends a fresh group). The pure merge renderers union each group's child
+/// lists in this order.
+fn group_named<'a, T>(items: &'a [T], name_of: impl Fn(&'a T) -> &'a str) -> Vec<Vec<&'a T>> {
+    let mut groups: Vec<Vec<&'a T>> = Vec::new();
+    for item in items {
+        if let Some(group) = groups
+            .iter_mut()
+            .find(|group| name_of(group[0]) == name_of(item))
+        {
+            group.push(item);
+        } else {
+            groups.push(vec![item]);
+        }
+    }
+    groups
+}
+
+/// Render the whole `sliceEventDefinitions` list body (`[..]`) directly from the
+/// projected event facts, byte-identical to folding them through the incremental
+/// `merge_or_append_named_record` builder — but without ever parsing artifact
+/// text. Events sharing a name are merged into one definition whose `attributes`
+/// list is the in-order union of the members' attributes (the `Append` child
+/// mode), with `stream`/`observed`/`shared` taken from the first member (the
+/// builder enforces those agree).
+fn render_slice_event_definitions(events: &[NewEventDefinition], flavor: RecordFlavor) -> String {
+    let mut groups: Vec<(&NewEventDefinition, Vec<&NewEventAttribute>)> = Vec::new();
+    for event in events {
+        if let Some(group) = groups
+            .iter_mut()
+            .find(|(first, _)| first.name.as_ref() == event.name.as_ref())
+        {
+            group.1.push(&event.attribute);
+        } else {
+            groups.push((event, vec![&event.attribute]));
+        }
+    }
+    let records = groups
+        .iter()
+        .map(|(first, attributes)| render_event_definition_record(first, attributes, flavor))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{records}]")
+}
+
+fn render_event_definition_record(
+    event: &NewEventDefinition,
+    attributes: &[&NewEventAttribute],
+    flavor: RecordFlavor,
+) -> String {
+    let attribute_records = attributes
+        .iter()
+        .map(|attribute| match flavor {
+            RecordFlavor::Lean => lean_event_attribute_record(attribute),
+            RecordFlavor::Quint => quint_event_attribute_record(attribute),
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    match flavor {
+        RecordFlavor::Lean => format!(
+            "{{ name := {}, stream := {}, attributes := [{}], observed := {}, shared := {} }}",
+            quoted(event.name.as_ref()),
+            quoted(event.stream.as_ref()),
+            attribute_records,
+            lean_bool(event.observed),
+            lean_bool(event.shared),
+        ),
+        RecordFlavor::Quint => format!(
+            "{{ name: {}, stream: {}, attributes: [{}], observed: {}, shared: {} }}",
+            quoted(event.name.as_ref()),
+            quoted(event.stream.as_ref()),
+            attribute_records,
+            event.observed,
+            event.shared,
+        ),
+    }
+}
+
+/// Render the whole `sliceReadModelDefinitions` list body directly from the
+/// projected facts, byte-identical to folding them through
+/// `merge_or_append_named_record` (child list `fields` = `Append`; the scalar
+/// fields are taken from the first member, which the builder enforces agree).
+/// Never parses artifact text.
+fn render_slice_read_model_definitions(
+    read_models: &[NewReadModelDefinition],
+    flavor: RecordFlavor,
+) -> String {
+    let records = group_named(read_models, |read_model| read_model.name.as_ref())
+        .iter()
+        .map(|group| render_read_model_definition_record(group, flavor))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{records}]")
+}
+
+fn render_read_model_definition_record(
+    group: &[&NewReadModelDefinition],
+    flavor: RecordFlavor,
+) -> String {
+    let first = group[0];
+    let fields = group
+        .iter()
+        .map(|read_model| match flavor {
+            RecordFlavor::Lean => lean_read_model_field_record(&read_model.field),
+            RecordFlavor::Quint => quint_read_model_field_record(&read_model.field),
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let transitive_rule = quoted(
+        first
+            .transitive_rule
+            .as_ref()
+            .map_or("", ReadModelTransitiveRule::as_ref),
+    );
+    let example_scenario_name = quoted(
+        first
+            .example_scenario_name
+            .as_ref()
+            .map_or("", ScenarioName::as_ref),
+    );
+    match flavor {
+        RecordFlavor::Lean => format!(
+            "{{ name := {}, fields := [{}], transitive := {}, relationshipFields := [{}], transitiveRule := {}, exampleScenarioName := {} }}",
+            quoted(first.name.as_ref()),
+            fields,
+            lean_bool(first.transitive),
+            lean_list(first.relationship_fields.as_slice()),
+            transitive_rule,
+            example_scenario_name,
+        ),
+        RecordFlavor::Quint => format!(
+            "{{ name: {}, fields: [{}], transitive: {}, relationshipFields: [{}], transitiveRule: {}, exampleScenarioName: {} }}",
+            quoted(first.name.as_ref()),
+            fields,
+            first.transitive,
+            quint_list(first.relationship_fields.as_slice()),
+            transitive_rule,
+            example_scenario_name,
+        ),
+    }
+}
+
+/// Render the whole `sliceExternalPayloads` list body directly from the projected
+/// facts, byte-identical to folding them through `merge_or_append_named_record`
+/// (child list `fields` = `Append`; group by name). Never parses artifact text.
+fn render_slice_external_payload_definitions(
+    payloads: &[NewExternalPayloadDefinition],
+    flavor: RecordFlavor,
+) -> String {
+    let records = group_named(payloads, |payload| payload.name.as_ref())
+        .iter()
+        .map(|group| render_external_payload_definition_record(group, flavor))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{records}]")
+}
+
+fn render_external_payload_definition_record(
+    group: &[&NewExternalPayloadDefinition],
+    flavor: RecordFlavor,
+) -> String {
+    let fields = group
+        .iter()
+        .map(|payload| external_payload_field_record(payload, flavor))
+        .collect::<Vec<_>>()
+        .join(",");
+    let name = quoted(group[0].name.as_ref());
+    // `fields` is the record's final field, so its value span runs up to the
+    // closing `}` and includes the space before it. The incremental builder
+    // overwrites that span (and thus the space) when it splices a second field
+    // into an existing record, so a merged record closes `]}` while a
+    // freshly-appended single-field record keeps the rendered `] }`. Reproduce
+    // that exactly for byte-identity with on-disk artifacts.
+    let closing = if group.len() > 1 { "]}" } else { "] }" };
+    match flavor {
+        RecordFlavor::Lean => format!("{{ name := {name}, fields := [{fields}{closing}"),
+        RecordFlavor::Quint => format!("{{ name: {name}, fields: [{fields}{closing}"),
+    }
+}
+
+fn external_payload_field_record(
+    payload: &NewExternalPayloadDefinition,
+    flavor: RecordFlavor,
+) -> String {
+    match flavor {
+        RecordFlavor::Lean => format!(
+            "{{ name := {}, provenanceDescription := {}, bitEncoding := {} }}",
+            quoted(payload.field.as_ref()),
+            quoted(payload.field_provenance.as_ref()),
+            quoted(payload.bit_encoding.as_ref()),
+        ),
+        RecordFlavor::Quint => format!(
+            "{{ name: {}, provenanceDescription: {}, bitEncoding: {} }}",
+            quoted(payload.field.as_ref()),
+            quoted(payload.field_provenance.as_ref()),
+            quoted(payload.bit_encoding.as_ref()),
+        ),
+    }
+}
+
+/// Union the child rows of an `AppendIfMissing` list across a name group the way
+/// the incremental builder does: the first member's rows are taken verbatim (the
+/// record is appended whole), then each later member's rows are appended only
+/// when not already present.
+fn union_if_missing<T>(group: &[&T], render_rows: impl Fn(&T) -> Vec<String>) -> Vec<String> {
+    let mut combined: Vec<String> = Vec::new();
+    for (index, member) in group.iter().enumerate() {
+        let rows = render_rows(member);
+        if index == 0 {
+            combined.extend(rows);
+        } else {
+            for row in rows {
+                if !combined.contains(&row) {
+                    combined.push(row);
+                }
+            }
+        }
+    }
+    combined
+}
+
+/// Render the whole `sliceCommandDefinitions` list body directly from the
+/// projected facts, byte-identical to folding them through
+/// `merge_or_append_named_record` (child lists per `COMMAND_CHILD_LIST_FIELDS`:
+/// `inputs` accumulate, `emittedEvents`/`observedStreams`/`errors` union by
+/// identity; `singleton`/`repeatBehavior` come from the first member). Never
+/// parses artifact text.
+fn render_slice_command_definitions(
+    commands: &[NewCommandDefinition],
+    flavor: RecordFlavor,
+) -> String {
+    let records = group_named(commands, |command| command.name.as_ref())
+        .iter()
+        .map(|group| render_command_definition_record(group, flavor))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{records}]")
+}
+
+fn render_command_definition_record(
+    group: &[&NewCommandDefinition],
+    flavor: RecordFlavor,
+) -> String {
+    let first = group[0];
+    let inputs = group
+        .iter()
+        .map(|command| match flavor {
+            RecordFlavor::Lean => lean_command_input_record(&command.input),
+            RecordFlavor::Quint => quint_command_input_record(&command.input),
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let emitted_events = union_if_missing(group, |command| {
+        command
+            .emitted_events
+            .as_slice()
+            .iter()
+            .map(|event| match flavor {
+                RecordFlavor::Lean => lean_event_reference_record(event.as_ref()),
+                RecordFlavor::Quint => quint_event_reference_record(event.as_ref()),
+            })
+            .collect()
+    })
+    .join(",");
+    let observed_streams = union_if_missing(group, |command| {
+        command
+            .observed_streams
+            .as_slice()
+            .iter()
+            .map(|stream| match flavor {
+                RecordFlavor::Lean => lean_stream_reference_record(stream.as_ref()),
+                RecordFlavor::Quint => quint_stream_reference_record(stream.as_ref()),
+            })
+            .collect()
+    })
+    .join(",");
+    let errors = union_if_missing(group, |command| {
+        command
+            .errors
+            .as_slice()
+            .iter()
+            .map(|error| match flavor {
+                RecordFlavor::Lean => lean_command_error_record(error),
+                RecordFlavor::Quint => quint_command_error_record(error),
+            })
+            .collect()
+    })
+    .join(",");
+    let singleton = first.singleton_repeat_behavior.is_some();
+    let repeat_behavior = quoted(
+        first
+            .singleton_repeat_behavior
+            .as_ref()
+            .map_or("", |repeat_behavior| repeat_behavior.as_ref()),
+    );
+    match flavor {
+        RecordFlavor::Lean => format!(
+            "{{ name := {}, inputs := [{}], emittedEvents := [{}], observedStreams := [{}], errors := [{}], singleton := {}, repeatBehavior := {} }}",
+            quoted(first.name.as_ref()),
+            inputs,
+            emitted_events,
+            observed_streams,
+            errors,
+            singleton,
+            repeat_behavior,
+        ),
+        RecordFlavor::Quint => format!(
+            "{{ name: {}, inputs: [{}], emittedEvents: [{}], observedStreams: [{}], errors: [{}], singleton: {}, repeatBehavior: {} }}",
+            quoted(first.name.as_ref()),
+            inputs,
+            emitted_events,
+            observed_streams,
+            errors,
+            singleton,
+            repeat_behavior,
+        ),
+    }
+}
+
+/// Render the whole `sliceViewDefinitions` list body directly from the projected
+/// facts, byte-identical to folding them through `merge_or_append_named_record`
+/// (child lists per `VIEW_CHILD_LIST_FIELDS`: `fields`/`controls` accumulate,
+/// `readModels`/`sketchTokens`/`localStates`/`filters` union by identity). Never
+/// parses artifact text.
+fn render_slice_view_definitions(views: &[NewViewDefinition], flavor: RecordFlavor) -> String {
+    let records = group_named(views, |view| view.name.as_ref())
+        .iter()
+        .map(|group| render_view_definition_record(group, flavor))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{records}]")
+}
+
+fn render_view_definition_record(group: &[&NewViewDefinition], flavor: RecordFlavor) -> String {
+    let first = group[0];
+    let read_models = union_if_missing(group, |view| {
+        vec![quoted(view.field.source_read_model.as_ref())]
+    })
+    .join(",");
+    let fields = group
+        .iter()
+        .map(|view| match flavor {
+            RecordFlavor::Lean => lean_view_field_record(&view.field),
+            RecordFlavor::Quint => quint_view_field_record(&view.field),
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let controls = group
+        .iter()
+        .flat_map(|view| {
+            view.controls.as_slice().iter().map(|control| match flavor {
+                RecordFlavor::Lean => lean_control_definition_record(control),
+                RecordFlavor::Quint => quint_control_definition_record(control),
+            })
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let sketch_tokens = union_if_missing(group, |view| {
+        view_sketch_tokens(view)
+            .iter()
+            .map(|token| quoted(token.as_ref()))
+            .collect()
+    })
+    .join(",");
+    let local_states = union_if_missing(group, |view| {
+        view.local_states
+            .as_slice()
+            .iter()
+            .map(|state| quoted(state.as_ref()))
+            .collect()
+    })
+    .join(",");
+    let filters = union_if_missing(group, |view| {
+        view.filters
+            .as_slice()
+            .iter()
+            .map(|filter| quoted(filter.as_ref()))
+            .collect()
+    })
+    .join(",");
+    // `filters` is the record's final field, so a splice into it consumes the
+    // space before the closing brace (see the external-payload renderer). That
+    // splice fires only when a member after the first contributes a non-empty
+    // filters list; otherwise the rendered `] }` survives.
+    let filters_spliced = group.len() > 1
+        && group[1..]
+            .iter()
+            .any(|view| !view.filters.as_slice().is_empty());
+    let closing = if filters_spliced { "]}" } else { "] }" };
+    match flavor {
+        RecordFlavor::Lean => format!(
+            "{{ name := {}, readModels := [{}], fields := [{}], controls := [{}], sketchTokens := [{}], localStates := [{}], filters := [{}{}",
+            quoted(first.name.as_ref()),
+            read_models,
+            fields,
+            controls,
+            sketch_tokens,
+            local_states,
+            filters,
+            closing,
+        ),
+        RecordFlavor::Quint => format!(
+            "{{ name: {}, readModels: [{}], fields: [{}], controls: [{}], sketchTokens: [{}], localStates: [{}], filters: [{}{}",
+            quoted(first.name.as_ref()),
+            read_models,
+            fields,
+            controls,
+            sketch_tokens,
+            local_states,
+            filters,
+            closing,
+        ),
+    }
+}
+
+/// The projected slice facts a complete slice module is rendered from — the same
+/// vectors `ProjectedSlice` carries, in arrival order.
+pub(crate) struct SliceModuleFacts<'a> {
+    pub(crate) scenarios: &'a [NewSliceScenario],
+    pub(crate) outcomes: &'a [NewOutcomeDefinition],
+    pub(crate) external_payloads: &'a [NewExternalPayloadDefinition],
+    pub(crate) event_definitions: &'a [NewEventDefinition],
+    pub(crate) command_definitions: &'a [NewCommandDefinition],
+    pub(crate) read_models: &'a [NewReadModelDefinition],
+    pub(crate) bit_level_data_flows: &'a [NewBitLevelDataFlow],
+    pub(crate) views: &'a [NewViewDefinition],
+    pub(crate) translations: &'a [NewTranslationDefinition],
+    pub(crate) automations: &'a [NewAutomationDefinition],
+    pub(crate) board_elements: &'a [NewBoardElement],
+    pub(crate) board_connections: &'a [NewBoardConnection],
+}
+
+/// Populate every definition list of a freshly-emitted slice module `shell`
+/// (whose lists are the `:= []` placeholders) directly from the projected facts,
+/// replacing each placeholder with the fully-rendered list body. This is the pure
+/// emit path: it renders each list from the facts in one shot instead of
+/// replaying records through the incremental text-merge builders, so it never
+/// parses an artifact. Each rendered body is parity-proven byte-identical to the
+/// builder fold for that list (see `pure_emit_parity_tests`), so the populated
+/// module is byte-identical to the replay-built module.
+pub(crate) fn populate_slice_lists(
+    shell: &str,
+    facts: &SliceModuleFacts<'_>,
+    flavor: RecordFlavor,
+) -> String {
+    let scenario_body = |kind: ScenarioKind| {
+        let matching: Vec<&NewSliceScenario> = facts
+            .scenarios
+            .iter()
+            .filter(|scenario| scenario.kind == kind)
+            .collect();
+        render_append_list(&matching, |scenario| match flavor {
+            RecordFlavor::Lean => lean_scenario_record(scenario),
+            RecordFlavor::Quint => quint_scenario_record(scenario),
+        })
+    };
+    // sliceReferencedCommands accumulates (no dedup) the views' control command
+    // references first, then one reference per translation, then per automation —
+    // the order `ProjectedSlice::effects` enqueues those handlers.
+    let mut referenced_commands: Vec<String> = Vec::new();
+    for view in facts.views {
+        referenced_commands.extend(match flavor {
+            RecordFlavor::Lean => lean_view_referenced_command_records(view),
+            RecordFlavor::Quint => quint_view_referenced_command_records(view),
+        });
+    }
+    for translation in facts.translations {
+        referenced_commands.push(match flavor {
+            RecordFlavor::Lean => lean_command_reference_record(translation.command_name.as_ref()),
+            RecordFlavor::Quint => {
+                quint_command_reference_record(translation.command_name.as_ref())
+            }
+        });
+    }
+    for automation in facts.automations {
+        referenced_commands.push(match flavor {
+            RecordFlavor::Lean => lean_command_reference_record(automation.command_name.as_ref()),
+            RecordFlavor::Quint => quint_command_reference_record(automation.command_name.as_ref()),
+        });
+    }
+    let referenced_commands_body = format!("[{}]", referenced_commands.join(","));
+
+    let bodies: [(&str, &str, String); 19] = [
+        (
+            "def sliceAcceptanceScenarios : List EventModelScenario := ",
+            "val sliceAcceptanceScenarios: List[EventModelScenario] = ",
+            scenario_body(ScenarioKind::Acceptance),
+        ),
+        (
+            "def sliceContractScenarios : List EventModelScenario := ",
+            "val sliceContractScenarios: List[EventModelScenario] = ",
+            scenario_body(ScenarioKind::Contract),
+        ),
+        (
+            "def sliceOutcomeDefinitions : List OutcomeDefinition := ",
+            "val sliceOutcomeDefinitions: List[OutcomeDefinition] = ",
+            render_append_list(facts.outcomes, |outcome| match flavor {
+                RecordFlavor::Lean => lean_outcome_definition_record(outcome),
+                RecordFlavor::Quint => quint_outcome_definition_record(outcome),
+            }),
+        ),
+        (
+            "def sliceExternalPayloads : List ExternalPayloadDefinition := ",
+            "val sliceExternalPayloads: List[ExternalPayloadDefinition] = ",
+            render_slice_external_payload_definitions(facts.external_payloads, flavor),
+        ),
+        (
+            "def sliceEvents : List SliceEventReference := ",
+            "val sliceEvents: List[SliceEventReference] = ",
+            render_dedup_list(facts.event_definitions, |event| match flavor {
+                RecordFlavor::Lean => lean_event_reference_record(event.name.as_ref()),
+                RecordFlavor::Quint => quint_event_reference_record(event.name.as_ref()),
+            }),
+        ),
+        (
+            "def sliceStreams : List StreamDefinition := ",
+            "val sliceStreams: List[StreamDefinition] = ",
+            render_dedup_list(facts.event_definitions, |event| match flavor {
+                RecordFlavor::Lean => lean_stream_record(event.stream.as_ref()),
+                RecordFlavor::Quint => quint_stream_record(event.stream.as_ref()),
+            }),
+        ),
+        (
+            "def sliceEventDefinitions : List EventDefinition := ",
+            "val sliceEventDefinitions: List[EventDefinition] = ",
+            render_slice_event_definitions(facts.event_definitions, flavor),
+        ),
+        (
+            "def sliceCommands : List SliceCommandReference := ",
+            "val sliceCommands: List[SliceCommandReference] = ",
+            render_dedup_list(facts.command_definitions, |command| match flavor {
+                RecordFlavor::Lean => lean_command_reference_record(command.name.as_ref()),
+                RecordFlavor::Quint => quint_command_reference_record(command.name.as_ref()),
+            }),
+        ),
+        (
+            "def sliceCommandDefinitions : List CommandDefinition := ",
+            "val sliceCommandDefinitions: List[CommandDefinition] = ",
+            render_slice_command_definitions(facts.command_definitions, flavor),
+        ),
+        (
+            "def sliceReadModels : List SliceReadModelReference := ",
+            "val sliceReadModels: List[SliceReadModelReference] = ",
+            render_dedup_list(facts.read_models, |read_model| match flavor {
+                RecordFlavor::Lean => lean_read_model_reference_record(read_model.name.as_ref()),
+                RecordFlavor::Quint => quint_read_model_reference_record(read_model.name.as_ref()),
+            }),
+        ),
+        (
+            "def sliceReadModelDefinitions : List ReadModelDefinition := ",
+            "val sliceReadModelDefinitions: List[ReadModelDefinition] = ",
+            render_slice_read_model_definitions(facts.read_models, flavor),
+        ),
+        (
+            "def sliceBitLevelDataFlows : List BitLevelDataFlow := ",
+            "val sliceBitLevelDataFlows: List[BitLevelDataFlow] = ",
+            render_append_list(facts.bit_level_data_flows, |data_flow| match flavor {
+                RecordFlavor::Lean => lean_data_flow_record(data_flow),
+                RecordFlavor::Quint => quint_data_flow_record(data_flow),
+            }),
+        ),
+        (
+            "def sliceViews : List SliceViewReference := ",
+            "val sliceViews: List[SliceViewReference] = ",
+            render_dedup_list(facts.views, |view| match flavor {
+                RecordFlavor::Lean => lean_view_reference_record(view.name.as_ref()),
+                RecordFlavor::Quint => quint_view_reference_record(view.name.as_ref()),
+            }),
+        ),
+        (
+            "def sliceReferencedCommands : List SliceCommandReference := ",
+            "val sliceReferencedCommands: List[SliceCommandReference] = ",
+            referenced_commands_body,
+        ),
+        (
+            "def sliceViewDefinitions : List ViewDefinition := ",
+            "val sliceViewDefinitions: List[ViewDefinition] = ",
+            render_slice_view_definitions(facts.views, flavor),
+        ),
+        (
+            "def sliceTranslations : List TranslationDefinition := ",
+            "val sliceTranslations: List[TranslationDefinition] = ",
+            render_append_list(facts.translations, |translation| match flavor {
+                RecordFlavor::Lean => lean_translation_definition_record(translation),
+                RecordFlavor::Quint => quint_translation_definition_record(translation),
+            }),
+        ),
+        (
+            "def sliceAutomations : List AutomationDefinition := ",
+            "val sliceAutomations: List[AutomationDefinition] = ",
+            render_append_list(facts.automations, |automation| match flavor {
+                RecordFlavor::Lean => lean_automation_definition_record(automation),
+                RecordFlavor::Quint => quint_automation_definition_record(automation),
+            }),
+        ),
+        (
+            "def sliceBoardElements : List BoardElement := ",
+            "val sliceBoardElements: List[BoardElement] = ",
+            render_append_list(facts.board_elements, |element| match flavor {
+                RecordFlavor::Lean => lean_board_element_record(element),
+                RecordFlavor::Quint => quint_board_element_record(element),
+            }),
+        ),
+        (
+            "def sliceBoardConnections : List BoardConnection := ",
+            "val sliceBoardConnections: List[BoardConnection] = ",
+            render_append_list(facts.board_connections, |connection| match flavor {
+                RecordFlavor::Lean => lean_board_connection_record(connection),
+                RecordFlavor::Quint => quint_board_connection_record(connection),
+            }),
+        ),
+    ];
+
+    let mut populated = shell.to_owned();
+    for (lean_marker, quint_marker, body) in &bodies {
+        let marker = match flavor {
+            RecordFlavor::Lean => lean_marker,
+            RecordFlavor::Quint => quint_marker,
+        };
+        populated = populated.replace(&format!("{marker}[]"), &format!("{marker}{body}"));
+    }
+    populated
+}
+
 fn lean_event_reference_record(event_name: &str) -> String {
     format!("{{ name := {} }}", quoted(event_name))
 }
 
 fn quint_event_reference_record(event_name: &str) -> String {
     format!("{{ name: {} }}", quoted(event_name))
-}
-
-fn lean_event_reference_records(event_names: &[EventName]) -> String {
-    event_names
-        .iter()
-        .map(|event_name| lean_event_reference_record(event_name.as_ref()))
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
-fn quint_event_reference_records(event_names: &[EventName]) -> String {
-    event_names
-        .iter()
-        .map(|event_name| quint_event_reference_record(event_name.as_ref()))
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
-fn lean_stream_reference_records(stream_names: &[StreamName]) -> String {
-    stream_names
-        .iter()
-        .map(|stream_name| lean_stream_reference_record(stream_name.as_ref()))
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
-fn quint_stream_reference_records(stream_names: &[StreamName]) -> String {
-    stream_names
-        .iter()
-        .map(|stream_name| quint_stream_reference_record(stream_name.as_ref()))
-        .collect::<Vec<_>>()
-        .join(",")
 }
 
 fn lean_command_reference_record(command_name: &str) -> String {
@@ -3243,52 +2779,6 @@ fn lean_view_reference_record(view_name: &str) -> String {
 
 fn quint_view_reference_record(view_name: &str) -> String {
     format!("{{ name: {} }}", quoted(view_name))
-}
-
-fn lean_external_payload_definition_record(
-    external_payload: &NewExternalPayloadDefinition,
-) -> String {
-    format!(
-        "{{ name := {}, fields := [{{ name := {}, provenanceDescription := {}, bitEncoding := {} }}] }}",
-        quoted(external_payload.name.as_ref()),
-        quoted(external_payload.field.as_ref()),
-        quoted(external_payload.field_provenance.as_ref()),
-        quoted(external_payload.bit_encoding.as_ref()),
-    )
-}
-
-fn quint_external_payload_definition_record(
-    external_payload: &NewExternalPayloadDefinition,
-) -> String {
-    format!(
-        "{{ name: {}, fields: [{{ name: {}, provenanceDescription: {}, bitEncoding: {} }}] }}",
-        quoted(external_payload.name.as_ref()),
-        quoted(external_payload.field.as_ref()),
-        quoted(external_payload.field_provenance.as_ref()),
-        quoted(external_payload.bit_encoding.as_ref()),
-    )
-}
-
-fn lean_event_definition_record(event: &NewEventDefinition) -> String {
-    format!(
-        "{{ name := {}, stream := {}, attributes := [{}], observed := {}, shared := {} }}",
-        quoted(event.name.as_ref()),
-        quoted(event.stream.as_ref()),
-        lean_event_attribute_record(&event.attribute),
-        lean_bool(event.observed),
-        lean_bool(event.shared),
-    )
-}
-
-fn quint_event_definition_record(event: &NewEventDefinition) -> String {
-    format!(
-        "{{ name: {}, stream: {}, attributes: [{}], observed: {}, shared: {} }}",
-        quoted(event.name.as_ref()),
-        quoted(event.stream.as_ref()),
-        quint_event_attribute_record(&event.attribute),
-        event.observed,
-        event.shared,
-    )
 }
 
 fn lean_event_attribute_record(attribute: &NewEventAttribute) -> String {
@@ -3322,50 +2812,6 @@ fn quint_event_attribute_record(attribute: &NewEventAttribute) -> String {
                 .map_or("", GeneratedEventAttributeSourceKind::as_ref),
         ),
         quoted(attribute.provenance_description.as_ref()),
-    )
-}
-
-fn lean_read_model_definition_record(read_model: &NewReadModelDefinition) -> String {
-    format!(
-        "{{ name := {}, fields := [{}], transitive := {}, relationshipFields := [{}], transitiveRule := {}, exampleScenarioName := {} }}",
-        quoted(read_model.name.as_ref()),
-        lean_read_model_field_record(&read_model.field),
-        lean_bool(read_model.transitive),
-        lean_list(read_model.relationship_fields.as_slice()),
-        quoted(
-            read_model
-                .transitive_rule
-                .as_ref()
-                .map_or("", ReadModelTransitiveRule::as_ref),
-        ),
-        quoted(
-            read_model
-                .example_scenario_name
-                .as_ref()
-                .map_or("", ScenarioName::as_ref),
-        ),
-    )
-}
-
-fn quint_read_model_definition_record(read_model: &NewReadModelDefinition) -> String {
-    format!(
-        "{{ name: {}, fields: [{}], transitive: {}, relationshipFields: [{}], transitiveRule: {}, exampleScenarioName: {} }}",
-        quoted(read_model.name.as_ref()),
-        quint_read_model_field_record(&read_model.field),
-        read_model.transitive,
-        quint_list(read_model.relationship_fields.as_slice()),
-        quoted(
-            read_model
-                .transitive_rule
-                .as_ref()
-                .map_or("", ReadModelTransitiveRule::as_ref),
-        ),
-        quoted(
-            read_model
-                .example_scenario_name
-                .as_ref()
-                .map_or("", ScenarioName::as_ref),
-        ),
     )
 }
 
@@ -3430,42 +2876,6 @@ fn quint_read_model_field_record(field: &NewReadModelField) -> String {
                 .map_or("", ScenarioName::as_ref),
         ),
         quoted(field.provenance_description.as_ref()),
-    )
-}
-
-fn lean_view_definition_record(view: &NewViewDefinition) -> String {
-    format!(
-        "{{ name := {}, readModels := [{}], fields := [{}], controls := [{}], sketchTokens := [{}], localStates := [{}], filters := [{}] }}",
-        quoted(view.name.as_ref()),
-        quoted(view.field.source_read_model.as_ref()),
-        lean_view_field_record(&view.field),
-        view.controls
-            .as_slice()
-            .iter()
-            .map(lean_control_definition_record)
-            .collect::<Vec<_>>()
-            .join(","),
-        lean_list(&view_sketch_tokens(view)),
-        lean_list(view.local_states.as_slice()),
-        lean_list(view.filters.as_slice()),
-    )
-}
-
-fn quint_view_definition_record(view: &NewViewDefinition) -> String {
-    format!(
-        "{{ name: {}, readModels: [{}], fields: [{}], controls: [{}], sketchTokens: [{}], localStates: [{}], filters: [{}] }}",
-        quoted(view.name.as_ref()),
-        quoted(view.field.source_read_model.as_ref()),
-        quint_view_field_record(&view.field),
-        view.controls
-            .as_slice()
-            .iter()
-            .map(quint_control_definition_record)
-            .collect::<Vec<_>>()
-            .join(","),
-        quint_list(&view_sketch_tokens(view)),
-        quint_list(view.local_states.as_slice()),
-        quint_list(view.filters.as_slice()),
     )
 }
 
@@ -3790,12 +3200,4 @@ fn quoted(value: &str) -> String {
     serde_json::to_string(value).unwrap_or_else(|error| {
         unreachable!("EMC generated formal slice string literal must be valid: {error}");
     })
-}
-
-fn file_contents(value: String) -> Result<FileContents, FormalSliceFactError> {
-    FileContents::try_new(value).map_err(|error| FormalSliceFactError::new(error.to_string()))
-}
-
-fn report_line(value: String) -> Result<ReportLine, FormalSliceFactError> {
-    ReportLine::try_new(value).map_err(|error| FormalSliceFactError::new(error.to_string()))
 }
