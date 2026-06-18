@@ -779,6 +779,18 @@ mod tests {
                 "event frontier changed during verification",
             ));
 
+        // The guard returns before the readiness-append loop, so no readiness
+        // event was recorded. Had one been wrongly appended at the now
+        // superseded frontier, `emc list workflows` would report it as stale
+        // (the grafted transaction moved the frontier); its absence proves the
+        // declaration was withheld.
+        Command::cargo_bin("emc")?
+            .args(["list", "workflows"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("readiness is stale").not());
+
         Ok(())
     }
 
