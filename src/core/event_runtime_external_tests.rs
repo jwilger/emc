@@ -1298,4 +1298,89 @@ mod tests {
         );
         Ok(())
     }
+
+    /// Every persisted transaction is a complete, self-describing envelope: the
+    /// header carries the schema (format) version, the transaction id (one emc
+    /// command is one transaction, so the transaction id is the command/group
+    /// identity), and the parent transaction ids; each event carries an event
+    /// id, stream id, stream version (ordinal), event type, and the typed
+    /// payload. eventcore-fs owns this envelope; emc recovers the per-operation
+    /// event type as the typed payload via `read_all_emc_events`.
+    #[test]
+    fn committed_transactions_carry_a_complete_self_describing_envelope()
+    -> Result<(), Box<dyn Error>> {
+        let project = TempDir::new()?;
+        // Span the project, workflow, and slice streams.
+        seed_slice(project.path())?;
+
+        let events_dir = event_store_root(project.path()).join("events");
+        let mut headers = 0_usize;
+        let mut envelopes = 0_usize;
+        for entry in fs::read_dir(&events_dir)? {
+            let path = entry?.path();
+            if path
+                .extension()
+                .is_some_and(|extension| extension == "jsonl")
+            {
+                let contents = fs::read_to_string(&path)?;
+                for line in contents.lines().filter(|line| !line.trim().is_empty()) {
+                    let record: serde_json::Value = serde_json::from_str(line)?;
+                    match record.get("record").and_then(serde_json::Value::as_str) {
+                        Some("header") => {
+                            for field in
+                                ["format_version", "transaction_id", "parent_transaction_ids"]
+                            {
+                                assert!(
+                                    record.get(field).is_some(),
+                                    "transaction header must carry {field}: {line}"
+                                );
+                            }
+                            headers += 1;
+                        }
+                        Some("event") => {
+                            for field in [
+                                "event_id",
+                                "stream_id",
+                                "stream_version",
+                                "event_type",
+                                "event_data",
+                            ] {
+                                assert!(
+                                    record.get(field).is_some(),
+                                    "event envelope must carry {field}: {line}"
+                                );
+                            }
+                            envelopes += 1;
+                        }
+                        other => {
+                            return Err(
+                                format!("unexpected transaction record kind: {other:?}").into()
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        assert!(
+            headers >= 3 && envelopes >= 3,
+            "project, workflow, and slice operations must each persist an enveloped transaction \
+             (headers={headers}, envelopes={envelopes})"
+        );
+
+        // emc recovers each per-operation event type as the typed payload.
+        let typed = read_all_emc_events(project.path())?;
+        assert!(
+            typed
+                .iter()
+                .any(|event| matches!(event, EmcEvent::ProjectInitialized { .. }))
+                && typed
+                    .iter()
+                    .any(|event| matches!(event, EmcEvent::WorkflowAdded { .. }))
+                && typed
+                    .iter()
+                    .any(|event| matches!(event, EmcEvent::SliceAdded { .. })),
+            "typed read-back must recover each per-operation event type, got {typed:?}"
+        );
+        Ok(())
+    }
 }
