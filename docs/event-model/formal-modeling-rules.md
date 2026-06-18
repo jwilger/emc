@@ -297,7 +297,7 @@ Quint should verify at least:
   review records, conflict resolutions, and workflow-readiness declarations use
   eventcore command paths; the current repository-tracked event export remains
   the mechanically exercised interchange path for the full command set.
-- 🟡 `emc verify` declares workflow readiness only after Lean4 and Quint
+- ✅ `emc verify` declares workflow readiness only after Lean4 and Quint
   verification succeeds for an unchanged exported-event frontier. If the
   frontier changes during verification, readiness is not appended and the
   verification command reports a retryable frontier-change error.
