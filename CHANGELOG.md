@@ -7,6 +7,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5](https://git.johnwilger.com/Slipstream/emc/compare/v0.1.4...v0.1.5) - 2026-06-18
+
+### Added
+
+- *(conflict)* record resolutions as replayable ConflictResolved events ([#151](https://git.johnwilger.com/Slipstream/emc/pulls/151))
+
+### Other
+
+- *(events)* verify the persisted transaction envelope is complete ([#157](https://git.johnwilger.com/Slipstream/emc/pulls/157))
+- *(verify)* assert readiness withheld when frontier moves mid-verify ([#155](https://git.johnwilger.com/Slipstream/emc/pulls/155))
+- *(runtime)* exercise every command at the eventcore dispatch boundary ([#153](https://git.johnwilger.com/Slipstream/emc/pulls/153))
+- *(verify)* prove readiness stays out of the projection fingerprint ([#149](https://git.johnwilger.com/Slipstream/emc/pulls/149))
+- *(store)* assert eventcore-fs gitignore keeps the log sole truth ([#147](https://git.johnwilger.com/Slipstream/emc/pulls/147))
+- correct event-store references to eventcore-fs source of truth ([#145](https://git.johnwilger.com/Slipstream/emc/pulls/145))
+
 ## [0.1.4](https://git.johnwilger.com/Slipstream/emc/compare/v0.1.3...v0.1.4) - 2026-06-18
 
 ### Fixed
