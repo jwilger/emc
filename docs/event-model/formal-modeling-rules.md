@@ -272,10 +272,14 @@ Quint should verify at least:
 
 ## Event-Sourced Authoring Runtime
 
-- 🟡 Project, workflow, workflow-fact, workflow-transition, slice, slice-fact,
-  conflict-resolution, clean-review, and workflow-readiness operations export
-  domain events with schema version, event id, command id, ordinal, stream id,
-  parents, event type, and typed payload data.
+- ✅ Project, workflow, workflow-fact, workflow-transition, slice, slice-fact,
+  conflict-resolution, clean-review, and workflow-readiness operations append
+  domain events to the eventcore-fs store as complete self-describing
+  transactions: a schema (format) version, a transaction id (one command is one
+  transaction, so it is the command/group identity), parent transaction ids,
+  and per event an event id, stream id, stream version (ordinal), event type,
+  and the typed payload (whose per-operation event type is the payload's
+  semantic discriminant).
 - ✅ Exported project, workflow, workflow-fact, workflow-transition, slice,
   slice-fact, review, conflict-resolution, and workflow-readiness events
   project into `emc.toml`, Lean4 artifacts, Quint artifacts, and review records
