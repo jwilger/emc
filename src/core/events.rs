@@ -171,6 +171,8 @@ pub(crate) enum ExportedEventType {
     SliceViewControlRemoved,
     SliceBitLevelDataFlowAdded,
     SliceTranslationAdded,
+    SliceTranslationDefinitionUpdated,
+    SliceTranslationDefinitionRemoved,
     SliceAutomationAdded,
     SliceAutomationDefinitionUpdated,
     SliceAutomationDefinitionRemoved,
@@ -224,6 +226,8 @@ impl ExportedEventType {
             "SliceViewControlRemoved" => Ok(Self::SliceViewControlRemoved),
             "SliceBitLevelDataFlowAdded" => Ok(Self::SliceBitLevelDataFlowAdded),
             "SliceTranslationAdded" => Ok(Self::SliceTranslationAdded),
+            "SliceTranslationDefinitionUpdated" => Ok(Self::SliceTranslationDefinitionUpdated),
+            "SliceTranslationDefinitionRemoved" => Ok(Self::SliceTranslationDefinitionRemoved),
             "SliceAutomationAdded" => Ok(Self::SliceAutomationAdded),
             "SliceAutomationDefinitionUpdated" => Ok(Self::SliceAutomationDefinitionUpdated),
             "SliceAutomationDefinitionRemoved" => Ok(Self::SliceAutomationDefinitionRemoved),
@@ -280,6 +284,8 @@ impl AsRef<str> for ExportedEventType {
             Self::SliceViewControlRemoved => "SliceViewControlRemoved",
             Self::SliceBitLevelDataFlowAdded => "SliceBitLevelDataFlowAdded",
             Self::SliceTranslationAdded => "SliceTranslationAdded",
+            Self::SliceTranslationDefinitionUpdated => "SliceTranslationDefinitionUpdated",
+            Self::SliceTranslationDefinitionRemoved => "SliceTranslationDefinitionRemoved",
             Self::SliceAutomationAdded => "SliceAutomationAdded",
             Self::SliceAutomationDefinitionUpdated => "SliceAutomationDefinitionUpdated",
             Self::SliceAutomationDefinitionRemoved => "SliceAutomationDefinitionRemoved",
@@ -2424,6 +2430,13 @@ pub(crate) enum ExportedEventBody {
     SliceTranslationAdded {
         translation: NewTranslationDefinition,
     },
+    SliceTranslationDefinitionUpdated {
+        translation: NewTranslationDefinition,
+    },
+    SliceTranslationDefinitionRemoved {
+        slice: SliceSlug,
+        name: TranslationName,
+    },
     SliceAutomationAdded {
         automation: NewAutomationDefinition,
     },
@@ -2527,6 +2540,12 @@ impl ExportedEventBody {
                 ExportedEventType::SliceBitLevelDataFlowAdded
             }
             Self::SliceTranslationAdded { .. } => ExportedEventType::SliceTranslationAdded,
+            Self::SliceTranslationDefinitionUpdated { .. } => {
+                ExportedEventType::SliceTranslationDefinitionUpdated
+            }
+            Self::SliceTranslationDefinitionRemoved { .. } => {
+                ExportedEventType::SliceTranslationDefinitionRemoved
+            }
             Self::SliceAutomationAdded { .. } => ExportedEventType::SliceAutomationAdded,
             Self::SliceAutomationDefinitionUpdated { .. } => {
                 ExportedEventType::SliceAutomationDefinitionUpdated
@@ -2675,8 +2694,12 @@ impl ExportedEventBody {
             Self::SliceBitLevelDataFlowAdded { data_flow } => {
                 SliceBitLevelDataFlowAddedEventPayload::from_data_flow(data_flow).to_json_value()
             }
-            Self::SliceTranslationAdded { translation } => {
+            Self::SliceTranslationAdded { translation }
+            | Self::SliceTranslationDefinitionUpdated { translation } => {
                 SliceTranslationAddedEventPayload::from_translation(translation).to_json_value()
+            }
+            Self::SliceTranslationDefinitionRemoved { slice, name } => {
+                json!({ "slice": slice.as_ref(), "name": name.as_ref() })
             }
             Self::SliceAutomationAdded { automation }
             | Self::SliceAutomationDefinitionUpdated { automation } => {
@@ -2914,10 +2937,11 @@ impl ExportedEventBody {
                 data_flow: SliceBitLevelDataFlowAddedEventPayload::from_json_value(payload)?
                     .into_data_flow(),
             }),
-            ExportedEventType::SliceTranslationAdded => Ok(Self::SliceTranslationAdded {
-                translation: SliceTranslationAddedEventPayload::from_json_value(payload)?
-                    .into_translation(),
-            }),
+            ExportedEventType::SliceTranslationAdded
+            | ExportedEventType::SliceTranslationDefinitionUpdated
+            | ExportedEventType::SliceTranslationDefinitionRemoved => {
+                Self::translation_from_event_type_and_payload(event_type, payload)
+            }
             ExportedEventType::SliceAutomationAdded
             | ExportedEventType::SliceAutomationDefinitionUpdated
             | ExportedEventType::SliceAutomationDefinitionRemoved => {
@@ -2932,6 +2956,33 @@ impl ExportedEventBody {
                     .into_connection(),
             }),
             _ => Self::misc_from_event_type_and_payload(event_type, payload),
+        }
+    }
+
+    fn translation_from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
+            ExportedEventType::SliceTranslationAdded => Ok(Self::SliceTranslationAdded {
+                translation: SliceTranslationAddedEventPayload::from_json_value(payload)?
+                    .into_translation(),
+            }),
+            ExportedEventType::SliceTranslationDefinitionUpdated => {
+                Ok(Self::SliceTranslationDefinitionUpdated {
+                    translation: SliceTranslationAddedEventPayload::from_json_value(payload)?
+                        .into_translation(),
+                })
+            }
+            ExportedEventType::SliceTranslationDefinitionRemoved => {
+                Ok(Self::SliceTranslationDefinitionRemoved {
+                    slice: slice_slug(required_str(payload, "slice")?)?,
+                    name: translation_name(required_str(payload, "name")?)?,
+                })
+            }
+            other => Err(format!(
+                "translation_from_event_type_and_payload received a non-translation event type {other}"
+            )),
         }
     }
 
@@ -3477,6 +3528,30 @@ impl EventDraft {
         }
     }
 
+    pub(crate) fn slice_translation_definition_updated(
+        translation: &NewTranslationDefinition,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(translation.slice_slug()),
+            body: ExportedEventBody::SliceTranslationDefinitionUpdated {
+                translation: translation.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_translation_definition_removed(
+        slice: &SliceSlug,
+        name: &TranslationName,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(slice),
+            body: ExportedEventBody::SliceTranslationDefinitionRemoved {
+                slice: slice.clone(),
+                name: name.clone(),
+            },
+        }
+    }
+
     pub(crate) fn slice_automation_added(automation: &NewAutomationDefinition) -> Self {
         Self {
             stream_id: EventStreamId::slice(automation.slice_slug()),
@@ -3878,6 +3953,10 @@ impl ProjectedModel {
             | EmcEvent::SliceAutomationDefinitionRemoved { .. } => {
                 Self::apply_automation_definition_event(model, event)
             }
+            EmcEvent::SliceTranslationDefinitionUpdated { .. }
+            | EmcEvent::SliceTranslationDefinitionRemoved { .. } => {
+                Self::apply_translation_definition_event(model, event)
+            }
             EmcEvent::SliceOutcomeDefinitionUpdated { outcome, .. } => {
                 Self::apply_outcome_definition_updated(model, outcome.outcome())
             }
@@ -4144,6 +4223,51 @@ impl ProjectedModel {
                 Err("apply_automation_definition_event received a non-automation event".to_owned())
             }
         }
+    }
+
+    fn apply_translation_definition_event(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        match event {
+            EmcEvent::SliceTranslationDefinitionUpdated { translation, .. } => {
+                Self::apply_translation_definition_updated(model, translation.translation())
+            }
+            EmcEvent::SliceTranslationDefinitionRemoved { translation, .. } => {
+                Self::apply_translation_definition_removed(
+                    model,
+                    translation.slice(),
+                    translation.name(),
+                )
+            }
+            _ => Err(
+                "apply_translation_definition_event received a non-translation event".to_owned(),
+            ),
+        }
+    }
+
+    fn apply_translation_definition_updated(
+        model: Option<Self>,
+        translation: NewTranslationDefinition,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceTranslationDefinitionUpdated")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceTranslationDefinitionUpdated {
+            translation,
+        })?;
+        Ok(Some(model))
+    }
+
+    fn apply_translation_definition_removed(
+        model: Option<Self>,
+        slice: &SliceSlug,
+        name: &TranslationName,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceTranslationDefinitionRemoved")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceTranslationDefinitionRemoved {
+            slice: slice.clone(),
+            name: name.clone(),
+        })?;
+        Ok(Some(model))
     }
 
     fn apply_command_definition_updated(
@@ -4771,10 +4895,10 @@ impl ProjectedModel {
             | ExportedEventBody::SliceViewControlRemoved { .. } => {
                 self.apply_slice_view_body(body)?;
             }
-            ExportedEventBody::SliceTranslationAdded { translation } => {
-                self.slice_mut(translation.slice_slug(), "SliceTranslationAdded")?
-                    .translations
-                    .push(translation);
+            ExportedEventBody::SliceTranslationAdded { .. }
+            | ExportedEventBody::SliceTranslationDefinitionUpdated { .. }
+            | ExportedEventBody::SliceTranslationDefinitionRemoved { .. } => {
+                self.apply_slice_translation_body(body)?;
             }
             ExportedEventBody::SliceAutomationAdded { .. }
             | ExportedEventBody::SliceAutomationDefinitionUpdated { .. }
@@ -4832,6 +4956,24 @@ impl ProjectedModel {
             }
             ExportedEventBody::SliceAutomationDefinitionRemoved { slice, name } => {
                 self.apply_slice_automation_definition_removed(&slice, &name)
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn apply_slice_translation_body(&mut self, body: ExportedEventBody) -> Result<(), String> {
+        match body {
+            ExportedEventBody::SliceTranslationAdded { translation } => {
+                self.slice_mut(translation.slice_slug(), "SliceTranslationAdded")?
+                    .translations
+                    .push(translation);
+                Ok(())
+            }
+            ExportedEventBody::SliceTranslationDefinitionUpdated { translation } => {
+                self.apply_slice_translation_definition_updated(translation)
+            }
+            ExportedEventBody::SliceTranslationDefinitionRemoved { slice, name } => {
+                self.apply_slice_translation_definition_removed(&slice, &name)
             }
             _ => Ok(()),
         }
@@ -4943,6 +5085,32 @@ impl ProjectedModel {
         self.slice_mut(slice, "SliceAutomationDefinitionRemoved")?
             .automations
             .retain(|automation| automation.name() != name);
+        Ok(())
+    }
+
+    fn apply_slice_translation_definition_updated(
+        &mut self,
+        translation: NewTranslationDefinition,
+    ) -> Result<(), String> {
+        let slice = self.slice_mut(
+            translation.slice_slug(),
+            "SliceTranslationDefinitionUpdated",
+        )?;
+        slice
+            .translations
+            .retain(|existing| existing.name() != translation.name());
+        slice.translations.push(translation);
+        Ok(())
+    }
+
+    fn apply_slice_translation_definition_removed(
+        &mut self,
+        slice: &SliceSlug,
+        name: &TranslationName,
+    ) -> Result<(), String> {
+        self.slice_mut(slice, "SliceTranslationDefinitionRemoved")?
+            .translations
+            .retain(|translation| translation.name() != name);
         Ok(())
     }
 

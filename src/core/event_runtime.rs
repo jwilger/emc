@@ -15,11 +15,12 @@ use crate::core::event_commands::{
     ConnectWorkflowCommand, DeclareWorkflowReadinessCommand, EmcEvent, InitializeProjectCommand,
     RecordReviewCommand, RemoveAutomationDefinitionCommand, RemoveCommandDefinitionCommand,
     RemoveEventDefinitionCommand, RemoveOutcomeDefinitionCommand, RemoveReadModelDefinitionCommand,
-    RemoveSliceCommand, RemoveSliceScenarioCommand, RemoveViewControlCommand,
-    RemoveViewDefinitionCommand, RemoveWorkflowCommand, RemoveWorkflowTransitionCommand,
-    ResolveConflictCommand, SliceFactInput, UpdateAutomationDefinitionCommand,
-    UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand, UpdateOutcomeDefinitionCommand,
-    UpdateReadModelDefinitionCommand, UpdateSliceCommand, UpdateSliceScenarioCommand,
+    RemoveSliceCommand, RemoveSliceScenarioCommand, RemoveTranslationDefinitionCommand,
+    RemoveViewControlCommand, RemoveViewDefinitionCommand, RemoveWorkflowCommand,
+    RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
+    UpdateAutomationDefinitionCommand, UpdateCommandDefinitionCommand,
+    UpdateEventDefinitionCommand, UpdateOutcomeDefinitionCommand, UpdateReadModelDefinitionCommand,
+    UpdateSliceCommand, UpdateSliceScenarioCommand, UpdateTranslationDefinitionCommand,
     UpdateViewControlCommand, UpdateViewDefinitionCommand, UpdateWorkflowCommand,
     WorkflowFactInput,
 };
@@ -192,6 +193,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::SliceViewControlRemoved { .. }
         | ExportedEventBody::SliceBitLevelDataFlowAdded { .. }
         | ExportedEventBody::SliceTranslationAdded { .. }
+        | ExportedEventBody::SliceTranslationDefinitionUpdated { .. }
+        | ExportedEventBody::SliceTranslationDefinitionRemoved { .. }
         | ExportedEventBody::SliceAutomationAdded { .. }
         | ExportedEventBody::SliceAutomationDefinitionUpdated { .. }
         | ExportedEventBody::SliceAutomationDefinitionRemoved { .. }
@@ -387,15 +390,9 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
             )
             .await
         }
-        ExportedEventBody::SliceCommandDefinitionUpdated { command } => {
-            run_command(store, UpdateCommandDefinitionCommand::new(command.clone())?).await
-        }
-        ExportedEventBody::SliceCommandDefinitionRemoved { slice, name } => {
-            run_command(
-                store,
-                RemoveCommandDefinitionCommand::new(slice.clone(), name.clone())?,
-            )
-            .await
+        ExportedEventBody::SliceCommandDefinitionUpdated { .. }
+        | ExportedEventBody::SliceCommandDefinitionRemoved { .. } => {
+            dispatch_slice_command_definition(store, body).await
         }
         ExportedEventBody::SliceEventDefinitionUpdated { event } => {
             run_command(store, UpdateEventDefinitionCommand::new(event.clone())?).await
@@ -410,6 +407,10 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
         ExportedEventBody::SliceAutomationDefinitionUpdated { .. }
         | ExportedEventBody::SliceAutomationDefinitionRemoved { .. } => {
             dispatch_slice_automation(store, body).await
+        }
+        ExportedEventBody::SliceTranslationDefinitionUpdated { .. }
+        | ExportedEventBody::SliceTranslationDefinitionRemoved { .. } => {
+            dispatch_slice_translation(store, body).await
         }
         ExportedEventBody::SliceOutcomeDefinitionUpdated { .. }
         | ExportedEventBody::SliceOutcomeDefinitionRemoved { .. } => {
@@ -464,6 +465,25 @@ async fn dispatch_slice_outcome(
     }
 }
 
+async fn dispatch_slice_command_definition(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<(), String> {
+    match body {
+        ExportedEventBody::SliceCommandDefinitionUpdated { command } => {
+            run_command(store, UpdateCommandDefinitionCommand::new(command.clone())?).await
+        }
+        ExportedEventBody::SliceCommandDefinitionRemoved { slice, name } => {
+            run_command(
+                store,
+                RemoveCommandDefinitionCommand::new(slice.clone(), name.clone())?,
+            )
+            .await
+        }
+        _ => Err("dispatch_slice_command_definition received a non-command body".to_owned()),
+    }
+}
+
 async fn dispatch_slice_automation(
     store: &FileEventStore,
     body: &ExportedEventBody,
@@ -484,6 +504,29 @@ async fn dispatch_slice_automation(
             .await
         }
         _ => Err("dispatch_slice_automation received a non-automation body".to_owned()),
+    }
+}
+
+async fn dispatch_slice_translation(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<(), String> {
+    match body {
+        ExportedEventBody::SliceTranslationDefinitionUpdated { translation } => {
+            run_command(
+                store,
+                UpdateTranslationDefinitionCommand::new(translation.clone())?,
+            )
+            .await
+        }
+        ExportedEventBody::SliceTranslationDefinitionRemoved { slice, name } => {
+            run_command(
+                store,
+                RemoveTranslationDefinitionCommand::new(slice.clone(), name.clone())?,
+            )
+            .await
+        }
+        _ => Err("dispatch_slice_translation received a non-translation body".to_owned()),
     }
 }
 

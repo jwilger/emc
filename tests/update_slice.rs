@@ -1399,6 +1399,108 @@ mod tests {
     }
 
     #[test]
+    fn update_translation_definition_rewrites_synchronized_artifacts() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_capture_ticket_command(temp_dir.path())?;
+        add_ticket_webhook_translation(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "translation",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "capture-ticket-from-webhook",
+                "--external-event",
+                "TicketWebhookRetried",
+                "--payload-contract",
+                "TicketWebhookRetryPayload",
+                "--command",
+                "CaptureTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated translation capture-ticket-from-webhook on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("TicketWebhookRetried"),
+            "updated translation external event must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("TicketWebhookRetryPayload"),
+            "updated translation payload contract must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("TicketWebhookReceived"),
+            "old translation external event must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_translation_definition_removes_it_from_synchronized_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_capture_ticket_command(temp_dir.path())?;
+        add_ticket_webhook_translation(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "translation",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "capture-ticket-from-webhook",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed translation capture-ticket-from-webhook from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_lean.contains("name := \"capture-ticket-from-webhook\""),
+            "removed translation must be absent from Lean slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("name: \"capture-ticket-from-webhook\""),
+            "removed translation must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn remove_control_definition_removes_it_from_synchronized_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -1719,6 +1821,29 @@ mod tests {
                 "DuplicateTicket",
                 "--reaction",
                 "route duplicate tickets to manual assignment",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_ticket_webhook_translation(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "translation",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "capture-ticket-from-webhook",
+                "--external-event",
+                "TicketWebhookReceived",
+                "--payload-contract",
+                "TicketWebhookPayload",
+                "--command",
+                "CaptureTicket",
             ])
             .current_dir(cwd)
             .assert()

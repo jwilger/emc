@@ -27,10 +27,11 @@ use crate::core::effect::{
     SliceCommandDefinitionRemovalEffect, SliceDescriptionUpdateEffect,
     SliceEventDefinitionRemovalEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
     SliceOutcomeDefinitionRemovalEffect, SliceReadModelDefinitionRemovalEffect,
-    SliceScenarioRemovalEffect, SliceViewControlRemovalEffect, SliceViewControlUpdateEffect,
-    SliceViewDefinitionRemovalEffect, WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect,
-    WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
-    WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    SliceScenarioRemovalEffect, SliceTranslationDefinitionRemovalEffect,
+    SliceViewControlRemovalEffect, SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect,
+    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
+    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
+    WorkflowTransitionEvidenceEffect,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
@@ -342,6 +343,8 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::AddSliceFromWorkflow(_)
             | Effect::AddSliceScenarioFromSlice(_)
             | Effect::AddTranslationDefinitionFromSlice(_)
+            | Effect::RemoveTranslationDefinitionFromSlice(_)
+            | Effect::UpdateTranslationDefinitionFromSlice(_)
             | Effect::AddViewDefinitionFromSlice(_)
             | Effect::AddWorkflowCommandErrorFromWorkflow(_)
             | Effect::AddWorkflowEntryLifecycleStateFromWorkflow(_)
@@ -537,6 +540,12 @@ fn interpret_slice_fact_effect(effect: &Effect) -> Option<Result<Vec<String>, Sh
         Effect::AddTranslationDefinitionFromSlice(translation) => {
             interpret_translation_added(translation)
         }
+        Effect::RemoveTranslationDefinitionFromSlice(removal) => {
+            interpret_translation_removed(removal)
+        }
+        Effect::UpdateTranslationDefinitionFromSlice(translation) => {
+            interpret_translation_updated(translation)
+        }
         _ => return None,
     })
 }
@@ -603,6 +612,51 @@ fn interpret_automation_removed(
         EventDraft::slice_automation_definition_removed(
             removal.slice_slug(),
             removal.automation_name(),
+        ),
+    )
+}
+
+fn interpret_translation_updated(
+    translation: &NewTranslationDefinition,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "updated translation {} on slice {}",
+            translation.name().as_ref(),
+            translation.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "updated translation {} in project root",
+            translation.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        translation.slice_slug(),
+        reports,
+        EventDraft::slice_translation_definition_updated(translation),
+    )
+}
+
+fn interpret_translation_removed(
+    removal: &SliceTranslationDefinitionRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "removed translation {} from slice {}",
+            removal.translation_name().as_ref(),
+            removal.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "removed translation {} from project root",
+            removal.translation_name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        removal.slice_slug(),
+        reports,
+        EventDraft::slice_translation_definition_removed(
+            removal.slice_slug(),
+            removal.translation_name(),
         ),
     )
 }

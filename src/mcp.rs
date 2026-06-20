@@ -1127,7 +1127,28 @@ fn add_translation_definition_tool() -> Tool {
     Tool::new(
         "add_translation_definition",
         "Add a translation external event, payload contract, and target command directly to Lean4 and Quint slice artifacts.",
-        schema_object(json!({
+        schema_object(translation_definition_schema()),
+    )
+}
+
+fn update_translation_definition_tool() -> Tool {
+    Tool::new(
+        "update_translation_definition",
+        "Update a translation external event, payload contract, and target command in a slice, then regenerate synchronized model artifacts.",
+        schema_object(translation_definition_schema()),
+    )
+}
+
+fn remove_translation_definition_tool() -> Tool {
+    Tool::new(
+        "remove_translation_definition",
+        "Remove a translation definition from a slice, then regenerate synchronized model artifacts.",
+        schema_object(slice_named_definition_schema()),
+    )
+}
+
+fn translation_definition_schema() -> Value {
+    json!({
                 "type": "object",
                 "properties": {
                     "slice": {
@@ -1148,8 +1169,7 @@ fn add_translation_definition_tool() -> Tool {
                 },
                 "required": ["slice", "name", "external_event", "payload_contract", "command"],
                 "additionalProperties": false
-        })),
-    )
+    })
 }
 
 fn add_external_payload_definition_tool() -> Tool {
@@ -1627,6 +1647,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_slice_name_tool(),
         update_slice_scenario_tool(),
         update_automation_definition_tool(),
+        update_translation_definition_tool(),
         update_command_definition_tool(),
         update_event_definition_tool(),
         update_outcome_definition_tool(),
@@ -1636,6 +1657,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         remove_slice_tool(),
         remove_slice_scenario_tool(),
         remove_automation_definition_tool(),
+        remove_translation_definition_tool(),
         remove_command_definition_tool(),
         remove_event_definition_tool(),
         remove_outcome_definition_tool(),
@@ -2010,6 +2032,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_slice_name" => Some(update_slice_name_tool_text(request)),
         "update_slice_scenario" => Some(update_slice_scenario_tool_text(request)),
         "update_automation_definition" => Some(update_automation_definition_tool_text(request)),
+        "update_translation_definition" => Some(update_translation_definition_tool_text(request)),
         "update_command_definition" => Some(update_command_definition_tool_text(request)),
         "update_event_definition" => Some(update_event_definition_tool_text(request)),
         "update_outcome_definition" => Some(update_outcome_definition_tool_text(request)),
@@ -2019,6 +2042,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "remove_slice" => Some(remove_slice_tool_text(request)),
         "remove_slice_scenario" => Some(remove_slice_scenario_tool_text(request)),
         "remove_automation_definition" => Some(remove_automation_definition_tool_text(request)),
+        "remove_translation_definition" => Some(remove_translation_definition_tool_text(request)),
         "remove_command_definition" => Some(remove_command_definition_tool_text(request)),
         "remove_event_definition" => Some(remove_event_definition_tool_text(request)),
         "remove_outcome_definition" => Some(remove_outcome_definition_tool_text(request)),
@@ -3597,28 +3621,64 @@ fn parse_automation_definition(
 }
 
 fn add_translation_definition_tool_text(request: &Value) -> Result<String, ShellError> {
-    let arguments = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .ok_or_else(|| ShellError::message("add_translation_definition requires arguments"))?;
+    let arguments = tool_arguments(request, "add_translation_definition")?;
+    let translation = parse_translation_definition(arguments, "add_translation_definition")?;
+    interpret_collect_reports(&command::add_translation_definition(translation))
+        .map(|reports| reports.join("\n"))
+}
+
+fn update_translation_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = tool_arguments(request, "update_translation_definition")?;
+    let translation = parse_translation_definition(arguments, "update_translation_definition")?;
+    interpret_collect_reports(&command::update_translation_definition(translation))
+        .map(|reports| reports.join("\n"))
+}
+
+fn remove_translation_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = tool_arguments(request, "remove_translation_definition")?;
     let slice_slug = arguments
         .get("slice")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_translation_definition requires slice"))
+        .ok_or_else(|| ShellError::message("remove_translation_definition requires slice"))
         .and_then(|raw_slice| {
             parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let translation_name = arguments
         .get("name")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_translation_definition requires name"))
+        .ok_or_else(|| ShellError::message("remove_translation_definition requires name"))
+        .and_then(|raw_name| {
+            parse_translation_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    interpret_collect_reports(&command::remove_translation_definition(
+        slice_slug,
+        translation_name,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn parse_translation_definition(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<NewTranslationDefinition, ShellError> {
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires slice")))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let translation_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires name")))
         .and_then(|raw_name| {
             parse_translation_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let external_event_name = arguments
         .get("external_event")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_translation_definition requires external_event"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires external_event")))
         .and_then(|raw_external_event| {
             parse_translation_external_event_name(raw_external_event)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3626,7 +3686,7 @@ fn add_translation_definition_tool_text(request: &Value) -> Result<String, Shell
     let payload_contract_name = arguments
         .get("payload_contract")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_translation_definition requires payload_contract"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires payload_contract")))
         .and_then(|raw_payload_contract| {
             parse_payload_contract_name(raw_payload_contract)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3634,21 +3694,17 @@ fn add_translation_definition_tool_text(request: &Value) -> Result<String, Shell
     let command_name = arguments
         .get("command")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_translation_definition requires command"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires command")))
         .and_then(|raw_command| {
             parse_command_name(raw_command).map_err(|error| ShellError::message(error.to_string()))
         })?;
-
-    interpret_collect_reports(&command::add_translation_definition(
-        NewTranslationDefinition::new(
-            slice_slug,
-            translation_name,
-            external_event_name,
-            payload_contract_name,
-            command_name,
-        ),
+    Ok(NewTranslationDefinition::new(
+        slice_slug,
+        translation_name,
+        external_event_name,
+        payload_contract_name,
+        command_name,
     ))
-    .map(|reports| reports.join("\n"))
 }
 
 fn add_external_payload_definition_tool_text(request: &Value) -> Result<String, ShellError> {

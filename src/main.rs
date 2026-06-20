@@ -39,9 +39,9 @@ use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     AutomationName, CommandInputSourceKind, CommandName, ControlName, ControlRecoveryBehavior,
     EventName, ModelDescription, ModelName, OutcomeLabelName, ReadModelFieldSourceKind,
-    ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SketchToken, SliceSlug, ViewName,
-    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
-    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
+    ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SketchToken, SliceSlug,
+    TranslationName, ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
+    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
     WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
     WorkflowTransitionKind,
 };
@@ -180,6 +180,13 @@ enum Command {
     },
     AddTranslationDefinition {
         translation: NewTranslationDefinition,
+    },
+    UpdateTranslationDefinition {
+        translation: NewTranslationDefinition,
+    },
+    RemoveTranslationDefinition {
+        slice_slug: SliceSlug,
+        translation_name: TranslationName,
     },
     AddWorkflow {
         workflow: NewWorkflow,
@@ -352,6 +359,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::AddTranslationDefinition { translation } => {
             interpret(&command::add_translation_definition(translation))
         }
+        Command::UpdateTranslationDefinition { translation } => {
+            interpret(&command::update_translation_definition(translation))
+        }
         other => run_workflow_commands(other),
     }
 }
@@ -454,6 +464,13 @@ fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
         } => interpret(&command::remove_automation_definition(
             slice_slug,
             automation_name,
+        )),
+        Command::RemoveTranslationDefinition {
+            slice_slug,
+            translation_name,
+        } => interpret(&command::remove_translation_definition(
+            slice_slug,
+            translation_name,
         )),
         Command::RemoveOutcomeDefinition {
             slice_slug,
@@ -885,6 +902,23 @@ fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
                 command: Command::RemoveAutomationDefinition {
                     slice_slug,
                     automation_name,
+                },
+            })
+        }
+        [command, subject, slice_flag, slice, name_flag, name]
+            if command == "remove"
+                && subject == "translation"
+                && slice_flag == "--slice"
+                && name_flag == "--name" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+            let translation_name = parse_translation_name(name)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::RemoveTranslationDefinition {
+                    slice_slug,
+                    translation_name,
                 },
             })
         }
@@ -3454,7 +3488,7 @@ fn parse_cli_32(arguments: &[String]) -> Result<Cli, ShellError> {
             payload_contract,
             command_flag,
             target_command,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "translation"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -3472,17 +3506,19 @@ fn parse_cli_32(arguments: &[String]) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let command_name = parse_command_name(target_command)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::AddTranslationDefinition {
-                    translation: NewTranslationDefinition::new(
-                        slice_slug,
-                        translation_name,
-                        external_event_name,
-                        payload_contract_name,
-                        command_name,
-                    ),
-                },
-            })
+            let translation = NewTranslationDefinition::new(
+                slice_slug,
+                translation_name,
+                external_event_name,
+                payload_contract_name,
+                command_name,
+            );
+            let command = if command == "add" {
+                Command::AddTranslationDefinition { translation }
+            } else {
+                Command::UpdateTranslationDefinition { translation }
+            };
+            Ok(Cli { command })
         }
         _ => parse_cli_33(arguments),
     }
@@ -5327,6 +5363,10 @@ fn help_update_subcommand() -> ClapCommand {
             ClapCommand::new("event")
                 .about("Update an event definition and synchronized formal artifacts"),
         )
+        .subcommand(
+            ClapCommand::new("translation")
+                .about("Update a translation definition and synchronized formal artifacts"),
+        )
 }
 
 fn help_remove_subcommand() -> ClapCommand {
@@ -5350,6 +5390,10 @@ fn help_remove_subcommand() -> ClapCommand {
         .subcommand(
             ClapCommand::new("event")
                 .about("Remove an event definition and synchronized formal artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("translation")
+                .about("Remove a translation definition and synchronized formal artifacts"),
         )
 }
 

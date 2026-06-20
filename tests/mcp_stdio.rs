@@ -1073,6 +1073,78 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_translation_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_translation(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_translation_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"update_translation_definition\"",
+            ))
+            .stdout(predicate::str::contains(
+                "updated translation capture-ticket-from-webhook on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_quint.contains("TicketWebhookRetried"),
+            "MCP-updated translation external event must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("TicketWebhookReceived"),
+            "old translation external event must be absent after MCP update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_translation_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_translation(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_translation_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"remove_translation_definition\"",
+            ))
+            .stdout(predicate::str::contains(
+                "removed translation capture-ticket-from-webhook from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_quint.contains("name: \"capture-ticket-from-webhook\""),
+            "MCP-removed translation must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_slice_update_fork(&temp_dir)?;
@@ -1299,6 +1371,22 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_automation_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"assign-duplicate-ticket\"}}}\n",
+        )
+    }
+
+    fn update_translation_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_translation_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-from-webhook\",\"external_event\":\"TicketWebhookRetried\",\"payload_contract\":\"TicketWebhookRetryPayload\",\"command\":\"CaptureTicket\"}}}\n",
+        )
+    }
+
+    fn remove_translation_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_translation_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-from-webhook\"}}}\n",
         )
     }
 
@@ -1539,6 +1627,29 @@ mod tests {
                 "DuplicateTicket",
                 "--reaction",
                 "route duplicate tickets to manual assignment",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn initialize_project_with_translation(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        initialize_project_with_command(cwd)?;
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "translation",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "capture-ticket-from-webhook",
+                "--external-event",
+                "TicketWebhookReceived",
+                "--payload-contract",
+                "TicketWebhookPayload",
+                "--command",
+                "CaptureTicket",
             ])
             .current_dir(cwd)
             .assert()
