@@ -1192,6 +1192,107 @@ mod tests {
     }
 
     #[test]
+    fn update_outcome_definition_rewrites_synchronized_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_ticket_captured_outcome(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "outcome",
+                "--slice",
+                "capture-ticket",
+                "--label",
+                "ticket-captured",
+                "--events",
+                "TicketRouted",
+                "--externally-relevant",
+                "false",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated outcome ticket-captured on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains(
+                "{ label := \"ticket-captured\", eventSet := [\"TicketRouted\"], externallyRelevant := false }"
+            ),
+            "updated outcome must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains(
+                "{ label: \"ticket-captured\", eventSet: [\"TicketRouted\"], externallyRelevant: false }"
+            ),
+            "updated outcome must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("TicketCaptured"),
+            "old outcome event set must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_outcome_definition_removes_it_from_synchronized_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_ticket_captured_outcome(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "outcome",
+                "--slice",
+                "capture-ticket",
+                "--label",
+                "ticket-captured",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed outcome ticket-captured from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_lean.contains("label := \"ticket-captured\""),
+            "removed outcome must be absent from Lean slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("label: \"ticket-captured\""),
+            "removed outcome must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn remove_control_definition_removes_it_from_synchronized_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -1465,6 +1566,27 @@ mod tests {
                 "--attribute-provenance",
                 "projection title field",
                 "--observed",
+                "true",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_ticket_captured_outcome(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "outcome",
+                "--slice",
+                "capture-ticket",
+                "--label",
+                "ticket-captured",
+                "--events",
+                "TicketCaptured",
+                "--externally-relevant",
                 "true",
             ])
             .current_dir(cwd)

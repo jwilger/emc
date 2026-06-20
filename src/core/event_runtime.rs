@@ -14,12 +14,13 @@ use crate::core::event_commands::{
     AddSliceCommand, AddSliceFactCommand, AddWorkflowCommand, AddWorkflowFactCommand,
     ConnectWorkflowCommand, DeclareWorkflowReadinessCommand, EmcEvent, InitializeProjectCommand,
     RecordReviewCommand, RemoveCommandDefinitionCommand, RemoveEventDefinitionCommand,
-    RemoveReadModelDefinitionCommand, RemoveSliceCommand, RemoveSliceScenarioCommand,
-    RemoveViewControlCommand, RemoveViewDefinitionCommand, RemoveWorkflowCommand,
-    RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
-    UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand, UpdateReadModelDefinitionCommand,
-    UpdateSliceCommand, UpdateSliceScenarioCommand, UpdateViewControlCommand,
-    UpdateViewDefinitionCommand, UpdateWorkflowCommand, WorkflowFactInput,
+    RemoveOutcomeDefinitionCommand, RemoveReadModelDefinitionCommand, RemoveSliceCommand,
+    RemoveSliceScenarioCommand, RemoveViewControlCommand, RemoveViewDefinitionCommand,
+    RemoveWorkflowCommand, RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
+    UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand, UpdateOutcomeDefinitionCommand,
+    UpdateReadModelDefinitionCommand, UpdateSliceCommand, UpdateSliceScenarioCommand,
+    UpdateViewControlCommand, UpdateViewDefinitionCommand, UpdateWorkflowCommand,
+    WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
 
@@ -171,6 +172,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::SliceScenarioUpdated { .. }
         | ExportedEventBody::SliceScenarioRemoved { .. }
         | ExportedEventBody::SliceOutcomeAdded { .. }
+        | ExportedEventBody::SliceOutcomeDefinitionUpdated { .. }
+        | ExportedEventBody::SliceOutcomeDefinitionRemoved { .. }
         | ExportedEventBody::SliceExternalPayloadAdded { .. }
         | ExportedEventBody::SliceEventDefinitionAdded { .. }
         | ExportedEventBody::SliceEventDefinitionUpdated { .. }
@@ -398,6 +401,16 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
             run_command(
                 store,
                 RemoveEventDefinitionCommand::new(slice.clone(), name.clone())?,
+            )
+            .await
+        }
+        ExportedEventBody::SliceOutcomeDefinitionUpdated { outcome } => {
+            run_command(store, UpdateOutcomeDefinitionCommand::new(outcome.clone())?).await
+        }
+        ExportedEventBody::SliceOutcomeDefinitionRemoved { slice, label } => {
+            run_command(
+                store,
+                RemoveOutcomeDefinitionCommand::new(slice.clone(), label.clone())?,
             )
             .await
         }

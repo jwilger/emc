@@ -38,11 +38,12 @@ use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     CommandInputSourceKind, CommandName, ControlName, ControlRecoveryBehavior, EventName,
-    ModelDescription, ModelName, ReadModelFieldSourceKind, ReadModelName, ReviewTimestamp,
-    ReviewerId, ScenarioName, SketchToken, SliceSlug, ViewName, WorkflowCommandErrorRecord,
-    WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
-    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceNavigationEndpoints,
-    WorkflowTransitionEvidenceRecord, WorkflowTransitionKind,
+    ModelDescription, ModelName, OutcomeLabelName, ReadModelFieldSourceKind, ReadModelName,
+    ReviewTimestamp, ReviewerId, ScenarioName, SketchToken, SliceSlug, ViewName,
+    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
+    WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionKind,
 };
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
@@ -119,6 +120,13 @@ enum Command {
     },
     AddOutcomeDefinition {
         outcome: NewOutcomeDefinition,
+    },
+    UpdateOutcomeDefinition {
+        outcome: NewOutcomeDefinition,
+    },
+    RemoveOutcomeDefinition {
+        slice_slug: SliceSlug,
+        outcome_label: OutcomeLabelName,
     },
     AddReadModelDefinition {
         read_model: NewReadModelDefinition,
@@ -308,6 +316,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::AddOutcomeDefinition { outcome } => {
             interpret(&command::add_outcome_definition(outcome))
         }
+        Command::UpdateOutcomeDefinition { outcome } => {
+            interpret(&command::update_outcome_definition(outcome))
+        }
         Command::AddReadModelDefinition { read_model } => {
             interpret(&command::add_read_model_definition(read_model))
         }
@@ -427,6 +438,13 @@ fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
             slice_slug,
             event_name,
         } => interpret(&command::remove_event_definition(slice_slug, event_name)),
+        Command::RemoveOutcomeDefinition {
+            slice_slug,
+            outcome_label,
+        } => interpret(&command::remove_outcome_definition(
+            slice_slug,
+            outcome_label,
+        )),
         Command::RemoveReadModelDefinition {
             slice_slug,
             read_model_name,
@@ -835,6 +853,23 @@ fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
                 && name_flag == "--name" =>
         {
             remove_command_definition_cli(slice, name)
+        }
+        [command, subject, slice_flag, slice, label_flag, label]
+            if command == "remove"
+                && subject == "outcome"
+                && slice_flag == "--slice"
+                && label_flag == "--label" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+            let outcome_label = parse_outcome_label_name(label)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::RemoveOutcomeDefinition {
+                    slice_slug,
+                    outcome_label,
+                },
+            })
         }
         _ => parse_cli_control_or_data_flow(arguments),
     }
@@ -2625,7 +2660,7 @@ fn parse_cli_22(arguments: &[String]) -> Result<Cli, ShellError> {
             events,
             externally_relevant_flag,
             externally_relevant,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "outcome"
             && slice_flag == "--slice"
             && label_flag == "--label"
@@ -2639,16 +2674,18 @@ fn parse_cli_22(arguments: &[String]) -> Result<Cli, ShellError> {
             let events = parse_event_names(events)
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let externally_relevant = parse_bool_flag(externally_relevant)?;
-            Ok(Cli {
-                command: Command::AddOutcomeDefinition {
-                    outcome: NewOutcomeDefinition::new(
-                        slice_slug,
-                        label,
-                        OutcomeEventNames::from_events(events),
-                        externally_relevant,
-                    ),
-                },
-            })
+            let outcome = NewOutcomeDefinition::new(
+                slice_slug,
+                label,
+                OutcomeEventNames::from_events(events),
+                externally_relevant,
+            );
+            let command = if command == "add" {
+                Command::AddOutcomeDefinition { outcome }
+            } else {
+                Command::UpdateOutcomeDefinition { outcome }
+            };
+            Ok(Cli { command })
         }
         _ => parse_cli_23(arguments),
     }

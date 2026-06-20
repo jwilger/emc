@@ -935,6 +935,76 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_outcome_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_outcome(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_outcome_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"update_outcome_definition\""))
+            .stdout(predicate::str::contains(
+                "updated outcome ticket-captured on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_quint.contains(
+                "{ label: \"ticket-captured\", eventSet: [\"TicketRouted\"], externallyRelevant: false }"
+            ),
+            "MCP-updated outcome must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("TicketCaptured"),
+            "old outcome event set must be absent after MCP update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_outcome_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_outcome(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_outcome_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"remove_outcome_definition\""))
+            .stdout(predicate::str::contains(
+                "removed outcome ticket-captured from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_quint.contains("label: \"ticket-captured\""),
+            "MCP-removed outcome must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_slice_update_fork(&temp_dir)?;
@@ -1132,6 +1202,22 @@ mod tests {
         )
     }
 
+    fn update_outcome_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_outcome_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"label\":\"ticket-captured\",\"events\":\"TicketRouted\",\"externally_relevant\":false}}}\n",
+        )
+    }
+
+    fn remove_outcome_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_outcome_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"label\":\"ticket-captured\"}}}\n",
+        )
+    }
+
     fn resolve_conflict_mcp_requests(stream_id: &str, branch_tx: &str) -> String {
         format!(
             "{}{}{}\n",
@@ -1325,6 +1411,27 @@ mod tests {
         add_duplicate_ticket_contract_scenario(cwd)?;
         add_capture_ticket_command_with_error(cwd)?;
         add_controlled_ticket_detail_view(cwd)?;
+        Ok(())
+    }
+
+    fn initialize_project_with_outcome(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        initialize_project_with_scenario(cwd)?;
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "outcome",
+                "--slice",
+                "capture-ticket",
+                "--label",
+                "ticket-captured",
+                "--events",
+                "TicketCaptured",
+                "--externally-relevant",
+                "true",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
         Ok(())
     }
 

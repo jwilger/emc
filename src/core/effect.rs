@@ -14,10 +14,10 @@ use crate::core::formal_slice_facts::{
 };
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    CommandName, ControlName, EventName, ModelDescription, ModelName, ReadModelName,
-    ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug, ViewName, WorkflowCommandErrorRecord,
-    WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
-    WorkflowSlug, WorkflowTransitionEvidenceRecord,
+    CommandName, ControlName, EventName, ModelDescription, ModelName, OutcomeLabelName,
+    ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug, ViewName,
+    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
 
@@ -113,6 +113,29 @@ impl SliceEventDefinitionRemovalEffect {
 
     pub(crate) fn event_name(&self) -> &EventName {
         &self.event_name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceOutcomeDefinitionRemovalEffect {
+    slice_slug: SliceSlug,
+    outcome_label: OutcomeLabelName,
+}
+
+impl SliceOutcomeDefinitionRemovalEffect {
+    pub(crate) fn new(slice_slug: SliceSlug, outcome_label: OutcomeLabelName) -> Self {
+        Self {
+            slice_slug,
+            outcome_label,
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn outcome_label(&self) -> &OutcomeLabelName {
+        &self.outcome_label
     }
 }
 
@@ -860,6 +883,8 @@ pub(crate) enum Effect {
     UpdateEventDefinitionFromSlice(NewEventDefinition),
     AddExternalPayloadDefinitionFromSlice(NewExternalPayloadDefinition),
     AddOutcomeDefinitionFromSlice(NewOutcomeDefinition),
+    RemoveOutcomeDefinitionFromSlice(SliceOutcomeDefinitionRemovalEffect),
+    UpdateOutcomeDefinitionFromSlice(NewOutcomeDefinition),
     AddReadModelDefinitionFromSlice(NewReadModelDefinition),
     RemoveReadModelDefinitionFromSlice(SliceReadModelDefinitionRemovalEffect),
     UpdateReadModelDefinitionFromSlice(NewReadModelDefinition),

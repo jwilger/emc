@@ -173,6 +173,16 @@ pub(crate) enum EmcEvent {
         #[serde(flatten)]
         fact: SliceFactEvent,
     },
+    SliceOutcomeDefinitionUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        outcome: SliceOutcomeDefinitionUpdateEvent,
+    },
+    SliceOutcomeDefinitionRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        outcome: SliceOutcomeDefinitionRemovalEvent,
+    },
     SliceCommandDefinitionUpdated {
         stream_id: StreamId,
         #[serde(flatten)]
@@ -268,6 +278,8 @@ impl Event for EmcEvent {
             | Self::SliceUpdated { stream_id, .. }
             | Self::SliceRemoved { stream_id, .. }
             | Self::SliceFactAdded { stream_id, .. }
+            | Self::SliceOutcomeDefinitionUpdated { stream_id, .. }
+            | Self::SliceOutcomeDefinitionRemoved { stream_id, .. }
             | Self::SliceCommandDefinitionUpdated { stream_id, .. }
             | Self::SliceCommandDefinitionRemoved { stream_id, .. }
             | Self::SliceEventDefinitionUpdated { stream_id, .. }
@@ -1033,6 +1045,176 @@ impl<'de> Deserialize<'de> for SliceCommandDefinitionRemovalEvent {
             }
             other => Err(DeserializeError::custom(format!(
                 "expected SliceCommandDefinitionRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateOutcomeDefinitionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    outcome: NewOutcomeDefinition,
+}
+
+impl UpdateOutcomeDefinitionCommand {
+    pub(crate) fn new(outcome: NewOutcomeDefinition) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(outcome.slice_slug().as_ref())?,
+            outcome,
+        })
+    }
+}
+
+impl CommandLogic for UpdateOutcomeDefinitionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before updating outcome definition"
+        );
+        Ok(vec![EmcEvent::SliceOutcomeDefinitionUpdated {
+            stream_id: self.slice_stream.clone(),
+            outcome: SliceOutcomeDefinitionUpdateEvent::new(self.outcome.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveOutcomeDefinitionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    slice: SliceSlug,
+    label: OutcomeLabelName,
+}
+
+impl RemoveOutcomeDefinitionCommand {
+    pub(crate) fn new(slice: SliceSlug, label: OutcomeLabelName) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(slice.as_ref())?,
+            slice,
+            label,
+        })
+    }
+}
+
+impl CommandLogic for RemoveOutcomeDefinitionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before removing outcome definition"
+        );
+        Ok(vec![EmcEvent::SliceOutcomeDefinitionRemoved {
+            stream_id: self.slice_stream.clone(),
+            outcome: SliceOutcomeDefinitionRemovalEvent::new(
+                self.slice.clone(),
+                self.label.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceOutcomeDefinitionUpdateEvent {
+    outcome: NewOutcomeDefinition,
+}
+
+impl SliceOutcomeDefinitionUpdateEvent {
+    pub(crate) fn new(outcome: NewOutcomeDefinition) -> Self {
+        Self { outcome }
+    }
+
+    pub(crate) fn outcome(&self) -> NewOutcomeDefinition {
+        self.outcome.clone()
+    }
+}
+
+impl Serialize for SliceOutcomeDefinitionUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_outcome_definition_updated(&self.outcome)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceOutcomeDefinitionUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceOutcomeDefinitionUpdated { outcome } => Ok(Self::new(outcome)),
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceOutcomeDefinitionUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceOutcomeDefinitionRemovalEvent {
+    slice: SliceSlug,
+    label: OutcomeLabelName,
+}
+
+impl SliceOutcomeDefinitionRemovalEvent {
+    pub(crate) fn new(slice: SliceSlug, label: OutcomeLabelName) -> Self {
+        Self { slice, label }
+    }
+
+    pub(crate) fn slice(&self) -> &SliceSlug {
+        &self.slice
+    }
+
+    pub(crate) fn label(&self) -> &OutcomeLabelName {
+        &self.label
+    }
+}
+
+impl Serialize for SliceOutcomeDefinitionRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_outcome_definition_removed(&self.slice, &self.label)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceOutcomeDefinitionRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceOutcomeDefinitionRemoved { slice, label } => {
+                Ok(Self::new(slice, label))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceOutcomeDefinitionRemoved event body, got {}",
                 other.event_type()
             ))),
         }
