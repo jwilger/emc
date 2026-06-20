@@ -5,6 +5,7 @@ mod tests {
     use std::error::Error;
     use std::fs;
     use std::io::{self, BufRead, BufReader, ErrorKind, Write};
+    use std::path::Path;
     use std::process::{Command as ProcessCommand, Stdio};
     use std::sync::mpsc;
     use std::thread;
@@ -504,6 +505,74 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_slice_scenario() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_scenario(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_slice_scenario_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"update_slice_scenario\""))
+            .stdout(predicate::str::contains(
+                "updated scenario Actor captures ticket on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            fs::read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        assert!(
+            slice_lean.contains("the actor submits corrected ticket details"),
+            "MCP-updated scenario must be represented in Lean slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("the actor submits ticket details"),
+            "old scenario text must be absent after MCP update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_slice_scenario() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_scenario(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_slice_scenario_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"remove_slice_scenario\""))
+            .stdout(predicate::str::contains(
+                "removed scenario Actor captures ticket from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_quint.contains("Actor captures ticket"),
+            "MCP-removed scenario must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_slice_update_fork(&temp_dir)?;
@@ -605,6 +674,22 @@ mod tests {
         )
     }
 
+    fn update_slice_scenario_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_slice_scenario\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"Actor captures ticket\",\"kind\":\"acceptance\",\"given\":\"ticket intake screen is open\",\"when\":\"the actor submits corrected ticket details\",\"then\":\"the corrected details are visible for review\"}}}\n",
+        )
+    }
+
+    fn remove_slice_scenario_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_slice_scenario\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"Actor captures ticket\"}}}\n",
+        )
+    }
+
     fn resolve_conflict_mcp_requests(stream_id: &str, branch_tx: &str) -> String {
         format!(
             "{}{}{}\n",
@@ -614,6 +699,67 @@ mod tests {
                 "{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{{\"name\":\"resolve_conflict\",\"arguments\":{{\"id\":\"{stream_id}\",\"choose_event\":\"{branch_tx}\"}}}}}}"
             )
         )
+    }
+
+    fn initialize_project_with_scenario(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "slice",
+                "--workflow",
+                "open-ticket",
+                "--slug",
+                "capture-ticket",
+                "--name",
+                "Capture ticket",
+                "--type",
+                "state_view",
+                "--description",
+                "Actor enters repair ticket details.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--kind",
+                "acceptance",
+                "--name",
+                "Actor captures ticket",
+                "--given",
+                "ticket intake screen is open",
+                "--when",
+                "the actor submits ticket details",
+                "--then",
+                "the ticket details are visible for review",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
     }
 
     fn create_slice_update_fork(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {

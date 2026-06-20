@@ -13,9 +13,9 @@ use tokio::runtime::Builder;
 use crate::core::event_commands::{
     AddSliceCommand, AddSliceFactCommand, AddWorkflowCommand, AddWorkflowFactCommand,
     ConnectWorkflowCommand, DeclareWorkflowReadinessCommand, EmcEvent, InitializeProjectCommand,
-    RecordReviewCommand, RemoveSliceCommand, RemoveWorkflowCommand,
+    RecordReviewCommand, RemoveSliceCommand, RemoveSliceScenarioCommand, RemoveWorkflowCommand,
     RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput, UpdateSliceCommand,
-    UpdateWorkflowCommand, WorkflowFactInput,
+    UpdateSliceScenarioCommand, UpdateWorkflowCommand, WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
 
@@ -164,6 +164,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::SliceUpdated { .. }
         | ExportedEventBody::SliceRemoved { .. }
         | ExportedEventBody::SliceScenarioAdded { .. }
+        | ExportedEventBody::SliceScenarioUpdated { .. }
+        | ExportedEventBody::SliceScenarioRemoved { .. }
         | ExportedEventBody::SliceOutcomeAdded { .. }
         | ExportedEventBody::SliceExternalPayloadAdded { .. }
         | ExportedEventBody::SliceEventDefinitionAdded { .. }
@@ -354,6 +356,16 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
         }
         ExportedEventBody::SliceRemoved { slug } => {
             run_command(store, RemoveSliceCommand::from_semantic(slug.clone())?).await
+        }
+        ExportedEventBody::SliceScenarioUpdated { scenario } => {
+            run_command(store, UpdateSliceScenarioCommand::new(scenario.clone())?).await
+        }
+        ExportedEventBody::SliceScenarioRemoved { slice, name } => {
+            run_command(
+                store,
+                RemoveSliceScenarioCommand::new(slice.clone(), name.clone())?,
+            )
+            .await
         }
         _ => {
             run_command(

@@ -20,8 +20,8 @@ use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     CommandErrorName, CommandName, ModelDescription, ModelName, OutcomeLabelName,
-    PayloadContractName, ReviewRuleName, ReviewTimestamp, ReviewerId, SliceKindName, SliceSlug,
-    StreamName, TransitionTriggerName, WorkflowCommandErrorRecord,
+    PayloadContractName, ReviewRuleName, ReviewTimestamp, ReviewerId, ScenarioName, SliceKindName,
+    SliceSlug, StreamName, TransitionTriggerName, WorkflowCommandErrorRecord,
     WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
     WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation, WorkflowOutcomeRecord,
     WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
@@ -172,6 +172,16 @@ pub(crate) enum EmcEvent {
         #[serde(flatten)]
         fact: SliceFactEvent,
     },
+    SliceScenarioUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        scenario: SliceScenarioUpdateEvent,
+    },
+    SliceScenarioRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        scenario: SliceScenarioRemovalEvent,
+    },
     ReviewRecorded {
         stream_id: StreamId,
         workflow: WorkflowSlug,
@@ -207,6 +217,8 @@ impl Event for EmcEvent {
             | Self::SliceUpdated { stream_id, .. }
             | Self::SliceRemoved { stream_id, .. }
             | Self::SliceFactAdded { stream_id, .. }
+            | Self::SliceScenarioUpdated { stream_id, .. }
+            | Self::SliceScenarioRemoved { stream_id, .. }
             | Self::ReviewRecorded { stream_id, .. }
             | Self::ConflictResolved { stream_id, .. } => stream_id,
         }
@@ -799,6 +811,171 @@ impl CommandLogic for AddSliceFactCommand {
     }
 }
 
+#[derive(Command)]
+pub(crate) struct UpdateSliceScenarioCommand {
+    #[stream]
+    slice_stream: StreamId,
+    scenario: NewSliceScenario,
+}
+
+impl UpdateSliceScenarioCommand {
+    pub(crate) fn new(scenario: NewSliceScenario) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(scenario.slice_slug().as_ref())?,
+            scenario,
+        })
+    }
+}
+
+impl CommandLogic for UpdateSliceScenarioCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before updating scenario"
+        );
+        Ok(vec![EmcEvent::SliceScenarioUpdated {
+            stream_id: self.slice_stream.clone(),
+            scenario: SliceScenarioUpdateEvent::new(self.scenario.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveSliceScenarioCommand {
+    #[stream]
+    slice_stream: StreamId,
+    slice: SliceSlug,
+    name: ScenarioName,
+}
+
+impl RemoveSliceScenarioCommand {
+    pub(crate) fn new(slice: SliceSlug, name: ScenarioName) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(slice.as_ref())?,
+            slice,
+            name,
+        })
+    }
+}
+
+impl CommandLogic for RemoveSliceScenarioCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before removing scenario"
+        );
+        Ok(vec![EmcEvent::SliceScenarioRemoved {
+            stream_id: self.slice_stream.clone(),
+            scenario: SliceScenarioRemovalEvent::new(self.slice.clone(), self.name.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceScenarioUpdateEvent {
+    scenario: NewSliceScenario,
+}
+
+impl SliceScenarioUpdateEvent {
+    pub(crate) fn new(scenario: NewSliceScenario) -> Self {
+        Self { scenario }
+    }
+
+    pub(crate) fn scenario(&self) -> NewSliceScenario {
+        self.scenario.clone()
+    }
+}
+
+impl Serialize for SliceScenarioUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_scenario_updated(&self.scenario)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceScenarioUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceScenarioUpdated { scenario } => Ok(Self::new(scenario)),
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceScenarioUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceScenarioRemovalEvent {
+    slice: SliceSlug,
+    name: ScenarioName,
+}
+
+impl SliceScenarioRemovalEvent {
+    pub(crate) fn new(slice: SliceSlug, name: ScenarioName) -> Self {
+        Self { slice, name }
+    }
+
+    pub(crate) fn slice(&self) -> &SliceSlug {
+        &self.slice
+    }
+
+    pub(crate) fn name(&self) -> &ScenarioName {
+        &self.name
+    }
+}
+
+impl Serialize for SliceScenarioRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_scenario_removed(&self.slice, &self.name)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceScenarioRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceScenarioRemoved { slice, name } => Ok(Self::new(slice, name)),
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceScenarioRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct SliceFactEvent {
     fact: Box<SliceFactInput>,
@@ -824,10 +1001,35 @@ impl Serialize for SliceFactEvent {
         S: Serializer,
     {
         let body = SliceFactEventBody::from_slice_fact(self.fact.as_ref());
-        let mut state = serializer.serialize_struct("SliceFactEvent", 1)?;
-        state.serialize_field("body", &body.to_json_value())?;
-        state.end()
+        serialize_tagged_event_body(serializer, &body.to_json_value())
     }
+}
+
+fn serialize_event_body<S>(serializer: S, body: &ExportedEventBody) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serialize_tagged_event_body(serializer, &body.tagged_json_value())
+}
+
+fn serialize_tagged_event_body<S>(serializer: S, body: &Value) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut state = serializer.serialize_struct("EventBody", 1)?;
+    state.serialize_field("body", body)?;
+    state.end()
+}
+
+fn deserialize_event_body<'de, D>(deserializer: D) -> Result<ExportedEventBody, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let serialized = SerializedSliceFactEvent::deserialize(deserializer)?;
+    serialized
+        .slice_fact_body()
+        .map(SliceFactEventBody::into_body)
+        .map_err(DeserializeError::custom)
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -856,6 +1058,10 @@ impl SliceFactEventBody {
 
     fn into_slice_fact(self) -> Result<SliceFactInput, String> {
         SliceFactInput::from_event_body(&self.body)
+    }
+
+    fn into_body(self) -> ExportedEventBody {
+        self.body
     }
 
     fn to_json_value(&self) -> Value {
