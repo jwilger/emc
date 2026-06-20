@@ -783,6 +783,80 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_view_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_view(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_view_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"update_view_definition\""))
+            .stdout(predicate::str::contains(
+                "updated view ticket_detail on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            fs::read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("ticket_summary_view"),
+            "MCP-updated view field must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("summary-label"),
+            "MCP-updated view sketch token must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("ticket_title_view"),
+            "old view field must be absent after MCP update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_view_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_view(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_view_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"remove_view_definition\""))
+            .stdout(predicate::str::contains(
+                "removed view ticket_detail from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_quint.contains("name: \"ticket_detail\""),
+            "MCP-removed view must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_slice_update_fork(&temp_dir)?;
@@ -948,6 +1022,22 @@ mod tests {
         )
     }
 
+    fn update_view_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_view_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"ticket_detail\",\"read_model\":\"ticket_state\",\"field\":\"ticket_summary_view\",\"source_field\":\"ticket_title\",\"sketch_token\":\"summary-label\",\"field_provenance\":\"ticket_state.ticket_title -> summary label\",\"bit_encoding\":\"UTF-8 summary string\",\"control\":\"submit-ticket\",\"control_command\":\"CaptureTicket\",\"control_input\":\"ticket_title\",\"control_input_source\":\"actor\",\"control_input_description\":\"title field on the intake form\",\"control_input_sketch_token\":\"title-input\",\"control_input_visible\":true,\"control_input_decision\":true,\"handled_errors\":\"DuplicateTicket\",\"recovery_behavior\":\"retry\",\"control_sketch_token\":\"submit-button\",\"navigation_type\":\"modeled_view\",\"navigation_target\":\"ticket_detail\"}}}\n",
+        )
+    }
+
+    fn remove_view_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_view_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"ticket_detail\"}}}\n",
+        )
+    }
+
     fn resolve_conflict_mcp_requests(stream_id: &str, branch_tx: &str) -> String {
         format!(
             "{}{}{}\n",
@@ -1100,6 +1190,35 @@ mod tests {
                 "title",
                 "--field-provenance",
                 "TicketCaptured.title",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn initialize_project_with_view(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        initialize_project_with_read_model(cwd)?;
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "view",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "ticket_detail",
+                "--read-model",
+                "ticket_state",
+                "--field",
+                "ticket_title_view",
+                "--source-field",
+                "ticket_title",
+                "--sketch-token",
+                "title-label",
+                "--field-provenance",
+                "ticket_state.ticket_title -> title label",
+                "--bit-encoding",
+                "UTF-8 title string",
             ])
             .current_dir(cwd)
             .assert()

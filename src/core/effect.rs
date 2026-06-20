@@ -14,7 +14,7 @@ use crate::core::formal_slice_facts::{
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     CommandName, EventName, ModelDescription, ModelName, ReadModelName, ReviewTimestamp,
-    ReviewerId, ScenarioName, SliceSlug, WorkflowCommandErrorRecord,
+    ReviewerId, ScenarioName, SliceSlug, ViewName, WorkflowCommandErrorRecord,
     WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
     WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
@@ -135,6 +135,29 @@ impl SliceReadModelDefinitionRemovalEffect {
 
     pub(crate) fn read_model_name(&self) -> &ReadModelName {
         &self.read_model_name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceViewDefinitionRemovalEffect {
+    slice_slug: SliceSlug,
+    view_name: ViewName,
+}
+
+impl SliceViewDefinitionRemovalEffect {
+    pub(crate) fn new(slice_slug: SliceSlug, view_name: ViewName) -> Self {
+        Self {
+            slice_slug,
+            view_name,
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn view_name(&self) -> &ViewName {
+        &self.view_name
     }
 }
 
@@ -774,6 +797,8 @@ pub(crate) enum Effect {
     RemoveReadModelDefinitionFromSlice(SliceReadModelDefinitionRemovalEffect),
     UpdateReadModelDefinitionFromSlice(NewReadModelDefinition),
     AddViewDefinitionFromSlice(NewViewDefinition),
+    RemoveViewDefinitionFromSlice(SliceViewDefinitionRemovalEffect),
+    UpdateViewDefinitionFromSlice(NewViewDefinition),
     AddSliceFromWorkflow(NewSlice),
     AddSliceScenarioFromSlice(NewSliceScenario),
     AddTranslationDefinitionFromSlice(NewTranslationDefinition),
