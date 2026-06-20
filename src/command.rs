@@ -6,14 +6,16 @@ use crate::core::effect::{
     SliceCommandDefinitionRemovalEffect, SliceDescriptionUpdateEffect,
     SliceEventDefinitionRemovalEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
     SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect,
-    SliceViewDefinitionRemovalEffect, WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect,
-    WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
-    WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    SliceViewControlRemovalEffect, SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect,
+    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
+    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
+    WorkflowTransitionEvidenceEffect,
 };
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
-    NewCommandDefinition, NewEventDefinition, NewExternalPayloadDefinition, NewOutcomeDefinition,
-    NewReadModelDefinition, NewSliceScenario, NewTranslationDefinition, NewViewDefinition,
+    NewCommandDefinition, NewControlDefinition, NewEventDefinition, NewExternalPayloadDefinition,
+    NewOutcomeDefinition, NewReadModelDefinition, NewSliceScenario, NewTranslationDefinition,
+    NewViewDefinition,
 };
 use crate::core::gherkin::{
     GherkinSuite, list_gherkin_features, run_all_gherkin_suites, run_gherkin_suite,
@@ -22,8 +24,8 @@ use crate::core::project::{ProjectName, init_project};
 use crate::core::review_gate::review_gate;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    CommandName, EventName, ModelDescription, ModelName, ReadModelName, ReviewTimestamp,
-    ReviewerId, ScenarioName, SliceSlug, ViewName, WorkflowCommandErrorRecord,
+    CommandName, ControlName, EventName, ModelDescription, ModelName, ReadModelName,
+    ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug, ViewName, WorkflowCommandErrorRecord,
     WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
     WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
@@ -129,6 +131,26 @@ pub(crate) fn update_view_definition(view: NewViewDefinition) -> EffectPlan {
 pub(crate) fn remove_view_definition(slice_slug: SliceSlug, view_name: ViewName) -> EffectPlan {
     EffectPlan::new(vec![Effect::RemoveViewDefinitionFromSlice(
         SliceViewDefinitionRemovalEffect::new(slice_slug, view_name),
+    )])
+}
+
+pub(crate) fn update_control_definition(
+    slice_slug: SliceSlug,
+    view_name: ViewName,
+    control: NewControlDefinition,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateViewControlFromSlice(
+        SliceViewControlUpdateEffect::new(slice_slug, view_name, control),
+    )])
+}
+
+pub(crate) fn remove_control_definition(
+    slice_slug: SliceSlug,
+    view_name: ViewName,
+    control_name: ControlName,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveViewControlFromSlice(
+        SliceViewControlRemovalEffect::new(slice_slug, view_name, control_name),
     )])
 }
 

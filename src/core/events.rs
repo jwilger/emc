@@ -165,6 +165,8 @@ pub(crate) enum ExportedEventType {
     SliceViewAdded,
     SliceViewDefinitionUpdated,
     SliceViewDefinitionRemoved,
+    SliceViewControlUpdated,
+    SliceViewControlRemoved,
     SliceBitLevelDataFlowAdded,
     SliceTranslationAdded,
     SliceAutomationAdded,
@@ -212,6 +214,8 @@ impl ExportedEventType {
             "SliceViewAdded" => Ok(Self::SliceViewAdded),
             "SliceViewDefinitionUpdated" => Ok(Self::SliceViewDefinitionUpdated),
             "SliceViewDefinitionRemoved" => Ok(Self::SliceViewDefinitionRemoved),
+            "SliceViewControlUpdated" => Ok(Self::SliceViewControlUpdated),
+            "SliceViewControlRemoved" => Ok(Self::SliceViewControlRemoved),
             "SliceBitLevelDataFlowAdded" => Ok(Self::SliceBitLevelDataFlowAdded),
             "SliceTranslationAdded" => Ok(Self::SliceTranslationAdded),
             "SliceAutomationAdded" => Ok(Self::SliceAutomationAdded),
@@ -262,6 +266,8 @@ impl AsRef<str> for ExportedEventType {
             Self::SliceViewAdded => "SliceViewAdded",
             Self::SliceViewDefinitionUpdated => "SliceViewDefinitionUpdated",
             Self::SliceViewDefinitionRemoved => "SliceViewDefinitionRemoved",
+            Self::SliceViewControlUpdated => "SliceViewControlUpdated",
+            Self::SliceViewControlRemoved => "SliceViewControlRemoved",
             Self::SliceBitLevelDataFlowAdded => "SliceBitLevelDataFlowAdded",
             Self::SliceTranslationAdded => "SliceTranslationAdded",
             Self::SliceAutomationAdded => "SliceAutomationAdded",
@@ -2383,6 +2389,16 @@ pub(crate) enum ExportedEventBody {
         slice: SliceSlug,
         name: ViewName,
     },
+    SliceViewControlUpdated {
+        slice: SliceSlug,
+        view: ViewName,
+        control: NewControlDefinition,
+    },
+    SliceViewControlRemoved {
+        slice: SliceSlug,
+        view: ViewName,
+        name: ControlName,
+    },
     SliceBitLevelDataFlowAdded {
         data_flow: NewBitLevelDataFlow,
     },
@@ -2473,6 +2489,8 @@ impl ExportedEventBody {
             Self::SliceViewDefinitionRemoved { .. } => {
                 ExportedEventType::SliceViewDefinitionRemoved
             }
+            Self::SliceViewControlUpdated { .. } => ExportedEventType::SliceViewControlUpdated,
+            Self::SliceViewControlRemoved { .. } => ExportedEventType::SliceViewControlRemoved,
             Self::SliceBitLevelDataFlowAdded { .. } => {
                 ExportedEventType::SliceBitLevelDataFlowAdded
             }
@@ -2595,6 +2613,22 @@ impl ExportedEventBody {
             }
             Self::SliceViewDefinitionRemoved { slice, name } => {
                 json!({ "slice": slice.as_ref(), "name": name.as_ref() })
+            }
+            Self::SliceViewControlUpdated {
+                slice,
+                view,
+                control,
+            } => json!({
+                "slice": slice.as_ref(),
+                "view": view.as_ref(),
+                "control": SliceViewAddedEventPayload::control_to_json_value(control),
+            }),
+            Self::SliceViewControlRemoved { slice, view, name } => {
+                json!({
+                    "slice": slice.as_ref(),
+                    "view": view.as_ref(),
+                    "name": name.as_ref(),
+                })
             }
             Self::SliceBitLevelDataFlowAdded { data_flow } => {
                 SliceBitLevelDataFlowAddedEventPayload::from_data_flow(data_flow).to_json_value()
@@ -2821,16 +2855,13 @@ impl ExportedEventBody {
             | ExportedEventType::SliceReadModelDefinitionRemoved => {
                 Self::read_model_from_event_type_and_payload(event_type, payload)
             }
-            ExportedEventType::SliceViewAdded => Ok(Self::SliceViewAdded {
-                view: SliceViewAddedEventPayload::from_json_value(payload)?.into_view(),
-            }),
-            ExportedEventType::SliceViewDefinitionUpdated => Ok(Self::SliceViewDefinitionUpdated {
-                view: SliceViewAddedEventPayload::from_json_value(payload)?.into_view(),
-            }),
-            ExportedEventType::SliceViewDefinitionRemoved => Ok(Self::SliceViewDefinitionRemoved {
-                slice: slice_slug(required_str(payload, "slice")?)?,
-                name: view_name(required_str(payload, "name")?)?,
-            }),
+            ExportedEventType::SliceViewAdded
+            | ExportedEventType::SliceViewDefinitionUpdated
+            | ExportedEventType::SliceViewDefinitionRemoved
+            | ExportedEventType::SliceViewControlUpdated
+            | ExportedEventType::SliceViewControlRemoved => {
+                Self::view_from_event_type_and_payload(event_type, payload)
+            }
             ExportedEventType::SliceBitLevelDataFlowAdded => Ok(Self::SliceBitLevelDataFlowAdded {
                 data_flow: SliceBitLevelDataFlowAddedEventPayload::from_json_value(payload)?
                     .into_data_flow(),
@@ -2852,6 +2883,37 @@ impl ExportedEventBody {
                     .into_connection(),
             }),
             _ => Self::misc_from_event_type_and_payload(event_type, payload),
+        }
+    }
+
+    fn view_from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
+            ExportedEventType::SliceViewAdded => Ok(Self::SliceViewAdded {
+                view: SliceViewAddedEventPayload::from_json_value(payload)?.into_view(),
+            }),
+            ExportedEventType::SliceViewDefinitionUpdated => Ok(Self::SliceViewDefinitionUpdated {
+                view: SliceViewAddedEventPayload::from_json_value(payload)?.into_view(),
+            }),
+            ExportedEventType::SliceViewDefinitionRemoved => Ok(Self::SliceViewDefinitionRemoved {
+                slice: slice_slug(required_str(payload, "slice")?)?,
+                name: view_name(required_str(payload, "name")?)?,
+            }),
+            ExportedEventType::SliceViewControlUpdated => Ok(Self::SliceViewControlUpdated {
+                slice: slice_slug(required_str(payload, "slice")?)?,
+                view: view_name(required_str(payload, "view")?)?,
+                control: SliceViewAddedEventPayload::control_definition_from_json_value(
+                    required_object(payload, "control")?,
+                )?,
+            }),
+            ExportedEventType::SliceViewControlRemoved => Ok(Self::SliceViewControlRemoved {
+                slice: slice_slug(required_str(payload, "slice")?)?,
+                view: view_name(required_str(payload, "view")?)?,
+                name: control_name(required_str(payload, "name")?)?,
+            }),
+            _ => Err(format!("unexpected view event type {event_type}")),
         }
     }
 
@@ -3242,6 +3304,36 @@ impl EventDraft {
             stream_id: EventStreamId::slice(slice),
             body: ExportedEventBody::SliceViewDefinitionRemoved {
                 slice: slice.clone(),
+                name: name.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_view_control_updated(
+        slice: &SliceSlug,
+        view: &ViewName,
+        control: &NewControlDefinition,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(slice),
+            body: ExportedEventBody::SliceViewControlUpdated {
+                slice: slice.clone(),
+                view: view.clone(),
+                control: control.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_view_control_removed(
+        slice: &SliceSlug,
+        view: &ViewName,
+        name: &ControlName,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(slice),
+            body: ExportedEventBody::SliceViewControlRemoved {
+                slice: slice.clone(),
+                view: view.clone(),
                 name: name.clone(),
             },
         }
@@ -3666,6 +3758,18 @@ impl ProjectedModel {
             EmcEvent::SliceViewDefinitionRemoved { view, .. } => {
                 Self::apply_view_definition_removed(model, view.slice(), view.name())
             }
+            EmcEvent::SliceViewControlUpdated { control, .. } => Self::apply_view_control_updated(
+                model,
+                control.slice(),
+                control.view(),
+                control.control(),
+            ),
+            EmcEvent::SliceViewControlRemoved { control, .. } => Self::apply_view_control_removed(
+                model,
+                control.slice(),
+                control.view(),
+                control.name(),
+            ),
             EmcEvent::SliceScenarioUpdated { scenario, .. } => {
                 Self::apply_slice_scenario_updated(model, scenario.scenario())
             }
@@ -3953,6 +4057,36 @@ impl ProjectedModel {
         let mut model = Self::require(model, "SliceViewDefinitionRemoved")?;
         model.apply_slice_fact_body(ExportedEventBody::SliceViewDefinitionRemoved {
             slice: slice.clone(),
+            name: name.clone(),
+        })?;
+        Ok(Some(model))
+    }
+
+    fn apply_view_control_updated(
+        model: Option<Self>,
+        slice: &SliceSlug,
+        view: &ViewName,
+        control: NewControlDefinition,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceViewControlUpdated")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceViewControlUpdated {
+            slice: slice.clone(),
+            view: view.clone(),
+            control,
+        })?;
+        Ok(Some(model))
+    }
+
+    fn apply_view_control_removed(
+        model: Option<Self>,
+        slice: &SliceSlug,
+        view: &ViewName,
+        name: &ControlName,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceViewControlRemoved")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceViewControlRemoved {
+            slice: slice.clone(),
+            view: view.clone(),
             name: name.clone(),
         })?;
         Ok(Some(model))
@@ -4408,16 +4542,12 @@ impl ProjectedModel {
                     .bit_level_data_flows
                     .push(data_flow);
             }
-            ExportedEventBody::SliceViewAdded { view } => {
-                self.slice_mut(view.slice_slug(), "SliceViewAdded")?
-                    .views
-                    .push(view);
-            }
-            ExportedEventBody::SliceViewDefinitionUpdated { view } => {
-                self.apply_slice_view_definition_updated(view)?;
-            }
-            ExportedEventBody::SliceViewDefinitionRemoved { slice, name } => {
-                self.apply_slice_view_definition_removed(&slice, &name)?;
+            ExportedEventBody::SliceViewAdded { .. }
+            | ExportedEventBody::SliceViewDefinitionUpdated { .. }
+            | ExportedEventBody::SliceViewDefinitionRemoved { .. }
+            | ExportedEventBody::SliceViewControlUpdated { .. }
+            | ExportedEventBody::SliceViewControlRemoved { .. } => {
+                self.apply_slice_view_body(body)?;
             }
             ExportedEventBody::SliceTranslationAdded { translation } => {
                 self.slice_mut(translation.slice_slug(), "SliceTranslationAdded")?
@@ -4469,6 +4599,34 @@ impl ProjectedModel {
         self.slice_mut(slice, "SliceEventDefinitionRemoved")?
             .event_definitions
             .retain(|event| event.name() != name);
+        Ok(())
+    }
+
+    fn apply_slice_view_body(&mut self, body: ExportedEventBody) -> Result<(), String> {
+        match body {
+            ExportedEventBody::SliceViewAdded { view } => {
+                self.slice_mut(view.slice_slug(), "SliceViewAdded")?
+                    .views
+                    .push(view);
+            }
+            ExportedEventBody::SliceViewDefinitionUpdated { view } => {
+                self.apply_slice_view_definition_updated(view)?;
+            }
+            ExportedEventBody::SliceViewDefinitionRemoved { slice, name } => {
+                self.apply_slice_view_definition_removed(&slice, &name)?;
+            }
+            ExportedEventBody::SliceViewControlUpdated {
+                slice,
+                view,
+                control,
+            } => {
+                self.apply_slice_view_control_updated(&slice, &view, control)?;
+            }
+            ExportedEventBody::SliceViewControlRemoved { slice, view, name } => {
+                self.apply_slice_view_control_removed(&slice, &view, &name)?;
+            }
+            _ => return Err("apply_slice_view_body received a non-view body".to_owned()),
+        }
         Ok(())
     }
 
@@ -4561,6 +4719,50 @@ impl ProjectedModel {
         self.slice_mut(slice, "SliceViewDefinitionRemoved")?
             .views
             .retain(|view| view.name() != name);
+        Ok(())
+    }
+
+    fn apply_slice_view_control_updated(
+        &mut self,
+        slice: &SliceSlug,
+        view: &ViewName,
+        control: NewControlDefinition,
+    ) -> Result<(), String> {
+        let slice = self.slice_mut(slice, "SliceViewControlUpdated")?;
+        let view_definition = slice
+            .views
+            .iter_mut()
+            .find(|existing| existing.name() == view)
+            .ok_or_else(|| {
+                format!(
+                    "SliceViewControlUpdated requires existing view '{}' in slice '{}'",
+                    view.as_ref(),
+                    slice.slug.as_ref()
+                )
+            })?;
+        *view_definition = view_definition.clone().with_updated_control(control);
+        Ok(())
+    }
+
+    fn apply_slice_view_control_removed(
+        &mut self,
+        slice: &SliceSlug,
+        view: &ViewName,
+        name: &ControlName,
+    ) -> Result<(), String> {
+        let slice = self.slice_mut(slice, "SliceViewControlRemoved")?;
+        let view_definition = slice
+            .views
+            .iter_mut()
+            .find(|existing| existing.name() == view)
+            .ok_or_else(|| {
+                format!(
+                    "SliceViewControlRemoved requires existing view '{}' in slice '{}'",
+                    view.as_ref(),
+                    slice.slug.as_ref()
+                )
+            })?;
+        *view_definition = view_definition.clone().with_removed_control(name);
         Ok(())
     }
 

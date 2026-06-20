@@ -15,11 +15,11 @@ use crate::core::event_commands::{
     ConnectWorkflowCommand, DeclareWorkflowReadinessCommand, EmcEvent, InitializeProjectCommand,
     RecordReviewCommand, RemoveCommandDefinitionCommand, RemoveEventDefinitionCommand,
     RemoveReadModelDefinitionCommand, RemoveSliceCommand, RemoveSliceScenarioCommand,
-    RemoveViewDefinitionCommand, RemoveWorkflowCommand, RemoveWorkflowTransitionCommand,
-    ResolveConflictCommand, SliceFactInput, UpdateCommandDefinitionCommand,
-    UpdateEventDefinitionCommand, UpdateReadModelDefinitionCommand, UpdateSliceCommand,
-    UpdateSliceScenarioCommand, UpdateViewDefinitionCommand, UpdateWorkflowCommand,
-    WorkflowFactInput,
+    RemoveViewControlCommand, RemoveViewDefinitionCommand, RemoveWorkflowCommand,
+    RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
+    UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand, UpdateReadModelDefinitionCommand,
+    UpdateSliceCommand, UpdateSliceScenarioCommand, UpdateViewControlCommand,
+    UpdateViewDefinitionCommand, UpdateWorkflowCommand, WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
 
@@ -184,6 +184,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::SliceViewAdded { .. }
         | ExportedEventBody::SliceViewDefinitionUpdated { .. }
         | ExportedEventBody::SliceViewDefinitionRemoved { .. }
+        | ExportedEventBody::SliceViewControlUpdated { .. }
+        | ExportedEventBody::SliceViewControlRemoved { .. }
         | ExportedEventBody::SliceBitLevelDataFlowAdded { .. }
         | ExportedEventBody::SliceTranslationAdded { .. }
         | ExportedEventBody::SliceAutomationAdded { .. }
@@ -413,6 +415,27 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
             )
             .await
         }
+        ExportedEventBody::SliceViewDefinitionUpdated { .. }
+        | ExportedEventBody::SliceViewDefinitionRemoved { .. }
+        | ExportedEventBody::SliceViewControlUpdated { .. }
+        | ExportedEventBody::SliceViewControlRemoved { .. } => {
+            dispatch_slice_view(store, body).await
+        }
+        _ => {
+            run_command(
+                store,
+                AddSliceFactCommand::new(SliceFactInput::from_event_body(body)?)?,
+            )
+            .await
+        }
+    }
+}
+
+async fn dispatch_slice_view(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<(), String> {
+    match body {
         ExportedEventBody::SliceViewDefinitionUpdated { view } => {
             run_command(store, UpdateViewDefinitionCommand::new(view.clone())?).await
         }
@@ -423,13 +446,25 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
             )
             .await
         }
-        _ => {
+        ExportedEventBody::SliceViewControlUpdated {
+            slice,
+            view,
+            control,
+        } => {
             run_command(
                 store,
-                AddSliceFactCommand::new(SliceFactInput::from_event_body(body)?)?,
+                UpdateViewControlCommand::new(slice.clone(), view.clone(), control.clone())?,
             )
             .await
         }
+        ExportedEventBody::SliceViewControlRemoved { slice, view, name } => {
+            run_command(
+                store,
+                RemoveViewControlCommand::new(slice.clone(), view.clone(), name.clone())?,
+            )
+            .await
+        }
+        _ => Err("dispatch_slice_view received a non-view body".to_owned()),
     }
 }
 

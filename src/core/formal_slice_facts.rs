@@ -1415,6 +1415,16 @@ impl NewViewDefinition {
     pub fn filters(&self) -> &ViewFilters {
         &self.filters
     }
+
+    pub(crate) fn with_updated_control(mut self, control: NewControlDefinition) -> Self {
+        self.controls = self.controls.with_updated_control(control);
+        self
+    }
+
+    pub(crate) fn with_removed_control(mut self, name: &ControlName) -> Self {
+        self.controls = self.controls.with_removed_control(name);
+        self
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -1877,6 +1887,18 @@ impl ViewControls {
 
     pub fn as_slice(&self) -> &[NewControlDefinition] {
         &self.controls
+    }
+
+    fn with_updated_control(mut self, control: NewControlDefinition) -> Self {
+        self.controls
+            .retain(|existing| existing.name() != control.name());
+        self.controls.push(control);
+        self
+    }
+
+    fn with_removed_control(mut self, name: &ControlName) -> Self {
+        self.controls.retain(|control| control.name() != name);
+        self
     }
 }
 
