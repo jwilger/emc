@@ -46,4 +46,22 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn cli_help_prints_the_modeling_process_guide() -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(["help", "modeling"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("EMC Modeling Process"))
+            .stdout(predicate::str::contains("Phase-By-Phase Modeling Order"))
+            .stdout(predicate::str::contains("Acceptance Scenarios"))
+            .stdout(predicate::str::contains("external actor's point of view"))
+            .stdout(predicate::str::contains("Contract Scenarios"))
+            .stdout(predicate::str::contains(
+                "internal provenance and traceability requirements",
+            ));
+
+        Ok(())
+    }
 }

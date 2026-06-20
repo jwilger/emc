@@ -33,6 +33,7 @@ use crate::core::formal_slice_facts::{
 };
 use crate::core::gherkin::GherkinSuite;
 use crate::core::modeling_enums::MODELING_ENUMS;
+use crate::core::modeling_guidance::modeling_process_guide;
 use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
@@ -156,6 +157,7 @@ enum Command {
     GherkinRunAll,
     Help,
     HelpEnums,
+    HelpModeling,
     Init {
         name: ProjectName,
     },
@@ -316,6 +318,10 @@ fn run_query_commands(command: Command) -> Result<(), ShellError> {
         Command::Help => print_help(),
         Command::HelpEnums => {
             print_enum_help();
+            Ok(())
+        }
+        Command::HelpModeling => {
+            print_modeling_help();
             Ok(())
         }
         Command::Init { name } => interpret(&command::init(&name)),
@@ -557,6 +563,9 @@ fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
         }),
         [command, subject] if command == "help" && subject == "enums" => Ok(Cli {
             command: Command::HelpEnums,
+        }),
+        [command, subject] if command == "help" && subject == "modeling" => Ok(Cli {
+            command: Command::HelpModeling,
         }),
         [
             command,
@@ -4566,6 +4575,10 @@ fn print_enum_help() {
     }
 }
 
+fn print_modeling_help() {
+    println!("{}", modeling_process_guide());
+}
+
 fn parse_basic_scenario(
     slice_slug: SliceSlug,
     scenario_kind: &str,
@@ -4642,6 +4655,7 @@ fn help_help_subcommand() -> ClapCommand {
     ClapCommand::new("help")
         .about("Show modeling reference material")
         .subcommand(ClapCommand::new("enums").about("List accepted modeled enum values"))
+        .subcommand(ClapCommand::new("modeling").about("Show the EMC modeling process guide"))
 }
 
 fn help_list_subcommand() -> ClapCommand {
@@ -4768,6 +4782,7 @@ fn help_after_text() -> &'static str {
     "Common commands:
   emc init --name <project-name>
   emc help enums
+  emc help modeling
   emc add workflow --slug <slug> --name <name> --description <text>
   emc update workflow --slug <workflow> --name <name>
   emc remove workflow --slug <workflow>

@@ -28,6 +28,7 @@ use crate::core::formal_slice_facts::{
     ViewControls, ViewFilters, ViewLocalStates,
 };
 use crate::core::modeling_enums::MODELING_ENUMS;
+use crate::core::modeling_guidance::modeling_process_guide;
 use crate::core::slice::NewSlice;
 use crate::core::types::{
     CommandInputSourceDescription, CommandInputSourceKind, CommandName, DatumName,
@@ -539,6 +540,16 @@ fn project_status_tools() -> Vec<Tool> {
         Tool::new(
             "list_modeling_enums",
             "List accepted modeled enum strings for constrained EMC tool arguments.",
+            schema_object(json!({
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                    "additionalProperties": false
+            })),
+        ),
+        Tool::new(
+            "get_modeling_guidance",
+            "Return the full EMC modeling process guide.",
             schema_object(json!({
                     "type": "object",
                     "properties": {},
@@ -1623,6 +1634,7 @@ fn query_tool_text(name: &str, request: &Value) -> Option<Result<String, ShellEr
         "list_transitions" => Some(list_transitions_tool_text()),
         "list_conflicts" => Some(list_conflicts_tool_text()),
         "list_modeling_enums" => Some(list_modeling_enums_tool_text()),
+        "get_modeling_guidance" => Some(Ok(get_modeling_guidance_tool_text())),
         "resolve_conflict" => Some(resolve_conflict_tool_text(request)),
         "show_workflow" => Some(show_workflow_tool_text(request)),
         "show_slice" => Some(show_slice_tool_text(request)),
@@ -1749,6 +1761,10 @@ fn list_modeling_enums_tool_text() -> Result<String, ShellError> {
             .collect::<Vec<_>>(),
     )
     .map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn get_modeling_guidance_tool_text() -> String {
+    modeling_process_guide().to_owned()
 }
 
 fn resolve_conflict_tool_text(request: &Value) -> Result<String, ShellError> {
