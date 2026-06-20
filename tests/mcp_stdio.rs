@@ -484,6 +484,26 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_exposes_modeling_guidance_tool() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(modeling_guidance_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"get_modeling_guidance\""))
+            .stdout(predicate::str::contains("EMC Modeling Process"))
+            .stdout(predicate::str::contains("Phase-By-Phase Modeling Order"))
+            .stdout(predicate::str::contains("Acceptance Scenarios"))
+            .stdout(predicate::str::contains("external actor's point of view"))
+            .stdout(predicate::str::contains("Contract Scenarios"));
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_slice_update_fork(&temp_dir)?;
@@ -574,6 +594,14 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"list_conflicts\",\"arguments\":{}}}\n",
+        )
+    }
+
+    fn modeling_guidance_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"get_modeling_guidance\",\"arguments\":{}}}\n",
         )
     }
 
