@@ -1371,6 +1371,22 @@ fn add_view_definition_tool() -> Tool {
     )
 }
 
+fn update_view_definition_tool() -> Tool {
+    Tool::new(
+        "update_view_definition",
+        "Update a view field plus command control, input provenance, error handling, and navigation in a slice, then regenerate synchronized model artifacts.",
+        schema_object(add_view_definition_schema()),
+    )
+}
+
+fn remove_view_definition_tool() -> Tool {
+    Tool::new(
+        "remove_view_definition",
+        "Remove a view definition from a slice, then regenerate synchronized model artifacts.",
+        schema_object(slice_named_definition_schema()),
+    )
+}
+
 fn add_view_definition_schema() -> Value {
     json!({
         "type": "object",
@@ -1470,11 +1486,13 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_command_definition_tool(),
         update_event_definition_tool(),
         update_read_model_definition_tool(),
+        update_view_definition_tool(),
         remove_slice_tool(),
         remove_slice_scenario_tool(),
         remove_command_definition_tool(),
         remove_event_definition_tool(),
         remove_read_model_definition_tool(),
+        remove_view_definition_tool(),
         remove_workflow_tool(),
         connect_workflow_tool(),
         remove_transition_tool(),
@@ -1845,11 +1863,13 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_command_definition" => Some(update_command_definition_tool_text(request)),
         "update_event_definition" => Some(update_event_definition_tool_text(request)),
         "update_read_model_definition" => Some(update_read_model_definition_tool_text(request)),
+        "update_view_definition" => Some(update_view_definition_tool_text(request)),
         "remove_slice" => Some(remove_slice_tool_text(request)),
         "remove_slice_scenario" => Some(remove_slice_scenario_tool_text(request)),
         "remove_command_definition" => Some(remove_command_definition_tool_text(request)),
         "remove_event_definition" => Some(remove_event_definition_tool_text(request)),
         "remove_read_model_definition" => Some(remove_read_model_definition_tool_text(request)),
+        "remove_view_definition" => Some(remove_view_definition_tool_text(request)),
         "remove_workflow" => Some(remove_workflow_tool_text(request)),
         "connect_workflow" => Some(connect_workflow_tool_text(request)),
         "remove_transition" => Some(remove_transition_tool_text(request)),
@@ -3987,17 +4007,63 @@ fn add_view_definition_tool_text(request: &Value) -> Result<String, ShellError> 
         .get("params")
         .and_then(|params| params.get("arguments"))
         .ok_or_else(|| ShellError::message("add_view_definition requires arguments"))?;
+    let view_definition = build_view_definition_from_arguments(arguments, "add_view_definition")?;
+
+    interpret_collect_reports(&command::add_view_definition(view_definition))
+        .map(|reports| reports.join("\n"))
+}
+
+fn update_view_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("update_view_definition requires arguments"))?;
+    let view_definition =
+        build_view_definition_from_arguments(arguments, "update_view_definition")?;
+
+    interpret_collect_reports(&command::update_view_definition(view_definition))
+        .map(|reports| reports.join("\n"))
+}
+
+fn remove_view_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("remove_view_definition requires arguments"))?;
     let slice_slug = arguments
         .get("slice")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_view_definition requires slice"))
+        .ok_or_else(|| ShellError::message("remove_view_definition requires slice"))
         .and_then(|raw_slice| {
             parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let view_name = arguments
         .get("name")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_view_definition requires name"))
+        .ok_or_else(|| ShellError::message("remove_view_definition requires name"))
+        .and_then(|raw_name| {
+            parse_view_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(&command::remove_view_definition(slice_slug, view_name))
+        .map(|reports| reports.join("\n"))
+}
+
+fn build_view_definition_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<NewViewDefinition, ShellError> {
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires slice")))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let view_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires name")))
         .and_then(|raw_name| {
             parse_view_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
         })?;
@@ -4014,8 +4080,7 @@ fn add_view_definition_tool_text(request: &Value) -> Result<String, ShellError> 
         .with_filters(ViewFilters::from_targets(filters.unwrap_or_default()))
         .with_controls(ViewControls::from_controls([control]));
 
-    interpret_collect_reports(&command::add_view_definition(view_definition))
-        .map(|reports| reports.join("\n"))
+    Ok(view_definition)
 }
 
 fn parse_view_definition_field(arguments: &Value) -> Result<NewViewField, ShellError> {

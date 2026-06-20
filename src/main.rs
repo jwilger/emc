@@ -133,6 +133,13 @@ enum Command {
     AddViewDefinition {
         view: NewViewDefinition,
     },
+    UpdateViewDefinition {
+        view: NewViewDefinition,
+    },
+    RemoveViewDefinition {
+        slice_slug: SliceSlug,
+        view_name: ViewName,
+    },
     AddSlice {
         slice: NewSlice,
     },
@@ -298,6 +305,7 @@ fn run(cli: Cli) -> Result<(), ShellError> {
             interpret(&command::update_read_model_definition(read_model))
         }
         Command::AddViewDefinition { view } => interpret(&command::add_view_definition(view)),
+        Command::UpdateViewDefinition { view } => interpret(&command::update_view_definition(view)),
         Command::AddSlice { slice } => interpret(&command::add_slice(slice)),
         Command::AddSliceScenario { scenario } => interpret(&command::add_slice_scenario(scenario)),
         Command::UpdateSliceScenario { scenario } => {
@@ -409,6 +417,10 @@ fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
             slice_slug,
             read_model_name,
         )),
+        Command::RemoveViewDefinition {
+            slice_slug,
+            view_name,
+        } => interpret(&command::remove_view_definition(slice_slug, view_name)),
         Command::RemoveSlice { slug } => interpret(&command::remove_slice(slug)),
         Command::RemoveSliceScenario {
             slice_slug,
@@ -615,6 +627,25 @@ fn build_add_view_cli(
     })
 }
 
+fn view_definition_cli(command: &str, view: NewViewDefinition) -> Cli {
+    let command = if command == "update" {
+        Command::UpdateViewDefinition { view }
+    } else {
+        Command::AddViewDefinition { view }
+    };
+    Cli { command }
+}
+
+fn remove_view_definition_cli(slice: &str, name: &str) -> Result<Cli, ShellError> {
+    let (slice_slug, view_name) = parse_slice_and_view_name(slice, name)?;
+    Ok(Cli {
+        command: Command::RemoveViewDefinition {
+            slice_slug,
+            view_name,
+        },
+    })
+}
+
 fn remove_command_definition_cli(slice: &str, name: &str) -> Result<Cli, ShellError> {
     let slice_slug =
         parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
@@ -778,6 +809,14 @@ fn parse_cli_remove_event_or_2(arguments: &[String]) -> Result<Cli, ShellError> 
                 && name_flag == "--name" =>
         {
             remove_read_model_definition_cli(slice, name)
+        }
+        [command, subject, slice_flag, slice, name_flag, name]
+            if command == "remove"
+                && subject == "view"
+                && slice_flag == "--slice"
+                && name_flag == "--name" =>
+        {
+            remove_view_definition_cli(slice, name)
         }
         _ => parse_cli_2(arguments),
     }
@@ -2425,7 +2464,7 @@ fn parse_cli_23(arguments: &[String]) -> Result<Cli, ShellError> {
             field_provenance,
             bit_encoding_flag,
             bit_encoding,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "view"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -2452,24 +2491,23 @@ fn parse_cli_23(arguments: &[String]) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let bit_encoding = parse_bit_encoding_semantics(bit_encoding)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::AddViewDefinition {
-                    view: NewViewDefinition::new(
-                        slice_slug,
-                        view_name,
-                        NewViewField::new(
-                            field_name,
-                            parse_view_field_source_kind("read_model")
-                                .map_err(|error| ShellError::message(error.to_string()))?,
-                            read_model_name,
-                            source_field,
-                            sketch_token,
-                            provenance_description,
-                            bit_encoding,
-                        ),
+            Ok(view_definition_cli(
+                command,
+                NewViewDefinition::new(
+                    slice_slug,
+                    view_name,
+                    NewViewField::new(
+                        field_name,
+                        parse_view_field_source_kind("read_model")
+                            .map_err(|error| ShellError::message(error.to_string()))?,
+                        read_model_name,
+                        source_field,
+                        sketch_token,
+                        provenance_description,
+                        bit_encoding,
                     ),
-                },
-            })
+                ),
+            ))
         }
         _ => parse_cli_24(arguments),
     }

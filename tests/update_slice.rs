@@ -1006,6 +1006,115 @@ mod tests {
     }
 
     #[test]
+    fn remove_view_definition_removes_it_from_synchronized_artifacts() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_ticket_captured_event(temp_dir.path())?;
+        add_ticket_state_read_model(temp_dir.path())?;
+        add_ticket_detail_view(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "view",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "ticket_detail",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed view ticket_detail from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_lean.contains("name := \"ticket_detail\""),
+            "removed view must be absent from Lean slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("name: \"ticket_detail\""),
+            "removed view must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn update_view_definition_rewrites_synchronized_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_ticket_captured_event(temp_dir.path())?;
+        add_ticket_state_read_model(temp_dir.path())?;
+        add_ticket_detail_view(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "view",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "ticket_detail",
+                "--read-model",
+                "ticket_state",
+                "--field",
+                "ticket_summary_view",
+                "--source-field",
+                "ticket_title",
+                "--sketch-token",
+                "ticket-summary-label",
+                "--field-provenance",
+                "ticket_state.ticket_title -> summary label",
+                "--bit-encoding",
+                "plain text summary label",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated view ticket_detail on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("ticket_summary_view"),
+            "updated view field must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("ticket-summary-label"),
+            "updated view sketch token must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("ticket_title_view"),
+            "old view field must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn update_slice_kind_rejects_non_slug_flag() -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args([
@@ -1193,6 +1302,35 @@ mod tests {
                 "ticket_title",
                 "--field-provenance",
                 "TicketCaptured.ticket_title",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_ticket_detail_view(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "view",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "ticket_detail",
+                "--read-model",
+                "ticket_state",
+                "--field",
+                "ticket_title_view",
+                "--source-field",
+                "ticket_title",
+                "--sketch-token",
+                "ticket-title-label",
+                "--field-provenance",
+                "ticket_state.ticket_title -> title label",
+                "--bit-encoding",
+                "plain text title label",
             ])
             .current_dir(cwd)
             .assert()

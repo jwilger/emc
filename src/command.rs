@@ -5,9 +5,10 @@ use crate::core::effect::{
     ChosenEventId, CleanReviewEffect, Effect, EffectPlan, EventConflictId, EventConflictResolution,
     SliceCommandDefinitionRemovalEffect, SliceDescriptionUpdateEffect,
     SliceEventDefinitionRemovalEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
-    SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect, WorkflowCommandErrorEffect,
-    WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
-    WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect,
+    SliceViewDefinitionRemovalEffect, WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect,
+    WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
+    WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
 };
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
@@ -22,7 +23,7 @@ use crate::core::review_gate::review_gate;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     CommandName, EventName, ModelDescription, ModelName, ReadModelName, ReviewTimestamp,
-    ReviewerId, ScenarioName, SliceSlug, WorkflowCommandErrorRecord,
+    ReviewerId, ScenarioName, SliceSlug, ViewName, WorkflowCommandErrorRecord,
     WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
     WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
@@ -119,6 +120,16 @@ pub(crate) fn remove_read_model_definition(
 
 pub(crate) fn add_view_definition(view: NewViewDefinition) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddViewDefinitionFromSlice(view)])
+}
+
+pub(crate) fn update_view_definition(view: NewViewDefinition) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateViewDefinitionFromSlice(view)])
+}
+
+pub(crate) fn remove_view_definition(slice_slug: SliceSlug, view_name: ViewName) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveViewDefinitionFromSlice(
+        SliceViewDefinitionRemovalEffect::new(slice_slug, view_name),
+    )])
 }
 
 pub(crate) fn add_bit_level_data_flow(data_flow: NewBitLevelDataFlow) -> EffectPlan {
