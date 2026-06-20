@@ -25,7 +25,8 @@ use crate::core::effect::{
     ProcessInvocation, ProcessInvocations, ProjectPath, ProjectionFingerprint, ReportLine,
     ReviewEventReference, ReviewRecordRequirement, SliceCommandDefinitionRemovalEffect,
     SliceDescriptionUpdateEffect, SliceEventDefinitionRemovalEffect, SliceKindUpdateEffect,
-    SliceNameUpdateEffect, SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect,
+    SliceNameUpdateEffect, SliceOutcomeDefinitionRemovalEffect,
+    SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect,
     SliceViewControlRemovalEffect, SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect,
     WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
     WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
@@ -351,6 +352,7 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::RecordCleanReviewFromWorkflow(_)
             | Effect::RemoveCommandDefinitionFromSlice(_)
             | Effect::RemoveEventDefinitionFromSlice(_)
+            | Effect::RemoveOutcomeDefinitionFromSlice(_)
             | Effect::RemoveReadModelDefinitionFromSlice(_)
             | Effect::RemoveSliceScenarioFromSlice(_)
             | Effect::RemoveSliceFromWorkflow(_)
@@ -361,6 +363,7 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::RequireWorkflowEntryLifecycleCoverageFromWorkflow(_)
             | Effect::UpdateCommandDefinitionFromSlice(_)
             | Effect::UpdateEventDefinitionFromSlice(_)
+            | Effect::UpdateOutcomeDefinitionFromSlice(_)
             | Effect::UpdateReadModelDefinitionFromSlice(_)
             | Effect::UpdateSliceScenarioFromSlice(_)
             | Effect::UpdateSliceDescriptionFromWorkflow(_)
@@ -502,6 +505,8 @@ fn interpret_slice_fact_effect(effect: &Effect) -> Option<Result<Vec<String>, Sh
             interpret_external_payload_added(external_payload)
         }
         Effect::AddOutcomeDefinitionFromSlice(outcome) => interpret_outcome_added(outcome),
+        Effect::RemoveOutcomeDefinitionFromSlice(removal) => interpret_outcome_removed(removal),
+        Effect::UpdateOutcomeDefinitionFromSlice(outcome) => interpret_outcome_updated(outcome),
         Effect::AddReadModelDefinitionFromSlice(read_model) => {
             interpret_read_model_added(read_model)
         }
@@ -789,6 +794,46 @@ fn interpret_outcome_added(outcome: &NewOutcomeDefinition) -> Result<Vec<String>
         outcome.slice_slug(),
         reports,
         EventDraft::slice_outcome_added(outcome),
+    )
+}
+
+fn interpret_outcome_updated(outcome: &NewOutcomeDefinition) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "updated outcome {} on slice {}",
+            outcome.label().as_ref(),
+            outcome.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "updated outcome {} in project root",
+            outcome.label().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        outcome.slice_slug(),
+        reports,
+        EventDraft::slice_outcome_definition_updated(outcome),
+    )
+}
+
+fn interpret_outcome_removed(
+    removal: &SliceOutcomeDefinitionRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "removed outcome {} from slice {}",
+            removal.outcome_label().as_ref(),
+            removal.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "removed outcome {} from project root",
+            removal.outcome_label().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        removal.slice_slug(),
+        reports,
+        EventDraft::slice_outcome_definition_removed(removal.slice_slug(), removal.outcome_label()),
     )
 }
 

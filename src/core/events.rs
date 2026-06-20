@@ -152,6 +152,8 @@ pub(crate) enum ExportedEventType {
     SliceScenarioUpdated,
     SliceScenarioRemoved,
     SliceOutcomeAdded,
+    SliceOutcomeDefinitionUpdated,
+    SliceOutcomeDefinitionRemoved,
     SliceExternalPayloadAdded,
     SliceEventDefinitionAdded,
     SliceEventDefinitionUpdated,
@@ -201,6 +203,8 @@ impl ExportedEventType {
             "SliceScenarioUpdated" => Ok(Self::SliceScenarioUpdated),
             "SliceScenarioRemoved" => Ok(Self::SliceScenarioRemoved),
             "SliceOutcomeAdded" => Ok(Self::SliceOutcomeAdded),
+            "SliceOutcomeDefinitionUpdated" => Ok(Self::SliceOutcomeDefinitionUpdated),
+            "SliceOutcomeDefinitionRemoved" => Ok(Self::SliceOutcomeDefinitionRemoved),
             "SliceExternalPayloadAdded" => Ok(Self::SliceExternalPayloadAdded),
             "SliceEventDefinitionAdded" => Ok(Self::SliceEventDefinitionAdded),
             "SliceEventDefinitionUpdated" => Ok(Self::SliceEventDefinitionUpdated),
@@ -253,6 +257,8 @@ impl AsRef<str> for ExportedEventType {
             Self::SliceScenarioUpdated => "SliceScenarioUpdated",
             Self::SliceScenarioRemoved => "SliceScenarioRemoved",
             Self::SliceOutcomeAdded => "SliceOutcomeAdded",
+            Self::SliceOutcomeDefinitionUpdated => "SliceOutcomeDefinitionUpdated",
+            Self::SliceOutcomeDefinitionRemoved => "SliceOutcomeDefinitionRemoved",
             Self::SliceExternalPayloadAdded => "SliceExternalPayloadAdded",
             Self::SliceEventDefinitionAdded => "SliceEventDefinitionAdded",
             Self::SliceEventDefinitionUpdated => "SliceEventDefinitionUpdated",
@@ -2346,6 +2352,13 @@ pub(crate) enum ExportedEventBody {
     SliceOutcomeAdded {
         outcome: NewOutcomeDefinition,
     },
+    SliceOutcomeDefinitionUpdated {
+        outcome: NewOutcomeDefinition,
+    },
+    SliceOutcomeDefinitionRemoved {
+        slice: SliceSlug,
+        label: OutcomeLabelName,
+    },
     SliceExternalPayloadAdded {
         external_payload: NewExternalPayloadDefinition,
     },
@@ -2458,6 +2471,12 @@ impl ExportedEventBody {
             Self::SliceScenarioUpdated { .. } => ExportedEventType::SliceScenarioUpdated,
             Self::SliceScenarioRemoved { .. } => ExportedEventType::SliceScenarioRemoved,
             Self::SliceOutcomeAdded { .. } => ExportedEventType::SliceOutcomeAdded,
+            Self::SliceOutcomeDefinitionUpdated { .. } => {
+                ExportedEventType::SliceOutcomeDefinitionUpdated
+            }
+            Self::SliceOutcomeDefinitionRemoved { .. } => {
+                ExportedEventType::SliceOutcomeDefinitionRemoved
+            }
             Self::SliceExternalPayloadAdded { .. } => ExportedEventType::SliceExternalPayloadAdded,
             Self::SliceEventDefinitionAdded { .. } => ExportedEventType::SliceEventDefinitionAdded,
             Self::SliceEventDefinitionUpdated { .. } => {
@@ -2580,8 +2599,12 @@ impl ExportedEventBody {
             Self::SliceScenarioRemoved { slice, name } => {
                 json!({ "slice": slice.as_ref(), "name": name.as_ref() })
             }
-            Self::SliceOutcomeAdded { outcome } => {
+            Self::SliceOutcomeAdded { outcome }
+            | Self::SliceOutcomeDefinitionUpdated { outcome } => {
                 SliceOutcomeAddedEventPayload::from_outcome(outcome).to_json_value()
+            }
+            Self::SliceOutcomeDefinitionRemoved { slice, label } => {
+                json!({ "slice": slice.as_ref(), "label": label.as_ref() })
             }
             Self::SliceExternalPayloadAdded { external_payload } => {
                 SliceExternalPayloadAddedEventPayload::from_external_payload(external_payload)
@@ -2809,9 +2832,11 @@ impl ExportedEventBody {
                 slice: slice_slug(required_str(payload, "slice")?)?,
                 name: scenario_name(required_str(payload, "name")?)?,
             }),
-            ExportedEventType::SliceOutcomeAdded => Ok(Self::SliceOutcomeAdded {
-                outcome: SliceOutcomeAddedEventPayload::from_json_value(payload)?.into_outcome(),
-            }),
+            ExportedEventType::SliceOutcomeAdded
+            | ExportedEventType::SliceOutcomeDefinitionUpdated
+            | ExportedEventType::SliceOutcomeDefinitionRemoved => {
+                Self::outcome_from_event_type_and_payload(event_type, payload)
+            }
             ExportedEventType::SliceExternalPayloadAdded => Ok(Self::SliceExternalPayloadAdded {
                 external_payload: SliceExternalPayloadAddedEventPayload::from_json_value(payload)?
                     .into_external_payload(),
@@ -2882,6 +2907,30 @@ impl ExportedEventBody {
                 connection: SliceBoardConnectionAddedEventPayload::from_json_value(payload)?
                     .into_connection(),
             }),
+            _ => Self::misc_from_event_type_and_payload(event_type, payload),
+        }
+    }
+
+    fn outcome_from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
+            ExportedEventType::SliceOutcomeAdded => Ok(Self::SliceOutcomeAdded {
+                outcome: SliceOutcomeAddedEventPayload::from_json_value(payload)?.into_outcome(),
+            }),
+            ExportedEventType::SliceOutcomeDefinitionUpdated => {
+                Ok(Self::SliceOutcomeDefinitionUpdated {
+                    outcome: SliceOutcomeAddedEventPayload::from_json_value(payload)?
+                        .into_outcome(),
+                })
+            }
+            ExportedEventType::SliceOutcomeDefinitionRemoved => {
+                Ok(Self::SliceOutcomeDefinitionRemoved {
+                    slice: slice_slug(required_str(payload, "slice")?)?,
+                    label: outcome_label_name(required_str(payload, "label")?)?,
+                })
+            }
             _ => Self::misc_from_event_type_and_payload(event_type, payload),
         }
     }
@@ -3183,6 +3232,28 @@ impl EventDraft {
             stream_id: EventStreamId::slice(outcome.slice_slug()),
             body: ExportedEventBody::SliceOutcomeAdded {
                 outcome: outcome.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_outcome_definition_updated(outcome: &NewOutcomeDefinition) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(outcome.slice_slug()),
+            body: ExportedEventBody::SliceOutcomeDefinitionUpdated {
+                outcome: outcome.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_outcome_definition_removed(
+        slice: &SliceSlug,
+        label: &OutcomeLabelName,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(slice),
+            body: ExportedEventBody::SliceOutcomeDefinitionRemoved {
+                slice: slice.clone(),
+                label: label.clone(),
             },
         }
     }
@@ -3730,6 +3801,12 @@ impl ProjectedModel {
             EmcEvent::SliceUpdated { .. } => Self::apply_slice_updated(model, event),
             EmcEvent::SliceRemoved { slug, .. } => Self::apply_slice_removed(model, &slug),
             EmcEvent::SliceFactAdded { fact, .. } => Self::apply_slice_fact_added(model, &fact),
+            EmcEvent::SliceOutcomeDefinitionUpdated { outcome, .. } => {
+                Self::apply_outcome_definition_updated(model, outcome.outcome())
+            }
+            EmcEvent::SliceOutcomeDefinitionRemoved { outcome, .. } => {
+                Self::apply_outcome_definition_removed(model, outcome.slice(), outcome.label())
+            }
             EmcEvent::SliceEventDefinitionUpdated { event, .. } => {
                 Self::apply_event_definition_updated(model, event.event())
             }
@@ -3987,6 +4064,29 @@ impl ProjectedModel {
     ) -> Result<Option<Self>, String> {
         let mut model = Self::require(model, "SliceEventDefinitionUpdated")?;
         model.apply_slice_fact_body(ExportedEventBody::SliceEventDefinitionUpdated { event })?;
+        Ok(Some(model))
+    }
+
+    fn apply_outcome_definition_updated(
+        model: Option<Self>,
+        outcome: NewOutcomeDefinition,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceOutcomeDefinitionUpdated")?;
+        model
+            .apply_slice_fact_body(ExportedEventBody::SliceOutcomeDefinitionUpdated { outcome })?;
+        Ok(Some(model))
+    }
+
+    fn apply_outcome_definition_removed(
+        model: Option<Self>,
+        slice: &SliceSlug,
+        label: &OutcomeLabelName,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceOutcomeDefinitionRemoved")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceOutcomeDefinitionRemoved {
+            slice: slice.clone(),
+            label: label.clone(),
+        })?;
         Ok(Some(model))
     }
 
@@ -4483,10 +4583,10 @@ impl ProjectedModel {
 
     fn apply_slice_fact_body(&mut self, body: ExportedEventBody) -> Result<(), String> {
         match body {
-            ExportedEventBody::SliceOutcomeAdded { outcome } => {
-                self.slice_mut(outcome.slice_slug(), "SliceOutcomeAdded")?
-                    .outcomes
-                    .push(outcome);
+            ExportedEventBody::SliceOutcomeAdded { .. }
+            | ExportedEventBody::SliceOutcomeDefinitionUpdated { .. }
+            | ExportedEventBody::SliceOutcomeDefinitionRemoved { .. } => {
+                self.apply_slice_outcome_body(body)?;
             }
             ExportedEventBody::SliceScenarioAdded { scenario } => {
                 self.slice_mut(scenario.slice_slug(), "SliceScenarioAdded")?
@@ -4579,6 +4679,24 @@ impl ProjectedModel {
         Ok(())
     }
 
+    fn apply_slice_outcome_body(&mut self, body: ExportedEventBody) -> Result<(), String> {
+        match body {
+            ExportedEventBody::SliceOutcomeAdded { outcome } => {
+                self.slice_mut(outcome.slice_slug(), "SliceOutcomeAdded")?
+                    .outcomes
+                    .push(outcome);
+                Ok(())
+            }
+            ExportedEventBody::SliceOutcomeDefinitionUpdated { outcome } => {
+                self.apply_slice_outcome_definition_updated(outcome)
+            }
+            ExportedEventBody::SliceOutcomeDefinitionRemoved { slice, label } => {
+                self.apply_slice_outcome_definition_removed(&slice, &label)
+            }
+            _ => Ok(()),
+        }
+    }
+
     fn apply_slice_event_definition_updated(
         &mut self,
         event: NewEventDefinition,
@@ -4662,6 +4780,29 @@ impl ProjectedModel {
             .command_definitions
             .retain(|existing| existing.name() != command.name());
         slice.command_definitions.push(command);
+        Ok(())
+    }
+
+    fn apply_slice_outcome_definition_updated(
+        &mut self,
+        outcome: NewOutcomeDefinition,
+    ) -> Result<(), String> {
+        let slice = self.slice_mut(outcome.slice_slug(), "SliceOutcomeDefinitionUpdated")?;
+        slice
+            .outcomes
+            .retain(|existing| existing.label() != outcome.label());
+        slice.outcomes.push(outcome);
+        Ok(())
+    }
+
+    fn apply_slice_outcome_definition_removed(
+        &mut self,
+        slice: &SliceSlug,
+        label: &OutcomeLabelName,
+    ) -> Result<(), String> {
+        self.slice_mut(slice, "SliceOutcomeDefinitionRemoved")?
+            .outcomes
+            .retain(|outcome| outcome.label() != label);
         Ok(())
     }
 

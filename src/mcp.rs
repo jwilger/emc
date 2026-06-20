@@ -1244,26 +1244,62 @@ fn add_outcome_definition_tool() -> Tool {
     Tool::new(
         "add_outcome_definition",
         "Add an outcome label and backing event set directly to Lean4 and Quint slice artifacts.",
-        schema_object(json!({
-                "type": "object",
-                "properties": {
-                    "slice": {
-                        "type": "string"
-                    },
-                    "label": {
-                        "type": "string"
-                    },
-                    "events": {
-                        "type": "string"
-                    },
-                    "externally_relevant": {
-                        "type": "boolean"
-                    }
-                },
-                "required": ["slice", "label", "events", "externally_relevant"],
-                "additionalProperties": false
-        })),
+        schema_object(outcome_definition_schema()),
     )
+}
+
+fn update_outcome_definition_tool() -> Tool {
+    Tool::new(
+        "update_outcome_definition",
+        "Update an outcome label and backing event set in a slice, then regenerate synchronized model artifacts.",
+        schema_object(outcome_definition_schema()),
+    )
+}
+
+fn remove_outcome_definition_tool() -> Tool {
+    Tool::new(
+        "remove_outcome_definition",
+        "Remove an outcome definition from a slice, then regenerate synchronized model artifacts.",
+        schema_object(slice_outcome_label_schema()),
+    )
+}
+
+fn outcome_definition_schema() -> Value {
+    json!({
+            "type": "object",
+            "properties": {
+                "slice": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "events": {
+                    "type": "string"
+                },
+                "externally_relevant": {
+                    "type": "boolean"
+                }
+            },
+            "required": ["slice", "label", "events", "externally_relevant"],
+            "additionalProperties": false
+    })
+}
+
+fn slice_outcome_label_schema() -> Value {
+    json!({
+            "type": "object",
+            "properties": {
+                "slice": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                }
+            },
+            "required": ["slice", "label"],
+            "additionalProperties": false
+    })
 }
 
 fn add_read_model_definition_tool() -> Tool {
@@ -1572,6 +1608,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_slice_scenario_tool(),
         update_command_definition_tool(),
         update_event_definition_tool(),
+        update_outcome_definition_tool(),
         update_read_model_definition_tool(),
         update_view_definition_tool(),
         update_control_definition_tool(),
@@ -1579,6 +1616,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         remove_slice_scenario_tool(),
         remove_command_definition_tool(),
         remove_event_definition_tool(),
+        remove_outcome_definition_tool(),
         remove_read_model_definition_tool(),
         remove_view_definition_tool(),
         remove_control_definition_tool(),
@@ -1951,6 +1989,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_slice_scenario" => Some(update_slice_scenario_tool_text(request)),
         "update_command_definition" => Some(update_command_definition_tool_text(request)),
         "update_event_definition" => Some(update_event_definition_tool_text(request)),
+        "update_outcome_definition" => Some(update_outcome_definition_tool_text(request)),
         "update_read_model_definition" => Some(update_read_model_definition_tool_text(request)),
         "update_view_definition" => Some(update_view_definition_tool_text(request)),
         "update_control_definition" => Some(update_control_definition_tool_text(request)),
@@ -1958,6 +1997,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "remove_slice_scenario" => Some(remove_slice_scenario_tool_text(request)),
         "remove_command_definition" => Some(remove_command_definition_tool_text(request)),
         "remove_event_definition" => Some(remove_event_definition_tool_text(request)),
+        "remove_outcome_definition" => Some(remove_outcome_definition_tool_text(request)),
         "remove_read_model_definition" => Some(remove_read_model_definition_tool_text(request)),
         "remove_view_definition" => Some(remove_view_definition_tool_text(request)),
         "remove_control_definition" => Some(remove_control_definition_tool_text(request)),
@@ -3614,21 +3654,62 @@ fn add_external_payload_definition_tool_text(request: &Value) -> Result<String, 
 }
 
 fn add_outcome_definition_tool_text(request: &Value) -> Result<String, ShellError> {
-    let arguments = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .ok_or_else(|| ShellError::message("add_outcome_definition requires arguments"))?;
+    let arguments = tool_arguments(request, "add_outcome_definition")?;
+    let outcome = parse_outcome_definition(arguments, "add_outcome_definition")?;
+    interpret_collect_reports(&command::add_outcome_definition(outcome))
+        .map(|reports| reports.join("\n"))
+}
+
+fn update_outcome_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = tool_arguments(request, "update_outcome_definition")?;
+    let outcome = parse_outcome_definition(arguments, "update_outcome_definition")?;
+    interpret_collect_reports(&command::update_outcome_definition(outcome))
+        .map(|reports| reports.join("\n"))
+}
+
+fn remove_outcome_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = tool_arguments(request, "remove_outcome_definition")?;
     let slice_slug = arguments
         .get("slice")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_outcome_definition requires slice"))
+        .ok_or_else(|| ShellError::message("remove_outcome_definition requires slice"))
         .and_then(|raw_slice| {
             parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let label = arguments
         .get("label")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_outcome_definition requires label"))
+        .ok_or_else(|| ShellError::message("remove_outcome_definition requires label"))
+        .and_then(|raw_label| {
+            parse_outcome_label_name(raw_label)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    interpret_collect_reports(&command::remove_outcome_definition(slice_slug, label))
+        .map(|reports| reports.join("\n"))
+}
+
+fn tool_arguments<'a>(request: &'a Value, tool_name: &str) -> Result<&'a Value, ShellError> {
+    request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires arguments")))
+}
+
+fn parse_outcome_definition(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<NewOutcomeDefinition, ShellError> {
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires slice")))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let label = arguments
+        .get("label")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires label")))
         .and_then(|raw_label| {
             parse_outcome_label_name(raw_label)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3636,24 +3717,20 @@ fn add_outcome_definition_tool_text(request: &Value) -> Result<String, ShellErro
     let events = arguments
         .get("events")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_outcome_definition requires events"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires events")))
         .and_then(|raw_events| {
             parse_event_names(raw_events).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let externally_relevant = arguments
         .get("externally_relevant")
         .and_then(Value::as_bool)
-        .ok_or_else(|| {
-            ShellError::message("add_outcome_definition requires externally_relevant")
-        })?;
-
-    interpret_collect_reports(&command::add_outcome_definition(NewOutcomeDefinition::new(
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires externally_relevant")))?;
+    Ok(NewOutcomeDefinition::new(
         slice_slug,
         label,
         OutcomeEventNames::from_events(events),
         externally_relevant,
-    )))
-    .map(|reports| reports.join("\n"))
+    ))
 }
 
 fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError> {
