@@ -20,14 +20,15 @@ use crate::core::formal_slice_facts::{
 use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    CommandErrorName, CommandName, ControlName, EventName, ModelDescription, ModelName,
-    OutcomeLabelName, PayloadContractName, ReadModelName, ReviewRuleName, ReviewTimestamp,
-    ReviewerId, ScenarioName, SliceKindName, SliceSlug, StreamName, TransitionTriggerName,
-    ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleEvidenceText,
-    WorkflowEntryLifecycleStateName, WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation,
-    WorkflowOutcomeRecord, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
-    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceRecord, WorkflowTransitionKind, WorkflowTransitionSourceEvidenceText,
+    AutomationName, CommandErrorName, CommandName, ControlName, EventName, ModelDescription,
+    ModelName, OutcomeLabelName, PayloadContractName, ReadModelName, ReviewRuleName,
+    ReviewTimestamp, ReviewerId, ScenarioName, SliceKindName, SliceSlug, StreamName,
+    TransitionTriggerName, ViewName, WorkflowCommandErrorRecord,
+    WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
+    WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation, WorkflowOutcomeRecord,
+    WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
+    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionKind, WorkflowTransitionSourceEvidenceText,
     WorkflowTransitionTargetEvidenceText, WorkflowViewRole,
 };
 
@@ -173,6 +174,16 @@ pub(crate) enum EmcEvent {
         #[serde(flatten)]
         fact: SliceFactEvent,
     },
+    SliceAutomationDefinitionUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        automation: SliceAutomationDefinitionUpdateEvent,
+    },
+    SliceAutomationDefinitionRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        automation: SliceAutomationDefinitionRemovalEvent,
+    },
     SliceOutcomeDefinitionUpdated {
         stream_id: StreamId,
         #[serde(flatten)]
@@ -278,6 +289,8 @@ impl Event for EmcEvent {
             | Self::SliceUpdated { stream_id, .. }
             | Self::SliceRemoved { stream_id, .. }
             | Self::SliceFactAdded { stream_id, .. }
+            | Self::SliceAutomationDefinitionUpdated { stream_id, .. }
+            | Self::SliceAutomationDefinitionRemoved { stream_id, .. }
             | Self::SliceOutcomeDefinitionUpdated { stream_id, .. }
             | Self::SliceOutcomeDefinitionRemoved { stream_id, .. }
             | Self::SliceCommandDefinitionUpdated { stream_id, .. }
@@ -1045,6 +1058,178 @@ impl<'de> Deserialize<'de> for SliceCommandDefinitionRemovalEvent {
             }
             other => Err(DeserializeError::custom(format!(
                 "expected SliceCommandDefinitionRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateAutomationDefinitionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    automation: NewAutomationDefinition,
+}
+
+impl UpdateAutomationDefinitionCommand {
+    pub(crate) fn new(automation: NewAutomationDefinition) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(automation.slice_slug().as_ref())?,
+            automation,
+        })
+    }
+}
+
+impl CommandLogic for UpdateAutomationDefinitionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before updating automation definition"
+        );
+        Ok(vec![EmcEvent::SliceAutomationDefinitionUpdated {
+            stream_id: self.slice_stream.clone(),
+            automation: SliceAutomationDefinitionUpdateEvent::new(self.automation.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveAutomationDefinitionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    slice: SliceSlug,
+    name: AutomationName,
+}
+
+impl RemoveAutomationDefinitionCommand {
+    pub(crate) fn new(slice: SliceSlug, name: AutomationName) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(slice.as_ref())?,
+            slice,
+            name,
+        })
+    }
+}
+
+impl CommandLogic for RemoveAutomationDefinitionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before removing automation definition"
+        );
+        Ok(vec![EmcEvent::SliceAutomationDefinitionRemoved {
+            stream_id: self.slice_stream.clone(),
+            automation: SliceAutomationDefinitionRemovalEvent::new(
+                self.slice.clone(),
+                self.name.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceAutomationDefinitionUpdateEvent {
+    automation: NewAutomationDefinition,
+}
+
+impl SliceAutomationDefinitionUpdateEvent {
+    pub(crate) fn new(automation: NewAutomationDefinition) -> Self {
+        Self { automation }
+    }
+
+    pub(crate) fn automation(&self) -> NewAutomationDefinition {
+        self.automation.clone()
+    }
+}
+
+impl Serialize for SliceAutomationDefinitionUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_automation_definition_updated(&self.automation)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceAutomationDefinitionUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceAutomationDefinitionUpdated { automation } => {
+                Ok(Self::new(automation))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceAutomationDefinitionUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceAutomationDefinitionRemovalEvent {
+    slice: SliceSlug,
+    name: AutomationName,
+}
+
+impl SliceAutomationDefinitionRemovalEvent {
+    pub(crate) fn new(slice: SliceSlug, name: AutomationName) -> Self {
+        Self { slice, name }
+    }
+
+    pub(crate) fn slice(&self) -> &SliceSlug {
+        &self.slice
+    }
+
+    pub(crate) fn name(&self) -> &AutomationName {
+        &self.name
+    }
+}
+
+impl Serialize for SliceAutomationDefinitionRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_automation_definition_removed(&self.slice, &self.name)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceAutomationDefinitionRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceAutomationDefinitionRemoved { slice, name } => {
+                Ok(Self::new(slice, name))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceAutomationDefinitionRemoved event body, got {}",
                 other.event_type()
             ))),
         }

@@ -14,9 +14,9 @@ use crate::core::formal_slice_facts::{
 };
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    CommandName, ControlName, EventName, ModelDescription, ModelName, OutcomeLabelName,
-    ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug, ViewName,
-    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
+    AutomationName, CommandName, ControlName, EventName, ModelDescription, ModelName,
+    OutcomeLabelName, ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug,
+    ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
     WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
@@ -136,6 +136,29 @@ impl SliceOutcomeDefinitionRemovalEffect {
 
     pub(crate) fn outcome_label(&self) -> &OutcomeLabelName {
         &self.outcome_label
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceAutomationDefinitionRemovalEffect {
+    slice_slug: SliceSlug,
+    automation_name: AutomationName,
+}
+
+impl SliceAutomationDefinitionRemovalEffect {
+    pub(crate) fn new(slice_slug: SliceSlug, automation_name: AutomationName) -> Self {
+        Self {
+            slice_slug,
+            automation_name,
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn automation_name(&self) -> &AutomationName {
+        &self.automation_name
     }
 }
 
@@ -872,6 +895,8 @@ impl FormalSliceArtifactWriteEffect {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum Effect {
     AddAutomationDefinitionFromSlice(NewAutomationDefinition),
+    RemoveAutomationDefinitionFromSlice(SliceAutomationDefinitionRemovalEffect),
+    UpdateAutomationDefinitionFromSlice(NewAutomationDefinition),
     AddBitLevelDataFlowFromSlice(NewBitLevelDataFlow),
     AddBoardConnectionFromSlice(NewBoardConnection),
     AddBoardElementFromSlice(NewBoardElement),

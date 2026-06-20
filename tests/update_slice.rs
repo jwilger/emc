@@ -1293,6 +1293,112 @@ mod tests {
     }
 
     #[test]
+    fn update_automation_definition_rewrites_synchronized_artifacts() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_duplicate_ticket_contract_scenario(temp_dir.path())?;
+        add_capture_ticket_command_with_error(temp_dir.path())?;
+        add_duplicate_ticket_automation(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "automation",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "assign-duplicate-ticket",
+                "--trigger",
+                "DuplicateTicketEscalated",
+                "--command",
+                "CaptureTicket",
+                "--handled-errors",
+                "DuplicateTicket",
+                "--reaction",
+                "escalate duplicate tickets to a human assignment queue",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated automation assign-duplicate-ticket on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("DuplicateTicketEscalated"),
+            "updated automation trigger must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("escalate duplicate tickets to a human assignment queue"),
+            "updated automation reaction must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("DuplicateTicketDetected"),
+            "old automation trigger must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_automation_definition_removes_it_from_synchronized_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_duplicate_ticket_contract_scenario(temp_dir.path())?;
+        add_capture_ticket_command_with_error(temp_dir.path())?;
+        add_duplicate_ticket_automation(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "automation",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "assign-duplicate-ticket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed automation assign-duplicate-ticket from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_lean.contains("name := \"assign-duplicate-ticket\""),
+            "removed automation must be absent from Lean slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("name: \"assign-duplicate-ticket\""),
+            "removed automation must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn remove_control_definition_removes_it_from_synchronized_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -1588,6 +1694,31 @@ mod tests {
                 "TicketCaptured",
                 "--externally-relevant",
                 "true",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_duplicate_ticket_automation(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "automation",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "assign-duplicate-ticket",
+                "--trigger",
+                "DuplicateTicketDetected",
+                "--command",
+                "CaptureTicket",
+                "--handled-errors",
+                "DuplicateTicket",
+                "--reaction",
+                "route duplicate tickets to manual assignment",
             ])
             .current_dir(cwd)
             .assert()

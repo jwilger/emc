@@ -37,9 +37,9 @@ use crate::core::modeling_enums::MODELING_ENUMS;
 use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    CommandInputSourceKind, CommandName, ControlName, ControlRecoveryBehavior, EventName,
-    ModelDescription, ModelName, OutcomeLabelName, ReadModelFieldSourceKind, ReadModelName,
-    ReviewTimestamp, ReviewerId, ScenarioName, SketchToken, SliceSlug, ViewName,
+    AutomationName, CommandInputSourceKind, CommandName, ControlName, ControlRecoveryBehavior,
+    EventName, ModelDescription, ModelName, OutcomeLabelName, ReadModelFieldSourceKind,
+    ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SketchToken, SliceSlug, ViewName,
     WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
     WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
     WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
@@ -85,6 +85,13 @@ struct Cli {
 enum Command {
     AddAutomationDefinition {
         automation: NewAutomationDefinition,
+    },
+    UpdateAutomationDefinition {
+        automation: NewAutomationDefinition,
+    },
+    RemoveAutomationDefinition {
+        slice_slug: SliceSlug,
+        automation_name: AutomationName,
     },
     AddBitLevelDataFlow {
         data_flow: NewBitLevelDataFlow,
@@ -293,6 +300,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::AddAutomationDefinition { automation } => {
             interpret(&command::add_automation_definition(automation))
         }
+        Command::UpdateAutomationDefinition { automation } => {
+            interpret(&command::update_automation_definition(automation))
+        }
         Command::AddBitLevelDataFlow { data_flow } => {
             interpret(&command::add_bit_level_data_flow(data_flow))
         }
@@ -438,6 +448,13 @@ fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
             slice_slug,
             event_name,
         } => interpret(&command::remove_event_definition(slice_slug, event_name)),
+        Command::RemoveAutomationDefinition {
+            slice_slug,
+            automation_name,
+        } => interpret(&command::remove_automation_definition(
+            slice_slug,
+            automation_name,
+        )),
         Command::RemoveOutcomeDefinition {
             slice_slug,
             outcome_label,
@@ -853,6 +870,23 @@ fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
                 && name_flag == "--name" =>
         {
             remove_command_definition_cli(slice, name)
+        }
+        [command, subject, slice_flag, slice, name_flag, name]
+            if command == "remove"
+                && subject == "automation"
+                && slice_flag == "--slice"
+                && name_flag == "--name" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+            let automation_name = parse_automation_name(name)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::RemoveAutomationDefinition {
+                    slice_slug,
+                    automation_name,
+                },
+            })
         }
         [command, subject, slice_flag, slice, label_flag, label]
             if command == "remove"
@@ -3365,7 +3399,7 @@ fn parse_cli_31(arguments: &[String]) -> Result<Cli, ShellError> {
             handled_errors,
             reaction_flag,
             reaction,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "automation"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -3386,18 +3420,20 @@ fn parse_cli_31(arguments: &[String]) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let reaction_description = parse_automation_reaction_description(reaction)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::AddAutomationDefinition {
-                    automation: NewAutomationDefinition::new(
-                        slice_slug,
-                        automation_name,
-                        trigger_name,
-                        command_name,
-                        CommandErrorNames::from_names(handled_errors),
-                        reaction_description,
-                    ),
-                },
-            })
+            let automation = NewAutomationDefinition::new(
+                slice_slug,
+                automation_name,
+                trigger_name,
+                command_name,
+                CommandErrorNames::from_names(handled_errors),
+                reaction_description,
+            );
+            let command = if command == "add" {
+                Command::AddAutomationDefinition { automation }
+            } else {
+                Command::UpdateAutomationDefinition { automation }
+            };
+            Ok(Cli { command })
         }
         _ => parse_cli_32(arguments),
     }

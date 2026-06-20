@@ -23,14 +23,14 @@ use crate::core::effect::{
     ArtifactDigest, ArtifactDigestRequirement, CanonicalDeclarationRequirement, CleanReviewEffect,
     Effect, EffectPlan, EventConflictResolution, FileContents, FileWriteEffect, ModelContentDigest,
     ProcessInvocation, ProcessInvocations, ProjectPath, ProjectionFingerprint, ReportLine,
-    ReviewEventReference, ReviewRecordRequirement, SliceCommandDefinitionRemovalEffect,
-    SliceDescriptionUpdateEffect, SliceEventDefinitionRemovalEffect, SliceKindUpdateEffect,
-    SliceNameUpdateEffect, SliceOutcomeDefinitionRemovalEffect,
-    SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect,
-    SliceViewControlRemovalEffect, SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect,
-    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
-    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
-    WorkflowTransitionEvidenceEffect,
+    ReviewEventReference, ReviewRecordRequirement, SliceAutomationDefinitionRemovalEffect,
+    SliceCommandDefinitionRemovalEffect, SliceDescriptionUpdateEffect,
+    SliceEventDefinitionRemovalEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
+    SliceOutcomeDefinitionRemovalEffect, SliceReadModelDefinitionRemovalEffect,
+    SliceScenarioRemovalEffect, SliceViewControlRemovalEffect, SliceViewControlUpdateEffect,
+    SliceViewDefinitionRemovalEffect, WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect,
+    WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
+    WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
@@ -329,6 +329,8 @@ fn effect_is_mutation(effect: &Effect) -> bool {
     matches!(
         effect,
         Effect::AddAutomationDefinitionFromSlice(_)
+            | Effect::RemoveAutomationDefinitionFromSlice(_)
+            | Effect::UpdateAutomationDefinitionFromSlice(_)
             | Effect::AddBitLevelDataFlowFromSlice(_)
             | Effect::AddBoardConnectionFromSlice(_)
             | Effect::AddBoardElementFromSlice(_)
@@ -480,6 +482,12 @@ fn interpret_slice_fact_effect(effect: &Effect) -> Option<Result<Vec<String>, Sh
         Effect::AddAutomationDefinitionFromSlice(automation) => {
             interpret_automation_added(automation)
         }
+        Effect::RemoveAutomationDefinitionFromSlice(removal) => {
+            interpret_automation_removed(removal)
+        }
+        Effect::UpdateAutomationDefinitionFromSlice(automation) => {
+            interpret_automation_updated(automation)
+        }
         Effect::AddBitLevelDataFlowFromSlice(data_flow) => {
             interpret_bit_level_data_flow_added(data_flow)
         }
@@ -551,6 +559,51 @@ fn interpret_automation_added(
         automation.slice_slug(),
         reports,
         EventDraft::slice_automation_added(automation),
+    )
+}
+
+fn interpret_automation_updated(
+    automation: &NewAutomationDefinition,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "updated automation {} on slice {}",
+            automation.name().as_ref(),
+            automation.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "updated automation {} in project root",
+            automation.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        automation.slice_slug(),
+        reports,
+        EventDraft::slice_automation_definition_updated(automation),
+    )
+}
+
+fn interpret_automation_removed(
+    removal: &SliceAutomationDefinitionRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "removed automation {} from slice {}",
+            removal.automation_name().as_ref(),
+            removal.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "removed automation {} from project root",
+            removal.automation_name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        removal.slice_slug(),
+        reports,
+        EventDraft::slice_automation_definition_removed(
+            removal.slice_slug(),
+            removal.automation_name(),
+        ),
     )
 }
 

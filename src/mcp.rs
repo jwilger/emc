@@ -1075,32 +1075,52 @@ fn add_automation_definition_tool() -> Tool {
     Tool::new(
         "add_automation_definition",
         "Add an automation trigger, issued command, handled errors, and reaction semantics directly to Lean4 and Quint slice artifacts.",
-        schema_object(json!({
-                "type": "object",
-                "properties": {
-                    "slice": {
-                        "type": "string"
-                    },
-                    "name": {
-                        "type": "string"
-                    },
-                    "trigger": {
-                        "type": "string"
-                    },
-                    "command": {
-                        "type": "string"
-                    },
-                    "handled_errors": {
-                        "type": "string"
-                    },
-                    "reaction": {
-                        "type": "string"
-                    }
-                },
-                "required": ["slice", "name", "trigger", "command", "handled_errors", "reaction"],
-                "additionalProperties": false
-        })),
+        schema_object(automation_definition_schema()),
     )
+}
+
+fn update_automation_definition_tool() -> Tool {
+    Tool::new(
+        "update_automation_definition",
+        "Update an automation trigger, issued command, handled errors, and reaction semantics in a slice, then regenerate synchronized model artifacts.",
+        schema_object(automation_definition_schema()),
+    )
+}
+
+fn remove_automation_definition_tool() -> Tool {
+    Tool::new(
+        "remove_automation_definition",
+        "Remove an automation definition from a slice, then regenerate synchronized model artifacts.",
+        schema_object(slice_named_definition_schema()),
+    )
+}
+
+fn automation_definition_schema() -> Value {
+    json!({
+            "type": "object",
+            "properties": {
+                "slice": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "trigger": {
+                    "type": "string"
+                },
+                "command": {
+                    "type": "string"
+                },
+                "handled_errors": {
+                    "type": "string"
+                },
+                "reaction": {
+                    "type": "string"
+                }
+            },
+            "required": ["slice", "name", "trigger", "command", "handled_errors", "reaction"],
+            "additionalProperties": false
+    })
 }
 
 fn add_translation_definition_tool() -> Tool {
@@ -1606,6 +1626,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_slice_kind_tool(),
         update_slice_name_tool(),
         update_slice_scenario_tool(),
+        update_automation_definition_tool(),
         update_command_definition_tool(),
         update_event_definition_tool(),
         update_outcome_definition_tool(),
@@ -1614,6 +1635,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_control_definition_tool(),
         remove_slice_tool(),
         remove_slice_scenario_tool(),
+        remove_automation_definition_tool(),
         remove_command_definition_tool(),
         remove_event_definition_tool(),
         remove_outcome_definition_tool(),
@@ -1987,6 +2009,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_slice_kind" => Some(update_slice_kind_tool_text(request)),
         "update_slice_name" => Some(update_slice_name_tool_text(request)),
         "update_slice_scenario" => Some(update_slice_scenario_tool_text(request)),
+        "update_automation_definition" => Some(update_automation_definition_tool_text(request)),
         "update_command_definition" => Some(update_command_definition_tool_text(request)),
         "update_event_definition" => Some(update_event_definition_tool_text(request)),
         "update_outcome_definition" => Some(update_outcome_definition_tool_text(request)),
@@ -1995,6 +2018,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_control_definition" => Some(update_control_definition_tool_text(request)),
         "remove_slice" => Some(remove_slice_tool_text(request)),
         "remove_slice_scenario" => Some(remove_slice_scenario_tool_text(request)),
+        "remove_automation_definition" => Some(remove_automation_definition_tool_text(request)),
         "remove_command_definition" => Some(remove_command_definition_tool_text(request)),
         "remove_event_definition" => Some(remove_event_definition_tool_text(request)),
         "remove_outcome_definition" => Some(remove_outcome_definition_tool_text(request)),
@@ -3476,28 +3500,64 @@ fn parse_optional_command_errors(
 }
 
 fn add_automation_definition_tool_text(request: &Value) -> Result<String, ShellError> {
-    let arguments = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .ok_or_else(|| ShellError::message("add_automation_definition requires arguments"))?;
+    let arguments = tool_arguments(request, "add_automation_definition")?;
+    let automation = parse_automation_definition(arguments, "add_automation_definition")?;
+    interpret_collect_reports(&command::add_automation_definition(automation))
+        .map(|reports| reports.join("\n"))
+}
+
+fn update_automation_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = tool_arguments(request, "update_automation_definition")?;
+    let automation = parse_automation_definition(arguments, "update_automation_definition")?;
+    interpret_collect_reports(&command::update_automation_definition(automation))
+        .map(|reports| reports.join("\n"))
+}
+
+fn remove_automation_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = tool_arguments(request, "remove_automation_definition")?;
     let slice_slug = arguments
         .get("slice")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_automation_definition requires slice"))
+        .ok_or_else(|| ShellError::message("remove_automation_definition requires slice"))
         .and_then(|raw_slice| {
             parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let automation_name = arguments
         .get("name")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_automation_definition requires name"))
+        .ok_or_else(|| ShellError::message("remove_automation_definition requires name"))
+        .and_then(|raw_name| {
+            parse_automation_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    interpret_collect_reports(&command::remove_automation_definition(
+        slice_slug,
+        automation_name,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn parse_automation_definition(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<NewAutomationDefinition, ShellError> {
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires slice")))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let automation_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires name")))
         .and_then(|raw_name| {
             parse_automation_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let trigger_name = arguments
         .get("trigger")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_automation_definition requires trigger"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires trigger")))
         .and_then(|raw_trigger| {
             parse_automation_trigger_name(raw_trigger)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3505,14 +3565,14 @@ fn add_automation_definition_tool_text(request: &Value) -> Result<String, ShellE
     let command_name = arguments
         .get("command")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_automation_definition requires command"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires command")))
         .and_then(|raw_command| {
             parse_command_name(raw_command).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let handled_errors = arguments
         .get("handled_errors")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_automation_definition requires handled_errors"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires handled_errors")))
         .and_then(|raw_errors| {
             parse_command_error_names(raw_errors)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3520,23 +3580,20 @@ fn add_automation_definition_tool_text(request: &Value) -> Result<String, ShellE
     let reaction_description = arguments
         .get("reaction")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_automation_definition requires reaction"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires reaction")))
         .and_then(|raw_reaction| {
             parse_automation_reaction_description(raw_reaction)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
 
-    interpret_collect_reports(&command::add_automation_definition(
-        NewAutomationDefinition::new(
-            slice_slug,
-            automation_name,
-            trigger_name,
-            command_name,
-            CommandErrorNames::from_names(handled_errors),
-            reaction_description,
-        ),
+    Ok(NewAutomationDefinition::new(
+        slice_slug,
+        automation_name,
+        trigger_name,
+        command_name,
+        CommandErrorNames::from_names(handled_errors),
+        reaction_description,
     ))
-    .map(|reports| reports.join("\n"))
 }
 
 fn add_translation_definition_tool_text(request: &Value) -> Result<String, ShellError> {
