@@ -7,10 +7,10 @@ use crate::core::effect::{
     SliceDescriptionUpdateEffect, SliceEventDefinitionRemovalEffect, SliceKindUpdateEffect,
     SliceNameUpdateEffect, SliceOutcomeDefinitionRemovalEffect,
     SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect,
-    SliceViewControlRemovalEffect, SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect,
-    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
-    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
-    WorkflowTransitionEvidenceEffect,
+    SliceTranslationDefinitionRemovalEffect, SliceViewControlRemovalEffect,
+    SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect, WorkflowCommandErrorEffect,
+    WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
+    WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
 };
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
@@ -27,8 +27,9 @@ use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     AutomationName, CommandName, ControlName, EventName, ModelDescription, ModelName,
     OutcomeLabelName, ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug,
-    ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
-    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
+    TranslationName, ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
+    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug,
+    WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
 
@@ -74,6 +75,21 @@ pub(crate) fn remove_automation_definition(
 
 pub(crate) fn add_translation_definition(translation: NewTranslationDefinition) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddTranslationDefinitionFromSlice(translation)])
+}
+
+pub(crate) fn update_translation_definition(translation: NewTranslationDefinition) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateTranslationDefinitionFromSlice(
+        translation,
+    )])
+}
+
+pub(crate) fn remove_translation_definition(
+    slice_slug: SliceSlug,
+    translation_name: TranslationName,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveTranslationDefinitionFromSlice(
+        SliceTranslationDefinitionRemovalEffect::new(slice_slug, translation_name),
+    )])
 }
 
 pub(crate) fn add_command_definition(command: NewCommandDefinition) -> EffectPlan {

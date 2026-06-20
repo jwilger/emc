@@ -16,8 +16,9 @@ use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     AutomationName, CommandName, ControlName, EventName, ModelDescription, ModelName,
     OutcomeLabelName, ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug,
-    ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
-    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
+    TranslationName, ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
+    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug,
+    WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
 
@@ -159,6 +160,29 @@ impl SliceAutomationDefinitionRemovalEffect {
 
     pub(crate) fn automation_name(&self) -> &AutomationName {
         &self.automation_name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceTranslationDefinitionRemovalEffect {
+    slice_slug: SliceSlug,
+    translation_name: TranslationName,
+}
+
+impl SliceTranslationDefinitionRemovalEffect {
+    pub(crate) fn new(slice_slug: SliceSlug, translation_name: TranslationName) -> Self {
+        Self {
+            slice_slug,
+            translation_name,
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn translation_name(&self) -> &TranslationName {
+        &self.translation_name
     }
 }
 
@@ -921,6 +945,8 @@ pub(crate) enum Effect {
     AddSliceFromWorkflow(NewSlice),
     AddSliceScenarioFromSlice(NewSliceScenario),
     AddTranslationDefinitionFromSlice(NewTranslationDefinition),
+    RemoveTranslationDefinitionFromSlice(SliceTranslationDefinitionRemovalEffect),
+    UpdateTranslationDefinitionFromSlice(NewTranslationDefinition),
     RemoveSliceScenarioFromSlice(SliceScenarioRemovalEffect),
     UpdateSliceScenarioFromSlice(NewSliceScenario),
     AddWorkflowFromIndex(NewWorkflow),

@@ -23,7 +23,7 @@ use crate::core::types::{
     AutomationName, CommandErrorName, CommandName, ControlName, EventName, ModelDescription,
     ModelName, OutcomeLabelName, PayloadContractName, ReadModelName, ReviewRuleName,
     ReviewTimestamp, ReviewerId, ScenarioName, SliceKindName, SliceSlug, StreamName,
-    TransitionTriggerName, ViewName, WorkflowCommandErrorRecord,
+    TransitionTriggerName, TranslationName, ViewName, WorkflowCommandErrorRecord,
     WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
     WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation, WorkflowOutcomeRecord,
     WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
@@ -184,6 +184,16 @@ pub(crate) enum EmcEvent {
         #[serde(flatten)]
         automation: SliceAutomationDefinitionRemovalEvent,
     },
+    SliceTranslationDefinitionUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        translation: SliceTranslationDefinitionUpdateEvent,
+    },
+    SliceTranslationDefinitionRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        translation: SliceTranslationDefinitionRemovalEvent,
+    },
     SliceOutcomeDefinitionUpdated {
         stream_id: StreamId,
         #[serde(flatten)]
@@ -291,6 +301,8 @@ impl Event for EmcEvent {
             | Self::SliceFactAdded { stream_id, .. }
             | Self::SliceAutomationDefinitionUpdated { stream_id, .. }
             | Self::SliceAutomationDefinitionRemoved { stream_id, .. }
+            | Self::SliceTranslationDefinitionUpdated { stream_id, .. }
+            | Self::SliceTranslationDefinitionRemoved { stream_id, .. }
             | Self::SliceOutcomeDefinitionUpdated { stream_id, .. }
             | Self::SliceOutcomeDefinitionRemoved { stream_id, .. }
             | Self::SliceCommandDefinitionUpdated { stream_id, .. }
@@ -1230,6 +1242,178 @@ impl<'de> Deserialize<'de> for SliceAutomationDefinitionRemovalEvent {
             }
             other => Err(DeserializeError::custom(format!(
                 "expected SliceAutomationDefinitionRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateTranslationDefinitionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    translation: NewTranslationDefinition,
+}
+
+impl UpdateTranslationDefinitionCommand {
+    pub(crate) fn new(translation: NewTranslationDefinition) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(translation.slice_slug().as_ref())?,
+            translation,
+        })
+    }
+}
+
+impl CommandLogic for UpdateTranslationDefinitionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before updating translation definition"
+        );
+        Ok(vec![EmcEvent::SliceTranslationDefinitionUpdated {
+            stream_id: self.slice_stream.clone(),
+            translation: SliceTranslationDefinitionUpdateEvent::new(self.translation.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveTranslationDefinitionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    slice: SliceSlug,
+    name: TranslationName,
+}
+
+impl RemoveTranslationDefinitionCommand {
+    pub(crate) fn new(slice: SliceSlug, name: TranslationName) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(slice.as_ref())?,
+            slice,
+            name,
+        })
+    }
+}
+
+impl CommandLogic for RemoveTranslationDefinitionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before removing translation definition"
+        );
+        Ok(vec![EmcEvent::SliceTranslationDefinitionRemoved {
+            stream_id: self.slice_stream.clone(),
+            translation: SliceTranslationDefinitionRemovalEvent::new(
+                self.slice.clone(),
+                self.name.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceTranslationDefinitionUpdateEvent {
+    translation: NewTranslationDefinition,
+}
+
+impl SliceTranslationDefinitionUpdateEvent {
+    pub(crate) fn new(translation: NewTranslationDefinition) -> Self {
+        Self { translation }
+    }
+
+    pub(crate) fn translation(&self) -> NewTranslationDefinition {
+        self.translation.clone()
+    }
+}
+
+impl Serialize for SliceTranslationDefinitionUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_translation_definition_updated(&self.translation)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceTranslationDefinitionUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceTranslationDefinitionUpdated { translation } => {
+                Ok(Self::new(translation))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceTranslationDefinitionUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceTranslationDefinitionRemovalEvent {
+    slice: SliceSlug,
+    name: TranslationName,
+}
+
+impl SliceTranslationDefinitionRemovalEvent {
+    pub(crate) fn new(slice: SliceSlug, name: TranslationName) -> Self {
+        Self { slice, name }
+    }
+
+    pub(crate) fn slice(&self) -> &SliceSlug {
+        &self.slice
+    }
+
+    pub(crate) fn name(&self) -> &TranslationName {
+        &self.name
+    }
+}
+
+impl Serialize for SliceTranslationDefinitionRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_translation_definition_removed(&self.slice, &self.name)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceTranslationDefinitionRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceTranslationDefinitionRemoved { slice, name } => {
+                Ok(Self::new(slice, name))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceTranslationDefinitionRemoved event body, got {}",
                 other.event_type()
             ))),
         }
