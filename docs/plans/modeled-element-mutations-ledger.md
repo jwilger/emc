@@ -25,16 +25,19 @@ This ledger tracks #159 across multiple PRs.
 - PR #178: added event-sourced CLI and MCP update/remove support for view
   controls. Covers behavior through synchronized Lean4/Quint artifact assertions
   for both CLI and MCP entry points.
-- Current branch: adds event-sourced CLI and MCP update/remove support for
+- PR #180: added event-sourced CLI and MCP update/remove support for
   outcome definitions. Covers behavior through synchronized Lean4/Quint artifact
   assertions for both CLI and MCP entry points.
+- Current branch: adds event-sourced CLI and MCP update/remove support for
+  automation definitions. Covers behavior through synchronized Lean4/Quint
+  artifact assertions for both CLI and MCP entry points.
 
 ## Current PR boundary
 
 - This PR should broaden beyond scenarios, commands, events, read models, and
-  views, and controls to outcome definitions without closing #159. Keep #159
-  open until all modeled element families listed in the issue have CLI and MCP
-  update/remove coverage.
+  views, controls, and outcomes to automation definitions without closing #159.
+  Keep #159 open until all modeled element families listed in the issue have
+  CLI and MCP update/remove coverage.
 
 ## Remaining modeled element targets
 
@@ -46,9 +49,10 @@ This ledger tracks #159 across multiple PRs.
   transition evidence, entry lifecycle coverage/state.
 - Slice-owned definitions: commands are covered by PR #170, events are covered
   by PR #172, read models are covered by PR #174, views are covered by PR #176,
-  controls are covered by PR #178, and outcomes are covered by the current
-  branch. Remaining families are automations, translations, external payloads,
-  board elements, board connections, and data-flow facts.
+  controls are covered by PR #178, outcomes are covered by PR #180, and
+  automations are covered by the current branch. Remaining families are
+  translations, external payloads, board elements, board connections, and
+  data-flow facts.
 - Scenario follow-up: add tests for contract scenario update/remove if needed by
   final completion evidence.
 
@@ -71,8 +75,10 @@ This ledger tracks #159 across multiple PRs.
 - `cargo test --test mcp_stdio control_definition`
 - `cargo test --test update_slice outcome_definition`
 - `cargo test --test mcp_stdio outcome_definition`
+- `cargo test --test update_slice automation_definition`
+- `cargo test --test mcp_stdio automation_definition`
 
 ## Next likely increment
 
-Extend the same update/remove pattern to automation definitions, then continue
+Extend the same update/remove pattern to translation definitions, then continue
 through the remaining slice-owned definition families.

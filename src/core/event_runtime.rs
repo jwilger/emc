@@ -13,10 +13,11 @@ use tokio::runtime::Builder;
 use crate::core::event_commands::{
     AddSliceCommand, AddSliceFactCommand, AddWorkflowCommand, AddWorkflowFactCommand,
     ConnectWorkflowCommand, DeclareWorkflowReadinessCommand, EmcEvent, InitializeProjectCommand,
-    RecordReviewCommand, RemoveCommandDefinitionCommand, RemoveEventDefinitionCommand,
-    RemoveOutcomeDefinitionCommand, RemoveReadModelDefinitionCommand, RemoveSliceCommand,
-    RemoveSliceScenarioCommand, RemoveViewControlCommand, RemoveViewDefinitionCommand,
-    RemoveWorkflowCommand, RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
+    RecordReviewCommand, RemoveAutomationDefinitionCommand, RemoveCommandDefinitionCommand,
+    RemoveEventDefinitionCommand, RemoveOutcomeDefinitionCommand, RemoveReadModelDefinitionCommand,
+    RemoveSliceCommand, RemoveSliceScenarioCommand, RemoveViewControlCommand,
+    RemoveViewDefinitionCommand, RemoveWorkflowCommand, RemoveWorkflowTransitionCommand,
+    ResolveConflictCommand, SliceFactInput, UpdateAutomationDefinitionCommand,
     UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand, UpdateOutcomeDefinitionCommand,
     UpdateReadModelDefinitionCommand, UpdateSliceCommand, UpdateSliceScenarioCommand,
     UpdateViewControlCommand, UpdateViewDefinitionCommand, UpdateWorkflowCommand,
@@ -192,6 +193,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::SliceBitLevelDataFlowAdded { .. }
         | ExportedEventBody::SliceTranslationAdded { .. }
         | ExportedEventBody::SliceAutomationAdded { .. }
+        | ExportedEventBody::SliceAutomationDefinitionUpdated { .. }
+        | ExportedEventBody::SliceAutomationDefinitionRemoved { .. }
         | ExportedEventBody::SliceBoardElementAdded { .. }
         | ExportedEventBody::SliceBoardConnectionAdded { .. } => dispatch_slice(store, body).await,
         ExportedEventBody::ReviewRecorded { .. } | ExportedEventBody::ConflictResolved { .. } => {
@@ -404,15 +407,13 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
             )
             .await
         }
-        ExportedEventBody::SliceOutcomeDefinitionUpdated { outcome } => {
-            run_command(store, UpdateOutcomeDefinitionCommand::new(outcome.clone())?).await
+        ExportedEventBody::SliceAutomationDefinitionUpdated { .. }
+        | ExportedEventBody::SliceAutomationDefinitionRemoved { .. } => {
+            dispatch_slice_automation(store, body).await
         }
-        ExportedEventBody::SliceOutcomeDefinitionRemoved { slice, label } => {
-            run_command(
-                store,
-                RemoveOutcomeDefinitionCommand::new(slice.clone(), label.clone())?,
-            )
-            .await
+        ExportedEventBody::SliceOutcomeDefinitionUpdated { .. }
+        | ExportedEventBody::SliceOutcomeDefinitionRemoved { .. } => {
+            dispatch_slice_outcome(store, body).await
         }
         ExportedEventBody::SliceReadModelDefinitionUpdated { read_model } => {
             run_command(
@@ -441,6 +442,48 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
             )
             .await
         }
+    }
+}
+
+async fn dispatch_slice_outcome(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<(), String> {
+    match body {
+        ExportedEventBody::SliceOutcomeDefinitionUpdated { outcome } => {
+            run_command(store, UpdateOutcomeDefinitionCommand::new(outcome.clone())?).await
+        }
+        ExportedEventBody::SliceOutcomeDefinitionRemoved { slice, label } => {
+            run_command(
+                store,
+                RemoveOutcomeDefinitionCommand::new(slice.clone(), label.clone())?,
+            )
+            .await
+        }
+        _ => Err("dispatch_slice_outcome received a non-outcome body".to_owned()),
+    }
+}
+
+async fn dispatch_slice_automation(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<(), String> {
+    match body {
+        ExportedEventBody::SliceAutomationDefinitionUpdated { automation } => {
+            run_command(
+                store,
+                UpdateAutomationDefinitionCommand::new(automation.clone())?,
+            )
+            .await
+        }
+        ExportedEventBody::SliceAutomationDefinitionRemoved { slice, name } => {
+            run_command(
+                store,
+                RemoveAutomationDefinitionCommand::new(slice.clone(), name.clone())?,
+            )
+            .await
+        }
+        _ => Err("dispatch_slice_automation received a non-automation body".to_owned()),
     }
 }
 

@@ -3,13 +3,14 @@
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::effect::{
     ChosenEventId, CleanReviewEffect, Effect, EffectPlan, EventConflictId, EventConflictResolution,
-    SliceCommandDefinitionRemovalEffect, SliceDescriptionUpdateEffect,
-    SliceEventDefinitionRemovalEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
-    SliceOutcomeDefinitionRemovalEffect, SliceReadModelDefinitionRemovalEffect,
-    SliceScenarioRemovalEffect, SliceViewControlRemovalEffect, SliceViewControlUpdateEffect,
-    SliceViewDefinitionRemovalEffect, WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect,
-    WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
-    WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    SliceAutomationDefinitionRemovalEffect, SliceCommandDefinitionRemovalEffect,
+    SliceDescriptionUpdateEffect, SliceEventDefinitionRemovalEffect, SliceKindUpdateEffect,
+    SliceNameUpdateEffect, SliceOutcomeDefinitionRemovalEffect,
+    SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect,
+    SliceViewControlRemovalEffect, SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect,
+    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
+    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
+    WorkflowTransitionEvidenceEffect,
 };
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
@@ -24,9 +25,9 @@ use crate::core::project::{ProjectName, init_project};
 use crate::core::review_gate::review_gate;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    CommandName, ControlName, EventName, ModelDescription, ModelName, OutcomeLabelName,
-    ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug, ViewName,
-    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
+    AutomationName, CommandName, ControlName, EventName, ModelDescription, ModelName,
+    OutcomeLabelName, ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug,
+    ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
     WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
@@ -54,6 +55,21 @@ pub(crate) fn remove_slice_scenario(
 
 pub(crate) fn add_automation_definition(automation: NewAutomationDefinition) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddAutomationDefinitionFromSlice(automation)])
+}
+
+pub(crate) fn update_automation_definition(automation: NewAutomationDefinition) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateAutomationDefinitionFromSlice(
+        automation,
+    )])
+}
+
+pub(crate) fn remove_automation_definition(
+    slice_slug: SliceSlug,
+    automation_name: AutomationName,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveAutomationDefinitionFromSlice(
+        SliceAutomationDefinitionRemovalEffect::new(slice_slug, automation_name),
+    )])
 }
 
 pub(crate) fn add_translation_definition(translation: NewTranslationDefinition) -> EffectPlan {

@@ -172,6 +172,8 @@ pub(crate) enum ExportedEventType {
     SliceBitLevelDataFlowAdded,
     SliceTranslationAdded,
     SliceAutomationAdded,
+    SliceAutomationDefinitionUpdated,
+    SliceAutomationDefinitionRemoved,
     SliceBoardElementAdded,
     SliceBoardConnectionAdded,
     ReviewRecorded,
@@ -223,6 +225,8 @@ impl ExportedEventType {
             "SliceBitLevelDataFlowAdded" => Ok(Self::SliceBitLevelDataFlowAdded),
             "SliceTranslationAdded" => Ok(Self::SliceTranslationAdded),
             "SliceAutomationAdded" => Ok(Self::SliceAutomationAdded),
+            "SliceAutomationDefinitionUpdated" => Ok(Self::SliceAutomationDefinitionUpdated),
+            "SliceAutomationDefinitionRemoved" => Ok(Self::SliceAutomationDefinitionRemoved),
             "SliceBoardElementAdded" => Ok(Self::SliceBoardElementAdded),
             "SliceBoardConnectionAdded" => Ok(Self::SliceBoardConnectionAdded),
             "ReviewRecorded" => Ok(Self::ReviewRecorded),
@@ -277,6 +281,8 @@ impl AsRef<str> for ExportedEventType {
             Self::SliceBitLevelDataFlowAdded => "SliceBitLevelDataFlowAdded",
             Self::SliceTranslationAdded => "SliceTranslationAdded",
             Self::SliceAutomationAdded => "SliceAutomationAdded",
+            Self::SliceAutomationDefinitionUpdated => "SliceAutomationDefinitionUpdated",
+            Self::SliceAutomationDefinitionRemoved => "SliceAutomationDefinitionRemoved",
             Self::SliceBoardElementAdded => "SliceBoardElementAdded",
             Self::SliceBoardConnectionAdded => "SliceBoardConnectionAdded",
             Self::ReviewRecorded => "ReviewRecorded",
@@ -2421,6 +2427,13 @@ pub(crate) enum ExportedEventBody {
     SliceAutomationAdded {
         automation: NewAutomationDefinition,
     },
+    SliceAutomationDefinitionUpdated {
+        automation: NewAutomationDefinition,
+    },
+    SliceAutomationDefinitionRemoved {
+        slice: SliceSlug,
+        name: AutomationName,
+    },
     SliceBoardElementAdded {
         element: NewBoardElement,
     },
@@ -2515,6 +2528,12 @@ impl ExportedEventBody {
             }
             Self::SliceTranslationAdded { .. } => ExportedEventType::SliceTranslationAdded,
             Self::SliceAutomationAdded { .. } => ExportedEventType::SliceAutomationAdded,
+            Self::SliceAutomationDefinitionUpdated { .. } => {
+                ExportedEventType::SliceAutomationDefinitionUpdated
+            }
+            Self::SliceAutomationDefinitionRemoved { .. } => {
+                ExportedEventType::SliceAutomationDefinitionRemoved
+            }
             Self::SliceBoardElementAdded { .. } => ExportedEventType::SliceBoardElementAdded,
             Self::SliceBoardConnectionAdded { .. } => ExportedEventType::SliceBoardConnectionAdded,
             Self::ReviewRecorded { .. } => ExportedEventType::ReviewRecorded,
@@ -2659,8 +2678,12 @@ impl ExportedEventBody {
             Self::SliceTranslationAdded { translation } => {
                 SliceTranslationAddedEventPayload::from_translation(translation).to_json_value()
             }
-            Self::SliceAutomationAdded { automation } => {
+            Self::SliceAutomationAdded { automation }
+            | Self::SliceAutomationDefinitionUpdated { automation } => {
                 SliceAutomationAddedEventPayload::from_automation(automation).to_json_value()
+            }
+            Self::SliceAutomationDefinitionRemoved { slice, name } => {
+                json!({ "slice": slice.as_ref(), "name": name.as_ref() })
             }
             Self::SliceBoardElementAdded { element } => {
                 SliceBoardElementAddedEventPayload::from_element(element).to_json_value()
@@ -2895,10 +2918,11 @@ impl ExportedEventBody {
                 translation: SliceTranslationAddedEventPayload::from_json_value(payload)?
                     .into_translation(),
             }),
-            ExportedEventType::SliceAutomationAdded => Ok(Self::SliceAutomationAdded {
-                automation: SliceAutomationAddedEventPayload::from_json_value(payload)?
-                    .into_automation(),
-            }),
+            ExportedEventType::SliceAutomationAdded
+            | ExportedEventType::SliceAutomationDefinitionUpdated
+            | ExportedEventType::SliceAutomationDefinitionRemoved => {
+                Self::automation_from_event_type_and_payload(event_type, payload)
+            }
             ExportedEventType::SliceBoardElementAdded => Ok(Self::SliceBoardElementAdded {
                 element: SliceBoardElementAddedEventPayload::from_json_value(payload)?
                     .into_element(),
@@ -2907,6 +2931,31 @@ impl ExportedEventBody {
                 connection: SliceBoardConnectionAddedEventPayload::from_json_value(payload)?
                     .into_connection(),
             }),
+            _ => Self::misc_from_event_type_and_payload(event_type, payload),
+        }
+    }
+
+    fn automation_from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
+            ExportedEventType::SliceAutomationAdded => Ok(Self::SliceAutomationAdded {
+                automation: SliceAutomationAddedEventPayload::from_json_value(payload)?
+                    .into_automation(),
+            }),
+            ExportedEventType::SliceAutomationDefinitionUpdated => {
+                Ok(Self::SliceAutomationDefinitionUpdated {
+                    automation: SliceAutomationAddedEventPayload::from_json_value(payload)?
+                        .into_automation(),
+                })
+            }
+            ExportedEventType::SliceAutomationDefinitionRemoved => {
+                Ok(Self::SliceAutomationDefinitionRemoved {
+                    slice: slice_slug(required_str(payload, "slice")?)?,
+                    name: automation_name(required_str(payload, "name")?)?,
+                })
+            }
             _ => Self::misc_from_event_type_and_payload(event_type, payload),
         }
     }
@@ -3437,6 +3486,30 @@ impl EventDraft {
         }
     }
 
+    pub(crate) fn slice_automation_definition_updated(
+        automation: &NewAutomationDefinition,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(automation.slice_slug()),
+            body: ExportedEventBody::SliceAutomationDefinitionUpdated {
+                automation: automation.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_automation_definition_removed(
+        slice: &SliceSlug,
+        name: &AutomationName,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(slice),
+            body: ExportedEventBody::SliceAutomationDefinitionRemoved {
+                slice: slice.clone(),
+                name: name.clone(),
+            },
+        }
+    }
+
     pub(crate) fn slice_board_element_added(element: &NewBoardElement) -> Self {
         Self {
             stream_id: EventStreamId::slice(element.slice_slug()),
@@ -3801,6 +3874,10 @@ impl ProjectedModel {
             EmcEvent::SliceUpdated { .. } => Self::apply_slice_updated(model, event),
             EmcEvent::SliceRemoved { slug, .. } => Self::apply_slice_removed(model, &slug),
             EmcEvent::SliceFactAdded { fact, .. } => Self::apply_slice_fact_added(model, &fact),
+            EmcEvent::SliceAutomationDefinitionUpdated { .. }
+            | EmcEvent::SliceAutomationDefinitionRemoved { .. } => {
+                Self::apply_automation_definition_event(model, event)
+            }
             EmcEvent::SliceOutcomeDefinitionUpdated { outcome, .. } => {
                 Self::apply_outcome_definition_updated(model, outcome.outcome())
             }
@@ -4048,6 +4125,27 @@ impl ProjectedModel {
         Ok(Some(model))
     }
 
+    fn apply_automation_definition_event(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        match event {
+            EmcEvent::SliceAutomationDefinitionUpdated { automation, .. } => {
+                Self::apply_automation_definition_updated(model, automation.automation())
+            }
+            EmcEvent::SliceAutomationDefinitionRemoved { automation, .. } => {
+                Self::apply_automation_definition_removed(
+                    model,
+                    automation.slice(),
+                    automation.name(),
+                )
+            }
+            _ => {
+                Err("apply_automation_definition_event received a non-automation event".to_owned())
+            }
+        }
+    }
+
     fn apply_command_definition_updated(
         model: Option<Self>,
         command: NewCommandDefinition,
@@ -4064,6 +4162,30 @@ impl ProjectedModel {
     ) -> Result<Option<Self>, String> {
         let mut model = Self::require(model, "SliceEventDefinitionUpdated")?;
         model.apply_slice_fact_body(ExportedEventBody::SliceEventDefinitionUpdated { event })?;
+        Ok(Some(model))
+    }
+
+    fn apply_automation_definition_updated(
+        model: Option<Self>,
+        automation: NewAutomationDefinition,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceAutomationDefinitionUpdated")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceAutomationDefinitionUpdated {
+            automation,
+        })?;
+        Ok(Some(model))
+    }
+
+    fn apply_automation_definition_removed(
+        model: Option<Self>,
+        slice: &SliceSlug,
+        name: &AutomationName,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceAutomationDefinitionRemoved")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceAutomationDefinitionRemoved {
+            slice: slice.clone(),
+            name: name.clone(),
+        })?;
         Ok(Some(model))
     }
 
@@ -4654,10 +4776,10 @@ impl ProjectedModel {
                     .translations
                     .push(translation);
             }
-            ExportedEventBody::SliceAutomationAdded { automation } => {
-                self.slice_mut(automation.slice_slug(), "SliceAutomationAdded")?
-                    .automations
-                    .push(automation);
+            ExportedEventBody::SliceAutomationAdded { .. }
+            | ExportedEventBody::SliceAutomationDefinitionUpdated { .. }
+            | ExportedEventBody::SliceAutomationDefinitionRemoved { .. } => {
+                self.apply_slice_automation_body(body)?;
             }
             ExportedEventBody::SliceBoardElementAdded { element } => {
                 self.slice_mut(element.slice_slug(), "SliceBoardElementAdded")?
@@ -4692,6 +4814,24 @@ impl ProjectedModel {
             }
             ExportedEventBody::SliceOutcomeDefinitionRemoved { slice, label } => {
                 self.apply_slice_outcome_definition_removed(&slice, &label)
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn apply_slice_automation_body(&mut self, body: ExportedEventBody) -> Result<(), String> {
+        match body {
+            ExportedEventBody::SliceAutomationAdded { automation } => {
+                self.slice_mut(automation.slice_slug(), "SliceAutomationAdded")?
+                    .automations
+                    .push(automation);
+                Ok(())
+            }
+            ExportedEventBody::SliceAutomationDefinitionUpdated { automation } => {
+                self.apply_slice_automation_definition_updated(automation)
+            }
+            ExportedEventBody::SliceAutomationDefinitionRemoved { slice, name } => {
+                self.apply_slice_automation_definition_removed(&slice, &name)
             }
             _ => Ok(()),
         }
@@ -4780,6 +4920,29 @@ impl ProjectedModel {
             .command_definitions
             .retain(|existing| existing.name() != command.name());
         slice.command_definitions.push(command);
+        Ok(())
+    }
+
+    fn apply_slice_automation_definition_updated(
+        &mut self,
+        automation: NewAutomationDefinition,
+    ) -> Result<(), String> {
+        let slice = self.slice_mut(automation.slice_slug(), "SliceAutomationDefinitionUpdated")?;
+        slice
+            .automations
+            .retain(|existing| existing.name() != automation.name());
+        slice.automations.push(automation);
+        Ok(())
+    }
+
+    fn apply_slice_automation_definition_removed(
+        &mut self,
+        slice: &SliceSlug,
+        name: &AutomationName,
+    ) -> Result<(), String> {
+        self.slice_mut(slice, "SliceAutomationDefinitionRemoved")?
+            .automations
+            .retain(|automation| automation.name() != name);
         Ok(())
     }
 
