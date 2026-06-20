@@ -900,6 +900,112 @@ mod tests {
     }
 
     #[test]
+    fn remove_read_model_definition_removes_it_from_synchronized_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_ticket_captured_event(temp_dir.path())?;
+        add_ticket_state_read_model(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "read-model",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "ticket_state",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed read model ticket_state from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_lean.contains("name := \"ticket_state\""),
+            "removed read model must be absent from Lean slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("name: \"ticket_state\""),
+            "removed read model must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn update_read_model_definition_rewrites_synchronized_artifacts() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_ticket_captured_event(temp_dir.path())?;
+        add_ticket_state_read_model(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "read-model",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "ticket_state",
+                "--field",
+                "ticket_summary",
+                "--field-source",
+                "event_attribute",
+                "--source-event",
+                "TicketCaptured",
+                "--source-attribute",
+                "ticket_title",
+                "--field-provenance",
+                "TicketCaptured.ticket_title -> summary",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated read model ticket_state on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("ticket_summary"),
+            "updated read model field must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("TicketCaptured.ticket_title -> summary"),
+            "updated read model provenance must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("name := \"ticket_title\""),
+            "old read model field must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn update_slice_kind_rejects_non_slug_flag() -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args([
@@ -1060,6 +1166,33 @@ mod tests {
                 "projection title field",
                 "--observed",
                 "true",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_ticket_state_read_model(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "read-model",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "ticket_state",
+                "--field",
+                "ticket_title",
+                "--field-source",
+                "event_attribute",
+                "--source-event",
+                "TicketCaptured",
+                "--source-attribute",
+                "ticket_title",
+                "--field-provenance",
+                "TicketCaptured.ticket_title",
             ])
             .current_dir(cwd)
             .assert()

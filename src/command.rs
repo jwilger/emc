@@ -5,9 +5,9 @@ use crate::core::effect::{
     ChosenEventId, CleanReviewEffect, Effect, EffectPlan, EventConflictId, EventConflictResolution,
     SliceCommandDefinitionRemovalEffect, SliceDescriptionUpdateEffect,
     SliceEventDefinitionRemovalEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
-    SliceScenarioRemovalEffect, WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect,
-    WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
-    WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect, WorkflowCommandErrorEffect,
+    WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
+    WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
 };
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
@@ -21,10 +21,10 @@ use crate::core::project::{ProjectName, init_project};
 use crate::core::review_gate::review_gate;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    CommandName, EventName, ModelDescription, ModelName, ReviewTimestamp, ReviewerId, ScenarioName,
-    SliceSlug, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
-    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug,
-    WorkflowTransitionEvidenceRecord,
+    CommandName, EventName, ModelDescription, ModelName, ReadModelName, ReviewTimestamp,
+    ReviewerId, ScenarioName, SliceSlug, WorkflowCommandErrorRecord,
+    WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
+    WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
 
@@ -102,6 +102,19 @@ pub(crate) fn add_outcome_definition(outcome: NewOutcomeDefinition) -> EffectPla
 
 pub(crate) fn add_read_model_definition(read_model: NewReadModelDefinition) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddReadModelDefinitionFromSlice(read_model)])
+}
+
+pub(crate) fn update_read_model_definition(read_model: NewReadModelDefinition) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateReadModelDefinitionFromSlice(read_model)])
+}
+
+pub(crate) fn remove_read_model_definition(
+    slice_slug: SliceSlug,
+    read_model_name: ReadModelName,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveReadModelDefinitionFromSlice(
+        SliceReadModelDefinitionRemovalEffect::new(slice_slug, read_model_name),
+    )])
 }
 
 pub(crate) fn add_view_definition(view: NewViewDefinition) -> EffectPlan {

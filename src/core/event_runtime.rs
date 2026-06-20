@@ -14,10 +14,10 @@ use crate::core::event_commands::{
     AddSliceCommand, AddSliceFactCommand, AddWorkflowCommand, AddWorkflowFactCommand,
     ConnectWorkflowCommand, DeclareWorkflowReadinessCommand, EmcEvent, InitializeProjectCommand,
     RecordReviewCommand, RemoveCommandDefinitionCommand, RemoveEventDefinitionCommand,
-    RemoveSliceCommand, RemoveSliceScenarioCommand, RemoveWorkflowCommand,
-    RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
-    UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand, UpdateSliceCommand,
-    UpdateSliceScenarioCommand, UpdateWorkflowCommand, WorkflowFactInput,
+    RemoveReadModelDefinitionCommand, RemoveSliceCommand, RemoveSliceScenarioCommand,
+    RemoveWorkflowCommand, RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
+    UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand, UpdateReadModelDefinitionCommand,
+    UpdateSliceCommand, UpdateSliceScenarioCommand, UpdateWorkflowCommand, WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
 
@@ -177,6 +177,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::SliceCommandDefinitionUpdated { .. }
         | ExportedEventBody::SliceCommandDefinitionRemoved { .. }
         | ExportedEventBody::SliceReadModelAdded { .. }
+        | ExportedEventBody::SliceReadModelDefinitionUpdated { .. }
+        | ExportedEventBody::SliceReadModelDefinitionRemoved { .. }
         | ExportedEventBody::SliceViewAdded { .. }
         | ExportedEventBody::SliceBitLevelDataFlowAdded { .. }
         | ExportedEventBody::SliceTranslationAdded { .. }
@@ -390,6 +392,20 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
             run_command(
                 store,
                 RemoveEventDefinitionCommand::new(slice.clone(), name.clone())?,
+            )
+            .await
+        }
+        ExportedEventBody::SliceReadModelDefinitionUpdated { read_model } => {
+            run_command(
+                store,
+                UpdateReadModelDefinitionCommand::new(read_model.clone())?,
+            )
+            .await
+        }
+        ExportedEventBody::SliceReadModelDefinitionRemoved { slice, name } => {
+            run_command(
+                store,
+                RemoveReadModelDefinitionCommand::new(slice.clone(), name.clone())?,
             )
             .await
         }

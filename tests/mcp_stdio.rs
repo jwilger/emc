@@ -709,6 +709,80 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_read_model_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_read_model(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_read_model_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"update_read_model_definition\""))
+            .stdout(predicate::str::contains(
+                "updated read model ticket_state on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            fs::read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("ticket_summary"),
+            "MCP-updated read model field must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("TicketCaptured.title -> summary"),
+            "MCP-updated read model provenance must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("name := \"ticket_title\""),
+            "old read model field must be absent after MCP update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_read_model_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_read_model(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_read_model_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"remove_read_model_definition\""))
+            .stdout(predicate::str::contains(
+                "removed read model ticket_state from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_quint.contains("name: \"ticket_state\""),
+            "MCP-removed read model must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_slice_update_fork(&temp_dir)?;
@@ -858,6 +932,22 @@ mod tests {
         )
     }
 
+    fn update_read_model_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_read_model_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"ticket_state\",\"field\":\"ticket_summary\",\"field_source\":\"event_attribute\",\"source_event\":\"TicketCaptured\",\"source_attribute\":\"title\",\"field_provenance\":\"TicketCaptured.title -> summary\"}}}\n",
+        )
+    }
+
+    fn remove_read_model_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_read_model_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"ticket_state\"}}}\n",
+        )
+    }
+
     fn resolve_conflict_mcp_requests(stream_id: &str, branch_tx: &str) -> String {
         format!(
             "{}{}{}\n",
@@ -983,6 +1073,33 @@ mod tests {
                 "projection title field",
                 "--observed",
                 "true",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn initialize_project_with_read_model(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        initialize_project_with_event(cwd)?;
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "read-model",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "ticket_state",
+                "--field",
+                "ticket_title",
+                "--field-source",
+                "event_attribute",
+                "--source-event",
+                "TicketCaptured",
+                "--source-attribute",
+                "title",
+                "--field-provenance",
+                "TicketCaptured.title",
             ])
             .current_dir(cwd)
             .assert()

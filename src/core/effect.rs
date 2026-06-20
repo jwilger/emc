@@ -13,10 +13,10 @@ use crate::core::formal_slice_facts::{
 };
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    CommandName, EventName, ModelDescription, ModelName, ReviewTimestamp, ReviewerId, ScenarioName,
-    SliceSlug, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
-    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug,
-    WorkflowTransitionEvidenceRecord,
+    CommandName, EventName, ModelDescription, ModelName, ReadModelName, ReviewTimestamp,
+    ReviewerId, ScenarioName, SliceSlug, WorkflowCommandErrorRecord,
+    WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
+    WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
 
@@ -112,6 +112,29 @@ impl SliceEventDefinitionRemovalEffect {
 
     pub(crate) fn event_name(&self) -> &EventName {
         &self.event_name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceReadModelDefinitionRemovalEffect {
+    slice_slug: SliceSlug,
+    read_model_name: ReadModelName,
+}
+
+impl SliceReadModelDefinitionRemovalEffect {
+    pub(crate) fn new(slice_slug: SliceSlug, read_model_name: ReadModelName) -> Self {
+        Self {
+            slice_slug,
+            read_model_name,
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn read_model_name(&self) -> &ReadModelName {
+        &self.read_model_name
     }
 }
 
@@ -748,6 +771,8 @@ pub(crate) enum Effect {
     AddExternalPayloadDefinitionFromSlice(NewExternalPayloadDefinition),
     AddOutcomeDefinitionFromSlice(NewOutcomeDefinition),
     AddReadModelDefinitionFromSlice(NewReadModelDefinition),
+    RemoveReadModelDefinitionFromSlice(SliceReadModelDefinitionRemovalEffect),
+    UpdateReadModelDefinitionFromSlice(NewReadModelDefinition),
     AddViewDefinitionFromSlice(NewViewDefinition),
     AddSliceFromWorkflow(NewSlice),
     AddSliceScenarioFromSlice(NewSliceScenario),
