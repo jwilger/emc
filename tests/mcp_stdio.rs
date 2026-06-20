@@ -641,6 +641,74 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_event_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_event(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_event_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"update_event_definition\""))
+            .stdout(predicate::str::contains(
+                "updated event TicketCaptured on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            fs::read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        assert!(
+            slice_lean.contains("ticket-updates"),
+            "MCP-updated event stream must be represented in Lean slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("ticket-events"),
+            "old event stream must be absent after MCP update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_event_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_event(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_event_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"remove_event_definition\""))
+            .stdout(predicate::str::contains(
+                "removed event TicketCaptured from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_quint.contains("name: \"TicketCaptured\""),
+            "MCP-removed event must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_slice_update_fork(&temp_dir)?;
@@ -774,6 +842,22 @@ mod tests {
         )
     }
 
+    fn update_event_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_event_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketCaptured\",\"stream\":\"ticket-updates\",\"attribute\":\"summary\",\"attribute_source\":\"generated\",\"attribute_source_name\":\"ticket_summary\",\"attribute_source_field\":\"value\",\"generated_source_kind\":\"projection\",\"attribute_provenance\":\"projection summary field\",\"observed\":true}}}\n",
+        )
+    }
+
+    fn remove_event_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_event_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketCaptured\"}}}\n",
+        )
+    }
+
     fn resolve_conflict_mcp_requests(stream_id: &str, branch_tx: &str) -> String {
         format!(
             "{}{}{}\n",
@@ -866,6 +950,39 @@ mod tests {
                 "actor keystrokes -> form field",
                 "--emits",
                 "TicketCaptured",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn initialize_project_with_event(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        initialize_project_with_scenario(cwd)?;
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "ticket-events",
+                "--attribute",
+                "title",
+                "--attribute-source",
+                "generated",
+                "--attribute-source-name",
+                "ticket_title",
+                "--attribute-source-field",
+                "value",
+                "--generated-source-kind",
+                "projection",
+                "--attribute-provenance",
+                "projection title field",
+                "--observed",
+                "true",
             ])
             .current_dir(cwd)
             .assert()

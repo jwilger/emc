@@ -791,6 +791,115 @@ mod tests {
     }
 
     #[test]
+    fn remove_event_definition_removes_it_from_synchronized_artifacts() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_ticket_captured_event(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed event TicketCaptured from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_lean.contains("name := \"TicketCaptured\""),
+            "removed event must be absent from Lean slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("name: \"TicketCaptured\""),
+            "removed event must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn update_event_definition_rewrites_synchronized_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_ticket_captured_event(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "ticket-updates",
+                "--attribute",
+                "summary",
+                "--attribute-source",
+                "generated",
+                "--attribute-source-name",
+                "ticket_summary",
+                "--attribute-source-field",
+                "value",
+                "--generated-source-kind",
+                "projection",
+                "--attribute-provenance",
+                "projection summary field",
+                "--observed",
+                "true",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated event TicketCaptured on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("ticket-updates"),
+            "updated event stream must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("summary"),
+            "updated event attribute must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("ticket-events"),
+            "old event stream must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn update_slice_kind_rejects_non_slug_flag() -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args([
@@ -918,6 +1027,39 @@ mod tests {
                 "actor keystrokes -> form field",
                 "--emits",
                 "TicketCaptured",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_ticket_captured_event(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "event",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketCaptured",
+                "--stream",
+                "ticket-events",
+                "--attribute",
+                "title",
+                "--attribute-source",
+                "generated",
+                "--attribute-source-name",
+                "ticket_title",
+                "--attribute-source-field",
+                "value",
+                "--generated-source-kind",
+                "projection",
+                "--attribute-provenance",
+                "projection title field",
+                "--observed",
+                "true",
             ])
             .current_dir(cwd)
             .assert()

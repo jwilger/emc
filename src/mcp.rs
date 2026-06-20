@@ -1164,47 +1164,79 @@ fn add_event_definition_tool() -> Tool {
     Tool::new(
         "add_event_definition",
         "Add an event, stream, attribute source, and provenance directly to Lean4 and Quint slice artifacts.",
+        schema_object(event_definition_schema()),
+    )
+}
+
+fn update_event_definition_tool() -> Tool {
+    Tool::new(
+        "update_event_definition",
+        "Update an event, stream, attribute source, and provenance in a slice, then regenerate synchronized model artifacts.",
+        schema_object(event_definition_schema()),
+    )
+}
+
+fn remove_event_definition_tool() -> Tool {
+    Tool::new(
+        "remove_event_definition",
+        "Remove an event definition from a slice, then regenerate synchronized model artifacts.",
         schema_object(json!({
-                "type": "object",
-                "properties": {
-                    "slice": {
-                        "type": "string"
-                    },
-                    "name": {
-                        "type": "string"
-                    },
-                    "stream": {
-                        "type": "string"
-                    },
-                    "attribute": {
-                        "type": "string"
-                    },
-                    "attribute_source": {
-                        "type": "string"
-                    },
-                    "attribute_source_name": {
-                        "type": "string"
-                    },
-                    "attribute_source_field": {
-                        "type": "string"
-                    },
-                    "generated_source_kind": {
-                        "type": "string"
-                    },
-                    "attribute_provenance": {
-                        "type": "string"
-                    },
-                    "observed": {
-                        "type": "boolean"
-                    },
-                    "shared": {
-                        "type": "boolean"
-                    }
+            "type": "object",
+            "properties": {
+                "slice": {
+                    "type": "string"
                 },
-                "required": ["slice", "name", "stream", "attribute", "attribute_source", "attribute_source_name", "attribute_source_field", "attribute_provenance"],
-                "additionalProperties": false
+                "name": {
+                    "type": "string"
+                }
+            },
+            "required": ["slice", "name"],
+            "additionalProperties": false
         })),
     )
+}
+
+fn event_definition_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "slice": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "stream": {
+                "type": "string"
+            },
+            "attribute": {
+                "type": "string"
+            },
+            "attribute_source": {
+                "type": "string"
+            },
+            "attribute_source_name": {
+                "type": "string"
+            },
+            "attribute_source_field": {
+                "type": "string"
+            },
+            "generated_source_kind": {
+                "type": "string"
+            },
+            "attribute_provenance": {
+                "type": "string"
+            },
+            "observed": {
+                "type": "boolean"
+            },
+            "shared": {
+                "type": "boolean"
+            }
+        },
+        "required": ["slice", "name", "stream", "attribute", "attribute_source", "attribute_source_name", "attribute_source_field", "attribute_provenance"],
+        "additionalProperties": false
+    })
 }
 
 fn add_outcome_definition_tool() -> Tool {
@@ -1400,9 +1432,11 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_slice_name_tool(),
         update_slice_scenario_tool(),
         update_command_definition_tool(),
+        update_event_definition_tool(),
         remove_slice_tool(),
         remove_slice_scenario_tool(),
         remove_command_definition_tool(),
+        remove_event_definition_tool(),
         remove_workflow_tool(),
         connect_workflow_tool(),
         remove_transition_tool(),
@@ -1771,9 +1805,11 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_slice_name" => Some(update_slice_name_tool_text(request)),
         "update_slice_scenario" => Some(update_slice_scenario_tool_text(request)),
         "update_command_definition" => Some(update_command_definition_tool_text(request)),
+        "update_event_definition" => Some(update_event_definition_tool_text(request)),
         "remove_slice" => Some(remove_slice_tool_text(request)),
         "remove_slice_scenario" => Some(remove_slice_scenario_tool_text(request)),
         "remove_command_definition" => Some(remove_command_definition_tool_text(request)),
+        "remove_event_definition" => Some(remove_event_definition_tool_text(request)),
         "remove_workflow" => Some(remove_workflow_tool_text(request)),
         "connect_workflow" => Some(connect_workflow_tool_text(request)),
         "remove_transition" => Some(remove_transition_tool_text(request)),
@@ -3474,31 +3510,76 @@ fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError>
         .get("params")
         .and_then(|params| params.get("arguments"))
         .ok_or_else(|| ShellError::message("add_event_definition requires arguments"))?;
+    let event = build_event_definition_from_arguments(arguments, "add_event_definition")?;
+
+    interpret_collect_reports(&command::add_event_definition(event))
+        .map(|reports| reports.join("\n"))
+}
+
+fn update_event_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("update_event_definition requires arguments"))?;
+    let event = build_event_definition_from_arguments(arguments, "update_event_definition")?;
+
+    interpret_collect_reports(&command::update_event_definition(event))
+        .map(|reports| reports.join("\n"))
+}
+
+fn remove_event_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("remove_event_definition requires arguments"))?;
     let slice_slug = arguments
         .get("slice")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_event_definition requires slice"))
+        .ok_or_else(|| ShellError::message("remove_event_definition requires slice"))
         .and_then(|raw_slice| {
             parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let event_name = arguments
         .get("name")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_event_definition requires name"))
+        .ok_or_else(|| ShellError::message("remove_event_definition requires name"))
+        .and_then(|raw_name| {
+            parse_event_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(&command::remove_event_definition(slice_slug, event_name))
+        .map(|reports| reports.join("\n"))
+}
+
+fn build_event_definition_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<NewEventDefinition, ShellError> {
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires slice")))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let event_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires name")))
         .and_then(|raw_name| {
             parse_event_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let stream_name = arguments
         .get("stream")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_event_definition requires stream"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires stream")))
         .and_then(|raw_stream| {
             parse_stream_name(raw_stream).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let attribute_name = arguments
         .get("attribute")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_event_definition requires attribute"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires attribute")))
         .and_then(|raw_attribute| {
             parse_event_attribute_name(raw_attribute)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3506,7 +3587,7 @@ fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError>
     let attribute_source_kind = arguments
         .get("attribute_source")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_event_definition requires attribute_source"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires attribute_source")))
         .and_then(|raw_attribute_source| {
             parse_event_attribute_source_kind(raw_attribute_source)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3514,7 +3595,7 @@ fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError>
     let attribute_source_name = arguments
         .get("attribute_source_name")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_event_definition requires attribute_source_name"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires attribute_source_name")))
         .and_then(|raw_attribute_source_name| {
             parse_event_attribute_source_name(raw_attribute_source_name)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3522,7 +3603,7 @@ fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError>
     let attribute_source_field = arguments
         .get("attribute_source_field")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_event_definition requires attribute_source_field"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires attribute_source_field")))
         .and_then(|raw_attribute_source_field| {
             parse_event_attribute_source_field(raw_attribute_source_field)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3536,7 +3617,7 @@ fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError>
     let provenance_description = arguments
         .get("attribute_provenance")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_event_definition requires attribute_provenance"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires attribute_provenance")))
         .and_then(|raw_provenance| {
             parse_provenance_description(raw_provenance)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3558,17 +3639,14 @@ fn add_event_definition_tool_text(request: &Value) -> Result<String, ShellError>
         .get("shared")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let event = build_event_definition(
+    Ok(build_event_definition(
         slice_slug,
         event_name,
         stream_name,
         attribute,
         observed,
         shared,
-    );
-
-    interpret_collect_reports(&command::add_event_definition(event))
-        .map(|reports| reports.join("\n"))
+    ))
 }
 
 fn build_event_attribute(
