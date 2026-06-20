@@ -1269,62 +1269,98 @@ fn add_read_model_definition_tool() -> Tool {
     Tool::new(
         "add_read_model_definition",
         "Add a read model, field source, and field provenance directly to Lean4 and Quint slice artifacts.",
-        schema_object(json!({
-                "type": "object",
-                "properties": {
-                    "slice": {
-                        "type": "string"
-                    },
-                    "name": {
-                        "type": "string"
-                    },
-                    "field": {
-                        "type": "string"
-                    },
-                    "field_source": {
-                        "type": "string"
-                    },
-                    "source_event": {
-                        "type": "string"
-                    },
-                    "source_attribute": {
-                        "type": "string"
-                    },
-                    "derivation_rule": {
-                        "type": "string"
-                    },
-                    "derivation_source_fields": {
-                        "type": "string"
-                    },
-                    "derivation_scenario": {
-                        "type": "string"
-                    },
-                    "absence_event": {
-                        "type": "string"
-                    },
-                    "absence_scenario": {
-                        "type": "string"
-                    },
-                    "field_provenance": {
-                        "type": "string"
-                    },
-                    "transitive": {
-                        "type": "boolean"
-                    },
-                    "relationship_fields": {
-                        "type": "string"
-                    },
-                    "transitive_rule": {
-                        "type": "string"
-                    },
-                    "example_scenario": {
-                        "type": "string"
-                    }
-                },
-                "required": ["slice", "name", "field", "field_source", "field_provenance"],
-                "additionalProperties": false
-        })),
+        schema_object(read_model_definition_schema()),
     )
+}
+
+fn update_read_model_definition_tool() -> Tool {
+    Tool::new(
+        "update_read_model_definition",
+        "Update a read model, field source, and field provenance in a slice, then regenerate synchronized model artifacts.",
+        schema_object(read_model_definition_schema()),
+    )
+}
+
+fn remove_read_model_definition_tool() -> Tool {
+    Tool::new(
+        "remove_read_model_definition",
+        "Remove a read model definition from a slice, then regenerate synchronized model artifacts.",
+        schema_object(slice_named_definition_schema()),
+    )
+}
+
+fn read_model_definition_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "slice": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "field": {
+                "type": "string"
+            },
+            "field_source": {
+                "type": "string"
+            },
+            "source_event": {
+                "type": "string"
+            },
+            "source_attribute": {
+                "type": "string"
+            },
+            "derivation_rule": {
+                "type": "string"
+            },
+            "derivation_source_fields": {
+                "type": "string"
+            },
+            "derivation_scenario": {
+                "type": "string"
+            },
+            "absence_event": {
+                "type": "string"
+            },
+            "absence_scenario": {
+                "type": "string"
+            },
+            "field_provenance": {
+                "type": "string"
+            },
+            "transitive": {
+                "type": "boolean"
+            },
+            "relationship_fields": {
+                "type": "string"
+            },
+            "transitive_rule": {
+                "type": "string"
+            },
+            "example_scenario": {
+                "type": "string"
+            }
+        },
+        "required": ["slice", "name", "field", "field_source", "field_provenance"],
+        "additionalProperties": false
+    })
+}
+
+fn slice_named_definition_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "slice": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            }
+        },
+        "required": ["slice", "name"],
+        "additionalProperties": false
+    })
 }
 
 fn add_view_definition_tool() -> Tool {
@@ -1433,10 +1469,12 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_slice_scenario_tool(),
         update_command_definition_tool(),
         update_event_definition_tool(),
+        update_read_model_definition_tool(),
         remove_slice_tool(),
         remove_slice_scenario_tool(),
         remove_command_definition_tool(),
         remove_event_definition_tool(),
+        remove_read_model_definition_tool(),
         remove_workflow_tool(),
         connect_workflow_tool(),
         remove_transition_tool(),
@@ -1806,10 +1844,12 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_slice_scenario" => Some(update_slice_scenario_tool_text(request)),
         "update_command_definition" => Some(update_command_definition_tool_text(request)),
         "update_event_definition" => Some(update_event_definition_tool_text(request)),
+        "update_read_model_definition" => Some(update_read_model_definition_tool_text(request)),
         "remove_slice" => Some(remove_slice_tool_text(request)),
         "remove_slice_scenario" => Some(remove_slice_scenario_tool_text(request)),
         "remove_command_definition" => Some(remove_command_definition_tool_text(request)),
         "remove_event_definition" => Some(remove_event_definition_tool_text(request)),
+        "remove_read_model_definition" => Some(remove_read_model_definition_tool_text(request)),
         "remove_workflow" => Some(remove_workflow_tool_text(request)),
         "connect_workflow" => Some(connect_workflow_tool_text(request)),
         "remove_transition" => Some(remove_transition_tool_text(request)),
@@ -3698,31 +3738,81 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
         .get("params")
         .and_then(|params| params.get("arguments"))
         .ok_or_else(|| ShellError::message("add_read_model_definition requires arguments"))?;
+    let read_model =
+        build_read_model_definition_from_arguments(arguments, "add_read_model_definition")?;
+
+    interpret_collect_reports(&command::add_read_model_definition(read_model))
+        .map(|reports| reports.join("\n"))
+}
+
+fn update_read_model_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("update_read_model_definition requires arguments"))?;
+    let read_model =
+        build_read_model_definition_from_arguments(arguments, "update_read_model_definition")?;
+
+    interpret_collect_reports(&command::update_read_model_definition(read_model))
+        .map(|reports| reports.join("\n"))
+}
+
+fn remove_read_model_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("remove_read_model_definition requires arguments"))?;
     let slice_slug = arguments
         .get("slice")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_read_model_definition requires slice"))
+        .ok_or_else(|| ShellError::message("remove_read_model_definition requires slice"))
         .and_then(|raw_slice| {
             parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let read_model_name = arguments
         .get("name")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_read_model_definition requires name"))
+        .ok_or_else(|| ShellError::message("remove_read_model_definition requires name"))
+        .and_then(|raw_name| {
+            parse_read_model_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(&command::remove_read_model_definition(
+        slice_slug,
+        read_model_name,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn build_read_model_definition_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<NewReadModelDefinition, ShellError> {
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires slice")))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let read_model_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires name")))
         .and_then(|raw_name| {
             parse_read_model_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let field_name = arguments
         .get("field")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_read_model_definition requires field"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires field")))
         .and_then(|raw_field| {
             parse_datum_name(raw_field).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let field_source_kind = arguments
         .get("field_source")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_read_model_definition requires field_source"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires field_source")))
         .and_then(|raw_field_source| {
             parse_read_model_field_source_kind(raw_field_source)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3730,7 +3820,7 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
     let provenance_description = arguments
         .get("field_provenance")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_read_model_definition requires field_provenance"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires field_provenance")))
         .and_then(|raw_provenance| {
             parse_provenance_description(raw_provenance)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3741,8 +3831,7 @@ fn add_read_model_definition_tool_text(request: &Value) -> Result<String, ShellE
     let read_model = NewReadModelDefinition::new(slice_slug, read_model_name, read_model_field);
     let read_model = apply_optional_transitive_semantics(read_model, arguments)?;
 
-    interpret_collect_reports(&command::add_read_model_definition(read_model))
-        .map(|reports| reports.join("\n"))
+    Ok(read_model)
 }
 
 fn resolve_read_model_field_source(

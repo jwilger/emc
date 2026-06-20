@@ -160,6 +160,8 @@ pub(crate) enum ExportedEventType {
     SliceCommandDefinitionUpdated,
     SliceCommandDefinitionRemoved,
     SliceReadModelAdded,
+    SliceReadModelDefinitionUpdated,
+    SliceReadModelDefinitionRemoved,
     SliceViewAdded,
     SliceBitLevelDataFlowAdded,
     SliceTranslationAdded,
@@ -203,6 +205,8 @@ impl ExportedEventType {
             "SliceCommandDefinitionUpdated" => Ok(Self::SliceCommandDefinitionUpdated),
             "SliceCommandDefinitionRemoved" => Ok(Self::SliceCommandDefinitionRemoved),
             "SliceReadModelAdded" => Ok(Self::SliceReadModelAdded),
+            "SliceReadModelDefinitionUpdated" => Ok(Self::SliceReadModelDefinitionUpdated),
+            "SliceReadModelDefinitionRemoved" => Ok(Self::SliceReadModelDefinitionRemoved),
             "SliceViewAdded" => Ok(Self::SliceViewAdded),
             "SliceBitLevelDataFlowAdded" => Ok(Self::SliceBitLevelDataFlowAdded),
             "SliceTranslationAdded" => Ok(Self::SliceTranslationAdded),
@@ -249,6 +253,8 @@ impl AsRef<str> for ExportedEventType {
             Self::SliceCommandDefinitionUpdated => "SliceCommandDefinitionUpdated",
             Self::SliceCommandDefinitionRemoved => "SliceCommandDefinitionRemoved",
             Self::SliceReadModelAdded => "SliceReadModelAdded",
+            Self::SliceReadModelDefinitionUpdated => "SliceReadModelDefinitionUpdated",
+            Self::SliceReadModelDefinitionRemoved => "SliceReadModelDefinitionRemoved",
             Self::SliceViewAdded => "SliceViewAdded",
             Self::SliceBitLevelDataFlowAdded => "SliceBitLevelDataFlowAdded",
             Self::SliceTranslationAdded => "SliceTranslationAdded",
@@ -2354,6 +2360,13 @@ pub(crate) enum ExportedEventBody {
     SliceReadModelAdded {
         read_model: NewReadModelDefinition,
     },
+    SliceReadModelDefinitionUpdated {
+        read_model: NewReadModelDefinition,
+    },
+    SliceReadModelDefinitionRemoved {
+        slice: SliceSlug,
+        name: ReadModelName,
+    },
     SliceViewAdded {
         view: NewViewDefinition,
     },
@@ -2434,6 +2447,12 @@ impl ExportedEventBody {
                 ExportedEventType::SliceCommandDefinitionRemoved
             }
             Self::SliceReadModelAdded { .. } => ExportedEventType::SliceReadModelAdded,
+            Self::SliceReadModelDefinitionUpdated { .. } => {
+                ExportedEventType::SliceReadModelDefinitionUpdated
+            }
+            Self::SliceReadModelDefinitionRemoved { .. } => {
+                ExportedEventType::SliceReadModelDefinitionRemoved
+            }
             Self::SliceViewAdded { .. } => ExportedEventType::SliceViewAdded,
             Self::SliceBitLevelDataFlowAdded { .. } => {
                 ExportedEventType::SliceBitLevelDataFlowAdded
@@ -2545,8 +2564,12 @@ impl ExportedEventBody {
             Self::SliceCommandDefinitionRemoved { slice, name } => {
                 json!({ "slice": slice.as_ref(), "name": name.as_ref() })
             }
-            Self::SliceReadModelAdded { read_model } => {
+            Self::SliceReadModelAdded { read_model }
+            | Self::SliceReadModelDefinitionUpdated { read_model } => {
                 SliceReadModelAddedEventPayload::from_read_model(read_model).to_json_value()
+            }
+            Self::SliceReadModelDefinitionRemoved { slice, name } => {
+                json!({ "slice": slice.as_ref(), "name": name.as_ref() })
             }
             Self::SliceViewAdded { view } => {
                 SliceViewAddedEventPayload::from_view(view).to_json_value()
@@ -2771,10 +2794,11 @@ impl ExportedEventBody {
                     name: command_name(required_str(payload, "name")?)?,
                 })
             }
-            ExportedEventType::SliceReadModelAdded => Ok(Self::SliceReadModelAdded {
-                read_model: SliceReadModelAddedEventPayload::from_json_value(payload)?
-                    .into_read_model(),
-            }),
+            ExportedEventType::SliceReadModelAdded
+            | ExportedEventType::SliceReadModelDefinitionUpdated
+            | ExportedEventType::SliceReadModelDefinitionRemoved => {
+                Self::read_model_from_event_type_and_payload(event_type, payload)
+            }
             ExportedEventType::SliceViewAdded => Ok(Self::SliceViewAdded {
                 view: SliceViewAddedEventPayload::from_json_value(payload)?.into_view(),
             }),
@@ -2799,6 +2823,31 @@ impl ExportedEventBody {
                     .into_connection(),
             }),
             _ => Self::misc_from_event_type_and_payload(event_type, payload),
+        }
+    }
+
+    fn read_model_from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
+            ExportedEventType::SliceReadModelAdded => Ok(Self::SliceReadModelAdded {
+                read_model: SliceReadModelAddedEventPayload::from_json_value(payload)?
+                    .into_read_model(),
+            }),
+            ExportedEventType::SliceReadModelDefinitionUpdated => {
+                Ok(Self::SliceReadModelDefinitionUpdated {
+                    read_model: SliceReadModelAddedEventPayload::from_json_value(payload)?
+                        .into_read_model(),
+                })
+            }
+            ExportedEventType::SliceReadModelDefinitionRemoved => {
+                Ok(Self::SliceReadModelDefinitionRemoved {
+                    slice: slice_slug(required_str(payload, "slice")?)?,
+                    name: read_model_name(required_str(payload, "name")?)?,
+                })
+            }
+            _ => Err(format!("unexpected read model event type {event_type}")),
         }
     }
 
@@ -3119,6 +3168,28 @@ impl EventDraft {
             stream_id: EventStreamId::slice(read_model.slice_slug()),
             body: ExportedEventBody::SliceReadModelAdded {
                 read_model: read_model.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_read_model_definition_updated(read_model: &NewReadModelDefinition) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(read_model.slice_slug()),
+            body: ExportedEventBody::SliceReadModelDefinitionUpdated {
+                read_model: read_model.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_read_model_definition_removed(
+        slice: &SliceSlug,
+        name: &ReadModelName,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(slice),
+            body: ExportedEventBody::SliceReadModelDefinitionRemoved {
+                slice: slice.clone(),
+                name: name.clone(),
             },
         }
     }
@@ -3533,6 +3604,16 @@ impl ProjectedModel {
             EmcEvent::SliceCommandDefinitionRemoved { command, .. } => {
                 Self::apply_command_definition_removed(model, command.slice(), command.name())
             }
+            EmcEvent::SliceReadModelDefinitionUpdated { read_model, .. } => {
+                Self::apply_read_model_definition_updated(model, read_model.read_model())
+            }
+            EmcEvent::SliceReadModelDefinitionRemoved { read_model, .. } => {
+                Self::apply_read_model_definition_removed(
+                    model,
+                    read_model.slice(),
+                    read_model.name(),
+                )
+            }
             EmcEvent::SliceScenarioUpdated { scenario, .. } => {
                 Self::apply_slice_scenario_updated(model, scenario.scenario())
             }
@@ -3773,6 +3854,30 @@ impl ProjectedModel {
     ) -> Result<Option<Self>, String> {
         let mut model = Self::require(model, "SliceCommandDefinitionRemoved")?;
         model.apply_slice_fact_body(ExportedEventBody::SliceCommandDefinitionRemoved {
+            slice: slice.clone(),
+            name: name.clone(),
+        })?;
+        Ok(Some(model))
+    }
+
+    fn apply_read_model_definition_updated(
+        model: Option<Self>,
+        read_model: NewReadModelDefinition,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceReadModelDefinitionUpdated")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceReadModelDefinitionUpdated {
+            read_model,
+        })?;
+        Ok(Some(model))
+    }
+
+    fn apply_read_model_definition_removed(
+        model: Option<Self>,
+        slice: &SliceSlug,
+        name: &ReadModelName,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceReadModelDefinitionRemoved")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceReadModelDefinitionRemoved {
             slice: slice.clone(),
             name: name.clone(),
         })?;
@@ -4214,22 +4319,21 @@ impl ProjectedModel {
                     .push(command);
             }
             ExportedEventBody::SliceCommandDefinitionUpdated { command } => {
-                let slice =
-                    self.slice_mut(command.slice_slug(), "SliceCommandDefinitionUpdated")?;
-                slice
-                    .command_definitions
-                    .retain(|existing| existing.name() != command.name());
-                slice.command_definitions.push(command);
+                self.apply_slice_command_definition_updated(command)?;
             }
             ExportedEventBody::SliceCommandDefinitionRemoved { slice, name } => {
-                self.slice_mut(&slice, "SliceCommandDefinitionRemoved")?
-                    .command_definitions
-                    .retain(|command| command.name() != &name);
+                self.apply_slice_command_definition_removed(&slice, &name)?;
             }
             ExportedEventBody::SliceReadModelAdded { read_model } => {
                 self.slice_mut(read_model.slice_slug(), "SliceReadModelAdded")?
                     .read_models
                     .push(read_model);
+            }
+            ExportedEventBody::SliceReadModelDefinitionUpdated { read_model } => {
+                self.apply_slice_read_model_definition_updated(read_model)?;
+            }
+            ExportedEventBody::SliceReadModelDefinitionRemoved { slice, name } => {
+                self.apply_slice_read_model_definition_removed(&slice, &name)?;
             }
             ExportedEventBody::SliceBitLevelDataFlowAdded { data_flow } => {
                 self.slice_mut(data_flow.slice_slug(), "SliceBitLevelDataFlowAdded")?
@@ -4291,6 +4395,52 @@ impl ProjectedModel {
         self.slice_mut(slice, "SliceEventDefinitionRemoved")?
             .event_definitions
             .retain(|event| event.name() != name);
+        Ok(())
+    }
+
+    fn apply_slice_command_definition_updated(
+        &mut self,
+        command: NewCommandDefinition,
+    ) -> Result<(), String> {
+        let slice = self.slice_mut(command.slice_slug(), "SliceCommandDefinitionUpdated")?;
+        slice
+            .command_definitions
+            .retain(|existing| existing.name() != command.name());
+        slice.command_definitions.push(command);
+        Ok(())
+    }
+
+    fn apply_slice_command_definition_removed(
+        &mut self,
+        slice: &SliceSlug,
+        name: &CommandName,
+    ) -> Result<(), String> {
+        self.slice_mut(slice, "SliceCommandDefinitionRemoved")?
+            .command_definitions
+            .retain(|command| command.name() != name);
+        Ok(())
+    }
+
+    fn apply_slice_read_model_definition_updated(
+        &mut self,
+        read_model: NewReadModelDefinition,
+    ) -> Result<(), String> {
+        let slice = self.slice_mut(read_model.slice_slug(), "SliceReadModelDefinitionUpdated")?;
+        slice
+            .read_models
+            .retain(|existing| existing.name() != read_model.name());
+        slice.read_models.push(read_model);
+        Ok(())
+    }
+
+    fn apply_slice_read_model_definition_removed(
+        &mut self,
+        slice: &SliceSlug,
+        name: &ReadModelName,
+    ) -> Result<(), String> {
+        self.slice_mut(slice, "SliceReadModelDefinitionRemoved")?
+            .read_models
+            .retain(|read_model| read_model.name() != name);
         Ok(())
     }
 

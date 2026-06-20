@@ -38,8 +38,8 @@ use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     CommandInputSourceKind, CommandName, ControlName, ControlRecoveryBehavior, EventName,
-    ModelDescription, ModelName, ReadModelFieldSourceKind, ReviewTimestamp, ReviewerId,
-    ScenarioName, SketchToken, SliceSlug, ViewName, WorkflowCommandErrorRecord,
+    ModelDescription, ModelName, ReadModelFieldSourceKind, ReadModelName, ReviewTimestamp,
+    ReviewerId, ScenarioName, SketchToken, SliceSlug, ViewName, WorkflowCommandErrorRecord,
     WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
     WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceNavigationEndpoints,
     WorkflowTransitionEvidenceRecord, WorkflowTransitionKind,
@@ -122,6 +122,13 @@ enum Command {
     },
     AddReadModelDefinition {
         read_model: NewReadModelDefinition,
+    },
+    UpdateReadModelDefinition {
+        read_model: NewReadModelDefinition,
+    },
+    RemoveReadModelDefinition {
+        slice_slug: SliceSlug,
+        read_model_name: ReadModelName,
     },
     AddViewDefinition {
         view: NewViewDefinition,
@@ -287,6 +294,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::AddReadModelDefinition { read_model } => {
             interpret(&command::add_read_model_definition(read_model))
         }
+        Command::UpdateReadModelDefinition { read_model } => {
+            interpret(&command::update_read_model_definition(read_model))
+        }
         Command::AddViewDefinition { view } => interpret(&command::add_view_definition(view)),
         Command::AddSlice { slice } => interpret(&command::add_slice(slice)),
         Command::AddSliceScenario { scenario } => interpret(&command::add_slice_scenario(scenario)),
@@ -392,6 +402,13 @@ fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
             slice_slug,
             event_name,
         } => interpret(&command::remove_event_definition(slice_slug, event_name)),
+        Command::RemoveReadModelDefinition {
+            slice_slug,
+            read_model_name,
+        } => interpret(&command::remove_read_model_definition(
+            slice_slug,
+            read_model_name,
+        )),
         Command::RemoveSlice { slug } => interpret(&command::remove_slice(slug)),
         Command::RemoveSliceScenario {
             slice_slug,
@@ -624,6 +641,28 @@ fn remove_event_definition_cli(slice: &str, name: &str) -> Result<Cli, ShellErro
     })
 }
 
+fn read_model_definition_cli(command: &str, read_model: NewReadModelDefinition) -> Cli {
+    let command = if command == "update" {
+        Command::UpdateReadModelDefinition { read_model }
+    } else {
+        Command::AddReadModelDefinition { read_model }
+    };
+    Cli { command }
+}
+
+fn remove_read_model_definition_cli(slice: &str, name: &str) -> Result<Cli, ShellError> {
+    let slice_slug =
+        parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+    let read_model_name =
+        parse_read_model_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(Cli {
+        command: Command::RemoveReadModelDefinition {
+            slice_slug,
+            read_model_name,
+        },
+    })
+}
+
 fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
     match arguments {
         [] => Ok(Cli {
@@ -731,6 +770,14 @@ fn parse_cli_remove_event_or_2(arguments: &[String]) -> Result<Cli, ShellError> 
                 && name_flag == "--name" =>
         {
             remove_event_definition_cli(slice, name)
+        }
+        [command, subject, slice_flag, slice, name_flag, name]
+            if command == "remove"
+                && subject == "read-model"
+                && slice_flag == "--slice"
+                && name_flag == "--name" =>
+        {
+            remove_read_model_definition_cli(slice, name)
         }
         _ => parse_cli_2(arguments),
     }
@@ -1748,7 +1795,7 @@ fn parse_cli_14(arguments: &[String]) -> Result<Cli, ShellError> {
             transitive_rule,
             example_scenario_flag,
             example_scenario,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "read-model"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -1811,9 +1858,7 @@ fn parse_cli_14(arguments: &[String]) -> Result<Cli, ShellError> {
             } else {
                 read_model
             };
-            Ok(Cli {
-                command: Command::AddReadModelDefinition { read_model },
-            })
+            Ok(read_model_definition_cli(command, read_model))
         }
         _ => parse_cli_15(arguments),
     }
@@ -1840,7 +1885,7 @@ fn parse_cli_15(arguments: &[String]) -> Result<Cli, ShellError> {
             derivation_scenario,
             field_provenance_flag,
             field_provenance,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "read-model"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -1867,33 +1912,32 @@ fn parse_cli_15(arguments: &[String]) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let provenance_description = parse_provenance_description(field_provenance)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::AddReadModelDefinition {
-                    read_model: NewReadModelDefinition::new(
-                        slice_slug,
-                        read_model_name,
-                        NewReadModelField::new(
-                            field_name,
-                            match field_source_kind {
-                                ReadModelFieldSourceKind::Derivation => {
-                                    ReadModelFieldSource::derivation(
-                                        derivation_rule,
-                                        ReadModelDerivationSourceFields::from_fields(source_fields),
-                                        derivation_scenario,
-                                    )
-                                }
-                                other => {
-                                    return Err(read_model_field_source_kind_mismatch(
-                                        other,
-                                        ReadModelFieldSourceKind::Derivation,
-                                    ));
-                                }
-                            },
-                            provenance_description,
-                        ),
+            Ok(read_model_definition_cli(
+                command,
+                NewReadModelDefinition::new(
+                    slice_slug,
+                    read_model_name,
+                    NewReadModelField::new(
+                        field_name,
+                        match field_source_kind {
+                            ReadModelFieldSourceKind::Derivation => {
+                                ReadModelFieldSource::derivation(
+                                    derivation_rule,
+                                    ReadModelDerivationSourceFields::from_fields(source_fields),
+                                    derivation_scenario,
+                                )
+                            }
+                            other => {
+                                return Err(read_model_field_source_kind_mismatch(
+                                    other,
+                                    ReadModelFieldSourceKind::Derivation,
+                                ));
+                            }
+                        },
+                        provenance_description,
                     ),
-                },
-            })
+                ),
+            ))
         }
         _ => parse_cli_16(arguments),
     }
@@ -2118,7 +2162,7 @@ fn parse_cli_19(arguments: &[String]) -> Result<Cli, ShellError> {
             absence_scenario,
             field_provenance_flag,
             field_provenance,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "read-model"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -2142,32 +2186,31 @@ fn parse_cli_19(arguments: &[String]) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let provenance_description = parse_provenance_description(field_provenance)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::AddReadModelDefinition {
-                    read_model: NewReadModelDefinition::new(
-                        slice_slug,
-                        read_model_name,
-                        NewReadModelField::new(
-                            field_name,
-                            match field_source_kind {
-                                ReadModelFieldSourceKind::AbsenceDefault => {
-                                    ReadModelFieldSource::absence_default(
-                                        absence_event,
-                                        absence_scenario,
-                                    )
-                                }
-                                other => {
-                                    return Err(read_model_field_source_kind_mismatch(
-                                        other,
-                                        ReadModelFieldSourceKind::AbsenceDefault,
-                                    ));
-                                }
-                            },
-                            provenance_description,
-                        ),
+            Ok(read_model_definition_cli(
+                command,
+                NewReadModelDefinition::new(
+                    slice_slug,
+                    read_model_name,
+                    NewReadModelField::new(
+                        field_name,
+                        match field_source_kind {
+                            ReadModelFieldSourceKind::AbsenceDefault => {
+                                ReadModelFieldSource::absence_default(
+                                    absence_event,
+                                    absence_scenario,
+                                )
+                            }
+                            other => {
+                                return Err(read_model_field_source_kind_mismatch(
+                                    other,
+                                    ReadModelFieldSourceKind::AbsenceDefault,
+                                ));
+                            }
+                        },
+                        provenance_description,
                     ),
-                },
-            })
+                ),
+            ))
         }
         _ => parse_cli_20(arguments),
     }
@@ -2451,7 +2494,7 @@ fn parse_cli_24(arguments: &[String]) -> Result<Cli, ShellError> {
             source_attribute,
             field_provenance_flag,
             field_provenance,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "read-model"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -2475,32 +2518,31 @@ fn parse_cli_24(arguments: &[String]) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let provenance_description = parse_provenance_description(field_provenance)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::AddReadModelDefinition {
-                    read_model: NewReadModelDefinition::new(
-                        slice_slug,
-                        read_model_name,
-                        NewReadModelField::new(
-                            field_name,
-                            match field_source_kind {
-                                ReadModelFieldSourceKind::EventAttribute => {
-                                    ReadModelFieldSource::event_attribute(
-                                        source_event,
-                                        source_attribute,
-                                    )
-                                }
-                                other => {
-                                    return Err(read_model_field_source_kind_mismatch(
-                                        other,
-                                        ReadModelFieldSourceKind::EventAttribute,
-                                    ));
-                                }
-                            },
-                            provenance_description,
-                        ),
+            Ok(read_model_definition_cli(
+                command,
+                NewReadModelDefinition::new(
+                    slice_slug,
+                    read_model_name,
+                    NewReadModelField::new(
+                        field_name,
+                        match field_source_kind {
+                            ReadModelFieldSourceKind::EventAttribute => {
+                                ReadModelFieldSource::event_attribute(
+                                    source_event,
+                                    source_attribute,
+                                )
+                            }
+                            other => {
+                                return Err(read_model_field_source_kind_mismatch(
+                                    other,
+                                    ReadModelFieldSourceKind::EventAttribute,
+                                ));
+                            }
+                        },
+                        provenance_description,
                     ),
-                },
-            })
+                ),
+            ))
         }
         _ => parse_cli_25(arguments),
     }

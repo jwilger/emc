@@ -25,9 +25,10 @@ use crate::core::effect::{
     ProcessInvocation, ProcessInvocations, ProjectPath, ProjectionFingerprint, ReportLine,
     ReviewEventReference, ReviewRecordRequirement, SliceCommandDefinitionRemovalEffect,
     SliceDescriptionUpdateEffect, SliceEventDefinitionRemovalEffect, SliceKindUpdateEffect,
-    SliceNameUpdateEffect, SliceScenarioRemovalEffect, WorkflowCommandErrorEffect,
-    WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
-    WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    SliceNameUpdateEffect, SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect,
+    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
+    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
+    WorkflowTransitionEvidenceEffect,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
@@ -349,6 +350,7 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::RecordCleanReviewFromWorkflow(_)
             | Effect::RemoveCommandDefinitionFromSlice(_)
             | Effect::RemoveEventDefinitionFromSlice(_)
+            | Effect::RemoveReadModelDefinitionFromSlice(_)
             | Effect::RemoveSliceScenarioFromSlice(_)
             | Effect::RemoveSliceFromWorkflow(_)
             | Effect::RemoveTransitionFromWorkflow(_)
@@ -356,6 +358,7 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::RequireWorkflowEntryLifecycleCoverageFromWorkflow(_)
             | Effect::UpdateCommandDefinitionFromSlice(_)
             | Effect::UpdateEventDefinitionFromSlice(_)
+            | Effect::UpdateReadModelDefinitionFromSlice(_)
             | Effect::UpdateSliceScenarioFromSlice(_)
             | Effect::UpdateSliceDescriptionFromWorkflow(_)
             | Effect::UpdateSliceKindFromWorkflow(_)
@@ -496,6 +499,12 @@ fn interpret_slice_fact_effect(effect: &Effect) -> Option<Result<Vec<String>, Sh
         Effect::AddOutcomeDefinitionFromSlice(outcome) => interpret_outcome_added(outcome),
         Effect::AddReadModelDefinitionFromSlice(read_model) => {
             interpret_read_model_added(read_model)
+        }
+        Effect::RemoveReadModelDefinitionFromSlice(removal) => {
+            interpret_read_model_removed(removal)
+        }
+        Effect::UpdateReadModelDefinitionFromSlice(read_model) => {
+            interpret_read_model_updated(read_model)
         }
         Effect::AddViewDefinitionFromSlice(view) => interpret_view_added(view),
         Effect::AddSliceScenarioFromSlice(scenario) => interpret_slice_scenario_added(scenario),
@@ -792,6 +801,51 @@ fn interpret_read_model_added(
         read_model.slice_slug(),
         reports,
         EventDraft::slice_read_model_added(read_model),
+    )
+}
+
+fn interpret_read_model_updated(
+    read_model: &NewReadModelDefinition,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "updated read model {} on slice {}",
+            read_model.name().as_ref(),
+            read_model.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "updated read model {} in project root",
+            read_model.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        read_model.slice_slug(),
+        reports,
+        EventDraft::slice_read_model_definition_updated(read_model),
+    )
+}
+
+fn interpret_read_model_removed(
+    removal: &SliceReadModelDefinitionRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "removed read model {} from slice {}",
+            removal.read_model_name().as_ref(),
+            removal.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "removed read model {} from project root",
+            removal.read_model_name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        removal.slice_slug(),
+        reports,
+        EventDraft::slice_read_model_definition_removed(
+            removal.slice_slug(),
+            removal.read_model_name(),
+        ),
     )
 }
 

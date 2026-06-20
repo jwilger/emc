@@ -13,13 +13,16 @@ This ledger tracks #159 across multiple PRs.
 - PR #170: added event-sourced CLI and MCP update/remove support for
   command definitions. Covered behavior through synchronized Lean4/Quint
   artifact assertions for both CLI and MCP entry points.
-- Current branch: adds event-sourced CLI and MCP update/remove support for
+- PR #172: added event-sourced CLI and MCP update/remove support for
   event definitions. Covered behavior through synchronized Lean4/Quint artifact
+  assertions for both CLI and MCP entry points.
+- Current branch: adds event-sourced CLI and MCP update/remove support for read
+  model definitions. Covers behavior through synchronized Lean4/Quint artifact
   assertions for both CLI and MCP entry points.
 
 ## Current PR boundary
 
-- This PR should broaden beyond scenarios and commands to event definitions
+- This PR should broaden beyond scenarios, commands, and events to read model definitions
   without closing #159. Keep #159 open until all modeled element families listed
   in the issue have CLI and MCP update/remove coverage.
 
@@ -31,10 +34,10 @@ This ledger tracks #159 across multiple PRs.
   and adding only if that is semantically valid, otherwise add explicit update.
 - Workflow evidence facts: workflow outcomes, command errors, owned definitions,
   transition evidence, entry lifecycle coverage/state.
-- Slice-owned definitions: commands are covered by PR #170, and events are
-  covered by the current branch. Remaining families are read models, views,
-  controls, outcomes, automations, translations, external payloads, board
-  elements, board connections, and data-flow facts.
+- Slice-owned definitions: commands are covered by PR #170, events are covered
+  by PR #172, and read models are covered by the current branch. Remaining
+  families are views, controls, outcomes, automations, translations, external
+  payloads, board elements, board connections, and data-flow facts.
 - Scenario follow-up: add tests for contract scenario update/remove if needed by
   final completion evidence.
 
@@ -49,9 +52,11 @@ This ledger tracks #159 across multiple PRs.
 - `cargo test --test mcp_stdio command_definition`
 - `cargo test --test update_slice event_definition`
 - `cargo test --test mcp_stdio event_definition`
+- `cargo test --test update_slice read_model_definition`
+- `cargo test --test mcp_stdio read_model_definition`
 
 ## Next likely increment
 
-Extend the same update/remove pattern to read model definitions because they
-feed views, transitive projection facts, board elements, and several contract
-scenario relationships.
+Extend the same update/remove pattern to view definitions because they depend on
+read models and drive controls, navigation targets, and several workflow
+composition relationships.
