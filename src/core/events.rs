@@ -154,6 +154,8 @@ pub(crate) enum ExportedEventType {
     SliceOutcomeAdded,
     SliceExternalPayloadAdded,
     SliceEventDefinitionAdded,
+    SliceEventDefinitionUpdated,
+    SliceEventDefinitionRemoved,
     SliceCommandDefinitionAdded,
     SliceCommandDefinitionUpdated,
     SliceCommandDefinitionRemoved,
@@ -195,6 +197,8 @@ impl ExportedEventType {
             "SliceOutcomeAdded" => Ok(Self::SliceOutcomeAdded),
             "SliceExternalPayloadAdded" => Ok(Self::SliceExternalPayloadAdded),
             "SliceEventDefinitionAdded" => Ok(Self::SliceEventDefinitionAdded),
+            "SliceEventDefinitionUpdated" => Ok(Self::SliceEventDefinitionUpdated),
+            "SliceEventDefinitionRemoved" => Ok(Self::SliceEventDefinitionRemoved),
             "SliceCommandDefinitionAdded" => Ok(Self::SliceCommandDefinitionAdded),
             "SliceCommandDefinitionUpdated" => Ok(Self::SliceCommandDefinitionUpdated),
             "SliceCommandDefinitionRemoved" => Ok(Self::SliceCommandDefinitionRemoved),
@@ -239,6 +243,8 @@ impl AsRef<str> for ExportedEventType {
             Self::SliceOutcomeAdded => "SliceOutcomeAdded",
             Self::SliceExternalPayloadAdded => "SliceExternalPayloadAdded",
             Self::SliceEventDefinitionAdded => "SliceEventDefinitionAdded",
+            Self::SliceEventDefinitionUpdated => "SliceEventDefinitionUpdated",
+            Self::SliceEventDefinitionRemoved => "SliceEventDefinitionRemoved",
             Self::SliceCommandDefinitionAdded => "SliceCommandDefinitionAdded",
             Self::SliceCommandDefinitionUpdated => "SliceCommandDefinitionUpdated",
             Self::SliceCommandDefinitionRemoved => "SliceCommandDefinitionRemoved",
@@ -2328,6 +2334,13 @@ pub(crate) enum ExportedEventBody {
     SliceEventDefinitionAdded {
         event: NewEventDefinition,
     },
+    SliceEventDefinitionUpdated {
+        event: NewEventDefinition,
+    },
+    SliceEventDefinitionRemoved {
+        slice: SliceSlug,
+        name: EventName,
+    },
     SliceCommandDefinitionAdded {
         command: NewCommandDefinition,
     },
@@ -2405,6 +2418,12 @@ impl ExportedEventBody {
             Self::SliceOutcomeAdded { .. } => ExportedEventType::SliceOutcomeAdded,
             Self::SliceExternalPayloadAdded { .. } => ExportedEventType::SliceExternalPayloadAdded,
             Self::SliceEventDefinitionAdded { .. } => ExportedEventType::SliceEventDefinitionAdded,
+            Self::SliceEventDefinitionUpdated { .. } => {
+                ExportedEventType::SliceEventDefinitionUpdated
+            }
+            Self::SliceEventDefinitionRemoved { .. } => {
+                ExportedEventType::SliceEventDefinitionRemoved
+            }
             Self::SliceCommandDefinitionAdded { .. } => {
                 ExportedEventType::SliceCommandDefinitionAdded
             }
@@ -2512,8 +2531,12 @@ impl ExportedEventBody {
                 SliceExternalPayloadAddedEventPayload::from_external_payload(external_payload)
                     .to_json_value()
             }
-            Self::SliceEventDefinitionAdded { event } => {
+            Self::SliceEventDefinitionAdded { event }
+            | Self::SliceEventDefinitionUpdated { event } => {
                 SliceEventDefinitionAddedEventPayload::from_event(event).to_json_value()
+            }
+            Self::SliceEventDefinitionRemoved { slice, name } => {
+                json!({ "slice": slice.as_ref(), "name": name.as_ref() })
             }
             Self::SliceCommandDefinitionAdded { command }
             | Self::SliceCommandDefinitionUpdated { command } => {
@@ -2718,6 +2741,18 @@ impl ExportedEventBody {
                 event: SliceEventDefinitionAddedEventPayload::from_json_value(payload)?
                     .into_event(),
             }),
+            ExportedEventType::SliceEventDefinitionUpdated => {
+                Ok(Self::SliceEventDefinitionUpdated {
+                    event: SliceEventDefinitionAddedEventPayload::from_json_value(payload)?
+                        .into_event(),
+                })
+            }
+            ExportedEventType::SliceEventDefinitionRemoved => {
+                Ok(Self::SliceEventDefinitionRemoved {
+                    slice: slice_slug(required_str(payload, "slice")?)?,
+                    name: event_name(required_str(payload, "name")?)?,
+                })
+            }
             ExportedEventType::SliceCommandDefinitionAdded => {
                 Ok(Self::SliceCommandDefinitionAdded {
                     command: SliceCommandDefinitionAddedEventPayload::from_json_value(payload)?
@@ -3028,6 +3063,25 @@ impl EventDraft {
             stream_id: EventStreamId::slice(event.slice_slug()),
             body: ExportedEventBody::SliceEventDefinitionAdded {
                 event: event.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_event_definition_updated(event: &NewEventDefinition) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(event.slice_slug()),
+            body: ExportedEventBody::SliceEventDefinitionUpdated {
+                event: event.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_event_definition_removed(slice: &SliceSlug, name: &EventName) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(slice),
+            body: ExportedEventBody::SliceEventDefinitionRemoved {
+                slice: slice.clone(),
+                name: name.clone(),
             },
         }
     }
@@ -3467,6 +3521,12 @@ impl ProjectedModel {
             EmcEvent::SliceUpdated { .. } => Self::apply_slice_updated(model, event),
             EmcEvent::SliceRemoved { slug, .. } => Self::apply_slice_removed(model, &slug),
             EmcEvent::SliceFactAdded { fact, .. } => Self::apply_slice_fact_added(model, &fact),
+            EmcEvent::SliceEventDefinitionUpdated { event, .. } => {
+                Self::apply_event_definition_updated(model, event.event())
+            }
+            EmcEvent::SliceEventDefinitionRemoved { event, .. } => {
+                Self::apply_event_definition_removed(model, event.slice(), event.name())
+            }
             EmcEvent::SliceCommandDefinitionUpdated { command, .. } => {
                 Self::apply_command_definition_updated(model, command.command())
             }
@@ -3681,6 +3741,28 @@ impl ProjectedModel {
         let mut model = Self::require(model, "SliceCommandDefinitionUpdated")?;
         model
             .apply_slice_fact_body(ExportedEventBody::SliceCommandDefinitionUpdated { command })?;
+        Ok(Some(model))
+    }
+
+    fn apply_event_definition_updated(
+        model: Option<Self>,
+        event: NewEventDefinition,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceEventDefinitionUpdated")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceEventDefinitionUpdated { event })?;
+        Ok(Some(model))
+    }
+
+    fn apply_event_definition_removed(
+        model: Option<Self>,
+        slice: &SliceSlug,
+        name: &EventName,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceEventDefinitionRemoved")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceEventDefinitionRemoved {
+            slice: slice.clone(),
+            name: name.clone(),
+        })?;
         Ok(Some(model))
     }
 
@@ -4120,6 +4202,12 @@ impl ProjectedModel {
                     .event_definitions
                     .push(event);
             }
+            ExportedEventBody::SliceEventDefinitionUpdated { event } => {
+                self.apply_slice_event_definition_updated(event)?;
+            }
+            ExportedEventBody::SliceEventDefinitionRemoved { slice, name } => {
+                self.apply_slice_event_definition_removed(&slice, &name)?;
+            }
             ExportedEventBody::SliceCommandDefinitionAdded { command } => {
                 self.slice_mut(command.slice_slug(), "SliceCommandDefinitionAdded")?
                     .command_definitions
@@ -4180,6 +4268,29 @@ impl ProjectedModel {
                 ));
             }
         }
+        Ok(())
+    }
+
+    fn apply_slice_event_definition_updated(
+        &mut self,
+        event: NewEventDefinition,
+    ) -> Result<(), String> {
+        let slice = self.slice_mut(event.slice_slug(), "SliceEventDefinitionUpdated")?;
+        slice
+            .event_definitions
+            .retain(|existing| existing.name() != event.name());
+        slice.event_definitions.push(event);
+        Ok(())
+    }
+
+    fn apply_slice_event_definition_removed(
+        &mut self,
+        slice: &SliceSlug,
+        name: &EventName,
+    ) -> Result<(), String> {
+        self.slice_mut(slice, "SliceEventDefinitionRemoved")?
+            .event_definitions
+            .retain(|event| event.name() != name);
         Ok(())
     }
 

@@ -13,9 +13,10 @@ use tokio::runtime::Builder;
 use crate::core::event_commands::{
     AddSliceCommand, AddSliceFactCommand, AddWorkflowCommand, AddWorkflowFactCommand,
     ConnectWorkflowCommand, DeclareWorkflowReadinessCommand, EmcEvent, InitializeProjectCommand,
-    RecordReviewCommand, RemoveCommandDefinitionCommand, RemoveSliceCommand,
-    RemoveSliceScenarioCommand, RemoveWorkflowCommand, RemoveWorkflowTransitionCommand,
-    ResolveConflictCommand, SliceFactInput, UpdateCommandDefinitionCommand, UpdateSliceCommand,
+    RecordReviewCommand, RemoveCommandDefinitionCommand, RemoveEventDefinitionCommand,
+    RemoveSliceCommand, RemoveSliceScenarioCommand, RemoveWorkflowCommand,
+    RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
+    UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand, UpdateSliceCommand,
     UpdateSliceScenarioCommand, UpdateWorkflowCommand, WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
@@ -170,6 +171,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::SliceOutcomeAdded { .. }
         | ExportedEventBody::SliceExternalPayloadAdded { .. }
         | ExportedEventBody::SliceEventDefinitionAdded { .. }
+        | ExportedEventBody::SliceEventDefinitionUpdated { .. }
+        | ExportedEventBody::SliceEventDefinitionRemoved { .. }
         | ExportedEventBody::SliceCommandDefinitionAdded { .. }
         | ExportedEventBody::SliceCommandDefinitionUpdated { .. }
         | ExportedEventBody::SliceCommandDefinitionRemoved { .. }
@@ -377,6 +380,16 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
             run_command(
                 store,
                 RemoveCommandDefinitionCommand::new(slice.clone(), name.clone())?,
+            )
+            .await
+        }
+        ExportedEventBody::SliceEventDefinitionUpdated { event } => {
+            run_command(store, UpdateEventDefinitionCommand::new(event.clone())?).await
+        }
+        ExportedEventBody::SliceEventDefinitionRemoved { slice, name } => {
+            run_command(
+                store,
+                RemoveEventDefinitionCommand::new(slice.clone(), name.clone())?,
             )
             .await
         }

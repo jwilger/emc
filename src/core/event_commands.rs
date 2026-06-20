@@ -19,7 +19,7 @@ use crate::core::formal_slice_facts::{
 use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    CommandErrorName, CommandName, ModelDescription, ModelName, OutcomeLabelName,
+    CommandErrorName, CommandName, EventName, ModelDescription, ModelName, OutcomeLabelName,
     PayloadContractName, ReviewRuleName, ReviewTimestamp, ReviewerId, ScenarioName, SliceKindName,
     SliceSlug, StreamName, TransitionTriggerName, WorkflowCommandErrorRecord,
     WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
@@ -182,6 +182,16 @@ pub(crate) enum EmcEvent {
         #[serde(flatten)]
         command: SliceCommandDefinitionRemovalEvent,
     },
+    SliceEventDefinitionUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        event: SliceEventDefinitionUpdateEvent,
+    },
+    SliceEventDefinitionRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        event: SliceEventDefinitionRemovalEvent,
+    },
     SliceScenarioUpdated {
         stream_id: StreamId,
         #[serde(flatten)]
@@ -229,6 +239,8 @@ impl Event for EmcEvent {
             | Self::SliceFactAdded { stream_id, .. }
             | Self::SliceCommandDefinitionUpdated { stream_id, .. }
             | Self::SliceCommandDefinitionRemoved { stream_id, .. }
+            | Self::SliceEventDefinitionUpdated { stream_id, .. }
+            | Self::SliceEventDefinitionRemoved { stream_id, .. }
             | Self::SliceScenarioUpdated { stream_id, .. }
             | Self::SliceScenarioRemoved { stream_id, .. }
             | Self::ReviewRecorded { stream_id, .. }
@@ -984,6 +996,173 @@ impl<'de> Deserialize<'de> for SliceCommandDefinitionRemovalEvent {
             }
             other => Err(DeserializeError::custom(format!(
                 "expected SliceCommandDefinitionRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateEventDefinitionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    event: NewEventDefinition,
+}
+
+impl UpdateEventDefinitionCommand {
+    pub(crate) fn new(event: NewEventDefinition) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(event.slice_slug().as_ref())?,
+            event,
+        })
+    }
+}
+
+impl CommandLogic for UpdateEventDefinitionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before updating event definition"
+        );
+        Ok(vec![EmcEvent::SliceEventDefinitionUpdated {
+            stream_id: self.slice_stream.clone(),
+            event: SliceEventDefinitionUpdateEvent::new(self.event.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveEventDefinitionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    slice: SliceSlug,
+    name: EventName,
+}
+
+impl RemoveEventDefinitionCommand {
+    pub(crate) fn new(slice: SliceSlug, name: EventName) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(slice.as_ref())?,
+            slice,
+            name,
+        })
+    }
+}
+
+impl CommandLogic for RemoveEventDefinitionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before removing event definition"
+        );
+        Ok(vec![EmcEvent::SliceEventDefinitionRemoved {
+            stream_id: self.slice_stream.clone(),
+            event: SliceEventDefinitionRemovalEvent::new(self.slice.clone(), self.name.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceEventDefinitionUpdateEvent {
+    event: NewEventDefinition,
+}
+
+impl SliceEventDefinitionUpdateEvent {
+    pub(crate) fn new(event: NewEventDefinition) -> Self {
+        Self { event }
+    }
+
+    pub(crate) fn event(&self) -> NewEventDefinition {
+        self.event.clone()
+    }
+}
+
+impl Serialize for SliceEventDefinitionUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_event_definition_updated(&self.event)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceEventDefinitionUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceEventDefinitionUpdated { event } => Ok(Self::new(event)),
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceEventDefinitionUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceEventDefinitionRemovalEvent {
+    slice: SliceSlug,
+    name: EventName,
+}
+
+impl SliceEventDefinitionRemovalEvent {
+    pub(crate) fn new(slice: SliceSlug, name: EventName) -> Self {
+        Self { slice, name }
+    }
+
+    pub(crate) fn slice(&self) -> &SliceSlug {
+        &self.slice
+    }
+
+    pub(crate) fn name(&self) -> &EventName {
+        &self.name
+    }
+}
+
+impl Serialize for SliceEventDefinitionRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_event_definition_removed(&self.slice, &self.name)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceEventDefinitionRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceEventDefinitionRemoved { slice, name } => {
+                Ok(Self::new(slice, name))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceEventDefinitionRemoved event body, got {}",
                 other.event_type()
             ))),
         }

@@ -13,9 +13,10 @@ use crate::core::formal_slice_facts::{
 };
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    CommandName, ModelDescription, ModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug,
-    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
-    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
+    CommandName, EventName, ModelDescription, ModelName, ReviewTimestamp, ReviewerId, ScenarioName,
+    SliceSlug, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
+    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug,
+    WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
 
@@ -88,6 +89,29 @@ impl SliceCommandDefinitionRemovalEffect {
 
     pub(crate) fn command_name(&self) -> &CommandName {
         &self.command_name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceEventDefinitionRemovalEffect {
+    slice_slug: SliceSlug,
+    event_name: EventName,
+}
+
+impl SliceEventDefinitionRemovalEffect {
+    pub(crate) fn new(slice_slug: SliceSlug, event_name: EventName) -> Self {
+        Self {
+            slice_slug,
+            event_name,
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn event_name(&self) -> &EventName {
+        &self.event_name
     }
 }
 
@@ -719,6 +743,8 @@ pub(crate) enum Effect {
     RemoveCommandDefinitionFromSlice(SliceCommandDefinitionRemovalEffect),
     UpdateCommandDefinitionFromSlice(NewCommandDefinition),
     AddEventDefinitionFromSlice(NewEventDefinition),
+    RemoveEventDefinitionFromSlice(SliceEventDefinitionRemovalEffect),
+    UpdateEventDefinitionFromSlice(NewEventDefinition),
     AddExternalPayloadDefinitionFromSlice(NewExternalPayloadDefinition),
     AddOutcomeDefinitionFromSlice(NewOutcomeDefinition),
     AddReadModelDefinitionFromSlice(NewReadModelDefinition),

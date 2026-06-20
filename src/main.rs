@@ -37,12 +37,12 @@ use crate::core::modeling_enums::MODELING_ENUMS;
 use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    CommandInputSourceKind, CommandName, ControlName, ControlRecoveryBehavior, ModelDescription,
-    ModelName, ReadModelFieldSourceKind, ReviewTimestamp, ReviewerId, ScenarioName, SketchToken,
-    SliceSlug, ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
-    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
-    WorkflowTransitionKind,
+    CommandInputSourceKind, CommandName, ControlName, ControlRecoveryBehavior, EventName,
+    ModelDescription, ModelName, ReadModelFieldSourceKind, ReviewTimestamp, ReviewerId,
+    ScenarioName, SketchToken, SliceSlug, ViewName, WorkflowCommandErrorRecord,
+    WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
+    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceNavigationEndpoints,
+    WorkflowTransitionEvidenceRecord, WorkflowTransitionKind,
 };
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
@@ -106,6 +106,13 @@ enum Command {
     },
     AddEventDefinition {
         event: NewEventDefinition,
+    },
+    UpdateEventDefinition {
+        event: NewEventDefinition,
+    },
+    RemoveEventDefinition {
+        slice_slug: SliceSlug,
+        event_name: EventName,
     },
     AddExternalPayloadDefinition {
         external_payload: NewExternalPayloadDefinition,
@@ -268,6 +275,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
             command: definition,
         } => interpret(&command::update_command_definition(definition)),
         Command::AddEventDefinition { event } => interpret(&command::add_event_definition(event)),
+        Command::UpdateEventDefinition { event } => {
+            interpret(&command::update_event_definition(event))
+        }
         Command::AddExternalPayloadDefinition { external_payload } => {
             interpret(&command::add_external_payload_definition(external_payload))
         }
@@ -378,6 +388,10 @@ fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
             slice_slug,
             command_name,
         )),
+        Command::RemoveEventDefinition {
+            slice_slug,
+            event_name,
+        } => interpret(&command::remove_event_definition(slice_slug, event_name)),
         Command::RemoveSlice { slug } => interpret(&command::remove_slice(slug)),
         Command::RemoveSliceScenario {
             slice_slug,
@@ -597,6 +611,19 @@ fn remove_command_definition_cli(slice: &str, name: &str) -> Result<Cli, ShellEr
     })
 }
 
+fn remove_event_definition_cli(slice: &str, name: &str) -> Result<Cli, ShellError> {
+    let slice_slug =
+        parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+    let event_name =
+        parse_event_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(Cli {
+        command: Command::RemoveEventDefinition {
+            slice_slug,
+            event_name,
+        },
+    })
+}
+
 fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
     match arguments {
         [] => Ok(Cli {
@@ -690,6 +717,20 @@ fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
                     ),
                 },
             })
+        }
+        _ => parse_cli_remove_event_or_2(arguments),
+    }
+}
+
+fn parse_cli_remove_event_or_2(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
+        [command, subject, slice_flag, slice, name_flag, name]
+            if command == "remove"
+                && subject == "event"
+                && slice_flag == "--slice"
+                && name_flag == "--name" =>
+        {
+            remove_event_definition_cli(slice, name)
         }
         _ => parse_cli_2(arguments),
     }
@@ -1883,7 +1924,7 @@ fn parse_cli_16(arguments: &[String]) -> Result<Cli, ShellError> {
             attribute_provenance,
             shared_flag,
             shared,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "event"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -1916,7 +1957,11 @@ fn parse_cli_16(arguments: &[String]) -> Result<Cli, ShellError> {
                 NewEventDefinition::new(slice_slug, event_name, stream_name, attribute)
             };
             Ok(Cli {
-                command: Command::AddEventDefinition { event },
+                command: if command == "update" {
+                    Command::UpdateEventDefinition { event }
+                } else {
+                    Command::AddEventDefinition { event }
+                },
             })
         }
         _ => parse_cli_17(arguments),
@@ -1948,7 +1993,7 @@ fn parse_cli_17(arguments: &[String]) -> Result<Cli, ShellError> {
             attribute_provenance,
             observed_flag,
             observed,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "event"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -1981,7 +2026,11 @@ fn parse_cli_17(arguments: &[String]) -> Result<Cli, ShellError> {
                 NewEventDefinition::new(slice_slug, event_name, stream_name, attribute)
             };
             Ok(Cli {
-                command: Command::AddEventDefinition { event },
+                command: if command == "update" {
+                    Command::UpdateEventDefinition { event }
+                } else {
+                    Command::AddEventDefinition { event }
+                },
             })
         }
         _ => parse_cli_18(arguments),
@@ -2011,7 +2060,7 @@ fn parse_cli_18(arguments: &[String]) -> Result<Cli, ShellError> {
             generated_source_kind,
             attribute_provenance_flag,
             attribute_provenance,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "event"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -2037,9 +2086,12 @@ fn parse_cli_18(arguments: &[String]) -> Result<Cli, ShellError> {
                 Some(generated_source_kind),
                 attribute_provenance,
             )?;
+            let event = NewEventDefinition::new(slice_slug, event_name, stream_name, attribute);
             Ok(Cli {
-                command: Command::AddEventDefinition {
-                    event: NewEventDefinition::new(slice_slug, event_name, stream_name, attribute),
+                command: if command == "update" {
+                    Command::UpdateEventDefinition { event }
+                } else {
+                    Command::AddEventDefinition { event }
                 },
             })
         }
@@ -4907,6 +4959,10 @@ fn help_update_subcommand() -> ClapCommand {
             ClapCommand::new("command")
                 .about("Update a command definition and synchronized formal artifacts"),
         )
+        .subcommand(
+            ClapCommand::new("event")
+                .about("Update an event definition and synchronized formal artifacts"),
+        )
 }
 
 fn help_remove_subcommand() -> ClapCommand {
@@ -4926,6 +4982,10 @@ fn help_remove_subcommand() -> ClapCommand {
         .subcommand(
             ClapCommand::new("command")
                 .about("Remove a command definition and synchronized formal artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("event")
+                .about("Remove an event definition and synchronized formal artifacts"),
         )
 }
 
@@ -4992,6 +5052,7 @@ fn help_after_text() -> &'static str {
   emc add external-payload --slice <slice> --name <name> --field <field> --field-provenance <text> --bit-encoding <semantics>
   emc add event --slice <slice> --name <event> --stream <stream> --attribute <name> --attribute-source <kind> --attribute-source-name <name> --attribute-source-field <field> [--generated-source-kind <kind>] --attribute-provenance <text> [--observed true]
   emc add event --slice <slice> --name <event> --stream <stream> --attribute <name> --attribute-source <kind> --attribute-source-name <name> --attribute-source-field <field> [--generated-source-kind <kind>] --attribute-provenance <text> --shared <true|false>
+  emc update event --slice <slice> --name <event> --stream <stream> --attribute <name> --attribute-source <kind> --attribute-source-name <name> --attribute-source-field <field> [--generated-source-kind <kind>] --attribute-provenance <text> [--observed true]
   emc add outcome --slice <slice> --label <label> --events <event[,event]> --externally-relevant <true|false>
   emc add read-model --slice <slice> --name <read-model> --field <name> --field-source <kind> --source-event <event> --source-attribute <attribute> --field-provenance <text>
   emc add read-model --slice <slice> --name <read-model> --field <name> --field-source <kind> --source-event <event> --source-attribute <attribute> --field-provenance <text> --transitive <true|false> --relationship-fields <field[,field]> --transitive-rule <rule> --example-scenario <scenario>
@@ -5012,6 +5073,7 @@ fn help_after_text() -> &'static str {
   emc remove slice --slug <slice>
   emc remove scenario --slice <slice> --name <name>
   emc remove command --slice <slice> --name <name>
+  emc remove event --slice <slice> --name <name>
   emc connect workflow --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger> [--payload-contract <contract>]
   emc remove transition --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
   emc remove transition --workflow <workflow> --from <slice> --to-workflow <workflow> --via outcome --name <trigger>
