@@ -807,48 +807,52 @@ fn add_slice_scenario_tool() -> Tool {
     Tool::new(
         "add_slice_scenario",
         "Add an acceptance or contract GWT scenario directly to Lean4 and Quint slice artifacts.",
-        schema_object(json!({
-                "type": "object",
-                "properties": {
-                    "slice": {
-                        "type": "string"
-                    },
-                    "kind": {
-                        "type": "string",
-                        "enum": ["acceptance", "contract"]
-                    },
-                    "name": {
-                        "type": "string"
-                    },
-                    "given": {
-                        "type": "string"
-                    },
-                    "when": {
-                        "type": "string"
-                    },
-                    "then": {
-                        "type": "string"
-                    },
-                    "contract_kind": {
-                        "type": "string"
-                    },
-                    "covered_definition": {
-                        "type": "string"
-                    },
-                    "read_streams": {
-                        "type": "string"
-                    },
-                    "written_streams": {
-                        "type": "string"
-                    },
-                    "error_references": {
-                        "type": "string"
-                    }
-                },
-                "required": ["slice", "kind", "name", "given", "when", "then"],
-                "additionalProperties": false
-        })),
+        slice_scenario_schema(),
     )
+}
+
+fn slice_scenario_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "slice": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": ["acceptance", "contract"]
+                },
+                "name": {
+                    "type": "string"
+                },
+                "given": {
+                    "type": "string"
+                },
+                "when": {
+                    "type": "string"
+                },
+                "then": {
+                    "type": "string"
+                },
+                "contract_kind": {
+                    "type": "string"
+                },
+                "covered_definition": {
+                    "type": "string"
+                },
+                "read_streams": {
+                    "type": "string"
+                },
+                "written_streams": {
+                    "type": "string"
+                },
+                "error_references": {
+                    "type": "string"
+                }
+            },
+            "required": ["slice", "kind", "name", "given", "when", "then"],
+            "additionalProperties": false
+    }))
 }
 
 fn add_bit_level_data_flow_tool() -> Tool {
@@ -1366,7 +1370,9 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_slice_tool(),
         update_slice_kind_tool(),
         update_slice_name_tool(),
+        update_slice_scenario_tool(),
         remove_slice_tool(),
+        remove_slice_scenario_tool(),
         remove_workflow_tool(),
         connect_workflow_tool(),
         remove_transition_tool(),
@@ -1486,6 +1492,34 @@ fn remove_slice_tool() -> Tool {
                     }
                 },
                 "required": ["slug"],
+                "additionalProperties": false
+        })),
+    )
+}
+
+fn update_slice_scenario_tool() -> Tool {
+    Tool::new(
+        "update_slice_scenario",
+        "Update an acceptance or contract GWT scenario and regenerate synchronized model artifacts.",
+        slice_scenario_schema(),
+    )
+}
+
+fn remove_slice_scenario_tool() -> Tool {
+    Tool::new(
+        "remove_slice_scenario",
+        "Remove a GWT scenario and regenerate synchronized model artifacts.",
+        schema_object(json!({
+                "type": "object",
+                "properties": {
+                    "slice": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                },
+                "required": ["slice", "name"],
                 "additionalProperties": false
         })),
     )
@@ -1705,7 +1739,9 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_slice" => Some(update_slice_tool_text(request)),
         "update_slice_kind" => Some(update_slice_kind_tool_text(request)),
         "update_slice_name" => Some(update_slice_name_tool_text(request)),
+        "update_slice_scenario" => Some(update_slice_scenario_tool_text(request)),
         "remove_slice" => Some(remove_slice_tool_text(request)),
+        "remove_slice_scenario" => Some(remove_slice_scenario_tool_text(request)),
         "remove_workflow" => Some(remove_workflow_tool_text(request)),
         "connect_workflow" => Some(connect_workflow_tool_text(request)),
         "remove_transition" => Some(remove_transition_tool_text(request)),
@@ -2475,31 +2511,41 @@ fn add_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
         .get("params")
         .and_then(|params| params.get("arguments"))
         .ok_or_else(|| ShellError::message("add_slice_scenario requires arguments"))?;
+    let scenario = parse_slice_scenario_tool_arguments(arguments, "add_slice_scenario")?;
+
+    interpret_collect_reports(&command::add_slice_scenario(scenario))
+        .map(|reports| reports.join("\n"))
+}
+
+fn parse_slice_scenario_tool_arguments(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<NewSliceScenario, ShellError> {
     let slice_slug = arguments
         .get("slice")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_slice_scenario requires slice"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires slice")))
         .and_then(|raw_slice| {
             parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let scenario_kind = arguments
         .get("kind")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_slice_scenario requires kind"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires kind")))
         .and_then(|raw_kind| {
             parse_scenario_kind(raw_kind).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let name = arguments
         .get("name")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_slice_scenario requires name"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires name")))
         .and_then(|raw_name| {
             parse_scenario_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let given = arguments
         .get("given")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_slice_scenario requires given"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires given")))
         .and_then(|raw_given| {
             parse_scenario_step_text(raw_given)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -2507,7 +2553,7 @@ fn add_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
     let when = arguments
         .get("when")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_slice_scenario requires when"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires when")))
         .and_then(|raw_when| {
             parse_scenario_step_text(raw_when)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -2515,7 +2561,7 @@ fn add_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
     let then = arguments
         .get("then")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_slice_scenario requires then"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires then")))
         .and_then(|raw_then| {
             parse_scenario_step_text(raw_then)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -2534,7 +2580,7 @@ fn add_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
             let contract_kind = arguments
                 .get("contract_kind")
                 .and_then(Value::as_str)
-                .ok_or_else(|| ShellError::message("add_slice_scenario requires contract_kind"))
+                .ok_or_else(|| ShellError::message(format!("{tool_name} requires contract_kind")))
                 .and_then(|raw_contract_kind| {
                     parse_contract_kind_name(raw_contract_kind)
                         .map_err(|error| ShellError::message(error.to_string()))
@@ -2543,7 +2589,7 @@ fn add_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
                 .get("covered_definition")
                 .and_then(Value::as_str)
                 .ok_or_else(|| {
-                    ShellError::message("add_slice_scenario requires covered_definition")
+                    ShellError::message(format!("{tool_name} requires covered_definition"))
                 })
                 .and_then(|raw_covered_definition| {
                     parse_covered_definition_name(raw_covered_definition)
@@ -2561,10 +2607,7 @@ fn add_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
         }
     };
     let scenario = apply_optional_scenario_streams(arguments, scenario)?;
-    let scenario = apply_optional_scenario_error_references(arguments, scenario)?;
-
-    interpret_collect_reports(&command::add_slice_scenario(scenario))
-        .map(|reports| reports.join("\n"))
+    apply_optional_scenario_error_references(arguments, scenario)
 }
 
 fn apply_optional_scenario_streams(
@@ -4065,6 +4108,16 @@ fn update_slice_name_tool_text(request: &Value) -> Result<String, ShellError> {
         .map(|reports| reports.join("\n"))
 }
 
+fn update_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("update_slice_scenario requires arguments"))?;
+    let scenario = parse_slice_scenario_tool_arguments(arguments, "update_slice_scenario")?;
+    interpret_collect_reports(&command::update_slice_scenario(scenario))
+        .map(|reports| reports.join("\n"))
+}
+
 fn remove_slice_tool_text(request: &Value) -> Result<String, ShellError> {
     let arguments = request
         .get("params")
@@ -4078,6 +4131,29 @@ fn remove_slice_tool_text(request: &Value) -> Result<String, ShellError> {
             parse_slice_slug(raw_slug).map_err(|error| ShellError::message(error.to_string()))
         })?;
     interpret_collect_reports(&command::remove_slice(slug)).map(|reports| reports.join("\n"))
+}
+
+fn remove_slice_scenario_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("remove_slice_scenario requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("remove_slice_scenario requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let scenario_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("remove_slice_scenario requires name"))
+        .and_then(|raw_name| {
+            parse_scenario_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    interpret_collect_reports(&command::remove_slice_scenario(slice_slug, scenario_name))
+        .map(|reports| reports.join("\n"))
 }
 
 fn remove_workflow_tool_text(request: &Value) -> Result<String, ShellError> {

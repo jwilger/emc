@@ -24,9 +24,10 @@ use crate::core::effect::{
     Effect, EffectPlan, EventConflictResolution, FileContents, FileWriteEffect, ModelContentDigest,
     ProcessInvocation, ProcessInvocations, ProjectPath, ProjectionFingerprint, ReportLine,
     ReviewEventReference, ReviewRecordRequirement, SliceDescriptionUpdateEffect,
-    SliceKindUpdateEffect, SliceNameUpdateEffect, WorkflowCommandErrorEffect,
-    WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
-    WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    SliceKindUpdateEffect, SliceNameUpdateEffect, SliceScenarioRemovalEffect,
+    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
+    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
+    WorkflowTransitionEvidenceEffect,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
@@ -346,10 +347,12 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::ConnectWorkflowFromWorkflow(_)
             | Effect::DeclareWorkflowReadinessFromWorkflow(_)
             | Effect::RecordCleanReviewFromWorkflow(_)
+            | Effect::RemoveSliceScenarioFromSlice(_)
             | Effect::RemoveSliceFromWorkflow(_)
             | Effect::RemoveTransitionFromWorkflow(_)
             | Effect::RemoveWorkflowFromIndex(_)
             | Effect::RequireWorkflowEntryLifecycleCoverageFromWorkflow(_)
+            | Effect::UpdateSliceScenarioFromSlice(_)
             | Effect::UpdateSliceDescriptionFromWorkflow(_)
             | Effect::UpdateSliceKindFromWorkflow(_)
             | Effect::UpdateSliceNameFromWorkflow(_)
@@ -482,6 +485,10 @@ fn interpret_slice_fact_effect(effect: &Effect) -> Option<Result<Vec<String>, Sh
         }
         Effect::AddViewDefinitionFromSlice(view) => interpret_view_added(view),
         Effect::AddSliceScenarioFromSlice(scenario) => interpret_slice_scenario_added(scenario),
+        Effect::RemoveSliceScenarioFromSlice(removal) => interpret_slice_scenario_removed(removal),
+        Effect::UpdateSliceScenarioFromSlice(scenario) => {
+            interpret_slice_scenario_updated(scenario)
+        }
         Effect::AddTranslationDefinitionFromSlice(translation) => {
             interpret_translation_added(translation)
         }
@@ -719,6 +726,48 @@ fn interpret_slice_scenario_added(scenario: &NewSliceScenario) -> Result<Vec<Str
         scenario.slice_slug(),
         reports,
         EventDraft::slice_scenario_added(scenario),
+    )
+}
+
+fn interpret_slice_scenario_updated(
+    scenario: &NewSliceScenario,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "updated scenario {} on slice {}",
+            scenario.name().as_ref(),
+            scenario.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "updated scenario {} in project root",
+            scenario.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        scenario.slice_slug(),
+        reports,
+        EventDraft::slice_scenario_updated(scenario),
+    )
+}
+
+fn interpret_slice_scenario_removed(
+    removal: &SliceScenarioRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "removed scenario {} from slice {}",
+            removal.scenario_name().as_ref(),
+            removal.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "removed scenario {} from project root",
+            removal.scenario_name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        removal.slice_slug(),
+        reports,
+        EventDraft::slice_scenario_removed(removal.slice_slug(), removal.scenario_name()),
     )
 }
 

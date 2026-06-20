@@ -4,9 +4,9 @@ use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::effect::{
     ChosenEventId, CleanReviewEffect, Effect, EffectPlan, EventConflictId, EventConflictResolution,
     SliceDescriptionUpdateEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
-    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
-    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
-    WorkflowTransitionEvidenceEffect,
+    SliceScenarioRemovalEffect, WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect,
+    WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
+    WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
 };
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
@@ -20,7 +20,7 @@ use crate::core::project::{ProjectName, init_project};
 use crate::core::review_gate::review_gate;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceSlug,
+    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug,
     WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
     WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
@@ -32,6 +32,19 @@ pub(crate) fn add_slice(slice: NewSlice) -> EffectPlan {
 
 pub(crate) fn add_slice_scenario(scenario: NewSliceScenario) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddSliceScenarioFromSlice(scenario)])
+}
+
+pub(crate) fn update_slice_scenario(scenario: NewSliceScenario) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateSliceScenarioFromSlice(scenario)])
+}
+
+pub(crate) fn remove_slice_scenario(
+    slice_slug: SliceSlug,
+    scenario_name: ScenarioName,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveSliceScenarioFromSlice(
+        SliceScenarioRemovalEffect::new(slice_slug, scenario_name),
+    )])
 }
 
 pub(crate) fn add_automation_definition(automation: NewAutomationDefinition) -> EffectPlan {

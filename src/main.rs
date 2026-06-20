@@ -38,9 +38,9 @@ use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     CommandInputSourceKind, CommandName, ControlName, ControlRecoveryBehavior, ModelDescription,
-    ModelName, ReadModelFieldSourceKind, ReviewTimestamp, ReviewerId, SketchToken, SliceSlug,
-    ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
-    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
+    ModelName, ReadModelFieldSourceKind, ReviewTimestamp, ReviewerId, ScenarioName, SketchToken,
+    SliceSlug, ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
+    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
     WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
     WorkflowTransitionKind,
 };
@@ -117,6 +117,13 @@ enum Command {
     },
     AddSliceScenario {
         scenario: NewSliceScenario,
+    },
+    UpdateSliceScenario {
+        scenario: NewSliceScenario,
+    },
+    RemoveSliceScenario {
+        slice_slug: SliceSlug,
+        scenario_name: ScenarioName,
     },
     AddTranslationDefinition {
         translation: NewTranslationDefinition,
@@ -263,6 +270,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::AddViewDefinition { view } => interpret(&command::add_view_definition(view)),
         Command::AddSlice { slice } => interpret(&command::add_slice(slice)),
         Command::AddSliceScenario { scenario } => interpret(&command::add_slice_scenario(scenario)),
+        Command::UpdateSliceScenario { scenario } => {
+            interpret(&command::update_slice_scenario(scenario))
+        }
         Command::AddTranslationDefinition { translation } => {
             interpret(&command::add_translation_definition(translation))
         }
@@ -352,6 +362,10 @@ fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
             reviewed_at,
         } => interpret(&command::record_clean_review(slug, reviewer, reviewed_at)),
         Command::RemoveSlice { slug } => interpret(&command::remove_slice(slug)),
+        Command::RemoveSliceScenario {
+            slice_slug,
+            scenario_name,
+        } => interpret(&command::remove_slice_scenario(slice_slug, scenario_name)),
         Command::RemoveTransition { removal } => interpret(&command::remove_transition(removal)),
         Command::RemoveWorkflow { slug } => interpret(&command::remove_workflow(slug)),
         Command::ResolveConflict {
@@ -567,6 +581,23 @@ fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
         [command, subject] if command == "help" && subject == "modeling" => Ok(Cli {
             command: Command::HelpModeling,
         }),
+        [command, subject, slice_flag, slice, name_flag, name]
+            if command == "remove"
+                && subject == "scenario"
+                && slice_flag == "--slice"
+                && name_flag == "--name" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+            let scenario_name = parse_scenario_name(name)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            Ok(Cli {
+                command: Command::RemoveSliceScenario {
+                    slice_slug,
+                    scenario_name,
+                },
+            })
+        }
         [
             command,
             subject,
@@ -2590,6 +2621,82 @@ fn parse_cli_27(arguments: &[String]) -> Result<Cli, ShellError> {
                         ),
                     ),
                 },
+            })
+        }
+        _ => parse_cli_update_scenario_name_first(arguments),
+    }
+}
+
+fn parse_cli_update_scenario_name_first(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
+        [
+            command,
+            subject,
+            slice_flag,
+            slice,
+            name_flag,
+            name,
+            kind_flag,
+            scenario_kind,
+            given_flag,
+            given,
+            when_flag,
+            when,
+            then_flag,
+            then,
+        ] if command == "update"
+            && subject == "scenario"
+            && slice_flag == "--slice"
+            && name_flag == "--name"
+            && kind_flag == "--kind"
+            && given_flag == "--given"
+            && when_flag == "--when"
+            && then_flag == "--then" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+            let scenario =
+                parse_basic_scenario(slice_slug, scenario_kind, name, given, when, then)?;
+            Ok(Cli {
+                command: Command::UpdateSliceScenario { scenario },
+            })
+        }
+        _ => parse_cli_update_scenario_kind_first(arguments),
+    }
+}
+
+fn parse_cli_update_scenario_kind_first(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
+        [
+            command,
+            subject,
+            slice_flag,
+            slice,
+            kind_flag,
+            scenario_kind,
+            name_flag,
+            name,
+            given_flag,
+            given,
+            when_flag,
+            when,
+            then_flag,
+            then,
+        ] if command == "update"
+            && subject == "scenario"
+            && slice_flag == "--slice"
+            && kind_flag == "--kind"
+            && name_flag == "--name"
+            && given_flag == "--given"
+            && when_flag == "--when"
+            && then_flag == "--then" =>
+        {
+            let slice_slug =
+                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+            let scenario =
+                parse_basic_scenario(slice_slug, scenario_kind, name, given, when, then)?;
+            Ok(Cli {
+                command: Command::UpdateSliceScenario { scenario },
             })
         }
         _ => parse_cli_28(arguments),
@@ -4636,6 +4743,7 @@ fn help_command() -> ClapCommand {
         .subcommand(help_show_subcommand())
         .subcommand(help_add_subcommand())
         .subcommand(help_update_subcommand())
+        .subcommand(help_remove_subcommand())
         .subcommand(help_connect_subcommand())
         .subcommand(ClapCommand::new("verify").about("Run Lean4 and Quint verification"))
         .subcommand(ClapCommand::new("check").about("Check project artifact synchronization"))
@@ -4746,6 +4854,26 @@ fn help_update_subcommand() -> ClapCommand {
         .subcommand(
             ClapCommand::new("slice").about("Update a slice and synchronized formal artifacts"),
         )
+        .subcommand(
+            ClapCommand::new("scenario")
+                .about("Update an acceptance scenario and synchronized formal artifacts"),
+        )
+}
+
+fn help_remove_subcommand() -> ClapCommand {
+    ClapCommand::new("remove")
+        .about("Delete modeled business artifacts")
+        .subcommand(
+            ClapCommand::new("workflow")
+                .about("Remove a workflow and synchronized formal artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("slice").about("Remove a slice and synchronized formal artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("scenario")
+                .about("Remove a scenario and synchronized formal artifacts"),
+        )
 }
 
 fn help_connect_subcommand() -> ClapCommand {
@@ -4826,7 +4954,9 @@ fn help_after_text() -> &'static str {
   emc update slice --slug <slice> --description <text>
   emc update slice --slug <slice> --type <kind>
   emc update slice --slug <slice> --name <name>
+  emc update scenario --slice <slice> --kind acceptance --name <name> --given <text> --when <text> --then <text>
   emc remove slice --slug <slice>
+  emc remove scenario --slice <slice> --name <name>
   emc connect workflow --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger> [--payload-contract <contract>]
   emc remove transition --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
   emc remove transition --workflow <workflow> --from <slice> --to-workflow <workflow> --via outcome --name <trigger>

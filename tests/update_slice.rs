@@ -588,6 +588,106 @@ mod tests {
     }
 
     #[test]
+    fn remove_scenario_removes_it_from_synchronized_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_acceptance_scenario(temp_dir.path(), "Actor captures ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "Actor captures ticket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed scenario Actor captures ticket from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_lean.contains("Actor captures ticket"),
+            "removed scenario must be absent from Lean slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("Actor captures ticket"),
+            "removed scenario must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn update_scenario_rewrites_synchronized_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_acceptance_scenario(temp_dir.path(), "Actor captures ticket")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "Actor captures ticket",
+                "--kind",
+                "acceptance",
+                "--given",
+                "ticket intake screen is open",
+                "--when",
+                "the actor submits corrected ticket details",
+                "--then",
+                "the corrected details are visible for review",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated scenario Actor captures ticket on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("the actor submits corrected ticket details"),
+            "updated scenario must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("the corrected details are visible for review"),
+            "updated scenario must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("the actor submits ticket details"),
+            "old scenario text must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn update_slice_kind_rejects_non_slug_flag() -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args([
@@ -663,6 +763,31 @@ mod tests {
                 "state_view",
                 "--description",
                 "Actor enters repair ticket details.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_acceptance_scenario(cwd: &Path, name: &str) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--kind",
+                "acceptance",
+                "--name",
+                name,
+                "--given",
+                "ticket intake screen is open",
+                "--when",
+                "the actor submits ticket details",
+                "--then",
+                "the ticket details are visible for review",
             ])
             .current_dir(cwd)
             .assert()

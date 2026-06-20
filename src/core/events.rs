@@ -149,6 +149,8 @@ pub(crate) enum ExportedEventType {
     SliceUpdated,
     SliceRemoved,
     SliceScenarioAdded,
+    SliceScenarioUpdated,
+    SliceScenarioRemoved,
     SliceOutcomeAdded,
     SliceExternalPayloadAdded,
     SliceEventDefinitionAdded,
@@ -186,6 +188,8 @@ impl ExportedEventType {
             "SliceUpdated" => Ok(Self::SliceUpdated),
             "SliceRemoved" => Ok(Self::SliceRemoved),
             "SliceScenarioAdded" => Ok(Self::SliceScenarioAdded),
+            "SliceScenarioUpdated" => Ok(Self::SliceScenarioUpdated),
+            "SliceScenarioRemoved" => Ok(Self::SliceScenarioRemoved),
             "SliceOutcomeAdded" => Ok(Self::SliceOutcomeAdded),
             "SliceExternalPayloadAdded" => Ok(Self::SliceExternalPayloadAdded),
             "SliceEventDefinitionAdded" => Ok(Self::SliceEventDefinitionAdded),
@@ -226,6 +230,8 @@ impl AsRef<str> for ExportedEventType {
             Self::SliceUpdated => "SliceUpdated",
             Self::SliceRemoved => "SliceRemoved",
             Self::SliceScenarioAdded => "SliceScenarioAdded",
+            Self::SliceScenarioUpdated => "SliceScenarioUpdated",
+            Self::SliceScenarioRemoved => "SliceScenarioRemoved",
             Self::SliceOutcomeAdded => "SliceOutcomeAdded",
             Self::SliceExternalPayloadAdded => "SliceExternalPayloadAdded",
             Self::SliceEventDefinitionAdded => "SliceEventDefinitionAdded",
@@ -2300,6 +2306,13 @@ pub(crate) enum ExportedEventBody {
     SliceScenarioAdded {
         scenario: NewSliceScenario,
     },
+    SliceScenarioUpdated {
+        scenario: NewSliceScenario,
+    },
+    SliceScenarioRemoved {
+        slice: SliceSlug,
+        name: ScenarioName,
+    },
     SliceOutcomeAdded {
         outcome: NewOutcomeDefinition,
     },
@@ -2374,6 +2387,8 @@ impl ExportedEventBody {
             Self::SliceUpdated { .. } => ExportedEventType::SliceUpdated,
             Self::SliceRemoved { .. } => ExportedEventType::SliceRemoved,
             Self::SliceScenarioAdded { .. } => ExportedEventType::SliceScenarioAdded,
+            Self::SliceScenarioUpdated { .. } => ExportedEventType::SliceScenarioUpdated,
+            Self::SliceScenarioRemoved { .. } => ExportedEventType::SliceScenarioRemoved,
             Self::SliceOutcomeAdded { .. } => ExportedEventType::SliceOutcomeAdded,
             Self::SliceExternalPayloadAdded { .. } => ExportedEventType::SliceExternalPayloadAdded,
             Self::SliceEventDefinitionAdded { .. } => ExportedEventType::SliceEventDefinitionAdded,
@@ -2465,8 +2480,11 @@ impl ExportedEventBody {
                 SliceUpdatedEventPayload::from_slice_detail(slice).to_json_value()
             }
             Self::SliceRemoved { slug } => json!({ "slug": slug.as_ref() }),
-            Self::SliceScenarioAdded { scenario } => {
+            Self::SliceScenarioAdded { scenario } | Self::SliceScenarioUpdated { scenario } => {
                 SliceScenarioAddedEventPayload::from_scenario(scenario).to_json_value()
+            }
+            Self::SliceScenarioRemoved { slice, name } => {
+                json!({ "slice": slice.as_ref(), "name": name.as_ref() })
             }
             Self::SliceOutcomeAdded { outcome } => {
                 SliceOutcomeAddedEventPayload::from_outcome(outcome).to_json_value()
@@ -2658,6 +2676,13 @@ impl ExportedEventBody {
             }),
             ExportedEventType::SliceScenarioAdded => Ok(Self::SliceScenarioAdded {
                 scenario: SliceScenarioAddedEventPayload::from_json_value(payload)?.into_scenario(),
+            }),
+            ExportedEventType::SliceScenarioUpdated => Ok(Self::SliceScenarioUpdated {
+                scenario: SliceScenarioAddedEventPayload::from_json_value(payload)?.into_scenario(),
+            }),
+            ExportedEventType::SliceScenarioRemoved => Ok(Self::SliceScenarioRemoved {
+                slice: slice_slug(required_str(payload, "slice")?)?,
+                name: scenario_name(required_str(payload, "name")?)?,
             }),
             ExportedEventType::SliceOutcomeAdded => Ok(Self::SliceOutcomeAdded {
                 outcome: SliceOutcomeAddedEventPayload::from_json_value(payload)?.into_outcome(),
@@ -2920,6 +2945,25 @@ impl EventDraft {
             stream_id: EventStreamId::slice(scenario.slice_slug()),
             body: ExportedEventBody::SliceScenarioAdded {
                 scenario: scenario.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_scenario_updated(scenario: &NewSliceScenario) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(scenario.slice_slug()),
+            body: ExportedEventBody::SliceScenarioUpdated {
+                scenario: scenario.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_scenario_removed(slice: &SliceSlug, name: &ScenarioName) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(slice),
+            body: ExportedEventBody::SliceScenarioRemoved {
+                slice: slice.clone(),
+                name: name.clone(),
             },
         }
     }
@@ -3369,6 +3413,12 @@ impl ProjectedModel {
             EmcEvent::SliceUpdated { .. } => Self::apply_slice_updated(model, event),
             EmcEvent::SliceRemoved { slug, .. } => Self::apply_slice_removed(model, &slug),
             EmcEvent::SliceFactAdded { fact, .. } => Self::apply_slice_fact_added(model, &fact),
+            EmcEvent::SliceScenarioUpdated { scenario, .. } => {
+                Self::apply_slice_scenario_updated(model, scenario.scenario())
+            }
+            EmcEvent::SliceScenarioRemoved { scenario, .. } => {
+                Self::apply_slice_scenario_removed(model, scenario.slice(), scenario.name())
+            }
             EmcEvent::WorkflowReadinessDeclared { .. } => {
                 Ok(Some(Self::require(model, "WorkflowReadinessDeclared")?))
             }
@@ -3561,6 +3611,28 @@ impl ProjectedModel {
     ) -> Result<Option<Self>, String> {
         let mut model = Self::require(model, "SliceFactAdded")?;
         model.apply_slice_fact_body(fact.to_event_body())?;
+        Ok(Some(model))
+    }
+
+    fn apply_slice_scenario_updated(
+        model: Option<Self>,
+        scenario: NewSliceScenario,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceScenarioUpdated")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceScenarioUpdated { scenario })?;
+        Ok(Some(model))
+    }
+
+    fn apply_slice_scenario_removed(
+        model: Option<Self>,
+        slice: &SliceSlug,
+        name: &ScenarioName,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceScenarioRemoved")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceScenarioRemoved {
+            slice: slice.clone(),
+            name: name.clone(),
+        })?;
         Ok(Some(model))
     }
 
@@ -3942,6 +4014,18 @@ impl ProjectedModel {
                 self.slice_mut(scenario.slice_slug(), "SliceScenarioAdded")?
                     .scenarios
                     .push(scenario);
+            }
+            ExportedEventBody::SliceScenarioUpdated { scenario } => {
+                let slice = self.slice_mut(scenario.slice_slug(), "SliceScenarioUpdated")?;
+                slice
+                    .scenarios
+                    .retain(|existing| existing.name() != scenario.name());
+                slice.scenarios.push(scenario);
+            }
+            ExportedEventBody::SliceScenarioRemoved { slice, name } => {
+                self.slice_mut(&slice, "SliceScenarioRemoved")?
+                    .scenarios
+                    .retain(|scenario| scenario.name() != &name);
             }
             ExportedEventBody::SliceExternalPayloadAdded { external_payload } => {
                 self.slice_mut(external_payload.slice_slug(), "SliceExternalPayloadAdded")?

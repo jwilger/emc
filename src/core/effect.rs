@@ -13,7 +13,7 @@ use crate::core::formal_slice_facts::{
 };
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, SliceSlug,
+    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug,
     WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
     WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
@@ -44,6 +44,29 @@ semantic_artifact_digest!(ModelContentDigest);
 semantic_artifact_digest!(ReviewEventId);
 semantic_artifact_digest!(EventConflictId);
 semantic_artifact_digest!(ChosenEventId);
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceScenarioRemovalEffect {
+    slice_slug: SliceSlug,
+    scenario_name: ScenarioName,
+}
+
+impl SliceScenarioRemovalEffect {
+    pub(crate) fn new(slice_slug: SliceSlug, scenario_name: ScenarioName) -> Self {
+        Self {
+            slice_slug,
+            scenario_name,
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn scenario_name(&self) -> &ScenarioName {
+        &self.scenario_name
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct WorkflowCommandErrorEffect {
@@ -678,6 +701,8 @@ pub(crate) enum Effect {
     AddSliceFromWorkflow(NewSlice),
     AddSliceScenarioFromSlice(NewSliceScenario),
     AddTranslationDefinitionFromSlice(NewTranslationDefinition),
+    RemoveSliceScenarioFromSlice(SliceScenarioRemovalEffect),
+    UpdateSliceScenarioFromSlice(NewSliceScenario),
     AddWorkflowFromIndex(NewWorkflow),
     AddWorkflowCommandErrorFromWorkflow(WorkflowCommandErrorEffect),
     AddWorkflowOwnedDefinitionFromWorkflow(WorkflowOwnedDefinitionEffect),
