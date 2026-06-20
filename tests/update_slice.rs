@@ -688,6 +688,109 @@ mod tests {
     }
 
     #[test]
+    fn remove_command_definition_removes_it_from_synchronized_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_capture_ticket_command(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "command",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "CaptureTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed command CaptureTicket from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_lean.contains("name := \"CaptureTicket\""),
+            "removed command must be absent from Lean slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("name: \"CaptureTicket\""),
+            "removed command must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn update_command_definition_rewrites_synchronized_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_capture_ticket_command(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "command",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "CaptureTicket",
+                "--input",
+                "ticket_summary",
+                "--input-source",
+                "actor",
+                "--input-description",
+                "summary field on the intake form",
+                "--input-provenance",
+                "actor keystrokes -> summary field",
+                "--emits",
+                "TicketUpdated",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated command CaptureTicket on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("ticket_summary"),
+            "updated command input must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("TicketUpdated"),
+            "updated emitted event must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("ticket_title"),
+            "old command input must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn update_slice_kind_rejects_non_slug_flag() -> Result<(), Box<dyn Error>> {
         Command::cargo_bin("emc")?
             .args([
@@ -788,6 +891,33 @@ mod tests {
                 "the actor submits ticket details",
                 "--then",
                 "the ticket details are visible for review",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_capture_ticket_command(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "command",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "CaptureTicket",
+                "--input",
+                "ticket_title",
+                "--input-source",
+                "actor",
+                "--input-description",
+                "title field on the intake form",
+                "--input-provenance",
+                "actor keystrokes -> form field",
+                "--emits",
+                "TicketCaptured",
             ])
             .current_dir(cwd)
             .assert()

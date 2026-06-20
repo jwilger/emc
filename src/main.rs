@@ -97,6 +97,13 @@ enum Command {
     AddCommandDefinition {
         command: NewCommandDefinition,
     },
+    UpdateCommandDefinition {
+        command: NewCommandDefinition,
+    },
+    RemoveCommandDefinition {
+        slice_slug: SliceSlug,
+        command_name: CommandName,
+    },
     AddEventDefinition {
         event: NewEventDefinition,
     },
@@ -257,6 +264,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::AddCommandDefinition {
             command: definition,
         } => interpret(&command::add_command_definition(definition)),
+        Command::UpdateCommandDefinition {
+            command: definition,
+        } => interpret(&command::update_command_definition(definition)),
         Command::AddEventDefinition { event } => interpret(&command::add_event_definition(event)),
         Command::AddExternalPayloadDefinition { external_payload } => {
             interpret(&command::add_external_payload_definition(external_payload))
@@ -361,6 +371,13 @@ fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
             reviewer,
             reviewed_at,
         } => interpret(&command::record_clean_review(slug, reviewer, reviewed_at)),
+        Command::RemoveCommandDefinition {
+            slice_slug,
+            command_name,
+        } => interpret(&command::remove_command_definition(
+            slice_slug,
+            command_name,
+        )),
         Command::RemoveSlice { slug } => interpret(&command::remove_slice(slug)),
         Command::RemoveSliceScenario {
             slice_slug,
@@ -567,6 +584,19 @@ fn build_add_view_cli(
     })
 }
 
+fn remove_command_definition_cli(slice: &str, name: &str) -> Result<Cli, ShellError> {
+    let slice_slug =
+        parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+    let command_name =
+        parse_command_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(Cli {
+        command: Command::RemoveCommandDefinition {
+            slice_slug,
+            command_name,
+        },
+    })
+}
+
 fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
     match arguments {
         [] => Ok(Cli {
@@ -598,6 +628,14 @@ fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
                 },
             })
         }
+        [command, subject, slice_flag, slice, name_flag, name]
+            if command == "remove"
+                && subject == "command"
+                && slice_flag == "--slice"
+                && name_flag == "--name" =>
+        {
+            remove_command_definition_cli(slice, name)
+        }
         [
             command,
             subject,
@@ -615,7 +653,7 @@ fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
             target,
             bit_encoding_flag,
             bit_encoding,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "data-flow"
             && slice_flag == "--slice"
             && datum_flag == "--datum"
@@ -849,7 +887,7 @@ fn parse_cli_5(arguments: &[String]) -> Result<Cli, ShellError> {
             source_name,
             source_field_flag,
             source_field,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "command"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -3450,7 +3488,7 @@ fn parse_cli_38(arguments: &[String]) -> Result<Cli, ShellError> {
             input_provenance,
             emits_flag,
             emits,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "command"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -3474,19 +3512,26 @@ fn parse_cli_38(arguments: &[String]) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let emitted_events =
                 parse_event_names(emits).map_err(|error| ShellError::message(error.to_string()))?;
+            let command_definition = NewCommandDefinition::new(
+                slice_slug,
+                command_name,
+                NewCommandInput::new(
+                    input_name,
+                    require_actor_command_input_source(input_source)?,
+                    input_description,
+                    CommandInputProvenanceChain::from_hops(provenance_chain),
+                ),
+                EmittedEventNames::from_events(emitted_events),
+            );
             Ok(Cli {
-                command: Command::AddCommandDefinition {
-                    command: NewCommandDefinition::new(
-                        slice_slug,
-                        command_name,
-                        NewCommandInput::new(
-                            input_name,
-                            require_actor_command_input_source(input_source)?,
-                            input_description,
-                            CommandInputProvenanceChain::from_hops(provenance_chain),
-                        ),
-                        EmittedEventNames::from_events(emitted_events),
-                    ),
+                command: if command == "update" {
+                    Command::UpdateCommandDefinition {
+                        command: command_definition,
+                    }
+                } else {
+                    Command::AddCommandDefinition {
+                        command: command_definition,
+                    }
                 },
             })
         }
@@ -4858,6 +4903,10 @@ fn help_update_subcommand() -> ClapCommand {
             ClapCommand::new("scenario")
                 .about("Update an acceptance scenario and synchronized formal artifacts"),
         )
+        .subcommand(
+            ClapCommand::new("command")
+                .about("Update a command definition and synchronized formal artifacts"),
+        )
 }
 
 fn help_remove_subcommand() -> ClapCommand {
@@ -4873,6 +4922,10 @@ fn help_remove_subcommand() -> ClapCommand {
         .subcommand(
             ClapCommand::new("scenario")
                 .about("Remove a scenario and synchronized formal artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("command")
+                .about("Remove a command definition and synchronized formal artifacts"),
         )
 }
 
@@ -4935,6 +4988,7 @@ fn help_after_text() -> &'static str {
   emc add command --slice <slice> --name <name> --input <datum> --input-source invocation_argument --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --source-argument <argument> --source-field <field>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --singleton <true|false> --repeat-behavior <already_exists_error|idempotent>
   emc add command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]> --error <name> --error-scenario <scenario> --error-recovery <kind>
+  emc update command --slice <slice> --name <name> --input <datum> --input-source <kind> --input-description <text> --input-provenance <hop[,hop]> --emits <event[,event]>
   emc add external-payload --slice <slice> --name <name> --field <field> --field-provenance <text> --bit-encoding <semantics>
   emc add event --slice <slice> --name <event> --stream <stream> --attribute <name> --attribute-source <kind> --attribute-source-name <name> --attribute-source-field <field> [--generated-source-kind <kind>] --attribute-provenance <text> [--observed true]
   emc add event --slice <slice> --name <event> --stream <stream> --attribute <name> --attribute-source <kind> --attribute-source-name <name> --attribute-source-field <field> [--generated-source-kind <kind>] --attribute-provenance <text> --shared <true|false>
@@ -4957,6 +5011,7 @@ fn help_after_text() -> &'static str {
   emc update scenario --slice <slice> --kind acceptance --name <name> --given <text> --when <text> --then <text>
   emc remove slice --slug <slice>
   emc remove scenario --slice <slice> --name <name>
+  emc remove command --slice <slice> --name <name>
   emc connect workflow --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger> [--payload-contract <contract>]
   emc remove transition --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
   emc remove transition --workflow <workflow> --from <slice> --to-workflow <workflow> --via outcome --name <trigger>

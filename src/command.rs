@@ -3,10 +3,10 @@
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::effect::{
     ChosenEventId, CleanReviewEffect, Effect, EffectPlan, EventConflictId, EventConflictResolution,
-    SliceDescriptionUpdateEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
-    SliceScenarioRemovalEffect, WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect,
-    WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
-    WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    SliceCommandDefinitionRemovalEffect, SliceDescriptionUpdateEffect, SliceKindUpdateEffect,
+    SliceNameUpdateEffect, SliceScenarioRemovalEffect, WorkflowCommandErrorEffect,
+    WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
+    WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
 };
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
@@ -20,7 +20,7 @@ use crate::core::project::{ProjectName, init_project};
 use crate::core::review_gate::review_gate;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug,
+    CommandName, ModelDescription, ModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug,
     WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
     WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
@@ -57,6 +57,19 @@ pub(crate) fn add_translation_definition(translation: NewTranslationDefinition) 
 
 pub(crate) fn add_command_definition(command: NewCommandDefinition) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddCommandDefinitionFromSlice(command)])
+}
+
+pub(crate) fn update_command_definition(command: NewCommandDefinition) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateCommandDefinitionFromSlice(command)])
+}
+
+pub(crate) fn remove_command_definition(
+    slice_slug: SliceSlug,
+    command_name: CommandName,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveCommandDefinitionFromSlice(
+        SliceCommandDefinitionRemovalEffect::new(slice_slug, command_name),
+    )])
 }
 
 pub(crate) fn add_event_definition(event: NewEventDefinition) -> EffectPlan {
