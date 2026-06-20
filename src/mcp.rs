@@ -3,6 +3,7 @@
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 
+use emc::modeling_process_guide;
 use rmcp::model::{
     CallToolResult, Content, Implementation, InitializeResult, JsonObject, ListToolsResult,
     ServerCapabilities, Tool, ToolsCapability,
@@ -28,7 +29,6 @@ use crate::core::formal_slice_facts::{
     ViewControls, ViewFilters, ViewLocalStates,
 };
 use crate::core::modeling_enums::MODELING_ENUMS;
-use crate::core::modeling_guidance::modeling_process_guide;
 use crate::core::slice::NewSlice;
 use crate::core::types::{
     CommandInputSourceDescription, CommandInputSourceKind, CommandName, DatumName,

@@ -12,6 +12,7 @@ use std::env;
 use std::process::ExitCode;
 
 use clap::{Arg, Command as ClapCommand};
+use emc::modeling_process_guide;
 mod command;
 mod core;
 mod io;
@@ -33,7 +34,6 @@ use crate::core::formal_slice_facts::{
 };
 use crate::core::gherkin::GherkinSuite;
 use crate::core::modeling_enums::MODELING_ENUMS;
-use crate::core::modeling_guidance::modeling_process_guide;
 use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
