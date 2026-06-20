@@ -972,6 +972,34 @@ fn add_command_definition_tool() -> Tool {
     )
 }
 
+fn update_command_definition_tool() -> Tool {
+    Tool::new(
+        "update_command_definition",
+        "Update a command, input provenance, and emitted events in a slice, then regenerate synchronized model artifacts.",
+        schema_object(add_command_definition_schema()),
+    )
+}
+
+fn remove_command_definition_tool() -> Tool {
+    Tool::new(
+        "remove_command_definition",
+        "Remove a command definition from a slice, then regenerate synchronized model artifacts.",
+        schema_object(json!({
+            "type": "object",
+            "properties": {
+                "slice": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            },
+            "required": ["slice", "name"],
+            "additionalProperties": false
+        })),
+    )
+}
+
 fn add_command_definition_schema() -> Value {
     json!({
         "type": "object",
@@ -1371,8 +1399,10 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_slice_kind_tool(),
         update_slice_name_tool(),
         update_slice_scenario_tool(),
+        update_command_definition_tool(),
         remove_slice_tool(),
         remove_slice_scenario_tool(),
+        remove_command_definition_tool(),
         remove_workflow_tool(),
         connect_workflow_tool(),
         remove_transition_tool(),
@@ -1740,8 +1770,10 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_slice_kind" => Some(update_slice_kind_tool_text(request)),
         "update_slice_name" => Some(update_slice_name_tool_text(request)),
         "update_slice_scenario" => Some(update_slice_scenario_tool_text(request)),
+        "update_command_definition" => Some(update_command_definition_tool_text(request)),
         "remove_slice" => Some(remove_slice_tool_text(request)),
         "remove_slice_scenario" => Some(remove_slice_scenario_tool_text(request)),
+        "remove_command_definition" => Some(remove_command_definition_tool_text(request)),
         "remove_workflow" => Some(remove_workflow_tool_text(request)),
         "connect_workflow" => Some(connect_workflow_tool_text(request)),
         "remove_transition" => Some(remove_transition_tool_text(request)),
@@ -2861,7 +2893,57 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         .get("params")
         .and_then(|params| params.get("arguments"))
         .ok_or_else(|| ShellError::message("add_command_definition requires arguments"))?;
-    let inputs = parse_command_definition_inputs(arguments)?;
+    let command_definition =
+        build_command_definition_from_arguments(arguments, "add_command_definition")?;
+
+    interpret_collect_reports(&command::add_command_definition(command_definition))
+        .map(|reports| reports.join("\n"))
+}
+
+fn update_command_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("update_command_definition requires arguments"))?;
+    let command_definition =
+        build_command_definition_from_arguments(arguments, "update_command_definition")?;
+
+    interpret_collect_reports(&command::update_command_definition(command_definition))
+        .map(|reports| reports.join("\n"))
+}
+
+fn remove_command_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("remove_command_definition requires arguments"))?;
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("remove_command_definition requires slice"))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let command_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("remove_command_definition requires name"))
+        .and_then(|raw_name| {
+            parse_command_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(&command::remove_command_definition(
+        slice_slug,
+        command_name,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn build_command_definition_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<NewCommandDefinition, ShellError> {
+    let inputs = parse_command_definition_inputs(arguments, tool_name)?;
     let observed_streams = arguments
         .get("observes")
         .and_then(Value::as_str)
@@ -2869,10 +2951,10 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         .transpose()
         .map_err(|error| ShellError::message(error.to_string()))?;
     let refs = parse_command_input_source_refs(arguments)?;
-    let command_errors = parse_optional_command_errors(arguments)?;
-    let singleton_repeat_behavior = parse_optional_singleton_repeat_behavior(arguments)?;
+    let command_errors = parse_optional_command_errors(arguments, tool_name)?;
+    let singleton_repeat_behavior = parse_optional_singleton_repeat_behavior(arguments, tool_name)?;
 
-    let command_input_source = resolve_command_input_source(inputs.input_source, refs)?;
+    let command_input_source = resolve_command_input_source(inputs.input_source, refs, tool_name)?;
     let command_input = NewCommandInput::new(
         inputs.input_name,
         command_input_source,
@@ -2893,39 +2975,38 @@ fn add_command_definition_tool_text(request: &Value) -> Result<String, ShellErro
         .map_or(command_definition.clone(), |behavior| {
             command_definition.with_singleton_repeat_behavior(behavior)
         });
-
-    interpret_collect_reports(&command::add_command_definition(command_definition))
-        .map(|reports| reports.join("\n"))
+    Ok(command_definition)
 }
 
 fn parse_command_definition_inputs(
     arguments: &Value,
+    tool_name: &str,
 ) -> Result<CommandDefinitionInputs, ShellError> {
     let slice_slug = arguments
         .get("slice")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_command_definition requires slice"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires slice")))
         .and_then(|raw_slice| {
             parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let command_name = arguments
         .get("name")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_command_definition requires name"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires name")))
         .and_then(|raw_name| {
             parse_command_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let input_name = arguments
         .get("input")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_command_definition requires input"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires input")))
         .and_then(|raw_input| {
             parse_datum_name(raw_input).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let input_source = arguments
         .get("input_source")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_command_definition requires input_source"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires input_source")))
         .and_then(|raw_source| {
             parse_command_input_source_kind(raw_source)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -2933,7 +3014,7 @@ fn parse_command_definition_inputs(
     let input_description = arguments
         .get("input_description")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_command_definition requires input_description"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires input_description")))
         .and_then(|raw_description| {
             parse_command_input_source_description(raw_description)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -2941,7 +3022,7 @@ fn parse_command_definition_inputs(
     let provenance_chain = arguments
         .get("input_provenance")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_command_definition requires input_provenance"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires input_provenance")))
         .and_then(|raw_provenance| {
             parse_source_chain_hops(raw_provenance)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -2949,7 +3030,7 @@ fn parse_command_definition_inputs(
     let emitted_events = arguments
         .get("emits")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_command_definition requires emits"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires emits")))
         .and_then(|raw_emits| {
             parse_event_names(raw_emits).map_err(|error| ShellError::message(error.to_string()))
         })?;
@@ -3023,6 +3104,7 @@ fn parse_command_input_source_refs(
 fn resolve_command_input_source(
     input_source: CommandInputSourceKind,
     refs: CommandInputSourceRefs,
+    tool_name: &str,
 ) -> Result<CommandInputSource, ShellError> {
     match (
         input_source,
@@ -3087,35 +3169,36 @@ fn resolve_command_input_source(
         (CommandInputSourceKind::Actor, None, None, None, None, None, None, None) => {
             Ok(CommandInputSource::actor())
         }
-        (_, Some(_), None, None, None, None, None, None) => Err(ShellError::message(
-            "add_command_definition requires source_attribute when source_event is provided",
-        )),
-        (_, None, Some(_), None, None, None, None, None) => Err(ShellError::message(
-            "add_command_definition requires source_event when source_attribute is provided",
-        )),
-        (_, None, None, Some(_), None, None, None, None) => Err(ShellError::message(
-            "add_command_definition requires source_field when source_payload is provided",
-        )),
-        (_, None, None, None, Some(_), None, None, None) => Err(ShellError::message(
-            "add_command_definition requires source_field when source_name is provided",
-        )),
-        (_, None, None, None, None, Some(_), None, None) => Err(ShellError::message(
-            "add_command_definition requires source_field when source_session is provided",
-        )),
-        (_, None, None, None, None, None, Some(_), None) => Err(ShellError::message(
-            "add_command_definition requires source_field when source_argument is provided",
-        )),
-        (_, None, None, None, None, None, None, Some(_)) => Err(ShellError::message(
-            "add_command_definition requires source_payload, source_name, source_session, or source_argument when source_field is provided",
-        )),
-        _ => Err(ShellError::message(
-            "add_command_definition requires input_source and source reference fields to describe the same command input source",
-        )),
+        (_, Some(_), None, None, None, None, None, None) => Err(ShellError::message(format!(
+            "{tool_name} requires source_attribute when source_event is provided"
+        ))),
+        (_, None, Some(_), None, None, None, None, None) => Err(ShellError::message(format!(
+            "{tool_name} requires source_event when source_attribute is provided"
+        ))),
+        (_, None, None, Some(_), None, None, None, None) => Err(ShellError::message(format!(
+            "{tool_name} requires source_field when source_payload is provided"
+        ))),
+        (_, None, None, None, Some(_), None, None, None) => Err(ShellError::message(format!(
+            "{tool_name} requires source_field when source_name is provided"
+        ))),
+        (_, None, None, None, None, Some(_), None, None) => Err(ShellError::message(format!(
+            "{tool_name} requires source_field when source_session is provided"
+        ))),
+        (_, None, None, None, None, None, Some(_), None) => Err(ShellError::message(format!(
+            "{tool_name} requires source_field when source_argument is provided"
+        ))),
+        (_, None, None, None, None, None, None, Some(_)) => Err(ShellError::message(format!(
+            "{tool_name} requires source_payload, source_name, source_session, or source_argument when source_field is provided"
+        ))),
+        _ => Err(ShellError::message(format!(
+            "{tool_name} requires input_source and source reference fields to describe the same command input source"
+        ))),
     }
 }
 
 fn parse_optional_singleton_repeat_behavior(
     arguments: &Value,
+    tool_name: &str,
 ) -> Result<Option<SingletonRepeatBehavior>, ShellError> {
     match (
         arguments.get("singleton").and_then(Value::as_bool),
@@ -3125,16 +3208,19 @@ fn parse_optional_singleton_repeat_behavior(
             .map(Some)
             .map_err(|error| ShellError::message(error.to_string())),
         (Some(false), _) | (None, None) => Ok(None),
-        (Some(true), None) => Err(ShellError::message(
-            "add_command_definition requires repeat_behavior when singleton is true",
-        )),
-        (None, Some(_)) => Err(ShellError::message(
-            "add_command_definition requires singleton when repeat_behavior is provided",
-        )),
+        (Some(true), None) => Err(ShellError::message(format!(
+            "{tool_name} requires repeat_behavior when singleton is true"
+        ))),
+        (None, Some(_)) => Err(ShellError::message(format!(
+            "{tool_name} requires singleton when repeat_behavior is provided"
+        ))),
     }
 }
 
-fn parse_optional_command_errors(arguments: &Value) -> Result<CommandErrorDefinitions, ShellError> {
+fn parse_optional_command_errors(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<CommandErrorDefinitions, ShellError> {
     let maybe_error = arguments.get("error").and_then(Value::as_str);
     let maybe_scenario = arguments.get("error_scenario").and_then(Value::as_str);
     let maybe_recovery = arguments.get("error_recovery").and_then(Value::as_str);
@@ -3156,9 +3242,9 @@ fn parse_optional_command_errors(arguments: &Value) -> Result<CommandErrorDefini
                 ),
             ]))
         }
-        _ => Err(ShellError::message(
-            "add_command_definition requires error, error_scenario, and error_recovery together",
-        )),
+        _ => Err(ShellError::message(format!(
+            "{tool_name} requires error, error_scenario, and error_recovery together"
+        ))),
     }
 }
 

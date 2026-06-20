@@ -172,6 +172,16 @@ pub(crate) enum EmcEvent {
         #[serde(flatten)]
         fact: SliceFactEvent,
     },
+    SliceCommandDefinitionUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        command: SliceCommandDefinitionUpdateEvent,
+    },
+    SliceCommandDefinitionRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        command: SliceCommandDefinitionRemovalEvent,
+    },
     SliceScenarioUpdated {
         stream_id: StreamId,
         #[serde(flatten)]
@@ -217,6 +227,8 @@ impl Event for EmcEvent {
             | Self::SliceUpdated { stream_id, .. }
             | Self::SliceRemoved { stream_id, .. }
             | Self::SliceFactAdded { stream_id, .. }
+            | Self::SliceCommandDefinitionUpdated { stream_id, .. }
+            | Self::SliceCommandDefinitionRemoved { stream_id, .. }
             | Self::SliceScenarioUpdated { stream_id, .. }
             | Self::SliceScenarioRemoved { stream_id, .. }
             | Self::ReviewRecorded { stream_id, .. }
@@ -808,6 +820,173 @@ impl CommandLogic for AddSliceFactCommand {
             fact: SliceFactEvent::new(self.fact.clone()),
         }]
         .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateCommandDefinitionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    command: NewCommandDefinition,
+}
+
+impl UpdateCommandDefinitionCommand {
+    pub(crate) fn new(command: NewCommandDefinition) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(command.slice_slug().as_ref())?,
+            command,
+        })
+    }
+}
+
+impl CommandLogic for UpdateCommandDefinitionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before updating command definition"
+        );
+        Ok(vec![EmcEvent::SliceCommandDefinitionUpdated {
+            stream_id: self.slice_stream.clone(),
+            command: SliceCommandDefinitionUpdateEvent::new(self.command.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveCommandDefinitionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    slice: SliceSlug,
+    name: CommandName,
+}
+
+impl RemoveCommandDefinitionCommand {
+    pub(crate) fn new(slice: SliceSlug, name: CommandName) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(slice.as_ref())?,
+            slice,
+            name,
+        })
+    }
+}
+
+impl CommandLogic for RemoveCommandDefinitionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before removing command definition"
+        );
+        Ok(vec![EmcEvent::SliceCommandDefinitionRemoved {
+            stream_id: self.slice_stream.clone(),
+            command: SliceCommandDefinitionRemovalEvent::new(self.slice.clone(), self.name.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceCommandDefinitionUpdateEvent {
+    command: NewCommandDefinition,
+}
+
+impl SliceCommandDefinitionUpdateEvent {
+    pub(crate) fn new(command: NewCommandDefinition) -> Self {
+        Self { command }
+    }
+
+    pub(crate) fn command(&self) -> NewCommandDefinition {
+        self.command.clone()
+    }
+}
+
+impl Serialize for SliceCommandDefinitionUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_command_definition_updated(&self.command)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceCommandDefinitionUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceCommandDefinitionUpdated { command } => Ok(Self::new(command)),
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceCommandDefinitionUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceCommandDefinitionRemovalEvent {
+    slice: SliceSlug,
+    name: CommandName,
+}
+
+impl SliceCommandDefinitionRemovalEvent {
+    pub(crate) fn new(slice: SliceSlug, name: CommandName) -> Self {
+        Self { slice, name }
+    }
+
+    pub(crate) fn slice(&self) -> &SliceSlug {
+        &self.slice
+    }
+
+    pub(crate) fn name(&self) -> &CommandName {
+        &self.name
+    }
+}
+
+impl Serialize for SliceCommandDefinitionRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_command_definition_removed(&self.slice, &self.name)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceCommandDefinitionRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceCommandDefinitionRemoved { slice, name } => {
+                Ok(Self::new(slice, name))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceCommandDefinitionRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
     }
 }
 

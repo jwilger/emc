@@ -23,11 +23,11 @@ use crate::core::effect::{
     ArtifactDigest, ArtifactDigestRequirement, CanonicalDeclarationRequirement, CleanReviewEffect,
     Effect, EffectPlan, EventConflictResolution, FileContents, FileWriteEffect, ModelContentDigest,
     ProcessInvocation, ProcessInvocations, ProjectPath, ProjectionFingerprint, ReportLine,
-    ReviewEventReference, ReviewRecordRequirement, SliceDescriptionUpdateEffect,
-    SliceKindUpdateEffect, SliceNameUpdateEffect, SliceScenarioRemovalEffect,
-    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
-    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
-    WorkflowTransitionEvidenceEffect,
+    ReviewEventReference, ReviewRecordRequirement, SliceCommandDefinitionRemovalEffect,
+    SliceDescriptionUpdateEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
+    SliceScenarioRemovalEffect, WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect,
+    WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
+    WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
@@ -347,11 +347,13 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::ConnectWorkflowFromWorkflow(_)
             | Effect::DeclareWorkflowReadinessFromWorkflow(_)
             | Effect::RecordCleanReviewFromWorkflow(_)
+            | Effect::RemoveCommandDefinitionFromSlice(_)
             | Effect::RemoveSliceScenarioFromSlice(_)
             | Effect::RemoveSliceFromWorkflow(_)
             | Effect::RemoveTransitionFromWorkflow(_)
             | Effect::RemoveWorkflowFromIndex(_)
             | Effect::RequireWorkflowEntryLifecycleCoverageFromWorkflow(_)
+            | Effect::UpdateCommandDefinitionFromSlice(_)
             | Effect::UpdateSliceScenarioFromSlice(_)
             | Effect::UpdateSliceDescriptionFromWorkflow(_)
             | Effect::UpdateSliceKindFromWorkflow(_)
@@ -474,6 +476,12 @@ fn interpret_slice_fact_effect(effect: &Effect) -> Option<Result<Vec<String>, Sh
         Effect::AddBoardElementFromSlice(element) => interpret_board_element_added(element),
         Effect::AddCommandDefinitionFromSlice(command) => {
             interpret_command_definition_added(command)
+        }
+        Effect::RemoveCommandDefinitionFromSlice(removal) => {
+            interpret_command_definition_removed(removal)
+        }
+        Effect::UpdateCommandDefinitionFromSlice(command) => {
+            interpret_command_definition_updated(command)
         }
         Effect::AddEventDefinitionFromSlice(event) => interpret_event_definition_added(event),
         Effect::AddExternalPayloadDefinitionFromSlice(external_payload) => {
@@ -598,6 +606,48 @@ fn interpret_command_definition_added(
         command.slice_slug(),
         reports,
         EventDraft::slice_command_definition_added(command),
+    )
+}
+
+fn interpret_command_definition_updated(
+    command: &NewCommandDefinition,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "updated command {} on slice {}",
+            command.name().as_ref(),
+            command.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "updated command {} in project root",
+            command.name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        command.slice_slug(),
+        reports,
+        EventDraft::slice_command_definition_updated(command),
+    )
+}
+
+fn interpret_command_definition_removed(
+    removal: &SliceCommandDefinitionRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "removed command {} from slice {}",
+            removal.command_name().as_ref(),
+            removal.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "removed command {} from project root",
+            removal.command_name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        removal.slice_slug(),
+        reports,
+        EventDraft::slice_command_definition_removed(removal.slice_slug(), removal.command_name()),
     )
 }
 

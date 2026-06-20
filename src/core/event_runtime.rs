@@ -13,8 +13,9 @@ use tokio::runtime::Builder;
 use crate::core::event_commands::{
     AddSliceCommand, AddSliceFactCommand, AddWorkflowCommand, AddWorkflowFactCommand,
     ConnectWorkflowCommand, DeclareWorkflowReadinessCommand, EmcEvent, InitializeProjectCommand,
-    RecordReviewCommand, RemoveSliceCommand, RemoveSliceScenarioCommand, RemoveWorkflowCommand,
-    RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput, UpdateSliceCommand,
+    RecordReviewCommand, RemoveCommandDefinitionCommand, RemoveSliceCommand,
+    RemoveSliceScenarioCommand, RemoveWorkflowCommand, RemoveWorkflowTransitionCommand,
+    ResolveConflictCommand, SliceFactInput, UpdateCommandDefinitionCommand, UpdateSliceCommand,
     UpdateSliceScenarioCommand, UpdateWorkflowCommand, WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
@@ -170,6 +171,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::SliceExternalPayloadAdded { .. }
         | ExportedEventBody::SliceEventDefinitionAdded { .. }
         | ExportedEventBody::SliceCommandDefinitionAdded { .. }
+        | ExportedEventBody::SliceCommandDefinitionUpdated { .. }
+        | ExportedEventBody::SliceCommandDefinitionRemoved { .. }
         | ExportedEventBody::SliceReadModelAdded { .. }
         | ExportedEventBody::SliceViewAdded { .. }
         | ExportedEventBody::SliceBitLevelDataFlowAdded { .. }
@@ -364,6 +367,16 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
             run_command(
                 store,
                 RemoveSliceScenarioCommand::new(slice.clone(), name.clone())?,
+            )
+            .await
+        }
+        ExportedEventBody::SliceCommandDefinitionUpdated { command } => {
+            run_command(store, UpdateCommandDefinitionCommand::new(command.clone())?).await
+        }
+        ExportedEventBody::SliceCommandDefinitionRemoved { slice, name } => {
+            run_command(
+                store,
+                RemoveCommandDefinitionCommand::new(slice.clone(), name.clone())?,
             )
             .await
         }

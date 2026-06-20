@@ -13,7 +13,7 @@ use crate::core::formal_slice_facts::{
 };
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    ModelDescription, ModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug,
+    CommandName, ModelDescription, ModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug,
     WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord,
     WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
@@ -65,6 +65,29 @@ impl SliceScenarioRemovalEffect {
 
     pub(crate) fn scenario_name(&self) -> &ScenarioName {
         &self.scenario_name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceCommandDefinitionRemovalEffect {
+    slice_slug: SliceSlug,
+    command_name: CommandName,
+}
+
+impl SliceCommandDefinitionRemovalEffect {
+    pub(crate) fn new(slice_slug: SliceSlug, command_name: CommandName) -> Self {
+        Self {
+            slice_slug,
+            command_name,
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn command_name(&self) -> &CommandName {
+        &self.command_name
     }
 }
 
@@ -693,6 +716,8 @@ pub(crate) enum Effect {
     AddBoardConnectionFromSlice(NewBoardConnection),
     AddBoardElementFromSlice(NewBoardElement),
     AddCommandDefinitionFromSlice(NewCommandDefinition),
+    RemoveCommandDefinitionFromSlice(SliceCommandDefinitionRemovalEffect),
+    UpdateCommandDefinitionFromSlice(NewCommandDefinition),
     AddEventDefinitionFromSlice(NewEventDefinition),
     AddExternalPayloadDefinitionFromSlice(NewExternalPayloadDefinition),
     AddOutcomeDefinitionFromSlice(NewOutcomeDefinition),
