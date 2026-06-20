@@ -26,9 +26,10 @@ use crate::core::effect::{
     ReviewEventReference, ReviewRecordRequirement, SliceCommandDefinitionRemovalEffect,
     SliceDescriptionUpdateEffect, SliceEventDefinitionRemovalEffect, SliceKindUpdateEffect,
     SliceNameUpdateEffect, SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect,
-    SliceViewDefinitionRemovalEffect, WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect,
-    WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
-    WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    SliceViewControlRemovalEffect, SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect,
+    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
+    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
+    WorkflowTransitionEvidenceEffect,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
@@ -354,6 +355,7 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::RemoveSliceScenarioFromSlice(_)
             | Effect::RemoveSliceFromWorkflow(_)
             | Effect::RemoveTransitionFromWorkflow(_)
+            | Effect::RemoveViewControlFromSlice(_)
             | Effect::RemoveViewDefinitionFromSlice(_)
             | Effect::RemoveWorkflowFromIndex(_)
             | Effect::RequireWorkflowEntryLifecycleCoverageFromWorkflow(_)
@@ -364,6 +366,7 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::UpdateSliceDescriptionFromWorkflow(_)
             | Effect::UpdateSliceKindFromWorkflow(_)
             | Effect::UpdateSliceNameFromWorkflow(_)
+            | Effect::UpdateViewControlFromSlice(_)
             | Effect::UpdateViewDefinitionFromSlice(_)
             | Effect::UpdateWorkflowDescriptionFromIndexAndWorkflow(_)
             | Effect::UpdateWorkflowNameFromIndexAndWorkflow(_)
@@ -509,7 +512,9 @@ fn interpret_slice_fact_effect(effect: &Effect) -> Option<Result<Vec<String>, Sh
             interpret_read_model_updated(read_model)
         }
         Effect::AddViewDefinitionFromSlice(view) => interpret_view_added(view),
+        Effect::RemoveViewControlFromSlice(removal) => interpret_view_control_removed(removal),
         Effect::RemoveViewDefinitionFromSlice(removal) => interpret_view_removed(removal),
+        Effect::UpdateViewControlFromSlice(update) => interpret_view_control_updated(update),
         Effect::UpdateViewDefinitionFromSlice(view) => interpret_view_updated(view),
         Effect::AddSliceScenarioFromSlice(scenario) => interpret_slice_scenario_added(scenario),
         Effect::RemoveSliceScenarioFromSlice(removal) => interpret_slice_scenario_removed(removal),
@@ -909,6 +914,58 @@ fn interpret_view_removed(
         removal.slice_slug(),
         reports,
         EventDraft::slice_view_definition_removed(removal.slice_slug(), removal.view_name()),
+    )
+}
+
+fn interpret_view_control_updated(
+    update: &SliceViewControlUpdateEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "updated control {} on view {} in slice {}",
+            update.control().name().as_ref(),
+            update.view_name().as_ref(),
+            update.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "updated control {} in project root",
+            update.control().name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        update.slice_slug(),
+        reports,
+        EventDraft::slice_view_control_updated(
+            update.slice_slug(),
+            update.view_name(),
+            update.control(),
+        ),
+    )
+}
+
+fn interpret_view_control_removed(
+    removal: &SliceViewControlRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![
+        projected_report(format!(
+            "removed control {} from view {} in slice {}",
+            removal.control_name().as_ref(),
+            removal.view_name().as_ref(),
+            removal.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "removed control {} from project root",
+            removal.control_name().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        removal.slice_slug(),
+        reports,
+        EventDraft::slice_view_control_removed(
+            removal.slice_slug(),
+            removal.view_name(),
+            removal.control_name(),
+        ),
     )
 }
 

@@ -8,13 +8,14 @@ use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::events::EventDraft;
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
-    NewCommandDefinition, NewEventDefinition, NewExternalPayloadDefinition, NewOutcomeDefinition,
-    NewReadModelDefinition, NewSliceScenario, NewTranslationDefinition, NewViewDefinition,
+    NewCommandDefinition, NewControlDefinition, NewEventDefinition, NewExternalPayloadDefinition,
+    NewOutcomeDefinition, NewReadModelDefinition, NewSliceScenario, NewTranslationDefinition,
+    NewViewDefinition,
 };
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    CommandName, EventName, ModelDescription, ModelName, ReadModelName, ReviewTimestamp,
-    ReviewerId, ScenarioName, SliceSlug, ViewName, WorkflowCommandErrorRecord,
+    CommandName, ControlName, EventName, ModelDescription, ModelName, ReadModelName,
+    ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug, ViewName, WorkflowCommandErrorRecord,
     WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
     WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
@@ -158,6 +159,72 @@ impl SliceViewDefinitionRemovalEffect {
 
     pub(crate) fn view_name(&self) -> &ViewName {
         &self.view_name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceViewControlUpdateEffect {
+    slice_slug: SliceSlug,
+    view_name: ViewName,
+    control: NewControlDefinition,
+}
+
+impl SliceViewControlUpdateEffect {
+    pub(crate) fn new(
+        slice_slug: SliceSlug,
+        view_name: ViewName,
+        control: NewControlDefinition,
+    ) -> Self {
+        Self {
+            slice_slug,
+            view_name,
+            control,
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn view_name(&self) -> &ViewName {
+        &self.view_name
+    }
+
+    pub(crate) fn control(&self) -> &NewControlDefinition {
+        &self.control
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceViewControlRemovalEffect {
+    slice_slug: SliceSlug,
+    view_name: ViewName,
+    control_name: ControlName,
+}
+
+impl SliceViewControlRemovalEffect {
+    pub(crate) fn new(
+        slice_slug: SliceSlug,
+        view_name: ViewName,
+        control_name: ControlName,
+    ) -> Self {
+        Self {
+            slice_slug,
+            view_name,
+            control_name,
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn view_name(&self) -> &ViewName {
+        &self.view_name
+    }
+
+    pub(crate) fn control_name(&self) -> &ControlName {
+        &self.control_name
     }
 }
 
@@ -799,6 +866,8 @@ pub(crate) enum Effect {
     AddViewDefinitionFromSlice(NewViewDefinition),
     RemoveViewDefinitionFromSlice(SliceViewDefinitionRemovalEffect),
     UpdateViewDefinitionFromSlice(NewViewDefinition),
+    RemoveViewControlFromSlice(SliceViewControlRemovalEffect),
+    UpdateViewControlFromSlice(SliceViewControlUpdateEffect),
     AddSliceFromWorkflow(NewSlice),
     AddSliceScenarioFromSlice(NewSliceScenario),
     AddTranslationDefinitionFromSlice(NewTranslationDefinition),

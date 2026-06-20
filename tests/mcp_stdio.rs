@@ -857,6 +857,84 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_control_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_control(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_control_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"update_control_definition\""))
+            .stdout(predicate::str::contains(
+                "updated control submit-ticket on view ticket_detail in slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            fs::read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let root_quint = fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+        assert!(
+            slice_lean.contains("corrected title field on the intake form"),
+            "MCP-updated control input description must be represented in Lean slice artifacts"
+        );
+        assert!(
+            root_quint.contains("controlSketchToken: \"resubmit-button\""),
+            "MCP-updated control sketch token must be represented in Quint project inventory"
+        );
+        assert!(
+            !slice_lean.contains("sketchToken := \"submit-button\""),
+            "old control sketch token must be absent after MCP update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_control_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_control(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_control_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"remove_control_definition\""))
+            .stdout(predicate::str::contains(
+                "removed control submit-ticket from view ticket_detail in slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        let root_quint = fs::read_to_string(temp_dir.path().join("model/quint/RepairDesk.qnt"))?;
+        assert!(
+            !slice_quint.contains("controls: [{ name: \"submit-ticket\""),
+            "MCP-removed control must be absent from Quint slice artifacts"
+        );
+        assert!(
+            root_quint.contains("val modelViewControls: List[ModelViewControl] = []"),
+            "MCP-removed control must be absent from Quint project inventory"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_slice_update_fork(&temp_dir)?;
@@ -1035,6 +1113,22 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_view_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"ticket_detail\"}}}\n",
+        )
+    }
+
+    fn update_control_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_control_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"view\":\"ticket_detail\",\"name\":\"submit-ticket\",\"command\":\"CaptureTicket\",\"input\":\"ticket_title\",\"input_source\":\"actor\",\"input_description\":\"corrected title field on the intake form\",\"input_sketch_token\":\"corrected-title-input\",\"input_visible\":true,\"input_decision\":true,\"handled_errors\":\"DuplicateTicket\",\"recovery_behavior\":\"retry\",\"sketch_token\":\"resubmit-button\",\"navigation_type\":\"modeled_view\",\"navigation_target\":\"ticket_detail\"}}}\n",
+        )
+    }
+
+    fn remove_control_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_control_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"view\":\"ticket_detail\",\"name\":\"submit-ticket\"}}}\n",
         )
     }
 
@@ -1219,6 +1313,130 @@ mod tests {
                 "ticket_state.ticket_title -> title label",
                 "--bit-encoding",
                 "UTF-8 title string",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn initialize_project_with_control(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        initialize_project_with_read_model(cwd)?;
+        add_duplicate_ticket_contract_scenario(cwd)?;
+        add_capture_ticket_command_with_error(cwd)?;
+        add_controlled_ticket_detail_view(cwd)?;
+        Ok(())
+    }
+
+    fn add_duplicate_ticket_contract_scenario(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--kind",
+                "contract",
+                "--name",
+                "Duplicate ticket is rejected",
+                "--given",
+                "tickets stream already contains duplicate title",
+                "--when",
+                "CaptureTicket handles the duplicate title",
+                "--then",
+                "DuplicateTicket is returned",
+                "--contract-kind",
+                "command",
+                "--covered-definition",
+                "CaptureTicket",
+                "--error-references",
+                "DuplicateTicket",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn add_capture_ticket_command_with_error(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "command",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "CaptureTicket",
+                "--input",
+                "ticket_title",
+                "--input-source",
+                "actor",
+                "--input-description",
+                "title field on the intake form",
+                "--input-provenance",
+                "actor keystrokes -> form field",
+                "--emits",
+                "TicketCaptured",
+                "--error",
+                "DuplicateTicket",
+                "--error-scenario",
+                "Duplicate ticket is rejected",
+                "--error-recovery",
+                "retry",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn add_controlled_ticket_detail_view(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "view",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "ticket_detail",
+                "--read-model",
+                "ticket_state",
+                "--field",
+                "ticket_title_view",
+                "--source-field",
+                "ticket_title",
+                "--sketch-token",
+                "title-label",
+                "--field-provenance",
+                "ticket_state.ticket_title -> title label",
+                "--bit-encoding",
+                "UTF-8 title string",
+                "--control",
+                "submit-ticket",
+                "--control-command",
+                "CaptureTicket",
+                "--control-input",
+                "ticket_title",
+                "--control-input-source",
+                "actor",
+                "--control-input-description",
+                "title field on the intake form",
+                "--control-input-sketch-token",
+                "title-input",
+                "--control-input-visible",
+                "true",
+                "--control-input-decision",
+                "true",
+                "--handled-errors",
+                "DuplicateTicket",
+                "--recovery-behavior",
+                "retry",
+                "--control-sketch-token",
+                "submit-button",
+                "--navigation-type",
+                "modeled_view",
+                "--navigation-target",
+                "ticket_detail",
             ])
             .current_dir(cwd)
             .assert()

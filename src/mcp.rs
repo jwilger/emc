@@ -35,11 +35,12 @@ use crate::core::types::{
     EventAttributeName, EventAttributeSourceField, EventAttributeSourceKind,
     EventAttributeSourceName, EventName, GeneratedEventAttributeSourceKind, ModelDescription,
     NavigationTargetName, ProvenanceDescription, ReadModelFieldSourceKind, SingletonRepeatBehavior,
-    SliceSlug, SourceChainHop, StreamName, TransitionTriggerName, WorkflowCommandErrorRecord,
-    WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation, WorkflowOutcomeRecord,
-    WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
-    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceNavigationEndpoints,
-    WorkflowTransitionEvidenceRecord, WorkflowTransitionKind, WorkflowTransitionSourceEvidenceText,
+    SliceSlug, SourceChainHop, StreamName, TransitionTriggerName, ViewName,
+    WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation,
+    WorkflowOutcomeRecord, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
+    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
+    WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
+    WorkflowTransitionKind, WorkflowTransitionSourceEvidenceText,
     WorkflowTransitionTargetEvidenceText, WorkflowViewRole,
 };
 use crate::core::workflow::NewWorkflow;
@@ -1387,6 +1388,92 @@ fn remove_view_definition_tool() -> Tool {
     )
 }
 
+fn update_control_definition_tool() -> Tool {
+    Tool::new(
+        "update_control_definition",
+        "Update a control on a slice view, then regenerate synchronized model artifacts.",
+        schema_object(control_definition_schema()),
+    )
+}
+
+fn remove_control_definition_tool() -> Tool {
+    Tool::new(
+        "remove_control_definition",
+        "Remove a control from a slice view, then regenerate synchronized model artifacts.",
+        schema_object(json!({
+            "type": "object",
+            "properties": {
+                "slice": {
+                    "type": "string"
+                },
+                "view": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            },
+            "required": ["slice", "view", "name"],
+            "additionalProperties": false
+        })),
+    )
+}
+
+fn control_definition_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "slice": {
+                "type": "string"
+            },
+            "view": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "command": {
+                "type": "string"
+            },
+            "input": {
+                "type": "string"
+            },
+            "input_source": {
+                "type": "string"
+            },
+            "input_description": {
+                "type": "string"
+            },
+            "input_sketch_token": {
+                "type": "string"
+            },
+            "input_visible": {
+                "type": "boolean"
+            },
+            "input_decision": {
+                "type": "boolean"
+            },
+            "handled_errors": {
+                "type": "string"
+            },
+            "recovery_behavior": {
+                "type": "string"
+            },
+            "sketch_token": {
+                "type": "string"
+            },
+            "navigation_type": {
+                "type": "string"
+            },
+            "navigation_target": {
+                "type": "string"
+            }
+        },
+        "required": ["slice", "view", "name", "command", "input", "input_source", "input_description", "input_sketch_token", "input_visible", "input_decision", "handled_errors", "recovery_behavior", "sketch_token", "navigation_type", "navigation_target"],
+        "additionalProperties": false
+    })
+}
+
 fn add_view_definition_schema() -> Value {
     json!({
         "type": "object",
@@ -1487,12 +1574,14 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_event_definition_tool(),
         update_read_model_definition_tool(),
         update_view_definition_tool(),
+        update_control_definition_tool(),
         remove_slice_tool(),
         remove_slice_scenario_tool(),
         remove_command_definition_tool(),
         remove_event_definition_tool(),
         remove_read_model_definition_tool(),
         remove_view_definition_tool(),
+        remove_control_definition_tool(),
         remove_workflow_tool(),
         connect_workflow_tool(),
         remove_transition_tool(),
@@ -1864,12 +1953,14 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_event_definition" => Some(update_event_definition_tool_text(request)),
         "update_read_model_definition" => Some(update_read_model_definition_tool_text(request)),
         "update_view_definition" => Some(update_view_definition_tool_text(request)),
+        "update_control_definition" => Some(update_control_definition_tool_text(request)),
         "remove_slice" => Some(remove_slice_tool_text(request)),
         "remove_slice_scenario" => Some(remove_slice_scenario_tool_text(request)),
         "remove_command_definition" => Some(remove_command_definition_tool_text(request)),
         "remove_event_definition" => Some(remove_event_definition_tool_text(request)),
         "remove_read_model_definition" => Some(remove_read_model_definition_tool_text(request)),
         "remove_view_definition" => Some(remove_view_definition_tool_text(request)),
+        "remove_control_definition" => Some(remove_control_definition_tool_text(request)),
         "remove_workflow" => Some(remove_workflow_tool_text(request)),
         "connect_workflow" => Some(connect_workflow_tool_text(request)),
         "remove_transition" => Some(remove_transition_tool_text(request)),
@@ -4047,6 +4138,196 @@ fn remove_view_definition_tool_text(request: &Value) -> Result<String, ShellErro
 
     interpret_collect_reports(&command::remove_view_definition(slice_slug, view_name))
         .map(|reports| reports.join("\n"))
+}
+
+fn update_control_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("update_control_definition requires arguments"))?;
+    let (slice_slug, view_name) = parse_control_location(arguments, "update_control_definition")?;
+    let control = parse_control_definition(arguments, "update_control_definition")?;
+
+    interpret_collect_reports(&command::update_control_definition(
+        slice_slug, view_name, control,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn remove_control_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = request
+        .get("params")
+        .and_then(|params| params.get("arguments"))
+        .ok_or_else(|| ShellError::message("remove_control_definition requires arguments"))?;
+    let (slice_slug, view_name) = parse_control_location(arguments, "remove_control_definition")?;
+    let control_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message("remove_control_definition requires name"))
+        .and_then(|raw_name| {
+            parse_control_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+
+    interpret_collect_reports(&command::remove_control_definition(
+        slice_slug,
+        view_name,
+        control_name,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn parse_control_location(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<(SliceSlug, ViewName), ShellError> {
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires slice")))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let view_name = arguments
+        .get("view")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires view")))
+        .and_then(|raw_view| {
+            parse_view_name(raw_view).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    Ok((slice_slug, view_name))
+}
+
+fn parse_control_definition(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<NewControlDefinition, ShellError> {
+    let control_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires name")))
+        .and_then(|raw_name| {
+            parse_control_name(raw_name).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let control_command = arguments
+        .get("command")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires command")))
+        .and_then(|raw_command| {
+            parse_command_name(raw_command).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let input = parse_control_definition_input(arguments, tool_name)?;
+    let handled_errors = arguments
+        .get("handled_errors")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires handled_errors")))
+        .and_then(|raw_errors| {
+            parse_command_error_names(raw_errors)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let recovery_behavior = arguments
+        .get("recovery_behavior")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires recovery_behavior")))
+        .and_then(|raw_recovery| {
+            parse_control_recovery_behavior(raw_recovery)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let sketch_token = arguments
+        .get("sketch_token")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires sketch_token")))
+        .and_then(|raw_sketch_token| {
+            parse_sketch_token(raw_sketch_token)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let navigation = parse_control_definition_navigation(arguments, tool_name)?;
+
+    Ok(NewControlDefinition::new(
+        control_name,
+        control_command,
+        input,
+        CommandErrorNames::from_names(handled_errors),
+        recovery_behavior,
+        sketch_token,
+        navigation,
+    ))
+}
+
+fn parse_control_definition_input(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<NewControlInputProvision, ShellError> {
+    let input = arguments
+        .get("input")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires input")))
+        .and_then(|raw_input| {
+            parse_datum_name(raw_input).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let input_source = arguments
+        .get("input_source")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires input_source")))
+        .and_then(|raw_source| {
+            parse_command_input_source_kind(raw_source)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let input_description = arguments
+        .get("input_description")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires input_description")))
+        .and_then(|raw_description| {
+            parse_command_input_source_description(raw_description)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let input_sketch_token = arguments
+        .get("input_sketch_token")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires input_sketch_token")))
+        .and_then(|raw_sketch_token| {
+            parse_sketch_token(raw_sketch_token)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let input_visible = arguments
+        .get("input_visible")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires input_visible")))?;
+    let input_decision = arguments
+        .get("input_decision")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires input_decision")))?;
+
+    Ok(NewControlInputProvision::new(
+        input,
+        input_source,
+        input_description,
+        input_sketch_token,
+        input_visible,
+        input_decision,
+    ))
+}
+
+fn parse_control_definition_navigation(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<NewNavigationTarget, ShellError> {
+    let navigation_type = arguments
+        .get("navigation_type")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires navigation_type")))
+        .and_then(|raw_navigation_type| {
+            parse_navigation_target_type(raw_navigation_type)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let navigation_target = arguments
+        .get("navigation_target")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires navigation_target")))
+        .and_then(|raw_navigation_target| {
+            parse_navigation_target_name(raw_navigation_target)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    Ok(NewNavigationTarget::new(navigation_type, navigation_target))
 }
 
 fn build_view_definition_from_arguments(

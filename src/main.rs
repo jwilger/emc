@@ -140,6 +140,16 @@ enum Command {
         slice_slug: SliceSlug,
         view_name: ViewName,
     },
+    UpdateControlDefinition {
+        slice_slug: SliceSlug,
+        view_name: ViewName,
+        control: NewControlDefinition,
+    },
+    RemoveControlDefinition {
+        slice_slug: SliceSlug,
+        view_name: ViewName,
+        control_name: ControlName,
+    },
     AddSlice {
         slice: NewSlice,
     },
@@ -306,6 +316,13 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         }
         Command::AddViewDefinition { view } => interpret(&command::add_view_definition(view)),
         Command::UpdateViewDefinition { view } => interpret(&command::update_view_definition(view)),
+        Command::UpdateControlDefinition {
+            slice_slug,
+            view_name,
+            control,
+        } => interpret(&command::update_control_definition(
+            slice_slug, view_name, control,
+        )),
         Command::AddSlice { slice } => interpret(&command::add_slice(slice)),
         Command::AddSliceScenario { scenario } => interpret(&command::add_slice_scenario(scenario)),
         Command::UpdateSliceScenario { scenario } => {
@@ -421,6 +438,15 @@ fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
             slice_slug,
             view_name,
         } => interpret(&command::remove_view_definition(slice_slug, view_name)),
+        Command::RemoveControlDefinition {
+            slice_slug,
+            view_name,
+            control_name,
+        } => interpret(&command::remove_control_definition(
+            slice_slug,
+            view_name,
+            control_name,
+        )),
         Command::RemoveSlice { slug } => interpret(&command::remove_slice(slug)),
         Command::RemoveSliceScenario {
             slice_slug,
@@ -602,6 +628,54 @@ fn build_navigation_external_workflow(
     Ok(navigation.with_external_workflow(external_workflow))
 }
 
+#[derive(Clone, Copy)]
+struct ControlDefinitionInput<'a> {
+    name: &'a str,
+    command: &'a str,
+    input: &'a str,
+    input_source: &'a str,
+    input_description: &'a str,
+    input_sketch_token: &'a str,
+    input_visible: &'a str,
+    input_decision: &'a str,
+    handled_errors: &'a str,
+    recovery_behavior: &'a str,
+    sketch_token: &'a str,
+    navigation_type: &'a str,
+    navigation_target: &'a str,
+}
+
+fn build_control_definition(
+    input: ControlDefinitionInput<'_>,
+) -> Result<NewControlDefinition, ShellError> {
+    let (control_name, control_command) =
+        parse_control_name_and_command(input.name, input.command)?;
+    let provision = build_control_input_provision(
+        input.input,
+        input.input_source,
+        input.input_description,
+        input.input_sketch_token,
+        input.input_visible,
+        input.input_decision,
+    )?;
+    let (handled_errors, recovery_behavior, control_sketch_token) =
+        parse_control_errors_recovery_sketch(
+            input.handled_errors,
+            input.recovery_behavior,
+            input.sketch_token,
+        )?;
+    let navigation = build_navigation_target(input.navigation_type, input.navigation_target)?;
+    Ok(NewControlDefinition::new(
+        control_name,
+        control_command,
+        provision,
+        handled_errors,
+        recovery_behavior,
+        control_sketch_token,
+        navigation,
+    ))
+}
+
 fn build_add_view_cli(
     slice_slug: SliceSlug,
     view_name: ViewName,
@@ -694,6 +768,35 @@ fn remove_read_model_definition_cli(slice: &str, name: &str) -> Result<Cli, Shel
     })
 }
 
+fn remove_control_definition_cli(slice: &str, view: &str, name: &str) -> Result<Cli, ShellError> {
+    let (slice_slug, view_name) = parse_slice_and_view_name(slice, view)?;
+    let control_name =
+        parse_control_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(Cli {
+        command: Command::RemoveControlDefinition {
+            slice_slug,
+            view_name,
+            control_name,
+        },
+    })
+}
+
+fn update_control_definition_cli(
+    slice: &str,
+    view: &str,
+    input: ControlDefinitionInput<'_>,
+) -> Result<Cli, ShellError> {
+    let (slice_slug, view_name) = parse_slice_and_view_name(slice, view)?;
+    let control = build_control_definition(input)?;
+    Ok(Cli {
+        command: Command::UpdateControlDefinition {
+            slice_slug,
+            view_name,
+            control,
+        },
+    })
+}
+
 fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
     match arguments {
         [] => Ok(Cli {
@@ -733,6 +836,114 @@ fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
         {
             remove_command_definition_cli(slice, name)
         }
+        _ => parse_cli_control_or_data_flow(arguments),
+    }
+}
+
+fn parse_cli_control_or_data_flow(arguments: &[String]) -> Result<Cli, ShellError> {
+    if let Some(cli) = parse_cli_control(arguments)? {
+        return Ok(cli);
+    }
+    parse_cli_data_flow(arguments)
+}
+
+fn parse_cli_control(arguments: &[String]) -> Result<Option<Cli>, ShellError> {
+    match arguments {
+        [
+            command,
+            subject,
+            slice_flag,
+            slice,
+            view_flag,
+            view,
+            name_flag,
+            name,
+        ] if command == "remove"
+            && subject == "control"
+            && slice_flag == "--slice"
+            && view_flag == "--view"
+            && name_flag == "--name" =>
+        {
+            remove_control_definition_cli(slice, view, name).map(Some)
+        }
+        [
+            command,
+            subject,
+            slice_flag,
+            slice,
+            view_flag,
+            view,
+            name_flag,
+            name,
+            control_command_flag,
+            control_command,
+            control_input_flag,
+            control_input,
+            control_input_source_flag,
+            control_input_source,
+            control_input_description_flag,
+            control_input_description,
+            control_input_sketch_token_flag,
+            control_input_sketch_token,
+            control_input_visible_flag,
+            control_input_visible,
+            control_input_decision_flag,
+            control_input_decision,
+            handled_errors_flag,
+            handled_errors,
+            recovery_behavior_flag,
+            recovery_behavior,
+            control_sketch_token_flag,
+            control_sketch_token,
+            navigation_type_flag,
+            navigation_type,
+            navigation_target_flag,
+            navigation_target,
+        ] if command == "update"
+            && subject == "control"
+            && slice_flag == "--slice"
+            && view_flag == "--view"
+            && name_flag == "--name"
+            && control_command_flag == "--command"
+            && control_input_flag == "--input"
+            && control_input_source_flag == "--input-source"
+            && control_input_description_flag == "--input-description"
+            && control_input_sketch_token_flag == "--input-sketch-token"
+            && control_input_visible_flag == "--input-visible"
+            && control_input_decision_flag == "--input-decision"
+            && handled_errors_flag == "--handled-errors"
+            && recovery_behavior_flag == "--recovery-behavior"
+            && control_sketch_token_flag == "--sketch-token"
+            && navigation_type_flag == "--navigation-type"
+            && navigation_target_flag == "--navigation-target" =>
+        {
+            update_control_definition_cli(
+                slice,
+                view,
+                ControlDefinitionInput {
+                    name,
+                    command: control_command,
+                    input: control_input,
+                    input_source: control_input_source,
+                    input_description: control_input_description,
+                    input_sketch_token: control_input_sketch_token,
+                    input_visible: control_input_visible,
+                    input_decision: control_input_decision,
+                    handled_errors,
+                    recovery_behavior,
+                    sketch_token: control_sketch_token,
+                    navigation_type,
+                    navigation_target,
+                },
+            )
+            .map(Some)
+        }
+        _ => Ok(None),
+    }
+}
+
+fn parse_cli_data_flow(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
         [
             command,
             subject,
