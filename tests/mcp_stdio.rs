@@ -1285,6 +1285,74 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_board_connection() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_board_connection(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_board_connection_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"update_board_connection\""))
+            .stdout(predicate::str::contains(
+                "updated board connection actor-submit -> CaptureTicket on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_quint.contains("source: \"ticket-form-submit\""),
+            "MCP-updated board connection source must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("source: \"actor-submit\""),
+            "old board connection source must be absent after MCP update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_board_connection() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_board_connection(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_board_connection_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"remove_board_connection\""))
+            .stdout(predicate::str::contains(
+                "removed board connection TicketCaptured -> ticket_state from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_quint.contains("source: \"TicketCaptured\""),
+            "MCP-removed board connection must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_slice_update_fork(&temp_dir)?;
@@ -1559,6 +1627,22 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_board_element\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-command\"}}}\n",
+        )
+    }
+
+    fn update_board_connection_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_board_connection\",\"arguments\":{\"slice\":\"capture-ticket\",\"source\":\"actor-submit\",\"source_kind\":\"workflow_trigger\",\"target\":\"CaptureTicket\",\"target_kind\":\"command\",\"new_source\":\"ticket-form-submit\",\"new_source_kind\":\"workflow_trigger\",\"new_target\":\"CaptureTicket\",\"new_target_kind\":\"command\"}}}\n",
+        )
+    }
+
+    fn remove_board_connection_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_board_connection\",\"arguments\":{\"slice\":\"capture-ticket\",\"source\":\"TicketCaptured\",\"source_kind\":\"event\",\"target\":\"ticket_state\",\"target_kind\":\"read_model\"}}}\n",
         )
     }
 
@@ -1870,6 +1954,124 @@ mod tests {
                 "Capture ticket",
                 "--main-path",
                 "true",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn initialize_project_with_board_connection(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        initialize_project_with_read_model(cwd)?;
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "command",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "CaptureTicket",
+                "--input",
+                "ticket_title",
+                "--input-source",
+                "actor",
+                "--input-description",
+                "title field on the intake form",
+                "--input-provenance",
+                "actor keystrokes -> form field",
+                "--emits",
+                "TicketCaptured",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        add_board_element(
+            cwd,
+            "CaptureTicket",
+            "command",
+            "actions",
+            "CaptureTicket",
+            true,
+        )?;
+        add_board_element(
+            cwd,
+            "TicketCaptured",
+            "event",
+            "events",
+            "TicketCaptured",
+            false,
+        )?;
+        add_board_element(
+            cwd,
+            "ticket_state",
+            "read_model",
+            "actions",
+            "ticket_state",
+            false,
+        )?;
+        add_board_connection(
+            cwd,
+            "actor-submit",
+            "workflow_trigger",
+            "CaptureTicket",
+            "command",
+        )?;
+        add_board_connection(cwd, "TicketCaptured", "event", "ticket_state", "read_model")?;
+        Ok(())
+    }
+
+    fn add_board_element(
+        cwd: &Path,
+        name: &str,
+        kind: &str,
+        lane: &str,
+        declared_name: &str,
+        main_path: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "board-element",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                name,
+                "--kind",
+                kind,
+                "--lane",
+                lane,
+                "--declared-name",
+                declared_name,
+                "--main-path",
+                if main_path { "true" } else { "false" },
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn add_board_connection(
+        cwd: &Path,
+        source: &str,
+        source_kind: &str,
+        target: &str,
+        target_kind: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "board-connection",
+                "--slice",
+                "capture-ticket",
+                "--source",
+                source,
+                "--source-kind",
+                source_kind,
+                "--target",
+                target,
+                "--target-kind",
+                target_kind,
             ])
             .current_dir(cwd)
             .assert()

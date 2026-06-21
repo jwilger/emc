@@ -13,17 +13,18 @@ use tokio::runtime::Builder;
 use crate::core::event_commands::{
     AddSliceCommand, AddSliceFactCommand, AddWorkflowCommand, AddWorkflowFactCommand,
     ConnectWorkflowCommand, DeclareWorkflowReadinessCommand, EmcEvent, InitializeProjectCommand,
-    RecordReviewCommand, RemoveAutomationDefinitionCommand, RemoveBoardElementCommand,
-    RemoveCommandDefinitionCommand, RemoveEventDefinitionCommand,
+    RecordReviewCommand, RemoveAutomationDefinitionCommand, RemoveBoardConnectionCommand,
+    RemoveBoardElementCommand, RemoveCommandDefinitionCommand, RemoveEventDefinitionCommand,
     RemoveExternalPayloadDefinitionCommand, RemoveOutcomeDefinitionCommand,
     RemoveReadModelDefinitionCommand, RemoveSliceCommand, RemoveSliceScenarioCommand,
     RemoveTranslationDefinitionCommand, RemoveViewControlCommand, RemoveViewDefinitionCommand,
     RemoveWorkflowCommand, RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
-    UpdateAutomationDefinitionCommand, UpdateBoardElementCommand, UpdateCommandDefinitionCommand,
-    UpdateEventDefinitionCommand, UpdateExternalPayloadDefinitionCommand,
-    UpdateOutcomeDefinitionCommand, UpdateReadModelDefinitionCommand, UpdateSliceCommand,
-    UpdateSliceScenarioCommand, UpdateTranslationDefinitionCommand, UpdateViewControlCommand,
-    UpdateViewDefinitionCommand, UpdateWorkflowCommand, WorkflowFactInput,
+    UpdateAutomationDefinitionCommand, UpdateBoardConnectionCommand, UpdateBoardElementCommand,
+    UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand,
+    UpdateExternalPayloadDefinitionCommand, UpdateOutcomeDefinitionCommand,
+    UpdateReadModelDefinitionCommand, UpdateSliceCommand, UpdateSliceScenarioCommand,
+    UpdateTranslationDefinitionCommand, UpdateViewControlCommand, UpdateViewDefinitionCommand,
+    UpdateWorkflowCommand, WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
 
@@ -204,7 +205,11 @@ async fn dispatch_exported_event(
         | ExportedEventBody::SliceBoardElementAdded { .. }
         | ExportedEventBody::SliceBoardElementUpdated { .. }
         | ExportedEventBody::SliceBoardElementRemoved { .. }
-        | ExportedEventBody::SliceBoardConnectionAdded { .. } => dispatch_slice(store, body).await,
+        | ExportedEventBody::SliceBoardConnectionAdded { .. }
+        | ExportedEventBody::SliceBoardConnectionUpdated { .. }
+        | ExportedEventBody::SliceBoardConnectionRemoved { .. } => {
+            dispatch_slice(store, body).await
+        }
         ExportedEventBody::ReviewRecorded { .. } | ExportedEventBody::ConflictResolved { .. } => {
             dispatch_review_or_conflict(store, body).await
         }
@@ -421,6 +426,10 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
         | ExportedEventBody::SliceBoardElementRemoved { .. } => {
             dispatch_slice_board_element(store, body).await
         }
+        ExportedEventBody::SliceBoardConnectionUpdated { .. }
+        | ExportedEventBody::SliceBoardConnectionRemoved { .. } => {
+            dispatch_slice_board_connection(store, body).await
+        }
         ExportedEventBody::SliceTranslationDefinitionUpdated { .. }
         | ExportedEventBody::SliceTranslationDefinitionRemoved { .. } => {
             dispatch_slice_translation(store, body).await
@@ -576,6 +585,32 @@ async fn dispatch_slice_board_element(
             .await
         }
         _ => Err("dispatch_slice_board_element received a non-board-element body".to_owned()),
+    }
+}
+
+async fn dispatch_slice_board_connection(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<(), String> {
+    match body {
+        ExportedEventBody::SliceBoardConnectionUpdated {
+            previous,
+            connection,
+        } => {
+            run_command(
+                store,
+                UpdateBoardConnectionCommand::new(previous.clone(), connection.clone())?,
+            )
+            .await
+        }
+        ExportedEventBody::SliceBoardConnectionRemoved { connection } => {
+            run_command(
+                store,
+                RemoveBoardConnectionCommand::new(connection.clone())?,
+            )
+            .await
+        }
+        _ => Err("dispatch_slice_board_connection received a non-board-connection body".to_owned()),
     }
 }
 

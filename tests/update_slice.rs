@@ -1703,6 +1703,125 @@ mod tests {
     }
 
     #[test]
+    fn update_board_connection_rewrites_synchronized_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_capture_ticket_command(temp_dir.path())?;
+        add_capture_ticket_command_board_element(temp_dir.path(), true)?;
+        add_workflow_trigger_to_command_board_connection(temp_dir.path(), "actor-submit")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "board-connection",
+                "--slice",
+                "capture-ticket",
+                "--source",
+                "actor-submit",
+                "--source-kind",
+                "workflow_trigger",
+                "--target",
+                "CaptureTicket",
+                "--target-kind",
+                "command",
+                "--new-source",
+                "ticket-form-submit",
+                "--new-source-kind",
+                "workflow_trigger",
+                "--new-target",
+                "CaptureTicket",
+                "--new-target-kind",
+                "command",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated board connection actor-submit -> CaptureTicket on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("source := \"ticket-form-submit\""),
+            "updated board connection source must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("source: \"ticket-form-submit\""),
+            "updated board connection source must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("source := \"actor-submit\""),
+            "old board connection source must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_board_connection_removes_it_from_synchronized_artifacts() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_ticket_captured_event(temp_dir.path())?;
+        add_ticket_state_read_model(temp_dir.path())?;
+        add_ticket_captured_event_board_element(temp_dir.path(), false)?;
+        add_ticket_state_read_model_board_element(temp_dir.path(), false)?;
+        add_event_to_read_model_board_connection(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "board-connection",
+                "--slice",
+                "capture-ticket",
+                "--source",
+                "TicketCaptured",
+                "--source-kind",
+                "event",
+                "--target",
+                "ticket_state",
+                "--target-kind",
+                "read_model",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed board connection TicketCaptured -> ticket_state from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_lean.contains("source := \"TicketCaptured\""),
+            "removed board connection must be absent from Lean slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("source: \"TicketCaptured\""),
+            "removed board connection must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn remove_control_definition_removes_it_from_synchronized_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -2094,6 +2213,120 @@ mod tests {
                 "Capture ticket",
                 "--main-path",
                 "true",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_capture_ticket_command_board_element(
+        cwd: &Path,
+        main_path: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        add_board_element(
+            cwd,
+            "CaptureTicket",
+            "command",
+            "actions",
+            "CaptureTicket",
+            main_path,
+        )
+    }
+
+    fn add_ticket_captured_event_board_element(
+        cwd: &Path,
+        main_path: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        add_board_element(
+            cwd,
+            "TicketCaptured",
+            "event",
+            "events",
+            "TicketCaptured",
+            main_path,
+        )
+    }
+
+    fn add_ticket_state_read_model_board_element(
+        cwd: &Path,
+        main_path: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        add_board_element(
+            cwd,
+            "ticket_state",
+            "read_model",
+            "actions",
+            "ticket_state",
+            main_path,
+        )
+    }
+
+    fn add_board_element(
+        cwd: &Path,
+        name: &str,
+        kind: &str,
+        lane: &str,
+        declared_name: &str,
+        main_path: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "board-element",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                name,
+                "--kind",
+                kind,
+                "--lane",
+                lane,
+                "--declared-name",
+                declared_name,
+                "--main-path",
+                if main_path { "true" } else { "false" },
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_workflow_trigger_to_command_board_connection(
+        cwd: &Path,
+        source: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        add_board_connection(cwd, source, "workflow_trigger", "CaptureTicket", "command")
+    }
+
+    fn add_event_to_read_model_board_connection(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        add_board_connection(cwd, "TicketCaptured", "event", "ticket_state", "read_model")
+    }
+
+    fn add_board_connection(
+        cwd: &Path,
+        source: &str,
+        source_kind: &str,
+        target: &str,
+        target_kind: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "board-connection",
+                "--slice",
+                "capture-ticket",
+                "--source",
+                source,
+                "--source-kind",
+                source_kind,
+                "--target",
+                target,
+                "--target-kind",
+                target_kind,
             ])
             .current_dir(cwd)
             .assert()

@@ -37,17 +37,20 @@ This ledger tracks #159 across multiple PRs.
 - PR #186: added event-sourced CLI and MCP update/remove support for
   external payload definitions. Covers behavior through synchronized Lean4/Quint
   artifact assertions for both CLI and MCP entry points.
-- Current branch: adds event-sourced CLI and MCP update/remove support for
+- PR #188: added event-sourced CLI and MCP update/remove support for
   board elements. Covers behavior through synchronized Lean4/Quint
   artifact assertions for both CLI and MCP entry points.
+- Current branch: adds event-sourced CLI and MCP update/remove support for
+  board connections. Covers behavior through synchronized Lean4/Quint artifact
+  assertions for both CLI and MCP entry points.
 
 ## Current PR boundary
 
 - This PR should broaden beyond scenarios, commands, events, read models, views,
   controls, outcomes, automations, translations, and external payload
-  definitions to board elements without closing #159. Keep #159 open until all
-  modeled element families listed in the issue have CLI and MCP update/remove
-  coverage.
+  definitions, and board elements to board connections without closing #159.
+  Keep #159 open until all modeled element families listed in the issue have CLI
+  and MCP update/remove coverage.
 
 ## Remaining modeled element targets
 
@@ -61,8 +64,9 @@ This ledger tracks #159 across multiple PRs.
   by PR #172, read models are covered by PR #174, views are covered by PR #176,
   controls are covered by PR #178, outcomes are covered by PR #180, automations
   are covered by PR #182, translations are covered by PR #184, external
-  payloads are covered by PR #186, and board elements are covered by the current
-  branch. Remaining families are board connections and data-flow facts.
+  payloads are covered by PR #186, board elements are covered by PR #188, and
+  board connections are covered by the current branch. Remaining family is
+  data-flow facts.
 - Scenario follow-up: add tests for contract scenario update/remove if needed by
   final completion evidence.
 
@@ -93,8 +97,9 @@ This ledger tracks #159 across multiple PRs.
 - `cargo test --test mcp_stdio external_payload_definition`
 - `cargo test --test update_slice board_element`
 - `cargo test --test mcp_stdio board_element`
+- `cargo test --test update_slice board_connection`
+- `cargo test --test mcp_stdio board_connection`
 
 ## Next likely increment
 
-Extend the same update/remove pattern to board connections, then continue
-through data-flow facts.
+Extend the same update/remove pattern to data-flow facts.

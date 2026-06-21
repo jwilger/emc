@@ -24,6 +24,7 @@ use crate::core::effect::{
     Effect, EffectPlan, EventConflictResolution, FileContents, FileWriteEffect, ModelContentDigest,
     ProcessInvocation, ProcessInvocations, ProjectPath, ProjectionFingerprint, ReportLine,
     ReviewEventReference, ReviewRecordRequirement, SliceAutomationDefinitionRemovalEffect,
+    SliceBoardConnectionRemovalEffect, SliceBoardConnectionUpdateEffect,
     SliceBoardElementRemovalEffect, SliceCommandDefinitionRemovalEffect,
     SliceDescriptionUpdateEffect, SliceEventDefinitionRemovalEffect,
     SliceExternalPayloadDefinitionRemovalEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
@@ -335,6 +336,8 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::UpdateAutomationDefinitionFromSlice(_)
             | Effect::AddBitLevelDataFlowFromSlice(_)
             | Effect::AddBoardConnectionFromSlice(_)
+            | Effect::RemoveBoardConnectionFromSlice(_)
+            | Effect::UpdateBoardConnectionFromSlice(_)
             | Effect::AddBoardElementFromSlice(_)
             | Effect::RemoveBoardElementFromSlice(_)
             | Effect::UpdateBoardElementFromSlice(_)
@@ -501,6 +504,12 @@ fn interpret_slice_fact_effect(effect: &Effect) -> Option<Result<Vec<String>, Sh
         }
         Effect::AddBoardConnectionFromSlice(connection) => {
             interpret_board_connection_added(connection)
+        }
+        Effect::RemoveBoardConnectionFromSlice(removal) => {
+            interpret_board_connection_removed(removal)
+        }
+        Effect::UpdateBoardConnectionFromSlice(update) => {
+            interpret_board_connection_updated(update)
         }
         Effect::AddBoardElementFromSlice(element) => interpret_board_element_added(element),
         Effect::RemoveBoardElementFromSlice(removal) => interpret_board_element_removed(removal),
@@ -715,6 +724,55 @@ fn interpret_board_connection_added(
         connection.slice_slug(),
         reports,
         EventDraft::slice_board_connection_added(connection),
+    )
+}
+
+fn interpret_board_connection_updated(
+    update: &SliceBoardConnectionUpdateEffect,
+) -> Result<Vec<String>, ShellError> {
+    let previous = update.previous();
+    let replacement = update.replacement();
+    let reports = vec![
+        projected_report(format!(
+            "updated board connection {} -> {} on slice {}",
+            previous.source().as_ref(),
+            previous.target().as_ref(),
+            previous.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "updated board connection {} -> {} in project root",
+            previous.source().as_ref(),
+            previous.target().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        previous.slice_slug(),
+        reports,
+        EventDraft::slice_board_connection_updated(previous, replacement),
+    )
+}
+
+fn interpret_board_connection_removed(
+    removal: &SliceBoardConnectionRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let connection = removal.connection();
+    let reports = vec![
+        projected_report(format!(
+            "removed board connection {} -> {} from slice {}",
+            connection.source().as_ref(),
+            connection.target().as_ref(),
+            connection.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "removed board connection {} -> {} from project root",
+            connection.source().as_ref(),
+            connection.target().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        connection.slice_slug(),
+        reports,
+        EventDraft::slice_board_connection_removed(connection),
     )
 }
 

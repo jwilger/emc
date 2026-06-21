@@ -194,6 +194,16 @@ pub(crate) enum EmcEvent {
         #[serde(flatten)]
         element: SliceBoardElementRemovalEvent,
     },
+    SliceBoardConnectionUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        connection: SliceBoardConnectionUpdateEvent,
+    },
+    SliceBoardConnectionRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        connection: SliceBoardConnectionRemovalEvent,
+    },
     SliceTranslationDefinitionUpdated {
         stream_id: StreamId,
         #[serde(flatten)]
@@ -323,6 +333,8 @@ impl Event for EmcEvent {
             | Self::SliceAutomationDefinitionRemoved { stream_id, .. }
             | Self::SliceBoardElementUpdated { stream_id, .. }
             | Self::SliceBoardElementRemoved { stream_id, .. }
+            | Self::SliceBoardConnectionUpdated { stream_id, .. }
+            | Self::SliceBoardConnectionRemoved { stream_id, .. }
             | Self::SliceTranslationDefinitionUpdated { stream_id, .. }
             | Self::SliceTranslationDefinitionRemoved { stream_id, .. }
             | Self::SliceExternalPayloadDefinitionUpdated { stream_id, .. }
@@ -1094,6 +1106,185 @@ impl<'de> Deserialize<'de> for SliceBoardElementRemovalEvent {
             }
             other => Err(DeserializeError::custom(format!(
                 "expected SliceBoardElementRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateBoardConnectionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    previous: NewBoardConnection,
+    replacement: NewBoardConnection,
+}
+
+impl UpdateBoardConnectionCommand {
+    pub(crate) fn new(
+        previous: NewBoardConnection,
+        replacement: NewBoardConnection,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(previous.slice_slug().as_ref())?,
+            previous,
+            replacement,
+        })
+    }
+}
+
+impl CommandLogic for UpdateBoardConnectionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before updating board connection"
+        );
+        Ok(vec![EmcEvent::SliceBoardConnectionUpdated {
+            stream_id: self.slice_stream.clone(),
+            connection: SliceBoardConnectionUpdateEvent::new(
+                self.previous.clone(),
+                self.replacement.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveBoardConnectionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    connection: NewBoardConnection,
+}
+
+impl RemoveBoardConnectionCommand {
+    pub(crate) fn new(connection: NewBoardConnection) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(connection.slice_slug().as_ref())?,
+            connection,
+        })
+    }
+}
+
+impl CommandLogic for RemoveBoardConnectionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before removing board connection"
+        );
+        Ok(vec![EmcEvent::SliceBoardConnectionRemoved {
+            stream_id: self.slice_stream.clone(),
+            connection: SliceBoardConnectionRemovalEvent::new(self.connection.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceBoardConnectionUpdateEvent {
+    previous: NewBoardConnection,
+    replacement: NewBoardConnection,
+}
+
+impl SliceBoardConnectionUpdateEvent {
+    pub(crate) fn new(previous: NewBoardConnection, replacement: NewBoardConnection) -> Self {
+        Self {
+            previous,
+            replacement,
+        }
+    }
+
+    pub(crate) fn previous(&self) -> &NewBoardConnection {
+        &self.previous
+    }
+
+    pub(crate) fn replacement(&self) -> &NewBoardConnection {
+        &self.replacement
+    }
+}
+
+impl Serialize for SliceBoardConnectionUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_board_connection_updated(&self.previous, &self.replacement)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceBoardConnectionUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceBoardConnectionUpdated {
+                previous,
+                connection,
+            } => Ok(Self::new(previous, connection)),
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceBoardConnectionUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceBoardConnectionRemovalEvent {
+    connection: NewBoardConnection,
+}
+
+impl SliceBoardConnectionRemovalEvent {
+    pub(crate) fn new(connection: NewBoardConnection) -> Self {
+        Self { connection }
+    }
+
+    pub(crate) fn connection(&self) -> &NewBoardConnection {
+        &self.connection
+    }
+}
+
+impl Serialize for SliceBoardConnectionRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_board_connection_removed(&self.connection)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceBoardConnectionRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceBoardConnectionRemoved { connection } => {
+                Ok(Self::new(connection))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceBoardConnectionRemoved event body, got {}",
                 other.event_type()
             ))),
         }

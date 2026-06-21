@@ -3,7 +3,8 @@
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::effect::{
     ChosenEventId, CleanReviewEffect, Effect, EffectPlan, EventConflictId, EventConflictResolution,
-    SliceAutomationDefinitionRemovalEffect, SliceBoardElementRemovalEffect,
+    SliceAutomationDefinitionRemovalEffect, SliceBoardConnectionRemovalEffect,
+    SliceBoardConnectionUpdateEffect, SliceBoardElementRemovalEffect,
     SliceCommandDefinitionRemovalEffect, SliceDescriptionUpdateEffect,
     SliceEventDefinitionRemovalEffect, SliceExternalPayloadDefinitionRemovalEffect,
     SliceKindUpdateEffect, SliceNameUpdateEffect, SliceOutcomeDefinitionRemovalEffect,
@@ -241,6 +242,21 @@ pub(crate) fn remove_board_element(
 
 pub(crate) fn add_board_connection(connection: NewBoardConnection) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddBoardConnectionFromSlice(connection)])
+}
+
+pub(crate) fn update_board_connection(
+    previous: NewBoardConnection,
+    replacement: NewBoardConnection,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateBoardConnectionFromSlice(
+        SliceBoardConnectionUpdateEffect::new(previous, replacement),
+    )])
+}
+
+pub(crate) fn remove_board_connection(connection: NewBoardConnection) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveBoardConnectionFromSlice(
+        SliceBoardConnectionRemovalEffect::new(connection),
+    )])
 }
 
 pub(crate) fn add_workflow(workflow: NewWorkflow) -> EffectPlan {

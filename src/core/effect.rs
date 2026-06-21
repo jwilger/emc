@@ -243,6 +243,44 @@ impl SliceBoardElementRemovalEffect {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceBoardConnectionUpdateEffect {
+    previous: NewBoardConnection,
+    replacement: NewBoardConnection,
+}
+
+impl SliceBoardConnectionUpdateEffect {
+    pub(crate) fn new(previous: NewBoardConnection, replacement: NewBoardConnection) -> Self {
+        Self {
+            previous,
+            replacement,
+        }
+    }
+
+    pub(crate) fn previous(&self) -> &NewBoardConnection {
+        &self.previous
+    }
+
+    pub(crate) fn replacement(&self) -> &NewBoardConnection {
+        &self.replacement
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceBoardConnectionRemovalEffect {
+    connection: NewBoardConnection,
+}
+
+impl SliceBoardConnectionRemovalEffect {
+    pub(crate) fn new(connection: NewBoardConnection) -> Self {
+        Self { connection }
+    }
+
+    pub(crate) fn connection(&self) -> &NewBoardConnection {
+        &self.connection
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct SliceReadModelDefinitionRemovalEffect {
     slice_slug: SliceSlug,
     read_model_name: ReadModelName,
@@ -979,6 +1017,8 @@ pub(crate) enum Effect {
     UpdateAutomationDefinitionFromSlice(NewAutomationDefinition),
     AddBitLevelDataFlowFromSlice(NewBitLevelDataFlow),
     AddBoardConnectionFromSlice(NewBoardConnection),
+    UpdateBoardConnectionFromSlice(SliceBoardConnectionUpdateEffect),
+    RemoveBoardConnectionFromSlice(SliceBoardConnectionRemovalEffect),
     AddBoardElementFromSlice(NewBoardElement),
     UpdateBoardElementFromSlice(NewBoardElement),
     RemoveBoardElementFromSlice(SliceBoardElementRemovalEffect),
