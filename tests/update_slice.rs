@@ -1501,6 +1501,108 @@ mod tests {
     }
 
     #[test]
+    fn update_external_payload_definition_rewrites_synchronized_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_ticket_webhook_payload(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "external-payload",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketWebhookPayload",
+                "--field",
+                "ticket_id",
+                "--field-provenance",
+                "retry webhook ticket identifier",
+                "--bit-encoding",
+                "UTF-8 retry ticket id",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated external payload TicketWebhookPayload.ticket_id on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("retry webhook ticket identifier"),
+            "updated external payload provenance must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("UTF-8 retry ticket id"),
+            "updated external payload bit encoding must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("UTF-8 webhook ticket id"),
+            "old external payload bit encoding must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_external_payload_definition_removes_it_from_synchronized_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_ticket_webhook_payload(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "external-payload",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketWebhookPayload",
+                "--field",
+                "ticket_id",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed external payload TicketWebhookPayload.ticket_id from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_lean.contains("name := \"TicketWebhookPayload\""),
+            "removed external payload must be absent from Lean slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("name: \"TicketWebhookPayload\""),
+            "removed external payload must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn remove_control_definition_removes_it_from_synchronized_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -1844,6 +1946,29 @@ mod tests {
                 "TicketWebhookPayload",
                 "--command",
                 "CaptureTicket",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_ticket_webhook_payload(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "external-payload",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketWebhookPayload",
+                "--field",
+                "ticket_id",
+                "--field-provenance",
+                "webhook ticket identifier",
+                "--bit-encoding",
+                "UTF-8 webhook ticket id",
             ])
             .current_dir(cwd)
             .assert()

@@ -14,11 +14,11 @@ use crate::core::formal_slice_facts::{
 };
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    AutomationName, CommandName, ControlName, EventName, ModelDescription, ModelName,
-    OutcomeLabelName, ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SliceSlug,
-    TranslationName, ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
-    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug,
-    WorkflowTransitionEvidenceRecord,
+    AutomationName, CommandName, ControlName, EventAttributeSourceField, EventAttributeSourceName,
+    EventName, ModelDescription, ModelName, OutcomeLabelName, ReadModelName, ReviewTimestamp,
+    ReviewerId, ScenarioName, SliceSlug, TranslationName, ViewName, WorkflowCommandErrorRecord,
+    WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
+    WorkflowSlug, WorkflowTransitionEvidenceRecord,
 };
 use crate::core::workflow::NewWorkflow;
 
@@ -183,6 +183,39 @@ impl SliceTranslationDefinitionRemovalEffect {
 
     pub(crate) fn translation_name(&self) -> &TranslationName {
         &self.translation_name
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceExternalPayloadDefinitionRemovalEffect {
+    slice_slug: SliceSlug,
+    payload_name: EventAttributeSourceName,
+    payload_field: EventAttributeSourceField,
+}
+
+impl SliceExternalPayloadDefinitionRemovalEffect {
+    pub(crate) fn new(
+        slice_slug: SliceSlug,
+        payload_name: EventAttributeSourceName,
+        payload_field: EventAttributeSourceField,
+    ) -> Self {
+        Self {
+            slice_slug,
+            payload_name,
+            payload_field,
+        }
+    }
+
+    pub(crate) fn slice_slug(&self) -> &SliceSlug {
+        &self.slice_slug
+    }
+
+    pub(crate) fn payload_name(&self) -> &EventAttributeSourceName {
+        &self.payload_name
+    }
+
+    pub(crate) fn payload_field(&self) -> &EventAttributeSourceField {
+        &self.payload_field
     }
 }
 
@@ -931,6 +964,8 @@ pub(crate) enum Effect {
     RemoveEventDefinitionFromSlice(SliceEventDefinitionRemovalEffect),
     UpdateEventDefinitionFromSlice(NewEventDefinition),
     AddExternalPayloadDefinitionFromSlice(NewExternalPayloadDefinition),
+    RemoveExternalPayloadDefinitionFromSlice(SliceExternalPayloadDefinitionRemovalEffect),
+    UpdateExternalPayloadDefinitionFromSlice(NewExternalPayloadDefinition),
     AddOutcomeDefinitionFromSlice(NewOutcomeDefinition),
     RemoveOutcomeDefinitionFromSlice(SliceOutcomeDefinitionRemovalEffect),
     UpdateOutcomeDefinitionFromSlice(NewOutcomeDefinition),

@@ -155,6 +155,8 @@ pub(crate) enum ExportedEventType {
     SliceOutcomeDefinitionUpdated,
     SliceOutcomeDefinitionRemoved,
     SliceExternalPayloadAdded,
+    SliceExternalPayloadDefinitionUpdated,
+    SliceExternalPayloadDefinitionRemoved,
     SliceEventDefinitionAdded,
     SliceEventDefinitionUpdated,
     SliceEventDefinitionRemoved,
@@ -210,6 +212,12 @@ impl ExportedEventType {
             "SliceOutcomeDefinitionUpdated" => Ok(Self::SliceOutcomeDefinitionUpdated),
             "SliceOutcomeDefinitionRemoved" => Ok(Self::SliceOutcomeDefinitionRemoved),
             "SliceExternalPayloadAdded" => Ok(Self::SliceExternalPayloadAdded),
+            "SliceExternalPayloadDefinitionUpdated" => {
+                Ok(Self::SliceExternalPayloadDefinitionUpdated)
+            }
+            "SliceExternalPayloadDefinitionRemoved" => {
+                Ok(Self::SliceExternalPayloadDefinitionRemoved)
+            }
             "SliceEventDefinitionAdded" => Ok(Self::SliceEventDefinitionAdded),
             "SliceEventDefinitionUpdated" => Ok(Self::SliceEventDefinitionUpdated),
             "SliceEventDefinitionRemoved" => Ok(Self::SliceEventDefinitionRemoved),
@@ -268,6 +276,8 @@ impl AsRef<str> for ExportedEventType {
             Self::SliceOutcomeDefinitionUpdated => "SliceOutcomeDefinitionUpdated",
             Self::SliceOutcomeDefinitionRemoved => "SliceOutcomeDefinitionRemoved",
             Self::SliceExternalPayloadAdded => "SliceExternalPayloadAdded",
+            Self::SliceExternalPayloadDefinitionUpdated => "SliceExternalPayloadDefinitionUpdated",
+            Self::SliceExternalPayloadDefinitionRemoved => "SliceExternalPayloadDefinitionRemoved",
             Self::SliceEventDefinitionAdded => "SliceEventDefinitionAdded",
             Self::SliceEventDefinitionUpdated => "SliceEventDefinitionUpdated",
             Self::SliceEventDefinitionRemoved => "SliceEventDefinitionRemoved",
@@ -2374,6 +2384,14 @@ pub(crate) enum ExportedEventBody {
     SliceExternalPayloadAdded {
         external_payload: NewExternalPayloadDefinition,
     },
+    SliceExternalPayloadDefinitionUpdated {
+        external_payload: NewExternalPayloadDefinition,
+    },
+    SliceExternalPayloadDefinitionRemoved {
+        slice: SliceSlug,
+        name: EventAttributeSourceName,
+        field: EventAttributeSourceField,
+    },
     SliceEventDefinitionAdded {
         event: NewEventDefinition,
     },
@@ -2504,6 +2522,12 @@ impl ExportedEventBody {
                 ExportedEventType::SliceOutcomeDefinitionRemoved
             }
             Self::SliceExternalPayloadAdded { .. } => ExportedEventType::SliceExternalPayloadAdded,
+            Self::SliceExternalPayloadDefinitionUpdated { .. } => {
+                ExportedEventType::SliceExternalPayloadDefinitionUpdated
+            }
+            Self::SliceExternalPayloadDefinitionRemoved { .. } => {
+                ExportedEventType::SliceExternalPayloadDefinitionRemoved
+            }
             Self::SliceEventDefinitionAdded { .. } => ExportedEventType::SliceEventDefinitionAdded,
             Self::SliceEventDefinitionUpdated { .. } => {
                 ExportedEventType::SliceEventDefinitionUpdated
@@ -2644,10 +2668,16 @@ impl ExportedEventBody {
             Self::SliceOutcomeDefinitionRemoved { slice, label } => {
                 json!({ "slice": slice.as_ref(), "label": label.as_ref() })
             }
-            Self::SliceExternalPayloadAdded { external_payload } => {
+            Self::SliceExternalPayloadAdded { external_payload }
+            | Self::SliceExternalPayloadDefinitionUpdated { external_payload } => {
                 SliceExternalPayloadAddedEventPayload::from_external_payload(external_payload)
                     .to_json_value()
             }
+            Self::SliceExternalPayloadDefinitionRemoved { slice, name, field } => json!({
+                "slice": slice.as_ref(),
+                "name": name.as_ref(),
+                "field": field.as_ref(),
+            }),
             Self::SliceEventDefinitionAdded { event }
             | Self::SliceEventDefinitionUpdated { event } => {
                 SliceEventDefinitionAddedEventPayload::from_event(event).to_json_value()
@@ -2883,10 +2913,11 @@ impl ExportedEventBody {
             | ExportedEventType::SliceOutcomeDefinitionRemoved => {
                 Self::outcome_from_event_type_and_payload(event_type, payload)
             }
-            ExportedEventType::SliceExternalPayloadAdded => Ok(Self::SliceExternalPayloadAdded {
-                external_payload: SliceExternalPayloadAddedEventPayload::from_json_value(payload)?
-                    .into_external_payload(),
-            }),
+            ExportedEventType::SliceExternalPayloadAdded
+            | ExportedEventType::SliceExternalPayloadDefinitionUpdated
+            | ExportedEventType::SliceExternalPayloadDefinitionRemoved => {
+                Self::external_payload_from_event_type_and_payload(event_type, payload)
+            }
             ExportedEventType::SliceEventDefinitionAdded => Ok(Self::SliceEventDefinitionAdded {
                 event: SliceEventDefinitionAddedEventPayload::from_json_value(payload)?
                     .into_event(),
@@ -2956,6 +2987,36 @@ impl ExportedEventBody {
                     .into_connection(),
             }),
             _ => Self::misc_from_event_type_and_payload(event_type, payload),
+        }
+    }
+
+    fn external_payload_from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
+            ExportedEventType::SliceExternalPayloadAdded => Ok(Self::SliceExternalPayloadAdded {
+                external_payload: SliceExternalPayloadAddedEventPayload::from_json_value(payload)?
+                    .into_external_payload(),
+            }),
+            ExportedEventType::SliceExternalPayloadDefinitionUpdated => {
+                Ok(Self::SliceExternalPayloadDefinitionUpdated {
+                    external_payload: SliceExternalPayloadAddedEventPayload::from_json_value(
+                        payload,
+                    )?
+                    .into_external_payload(),
+                })
+            }
+            ExportedEventType::SliceExternalPayloadDefinitionRemoved => {
+                Ok(Self::SliceExternalPayloadDefinitionRemoved {
+                    slice: slice_slug(required_str(payload, "slice")?)?,
+                    name: event_attribute_source_name(required_str(payload, "name")?)?,
+                    field: event_attribute_source_field(required_str(payload, "field")?)?,
+                })
+            }
+            other => Err(format!(
+                "external_payload_from_event_type_and_payload received a non-external-payload event type {other}"
+            )),
         }
     }
 
@@ -3365,6 +3426,32 @@ impl EventDraft {
             stream_id: EventStreamId::slice(external_payload.slice_slug()),
             body: ExportedEventBody::SliceExternalPayloadAdded {
                 external_payload: external_payload.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_external_payload_definition_updated(
+        external_payload: &NewExternalPayloadDefinition,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(external_payload.slice_slug()),
+            body: ExportedEventBody::SliceExternalPayloadDefinitionUpdated {
+                external_payload: external_payload.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_external_payload_definition_removed(
+        slice: &SliceSlug,
+        name: &EventAttributeSourceName,
+        field: &EventAttributeSourceField,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(slice),
+            body: ExportedEventBody::SliceExternalPayloadDefinitionRemoved {
+                slice: slice.clone(),
+                name: name.clone(),
+                field: field.clone(),
             },
         }
     }
@@ -3957,17 +4044,17 @@ impl ProjectedModel {
             | EmcEvent::SliceTranslationDefinitionRemoved { .. } => {
                 Self::apply_translation_definition_event(model, event)
             }
-            EmcEvent::SliceOutcomeDefinitionUpdated { outcome, .. } => {
-                Self::apply_outcome_definition_updated(model, outcome.outcome())
+            EmcEvent::SliceExternalPayloadDefinitionUpdated { .. }
+            | EmcEvent::SliceExternalPayloadDefinitionRemoved { .. } => {
+                Self::apply_external_payload_definition_event(model, event)
             }
-            EmcEvent::SliceOutcomeDefinitionRemoved { outcome, .. } => {
-                Self::apply_outcome_definition_removed(model, outcome.slice(), outcome.label())
+            EmcEvent::SliceOutcomeDefinitionUpdated { .. }
+            | EmcEvent::SliceOutcomeDefinitionRemoved { .. } => {
+                Self::apply_outcome_definition_event(model, event)
             }
-            EmcEvent::SliceEventDefinitionUpdated { event, .. } => {
-                Self::apply_event_definition_updated(model, event.event())
-            }
-            EmcEvent::SliceEventDefinitionRemoved { event, .. } => {
-                Self::apply_event_definition_removed(model, event.slice(), event.name())
+            EmcEvent::SliceEventDefinitionUpdated { .. }
+            | EmcEvent::SliceEventDefinitionRemoved { .. } => {
+                Self::apply_event_definition_event(model, event)
             }
             EmcEvent::SliceCommandDefinitionUpdated { command, .. } => {
                 Self::apply_command_definition_updated(model, command.command())
@@ -4246,6 +4333,64 @@ impl ProjectedModel {
         }
     }
 
+    fn apply_external_payload_definition_event(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        match event {
+            EmcEvent::SliceExternalPayloadDefinitionUpdated {
+                external_payload, ..
+            } => Self::apply_external_payload_definition_updated(
+                model,
+                external_payload.external_payload(),
+            ),
+            EmcEvent::SliceExternalPayloadDefinitionRemoved {
+                external_payload, ..
+            } => Self::apply_external_payload_definition_removed(
+                model,
+                external_payload.slice(),
+                external_payload.name(),
+                external_payload.field(),
+            ),
+            _ => Err(
+                "apply_external_payload_definition_event received a non-external-payload event"
+                    .to_owned(),
+            ),
+        }
+    }
+
+    fn apply_outcome_definition_event(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        match event {
+            EmcEvent::SliceOutcomeDefinitionUpdated { outcome, .. } => {
+                Self::apply_outcome_definition_updated(model, outcome.outcome())
+            }
+            EmcEvent::SliceOutcomeDefinitionRemoved { outcome, .. } => {
+                Self::apply_outcome_definition_removed(model, outcome.slice(), outcome.label())
+            }
+            _ => Err("apply_outcome_definition_event received a non-outcome event".to_owned()),
+        }
+    }
+
+    fn apply_event_definition_event(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        match event {
+            EmcEvent::SliceEventDefinitionUpdated { event, .. } => {
+                Self::apply_event_definition_updated(model, event.event())
+            }
+            EmcEvent::SliceEventDefinitionRemoved { event, .. } => {
+                Self::apply_event_definition_removed(model, event.slice(), event.name())
+            }
+            _ => {
+                Err("apply_event_definition_event received a non-event-definition event".to_owned())
+            }
+        }
+    }
+
     fn apply_translation_definition_updated(
         model: Option<Self>,
         translation: NewTranslationDefinition,
@@ -4266,6 +4411,32 @@ impl ProjectedModel {
         model.apply_slice_fact_body(ExportedEventBody::SliceTranslationDefinitionRemoved {
             slice: slice.clone(),
             name: name.clone(),
+        })?;
+        Ok(Some(model))
+    }
+
+    fn apply_external_payload_definition_updated(
+        model: Option<Self>,
+        external_payload: NewExternalPayloadDefinition,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceExternalPayloadDefinitionUpdated")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceExternalPayloadDefinitionUpdated {
+            external_payload,
+        })?;
+        Ok(Some(model))
+    }
+
+    fn apply_external_payload_definition_removed(
+        model: Option<Self>,
+        slice: &SliceSlug,
+        name: &EventAttributeSourceName,
+        field: &EventAttributeSourceField,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceExternalPayloadDefinitionRemoved")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceExternalPayloadDefinitionRemoved {
+            slice: slice.clone(),
+            name: name.clone(),
+            field: field.clone(),
         })?;
         Ok(Some(model))
     }
@@ -4845,10 +5016,10 @@ impl ProjectedModel {
             ExportedEventBody::SliceScenarioRemoved { slice, name } => {
                 self.apply_slice_scenario_removed_body(&slice, &name)?;
             }
-            ExportedEventBody::SliceExternalPayloadAdded { external_payload } => {
-                self.slice_mut(external_payload.slice_slug(), "SliceExternalPayloadAdded")?
-                    .external_payloads
-                    .push(external_payload);
+            ExportedEventBody::SliceExternalPayloadAdded { .. }
+            | ExportedEventBody::SliceExternalPayloadDefinitionUpdated { .. }
+            | ExportedEventBody::SliceExternalPayloadDefinitionRemoved { .. } => {
+                self.apply_slice_external_payload_body(body)?;
             }
             ExportedEventBody::SliceEventDefinitionAdded { event } => {
                 self.slice_mut(event.slice_slug(), "SliceEventDefinitionAdded")?
@@ -4979,6 +5150,24 @@ impl ProjectedModel {
         }
     }
 
+    fn apply_slice_external_payload_body(&mut self, body: ExportedEventBody) -> Result<(), String> {
+        match body {
+            ExportedEventBody::SliceExternalPayloadAdded { external_payload } => {
+                self.slice_mut(external_payload.slice_slug(), "SliceExternalPayloadAdded")?
+                    .external_payloads
+                    .push(external_payload);
+                Ok(())
+            }
+            ExportedEventBody::SliceExternalPayloadDefinitionUpdated { external_payload } => {
+                self.apply_slice_external_payload_definition_updated(external_payload)
+            }
+            ExportedEventBody::SliceExternalPayloadDefinitionRemoved { slice, name, field } => {
+                self.apply_slice_external_payload_definition_removed(&slice, &name, &field)
+            }
+            _ => Ok(()),
+        }
+    }
+
     fn apply_slice_event_definition_updated(
         &mut self,
         event: NewEventDefinition,
@@ -4988,6 +5177,34 @@ impl ProjectedModel {
             .event_definitions
             .retain(|existing| existing.name() != event.name());
         slice.event_definitions.push(event);
+        Ok(())
+    }
+
+    fn apply_slice_external_payload_definition_updated(
+        &mut self,
+        external_payload: NewExternalPayloadDefinition,
+    ) -> Result<(), String> {
+        let slice = self.slice_mut(
+            external_payload.slice_slug(),
+            "SliceExternalPayloadDefinitionUpdated",
+        )?;
+        slice.external_payloads.retain(|existing| {
+            existing.name() != external_payload.name()
+                || existing.field() != external_payload.field()
+        });
+        slice.external_payloads.push(external_payload);
+        Ok(())
+    }
+
+    fn apply_slice_external_payload_definition_removed(
+        &mut self,
+        slice: &SliceSlug,
+        name: &EventAttributeSourceName,
+        field: &EventAttributeSourceField,
+    ) -> Result<(), String> {
+        self.slice_mut(slice, "SliceExternalPayloadDefinitionRemoved")?
+            .external_payloads
+            .retain(|payload| payload.name() != name || payload.field() != field);
         Ok(())
     }
 

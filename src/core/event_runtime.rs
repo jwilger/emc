@@ -14,15 +14,16 @@ use crate::core::event_commands::{
     AddSliceCommand, AddSliceFactCommand, AddWorkflowCommand, AddWorkflowFactCommand,
     ConnectWorkflowCommand, DeclareWorkflowReadinessCommand, EmcEvent, InitializeProjectCommand,
     RecordReviewCommand, RemoveAutomationDefinitionCommand, RemoveCommandDefinitionCommand,
-    RemoveEventDefinitionCommand, RemoveOutcomeDefinitionCommand, RemoveReadModelDefinitionCommand,
-    RemoveSliceCommand, RemoveSliceScenarioCommand, RemoveTranslationDefinitionCommand,
-    RemoveViewControlCommand, RemoveViewDefinitionCommand, RemoveWorkflowCommand,
-    RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
-    UpdateAutomationDefinitionCommand, UpdateCommandDefinitionCommand,
-    UpdateEventDefinitionCommand, UpdateOutcomeDefinitionCommand, UpdateReadModelDefinitionCommand,
-    UpdateSliceCommand, UpdateSliceScenarioCommand, UpdateTranslationDefinitionCommand,
-    UpdateViewControlCommand, UpdateViewDefinitionCommand, UpdateWorkflowCommand,
-    WorkflowFactInput,
+    RemoveEventDefinitionCommand, RemoveExternalPayloadDefinitionCommand,
+    RemoveOutcomeDefinitionCommand, RemoveReadModelDefinitionCommand, RemoveSliceCommand,
+    RemoveSliceScenarioCommand, RemoveTranslationDefinitionCommand, RemoveViewControlCommand,
+    RemoveViewDefinitionCommand, RemoveWorkflowCommand, RemoveWorkflowTransitionCommand,
+    ResolveConflictCommand, SliceFactInput, UpdateAutomationDefinitionCommand,
+    UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand,
+    UpdateExternalPayloadDefinitionCommand, UpdateOutcomeDefinitionCommand,
+    UpdateReadModelDefinitionCommand, UpdateSliceCommand, UpdateSliceScenarioCommand,
+    UpdateTranslationDefinitionCommand, UpdateViewControlCommand, UpdateViewDefinitionCommand,
+    UpdateWorkflowCommand, WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
 
@@ -177,6 +178,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::SliceOutcomeDefinitionUpdated { .. }
         | ExportedEventBody::SliceOutcomeDefinitionRemoved { .. }
         | ExportedEventBody::SliceExternalPayloadAdded { .. }
+        | ExportedEventBody::SliceExternalPayloadDefinitionUpdated { .. }
+        | ExportedEventBody::SliceExternalPayloadDefinitionRemoved { .. }
         | ExportedEventBody::SliceEventDefinitionAdded { .. }
         | ExportedEventBody::SliceEventDefinitionUpdated { .. }
         | ExportedEventBody::SliceEventDefinitionRemoved { .. }
@@ -404,6 +407,10 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
             )
             .await
         }
+        ExportedEventBody::SliceExternalPayloadDefinitionUpdated { .. }
+        | ExportedEventBody::SliceExternalPayloadDefinitionRemoved { .. } => {
+            dispatch_slice_external_payload(store, body).await
+        }
         ExportedEventBody::SliceAutomationDefinitionUpdated { .. }
         | ExportedEventBody::SliceAutomationDefinitionRemoved { .. } => {
             dispatch_slice_automation(store, body).await
@@ -481,6 +488,33 @@ async fn dispatch_slice_command_definition(
             .await
         }
         _ => Err("dispatch_slice_command_definition received a non-command body".to_owned()),
+    }
+}
+
+async fn dispatch_slice_external_payload(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<(), String> {
+    match body {
+        ExportedEventBody::SliceExternalPayloadDefinitionUpdated { external_payload } => {
+            run_command(
+                store,
+                UpdateExternalPayloadDefinitionCommand::new(external_payload.clone())?,
+            )
+            .await
+        }
+        ExportedEventBody::SliceExternalPayloadDefinitionRemoved { slice, name, field } => {
+            run_command(
+                store,
+                RemoveExternalPayloadDefinitionCommand::new(
+                    slice.clone(),
+                    name.clone(),
+                    field.clone(),
+                )?,
+            )
+            .await
+        }
+        _ => Err("dispatch_slice_external_payload received a non-external-payload body".to_owned()),
     }
 }
 

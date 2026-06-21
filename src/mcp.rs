@@ -1176,7 +1176,43 @@ fn add_external_payload_definition_tool() -> Tool {
     Tool::new(
         "add_external_payload_definition",
         "Add an external payload field contract directly to Lean4 and Quint slice artifacts.",
+        schema_object(external_payload_definition_schema()),
+    )
+}
+
+fn update_external_payload_definition_tool() -> Tool {
+    Tool::new(
+        "update_external_payload_definition",
+        "Update an external payload field contract in a slice, then regenerate synchronized model artifacts.",
+        schema_object(external_payload_definition_schema()),
+    )
+}
+
+fn remove_external_payload_definition_tool() -> Tool {
+    Tool::new(
+        "remove_external_payload_definition",
+        "Remove an external payload field contract from a slice, then regenerate synchronized model artifacts.",
         schema_object(json!({
+            "type": "object",
+            "properties": {
+                "slice": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "field": {
+                    "type": "string"
+                }
+            },
+            "required": ["slice", "name", "field"],
+            "additionalProperties": false
+        })),
+    )
+}
+
+fn external_payload_definition_schema() -> Value {
+    json!({
                 "type": "object",
                 "properties": {
                     "slice": {
@@ -1197,8 +1233,7 @@ fn add_external_payload_definition_tool() -> Tool {
                 },
                 "required": ["slice", "name", "field", "field_provenance", "bit_encoding"],
                 "additionalProperties": false
-        })),
-    )
+    })
 }
 
 fn add_event_definition_tool() -> Tool {
@@ -1648,6 +1683,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_slice_scenario_tool(),
         update_automation_definition_tool(),
         update_translation_definition_tool(),
+        update_external_payload_definition_tool(),
         update_command_definition_tool(),
         update_event_definition_tool(),
         update_outcome_definition_tool(),
@@ -1658,6 +1694,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         remove_slice_scenario_tool(),
         remove_automation_definition_tool(),
         remove_translation_definition_tool(),
+        remove_external_payload_definition_tool(),
         remove_command_definition_tool(),
         remove_event_definition_tool(),
         remove_outcome_definition_tool(),
@@ -2033,6 +2070,9 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_slice_scenario" => Some(update_slice_scenario_tool_text(request)),
         "update_automation_definition" => Some(update_automation_definition_tool_text(request)),
         "update_translation_definition" => Some(update_translation_definition_tool_text(request)),
+        "update_external_payload_definition" => {
+            Some(update_external_payload_definition_tool_text(request))
+        }
         "update_command_definition" => Some(update_command_definition_tool_text(request)),
         "update_event_definition" => Some(update_event_definition_tool_text(request)),
         "update_outcome_definition" => Some(update_outcome_definition_tool_text(request)),
@@ -2043,6 +2083,9 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "remove_slice_scenario" => Some(remove_slice_scenario_tool_text(request)),
         "remove_automation_definition" => Some(remove_automation_definition_tool_text(request)),
         "remove_translation_definition" => Some(remove_translation_definition_tool_text(request)),
+        "remove_external_payload_definition" => {
+            Some(remove_external_payload_definition_tool_text(request))
+        }
         "remove_command_definition" => Some(remove_command_definition_tool_text(request)),
         "remove_event_definition" => Some(remove_event_definition_tool_text(request)),
         "remove_outcome_definition" => Some(remove_outcome_definition_tool_text(request)),
@@ -3708,21 +3751,36 @@ fn parse_translation_definition(
 }
 
 fn add_external_payload_definition_tool_text(request: &Value) -> Result<String, ShellError> {
-    let arguments = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .ok_or_else(|| ShellError::message("add_external_payload_definition requires arguments"))?;
+    let arguments = tool_arguments(request, "add_external_payload_definition")?;
+    let external_payload =
+        parse_external_payload_definition(arguments, "add_external_payload_definition")?;
+    interpret_collect_reports(&command::add_external_payload_definition(external_payload))
+        .map(|reports| reports.join("\n"))
+}
+
+fn update_external_payload_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = tool_arguments(request, "update_external_payload_definition")?;
+    let external_payload =
+        parse_external_payload_definition(arguments, "update_external_payload_definition")?;
+    interpret_collect_reports(&command::update_external_payload_definition(
+        external_payload,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn remove_external_payload_definition_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = tool_arguments(request, "remove_external_payload_definition")?;
     let slice_slug = arguments
         .get("slice")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_external_payload_definition requires slice"))
+        .ok_or_else(|| ShellError::message("remove_external_payload_definition requires slice"))
         .and_then(|raw_slice| {
             parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let payload_name = arguments
         .get("name")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_external_payload_definition requires name"))
+        .ok_or_else(|| ShellError::message("remove_external_payload_definition requires name"))
         .and_then(|raw_name| {
             parse_event_attribute_source_name(raw_name)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3730,7 +3788,42 @@ fn add_external_payload_definition_tool_text(request: &Value) -> Result<String, 
     let payload_field = arguments
         .get("field")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_external_payload_definition requires field"))
+        .ok_or_else(|| ShellError::message("remove_external_payload_definition requires field"))
+        .and_then(|raw_field| {
+            parse_event_attribute_source_field(raw_field)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    interpret_collect_reports(&command::remove_external_payload_definition(
+        slice_slug,
+        payload_name,
+        payload_field,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn parse_external_payload_definition(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<NewExternalPayloadDefinition, ShellError> {
+    let slice_slug = arguments
+        .get("slice")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires slice")))
+        .and_then(|raw_slice| {
+            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let payload_name = arguments
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires name")))
+        .and_then(|raw_name| {
+            parse_event_attribute_source_name(raw_name)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let payload_field = arguments
+        .get("field")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires field")))
         .and_then(|raw_field| {
             parse_event_attribute_source_field(raw_field)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3738,9 +3831,7 @@ fn add_external_payload_definition_tool_text(request: &Value) -> Result<String, 
     let field_provenance = arguments
         .get("field_provenance")
         .and_then(Value::as_str)
-        .ok_or_else(|| {
-            ShellError::message("add_external_payload_definition requires field_provenance")
-        })
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires field_provenance")))
         .and_then(|raw_field_provenance| {
             parse_provenance_description(raw_field_provenance)
                 .map_err(|error| ShellError::message(error.to_string()))
@@ -3748,22 +3839,18 @@ fn add_external_payload_definition_tool_text(request: &Value) -> Result<String, 
     let bit_encoding = arguments
         .get("bit_encoding")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_external_payload_definition requires bit_encoding"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires bit_encoding")))
         .and_then(|raw_bit_encoding| {
             parse_bit_encoding_semantics(raw_bit_encoding)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-
-    interpret_collect_reports(&command::add_external_payload_definition(
-        NewExternalPayloadDefinition::new(
-            slice_slug,
-            payload_name,
-            payload_field,
-            field_provenance,
-            bit_encoding,
-        ),
+    Ok(NewExternalPayloadDefinition::new(
+        slice_slug,
+        payload_name,
+        payload_field,
+        field_provenance,
+        bit_encoding,
     ))
-    .map(|reports| reports.join("\n"))
 }
 
 fn add_outcome_definition_tool_text(request: &Value) -> Result<String, ShellError> {

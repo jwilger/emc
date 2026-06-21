@@ -25,13 +25,13 @@ use crate::core::effect::{
     ProcessInvocation, ProcessInvocations, ProjectPath, ProjectionFingerprint, ReportLine,
     ReviewEventReference, ReviewRecordRequirement, SliceAutomationDefinitionRemovalEffect,
     SliceCommandDefinitionRemovalEffect, SliceDescriptionUpdateEffect,
-    SliceEventDefinitionRemovalEffect, SliceKindUpdateEffect, SliceNameUpdateEffect,
-    SliceOutcomeDefinitionRemovalEffect, SliceReadModelDefinitionRemovalEffect,
-    SliceScenarioRemovalEffect, SliceTranslationDefinitionRemovalEffect,
-    SliceViewControlRemovalEffect, SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect,
-    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
-    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
-    WorkflowTransitionEvidenceEffect,
+    SliceEventDefinitionRemovalEffect, SliceExternalPayloadDefinitionRemovalEffect,
+    SliceKindUpdateEffect, SliceNameUpdateEffect, SliceOutcomeDefinitionRemovalEffect,
+    SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect,
+    SliceTranslationDefinitionRemovalEffect, SliceViewControlRemovalEffect,
+    SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect, WorkflowCommandErrorEffect,
+    WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
+    WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
@@ -338,6 +338,8 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::AddCommandDefinitionFromSlice(_)
             | Effect::AddEventDefinitionFromSlice(_)
             | Effect::AddExternalPayloadDefinitionFromSlice(_)
+            | Effect::RemoveExternalPayloadDefinitionFromSlice(_)
+            | Effect::UpdateExternalPayloadDefinitionFromSlice(_)
             | Effect::AddOutcomeDefinitionFromSlice(_)
             | Effect::AddReadModelDefinitionFromSlice(_)
             | Effect::AddSliceFromWorkflow(_)
@@ -514,6 +516,12 @@ fn interpret_slice_fact_effect(effect: &Effect) -> Option<Result<Vec<String>, Sh
         Effect::UpdateEventDefinitionFromSlice(event) => interpret_event_definition_updated(event),
         Effect::AddExternalPayloadDefinitionFromSlice(external_payload) => {
             interpret_external_payload_added(external_payload)
+        }
+        Effect::RemoveExternalPayloadDefinitionFromSlice(removal) => {
+            interpret_external_payload_removed(removal)
+        }
+        Effect::UpdateExternalPayloadDefinitionFromSlice(external_payload) => {
+            interpret_external_payload_updated(external_payload)
         }
         Effect::AddOutcomeDefinitionFromSlice(outcome) => interpret_outcome_added(outcome),
         Effect::RemoveOutcomeDefinitionFromSlice(removal) => interpret_outcome_removed(removal),
@@ -882,6 +890,60 @@ fn interpret_external_payload_added(
         external_payload.slice_slug(),
         reports,
         EventDraft::slice_external_payload_added(external_payload),
+    )
+}
+
+fn interpret_external_payload_updated(
+    external_payload: &NewExternalPayloadDefinition,
+) -> Result<Vec<String>, ShellError> {
+    let qualified_name = format!(
+        "{}.{}",
+        external_payload.name().as_ref(),
+        external_payload.field().as_ref()
+    );
+    let reports = vec![
+        projected_report(format!(
+            "updated external payload {} on slice {}",
+            qualified_name,
+            external_payload.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "updated external payload {qualified_name} in project root"
+        ))?,
+    ];
+    interpret_slice_addition(
+        external_payload.slice_slug(),
+        reports,
+        EventDraft::slice_external_payload_definition_updated(external_payload),
+    )
+}
+
+fn interpret_external_payload_removed(
+    removal: &SliceExternalPayloadDefinitionRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let qualified_name = format!(
+        "{}.{}",
+        removal.payload_name().as_ref(),
+        removal.payload_field().as_ref()
+    );
+    let reports = vec![
+        projected_report(format!(
+            "removed external payload {} from slice {}",
+            qualified_name,
+            removal.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "removed external payload {qualified_name} from project root"
+        ))?,
+    ];
+    interpret_slice_addition(
+        removal.slice_slug(),
+        reports,
+        EventDraft::slice_external_payload_definition_removed(
+            removal.slice_slug(),
+            removal.payload_name(),
+            removal.payload_field(),
+        ),
     )
 }
 
