@@ -3,7 +3,8 @@
 use crate::core::connection::{WorkflowConnection, WorkflowTransitionRemoval};
 use crate::core::effect::{
     ChosenEventId, CleanReviewEffect, Effect, EffectPlan, EventConflictId, EventConflictResolution,
-    SliceAutomationDefinitionRemovalEffect, SliceBoardConnectionRemovalEffect,
+    SliceAutomationDefinitionRemovalEffect, SliceBitLevelDataFlowRemovalEffect,
+    SliceBitLevelDataFlowUpdateEffect, SliceBoardConnectionRemovalEffect,
     SliceBoardConnectionUpdateEffect, SliceBoardElementRemovalEffect,
     SliceCommandDefinitionRemovalEffect, SliceDescriptionUpdateEffect,
     SliceEventDefinitionRemovalEffect, SliceExternalPayloadDefinitionRemovalEffect,
@@ -221,6 +222,21 @@ pub(crate) fn remove_control_definition(
 
 pub(crate) fn add_bit_level_data_flow(data_flow: NewBitLevelDataFlow) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddBitLevelDataFlowFromSlice(data_flow)])
+}
+
+pub(crate) fn update_bit_level_data_flow(
+    previous: NewBitLevelDataFlow,
+    replacement: NewBitLevelDataFlow,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateBitLevelDataFlowFromSlice(
+        SliceBitLevelDataFlowUpdateEffect::new(previous, replacement),
+    )])
+}
+
+pub(crate) fn remove_bit_level_data_flow(data_flow: NewBitLevelDataFlow) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveBitLevelDataFlowFromSlice(
+        SliceBitLevelDataFlowRemovalEffect::new(data_flow),
+    )])
 }
 
 pub(crate) fn add_board_element(element: NewBoardElement) -> EffectPlan {

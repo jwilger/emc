@@ -184,6 +184,16 @@ pub(crate) enum EmcEvent {
         #[serde(flatten)]
         automation: SliceAutomationDefinitionRemovalEvent,
     },
+    SliceBitLevelDataFlowUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        data_flow: SliceBitLevelDataFlowUpdateEvent,
+    },
+    SliceBitLevelDataFlowRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        data_flow: SliceBitLevelDataFlowRemovalEvent,
+    },
     SliceBoardElementUpdated {
         stream_id: StreamId,
         #[serde(flatten)]
@@ -331,6 +341,8 @@ impl Event for EmcEvent {
             | Self::SliceFactAdded { stream_id, .. }
             | Self::SliceAutomationDefinitionUpdated { stream_id, .. }
             | Self::SliceAutomationDefinitionRemoved { stream_id, .. }
+            | Self::SliceBitLevelDataFlowUpdated { stream_id, .. }
+            | Self::SliceBitLevelDataFlowRemoved { stream_id, .. }
             | Self::SliceBoardElementUpdated { stream_id, .. }
             | Self::SliceBoardElementRemoved { stream_id, .. }
             | Self::SliceBoardConnectionUpdated { stream_id, .. }
@@ -1106,6 +1118,185 @@ impl<'de> Deserialize<'de> for SliceBoardElementRemovalEvent {
             }
             other => Err(DeserializeError::custom(format!(
                 "expected SliceBoardElementRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateBitLevelDataFlowCommand {
+    #[stream]
+    slice_stream: StreamId,
+    previous: NewBitLevelDataFlow,
+    replacement: NewBitLevelDataFlow,
+}
+
+impl UpdateBitLevelDataFlowCommand {
+    pub(crate) fn new(
+        previous: NewBitLevelDataFlow,
+        replacement: NewBitLevelDataFlow,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(previous.slice_slug().as_ref())?,
+            previous,
+            replacement,
+        })
+    }
+}
+
+impl CommandLogic for UpdateBitLevelDataFlowCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before updating bit-level data flow"
+        );
+        Ok(vec![EmcEvent::SliceBitLevelDataFlowUpdated {
+            stream_id: self.slice_stream.clone(),
+            data_flow: SliceBitLevelDataFlowUpdateEvent::new(
+                self.previous.clone(),
+                self.replacement.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveBitLevelDataFlowCommand {
+    #[stream]
+    slice_stream: StreamId,
+    data_flow: NewBitLevelDataFlow,
+}
+
+impl RemoveBitLevelDataFlowCommand {
+    pub(crate) fn new(data_flow: NewBitLevelDataFlow) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(data_flow.slice_slug().as_ref())?,
+            data_flow,
+        })
+    }
+}
+
+impl CommandLogic for RemoveBitLevelDataFlowCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before removing bit-level data flow"
+        );
+        Ok(vec![EmcEvent::SliceBitLevelDataFlowRemoved {
+            stream_id: self.slice_stream.clone(),
+            data_flow: SliceBitLevelDataFlowRemovalEvent::new(self.data_flow.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceBitLevelDataFlowUpdateEvent {
+    previous: NewBitLevelDataFlow,
+    replacement: NewBitLevelDataFlow,
+}
+
+impl SliceBitLevelDataFlowUpdateEvent {
+    pub(crate) fn new(previous: NewBitLevelDataFlow, replacement: NewBitLevelDataFlow) -> Self {
+        Self {
+            previous,
+            replacement,
+        }
+    }
+
+    pub(crate) fn previous(&self) -> &NewBitLevelDataFlow {
+        &self.previous
+    }
+
+    pub(crate) fn replacement(&self) -> &NewBitLevelDataFlow {
+        &self.replacement
+    }
+}
+
+impl Serialize for SliceBitLevelDataFlowUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_bit_level_data_flow_updated(&self.previous, &self.replacement)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceBitLevelDataFlowUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceBitLevelDataFlowUpdated {
+                previous,
+                data_flow,
+            } => Ok(Self::new(previous, data_flow)),
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceBitLevelDataFlowUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceBitLevelDataFlowRemovalEvent {
+    data_flow: NewBitLevelDataFlow,
+}
+
+impl SliceBitLevelDataFlowRemovalEvent {
+    pub(crate) fn new(data_flow: NewBitLevelDataFlow) -> Self {
+        Self { data_flow }
+    }
+
+    pub(crate) fn data_flow(&self) -> &NewBitLevelDataFlow {
+        &self.data_flow
+    }
+}
+
+impl Serialize for SliceBitLevelDataFlowRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_bit_level_data_flow_removed(&self.data_flow)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceBitLevelDataFlowRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceBitLevelDataFlowRemoved { data_flow } => {
+                Ok(Self::new(data_flow))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceBitLevelDataFlowRemoved event body, got {}",
                 other.event_type()
             ))),
         }

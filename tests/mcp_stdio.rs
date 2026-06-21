@@ -1353,6 +1353,74 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_data_flow() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_data_flow(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_data_flow_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"update_bit_level_data_flow\""))
+            .stdout(predicate::str::contains(
+                "updated bit-level data flow ticket_title on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_quint.contains("source: \"reviewed title field\""),
+            "MCP-updated data-flow source must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("source: \"actor input title field\""),
+            "old data-flow source must be absent after MCP update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_data_flow() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_data_flow(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_data_flow_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"remove_bit_level_data_flow\""))
+            .stdout(predicate::str::contains(
+                "removed bit-level data flow ticket_title from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_quint.contains("datum: \"ticket_title\""),
+            "MCP-removed data flow must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_slice_update_fork(&temp_dir)?;
@@ -1643,6 +1711,22 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_board_connection\",\"arguments\":{\"slice\":\"capture-ticket\",\"source\":\"TicketCaptured\",\"source_kind\":\"event\",\"target\":\"ticket_state\",\"target_kind\":\"read_model\"}}}\n",
+        )
+    }
+
+    fn update_data_flow_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"actor input title field\",\"source_kind\":\"original\",\"transformation\":\"identity\",\"target\":\"Capture ticket.ticket_title\",\"bit_encoding\":\"UTF-8 string\",\"new_datum\":\"ticket_title\",\"new_source\":\"reviewed title field\",\"new_source_kind\":\"modeled_target\",\"new_transformation\":\"identity\",\"new_target\":\"Capture ticket.reviewed_title\",\"new_bit_encoding\":\"UTF-8 normalized string\"}}}\n",
+        )
+    }
+
+    fn remove_data_flow_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_bit_level_data_flow\",\"arguments\":{\"slice\":\"capture-ticket\",\"datum\":\"ticket_title\",\"source\":\"actor input title field\",\"source_kind\":\"original\",\"transformation\":\"identity\",\"target\":\"Capture ticket.ticket_title\",\"bit_encoding\":\"UTF-8 string\"}}}\n",
         )
     }
 
@@ -2017,6 +2101,33 @@ mod tests {
             "command",
         )?;
         add_board_connection(cwd, "TicketCaptured", "event", "ticket_state", "read_model")?;
+        Ok(())
+    }
+
+    fn initialize_project_with_data_flow(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        initialize_project_with_scenario(cwd)?;
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "actor input title field",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "identity",
+                "--target",
+                "Capture ticket.ticket_title",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
         Ok(())
     }
 

@@ -172,6 +172,8 @@ pub(crate) enum ExportedEventType {
     SliceViewControlUpdated,
     SliceViewControlRemoved,
     SliceBitLevelDataFlowAdded,
+    SliceBitLevelDataFlowUpdated,
+    SliceBitLevelDataFlowRemoved,
     SliceTranslationAdded,
     SliceTranslationDefinitionUpdated,
     SliceTranslationDefinitionRemoved,
@@ -237,6 +239,8 @@ impl ExportedEventType {
             "SliceViewControlUpdated" => Ok(Self::SliceViewControlUpdated),
             "SliceViewControlRemoved" => Ok(Self::SliceViewControlRemoved),
             "SliceBitLevelDataFlowAdded" => Ok(Self::SliceBitLevelDataFlowAdded),
+            "SliceBitLevelDataFlowUpdated" => Ok(Self::SliceBitLevelDataFlowUpdated),
+            "SliceBitLevelDataFlowRemoved" => Ok(Self::SliceBitLevelDataFlowRemoved),
             "SliceTranslationAdded" => Ok(Self::SliceTranslationAdded),
             "SliceTranslationDefinitionUpdated" => Ok(Self::SliceTranslationDefinitionUpdated),
             "SliceTranslationDefinitionRemoved" => Ok(Self::SliceTranslationDefinitionRemoved),
@@ -301,6 +305,8 @@ impl AsRef<str> for ExportedEventType {
             Self::SliceViewControlUpdated => "SliceViewControlUpdated",
             Self::SliceViewControlRemoved => "SliceViewControlRemoved",
             Self::SliceBitLevelDataFlowAdded => "SliceBitLevelDataFlowAdded",
+            Self::SliceBitLevelDataFlowUpdated => "SliceBitLevelDataFlowUpdated",
+            Self::SliceBitLevelDataFlowRemoved => "SliceBitLevelDataFlowRemoved",
             Self::SliceTranslationAdded => "SliceTranslationAdded",
             Self::SliceTranslationDefinitionUpdated => "SliceTranslationDefinitionUpdated",
             Self::SliceTranslationDefinitionRemoved => "SliceTranslationDefinitionRemoved",
@@ -1492,6 +1498,69 @@ impl SliceAutomationAddedEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct SliceBitLevelDataFlowUpdatedEventPayload {
+    previous: NewBitLevelDataFlow,
+    data_flow: NewBitLevelDataFlow,
+}
+
+impl SliceBitLevelDataFlowUpdatedEventPayload {
+    fn from_data_flows(previous: &NewBitLevelDataFlow, data_flow: &NewBitLevelDataFlow) -> Self {
+        Self {
+            previous: previous.clone(),
+            data_flow: data_flow.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        let slice = slice_slug(required_str(payload, "slice")?)?;
+        let previous = NewBitLevelDataFlow::new(
+            slice.clone(),
+            datum_name(required_str(payload, "datum")?)?,
+            data_flow_source_kind(required_str(payload, "source_kind")?)?,
+            data_flow_source(required_str(payload, "source")?)?,
+            transformation_semantics(required_str(payload, "transformation")?)?,
+            data_flow_target(required_str(payload, "target")?)?,
+            bit_encoding_semantics(required_str(payload, "bit_encoding")?)?,
+        );
+        let data_flow = NewBitLevelDataFlow::new(
+            slice,
+            datum_name(required_str(payload, "new_datum")?)?,
+            data_flow_source_kind(required_str(payload, "new_source_kind")?)?,
+            data_flow_source(required_str(payload, "new_source")?)?,
+            transformation_semantics(required_str(payload, "new_transformation")?)?,
+            data_flow_target(required_str(payload, "new_target")?)?,
+            bit_encoding_semantics(required_str(payload, "new_bit_encoding")?)?,
+        );
+        Ok(Self {
+            previous,
+            data_flow,
+        })
+    }
+
+    fn into_data_flows(self) -> (NewBitLevelDataFlow, NewBitLevelDataFlow) {
+        (self.previous, self.data_flow)
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "slice": self.previous.slice_slug().as_ref(),
+            "datum": self.previous.datum().as_ref(),
+            "source": self.previous.source().as_ref(),
+            "source_kind": self.previous.source_kind().as_ref(),
+            "transformation": self.previous.transformation().as_ref(),
+            "target": self.previous.target().as_ref(),
+            "bit_encoding": self.previous.bit_encoding().as_ref(),
+            "new_datum": self.data_flow.datum().as_ref(),
+            "new_source": self.data_flow.source().as_ref(),
+            "new_source_kind": self.data_flow.source_kind().as_ref(),
+            "new_transformation": self.data_flow.transformation().as_ref(),
+            "new_target": self.data_flow.target().as_ref(),
+            "new_bit_encoding": self.data_flow.bit_encoding().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct SliceBoardElementAddedEventPayload {
     element: NewBoardElement,
 }
@@ -2512,6 +2581,13 @@ pub(crate) enum ExportedEventBody {
     SliceBitLevelDataFlowAdded {
         data_flow: NewBitLevelDataFlow,
     },
+    SliceBitLevelDataFlowUpdated {
+        previous: NewBitLevelDataFlow,
+        data_flow: NewBitLevelDataFlow,
+    },
+    SliceBitLevelDataFlowRemoved {
+        data_flow: NewBitLevelDataFlow,
+    },
     SliceTranslationAdded {
         translation: NewTranslationDefinition,
     },
@@ -2641,9 +2717,9 @@ impl ExportedEventBody {
             }
             Self::SliceViewControlUpdated { .. } => ExportedEventType::SliceViewControlUpdated,
             Self::SliceViewControlRemoved { .. } => ExportedEventType::SliceViewControlRemoved,
-            Self::SliceBitLevelDataFlowAdded { .. } => {
-                ExportedEventType::SliceBitLevelDataFlowAdded
-            }
+            Self::SliceBitLevelDataFlowAdded { .. }
+            | Self::SliceBitLevelDataFlowUpdated { .. }
+            | Self::SliceBitLevelDataFlowRemoved { .. } => self.bit_level_data_flow_event_type(),
             Self::SliceTranslationAdded { .. } => ExportedEventType::SliceTranslationAdded,
             Self::SliceTranslationDefinitionUpdated { .. } => {
                 ExportedEventType::SliceTranslationDefinitionUpdated
@@ -2680,6 +2756,21 @@ impl ExportedEventBody {
             }
             Self::SliceBoardConnectionRemoved { .. } => {
                 ExportedEventType::SliceBoardConnectionRemoved
+            }
+            _ => self.event_type(),
+        }
+    }
+
+    fn bit_level_data_flow_event_type(&self) -> ExportedEventType {
+        match self {
+            Self::SliceBitLevelDataFlowAdded { .. } => {
+                ExportedEventType::SliceBitLevelDataFlowAdded
+            }
+            Self::SliceBitLevelDataFlowUpdated { .. } => {
+                ExportedEventType::SliceBitLevelDataFlowUpdated
+            }
+            Self::SliceBitLevelDataFlowRemoved { .. } => {
+                ExportedEventType::SliceBitLevelDataFlowRemoved
             }
             _ => self.event_type(),
         }
@@ -2822,9 +2913,9 @@ impl ExportedEventBody {
                     "name": name.as_ref(),
                 })
             }
-            Self::SliceBitLevelDataFlowAdded { data_flow } => {
-                SliceBitLevelDataFlowAddedEventPayload::from_data_flow(data_flow).to_json_value()
-            }
+            Self::SliceBitLevelDataFlowAdded { .. }
+            | Self::SliceBitLevelDataFlowUpdated { .. }
+            | Self::SliceBitLevelDataFlowRemoved { .. } => self.bit_level_data_flow_payload_json(),
             Self::SliceTranslationAdded { translation }
             | Self::SliceTranslationDefinitionUpdated { translation } => {
                 SliceTranslationAddedEventPayload::from_translation(translation).to_json_value()
@@ -2873,6 +2964,21 @@ impl ExportedEventBody {
             Self::SliceBoardElementRemoved { slice, name } => {
                 json!({ "slice": slice.as_ref(), "name": name.as_ref() })
             }
+            _ => self.slice_payload_json(),
+        }
+    }
+
+    fn bit_level_data_flow_payload_json(&self) -> Value {
+        match self {
+            Self::SliceBitLevelDataFlowAdded { data_flow }
+            | Self::SliceBitLevelDataFlowRemoved { data_flow } => {
+                SliceBitLevelDataFlowAddedEventPayload::from_data_flow(data_flow).to_json_value()
+            }
+            Self::SliceBitLevelDataFlowUpdated {
+                previous,
+                data_flow,
+            } => SliceBitLevelDataFlowUpdatedEventPayload::from_data_flows(previous, data_flow)
+                .to_json_value(),
             _ => self.slice_payload_json(),
         }
     }
@@ -3082,8 +3188,10 @@ impl ExportedEventBody {
             | ExportedEventType::SliceViewControlRemoved => {
                 Self::view_from_event_type_and_payload(event_type, payload)
             }
-            ExportedEventType::SliceBitLevelDataFlowAdded => {
-                Self::bit_level_data_flow_from_payload(payload)
+            ExportedEventType::SliceBitLevelDataFlowAdded
+            | ExportedEventType::SliceBitLevelDataFlowUpdated
+            | ExportedEventType::SliceBitLevelDataFlowRemoved => {
+                Self::bit_level_data_flow_from_event_type_and_payload(event_type, payload)
             }
             ExportedEventType::SliceTranslationAdded
             | ExportedEventType::SliceTranslationDefinitionUpdated
@@ -3166,11 +3274,34 @@ impl ExportedEventBody {
         }
     }
 
-    fn bit_level_data_flow_from_payload(payload: &Value) -> Result<Self, String> {
-        Ok(Self::SliceBitLevelDataFlowAdded {
-            data_flow: SliceBitLevelDataFlowAddedEventPayload::from_json_value(payload)?
-                .into_data_flow(),
-        })
+    fn bit_level_data_flow_from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
+            ExportedEventType::SliceBitLevelDataFlowAdded => Ok(Self::SliceBitLevelDataFlowAdded {
+                data_flow: SliceBitLevelDataFlowAddedEventPayload::from_json_value(payload)?
+                    .into_data_flow(),
+            }),
+            ExportedEventType::SliceBitLevelDataFlowUpdated => {
+                let (previous, data_flow) =
+                    SliceBitLevelDataFlowUpdatedEventPayload::from_json_value(payload)?
+                        .into_data_flows();
+                Ok(Self::SliceBitLevelDataFlowUpdated {
+                    previous,
+                    data_flow,
+                })
+            }
+            ExportedEventType::SliceBitLevelDataFlowRemoved => {
+                Ok(Self::SliceBitLevelDataFlowRemoved {
+                    data_flow: SliceBitLevelDataFlowAddedEventPayload::from_json_value(payload)?
+                        .into_data_flow(),
+                })
+            }
+            other => Err(format!(
+                "bit_level_data_flow_from_event_type_and_payload received a non-data-flow event type {other}"
+            )),
+        }
     }
 
     fn board_element_from_event_type_and_payload(
@@ -3812,6 +3943,28 @@ impl EventDraft {
         }
     }
 
+    pub(crate) fn slice_bit_level_data_flow_updated(
+        previous: &NewBitLevelDataFlow,
+        data_flow: &NewBitLevelDataFlow,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(previous.slice_slug()),
+            body: ExportedEventBody::SliceBitLevelDataFlowUpdated {
+                previous: previous.clone(),
+                data_flow: data_flow.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn slice_bit_level_data_flow_removed(data_flow: &NewBitLevelDataFlow) -> Self {
+        Self {
+            stream_id: EventStreamId::slice(data_flow.slice_slug()),
+            body: ExportedEventBody::SliceBitLevelDataFlowRemoved {
+                data_flow: data_flow.clone(),
+            },
+        }
+    }
+
     pub(crate) fn slice_translation_added(translation: &NewTranslationDefinition) -> Self {
         Self {
             stream_id: EventStreamId::slice(translation.slice_slug()),
@@ -4287,6 +4440,10 @@ impl ProjectedModel {
             | EmcEvent::SliceAutomationDefinitionRemoved { .. } => {
                 Self::apply_automation_definition_event(model, event)
             }
+            EmcEvent::SliceBitLevelDataFlowUpdated { .. }
+            | EmcEvent::SliceBitLevelDataFlowRemoved { .. } => {
+                Self::apply_bit_level_data_flow_event(model, event)
+            }
             EmcEvent::SliceBoardElementUpdated { .. }
             | EmcEvent::SliceBoardElementRemoved { .. } => {
                 Self::apply_board_element_event(model, event)
@@ -4568,6 +4725,25 @@ impl ProjectedModel {
                 Self::apply_board_element_removed(model, element.slice(), element.name())
             }
             _ => Err("apply_board_element_event received a non-board-element event".to_owned()),
+        }
+    }
+
+    fn apply_bit_level_data_flow_event(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        match event {
+            EmcEvent::SliceBitLevelDataFlowUpdated { data_flow, .. } => {
+                Self::apply_bit_level_data_flow_updated(
+                    model,
+                    data_flow.previous().clone(),
+                    data_flow.replacement().clone(),
+                )
+            }
+            EmcEvent::SliceBitLevelDataFlowRemoved { data_flow, .. } => {
+                Self::apply_bit_level_data_flow_removed(model, data_flow.data_flow().clone())
+            }
+            _ => Err("apply_bit_level_data_flow_event received a non-data-flow event".to_owned()),
         }
     }
 
@@ -4982,6 +5158,29 @@ impl ProjectedModel {
             view: view.clone(),
             name: name.clone(),
         })?;
+        Ok(Some(model))
+    }
+
+    fn apply_bit_level_data_flow_updated(
+        model: Option<Self>,
+        previous: NewBitLevelDataFlow,
+        data_flow: NewBitLevelDataFlow,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceBitLevelDataFlowUpdated")?;
+        model.apply_slice_fact_body(ExportedEventBody::SliceBitLevelDataFlowUpdated {
+            previous,
+            data_flow,
+        })?;
+        Ok(Some(model))
+    }
+
+    fn apply_bit_level_data_flow_removed(
+        model: Option<Self>,
+        data_flow: NewBitLevelDataFlow,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "SliceBitLevelDataFlowRemoved")?;
+        model
+            .apply_slice_fact_body(ExportedEventBody::SliceBitLevelDataFlowRemoved { data_flow })?;
         Ok(Some(model))
     }
 
@@ -5430,10 +5629,10 @@ impl ProjectedModel {
             ExportedEventBody::SliceReadModelDefinitionRemoved { slice, name } => {
                 self.apply_slice_read_model_definition_removed(&slice, &name)?;
             }
-            ExportedEventBody::SliceBitLevelDataFlowAdded { data_flow } => {
-                self.slice_mut(data_flow.slice_slug(), "SliceBitLevelDataFlowAdded")?
-                    .bit_level_data_flows
-                    .push(data_flow);
+            ExportedEventBody::SliceBitLevelDataFlowAdded { .. }
+            | ExportedEventBody::SliceBitLevelDataFlowUpdated { .. }
+            | ExportedEventBody::SliceBitLevelDataFlowRemoved { .. } => {
+                self.apply_slice_bit_level_data_flow_body(body)?;
             }
             ExportedEventBody::SliceViewAdded { .. }
             | ExportedEventBody::SliceViewDefinitionUpdated { .. }
@@ -5465,6 +5664,42 @@ impl ProjectedModel {
             other => {
                 return Err(format!(
                     "unexpected slice fact event body {}",
+                    other.event_type()
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn apply_slice_bit_level_data_flow_body(
+        &mut self,
+        body: ExportedEventBody,
+    ) -> Result<(), String> {
+        match body {
+            ExportedEventBody::SliceBitLevelDataFlowAdded { data_flow } => {
+                self.slice_mut(data_flow.slice_slug(), "SliceBitLevelDataFlowAdded")?
+                    .bit_level_data_flows
+                    .push(data_flow);
+            }
+            ExportedEventBody::SliceBitLevelDataFlowUpdated {
+                previous,
+                data_flow,
+            } => {
+                let slice =
+                    self.slice_mut(previous.slice_slug(), "SliceBitLevelDataFlowUpdated")?;
+                slice
+                    .bit_level_data_flows
+                    .retain(|existing| existing != &previous);
+                slice.bit_level_data_flows.push(data_flow);
+            }
+            ExportedEventBody::SliceBitLevelDataFlowRemoved { data_flow } => {
+                self.slice_mut(data_flow.slice_slug(), "SliceBitLevelDataFlowRemoved")?
+                    .bit_level_data_flows
+                    .retain(|existing| existing != &data_flow);
+            }
+            other => {
+                return Err(format!(
+                    "apply_slice_bit_level_data_flow_body received a non-data-flow body {}",
                     other.event_type()
                 ));
             }

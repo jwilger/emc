@@ -1,5 +1,6 @@
 // Copyright 2026 John Wilger
 
+use std::fmt::Display;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 
@@ -860,35 +861,104 @@ fn add_bit_level_data_flow_tool() -> Tool {
     Tool::new(
         "add_bit_level_data_flow",
         "Add source, transformation, target, and bit-encoding semantics directly to Lean4 and Quint slice artifacts.",
-        schema_object(json!({
-                "type": "object",
-                "properties": {
-                    "slice": {
-                        "type": "string"
-                    },
-                    "datum": {
-                        "type": "string"
-                    },
-                    "source": {
-                        "type": "string"
-                    },
-                    "source_kind": {
-                        "type": "string"
-                    },
-                    "transformation": {
-                        "type": "string"
-                    },
-                    "target": {
-                        "type": "string"
-                    },
-                    "bit_encoding": {
-                        "type": "string"
-                    }
-                },
-                "required": ["slice", "datum", "source", "source_kind", "transformation", "target", "bit_encoding"],
-                "additionalProperties": false
-        })),
+        bit_level_data_flow_schema(),
     )
+}
+
+fn update_bit_level_data_flow_tool() -> Tool {
+    Tool::new(
+        "update_bit_level_data_flow",
+        "Update source, transformation, target, and bit-encoding semantics in Lean4 and Quint slice artifacts.",
+        bit_level_data_flow_update_schema(),
+    )
+}
+
+fn remove_bit_level_data_flow_tool() -> Tool {
+    Tool::new(
+        "remove_bit_level_data_flow",
+        "Remove source, transformation, target, and bit-encoding semantics from Lean4 and Quint slice artifacts.",
+        bit_level_data_flow_schema(),
+    )
+}
+
+fn bit_level_data_flow_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "slice": {
+                    "type": "string"
+                },
+                "datum": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "source_kind": {
+                    "type": "string"
+                },
+                "transformation": {
+                    "type": "string"
+                },
+                "target": {
+                    "type": "string"
+                },
+                "bit_encoding": {
+                    "type": "string"
+                }
+            },
+            "required": ["slice", "datum", "source", "source_kind", "transformation", "target", "bit_encoding"],
+            "additionalProperties": false
+    }))
+}
+
+fn bit_level_data_flow_update_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "slice": {
+                    "type": "string"
+                },
+                "datum": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "source_kind": {
+                    "type": "string"
+                },
+                "transformation": {
+                    "type": "string"
+                },
+                "target": {
+                    "type": "string"
+                },
+                "bit_encoding": {
+                    "type": "string"
+                },
+                "new_datum": {
+                    "type": "string"
+                },
+                "new_source": {
+                    "type": "string"
+                },
+                "new_source_kind": {
+                    "type": "string"
+                },
+                "new_transformation": {
+                    "type": "string"
+                },
+                "new_target": {
+                    "type": "string"
+                },
+                "new_bit_encoding": {
+                    "type": "string"
+                }
+            },
+            "required": ["slice", "datum", "source", "source_kind", "transformation", "target", "bit_encoding", "new_datum", "new_source", "new_source_kind", "new_transformation", "new_target", "new_bit_encoding"],
+            "additionalProperties": false
+    }))
 }
 
 fn add_board_element_tool() -> Tool {
@@ -1783,6 +1853,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_automation_definition_tool(),
         update_translation_definition_tool(),
         update_external_payload_definition_tool(),
+        update_bit_level_data_flow_tool(),
         update_board_element_tool(),
         update_board_connection_tool(),
         update_command_definition_tool(),
@@ -1796,6 +1867,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         remove_automation_definition_tool(),
         remove_translation_definition_tool(),
         remove_external_payload_definition_tool(),
+        remove_bit_level_data_flow_tool(),
         remove_board_element_tool(),
         remove_board_connection_tool(),
         remove_command_definition_tool(),
@@ -2176,6 +2248,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_external_payload_definition" => {
             Some(update_external_payload_definition_tool_text(request))
         }
+        "update_bit_level_data_flow" => Some(update_bit_level_data_flow_tool_text(request)),
         "update_board_element" => Some(update_board_element_tool_text(request)),
         "update_board_connection" => Some(update_board_connection_tool_text(request)),
         "update_command_definition" => Some(update_command_definition_tool_text(request)),
@@ -2191,6 +2264,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "remove_external_payload_definition" => {
             Some(remove_external_payload_definition_tool_text(request))
         }
+        "remove_bit_level_data_flow" => Some(remove_bit_level_data_flow_tool_text(request)),
         "remove_board_element" => Some(remove_board_element_tool_text(request)),
         "remove_board_connection" => Some(remove_board_connection_tool_text(request)),
         "remove_command_definition" => Some(remove_command_definition_tool_text(request)),
@@ -3106,75 +3180,98 @@ fn apply_optional_scenario_error_references(
 }
 
 fn add_bit_level_data_flow_tool_text(request: &Value) -> Result<String, ShellError> {
-    let arguments = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires arguments"))?;
-    let slice_slug = arguments
+    let arguments = required_tool_arguments(request, "add_bit_level_data_flow")?;
+    interpret_collect_reports(&command::add_bit_level_data_flow(
+        bit_level_data_flow_from_arguments(arguments, "add_bit_level_data_flow", "")?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn update_bit_level_data_flow_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "update_bit_level_data_flow")?;
+    interpret_collect_reports(&command::update_bit_level_data_flow(
+        bit_level_data_flow_from_arguments(arguments, "update_bit_level_data_flow", "")?,
+        bit_level_data_flow_from_arguments(arguments, "update_bit_level_data_flow", "new_")?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn remove_bit_level_data_flow_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "remove_bit_level_data_flow")?;
+    interpret_collect_reports(&command::remove_bit_level_data_flow(
+        bit_level_data_flow_from_arguments(arguments, "remove_bit_level_data_flow", "")?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn bit_level_data_flow_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+) -> Result<NewBitLevelDataFlow, ShellError> {
+    Ok(NewBitLevelDataFlow::new(
+        bit_level_data_flow_slice(arguments, tool_name)?,
+        data_flow_arg(
+            arguments,
+            tool_name,
+            &format!("{prefix}datum"),
+            parse_datum_name,
+        )?,
+        data_flow_arg(
+            arguments,
+            tool_name,
+            &format!("{prefix}source_kind"),
+            parse_data_flow_source_kind,
+        )?,
+        data_flow_arg(
+            arguments,
+            tool_name,
+            &format!("{prefix}source"),
+            parse_data_flow_source,
+        )?,
+        data_flow_arg(
+            arguments,
+            tool_name,
+            &format!("{prefix}transformation"),
+            parse_transformation_semantics,
+        )?,
+        data_flow_arg(
+            arguments,
+            tool_name,
+            &format!("{prefix}target"),
+            parse_data_flow_target,
+        )?,
+        data_flow_arg(
+            arguments,
+            tool_name,
+            &format!("{prefix}bit_encoding"),
+            parse_bit_encoding_semantics,
+        )?,
+    ))
+}
+
+fn bit_level_data_flow_slice(arguments: &Value, tool_name: &str) -> Result<SliceSlug, ShellError> {
+    let raw_slice = arguments
         .get("slice")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires slice"))
-        .and_then(|raw_slice| {
-            parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let datum = arguments
-        .get("datum")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires datum"))
-        .and_then(|raw_datum| {
-            parse_datum_name(raw_datum).map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let source = arguments
-        .get("source")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires source"))
-        .and_then(|raw_source| {
-            parse_data_flow_source(raw_source)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let source_kind = arguments
-        .get("source_kind")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires source_kind"))
-        .and_then(|raw_source_kind| {
-            parse_data_flow_source_kind(raw_source_kind)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let transformation = arguments
-        .get("transformation")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires transformation"))
-        .and_then(|raw_transformation| {
-            parse_transformation_semantics(raw_transformation)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let target = arguments
-        .get("target")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires target"))
-        .and_then(|raw_target| {
-            parse_data_flow_target(raw_target)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
-    let bit_encoding = arguments
-        .get("bit_encoding")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_bit_level_data_flow requires bit_encoding"))
-        .and_then(|raw_bit_encoding| {
-            parse_bit_encoding_semantics(raw_bit_encoding)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires slice")))?;
+    parse_slice_slug(raw_slice).map_err(|error| ShellError::message(error.to_string()))
+}
 
-    interpret_collect_reports(&command::add_bit_level_data_flow(NewBitLevelDataFlow::new(
-        slice_slug,
-        datum,
-        source_kind,
-        source,
-        transformation,
-        target,
-        bit_encoding,
-    )))
-    .map(|reports| reports.join("\n"))
+fn data_flow_arg<T, E>(
+    arguments: &Value,
+    tool_name: &str,
+    field: &str,
+    parse: impl FnOnce(&str) -> Result<T, E>,
+) -> Result<T, ShellError>
+where
+    E: Display,
+{
+    let raw_value = arguments
+        .get(field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {field}")))?;
+    parse(raw_value).map_err(|error| ShellError::message(error.to_string()))
 }
 
 fn add_board_element_tool_text(request: &Value) -> Result<String, ShellError> {

@@ -424,6 +424,124 @@ mod tests {
     }
 
     #[test]
+    fn check_rebuilds_slice_bit_level_data_flow_updates_from_exported_events()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+
+        add_ticket_title_data_flow(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "actor input title field",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "identity",
+                "--target",
+                "Capture ticket.ticket_title",
+                "--bit-encoding",
+                "UTF-8 string",
+                "--new-datum",
+                "ticket_title",
+                "--new-source",
+                "reviewed title field",
+                "--new-source-kind",
+                "modeled_target",
+                "--new-transformation",
+                "identity",
+                "--new-target",
+                "Capture ticket.reviewed_title",
+                "--new-bit-encoding",
+                "UTF-8 normalized string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_quint.contains("source: \"reviewed title field\""),
+            "updated bit-level data flow must be rebuilt from exported events"
+        );
+        assert!(
+            !slice_quint.contains("source: \"actor input title field\""),
+            "previous bit-level data flow must not be rebuilt after update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_rebuilds_slice_bit_level_data_flow_removals_from_exported_events()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+
+        add_ticket_title_data_flow(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "actor input title field",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "identity",
+                "--target",
+                "Capture ticket.ticket_title",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_quint.contains("datum: \"ticket_title\""),
+            "removed bit-level data flow must not be rebuilt from exported events"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn check_rebuilds_slice_automations_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -1805,6 +1923,33 @@ mod tests {
                 "state_view",
                 "--description",
                 "Actor enters commas, pipes | semicolons; and colons: safely.",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_ticket_title_data_flow(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "actor input title field",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "identity",
+                "--target",
+                "Capture ticket.ticket_title",
+                "--bit-encoding",
+                "UTF-8 string",
             ])
             .current_dir(temp_dir.path())
             .assert()
