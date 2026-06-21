@@ -143,6 +143,8 @@ pub(crate) enum ExportedEventType {
     WorkflowCommandErrorUpdated,
     WorkflowCommandErrorRemoved,
     WorkflowOwnedDefinitionAdded,
+    WorkflowOwnedDefinitionUpdated,
+    WorkflowOwnedDefinitionRemoved,
     WorkflowTransitionEvidenceAdded,
     WorkflowEntryLifecycleCoverageRequired,
     WorkflowEntryLifecycleStateAdded,
@@ -209,6 +211,8 @@ impl ExportedEventType {
             "WorkflowCommandErrorUpdated" => Ok(Self::WorkflowCommandErrorUpdated),
             "WorkflowCommandErrorRemoved" => Ok(Self::WorkflowCommandErrorRemoved),
             "WorkflowOwnedDefinitionAdded" => Ok(Self::WorkflowOwnedDefinitionAdded),
+            "WorkflowOwnedDefinitionUpdated" => Ok(Self::WorkflowOwnedDefinitionUpdated),
+            "WorkflowOwnedDefinitionRemoved" => Ok(Self::WorkflowOwnedDefinitionRemoved),
             "WorkflowTransitionEvidenceAdded" => Ok(Self::WorkflowTransitionEvidenceAdded),
             "WorkflowEntryLifecycleCoverageRequired" => {
                 Ok(Self::WorkflowEntryLifecycleCoverageRequired)
@@ -284,6 +288,8 @@ impl AsRef<str> for ExportedEventType {
             Self::WorkflowCommandErrorUpdated => "WorkflowCommandErrorUpdated",
             Self::WorkflowCommandErrorRemoved => "WorkflowCommandErrorRemoved",
             Self::WorkflowOwnedDefinitionAdded => "WorkflowOwnedDefinitionAdded",
+            Self::WorkflowOwnedDefinitionUpdated => "WorkflowOwnedDefinitionUpdated",
+            Self::WorkflowOwnedDefinitionRemoved => "WorkflowOwnedDefinitionRemoved",
             Self::WorkflowTransitionEvidenceAdded => "WorkflowTransitionEvidenceAdded",
             Self::WorkflowEntryLifecycleCoverageRequired => {
                 "WorkflowEntryLifecycleCoverageRequired"
@@ -2367,33 +2373,54 @@ impl WorkflowOwnedDefinitionEventPayload {
 
     fn from_json_value(payload: &Value) -> Result<Self, String> {
         let workflow = workflow_slug(required_str(payload, "workflow")?)?;
-        let source_slice = workflow_transition_endpoint(required_str(payload, "source_slice")?)?;
-        let definition_kind =
-            workflow_owned_definition_kind(required_str(payload, "definition_kind")?)?;
-        let definition_name =
-            workflow_owned_definition_name(required_str(payload, "definition_name")?)?;
-        let definition_stream = optional_str(payload, "definition_stream")?
+        let definition =
+            Self::definition_from_json_value(payload, "", "WorkflowOwnedDefinitionAdded")?;
+
+        Ok(Self {
+            workflow,
+            definition,
+        })
+    }
+
+    fn definition_from_json_value(
+        payload: &Value,
+        prefix: &str,
+        event_type: &str,
+    ) -> Result<WorkflowOwnedDefinitionRecord, String> {
+        let source_slice =
+            workflow_transition_endpoint(required_str(payload, &format!("{prefix}source_slice"))?)?;
+        let definition_kind = workflow_owned_definition_kind(required_str(
+            payload,
+            &format!("{prefix}definition_kind"),
+        )?)?;
+        let definition_name = workflow_owned_definition_name(required_str(
+            payload,
+            &format!("{prefix}definition_name"),
+        )?)?;
+        let definition_stream = optional_str(payload, &format!("{prefix}definition_stream"))?
             .map(stream_name)
             .transpose()?;
-        let source_provenance = optional_str(payload, "source_provenance")?
+        let source_provenance = optional_str(payload, &format!("{prefix}source_provenance"))?
             .map(model_description)
             .transpose()?;
-        let event_participation = optional_str(payload, "event_participation")?
+        let event_participation = optional_str(payload, &format!("{prefix}event_participation"))?
             .map(workflow_event_participation)
             .transpose()?;
-        let view_role = optional_str(payload, "view_role")?
+        let view_role = optional_str(payload, &format!("{prefix}view_role"))?
             .map(workflow_view_role)
             .transpose()?;
 
-        let definition = match (
+        match (
             definition_stream,
             source_provenance,
             event_participation,
             view_role,
         ) {
-            (None, None, None, None) => {
-                WorkflowOwnedDefinitionRecord::new(source_slice, definition_kind, definition_name)
-            }
+            (None, None, None, None) => Ok(WorkflowOwnedDefinitionRecord::new(
+                source_slice,
+                definition_kind,
+                definition_name,
+            )),
             (None, None, None, Some(view_role)) => {
                 WorkflowOwnedDefinitionRecord::new_with_view_role(
                     source_slice,
@@ -2401,38 +2428,31 @@ impl WorkflowOwnedDefinitionEventPayload {
                     definition_name,
                     view_role,
                 )
-                .ok_or_else(|| "view role requires a view owned-definition kind".to_owned())?
+                .ok_or_else(|| "view role requires a view owned-definition kind".to_owned())
             }
             (Some(definition_stream), Some(source_provenance), None, None) => {
-                WorkflowOwnedDefinitionRecord::new_with_event_identity(
+                Ok(WorkflowOwnedDefinitionRecord::new_with_event_identity(
                     source_slice,
                     definition_kind,
                     definition_name,
                     definition_stream,
                     source_provenance,
-                )
+                ))
             }
             (Some(definition_stream), Some(source_provenance), Some(event_participation), None) => {
-                WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
-                    source_slice,
-                    definition_kind,
-                    definition_name,
-                    definition_stream,
-                    source_provenance,
-                    event_participation,
+                Ok(
+                    WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
+                        source_slice,
+                        definition_kind,
+                        definition_name,
+                        definition_stream,
+                        source_provenance,
+                        event_participation,
+                    ),
                 )
             }
-            _ => {
-                return Err(
-                    "WorkflowOwnedDefinitionAdded has incompatible optional fields".to_owned(),
-                );
-            }
-        };
-
-        Ok(Self {
-            workflow,
-            definition,
-        })
+            _ => Err(format!("{event_type} has incompatible optional fields")),
+        }
     }
 
     fn into_parts(self) -> (WorkflowSlug, WorkflowOwnedDefinitionRecord) {
@@ -2459,6 +2479,91 @@ impl WorkflowOwnedDefinitionEventPayload {
                 .map(AsRef::as_ref),
             "view_role": self.definition.view_role().map(AsRef::as_ref),
         })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowOwnedDefinitionUpdatedEventPayload {
+    workflow: WorkflowSlug,
+    previous: WorkflowOwnedDefinitionRecord,
+    definition: WorkflowOwnedDefinitionRecord,
+}
+
+impl WorkflowOwnedDefinitionUpdatedEventPayload {
+    fn from_parts(
+        workflow: &WorkflowSlug,
+        previous: &WorkflowOwnedDefinitionRecord,
+        definition: &WorkflowOwnedDefinitionRecord,
+    ) -> Self {
+        Self {
+            workflow: workflow.clone(),
+            previous: previous.clone(),
+            definition: definition.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            workflow: workflow_slug(required_str(payload, "workflow")?)?,
+            previous: WorkflowOwnedDefinitionEventPayload::definition_from_json_value(
+                payload,
+                "",
+                "WorkflowOwnedDefinitionUpdated",
+            )?,
+            definition: WorkflowOwnedDefinitionEventPayload::definition_from_json_value(
+                payload,
+                "new_",
+                "WorkflowOwnedDefinitionUpdated",
+            )?,
+        })
+    }
+
+    fn into_parts(
+        self,
+    ) -> (
+        WorkflowSlug,
+        WorkflowOwnedDefinitionRecord,
+        WorkflowOwnedDefinitionRecord,
+    ) {
+        (self.workflow, self.previous, self.definition)
+    }
+
+    fn to_json_value(&self) -> Value {
+        let mut value =
+            WorkflowOwnedDefinitionEventPayload::from_parts(&self.workflow, &self.previous)
+                .to_json_value();
+        let Value::Object(ref mut object) = value else {
+            return value;
+        };
+        object.insert(
+            "new_source_slice".to_owned(),
+            json!(self.definition.source_slice().as_ref()),
+        );
+        object.insert(
+            "new_definition_kind".to_owned(),
+            json!(self.definition.definition_kind().as_ref()),
+        );
+        object.insert(
+            "new_definition_name".to_owned(),
+            json!(self.definition.definition_name().as_ref()),
+        );
+        object.insert(
+            "new_definition_stream".to_owned(),
+            json!(self.definition.definition_stream().map(AsRef::as_ref)),
+        );
+        object.insert(
+            "new_source_provenance".to_owned(),
+            json!(self.definition.source_provenance().map(AsRef::as_ref)),
+        );
+        object.insert(
+            "new_event_participation".to_owned(),
+            json!(self.definition.event_participation().map(AsRef::as_ref)),
+        );
+        object.insert(
+            "new_view_role".to_owned(),
+            json!(self.definition.view_role().map(AsRef::as_ref)),
+        );
+        value
     }
 }
 
@@ -2698,6 +2803,15 @@ pub(crate) enum ExportedEventBody {
         workflow: WorkflowSlug,
         definition: WorkflowOwnedDefinitionRecord,
     },
+    WorkflowOwnedDefinitionUpdated {
+        workflow: WorkflowSlug,
+        previous: WorkflowOwnedDefinitionRecord,
+        definition: WorkflowOwnedDefinitionRecord,
+    },
+    WorkflowOwnedDefinitionRemoved {
+        workflow: WorkflowSlug,
+        definition: WorkflowOwnedDefinitionRecord,
+    },
     WorkflowTransitionEvidenceAdded {
         workflow: WorkflowSlug,
         evidence: WorkflowTransitionEvidenceRecord,
@@ -2893,6 +3007,8 @@ impl ExportedEventBody {
             | Self::WorkflowCommandErrorUpdated { .. }
             | Self::WorkflowCommandErrorRemoved { .. }
             | Self::WorkflowOwnedDefinitionAdded { .. }
+            | Self::WorkflowOwnedDefinitionUpdated { .. }
+            | Self::WorkflowOwnedDefinitionRemoved { .. }
             | Self::WorkflowTransitionEvidenceAdded { .. }
             | Self::WorkflowEntryLifecycleCoverageRequired { .. }
             | Self::WorkflowEntryLifecycleStateAdded { .. }
@@ -2992,6 +3108,12 @@ impl ExportedEventBody {
             Self::WorkflowOwnedDefinitionAdded { .. } => {
                 ExportedEventType::WorkflowOwnedDefinitionAdded
             }
+            Self::WorkflowOwnedDefinitionUpdated { .. } => {
+                ExportedEventType::WorkflowOwnedDefinitionUpdated
+            }
+            Self::WorkflowOwnedDefinitionRemoved { .. } => {
+                ExportedEventType::WorkflowOwnedDefinitionRemoved
+            }
             Self::WorkflowTransitionEvidenceAdded { .. } => {
                 ExportedEventType::WorkflowTransitionEvidenceAdded
             }
@@ -3086,8 +3208,20 @@ impl ExportedEventBody {
             Self::WorkflowOwnedDefinitionAdded {
                 workflow,
                 definition,
+            }
+            | Self::WorkflowOwnedDefinitionRemoved {
+                workflow,
+                definition,
             } => WorkflowOwnedDefinitionEventPayload::from_parts(workflow, definition)
                 .to_json_value(),
+            Self::WorkflowOwnedDefinitionUpdated {
+                workflow,
+                previous,
+                definition,
+            } => WorkflowOwnedDefinitionUpdatedEventPayload::from_parts(
+                workflow, previous, definition,
+            )
+            .to_json_value(),
             Self::WorkflowTransitionEvidenceAdded { workflow, evidence } => {
                 WorkflowTransitionEvidenceEventPayload::from_parts(workflow, evidence)
                     .to_json_value()
@@ -3351,6 +3485,52 @@ impl ExportedEventBody {
             ExportedEventType::WorkflowRemoved => Ok(Self::WorkflowRemoved {
                 slug: workflow_slug(required_str(payload, "slug")?)?,
             }),
+            ExportedEventType::WorkflowOutcomeAdded
+            | ExportedEventType::WorkflowOutcomeUpdated
+            | ExportedEventType::WorkflowOutcomeRemoved
+            | ExportedEventType::WorkflowCommandErrorAdded
+            | ExportedEventType::WorkflowCommandErrorUpdated
+            | ExportedEventType::WorkflowCommandErrorRemoved
+            | ExportedEventType::WorkflowOwnedDefinitionAdded
+            | ExportedEventType::WorkflowOwnedDefinitionUpdated
+            | ExportedEventType::WorkflowOwnedDefinitionRemoved
+            | ExportedEventType::WorkflowTransitionEvidenceAdded
+            | ExportedEventType::WorkflowEntryLifecycleCoverageRequired
+            | ExportedEventType::WorkflowEntryLifecycleStateAdded => {
+                Self::workflow_fact_from_event_type_and_payload(event_type, payload)
+            }
+            ExportedEventType::WorkflowReadinessDeclared => {
+                let readiness = WorkflowReadinessDeclaredEventPayload::from_json_value(payload)?;
+                Ok(Self::WorkflowReadinessDeclared {
+                    workflow: readiness.workflow,
+                    projection_fingerprint: readiness.projection_fingerprint,
+                    model_content_digest: readiness.model_content_digest,
+                    verified_at: readiness.verified_at,
+                    verified_by: readiness.verified_by,
+                    review_event: readiness.review_event,
+                })
+            }
+            ExportedEventType::WorkflowConnected => Ok(Self::WorkflowConnected {
+                connection: WorkflowConnectedEventPayload::from_json_value(payload)?
+                    .into_connection(),
+            }),
+            ExportedEventType::WorkflowTransitionUpdated => Ok(Self::WorkflowTransitionUpdated {
+                update: WorkflowTransitionUpdatedEventPayload::from_json_value(payload)?
+                    .into_update(),
+            }),
+            ExportedEventType::WorkflowTransitionRemoved => Ok(Self::WorkflowTransitionRemoved {
+                removal: WorkflowTransitionRemovedEventPayload::from_json_value(payload)?
+                    .into_removal(),
+            }),
+            _ => Self::slice_from_event_type_and_payload(event_type, payload),
+        }
+    }
+
+    fn workflow_fact_from_event_type_and_payload(
+        event_type: ExportedEventType,
+        payload: &Value,
+    ) -> Result<Self, String> {
+        match event_type {
             ExportedEventType::WorkflowOutcomeAdded => {
                 let (workflow, outcome) =
                     WorkflowOutcomeEventPayload::from_json_value(payload)?.into_parts();
@@ -3397,6 +3577,24 @@ impl ExportedEventBody {
                     definition,
                 })
             }
+            ExportedEventType::WorkflowOwnedDefinitionUpdated => {
+                let (workflow, previous, definition) =
+                    WorkflowOwnedDefinitionUpdatedEventPayload::from_json_value(payload)?
+                        .into_parts();
+                Ok(Self::WorkflowOwnedDefinitionUpdated {
+                    workflow,
+                    previous,
+                    definition,
+                })
+            }
+            ExportedEventType::WorkflowOwnedDefinitionRemoved => {
+                let (workflow, definition) =
+                    WorkflowOwnedDefinitionEventPayload::from_json_value(payload)?.into_parts();
+                Ok(Self::WorkflowOwnedDefinitionRemoved {
+                    workflow,
+                    definition,
+                })
+            }
             ExportedEventType::WorkflowTransitionEvidenceAdded => {
                 let (workflow, evidence) =
                     WorkflowTransitionEvidenceEventPayload::from_json_value(payload)?.into_parts();
@@ -3412,30 +3610,9 @@ impl ExportedEventBody {
                     WorkflowEntryLifecycleStateEventPayload::from_json_value(payload)?.into_parts();
                 Ok(Self::WorkflowEntryLifecycleStateAdded { workflow, coverage })
             }
-            ExportedEventType::WorkflowReadinessDeclared => {
-                let readiness = WorkflowReadinessDeclaredEventPayload::from_json_value(payload)?;
-                Ok(Self::WorkflowReadinessDeclared {
-                    workflow: readiness.workflow,
-                    projection_fingerprint: readiness.projection_fingerprint,
-                    model_content_digest: readiness.model_content_digest,
-                    verified_at: readiness.verified_at,
-                    verified_by: readiness.verified_by,
-                    review_event: readiness.review_event,
-                })
-            }
-            ExportedEventType::WorkflowConnected => Ok(Self::WorkflowConnected {
-                connection: WorkflowConnectedEventPayload::from_json_value(payload)?
-                    .into_connection(),
-            }),
-            ExportedEventType::WorkflowTransitionUpdated => Ok(Self::WorkflowTransitionUpdated {
-                update: WorkflowTransitionUpdatedEventPayload::from_json_value(payload)?
-                    .into_update(),
-            }),
-            ExportedEventType::WorkflowTransitionRemoved => Ok(Self::WorkflowTransitionRemoved {
-                removal: WorkflowTransitionRemovedEventPayload::from_json_value(payload)?
-                    .into_removal(),
-            }),
-            _ => Self::slice_from_event_type_and_payload(event_type, payload),
+            _ => Err(
+                "workflow_fact_from_event_type_and_payload received a non-fact event".to_owned(),
+            ),
         }
     }
 
@@ -3968,6 +4145,34 @@ impl EventDraft {
         Self {
             stream_id: EventStreamId::workflow(workflow),
             body: ExportedEventBody::WorkflowOwnedDefinitionAdded {
+                workflow: workflow.clone(),
+                definition: definition.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn workflow_owned_definition_updated(
+        workflow: &WorkflowSlug,
+        previous: &WorkflowOwnedDefinitionRecord,
+        definition: &WorkflowOwnedDefinitionRecord,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::workflow(workflow),
+            body: ExportedEventBody::WorkflowOwnedDefinitionUpdated {
+                workflow: workflow.clone(),
+                previous: previous.clone(),
+                definition: definition.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn workflow_owned_definition_removed(
+        workflow: &WorkflowSlug,
+        definition: &WorkflowOwnedDefinitionRecord,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::workflow(workflow),
+            body: ExportedEventBody::WorkflowOwnedDefinitionRemoved {
                 workflow: workflow.clone(),
                 definition: definition.clone(),
             },
@@ -4830,6 +5035,8 @@ impl ProjectedModel {
             | EmcEvent::WorkflowCommandErrorUpdated { .. }
             | EmcEvent::WorkflowCommandErrorRemoved { .. }
             | EmcEvent::WorkflowOwnedDefinitionAdded { .. }
+            | EmcEvent::WorkflowOwnedDefinitionUpdated { .. }
+            | EmcEvent::WorkflowOwnedDefinitionRemoved { .. }
             | EmcEvent::WorkflowTransitionEvidenceAdded { .. }
             | EmcEvent::WorkflowEntryLifecycleCoverageRequired { .. }
             | EmcEvent::WorkflowEntryLifecycleStateAdded { .. } => {
@@ -4939,8 +5146,10 @@ impl ProjectedModel {
             EmcEvent::WorkflowCommandErrorRemoved { error, .. } => {
                 Self::apply_workflow_command_error_removed(model, error.workflow(), error.error())
             }
-            EmcEvent::WorkflowOwnedDefinitionAdded { .. } => {
-                Self::apply_workflow_owned_definition_added(model, event)
+            EmcEvent::WorkflowOwnedDefinitionAdded { .. }
+            | EmcEvent::WorkflowOwnedDefinitionUpdated { .. }
+            | EmcEvent::WorkflowOwnedDefinitionRemoved { .. } => {
+                Self::apply_workflow_owned_definition_event(model, event)
             }
             EmcEvent::WorkflowTransitionEvidenceAdded { .. } => {
                 Self::apply_workflow_transition_evidence_added(model, event)
@@ -6007,6 +6216,64 @@ impl ProjectedModel {
             .workflow_mut(&workflow, "WorkflowOwnedDefinitionAdded")?
             .owned_definitions
             .push(definition);
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_owned_definition_event(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        match event {
+            EmcEvent::WorkflowOwnedDefinitionAdded { .. } => {
+                Self::apply_workflow_owned_definition_added(model, event)
+            }
+            EmcEvent::WorkflowOwnedDefinitionUpdated { definition, .. } => {
+                Self::apply_workflow_owned_definition_updated(
+                    model,
+                    definition.workflow(),
+                    definition.previous(),
+                    definition.replacement(),
+                )
+            }
+            EmcEvent::WorkflowOwnedDefinitionRemoved { definition, .. } => {
+                Self::apply_workflow_owned_definition_removed(
+                    model,
+                    definition.workflow(),
+                    definition.definition(),
+                )
+            }
+            _ => Err(
+                "apply_workflow_owned_definition_event received a non-owned-definition event"
+                    .to_owned(),
+            ),
+        }
+    }
+
+    fn apply_workflow_owned_definition_updated(
+        model: Option<Self>,
+        workflow: &WorkflowSlug,
+        previous: &WorkflowOwnedDefinitionRecord,
+        definition: &WorkflowOwnedDefinitionRecord,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "WorkflowOwnedDefinitionUpdated")?;
+        let workflow = model.workflow_mut(workflow, "WorkflowOwnedDefinitionUpdated")?;
+        workflow
+            .owned_definitions
+            .retain(|existing| existing != previous);
+        workflow.owned_definitions.push(definition.clone());
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_owned_definition_removed(
+        model: Option<Self>,
+        workflow: &WorkflowSlug,
+        definition: &WorkflowOwnedDefinitionRecord,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "WorkflowOwnedDefinitionRemoved")?;
+        model
+            .workflow_mut(workflow, "WorkflowOwnedDefinitionRemoved")?
+            .owned_definitions
+            .retain(|existing| existing != definition);
         Ok(Some(model))
     }
 

@@ -585,6 +585,111 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn update_workflow_owned_definition_rewrites_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_open_ticket_workflow(temp_dir.path())?;
+        add_workflow_owned_definition(
+            temp_dir.path(),
+            "open-ticket",
+            "capture-ticket",
+            "command",
+            "CaptureTicket",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow-owned-definition",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--definition-kind",
+                "command",
+                "--definition-name",
+                "CaptureTicket",
+                "--new-source-slice",
+                "capture-ticket",
+                "--new-definition-kind",
+                "command",
+                "--new-definition-name",
+                "SubmitTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated workflow owned definition command CaptureTicket on workflow open-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        assert!(lean.contains(
+            "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := WorkflowOwnedDefinitionKind.command, definitionName := \"SubmitTicket\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"\" }]"
+        ));
+        assert!(
+            !lean.contains("definitionName := \"CaptureTicket\""),
+            "updated workflow owned definition must replace the previous definition"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_workflow_owned_definition_removes_it_from_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_open_ticket_workflow(temp_dir.path())?;
+        add_workflow_owned_definition(
+            temp_dir.path(),
+            "open-ticket",
+            "capture-ticket",
+            "command",
+            "CaptureTicket",
+        )?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "workflow-owned-definition",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--definition-kind",
+                "command",
+                "--definition-name",
+                "CaptureTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed workflow owned definition command CaptureTicket from workflow open-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(
+            quint.contains("val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = []"),
+            "removed workflow owned definition must be absent from Quint workflow artifacts"
+        );
+
+        Ok(())
+    }
+
     fn setup_navigation_transition_workflow(cwd: &Path) -> Result<String, Box<dyn Error>> {
         init_repair_desk(cwd)?;
         add_open_ticket_workflow(cwd)?;

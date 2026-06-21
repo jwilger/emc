@@ -42,11 +42,12 @@ use crate::core::types::{
     AutomationName, BoardElementName, CommandInputSourceKind, CommandName, ControlName,
     ControlRecoveryBehavior, EventAttributeSourceField, EventAttributeSourceName, EventName,
     ModelDescription, ModelName, OutcomeLabelName, PayloadContractName, ReadModelFieldSourceKind,
-    ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SketchToken, SliceSlug,
+    ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SketchToken, SliceSlug, StreamName,
     TranslationName, ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
-    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
-    WorkflowTransitionKind,
+    WorkflowEventParticipation, WorkflowOutcomeRecord, WorkflowOwnedDefinitionKind,
+    WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord, WorkflowSlug,
+    WorkflowTransitionEndpoint, WorkflowTransitionEvidenceNavigationEndpoints,
+    WorkflowTransitionEvidenceRecord, WorkflowTransitionKind, WorkflowViewRole,
 };
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
@@ -237,6 +238,15 @@ enum Command {
         error: WorkflowCommandErrorRecord,
     },
     AddWorkflowOwnedDefinition {
+        workflow_slug: WorkflowSlug,
+        definition: WorkflowOwnedDefinitionRecord,
+    },
+    UpdateWorkflowOwnedDefinition {
+        workflow_slug: WorkflowSlug,
+        previous: WorkflowOwnedDefinitionRecord,
+        replacement: WorkflowOwnedDefinitionRecord,
+    },
+    RemoveWorkflowOwnedDefinition {
         workflow_slug: WorkflowSlug,
         definition: WorkflowOwnedDefinitionRecord,
     },
@@ -460,6 +470,22 @@ fn run_workflow_commands(command: Command) -> Result<(), ShellError> {
             workflow_slug,
             definition,
         } => interpret(&command::add_workflow_owned_definition(
+            workflow_slug,
+            definition,
+        )),
+        Command::UpdateWorkflowOwnedDefinition {
+            workflow_slug,
+            previous,
+            replacement,
+        } => interpret(&command::update_workflow_owned_definition(
+            workflow_slug,
+            previous,
+            replacement,
+        )),
+        Command::RemoveWorkflowOwnedDefinition {
+            workflow_slug,
+            definition,
+        } => interpret(&command::remove_workflow_owned_definition(
             workflow_slug,
             definition,
         )),
@@ -1421,6 +1447,10 @@ fn parse_cli_remove_event_or_2(arguments: &[String]) -> Result<Cli, ShellError> 
 }
 
 fn parse_cli_2(arguments: &[String]) -> Result<Cli, ShellError> {
+    if let Some(cli) = parse_workflow_owned_definition_mutation_cli(arguments)? {
+        return Ok(cli);
+    }
+
     match arguments {
         [
             command,
@@ -1479,6 +1509,168 @@ fn parse_cli_2(arguments: &[String]) -> Result<Cli, ShellError> {
             })
         }
         _ => parse_cli_3(arguments),
+    }
+}
+
+fn parse_workflow_owned_definition_mutation_cli(
+    arguments: &[String],
+) -> Result<Option<Cli>, ShellError> {
+    let [command, subject, ..] = arguments else {
+        return Ok(None);
+    };
+    if subject != "workflow-owned-definition" {
+        return Ok(None);
+    }
+    match command.as_str() {
+        "update" => {
+            let workflow_slug = parse_required_workflow_slug_flag(arguments)?;
+            Ok(Some(Cli {
+                command: Command::UpdateWorkflowOwnedDefinition {
+                    workflow_slug,
+                    previous: parse_workflow_owned_definition_flags(arguments, "")?,
+                    replacement: parse_workflow_owned_definition_flags(arguments, "new-")?,
+                },
+            }))
+        }
+        "remove" => {
+            let workflow_slug = parse_required_workflow_slug_flag(arguments)?;
+            Ok(Some(Cli {
+                command: Command::RemoveWorkflowOwnedDefinition {
+                    workflow_slug,
+                    definition: parse_workflow_owned_definition_flags(arguments, "")?,
+                },
+            }))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn parse_required_workflow_slug_flag(arguments: &[String]) -> Result<WorkflowSlug, ShellError> {
+    required_cli_flag(arguments, "--workflow").and_then(|workflow| {
+        parse_workflow_slug(workflow).map_err(|error| ShellError::message(error.to_string()))
+    })
+}
+
+fn parse_workflow_owned_definition_flags(
+    arguments: &[String],
+    prefix: &str,
+) -> Result<WorkflowOwnedDefinitionRecord, ShellError> {
+    let source_slice = required_cli_flag(arguments, &format!("--{prefix}source-slice")).and_then(
+        |source_slice| {
+            WorkflowTransitionEndpoint::try_new(source_slice.to_owned())
+                .map_err(|error| ShellError::message(error.to_string()))
+        },
+    )?;
+    let definition_kind = required_cli_flag(arguments, &format!("--{prefix}definition-kind"))
+        .and_then(|definition_kind| {
+            parse_workflow_owned_definition_kind(definition_kind)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let definition_name = required_cli_flag(arguments, &format!("--{prefix}definition-name"))
+        .and_then(|definition_name| {
+            parse_workflow_owned_definition_name(definition_name)
+                .map_err(|error| ShellError::message(error.to_string()))
+        })?;
+    let definition_stream = optional_cli_flag(arguments, &format!("--{prefix}definition-stream"))
+        .map(parse_stream_name)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let source_provenance = optional_cli_flag(arguments, &format!("--{prefix}source-provenance"))
+        .map(parse_model_description)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let event_participation =
+        optional_cli_flag(arguments, &format!("--{prefix}event-participation"))
+            .map(parse_workflow_event_participation)
+            .transpose()
+            .map_err(|error| ShellError::message(error.to_string()))?;
+    let view_role = optional_cli_flag(arguments, &format!("--{prefix}view-role"))
+        .map(parse_workflow_view_role)
+        .transpose()
+        .map_err(|error| ShellError::message(error.to_string()))?;
+
+    build_workflow_owned_definition_cli(
+        source_slice,
+        definition_kind,
+        definition_name,
+        definition_stream,
+        source_provenance,
+        event_participation,
+        view_role,
+    )
+}
+
+fn required_cli_flag<'args>(
+    arguments: &'args [String],
+    flag: &str,
+) -> Result<&'args str, ShellError> {
+    optional_cli_flag(arguments, flag)
+        .ok_or_else(|| ShellError::message(format!("{flag} is required")))
+}
+
+fn optional_cli_flag<'args>(arguments: &'args [String], flag: &str) -> Option<&'args str> {
+    arguments
+        .windows(2)
+        .find(|window| window.first().is_some_and(|candidate| candidate == flag))
+        .and_then(|window| window.get(1))
+        .map(String::as_str)
+}
+
+fn build_workflow_owned_definition_cli(
+    source_slice: WorkflowTransitionEndpoint,
+    definition_kind: WorkflowOwnedDefinitionKind,
+    definition_name: WorkflowOwnedDefinitionName,
+    definition_stream: Option<StreamName>,
+    source_provenance: Option<ModelDescription>,
+    event_participation: Option<WorkflowEventParticipation>,
+    view_role: Option<WorkflowViewRole>,
+) -> Result<WorkflowOwnedDefinitionRecord, ShellError> {
+    match (
+        definition_stream,
+        source_provenance,
+        event_participation,
+        view_role,
+    ) {
+        (None, None, None, None) => Ok(WorkflowOwnedDefinitionRecord::new(
+            source_slice,
+            definition_kind,
+            definition_name,
+        )),
+        (None, None, None, Some(view_role)) => WorkflowOwnedDefinitionRecord::new_with_view_role(
+            source_slice,
+            definition_kind,
+            definition_name,
+            view_role,
+        )
+        .ok_or_else(|| ShellError::message("view_role requires definition_kind view")),
+        (Some(definition_stream), Some(source_provenance), None, None) => {
+            Ok(WorkflowOwnedDefinitionRecord::new_with_event_identity(
+                source_slice,
+                definition_kind,
+                definition_name,
+                definition_stream,
+                source_provenance,
+            ))
+        }
+        (Some(definition_stream), Some(source_provenance), Some(event_participation), None) => Ok(
+            WorkflowOwnedDefinitionRecord::new_with_event_identity_and_participation(
+                source_slice,
+                definition_kind,
+                definition_name,
+                definition_stream,
+                source_provenance,
+                event_participation,
+            ),
+        ),
+        (_, _, Some(_), _) => Err(ShellError::message(
+            "event_participation requires definition_stream and source_provenance",
+        )),
+        (_, _, _, Some(_)) => Err(ShellError::message(
+            "view_role cannot be combined with event identity fields",
+        )),
+        _ => Err(ShellError::message(
+            "definition_stream and source_provenance must be provided together",
+        )),
     }
 }
 

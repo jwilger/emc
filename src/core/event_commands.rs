@@ -117,6 +117,16 @@ pub(crate) enum EmcEvent {
         event_participation: Option<WorkflowEventParticipation>,
         view_role: Option<WorkflowViewRole>,
     },
+    WorkflowOwnedDefinitionUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        definition: WorkflowOwnedDefinitionUpdateEvent,
+    },
+    WorkflowOwnedDefinitionRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        definition: WorkflowOwnedDefinitionRemovalEvent,
+    },
     WorkflowTransitionEvidenceAdded {
         stream_id: StreamId,
         workflow: WorkflowSlug,
@@ -360,6 +370,8 @@ impl Event for EmcEvent {
             | Self::WorkflowCommandErrorUpdated { stream_id, .. }
             | Self::WorkflowCommandErrorRemoved { stream_id, .. }
             | Self::WorkflowOwnedDefinitionAdded { stream_id, .. }
+            | Self::WorkflowOwnedDefinitionUpdated { stream_id, .. }
+            | Self::WorkflowOwnedDefinitionRemoved { stream_id, .. }
             | Self::WorkflowTransitionEvidenceAdded { stream_id, .. }
             | Self::WorkflowEntryLifecycleCoverageRequired { stream_id, .. }
             | Self::WorkflowEntryLifecycleStateAdded { stream_id, .. }
@@ -1322,6 +1334,221 @@ impl<'de> Deserialize<'de> for WorkflowCommandErrorRemovalEvent {
             }
             other => Err(DeserializeError::custom(format!(
                 "expected WorkflowCommandErrorRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateWorkflowOwnedDefinitionCommand {
+    #[stream]
+    workflow_stream: StreamId,
+    workflow: WorkflowSlug,
+    previous: WorkflowOwnedDefinitionRecord,
+    replacement: WorkflowOwnedDefinitionRecord,
+}
+
+impl UpdateWorkflowOwnedDefinitionCommand {
+    pub(crate) fn new(
+        workflow: WorkflowSlug,
+        previous: WorkflowOwnedDefinitionRecord,
+        replacement: WorkflowOwnedDefinitionRecord,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            workflow_stream: workflow_stream_id(workflow.as_ref())?,
+            workflow,
+            previous,
+            replacement,
+        })
+    }
+}
+
+impl CommandLogic for UpdateWorkflowOwnedDefinitionCommand {
+    type Event = EmcEvent;
+    type State = WorkflowCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_workflow_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "workflow stream must exist before updating owned definition"
+        );
+        Ok(vec![EmcEvent::WorkflowOwnedDefinitionUpdated {
+            stream_id: self.workflow_stream.clone(),
+            definition: WorkflowOwnedDefinitionUpdateEvent::new(
+                self.workflow.clone(),
+                self.previous.clone(),
+                self.replacement.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveWorkflowOwnedDefinitionCommand {
+    #[stream]
+    workflow_stream: StreamId,
+    workflow: WorkflowSlug,
+    definition: WorkflowOwnedDefinitionRecord,
+}
+
+impl RemoveWorkflowOwnedDefinitionCommand {
+    pub(crate) fn new(
+        workflow: WorkflowSlug,
+        definition: WorkflowOwnedDefinitionRecord,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            workflow_stream: workflow_stream_id(workflow.as_ref())?,
+            workflow,
+            definition,
+        })
+    }
+}
+
+impl CommandLogic for RemoveWorkflowOwnedDefinitionCommand {
+    type Event = EmcEvent;
+    type State = WorkflowCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_workflow_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "workflow stream must exist before removing owned definition"
+        );
+        Ok(vec![EmcEvent::WorkflowOwnedDefinitionRemoved {
+            stream_id: self.workflow_stream.clone(),
+            definition: WorkflowOwnedDefinitionRemovalEvent::new(
+                self.workflow.clone(),
+                self.definition.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowOwnedDefinitionUpdateEvent {
+    workflow: WorkflowSlug,
+    previous: WorkflowOwnedDefinitionRecord,
+    replacement: WorkflowOwnedDefinitionRecord,
+}
+
+impl WorkflowOwnedDefinitionUpdateEvent {
+    pub(crate) fn new(
+        workflow: WorkflowSlug,
+        previous: WorkflowOwnedDefinitionRecord,
+        replacement: WorkflowOwnedDefinitionRecord,
+    ) -> Self {
+        Self {
+            workflow,
+            previous,
+            replacement,
+        }
+    }
+
+    pub(crate) fn workflow(&self) -> &WorkflowSlug {
+        &self.workflow
+    }
+
+    pub(crate) fn previous(&self) -> &WorkflowOwnedDefinitionRecord {
+        &self.previous
+    }
+
+    pub(crate) fn replacement(&self) -> &WorkflowOwnedDefinitionRecord {
+        &self.replacement
+    }
+}
+
+impl Serialize for WorkflowOwnedDefinitionUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::workflow_owned_definition_updated(
+            &self.workflow,
+            &self.previous,
+            &self.replacement,
+        )
+        .body()
+        .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for WorkflowOwnedDefinitionUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::WorkflowOwnedDefinitionUpdated {
+                workflow,
+                previous,
+                definition,
+            } => Ok(Self::new(workflow, previous, definition)),
+            other => Err(DeserializeError::custom(format!(
+                "expected WorkflowOwnedDefinitionUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowOwnedDefinitionRemovalEvent {
+    workflow: WorkflowSlug,
+    definition: WorkflowOwnedDefinitionRecord,
+}
+
+impl WorkflowOwnedDefinitionRemovalEvent {
+    pub(crate) fn new(workflow: WorkflowSlug, definition: WorkflowOwnedDefinitionRecord) -> Self {
+        Self {
+            workflow,
+            definition,
+        }
+    }
+
+    pub(crate) fn workflow(&self) -> &WorkflowSlug {
+        &self.workflow
+    }
+
+    pub(crate) fn definition(&self) -> &WorkflowOwnedDefinitionRecord {
+        &self.definition
+    }
+}
+
+impl Serialize for WorkflowOwnedDefinitionRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::workflow_owned_definition_removed(&self.workflow, &self.definition)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for WorkflowOwnedDefinitionRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::WorkflowOwnedDefinitionRemoved {
+                workflow,
+                definition,
+            } => Ok(Self::new(workflow, definition)),
+            other => Err(DeserializeError::custom(format!(
+                "expected WorkflowOwnedDefinitionRemoved event body, got {}",
                 other.event_type()
             ))),
         }

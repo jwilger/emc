@@ -1047,6 +1047,138 @@ mod tests {
     }
 
     #[test]
+    fn check_rebuilds_updated_workflow_owned_definitions_from_exported_events()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-owned-definition",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--definition-kind",
+                "command",
+                "--definition-name",
+                "CaptureTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow-owned-definition",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--definition-kind",
+                "command",
+                "--definition-name",
+                "CaptureTicket",
+                "--new-source-slice",
+                "capture-ticket",
+                "--new-definition-kind",
+                "command",
+                "--new-definition-name",
+                "SubmitTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_lean = fs::read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        assert!(
+            workflow_lean.contains(
+                "def workflowOwnedDefinitions : List WorkflowOwnedDefinition := [{ sourceSlice := \"capture-ticket\", definitionKind := WorkflowOwnedDefinitionKind.command, definitionName := \"SubmitTicket\", definitionStream := \"\", sourceProvenance := \"\", eventParticipation := \"\", viewRole := \"\" }]"
+            ),
+            "updated workflow owned definition must be rebuilt from exported events"
+        );
+        assert!(
+            !workflow_lean.contains("definitionName := \"CaptureTicket\""),
+            "previous workflow owned definition must not be rebuilt from exported events"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_rebuilds_removed_workflow_owned_definitions_from_exported_events()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-owned-definition",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--definition-kind",
+                "command",
+                "--definition-name",
+                "CaptureTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "workflow-owned-definition",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--definition-kind",
+                "command",
+                "--definition-name",
+                "CaptureTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(
+            workflow_quint
+                .contains("val workflowOwnedDefinitions: List[WorkflowOwnedDefinition] = []"),
+            "removed workflow owned definition must not be rebuilt from exported events"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn check_rebuilds_workflow_transition_evidence_from_exported_events()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;

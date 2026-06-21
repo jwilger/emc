@@ -17,7 +17,8 @@ use crate::core::effect::{
     WorkflowCommandErrorRemovalEffect, WorkflowCommandErrorUpdateEffect,
     WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
     WorkflowOutcomeEffect, WorkflowOutcomeRemovalEffect, WorkflowOutcomeUpdateEffect,
-    WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    WorkflowOwnedDefinitionEffect, WorkflowOwnedDefinitionRemovalEffect,
+    WorkflowOwnedDefinitionUpdateEffect, WorkflowTransitionEvidenceEffect,
 };
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
@@ -345,6 +346,25 @@ pub(crate) fn add_workflow_owned_definition(
 ) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddWorkflowOwnedDefinitionFromWorkflow(
         WorkflowOwnedDefinitionEffect::new(workflow_slug, definition),
+    )])
+}
+
+pub(crate) fn update_workflow_owned_definition(
+    workflow_slug: WorkflowSlug,
+    previous: WorkflowOwnedDefinitionRecord,
+    replacement: WorkflowOwnedDefinitionRecord,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateWorkflowOwnedDefinitionFromWorkflow(
+        WorkflowOwnedDefinitionUpdateEffect::new(workflow_slug, previous, replacement),
+    )])
+}
+
+pub(crate) fn remove_workflow_owned_definition(
+    workflow_slug: WorkflowSlug,
+    definition: WorkflowOwnedDefinitionRecord,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveWorkflowOwnedDefinitionFromWorkflow(
+        WorkflowOwnedDefinitionRemovalEffect::new(workflow_slug, definition),
     )])
 }
 

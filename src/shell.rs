@@ -37,6 +37,7 @@ use crate::core::effect::{
     WorkflowCommandErrorUpdateEffect, WorkflowDescriptionUpdateEffect,
     WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
     WorkflowOutcomeRemovalEffect, WorkflowOutcomeUpdateEffect, WorkflowOwnedDefinitionEffect,
+    WorkflowOwnedDefinitionRemovalEffect, WorkflowOwnedDefinitionUpdateEffect,
     WorkflowTransitionEvidenceEffect,
 };
 use crate::core::event_runtime::{
@@ -1460,6 +1461,12 @@ fn interpret_workflow_fact_effect(effect: &Effect) -> Option<Result<Vec<String>,
         Effect::AddWorkflowOwnedDefinitionFromWorkflow(effect) => {
             interpret_workflow_owned_definition_added(effect)
         }
+        Effect::UpdateWorkflowOwnedDefinitionFromWorkflow(effect) => {
+            interpret_workflow_owned_definition_updated(effect)
+        }
+        Effect::RemoveWorkflowOwnedDefinitionFromWorkflow(effect) => {
+            interpret_workflow_owned_definition_removed(effect)
+        }
         Effect::AddWorkflowOutcomeFromWorkflow(effect) => interpret_workflow_outcome_added(effect),
         Effect::UpdateWorkflowOutcomeFromWorkflow(effect) => {
             interpret_workflow_outcome_updated(effect)
@@ -1542,6 +1549,42 @@ fn interpret_workflow_owned_definition_added(
         effect.workflow_slug(),
         reports,
         EventDraft::workflow_owned_definition_added(effect.workflow_slug(), effect.definition()),
+    )
+}
+
+fn interpret_workflow_owned_definition_updated(
+    effect: &WorkflowOwnedDefinitionUpdateEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "updated workflow owned definition {} {} on workflow {}",
+        effect.previous().definition_kind().as_ref(),
+        effect.previous().definition_name().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_owned_definition_updated(
+            effect.workflow_slug(),
+            effect.previous(),
+            effect.replacement(),
+        ),
+    )
+}
+
+fn interpret_workflow_owned_definition_removed(
+    effect: &WorkflowOwnedDefinitionRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "removed workflow owned definition {} {} from workflow {}",
+        effect.definition().definition_kind().as_ref(),
+        effect.definition().definition_name().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_owned_definition_removed(effect.workflow_slug(), effect.definition()),
     )
 }
 
