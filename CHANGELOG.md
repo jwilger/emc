@@ -7,6 +7,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11](https://git.johnwilger.com/Slipstream/emc/compare/v0.1.10...v0.1.11) - 2026-06-21
+
+### Added
+
+- update workflow entry lifecycle facts
+- update workflow transition evidence
+- update workflow owned definitions
+- update workflow transitions
+- update and remove workflow command errors
+- update and remove workflow outcomes
+- update and remove data flows
+- update and remove board connections
+- update and remove board elements
+- update and remove external payload definitions
+- update and remove translation definitions
+- update and remove automation definitions ([#182](https://git.johnwilger.com/Slipstream/emc/pulls/182))
+- update and remove outcome definitions ([#180](https://git.johnwilger.com/Slipstream/emc/pulls/180))
+- update and remove view controls ([#178](https://git.johnwilger.com/Slipstream/emc/pulls/178))
+- update and remove view definitions ([#176](https://git.johnwilger.com/Slipstream/emc/pulls/176))
+- update and remove read model definitions ([#174](https://git.johnwilger.com/Slipstream/emc/pulls/174))
+
+### Fixed
+
+- update contract scenarios from the CLI
+
+### Other
+
+- finalize modeled element mutation ledger
+
 ## [0.1.10](https://git.johnwilger.com/Slipstream/emc/compare/v0.1.9...v0.1.10) - 2026-06-20
 
 ### Added
