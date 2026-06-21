@@ -77,6 +77,16 @@ pub(crate) enum EmcEvent {
         label: OutcomeLabelName,
         externally_relevant: bool,
     },
+    WorkflowOutcomeUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        outcome: WorkflowOutcomeUpdateEvent,
+    },
+    WorkflowOutcomeRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        outcome: WorkflowOutcomeRemovalEvent,
+    },
     WorkflowCommandErrorAdded {
         stream_id: StreamId,
         workflow: WorkflowSlug,
@@ -327,6 +337,8 @@ impl Event for EmcEvent {
             | Self::WorkflowUpdated { stream_id, .. }
             | Self::WorkflowRemoved { stream_id, .. }
             | Self::WorkflowOutcomeAdded { stream_id, .. }
+            | Self::WorkflowOutcomeUpdated { stream_id, .. }
+            | Self::WorkflowOutcomeRemoved { stream_id, .. }
             | Self::WorkflowCommandErrorAdded { stream_id, .. }
             | Self::WorkflowOwnedDefinitionAdded { stream_id, .. }
             | Self::WorkflowTransitionEvidenceAdded { stream_id, .. }
@@ -793,6 +805,211 @@ impl CommandLogic for AddWorkflowFactCommand {
     fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
         require!(state.added, "workflow stream must exist before adding fact");
         Ok(vec![self.fact.to_event(self.workflow_stream.clone())].into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateWorkflowOutcomeCommand {
+    #[stream]
+    workflow_stream: StreamId,
+    workflow: WorkflowSlug,
+    previous: WorkflowOutcomeRecord,
+    replacement: WorkflowOutcomeRecord,
+}
+
+impl UpdateWorkflowOutcomeCommand {
+    pub(crate) fn new(
+        workflow: WorkflowSlug,
+        previous: WorkflowOutcomeRecord,
+        replacement: WorkflowOutcomeRecord,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            workflow_stream: workflow_stream_id(workflow.as_ref())?,
+            workflow,
+            previous,
+            replacement,
+        })
+    }
+}
+
+impl CommandLogic for UpdateWorkflowOutcomeCommand {
+    type Event = EmcEvent;
+    type State = WorkflowCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_workflow_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "workflow stream must exist before updating outcome"
+        );
+        Ok(vec![EmcEvent::WorkflowOutcomeUpdated {
+            stream_id: self.workflow_stream.clone(),
+            outcome: WorkflowOutcomeUpdateEvent::new(
+                self.workflow.clone(),
+                self.previous.clone(),
+                self.replacement.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveWorkflowOutcomeCommand {
+    #[stream]
+    workflow_stream: StreamId,
+    workflow: WorkflowSlug,
+    outcome: WorkflowOutcomeRecord,
+}
+
+impl RemoveWorkflowOutcomeCommand {
+    pub(crate) fn new(
+        workflow: WorkflowSlug,
+        outcome: WorkflowOutcomeRecord,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            workflow_stream: workflow_stream_id(workflow.as_ref())?,
+            workflow,
+            outcome,
+        })
+    }
+}
+
+impl CommandLogic for RemoveWorkflowOutcomeCommand {
+    type Event = EmcEvent;
+    type State = WorkflowCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_workflow_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "workflow stream must exist before removing outcome"
+        );
+        Ok(vec![EmcEvent::WorkflowOutcomeRemoved {
+            stream_id: self.workflow_stream.clone(),
+            outcome: WorkflowOutcomeRemovalEvent::new(self.workflow.clone(), self.outcome.clone()),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowOutcomeUpdateEvent {
+    workflow: WorkflowSlug,
+    previous: WorkflowOutcomeRecord,
+    replacement: WorkflowOutcomeRecord,
+}
+
+impl WorkflowOutcomeUpdateEvent {
+    pub(crate) fn new(
+        workflow: WorkflowSlug,
+        previous: WorkflowOutcomeRecord,
+        replacement: WorkflowOutcomeRecord,
+    ) -> Self {
+        Self {
+            workflow,
+            previous,
+            replacement,
+        }
+    }
+
+    pub(crate) fn workflow(&self) -> &WorkflowSlug {
+        &self.workflow
+    }
+
+    pub(crate) fn previous(&self) -> &WorkflowOutcomeRecord {
+        &self.previous
+    }
+
+    pub(crate) fn replacement(&self) -> &WorkflowOutcomeRecord {
+        &self.replacement
+    }
+}
+
+impl Serialize for WorkflowOutcomeUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body =
+            EventDraft::workflow_outcome_updated(&self.workflow, &self.previous, &self.replacement)
+                .body()
+                .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for WorkflowOutcomeUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::WorkflowOutcomeUpdated {
+                workflow,
+                previous,
+                outcome,
+            } => Ok(Self::new(workflow, previous, outcome)),
+            other => Err(DeserializeError::custom(format!(
+                "expected WorkflowOutcomeUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowOutcomeRemovalEvent {
+    workflow: WorkflowSlug,
+    outcome: WorkflowOutcomeRecord,
+}
+
+impl WorkflowOutcomeRemovalEvent {
+    pub(crate) fn new(workflow: WorkflowSlug, outcome: WorkflowOutcomeRecord) -> Self {
+        Self { workflow, outcome }
+    }
+
+    pub(crate) fn workflow(&self) -> &WorkflowSlug {
+        &self.workflow
+    }
+
+    pub(crate) fn outcome(&self) -> &WorkflowOutcomeRecord {
+        &self.outcome
+    }
+}
+
+impl Serialize for WorkflowOutcomeRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::workflow_outcome_removed(&self.workflow, &self.outcome)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for WorkflowOutcomeRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::WorkflowOutcomeRemoved { workflow, outcome } => {
+                Ok(Self::new(workflow, outcome))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected WorkflowOutcomeRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
     }
 }
 

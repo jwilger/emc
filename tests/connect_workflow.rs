@@ -187,6 +187,102 @@ mod tests {
     }
 
     #[test]
+    fn update_workflow_outcome_rewrites_canonical_workflow_artifacts() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_open_ticket_workflow(temp_dir.path())?;
+        add_workflow_outcome(temp_dir.path(), "ticket_captured", true)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow-outcome",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--externally-relevant",
+                "true",
+                "--new-source-slice",
+                "capture-ticket",
+                "--new-label",
+                "ticket_ready",
+                "--new-externally-relevant",
+                "false",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated workflow outcome ticket_captured on workflow open-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let lean = read_to_string(temp_dir.path().join("model/lean/OpenTicket.lean"))?;
+        assert!(
+            lean.contains(
+                "def workflowOutcomes : List WorkflowOutcome := [{ sourceSlice := \"capture-ticket\", label := \"ticket_ready\", externallyRelevant := false }]"
+            ),
+            "updated workflow outcome must be represented in Lean workflow artifacts"
+        );
+        assert!(
+            !lean.contains("label := \"ticket_captured\""),
+            "previous workflow outcome must be absent from Lean workflow artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_workflow_outcome_removes_it_from_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_open_ticket_workflow(temp_dir.path())?;
+        add_workflow_outcome(temp_dir.path(), "ticket_captured", true)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "workflow-outcome",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--externally-relevant",
+                "true",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed workflow outcome ticket_captured from workflow open-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(
+            quint.contains("val workflowOutcomes: List[WorkflowOutcome] = []"),
+            "removed workflow outcome must be absent from Quint workflow artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn add_workflow_command_error_updates_canonical_workflow_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -2135,6 +2231,61 @@ mod tests {
                 "review-ticket-screen",
             ],
         )
+    }
+
+    fn initialize_project_with_open_ticket_workflow(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(["init", "--name", "Repair Desk"])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow",
+                "--slug",
+                "open-ticket",
+                "--name",
+                "Open ticket",
+                "--description",
+                "Actor opens a repair ticket.",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        add_slice(
+            cwd,
+            "capture-ticket",
+            "Capture ticket",
+            "Actor enters repair ticket details.",
+        )
+    }
+
+    fn add_workflow_outcome(
+        cwd: &Path,
+        label: &str,
+        externally_relevant: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-outcome",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--label",
+                label,
+                "--externally-relevant",
+                if externally_relevant { "true" } else { "false" },
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
     }
 
     fn add_slice(

@@ -18,14 +18,14 @@ use crate::core::event_commands::{
     RemoveEventDefinitionCommand, RemoveExternalPayloadDefinitionCommand,
     RemoveOutcomeDefinitionCommand, RemoveReadModelDefinitionCommand, RemoveSliceCommand,
     RemoveSliceScenarioCommand, RemoveTranslationDefinitionCommand, RemoveViewControlCommand,
-    RemoveViewDefinitionCommand, RemoveWorkflowCommand, RemoveWorkflowTransitionCommand,
-    ResolveConflictCommand, SliceFactInput, UpdateAutomationDefinitionCommand,
-    UpdateBitLevelDataFlowCommand, UpdateBoardConnectionCommand, UpdateBoardElementCommand,
-    UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand,
+    RemoveViewDefinitionCommand, RemoveWorkflowCommand, RemoveWorkflowOutcomeCommand,
+    RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
+    UpdateAutomationDefinitionCommand, UpdateBitLevelDataFlowCommand, UpdateBoardConnectionCommand,
+    UpdateBoardElementCommand, UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand,
     UpdateExternalPayloadDefinitionCommand, UpdateOutcomeDefinitionCommand,
     UpdateReadModelDefinitionCommand, UpdateSliceCommand, UpdateSliceScenarioCommand,
     UpdateTranslationDefinitionCommand, UpdateViewControlCommand, UpdateViewDefinitionCommand,
-    UpdateWorkflowCommand, WorkflowFactInput,
+    UpdateWorkflowCommand, UpdateWorkflowOutcomeCommand, WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
 
@@ -163,6 +163,8 @@ async fn dispatch_exported_event(
             dispatch_workflow_lifecycle(store, body).await
         }
         ExportedEventBody::WorkflowOutcomeAdded { .. }
+        | ExportedEventBody::WorkflowOutcomeUpdated { .. }
+        | ExportedEventBody::WorkflowOutcomeRemoved { .. }
         | ExportedEventBody::WorkflowCommandErrorAdded { .. }
         | ExportedEventBody::WorkflowOwnedDefinitionAdded { .. }
         | ExportedEventBody::WorkflowTransitionEvidenceAdded { .. }
@@ -318,6 +320,32 @@ async fn dispatch_workflow_fact(
     store: &FileEventStore,
     body: &ExportedEventBody,
 ) -> Result<(), String> {
+    match body {
+        ExportedEventBody::WorkflowOutcomeUpdated {
+            workflow,
+            previous,
+            outcome,
+        } => {
+            return run_command(
+                store,
+                UpdateWorkflowOutcomeCommand::new(
+                    workflow.clone(),
+                    previous.clone(),
+                    outcome.clone(),
+                )?,
+            )
+            .await;
+        }
+        ExportedEventBody::WorkflowOutcomeRemoved { workflow, outcome } => {
+            return run_command(
+                store,
+                RemoveWorkflowOutcomeCommand::new(workflow.clone(), outcome.clone())?,
+            )
+            .await;
+        }
+        _ => {}
+    }
+
     let input = match body {
         ExportedEventBody::WorkflowOutcomeAdded { workflow, outcome } => {
             WorkflowFactInput::OutcomeAdded {

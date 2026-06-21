@@ -33,8 +33,8 @@ use crate::core::effect::{
     SliceScenarioRemovalEffect, SliceTranslationDefinitionRemovalEffect,
     SliceViewControlRemovalEffect, SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect,
     WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
-    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect,
-    WorkflowTransitionEvidenceEffect,
+    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOutcomeRemovalEffect,
+    WorkflowOutcomeUpdateEffect, WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
@@ -361,6 +361,8 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::AddWorkflowEntryLifecycleStateFromWorkflow(_)
             | Effect::AddWorkflowFromIndex(_)
             | Effect::AddWorkflowOutcomeFromWorkflow(_)
+            | Effect::UpdateWorkflowOutcomeFromWorkflow(_)
+            | Effect::RemoveWorkflowOutcomeFromWorkflow(_)
             | Effect::AddWorkflowOwnedDefinitionFromWorkflow(_)
             | Effect::AddWorkflowTransitionEvidenceFromWorkflow(_)
             | Effect::ConnectWorkflowFromWorkflow(_)
@@ -1448,6 +1450,12 @@ fn interpret_workflow_fact_effect(effect: &Effect) -> Option<Result<Vec<String>,
             interpret_workflow_owned_definition_added(effect)
         }
         Effect::AddWorkflowOutcomeFromWorkflow(effect) => interpret_workflow_outcome_added(effect),
+        Effect::UpdateWorkflowOutcomeFromWorkflow(effect) => {
+            interpret_workflow_outcome_updated(effect)
+        }
+        Effect::RemoveWorkflowOutcomeFromWorkflow(effect) => {
+            interpret_workflow_outcome_removed(effect)
+        }
         Effect::AddWorkflowTransitionEvidenceFromWorkflow(effect) => {
             interpret_workflow_transition_evidence_added(effect)
         }
@@ -1504,6 +1512,40 @@ fn interpret_workflow_outcome_added(
         effect.workflow_slug(),
         reports,
         EventDraft::workflow_outcome_added(effect.workflow_slug(), effect.outcome()),
+    )
+}
+
+fn interpret_workflow_outcome_updated(
+    effect: &WorkflowOutcomeUpdateEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "updated workflow outcome {} on workflow {}",
+        effect.previous().label().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_outcome_updated(
+            effect.workflow_slug(),
+            effect.previous(),
+            effect.replacement(),
+        ),
+    )
+}
+
+fn interpret_workflow_outcome_removed(
+    effect: &WorkflowOutcomeRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "removed workflow outcome {} from workflow {}",
+        effect.outcome().label().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_outcome_removed(effect.workflow_slug(), effect.outcome()),
     )
 }
 
