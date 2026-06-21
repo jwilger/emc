@@ -12,6 +12,7 @@ use crate::core::effect::{
     SliceReadModelDefinitionRemovalEffect, SliceScenarioRemovalEffect,
     SliceTranslationDefinitionRemovalEffect, SliceViewControlRemovalEffect,
     SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect, WorkflowCommandErrorEffect,
+    WorkflowCommandErrorRemovalEffect, WorkflowCommandErrorUpdateEffect,
     WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
     WorkflowOutcomeEffect, WorkflowOutcomeRemovalEffect, WorkflowOutcomeUpdateEffect,
     WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
@@ -314,6 +315,25 @@ pub(crate) fn add_workflow_command_error(
 ) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddWorkflowCommandErrorFromWorkflow(
         WorkflowCommandErrorEffect::new(workflow_slug, error),
+    )])
+}
+
+pub(crate) fn update_workflow_command_error(
+    workflow_slug: WorkflowSlug,
+    previous: WorkflowCommandErrorRecord,
+    replacement: WorkflowCommandErrorRecord,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateWorkflowCommandErrorFromWorkflow(
+        WorkflowCommandErrorUpdateEffect::new(workflow_slug, previous, replacement),
+    )])
+}
+
+pub(crate) fn remove_workflow_command_error(
+    workflow_slug: WorkflowSlug,
+    error: WorkflowCommandErrorRecord,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveWorkflowCommandErrorFromWorkflow(
+        WorkflowCommandErrorRemovalEffect::new(workflow_slug, error),
     )])
 }
 

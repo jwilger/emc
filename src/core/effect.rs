@@ -416,6 +416,62 @@ impl WorkflowCommandErrorEffect {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowCommandErrorUpdateEffect {
+    workflow_slug: WorkflowSlug,
+    previous: WorkflowCommandErrorRecord,
+    replacement: WorkflowCommandErrorRecord,
+}
+
+impl WorkflowCommandErrorUpdateEffect {
+    pub(crate) fn new(
+        workflow_slug: WorkflowSlug,
+        previous: WorkflowCommandErrorRecord,
+        replacement: WorkflowCommandErrorRecord,
+    ) -> Self {
+        Self {
+            workflow_slug,
+            previous,
+            replacement,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn previous(&self) -> &WorkflowCommandErrorRecord {
+        &self.previous
+    }
+
+    pub(crate) fn replacement(&self) -> &WorkflowCommandErrorRecord {
+        &self.replacement
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowCommandErrorRemovalEffect {
+    workflow_slug: WorkflowSlug,
+    error: WorkflowCommandErrorRecord,
+}
+
+impl WorkflowCommandErrorRemovalEffect {
+    pub(crate) fn new(workflow_slug: WorkflowSlug, error: WorkflowCommandErrorRecord) -> Self {
+        Self {
+            workflow_slug,
+            error,
+        }
+    }
+
+    pub(crate) fn workflow_slug(&self) -> &WorkflowSlug {
+        &self.workflow_slug
+    }
+
+    pub(crate) fn error(&self) -> &WorkflowCommandErrorRecord {
+        &self.error
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct WorkflowOwnedDefinitionEffect {
     workflow_slug: WorkflowSlug,
     definition: WorkflowOwnedDefinitionRecord,
@@ -1147,6 +1203,8 @@ pub(crate) enum Effect {
     UpdateSliceScenarioFromSlice(NewSliceScenario),
     AddWorkflowFromIndex(NewWorkflow),
     AddWorkflowCommandErrorFromWorkflow(WorkflowCommandErrorEffect),
+    UpdateWorkflowCommandErrorFromWorkflow(WorkflowCommandErrorUpdateEffect),
+    RemoveWorkflowCommandErrorFromWorkflow(WorkflowCommandErrorRemovalEffect),
     AddWorkflowOwnedDefinitionFromWorkflow(WorkflowOwnedDefinitionEffect),
     AddWorkflowOutcomeFromWorkflow(WorkflowOutcomeEffect),
     UpdateWorkflowOutcomeFromWorkflow(WorkflowOutcomeUpdateEffect),

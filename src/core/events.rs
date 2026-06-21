@@ -140,6 +140,8 @@ pub(crate) enum ExportedEventType {
     WorkflowOutcomeUpdated,
     WorkflowOutcomeRemoved,
     WorkflowCommandErrorAdded,
+    WorkflowCommandErrorUpdated,
+    WorkflowCommandErrorRemoved,
     WorkflowOwnedDefinitionAdded,
     WorkflowTransitionEvidenceAdded,
     WorkflowEntryLifecycleCoverageRequired,
@@ -203,6 +205,8 @@ impl ExportedEventType {
             "WorkflowOutcomeUpdated" => Ok(Self::WorkflowOutcomeUpdated),
             "WorkflowOutcomeRemoved" => Ok(Self::WorkflowOutcomeRemoved),
             "WorkflowCommandErrorAdded" => Ok(Self::WorkflowCommandErrorAdded),
+            "WorkflowCommandErrorUpdated" => Ok(Self::WorkflowCommandErrorUpdated),
+            "WorkflowCommandErrorRemoved" => Ok(Self::WorkflowCommandErrorRemoved),
             "WorkflowOwnedDefinitionAdded" => Ok(Self::WorkflowOwnedDefinitionAdded),
             "WorkflowTransitionEvidenceAdded" => Ok(Self::WorkflowTransitionEvidenceAdded),
             "WorkflowEntryLifecycleCoverageRequired" => {
@@ -275,6 +279,8 @@ impl AsRef<str> for ExportedEventType {
             Self::WorkflowOutcomeUpdated => "WorkflowOutcomeUpdated",
             Self::WorkflowOutcomeRemoved => "WorkflowOutcomeRemoved",
             Self::WorkflowCommandErrorAdded => "WorkflowCommandErrorAdded",
+            Self::WorkflowCommandErrorUpdated => "WorkflowCommandErrorUpdated",
+            Self::WorkflowCommandErrorRemoved => "WorkflowCommandErrorRemoved",
             Self::WorkflowOwnedDefinitionAdded => "WorkflowOwnedDefinitionAdded",
             Self::WorkflowTransitionEvidenceAdded => "WorkflowTransitionEvidenceAdded",
             Self::WorkflowEntryLifecycleCoverageRequired => {
@@ -2194,6 +2200,65 @@ impl WorkflowCommandErrorEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowCommandErrorUpdatedEventPayload {
+    workflow: WorkflowSlug,
+    previous: WorkflowCommandErrorRecord,
+    error: WorkflowCommandErrorRecord,
+}
+
+impl WorkflowCommandErrorUpdatedEventPayload {
+    fn from_parts(
+        workflow: &WorkflowSlug,
+        previous: &WorkflowCommandErrorRecord,
+        error: &WorkflowCommandErrorRecord,
+    ) -> Self {
+        Self {
+            workflow: workflow.clone(),
+            previous: previous.clone(),
+            error: error.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            workflow: workflow_slug(required_str(payload, "workflow")?)?,
+            previous: WorkflowCommandErrorRecord::new(
+                workflow_transition_endpoint(required_str(payload, "source_slice")?)?,
+                command_name(required_str(payload, "command")?)?,
+                command_error_name(required_str(payload, "error")?)?,
+            ),
+            error: WorkflowCommandErrorRecord::new(
+                workflow_transition_endpoint(required_str(payload, "new_source_slice")?)?,
+                command_name(required_str(payload, "new_command")?)?,
+                command_error_name(required_str(payload, "new_error")?)?,
+            ),
+        })
+    }
+
+    fn into_parts(
+        self,
+    ) -> (
+        WorkflowSlug,
+        WorkflowCommandErrorRecord,
+        WorkflowCommandErrorRecord,
+    ) {
+        (self.workflow, self.previous, self.error)
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "workflow": self.workflow.as_ref(),
+            "source_slice": self.previous.source_slice().as_ref(),
+            "command": self.previous.command_name().as_ref(),
+            "error": self.previous.error_name().as_ref(),
+            "new_source_slice": self.error.source_slice().as_ref(),
+            "new_command": self.error.command_name().as_ref(),
+            "new_error": self.error.error_name().as_ref(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowOwnedDefinitionEventPayload {
     workflow: WorkflowSlug,
     definition: WorkflowOwnedDefinitionRecord,
@@ -2527,6 +2592,15 @@ pub(crate) enum ExportedEventBody {
         workflow: WorkflowSlug,
         error: WorkflowCommandErrorRecord,
     },
+    WorkflowCommandErrorUpdated {
+        workflow: WorkflowSlug,
+        previous: WorkflowCommandErrorRecord,
+        error: WorkflowCommandErrorRecord,
+    },
+    WorkflowCommandErrorRemoved {
+        workflow: WorkflowSlug,
+        error: WorkflowCommandErrorRecord,
+    },
     WorkflowOwnedDefinitionAdded {
         workflow: WorkflowSlug,
         definition: WorkflowOwnedDefinitionRecord,
@@ -2720,6 +2794,8 @@ impl ExportedEventBody {
             | Self::WorkflowOutcomeUpdated { .. }
             | Self::WorkflowOutcomeRemoved { .. } => self.workflow_outcome_event_type(),
             Self::WorkflowCommandErrorAdded { .. }
+            | Self::WorkflowCommandErrorUpdated { .. }
+            | Self::WorkflowCommandErrorRemoved { .. }
             | Self::WorkflowOwnedDefinitionAdded { .. }
             | Self::WorkflowTransitionEvidenceAdded { .. }
             | Self::WorkflowEntryLifecycleCoverageRequired { .. }
@@ -2810,6 +2886,12 @@ impl ExportedEventBody {
     fn workflow_event_type(&self) -> ExportedEventType {
         match self {
             Self::WorkflowCommandErrorAdded { .. } => ExportedEventType::WorkflowCommandErrorAdded,
+            Self::WorkflowCommandErrorUpdated { .. } => {
+                ExportedEventType::WorkflowCommandErrorUpdated
+            }
+            Self::WorkflowCommandErrorRemoved { .. } => {
+                ExportedEventType::WorkflowCommandErrorRemoved
+            }
             Self::WorkflowOwnedDefinitionAdded { .. } => {
                 ExportedEventType::WorkflowOwnedDefinitionAdded
             }
@@ -2893,9 +2975,16 @@ impl ExportedEventBody {
                 outcome,
             } => WorkflowOutcomeUpdatedEventPayload::from_parts(workflow, previous, outcome)
                 .to_json_value(),
-            Self::WorkflowCommandErrorAdded { workflow, error } => {
+            Self::WorkflowCommandErrorAdded { workflow, error }
+            | Self::WorkflowCommandErrorRemoved { workflow, error } => {
                 WorkflowCommandErrorEventPayload::from_parts(workflow, error).to_json_value()
             }
+            Self::WorkflowCommandErrorUpdated {
+                workflow,
+                previous,
+                error,
+            } => WorkflowCommandErrorUpdatedEventPayload::from_parts(workflow, previous, error)
+                .to_json_value(),
             Self::WorkflowOwnedDefinitionAdded {
                 workflow,
                 definition,
@@ -3184,6 +3273,20 @@ impl ExportedEventBody {
                 let (workflow, error) =
                     WorkflowCommandErrorEventPayload::from_json_value(payload)?.into_parts();
                 Ok(Self::WorkflowCommandErrorAdded { workflow, error })
+            }
+            ExportedEventType::WorkflowCommandErrorUpdated => {
+                let (workflow, previous, error) =
+                    WorkflowCommandErrorUpdatedEventPayload::from_json_value(payload)?.into_parts();
+                Ok(Self::WorkflowCommandErrorUpdated {
+                    workflow,
+                    previous,
+                    error,
+                })
+            }
+            ExportedEventType::WorkflowCommandErrorRemoved => {
+                let (workflow, error) =
+                    WorkflowCommandErrorEventPayload::from_json_value(payload)?.into_parts();
+                Ok(Self::WorkflowCommandErrorRemoved { workflow, error })
             }
             ExportedEventType::WorkflowOwnedDefinitionAdded => {
                 let (workflow, definition) =
@@ -3719,6 +3822,34 @@ impl EventDraft {
         Self {
             stream_id: EventStreamId::workflow(workflow),
             body: ExportedEventBody::WorkflowCommandErrorAdded {
+                workflow: workflow.clone(),
+                error: error.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn workflow_command_error_updated(
+        workflow: &WorkflowSlug,
+        previous: &WorkflowCommandErrorRecord,
+        error: &WorkflowCommandErrorRecord,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::workflow(workflow),
+            body: ExportedEventBody::WorkflowCommandErrorUpdated {
+                workflow: workflow.clone(),
+                previous: previous.clone(),
+                error: error.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn workflow_command_error_removed(
+        workflow: &WorkflowSlug,
+        error: &WorkflowCommandErrorRecord,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::workflow(workflow),
+            body: ExportedEventBody::WorkflowCommandErrorRemoved {
                 workflow: workflow.clone(),
                 error: error.clone(),
             },
@@ -4581,6 +4712,8 @@ impl ProjectedModel {
             | EmcEvent::WorkflowOutcomeUpdated { .. }
             | EmcEvent::WorkflowOutcomeRemoved { .. }
             | EmcEvent::WorkflowCommandErrorAdded { .. }
+            | EmcEvent::WorkflowCommandErrorUpdated { .. }
+            | EmcEvent::WorkflowCommandErrorRemoved { .. }
             | EmcEvent::WorkflowOwnedDefinitionAdded { .. }
             | EmcEvent::WorkflowTransitionEvidenceAdded { .. }
             | EmcEvent::WorkflowEntryLifecycleCoverageRequired { .. }
@@ -4676,6 +4809,17 @@ impl ProjectedModel {
             }
             EmcEvent::WorkflowCommandErrorAdded { .. } => {
                 Self::apply_workflow_command_error_added(model, event)
+            }
+            EmcEvent::WorkflowCommandErrorUpdated { error, .. } => {
+                Self::apply_workflow_command_error_updated(
+                    model,
+                    error.workflow(),
+                    error.previous(),
+                    error.replacement(),
+                )
+            }
+            EmcEvent::WorkflowCommandErrorRemoved { error, .. } => {
+                Self::apply_workflow_command_error_removed(model, error.workflow(), error.error())
             }
             EmcEvent::WorkflowOwnedDefinitionAdded { .. } => {
                 Self::apply_workflow_owned_definition_added(model, event)
@@ -5619,6 +5763,34 @@ impl ProjectedModel {
             .workflow_mut(&workflow, "WorkflowCommandErrorAdded")?
             .command_errors
             .push(record);
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_command_error_updated(
+        model: Option<Self>,
+        workflow: &WorkflowSlug,
+        previous: &WorkflowCommandErrorRecord,
+        error: &WorkflowCommandErrorRecord,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "WorkflowCommandErrorUpdated")?;
+        let workflow = model.workflow_mut(workflow, "WorkflowCommandErrorUpdated")?;
+        workflow
+            .command_errors
+            .retain(|existing| existing != previous);
+        workflow.command_errors.push(error.clone());
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_command_error_removed(
+        model: Option<Self>,
+        workflow: &WorkflowSlug,
+        error: &WorkflowCommandErrorRecord,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "WorkflowCommandErrorRemoved")?;
+        model
+            .workflow_mut(workflow, "WorkflowCommandErrorRemoved")?
+            .command_errors
+            .retain(|existing| existing != error);
         Ok(Some(model))
     }
 

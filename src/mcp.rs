@@ -1847,6 +1847,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         update_workflow_tool(),
         update_workflow_name_tool(),
         update_workflow_outcome_tool(),
+        update_workflow_command_error_tool(),
         update_slice_tool(),
         update_slice_kind_tool(),
         update_slice_name_tool(),
@@ -1879,6 +1880,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         remove_control_definition_tool(),
         remove_workflow_tool(),
         remove_workflow_outcome_tool(),
+        remove_workflow_command_error_tool(),
         connect_workflow_tool(),
         remove_transition_tool(),
     ]
@@ -2107,6 +2109,83 @@ fn workflow_outcome_update_schema() -> JsonObject {
     }))
 }
 
+fn update_workflow_command_error_tool() -> Tool {
+    Tool::new(
+        "update_workflow_command_error",
+        "Update a workflow composition command-local error fact in Lean4 and Quint workflow artifacts.",
+        workflow_command_error_update_schema(),
+    )
+}
+
+fn remove_workflow_command_error_tool() -> Tool {
+    Tool::new(
+        "remove_workflow_command_error",
+        "Remove a workflow composition command-local error fact from Lean4 and Quint workflow artifacts.",
+        workflow_command_error_schema(),
+    )
+}
+
+fn workflow_command_error_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "workflow": {
+                    "type": "string"
+                },
+                "source_slice": {
+                    "type": "string"
+                },
+                "command": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                }
+            },
+            "required": ["workflow", "source_slice", "command", "error"],
+            "additionalProperties": false
+    }))
+}
+
+fn workflow_command_error_update_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "workflow": {
+                    "type": "string"
+                },
+                "source_slice": {
+                    "type": "string"
+                },
+                "command": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "new_source_slice": {
+                    "type": "string"
+                },
+                "new_command": {
+                    "type": "string"
+                },
+                "new_error": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "workflow",
+                "source_slice",
+                "command",
+                "error",
+                "new_source_slice",
+                "new_command",
+                "new_error"
+            ],
+            "additionalProperties": false
+    }))
+}
+
 fn remove_workflow_tool() -> Tool {
     Tool::new(
         "remove_workflow",
@@ -2319,6 +2398,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "update_workflow" => Some(update_workflow_tool_text(request)),
         "update_workflow_name" => Some(update_workflow_name_tool_text(request)),
         "update_workflow_outcome" => Some(update_workflow_outcome_tool_text(request)),
+        "update_workflow_command_error" => Some(update_workflow_command_error_tool_text(request)),
         "update_slice" => Some(update_slice_tool_text(request)),
         "update_slice_kind" => Some(update_slice_kind_tool_text(request)),
         "update_slice_name" => Some(update_slice_name_tool_text(request)),
@@ -2355,6 +2435,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "remove_control_definition" => Some(remove_control_definition_tool_text(request)),
         "remove_workflow" => Some(remove_workflow_tool_text(request)),
         "remove_workflow_outcome" => Some(remove_workflow_outcome_tool_text(request)),
+        "remove_workflow_command_error" => Some(remove_workflow_command_error_tool_text(request)),
         "connect_workflow" => Some(connect_workflow_tool_text(request)),
         "remove_transition" => Some(remove_transition_tool_text(request)),
         _ => None,
@@ -2649,47 +2730,75 @@ fn workflow_outcome_from_arguments(
 }
 
 fn add_workflow_command_error_tool_text(request: &Value) -> Result<String, ShellError> {
-    let arguments = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .ok_or_else(|| ShellError::message("add_workflow_command_error requires arguments"))?;
-    let workflow_slug = arguments
-        .get("workflow")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_command_error requires workflow"))
-        .and_then(|raw_workflow| {
-            parse_workflow_slug(raw_workflow)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
+    let arguments = required_tool_arguments(request, "add_workflow_command_error")?;
+    let workflow_slug = workflow_slug_from_arguments(arguments, "add_workflow_command_error")?;
+
+    interpret_collect_reports(&command::add_workflow_command_error(
+        workflow_slug,
+        workflow_command_error_from_arguments(arguments, "add_workflow_command_error", "")?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn update_workflow_command_error_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "update_workflow_command_error")?;
+    let workflow_slug = workflow_slug_from_arguments(arguments, "update_workflow_command_error")?;
+
+    interpret_collect_reports(&command::update_workflow_command_error(
+        workflow_slug,
+        workflow_command_error_from_arguments(arguments, "update_workflow_command_error", "")?,
+        workflow_command_error_from_arguments(arguments, "update_workflow_command_error", "new_")?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn remove_workflow_command_error_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "remove_workflow_command_error")?;
+    let workflow_slug = workflow_slug_from_arguments(arguments, "remove_workflow_command_error")?;
+
+    interpret_collect_reports(&command::remove_workflow_command_error(
+        workflow_slug,
+        workflow_command_error_from_arguments(arguments, "remove_workflow_command_error", "")?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn workflow_command_error_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+) -> Result<WorkflowCommandErrorRecord, ShellError> {
+    let source_slice_field = format!("{prefix}source_slice");
+    let command_field = format!("{prefix}command");
+    let error_field = format!("{prefix}error");
     let source_slice = arguments
-        .get("source_slice")
+        .get(&source_slice_field)
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_command_error requires source_slice"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {source_slice_field}")))
         .and_then(|raw_source_slice| {
             WorkflowTransitionEndpoint::try_new(raw_source_slice.to_owned())
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
     let command_name = arguments
-        .get("command")
+        .get(&command_field)
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_command_error requires command"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {command_field}")))
         .and_then(|raw_command| {
             parse_command_name(raw_command).map_err(|error| ShellError::message(error.to_string()))
         })?;
     let error_name = arguments
-        .get("error")
+        .get(&error_field)
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_command_error requires error"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {error_field}")))
         .and_then(|raw_error| {
             parse_command_error_name(raw_error)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
-
-    interpret_collect_reports(&command::add_workflow_command_error(
-        workflow_slug,
-        WorkflowCommandErrorRecord::new(source_slice, command_name, error_name),
+    Ok(WorkflowCommandErrorRecord::new(
+        source_slice,
+        command_name,
+        error_name,
     ))
-    .map(|reports| reports.join("\n"))
 }
 
 fn add_workflow_owned_definition_tool_text(request: &Value) -> Result<String, ShellError> {

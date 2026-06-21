@@ -898,6 +898,106 @@ mod tests {
     }
 
     #[test]
+    fn check_rebuilds_workflow_command_error_updates_from_exported_events()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+        add_duplicate_ticket_workflow_command_error(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow-command-error",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--command",
+                "CaptureTicket",
+                "--error",
+                "DuplicateTicket",
+                "--new-source-slice",
+                "capture-ticket",
+                "--new-command",
+                "SubmitTicket",
+                "--new-error",
+                "TicketAlreadySubmitted",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(
+            workflow_quint.contains(
+                "val workflowCommandErrors: List[WorkflowCommandError] = [{ sourceSlice: \"capture-ticket\", commandName: \"SubmitTicket\", errorName: \"TicketAlreadySubmitted\" }]"
+            ),
+            "updated workflow command error must be rebuilt from exported events"
+        );
+        assert!(
+            !workflow_quint.contains("DuplicateTicket"),
+            "previous workflow command error must not be rebuilt after update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_rebuilds_workflow_command_error_removals_from_exported_events()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+        add_duplicate_ticket_workflow_command_error(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "workflow-command-error",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--command",
+                "CaptureTicket",
+                "--error",
+                "DuplicateTicket",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(
+            workflow_quint.contains("val workflowCommandErrors: List[WorkflowCommandError] = []"),
+            "removed workflow command error must not be rebuilt from exported events"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn check_rebuilds_workflow_owned_definitions_from_exported_events() -> Result<(), Box<dyn Error>>
     {
         let temp_dir = TempDir::new()?;
@@ -2071,6 +2171,29 @@ mod tests {
                 "ticket_captured",
                 "--externally-relevant",
                 "true",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_duplicate_ticket_workflow_command_error(
+        temp_dir: &TempDir,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-command-error",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--command",
+                "CaptureTicket",
+                "--error",
+                "DuplicateTicket",
             ])
             .current_dir(temp_dir.path())
             .assert()

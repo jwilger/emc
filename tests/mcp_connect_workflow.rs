@@ -639,6 +639,59 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_workflow_command_error_facts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_open_ticket_workflow(temp_dir.path())?;
+        add_workflow_command_error(temp_dir.path(), "CaptureTicket", "DuplicateTicket")?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_workflow_command_error_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"update_workflow_command_error\"",
+            ))
+            .stdout(predicate::str::contains(
+                "updated workflow command error DuplicateTicket on workflow open-ticket",
+            ));
+
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(quint.contains(
+            "val workflowCommandErrors: List[WorkflowCommandError] = [{ sourceSlice: \"capture-ticket\", commandName: \"SubmitTicket\", errorName: \"TicketAlreadySubmitted\" }]"
+        ));
+        assert!(!quint.contains("DuplicateTicket"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_workflow_command_error_facts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_open_ticket_workflow(temp_dir.path())?;
+        add_workflow_command_error(temp_dir.path(), "CaptureTicket", "DuplicateTicket")?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_workflow_command_error_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"remove_workflow_command_error\"",
+            ))
+            .stdout(predicate::str::contains(
+                "removed workflow command error DuplicateTicket from workflow open-ticket",
+            ));
+
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(quint.contains("val workflowCommandErrors: List[WorkflowCommandError] = []"));
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_authors_workflow_owned_definition_facts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -981,6 +1034,31 @@ mod tests {
         Ok(())
     }
 
+    fn add_workflow_command_error(
+        cwd: &Path,
+        command: &str,
+        error: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-command-error",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--command",
+                command,
+                "--error",
+                error,
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
     fn transition_tool_schema<'tools>(
         tools: &'tools [Value],
         name: &str,
@@ -1089,6 +1167,22 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_command_error\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"command\":\"CaptureTicket\",\"error\":\"DuplicateTicket\"}}}\n",
+        )
+    }
+
+    fn update_workflow_command_error_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_command_error\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"command\":\"CaptureTicket\",\"error\":\"DuplicateTicket\",\"new_source_slice\":\"capture-ticket\",\"new_command\":\"SubmitTicket\",\"new_error\":\"TicketAlreadySubmitted\"}}}\n",
+        )
+    }
+
+    fn remove_workflow_command_error_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_command_error\",\"arguments\":{\"workflow\":\"open-ticket\",\"source_slice\":\"capture-ticket\",\"command\":\"CaptureTicket\",\"error\":\"DuplicateTicket\"}}}\n",
         )
     }
 

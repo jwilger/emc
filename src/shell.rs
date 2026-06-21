@@ -32,9 +32,11 @@ use crate::core::effect::{
     SliceOutcomeDefinitionRemovalEffect, SliceReadModelDefinitionRemovalEffect,
     SliceScenarioRemovalEffect, SliceTranslationDefinitionRemovalEffect,
     SliceViewControlRemovalEffect, SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect,
-    WorkflowCommandErrorEffect, WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect,
-    WorkflowNameUpdateEffect, WorkflowOutcomeEffect, WorkflowOutcomeRemovalEffect,
-    WorkflowOutcomeUpdateEffect, WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    WorkflowCommandErrorEffect, WorkflowCommandErrorRemovalEffect,
+    WorkflowCommandErrorUpdateEffect, WorkflowDescriptionUpdateEffect,
+    WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
+    WorkflowOutcomeRemovalEffect, WorkflowOutcomeUpdateEffect, WorkflowOwnedDefinitionEffect,
+    WorkflowTransitionEvidenceEffect,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
@@ -358,6 +360,8 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::UpdateTranslationDefinitionFromSlice(_)
             | Effect::AddViewDefinitionFromSlice(_)
             | Effect::AddWorkflowCommandErrorFromWorkflow(_)
+            | Effect::UpdateWorkflowCommandErrorFromWorkflow(_)
+            | Effect::RemoveWorkflowCommandErrorFromWorkflow(_)
             | Effect::AddWorkflowEntryLifecycleStateFromWorkflow(_)
             | Effect::AddWorkflowFromIndex(_)
             | Effect::AddWorkflowOutcomeFromWorkflow(_)
@@ -1446,6 +1450,12 @@ fn interpret_workflow_fact_effect(effect: &Effect) -> Option<Result<Vec<String>,
         Effect::AddWorkflowCommandErrorFromWorkflow(effect) => {
             interpret_workflow_command_error_added(effect)
         }
+        Effect::UpdateWorkflowCommandErrorFromWorkflow(effect) => {
+            interpret_workflow_command_error_updated(effect)
+        }
+        Effect::RemoveWorkflowCommandErrorFromWorkflow(effect) => {
+            interpret_workflow_command_error_removed(effect)
+        }
         Effect::AddWorkflowOwnedDefinitionFromWorkflow(effect) => {
             interpret_workflow_owned_definition_added(effect)
         }
@@ -1481,6 +1491,40 @@ fn interpret_workflow_command_error_added(
         effect.workflow_slug(),
         reports,
         EventDraft::workflow_command_error_added(effect.workflow_slug(), effect.error()),
+    )
+}
+
+fn interpret_workflow_command_error_updated(
+    effect: &WorkflowCommandErrorUpdateEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "updated workflow command error {} on workflow {}",
+        effect.previous().error_name().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_command_error_updated(
+            effect.workflow_slug(),
+            effect.previous(),
+            effect.replacement(),
+        ),
+    )
+}
+
+fn interpret_workflow_command_error_removed(
+    effect: &WorkflowCommandErrorRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "removed workflow command error {} from workflow {}",
+        effect.error().error_name().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_command_error_removed(effect.workflow_slug(), effect.error()),
     )
 }
 
