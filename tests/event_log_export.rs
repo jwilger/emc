@@ -750,6 +750,106 @@ mod tests {
     }
 
     #[test]
+    fn check_rebuilds_workflow_outcome_updates_from_exported_events() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+        add_ticket_captured_workflow_outcome(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "workflow-outcome",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--externally-relevant",
+                "true",
+                "--new-source-slice",
+                "capture-ticket",
+                "--new-label",
+                "ticket_ready",
+                "--new-externally-relevant",
+                "false",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(
+            workflow_quint.contains(
+                "val workflowOutcomes: List[WorkflowOutcome] = [{ sourceSlice: \"capture-ticket\", label: \"ticket_ready\", externallyRelevant: false }]"
+            ),
+            "updated workflow outcome must be rebuilt from exported events"
+        );
+        assert!(
+            !workflow_quint.contains("label: \"ticket_captured\""),
+            "previous workflow outcome must not be rebuilt after update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn check_rebuilds_workflow_outcome_removals_from_exported_events() -> Result<(), Box<dyn Error>>
+    {
+        let temp_dir = TempDir::new()?;
+        create_project_with_workflow_and_slice(&temp_dir)?;
+        add_ticket_captured_workflow_outcome(&temp_dir)?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "workflow-outcome",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--externally-relevant",
+                "true",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        fs::remove_file(temp_dir.path().join("emc.toml"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/lean"))?;
+        fs::remove_dir_all(temp_dir.path().join("model/quint"))?;
+
+        Command::cargo_bin("emc")?
+            .args(["check"])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let workflow_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(
+            workflow_quint.contains("val workflowOutcomes: List[WorkflowOutcome] = []"),
+            "removed workflow outcome must not be rebuilt from exported events"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn check_rebuilds_workflow_command_errors_from_exported_events() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_project_with_workflow_and_slice(&temp_dir)?;
@@ -1950,6 +2050,27 @@ mod tests {
                 "Capture ticket.ticket_title",
                 "--bit-encoding",
                 "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        Ok(())
+    }
+
+    fn add_ticket_captured_workflow_outcome(temp_dir: &TempDir) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "workflow-outcome",
+                "--workflow",
+                "open-ticket",
+                "--source-slice",
+                "capture-ticket",
+                "--label",
+                "ticket_captured",
+                "--externally-relevant",
+                "true",
             ])
             .current_dir(temp_dir.path())
             .assert()

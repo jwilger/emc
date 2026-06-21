@@ -43,17 +43,20 @@ This ledger tracks #159 across multiple PRs.
 - PR #190: added event-sourced CLI and MCP update/remove support for
   board connections. Covers behavior through synchronized Lean4/Quint artifact
   assertions for both CLI and MCP entry points.
-- Current branch: adds event-sourced CLI and MCP update/remove support for
+- PR #192: added event-sourced CLI and MCP update/remove support for
   data-flow facts. Covers behavior through synchronized Lean4/Quint artifact
   assertions, MCP entry points, and exported-event replay.
+- Current branch: adds event-sourced CLI and MCP update/remove support for
+  workflow outcome facts. Covers behavior through synchronized Lean4/Quint
+  artifact assertions, MCP entry points, and exported-event replay.
 
 ## Current PR boundary
 
 - This PR should broaden beyond scenarios, commands, events, read models, views,
   controls, outcomes, automations, translations, external payload definitions,
-  board elements, and board connections to data-flow facts without closing #159.
-  Keep #159 open until all modeled element families listed in the issue have CLI
-  and MCP update/remove coverage.
+  board elements, board connections, and data-flow facts to workflow outcome
+  facts without closing #159. Keep #159 open until all modeled element families
+  listed in the issue have CLI and MCP update/remove coverage.
 
 ## Remaining modeled element targets
 
@@ -61,15 +64,16 @@ This ledger tracks #159 across multiple PRs.
   workflow and slice fields; confirm MCP/CLI parity and any gaps before closing.
 - Workflow transitions: remove exists; update likely means replace by removing
   and adding only if that is semantically valid, otherwise add explicit update.
-- Workflow evidence facts: workflow outcomes, command errors, owned definitions,
-  transition evidence, entry lifecycle coverage/state.
+- Workflow evidence facts: command errors, owned definitions, transition
+  evidence, entry lifecycle coverage/state. Workflow outcomes are covered by the
+  current branch.
 - Slice-owned definitions: commands are covered by PR #170, events are covered
   by PR #172, read models are covered by PR #174, views are covered by PR #176,
   controls are covered by PR #178, outcomes are covered by PR #180, automations
   are covered by PR #182, translations are covered by PR #184, external
   payloads are covered by PR #186, board elements are covered by PR #188, board
-  connections are covered by PR #190, and data-flow facts are covered by the
-  current branch.
+  connections are covered by PR #190, and data-flow facts are covered by PR
+  #192.
 - Scenario follow-up: add tests for contract scenario update/remove if needed by
   final completion evidence.
 
@@ -105,6 +109,9 @@ This ledger tracks #159 across multiple PRs.
 - `cargo test --test update_slice data_flow`
 - `cargo test --test mcp_stdio data_flow`
 - `cargo test --test event_log_export bit_level_data_flow`
+- `cargo test --test connect_workflow workflow_outcome`
+- `cargo test --test mcp_connect_workflow workflow_outcome`
+- `cargo test --test event_log_export workflow_outcome`
 
 ## Next likely increment
 

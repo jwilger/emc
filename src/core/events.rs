@@ -137,6 +137,8 @@ pub(crate) enum ExportedEventType {
     WorkflowUpdated,
     WorkflowRemoved,
     WorkflowOutcomeAdded,
+    WorkflowOutcomeUpdated,
+    WorkflowOutcomeRemoved,
     WorkflowCommandErrorAdded,
     WorkflowOwnedDefinitionAdded,
     WorkflowTransitionEvidenceAdded,
@@ -198,6 +200,8 @@ impl ExportedEventType {
             "WorkflowUpdated" => Ok(Self::WorkflowUpdated),
             "WorkflowRemoved" => Ok(Self::WorkflowRemoved),
             "WorkflowOutcomeAdded" => Ok(Self::WorkflowOutcomeAdded),
+            "WorkflowOutcomeUpdated" => Ok(Self::WorkflowOutcomeUpdated),
+            "WorkflowOutcomeRemoved" => Ok(Self::WorkflowOutcomeRemoved),
             "WorkflowCommandErrorAdded" => Ok(Self::WorkflowCommandErrorAdded),
             "WorkflowOwnedDefinitionAdded" => Ok(Self::WorkflowOwnedDefinitionAdded),
             "WorkflowTransitionEvidenceAdded" => Ok(Self::WorkflowTransitionEvidenceAdded),
@@ -268,6 +272,8 @@ impl AsRef<str> for ExportedEventType {
             Self::WorkflowUpdated => "WorkflowUpdated",
             Self::WorkflowRemoved => "WorkflowRemoved",
             Self::WorkflowOutcomeAdded => "WorkflowOutcomeAdded",
+            Self::WorkflowOutcomeUpdated => "WorkflowOutcomeUpdated",
+            Self::WorkflowOutcomeRemoved => "WorkflowOutcomeRemoved",
             Self::WorkflowCommandErrorAdded => "WorkflowCommandErrorAdded",
             Self::WorkflowOwnedDefinitionAdded => "WorkflowOwnedDefinitionAdded",
             Self::WorkflowTransitionEvidenceAdded => "WorkflowTransitionEvidenceAdded",
@@ -2096,6 +2102,59 @@ impl WorkflowOutcomeEventPayload {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+struct WorkflowOutcomeUpdatedEventPayload {
+    workflow: WorkflowSlug,
+    previous: WorkflowOutcomeRecord,
+    outcome: WorkflowOutcomeRecord,
+}
+
+impl WorkflowOutcomeUpdatedEventPayload {
+    fn from_parts(
+        workflow: &WorkflowSlug,
+        previous: &WorkflowOutcomeRecord,
+        outcome: &WorkflowOutcomeRecord,
+    ) -> Self {
+        Self {
+            workflow: workflow.clone(),
+            previous: previous.clone(),
+            outcome: outcome.clone(),
+        }
+    }
+
+    fn from_json_value(payload: &Value) -> Result<Self, String> {
+        Ok(Self {
+            workflow: workflow_slug(required_str(payload, "workflow")?)?,
+            previous: WorkflowOutcomeRecord::new(
+                workflow_transition_endpoint(required_str(payload, "source_slice")?)?,
+                outcome_label_name(required_str(payload, "label")?)?,
+                required_bool(payload, "externally_relevant")?,
+            ),
+            outcome: WorkflowOutcomeRecord::new(
+                workflow_transition_endpoint(required_str(payload, "new_source_slice")?)?,
+                outcome_label_name(required_str(payload, "new_label")?)?,
+                required_bool(payload, "new_externally_relevant")?,
+            ),
+        })
+    }
+
+    fn into_parts(self) -> (WorkflowSlug, WorkflowOutcomeRecord, WorkflowOutcomeRecord) {
+        (self.workflow, self.previous, self.outcome)
+    }
+
+    fn to_json_value(&self) -> Value {
+        json!({
+            "workflow": self.workflow.as_ref(),
+            "source_slice": self.previous.source_slice().as_ref(),
+            "label": self.previous.label().as_ref(),
+            "externally_relevant": self.previous.externally_relevant(),
+            "new_source_slice": self.outcome.source_slice().as_ref(),
+            "new_label": self.outcome.label().as_ref(),
+            "new_externally_relevant": self.outcome.externally_relevant(),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct WorkflowCommandErrorEventPayload {
     workflow: WorkflowSlug,
     error: WorkflowCommandErrorRecord,
@@ -2455,6 +2514,15 @@ pub(crate) enum ExportedEventBody {
         workflow: WorkflowSlug,
         outcome: WorkflowOutcomeRecord,
     },
+    WorkflowOutcomeUpdated {
+        workflow: WorkflowSlug,
+        previous: WorkflowOutcomeRecord,
+        outcome: WorkflowOutcomeRecord,
+    },
+    WorkflowOutcomeRemoved {
+        workflow: WorkflowSlug,
+        outcome: WorkflowOutcomeRecord,
+    },
     WorkflowCommandErrorAdded {
         workflow: WorkflowSlug,
         error: WorkflowCommandErrorRecord,
@@ -2648,23 +2716,17 @@ impl ExportedEventBody {
             Self::WorkflowAdded { .. } => ExportedEventType::WorkflowAdded,
             Self::WorkflowUpdated { .. } => ExportedEventType::WorkflowUpdated,
             Self::WorkflowRemoved { .. } => ExportedEventType::WorkflowRemoved,
-            Self::WorkflowOutcomeAdded { .. } => ExportedEventType::WorkflowOutcomeAdded,
-            Self::WorkflowCommandErrorAdded { .. } => ExportedEventType::WorkflowCommandErrorAdded,
-            Self::WorkflowOwnedDefinitionAdded { .. } => {
-                ExportedEventType::WorkflowOwnedDefinitionAdded
-            }
-            Self::WorkflowTransitionEvidenceAdded { .. } => {
-                ExportedEventType::WorkflowTransitionEvidenceAdded
-            }
-            Self::WorkflowEntryLifecycleCoverageRequired { .. } => {
-                ExportedEventType::WorkflowEntryLifecycleCoverageRequired
-            }
-            Self::WorkflowEntryLifecycleStateAdded { .. } => {
-                ExportedEventType::WorkflowEntryLifecycleStateAdded
-            }
-            Self::WorkflowReadinessDeclared { .. } => ExportedEventType::WorkflowReadinessDeclared,
-            Self::WorkflowConnected { .. } => ExportedEventType::WorkflowConnected,
-            Self::WorkflowTransitionRemoved { .. } => ExportedEventType::WorkflowTransitionRemoved,
+            Self::WorkflowOutcomeAdded { .. }
+            | Self::WorkflowOutcomeUpdated { .. }
+            | Self::WorkflowOutcomeRemoved { .. } => self.workflow_outcome_event_type(),
+            Self::WorkflowCommandErrorAdded { .. }
+            | Self::WorkflowOwnedDefinitionAdded { .. }
+            | Self::WorkflowTransitionEvidenceAdded { .. }
+            | Self::WorkflowEntryLifecycleCoverageRequired { .. }
+            | Self::WorkflowEntryLifecycleStateAdded { .. }
+            | Self::WorkflowReadinessDeclared { .. }
+            | Self::WorkflowConnected { .. }
+            | Self::WorkflowTransitionRemoved { .. } => self.workflow_event_type(),
             Self::SliceAdded { .. } => ExportedEventType::SliceAdded,
             Self::SliceUpdated { .. } => ExportedEventType::SliceUpdated,
             Self::SliceRemoved { .. } => ExportedEventType::SliceRemoved,
@@ -2745,6 +2807,37 @@ impl ExportedEventBody {
         }
     }
 
+    fn workflow_event_type(&self) -> ExportedEventType {
+        match self {
+            Self::WorkflowCommandErrorAdded { .. } => ExportedEventType::WorkflowCommandErrorAdded,
+            Self::WorkflowOwnedDefinitionAdded { .. } => {
+                ExportedEventType::WorkflowOwnedDefinitionAdded
+            }
+            Self::WorkflowTransitionEvidenceAdded { .. } => {
+                ExportedEventType::WorkflowTransitionEvidenceAdded
+            }
+            Self::WorkflowEntryLifecycleCoverageRequired { .. } => {
+                ExportedEventType::WorkflowEntryLifecycleCoverageRequired
+            }
+            Self::WorkflowEntryLifecycleStateAdded { .. } => {
+                ExportedEventType::WorkflowEntryLifecycleStateAdded
+            }
+            Self::WorkflowReadinessDeclared { .. } => ExportedEventType::WorkflowReadinessDeclared,
+            Self::WorkflowConnected { .. } => ExportedEventType::WorkflowConnected,
+            Self::WorkflowTransitionRemoved { .. } => ExportedEventType::WorkflowTransitionRemoved,
+            _ => self.event_type(),
+        }
+    }
+
+    fn workflow_outcome_event_type(&self) -> ExportedEventType {
+        match self {
+            Self::WorkflowOutcomeAdded { .. } => ExportedEventType::WorkflowOutcomeAdded,
+            Self::WorkflowOutcomeUpdated { .. } => ExportedEventType::WorkflowOutcomeUpdated,
+            Self::WorkflowOutcomeRemoved { .. } => ExportedEventType::WorkflowOutcomeRemoved,
+            _ => self.event_type(),
+        }
+    }
+
     fn board_event_type(&self) -> ExportedEventType {
         match self {
             Self::SliceBoardElementAdded { .. } => ExportedEventType::SliceBoardElementAdded,
@@ -2790,9 +2883,16 @@ impl ExportedEventBody {
                 WorkflowEventPayload::from_workflow(workflow).to_json_value()
             }
             Self::WorkflowRemoved { slug } => json!({ "slug": slug.as_ref() }),
-            Self::WorkflowOutcomeAdded { workflow, outcome } => {
+            Self::WorkflowOutcomeAdded { workflow, outcome }
+            | Self::WorkflowOutcomeRemoved { workflow, outcome } => {
                 WorkflowOutcomeEventPayload::from_parts(workflow, outcome).to_json_value()
             }
+            Self::WorkflowOutcomeUpdated {
+                workflow,
+                previous,
+                outcome,
+            } => WorkflowOutcomeUpdatedEventPayload::from_parts(workflow, previous, outcome)
+                .to_json_value(),
             Self::WorkflowCommandErrorAdded { workflow, error } => {
                 WorkflowCommandErrorEventPayload::from_parts(workflow, error).to_json_value()
             }
@@ -3065,6 +3165,20 @@ impl ExportedEventBody {
                 let (workflow, outcome) =
                     WorkflowOutcomeEventPayload::from_json_value(payload)?.into_parts();
                 Ok(Self::WorkflowOutcomeAdded { workflow, outcome })
+            }
+            ExportedEventType::WorkflowOutcomeUpdated => {
+                let (workflow, previous, outcome) =
+                    WorkflowOutcomeUpdatedEventPayload::from_json_value(payload)?.into_parts();
+                Ok(Self::WorkflowOutcomeUpdated {
+                    workflow,
+                    previous,
+                    outcome,
+                })
+            }
+            ExportedEventType::WorkflowOutcomeRemoved => {
+                let (workflow, outcome) =
+                    WorkflowOutcomeEventPayload::from_json_value(payload)?.into_parts();
+                Ok(Self::WorkflowOutcomeRemoved { workflow, outcome })
             }
             ExportedEventType::WorkflowCommandErrorAdded => {
                 let (workflow, error) =
@@ -3564,6 +3678,34 @@ impl EventDraft {
         Self {
             stream_id: EventStreamId::workflow(workflow),
             body: ExportedEventBody::WorkflowOutcomeAdded {
+                workflow: workflow.clone(),
+                outcome: outcome.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn workflow_outcome_updated(
+        workflow: &WorkflowSlug,
+        previous: &WorkflowOutcomeRecord,
+        outcome: &WorkflowOutcomeRecord,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::workflow(workflow),
+            body: ExportedEventBody::WorkflowOutcomeUpdated {
+                workflow: workflow.clone(),
+                previous: previous.clone(),
+                outcome: outcome.clone(),
+            },
+        }
+    }
+
+    pub(crate) fn workflow_outcome_removed(
+        workflow: &WorkflowSlug,
+        outcome: &WorkflowOutcomeRecord,
+    ) -> Self {
+        Self {
+            stream_id: EventStreamId::workflow(workflow),
+            body: ExportedEventBody::WorkflowOutcomeRemoved {
                 workflow: workflow.clone(),
                 outcome: outcome.clone(),
             },
@@ -4429,9 +4571,22 @@ impl ProjectedModel {
             EmcEvent::ProjectInitialized { name, .. } => {
                 Ok(Some(Self::apply_project_initialized(model, name)))
             }
-            EmcEvent::WorkflowAdded { .. } => Self::apply_workflow_added(model, event),
-            EmcEvent::WorkflowUpdated { .. } => Self::apply_workflow_updated(model, event),
-            EmcEvent::WorkflowRemoved { slug, .. } => Self::apply_workflow_removed(model, &slug),
+            EmcEvent::WorkflowAdded { .. }
+            | EmcEvent::WorkflowUpdated { .. }
+            | EmcEvent::WorkflowRemoved { .. }
+            | EmcEvent::WorkflowReadinessDeclared { .. }
+            | EmcEvent::WorkflowConnected { .. }
+            | EmcEvent::WorkflowTransitionRemoved { .. }
+            | EmcEvent::WorkflowOutcomeAdded { .. }
+            | EmcEvent::WorkflowOutcomeUpdated { .. }
+            | EmcEvent::WorkflowOutcomeRemoved { .. }
+            | EmcEvent::WorkflowCommandErrorAdded { .. }
+            | EmcEvent::WorkflowOwnedDefinitionAdded { .. }
+            | EmcEvent::WorkflowTransitionEvidenceAdded { .. }
+            | EmcEvent::WorkflowEntryLifecycleCoverageRequired { .. }
+            | EmcEvent::WorkflowEntryLifecycleStateAdded { .. } => {
+                Self::apply_workflow_event(model, event)
+            }
             EmcEvent::SliceAdded { .. } => Self::apply_slice_added(model, event),
             EmcEvent::SliceUpdated { .. } => Self::apply_slice_updated(model, event),
             EmcEvent::SliceRemoved { slug, .. } => Self::apply_slice_removed(model, &slug),
@@ -4497,6 +4652,16 @@ impl ProjectedModel {
             EmcEvent::SliceScenarioUpdated { .. } | EmcEvent::SliceScenarioRemoved { .. } => {
                 Self::apply_slice_scenario_event(model, event)
             }
+            EmcEvent::ReviewRecorded { .. } => Self::apply_review_recorded(model, event),
+            EmcEvent::ConflictResolved { .. } => Ok(model),
+        }
+    }
+
+    fn apply_workflow_event(model: Option<Self>, event: EmcEvent) -> Result<Option<Self>, String> {
+        match event {
+            EmcEvent::WorkflowAdded { .. } => Self::apply_workflow_added(model, event),
+            EmcEvent::WorkflowUpdated { .. } => Self::apply_workflow_updated(model, event),
+            EmcEvent::WorkflowRemoved { slug, .. } => Self::apply_workflow_removed(model, &slug),
             EmcEvent::WorkflowReadinessDeclared { .. } => {
                 Ok(Some(Self::require(model, "WorkflowReadinessDeclared")?))
             }
@@ -4504,8 +4669,10 @@ impl ProjectedModel {
             EmcEvent::WorkflowTransitionRemoved { .. } => {
                 Self::apply_workflow_transition_removed(model, event)
             }
-            EmcEvent::WorkflowOutcomeAdded { .. } => {
-                Self::apply_workflow_outcome_added(model, event)
+            EmcEvent::WorkflowOutcomeAdded { .. }
+            | EmcEvent::WorkflowOutcomeUpdated { .. }
+            | EmcEvent::WorkflowOutcomeRemoved { .. } => {
+                Self::apply_workflow_outcome_event(model, event)
             }
             EmcEvent::WorkflowCommandErrorAdded { .. } => {
                 Self::apply_workflow_command_error_added(model, event)
@@ -4522,8 +4689,7 @@ impl ProjectedModel {
             EmcEvent::WorkflowEntryLifecycleStateAdded { .. } => {
                 Self::apply_workflow_entry_lifecycle_state_added(model, event)
             }
-            EmcEvent::ReviewRecorded { .. } => Self::apply_review_recorded(model, event),
-            EmcEvent::ConflictResolved { .. } => Ok(model),
+            _ => Err("apply_workflow_event received a non-workflow event".to_owned()),
         }
     }
 
@@ -5379,6 +5545,55 @@ impl ProjectedModel {
             .workflow_mut(&workflow, "WorkflowOutcomeAdded")?
             .outcomes
             .push(outcome);
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_outcome_event(
+        model: Option<Self>,
+        event: EmcEvent,
+    ) -> Result<Option<Self>, String> {
+        match event {
+            EmcEvent::WorkflowOutcomeAdded { .. } => {
+                Self::apply_workflow_outcome_added(model, event)
+            }
+            EmcEvent::WorkflowOutcomeUpdated { outcome, .. } => {
+                Self::apply_workflow_outcome_updated(
+                    model,
+                    outcome.workflow(),
+                    outcome.previous(),
+                    outcome.replacement(),
+                )
+            }
+            EmcEvent::WorkflowOutcomeRemoved { outcome, .. } => {
+                Self::apply_workflow_outcome_removed(model, outcome.workflow(), outcome.outcome())
+            }
+            _ => Err("apply_workflow_outcome_event received a non-outcome event".to_owned()),
+        }
+    }
+
+    fn apply_workflow_outcome_updated(
+        model: Option<Self>,
+        workflow: &WorkflowSlug,
+        previous: &WorkflowOutcomeRecord,
+        outcome: &WorkflowOutcomeRecord,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "WorkflowOutcomeUpdated")?;
+        let workflow = model.workflow_mut(workflow, "WorkflowOutcomeUpdated")?;
+        workflow.outcomes.retain(|existing| existing != previous);
+        workflow.outcomes.push(outcome.clone());
+        Ok(Some(model))
+    }
+
+    fn apply_workflow_outcome_removed(
+        model: Option<Self>,
+        workflow: &WorkflowSlug,
+        outcome: &WorkflowOutcomeRecord,
+    ) -> Result<Option<Self>, String> {
+        let mut model = Self::require(model, "WorkflowOutcomeRemoved")?;
+        model
+            .workflow_mut(workflow, "WorkflowOutcomeRemoved")?
+            .outcomes
+            .retain(|existing| existing != outcome);
         Ok(Some(model))
     }
 

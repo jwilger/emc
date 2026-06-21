@@ -1846,6 +1846,7 @@ fn model_mutation_tools() -> Vec<Tool> {
     vec![
         update_workflow_tool(),
         update_workflow_name_tool(),
+        update_workflow_outcome_tool(),
         update_slice_tool(),
         update_slice_kind_tool(),
         update_slice_name_tool(),
@@ -1877,6 +1878,7 @@ fn model_mutation_tools() -> Vec<Tool> {
         remove_view_definition_tool(),
         remove_control_definition_tool(),
         remove_workflow_tool(),
+        remove_workflow_outcome_tool(),
         connect_workflow_tool(),
         remove_transition_tool(),
     ]
@@ -2026,6 +2028,83 @@ fn remove_slice_scenario_tool() -> Tool {
                 "additionalProperties": false
         })),
     )
+}
+
+fn update_workflow_outcome_tool() -> Tool {
+    Tool::new(
+        "update_workflow_outcome",
+        "Update a workflow composition outcome fact in Lean4 and Quint workflow artifacts.",
+        workflow_outcome_update_schema(),
+    )
+}
+
+fn remove_workflow_outcome_tool() -> Tool {
+    Tool::new(
+        "remove_workflow_outcome",
+        "Remove a workflow composition outcome fact from Lean4 and Quint workflow artifacts.",
+        workflow_outcome_schema(),
+    )
+}
+
+fn workflow_outcome_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "workflow": {
+                    "type": "string"
+                },
+                "source_slice": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "externally_relevant": {
+                    "type": "boolean"
+                }
+            },
+            "required": ["workflow", "source_slice", "label", "externally_relevant"],
+            "additionalProperties": false
+    }))
+}
+
+fn workflow_outcome_update_schema() -> JsonObject {
+    schema_object(json!({
+            "type": "object",
+            "properties": {
+                "workflow": {
+                    "type": "string"
+                },
+                "source_slice": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "externally_relevant": {
+                    "type": "boolean"
+                },
+                "new_source_slice": {
+                    "type": "string"
+                },
+                "new_label": {
+                    "type": "string"
+                },
+                "new_externally_relevant": {
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "workflow",
+                "source_slice",
+                "label",
+                "externally_relevant",
+                "new_source_slice",
+                "new_label",
+                "new_externally_relevant"
+            ],
+            "additionalProperties": false
+    }))
 }
 
 fn remove_workflow_tool() -> Tool {
@@ -2239,6 +2318,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
     match name {
         "update_workflow" => Some(update_workflow_tool_text(request)),
         "update_workflow_name" => Some(update_workflow_name_tool_text(request)),
+        "update_workflow_outcome" => Some(update_workflow_outcome_tool_text(request)),
         "update_slice" => Some(update_slice_tool_text(request)),
         "update_slice_kind" => Some(update_slice_kind_tool_text(request)),
         "update_slice_name" => Some(update_slice_name_tool_text(request)),
@@ -2274,6 +2354,7 @@ fn mutation_tool_text(name: &str, request: &Value) -> Option<Result<String, Shel
         "remove_view_definition" => Some(remove_view_definition_tool_text(request)),
         "remove_control_definition" => Some(remove_control_definition_tool_text(request)),
         "remove_workflow" => Some(remove_workflow_tool_text(request)),
+        "remove_workflow_outcome" => Some(remove_workflow_outcome_tool_text(request)),
         "connect_workflow" => Some(connect_workflow_tool_text(request)),
         "remove_transition" => Some(remove_transition_tool_text(request)),
         _ => None,
@@ -2486,44 +2567,85 @@ fn add_workflow_tool_text(request: &Value) -> Result<String, ShellError> {
 }
 
 fn add_workflow_outcome_tool_text(request: &Value) -> Result<String, ShellError> {
-    let arguments = request
-        .get("params")
-        .and_then(|params| params.get("arguments"))
-        .ok_or_else(|| ShellError::message("add_workflow_outcome requires arguments"))?;
-    let workflow_slug = arguments
+    let arguments = required_tool_arguments(request, "add_workflow_outcome")?;
+    let workflow_slug = workflow_slug_from_arguments(arguments, "add_workflow_outcome")?;
+
+    interpret_collect_reports(&command::add_workflow_outcome(
+        workflow_slug,
+        workflow_outcome_from_arguments(arguments, "add_workflow_outcome", "")?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn update_workflow_outcome_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "update_workflow_outcome")?;
+    let workflow_slug = workflow_slug_from_arguments(arguments, "update_workflow_outcome")?;
+
+    interpret_collect_reports(&command::update_workflow_outcome(
+        workflow_slug,
+        workflow_outcome_from_arguments(arguments, "update_workflow_outcome", "")?,
+        workflow_outcome_from_arguments(arguments, "update_workflow_outcome", "new_")?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn remove_workflow_outcome_tool_text(request: &Value) -> Result<String, ShellError> {
+    let arguments = required_tool_arguments(request, "remove_workflow_outcome")?;
+    let workflow_slug = workflow_slug_from_arguments(arguments, "remove_workflow_outcome")?;
+
+    interpret_collect_reports(&command::remove_workflow_outcome(
+        workflow_slug,
+        workflow_outcome_from_arguments(arguments, "remove_workflow_outcome", "")?,
+    ))
+    .map(|reports| reports.join("\n"))
+}
+
+fn workflow_slug_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+) -> Result<WorkflowSlug, ShellError> {
+    let raw_workflow = arguments
         .get("workflow")
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_outcome requires workflow"))
-        .and_then(|raw_workflow| {
-            parse_workflow_slug(raw_workflow)
-                .map_err(|error| ShellError::message(error.to_string()))
-        })?;
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires workflow")))?;
+    parse_workflow_slug(raw_workflow).map_err(|error| ShellError::message(error.to_string()))
+}
+
+fn workflow_outcome_from_arguments(
+    arguments: &Value,
+    tool_name: &str,
+    prefix: &str,
+) -> Result<WorkflowOutcomeRecord, ShellError> {
+    let source_slice_field = format!("{prefix}source_slice");
+    let label_field = format!("{prefix}label");
+    let externally_relevant_field = format!("{prefix}externally_relevant");
     let source_slice = arguments
-        .get("source_slice")
+        .get(&source_slice_field)
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_outcome requires source_slice"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {source_slice_field}")))
         .and_then(|raw_source_slice| {
             WorkflowTransitionEndpoint::try_new(raw_source_slice.to_owned())
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
     let label = arguments
-        .get("label")
+        .get(&label_field)
         .and_then(Value::as_str)
-        .ok_or_else(|| ShellError::message("add_workflow_outcome requires label"))
+        .ok_or_else(|| ShellError::message(format!("{tool_name} requires {label_field}")))
         .and_then(|raw_label| {
             parse_outcome_label_name(raw_label)
                 .map_err(|error| ShellError::message(error.to_string()))
         })?;
     let externally_relevant = arguments
-        .get("externally_relevant")
+        .get(&externally_relevant_field)
         .and_then(Value::as_bool)
-        .ok_or_else(|| ShellError::message("add_workflow_outcome requires externally_relevant"))?;
-
-    interpret_collect_reports(&command::add_workflow_outcome(
-        workflow_slug,
-        WorkflowOutcomeRecord::new(source_slice, label, externally_relevant),
+        .ok_or_else(|| {
+            ShellError::message(format!("{tool_name} requires {externally_relevant_field}"))
+        })?;
+    Ok(WorkflowOutcomeRecord::new(
+        source_slice,
+        label,
+        externally_relevant,
     ))
-    .map(|reports| reports.join("\n"))
 }
 
 fn add_workflow_command_error_tool_text(request: &Value) -> Result<String, ShellError> {

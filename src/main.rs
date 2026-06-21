@@ -241,6 +241,15 @@ enum Command {
         workflow_slug: WorkflowSlug,
         outcome: WorkflowOutcomeRecord,
     },
+    UpdateWorkflowOutcome {
+        workflow_slug: WorkflowSlug,
+        previous: WorkflowOutcomeRecord,
+        replacement: WorkflowOutcomeRecord,
+    },
+    RemoveWorkflowOutcome {
+        workflow_slug: WorkflowSlug,
+        outcome: WorkflowOutcomeRecord,
+    },
     Check,
     ConnectWorkflow {
         connection: WorkflowConnection,
@@ -442,6 +451,19 @@ fn run_workflow_commands(command: Command) -> Result<(), ShellError> {
             workflow_slug,
             outcome,
         } => interpret(&command::add_workflow_outcome(workflow_slug, outcome)),
+        Command::UpdateWorkflowOutcome {
+            workflow_slug,
+            previous,
+            replacement,
+        } => interpret(&command::update_workflow_outcome(
+            workflow_slug,
+            previous,
+            replacement,
+        )),
+        Command::RemoveWorkflowOutcome {
+            workflow_slug,
+            outcome,
+        } => interpret(&command::remove_workflow_outcome(workflow_slug, outcome)),
         other => run_query_commands(other),
     }
 }
@@ -4422,39 +4444,11 @@ fn parse_cli_40(arguments: &[String]) -> Result<Cli, ShellError> {
 }
 
 fn parse_cli_41(arguments: &[String]) -> Result<Cli, ShellError> {
+    if let Some(cli) = parse_workflow_outcome_cli(arguments)? {
+        return Ok(cli);
+    }
+
     match arguments {
-        [
-            command,
-            subject,
-            workflow_flag,
-            workflow,
-            source_slice_flag,
-            source_slice,
-            label_flag,
-            label,
-            externally_relevant_flag,
-            externally_relevant,
-        ] if command == "add"
-            && subject == "workflow-outcome"
-            && workflow_flag == "--workflow"
-            && source_slice_flag == "--source-slice"
-            && label_flag == "--label"
-            && externally_relevant_flag == "--externally-relevant" =>
-        {
-            let workflow_slug = parse_workflow_slug(workflow)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let source_slice = WorkflowTransitionEndpoint::try_new(source_slice.to_owned())
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let label = parse_outcome_label_name(label)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let externally_relevant = parse_bool_flag(externally_relevant)?;
-            Ok(Cli {
-                command: Command::AddWorkflowOutcome {
-                    workflow_slug,
-                    outcome: WorkflowOutcomeRecord::new(source_slice, label, externally_relevant),
-                },
-            })
-        }
         [
             command,
             subject,
@@ -4490,6 +4484,107 @@ fn parse_cli_41(arguments: &[String]) -> Result<Cli, ShellError> {
         }
         _ => parse_cli_42(arguments),
     }
+}
+
+fn parse_workflow_outcome_cli(arguments: &[String]) -> Result<Option<Cli>, ShellError> {
+    match arguments {
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            source_slice_flag,
+            source_slice,
+            label_flag,
+            label,
+            externally_relevant_flag,
+            externally_relevant,
+            new_source_slice_flag,
+            new_source_slice,
+            new_label_flag,
+            new_label,
+            new_externally_relevant_flag,
+            new_externally_relevant,
+        ] if command == "update"
+            && subject == "workflow-outcome"
+            && workflow_flag == "--workflow"
+            && source_slice_flag == "--source-slice"
+            && label_flag == "--label"
+            && externally_relevant_flag == "--externally-relevant"
+            && new_source_slice_flag == "--new-source-slice"
+            && new_label_flag == "--new-label"
+            && new_externally_relevant_flag == "--new-externally-relevant" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let previous = parse_workflow_outcome_record(source_slice, label, externally_relevant)?;
+            let replacement = parse_workflow_outcome_record(
+                new_source_slice,
+                new_label,
+                new_externally_relevant,
+            )?;
+            Ok(Some(Cli {
+                command: Command::UpdateWorkflowOutcome {
+                    workflow_slug,
+                    previous,
+                    replacement,
+                },
+            }))
+        }
+        [
+            command,
+            subject,
+            workflow_flag,
+            workflow,
+            source_slice_flag,
+            source_slice,
+            label_flag,
+            label,
+            externally_relevant_flag,
+            externally_relevant,
+        ] if (command == "add" || command == "remove")
+            && subject == "workflow-outcome"
+            && workflow_flag == "--workflow"
+            && source_slice_flag == "--source-slice"
+            && label_flag == "--label"
+            && externally_relevant_flag == "--externally-relevant" =>
+        {
+            let workflow_slug = parse_workflow_slug(workflow)
+                .map_err(|error| ShellError::message(error.to_string()))?;
+            let outcome = parse_workflow_outcome_record(source_slice, label, externally_relevant)?;
+            Ok(Some(Cli {
+                command: if command == "add" {
+                    Command::AddWorkflowOutcome {
+                        workflow_slug,
+                        outcome,
+                    }
+                } else {
+                    Command::RemoveWorkflowOutcome {
+                        workflow_slug,
+                        outcome,
+                    }
+                },
+            }))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn parse_workflow_outcome_record(
+    source_slice: &str,
+    label: &str,
+    externally_relevant: &str,
+) -> Result<WorkflowOutcomeRecord, ShellError> {
+    let source_slice = WorkflowTransitionEndpoint::try_new(source_slice.to_owned())
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let label =
+        parse_outcome_label_name(label).map_err(|error| ShellError::message(error.to_string()))?;
+    let externally_relevant = parse_bool_flag(externally_relevant)?;
+    Ok(WorkflowOutcomeRecord::new(
+        source_slice,
+        label,
+        externally_relevant,
+    ))
 }
 
 fn parse_cli_42(arguments: &[String]) -> Result<Cli, ShellError> {

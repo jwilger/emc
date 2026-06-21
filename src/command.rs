@@ -13,7 +13,8 @@ use crate::core::effect::{
     SliceTranslationDefinitionRemovalEffect, SliceViewControlRemovalEffect,
     SliceViewControlUpdateEffect, SliceViewDefinitionRemovalEffect, WorkflowCommandErrorEffect,
     WorkflowDescriptionUpdateEffect, WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect,
-    WorkflowOutcomeEffect, WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
+    WorkflowOutcomeEffect, WorkflowOutcomeRemovalEffect, WorkflowOutcomeUpdateEffect,
+    WorkflowOwnedDefinitionEffect, WorkflowTransitionEvidenceEffect,
 };
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
@@ -285,6 +286,25 @@ pub(crate) fn add_workflow_outcome(
 ) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddWorkflowOutcomeFromWorkflow(
         WorkflowOutcomeEffect::new(workflow_slug, outcome),
+    )])
+}
+
+pub(crate) fn update_workflow_outcome(
+    workflow_slug: WorkflowSlug,
+    previous: WorkflowOutcomeRecord,
+    replacement: WorkflowOutcomeRecord,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateWorkflowOutcomeFromWorkflow(
+        WorkflowOutcomeUpdateEffect::new(workflow_slug, previous, replacement),
+    )])
+}
+
+pub(crate) fn remove_workflow_outcome(
+    workflow_slug: WorkflowSlug,
+    outcome: WorkflowOutcomeRecord,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveWorkflowOutcomeFromWorkflow(
+        WorkflowOutcomeRemovalEffect::new(workflow_slug, outcome),
     )])
 }
 
