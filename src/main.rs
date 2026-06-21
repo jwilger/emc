@@ -38,12 +38,12 @@ use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
     AutomationName, CommandInputSourceKind, CommandName, ControlName, ControlRecoveryBehavior,
-    EventName, ModelDescription, ModelName, OutcomeLabelName, ReadModelFieldSourceKind,
-    ReadModelName, ReviewTimestamp, ReviewerId, ScenarioName, SketchToken, SliceSlug,
-    TranslationName, ViewName, WorkflowCommandErrorRecord, WorkflowEntryLifecycleStateRecord,
-    WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
-    WorkflowTransitionEvidenceNavigationEndpoints, WorkflowTransitionEvidenceRecord,
-    WorkflowTransitionKind,
+    EventAttributeSourceField, EventAttributeSourceName, EventName, ModelDescription, ModelName,
+    OutcomeLabelName, ReadModelFieldSourceKind, ReadModelName, ReviewTimestamp, ReviewerId,
+    ScenarioName, SketchToken, SliceSlug, TranslationName, ViewName, WorkflowCommandErrorRecord,
+    WorkflowEntryLifecycleStateRecord, WorkflowOutcomeRecord, WorkflowOwnedDefinitionRecord,
+    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceNavigationEndpoints,
+    WorkflowTransitionEvidenceRecord, WorkflowTransitionKind,
 };
 use crate::core::workflow::NewWorkflow;
 use crate::io::dto::{
@@ -124,6 +124,14 @@ enum Command {
     },
     AddExternalPayloadDefinition {
         external_payload: NewExternalPayloadDefinition,
+    },
+    UpdateExternalPayloadDefinition {
+        external_payload: NewExternalPayloadDefinition,
+    },
+    RemoveExternalPayloadDefinition {
+        slice_slug: SliceSlug,
+        payload_name: EventAttributeSourceName,
+        payload_field: EventAttributeSourceField,
     },
     AddOutcomeDefinition {
         outcome: NewOutcomeDefinition,
@@ -330,6 +338,9 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::AddExternalPayloadDefinition { external_payload } => {
             interpret(&command::add_external_payload_definition(external_payload))
         }
+        Command::UpdateExternalPayloadDefinition { external_payload } => interpret(
+            &command::update_external_payload_definition(external_payload),
+        ),
         Command::AddOutcomeDefinition { outcome } => {
             interpret(&command::add_outcome_definition(outcome))
         }
@@ -471,6 +482,15 @@ fn run_mutation_commands(command: Command) -> Result<(), ShellError> {
         } => interpret(&command::remove_translation_definition(
             slice_slug,
             translation_name,
+        )),
+        Command::RemoveExternalPayloadDefinition {
+            slice_slug,
+            payload_name,
+            payload_field,
+        } => interpret(&command::remove_external_payload_definition(
+            slice_slug,
+            payload_name,
+            payload_field,
         )),
         Command::RemoveOutcomeDefinition {
             slice_slug,
@@ -833,6 +853,39 @@ fn remove_control_definition_cli(slice: &str, view: &str, name: &str) -> Result<
     })
 }
 
+fn remove_external_payload_definition_cli(
+    slice: &str,
+    name: &str,
+    field: &str,
+) -> Result<Cli, ShellError> {
+    let slice_slug =
+        parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+    let payload_name = parse_event_attribute_source_name(name)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let payload_field = parse_event_attribute_source_field(field)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(Cli {
+        command: Command::RemoveExternalPayloadDefinition {
+            slice_slug,
+            payload_name,
+            payload_field,
+        },
+    })
+}
+
+fn remove_translation_definition_cli(slice: &str, name: &str) -> Result<Cli, ShellError> {
+    let slice_slug =
+        parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+    let translation_name =
+        parse_translation_name(name).map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(Cli {
+        command: Command::RemoveTranslationDefinition {
+            slice_slug,
+            translation_name,
+        },
+    })
+}
+
 fn update_control_definition_cli(
     slice: &str,
     view: &str,
@@ -911,16 +964,24 @@ fn parse_cli(arguments: &[String]) -> Result<Cli, ShellError> {
                 && slice_flag == "--slice"
                 && name_flag == "--name" =>
         {
-            let slice_slug =
-                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
-            let translation_name = parse_translation_name(name)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::RemoveTranslationDefinition {
-                    slice_slug,
-                    translation_name,
-                },
-            })
+            remove_translation_definition_cli(slice, name)
+        }
+        [
+            command,
+            subject,
+            slice_flag,
+            slice,
+            name_flag,
+            name,
+            field_flag,
+            field,
+        ] if command == "remove"
+            && subject == "external-payload"
+            && slice_flag == "--slice"
+            && name_flag == "--name"
+            && field_flag == "--field" =>
+        {
+            remove_external_payload_definition_cli(slice, name, field)
         }
         [command, subject, slice_flag, slice, label_flag, label]
             if command == "remove"
@@ -2681,7 +2742,7 @@ fn parse_cli_21(arguments: &[String]) -> Result<Cli, ShellError> {
             field_provenance,
             bit_encoding_flag,
             bit_encoding,
-        ] if command == "add"
+        ] if (command == "add" || command == "update")
             && subject == "external-payload"
             && slice_flag == "--slice"
             && name_flag == "--name"
@@ -2699,17 +2760,19 @@ fn parse_cli_21(arguments: &[String]) -> Result<Cli, ShellError> {
                 .map_err(|error| ShellError::message(error.to_string()))?;
             let bit_encoding = parse_bit_encoding_semantics(bit_encoding)
                 .map_err(|error| ShellError::message(error.to_string()))?;
-            Ok(Cli {
-                command: Command::AddExternalPayloadDefinition {
-                    external_payload: NewExternalPayloadDefinition::new(
-                        slice_slug,
-                        payload_name,
-                        payload_field,
-                        field_provenance,
-                        bit_encoding,
-                    ),
-                },
-            })
+            let external_payload = NewExternalPayloadDefinition::new(
+                slice_slug,
+                payload_name,
+                payload_field,
+                field_provenance,
+                bit_encoding,
+            );
+            let command = if command == "add" {
+                Command::AddExternalPayloadDefinition { external_payload }
+            } else {
+                Command::UpdateExternalPayloadDefinition { external_payload }
+            };
+            Ok(Cli { command })
         }
         _ => parse_cli_22(arguments),
     }
@@ -5367,6 +5430,10 @@ fn help_update_subcommand() -> ClapCommand {
             ClapCommand::new("translation")
                 .about("Update a translation definition and synchronized formal artifacts"),
         )
+        .subcommand(
+            ClapCommand::new("external-payload")
+                .about("Update an external payload definition and synchronized formal artifacts"),
+        )
 }
 
 fn help_remove_subcommand() -> ClapCommand {
@@ -5394,6 +5461,10 @@ fn help_remove_subcommand() -> ClapCommand {
         .subcommand(
             ClapCommand::new("translation")
                 .about("Remove a translation definition and synchronized formal artifacts"),
+        )
+        .subcommand(
+            ClapCommand::new("external-payload")
+                .about("Remove an external payload definition and synchronized formal artifacts"),
         )
 }
 

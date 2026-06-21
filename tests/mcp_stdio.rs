@@ -1145,6 +1145,78 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_external_payload_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_external_payload(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_external_payload_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"update_external_payload_definition\"",
+            ))
+            .stdout(predicate::str::contains(
+                "updated external payload TicketWebhookPayload.ticket_id on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_quint.contains("retry webhook ticket identifier"),
+            "MCP-updated external payload provenance must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("UTF-8 webhook ticket id"),
+            "old external payload bit encoding must be absent after MCP update"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_external_payload_definition() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_external_payload(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_external_payload_definition_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"remove_external_payload_definition\"",
+            ))
+            .stdout(predicate::str::contains(
+                "removed external payload TicketWebhookPayload.ticket_id from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_quint =
+            fs::read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_quint.contains("name: \"TicketWebhookPayload\""),
+            "MCP-removed external payload must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_resolves_event_conflicts() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
         create_slice_update_fork(&temp_dir)?;
@@ -1387,6 +1459,22 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_translation_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"capture-ticket-from-webhook\"}}}\n",
+        )
+    }
+
+    fn update_external_payload_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_external_payload_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketWebhookPayload\",\"field\":\"ticket_id\",\"field_provenance\":\"retry webhook ticket identifier\",\"bit_encoding\":\"UTF-8 retry ticket id\"}}}\n",
+        )
+    }
+
+    fn remove_external_payload_definition_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_external_payload_definition\",\"arguments\":{\"slice\":\"capture-ticket\",\"name\":\"TicketWebhookPayload\",\"field\":\"ticket_id\"}}}\n",
         )
     }
 
@@ -1650,6 +1738,29 @@ mod tests {
                 "TicketWebhookPayload",
                 "--command",
                 "CaptureTicket",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+        Ok(())
+    }
+
+    fn initialize_project_with_external_payload(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        initialize_project_with_scenario(cwd)?;
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "external-payload",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "TicketWebhookPayload",
+                "--field",
+                "ticket_id",
+                "--field-provenance",
+                "webhook ticket identifier",
+                "--bit-encoding",
+                "UTF-8 webhook ticket id",
             ])
             .current_dir(cwd)
             .assert()

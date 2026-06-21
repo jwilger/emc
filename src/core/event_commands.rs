@@ -20,15 +20,15 @@ use crate::core::formal_slice_facts::{
 use crate::core::project::ProjectName;
 use crate::core::slice::{NewSlice, SliceKind};
 use crate::core::types::{
-    AutomationName, CommandErrorName, CommandName, ControlName, EventName, ModelDescription,
-    ModelName, OutcomeLabelName, PayloadContractName, ReadModelName, ReviewRuleName,
-    ReviewTimestamp, ReviewerId, ScenarioName, SliceKindName, SliceSlug, StreamName,
-    TransitionTriggerName, TranslationName, ViewName, WorkflowCommandErrorRecord,
-    WorkflowEntryLifecycleEvidenceText, WorkflowEntryLifecycleStateName,
-    WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation, WorkflowOutcomeRecord,
-    WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName, WorkflowOwnedDefinitionRecord,
-    WorkflowSlug, WorkflowTransitionEndpoint, WorkflowTransitionEvidenceRecord,
-    WorkflowTransitionKind, WorkflowTransitionSourceEvidenceText,
+    AutomationName, CommandErrorName, CommandName, ControlName, EventAttributeSourceField,
+    EventAttributeSourceName, EventName, ModelDescription, ModelName, OutcomeLabelName,
+    PayloadContractName, ReadModelName, ReviewRuleName, ReviewTimestamp, ReviewerId, ScenarioName,
+    SliceKindName, SliceSlug, StreamName, TransitionTriggerName, TranslationName, ViewName,
+    WorkflowCommandErrorRecord, WorkflowEntryLifecycleEvidenceText,
+    WorkflowEntryLifecycleStateName, WorkflowEntryLifecycleStateRecord, WorkflowEventParticipation,
+    WorkflowOutcomeRecord, WorkflowOwnedDefinitionKind, WorkflowOwnedDefinitionName,
+    WorkflowOwnedDefinitionRecord, WorkflowSlug, WorkflowTransitionEndpoint,
+    WorkflowTransitionEvidenceRecord, WorkflowTransitionKind, WorkflowTransitionSourceEvidenceText,
     WorkflowTransitionTargetEvidenceText, WorkflowViewRole,
 };
 
@@ -194,6 +194,16 @@ pub(crate) enum EmcEvent {
         #[serde(flatten)]
         translation: SliceTranslationDefinitionRemovalEvent,
     },
+    SliceExternalPayloadDefinitionUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        external_payload: SliceExternalPayloadDefinitionUpdateEvent,
+    },
+    SliceExternalPayloadDefinitionRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        external_payload: SliceExternalPayloadDefinitionRemovalEvent,
+    },
     SliceOutcomeDefinitionUpdated {
         stream_id: StreamId,
         #[serde(flatten)]
@@ -303,6 +313,8 @@ impl Event for EmcEvent {
             | Self::SliceAutomationDefinitionRemoved { stream_id, .. }
             | Self::SliceTranslationDefinitionUpdated { stream_id, .. }
             | Self::SliceTranslationDefinitionRemoved { stream_id, .. }
+            | Self::SliceExternalPayloadDefinitionUpdated { stream_id, .. }
+            | Self::SliceExternalPayloadDefinitionRemoved { stream_id, .. }
             | Self::SliceOutcomeDefinitionUpdated { stream_id, .. }
             | Self::SliceOutcomeDefinitionRemoved { stream_id, .. }
             | Self::SliceCommandDefinitionUpdated { stream_id, .. }
@@ -1414,6 +1426,200 @@ impl<'de> Deserialize<'de> for SliceTranslationDefinitionRemovalEvent {
             }
             other => Err(DeserializeError::custom(format!(
                 "expected SliceTranslationDefinitionRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateExternalPayloadDefinitionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    external_payload: NewExternalPayloadDefinition,
+}
+
+impl UpdateExternalPayloadDefinitionCommand {
+    pub(crate) fn new(external_payload: NewExternalPayloadDefinition) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(external_payload.slice_slug().as_ref())?,
+            external_payload,
+        })
+    }
+}
+
+impl CommandLogic for UpdateExternalPayloadDefinitionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before updating external payload definition"
+        );
+        Ok(vec![EmcEvent::SliceExternalPayloadDefinitionUpdated {
+            stream_id: self.slice_stream.clone(),
+            external_payload: SliceExternalPayloadDefinitionUpdateEvent::new(
+                self.external_payload.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveExternalPayloadDefinitionCommand {
+    #[stream]
+    slice_stream: StreamId,
+    slice: SliceSlug,
+    name: EventAttributeSourceName,
+    field: EventAttributeSourceField,
+}
+
+impl RemoveExternalPayloadDefinitionCommand {
+    pub(crate) fn new(
+        slice: SliceSlug,
+        name: EventAttributeSourceName,
+        field: EventAttributeSourceField,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            slice_stream: slice_stream_id(slice.as_ref())?,
+            slice,
+            name,
+            field,
+        })
+    }
+}
+
+impl CommandLogic for RemoveExternalPayloadDefinitionCommand {
+    type Event = EmcEvent;
+    type State = SliceCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_slice_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "slice stream must exist before removing external payload definition"
+        );
+        Ok(vec![EmcEvent::SliceExternalPayloadDefinitionRemoved {
+            stream_id: self.slice_stream.clone(),
+            external_payload: SliceExternalPayloadDefinitionRemovalEvent::new(
+                self.slice.clone(),
+                self.name.clone(),
+                self.field.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceExternalPayloadDefinitionUpdateEvent {
+    external_payload: NewExternalPayloadDefinition,
+}
+
+impl SliceExternalPayloadDefinitionUpdateEvent {
+    pub(crate) fn new(external_payload: NewExternalPayloadDefinition) -> Self {
+        Self { external_payload }
+    }
+
+    pub(crate) fn external_payload(&self) -> NewExternalPayloadDefinition {
+        self.external_payload.clone()
+    }
+}
+
+impl Serialize for SliceExternalPayloadDefinitionUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_external_payload_definition_updated(&self.external_payload)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceExternalPayloadDefinitionUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceExternalPayloadDefinitionUpdated { external_payload } => {
+                Ok(Self::new(external_payload))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceExternalPayloadDefinitionUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceExternalPayloadDefinitionRemovalEvent {
+    slice: SliceSlug,
+    name: EventAttributeSourceName,
+    field: EventAttributeSourceField,
+}
+
+impl SliceExternalPayloadDefinitionRemovalEvent {
+    pub(crate) fn new(
+        slice: SliceSlug,
+        name: EventAttributeSourceName,
+        field: EventAttributeSourceField,
+    ) -> Self {
+        Self { slice, name, field }
+    }
+
+    pub(crate) fn slice(&self) -> &SliceSlug {
+        &self.slice
+    }
+
+    pub(crate) fn name(&self) -> &EventAttributeSourceName {
+        &self.name
+    }
+
+    pub(crate) fn field(&self) -> &EventAttributeSourceField {
+        &self.field
+    }
+}
+
+impl Serialize for SliceExternalPayloadDefinitionRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::slice_external_payload_definition_removed(
+            &self.slice,
+            &self.name,
+            &self.field,
+        )
+        .body()
+        .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for SliceExternalPayloadDefinitionRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::SliceExternalPayloadDefinitionRemoved { slice, name, field } => {
+                Ok(Self::new(slice, name, field))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected SliceExternalPayloadDefinitionRemoved event body, got {}",
                 other.event_type()
             ))),
         }
