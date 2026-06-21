@@ -688,6 +688,113 @@ mod tests {
     }
 
     #[test]
+    fn update_contract_scenario_rewrites_synchronized_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_duplicate_ticket_contract_scenario(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--kind",
+                "contract",
+                "--name",
+                "Duplicate ticket is rejected",
+                "--given",
+                "tickets stream already contains a duplicate title",
+                "--when",
+                "CaptureTicket handles the repeated title",
+                "--then",
+                "TicketAlreadySubmitted is returned",
+                "--contract-kind",
+                "command",
+                "--covered-definition",
+                "CaptureTicket",
+                "--error-references",
+                "TicketAlreadySubmitted",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated scenario Duplicate ticket is rejected on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("TicketAlreadySubmitted is returned"),
+            "updated contract scenario must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("errorReferences: [\"TicketAlreadySubmitted\"]"),
+            "updated contract error references must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("DuplicateTicket is returned"),
+            "old contract scenario text must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_contract_scenario_removes_it_from_synchronized_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_duplicate_ticket_contract_scenario(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "scenario",
+                "--slice",
+                "capture-ticket",
+                "--name",
+                "Duplicate ticket is rejected",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed scenario Duplicate ticket is rejected from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_lean.contains("Duplicate ticket is rejected"),
+            "removed contract scenario must be absent from Lean slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("Duplicate ticket is rejected"),
+            "removed contract scenario must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn remove_command_definition_removes_it_from_synchronized_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
