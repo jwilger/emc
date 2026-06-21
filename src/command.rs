@@ -19,6 +19,7 @@ use crate::core::effect::{
     WorkflowOutcomeEffect, WorkflowOutcomeRemovalEffect, WorkflowOutcomeUpdateEffect,
     WorkflowOwnedDefinitionEffect, WorkflowOwnedDefinitionRemovalEffect,
     WorkflowOwnedDefinitionUpdateEffect, WorkflowTransitionEvidenceEffect,
+    WorkflowTransitionEvidenceRemovalEffect, WorkflowTransitionEvidenceUpdateEffect,
 };
 use crate::core::formal_slice_facts::{
     NewAutomationDefinition, NewBitLevelDataFlow, NewBoardConnection, NewBoardElement,
@@ -374,6 +375,25 @@ pub(crate) fn add_workflow_transition_evidence(
 ) -> EffectPlan {
     EffectPlan::new(vec![Effect::AddWorkflowTransitionEvidenceFromWorkflow(
         WorkflowTransitionEvidenceEffect::new(workflow_slug, evidence),
+    )])
+}
+
+pub(crate) fn update_workflow_transition_evidence(
+    workflow_slug: WorkflowSlug,
+    previous: WorkflowTransitionEvidenceRecord,
+    replacement: WorkflowTransitionEvidenceRecord,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::UpdateWorkflowTransitionEvidenceFromWorkflow(
+        WorkflowTransitionEvidenceUpdateEffect::new(workflow_slug, previous, replacement),
+    )])
+}
+
+pub(crate) fn remove_workflow_transition_evidence(
+    workflow_slug: WorkflowSlug,
+    evidence: WorkflowTransitionEvidenceRecord,
+) -> EffectPlan {
+    EffectPlan::new(vec![Effect::RemoveWorkflowTransitionEvidenceFromWorkflow(
+        WorkflowTransitionEvidenceRemovalEffect::new(workflow_slug, evidence),
     )])
 }
 

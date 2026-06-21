@@ -792,6 +792,118 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn update_workflow_transition_evidence_rewrites_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
+        setup_navigation_transition_workflow(cwd)?;
+        add_navigation_transition_evidence_and_ownership(cwd)?;
+
+        run_emc_stdout(
+            cwd,
+            &[
+                "update",
+                "workflow-transition-evidence",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
+                "--source-evidence",
+                "capture-ticket view owns the review-ticket-screen navigation control",
+                "--target-evidence",
+                "review-ticket workflow step exposes review-ticket-screen as its entry view",
+                "--new-from",
+                "capture-ticket",
+                "--new-to",
+                "review-ticket",
+                "--new-via",
+                "navigation",
+                "--new-name",
+                "review-ticket-screen",
+                "--new-source-control",
+                "review-ticket-screen",
+                "--new-target-view",
+                "review-ticket-screen",
+                "--new-source-evidence",
+                "capture-ticket control is the modeled navigation source",
+                "--new-target-evidence",
+                "review-ticket entry view is the modeled navigation target",
+            ],
+            "updated workflow transition evidence navigation review-ticket-screen on workflow open-ticket",
+        )?;
+
+        run_emc(cwd, &["check"])?;
+
+        let lean = read_lean(cwd)?;
+        assert!(lean.contains(
+            "def workflowTransitionEvidences : List WorkflowTransitionEvidence := [{ source := \"capture-ticket\", target := \"review-ticket\", kind := WorkflowTransitionKind.navigation, trigger := \"review-ticket-screen\", sourceControl := \"review-ticket-screen\", targetView := \"review-ticket-screen\", sourceEvidence := \"capture-ticket control is the modeled navigation source\", targetEvidence := \"review-ticket entry view is the modeled navigation target\" }]"
+        ));
+        assert!(
+            !lean.contains("capture-ticket view owns the review-ticket-screen navigation control"),
+            "updated workflow transition evidence must replace the previous evidence text"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_workflow_transition_evidence_removes_it_from_canonical_workflow_artifacts()
+    -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        let cwd = temp_dir.path();
+        setup_navigation_transition_workflow(cwd)?;
+        add_navigation_transition_evidence_and_ownership(cwd)?;
+
+        run_emc_stdout(
+            cwd,
+            &[
+                "remove",
+                "workflow-transition-evidence",
+                "--workflow",
+                "open-ticket",
+                "--from",
+                "capture-ticket",
+                "--to",
+                "review-ticket",
+                "--via",
+                "navigation",
+                "--name",
+                "review-ticket-screen",
+                "--source-control",
+                "review-ticket-screen",
+                "--target-view",
+                "review-ticket-screen",
+                "--source-evidence",
+                "capture-ticket view owns the review-ticket-screen navigation control",
+                "--target-evidence",
+                "review-ticket workflow step exposes review-ticket-screen as its entry view",
+            ],
+            "removed workflow transition evidence navigation review-ticket-screen from workflow open-ticket",
+        )?;
+
+        run_emc(cwd, &["check"])?;
+
+        let quint = read_quint(cwd)?;
+        assert!(
+            quint
+                .contains("val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = []"),
+            "removed workflow transition evidence must be absent from Quint workflow artifacts"
+        );
+
+        Ok(())
+    }
+
     fn setup_application_entry_workflow(cwd: &Path) -> Result<String, Box<dyn Error>> {
         init_repair_desk(cwd)?;
         run_emc(

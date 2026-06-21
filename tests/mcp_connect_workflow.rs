@@ -1035,6 +1035,64 @@ mod tests {
     }
 
     #[test]
+    fn mcp_stdio_updates_workflow_transition_evidence_facts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_open_ticket_review_workflow(temp_dir.path())?;
+        add_transition_evidence_with_mcp(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(update_workflow_transition_evidence_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"update_workflow_transition_evidence\"",
+            ))
+            .stdout(predicate::str::contains(
+                "updated workflow transition evidence navigation review-ticket-screen on workflow open-ticket",
+            ));
+
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(quint.contains(
+            "val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = [{ source: \"capture-ticket\", target: \"review-ticket\", kind: Navigation, trigger: \"review-ticket-screen\", sourceControl: \"review-ticket-screen\", targetView: \"review-ticket-screen\", sourceEvidence: \"capture-ticket control is the modeled navigation source\", targetEvidence: \"review-ticket entry view is the modeled navigation target\" }]"
+        ));
+        assert!(
+            !quint.contains("capture-ticket view owns the review-ticket-screen navigation control")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn mcp_stdio_removes_workflow_transition_evidence_facts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_open_ticket_review_workflow(temp_dir.path())?;
+        add_transition_evidence_with_mcp(temp_dir.path())?;
+
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(temp_dir.path())
+            .write_stdin(remove_workflow_transition_evidence_mcp_requests())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "\"remove_workflow_transition_evidence\"",
+            ))
+            .stdout(predicate::str::contains(
+                "removed workflow transition evidence navigation review-ticket-screen from workflow open-ticket",
+            ));
+
+        let quint = read_to_string(temp_dir.path().join("model/quint/OpenTicket.qnt"))?;
+        assert!(
+            quint
+                .contains("val workflowTransitionEvidences: List[WorkflowTransitionEvidence] = []")
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn mcp_stdio_authors_workflow_entry_lifecycle_coverage() -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
 
@@ -1157,6 +1215,21 @@ mod tests {
             .success();
 
         add_slice(cwd, "capture-ticket", "Capture ticket")
+    }
+
+    fn initialize_open_ticket_review_workflow(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        initialize_open_ticket_workflow(cwd)?;
+        add_slice(cwd, "review-ticket", "Review ticket")
+    }
+
+    fn add_transition_evidence_with_mcp(cwd: &Path) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args(["mcp", "stdio"])
+            .current_dir(cwd)
+            .write_stdin(workflow_transition_evidence_mcp_requests())
+            .assert()
+            .success();
+        Ok(())
     }
 
     fn add_workflow_outcome(
@@ -1417,6 +1490,22 @@ mod tests {
             "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"connect_workflow\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\"}}}\n",
             "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"add_workflow_transition_evidence\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\",\"source_evidence\":\"capture-ticket view owns the review-ticket-screen navigation control\",\"target_evidence\":\"review-ticket workflow step exposes review-ticket-screen as its entry view\"}}}\n",
+        )
+    }
+
+    fn update_workflow_transition_evidence_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"update_workflow_transition_evidence\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\",\"source_evidence\":\"capture-ticket view owns the review-ticket-screen navigation control\",\"target_evidence\":\"review-ticket workflow step exposes review-ticket-screen as its entry view\",\"new_from\":\"capture-ticket\",\"new_to\":\"review-ticket\",\"new_via\":\"navigation\",\"new_name\":\"review-ticket-screen\",\"new_source_control\":\"review-ticket-screen\",\"new_target_view\":\"review-ticket-screen\",\"new_source_evidence\":\"capture-ticket control is the modeled navigation source\",\"new_target_evidence\":\"review-ticket entry view is the modeled navigation target\"}}}\n",
+        )
+    }
+
+    fn remove_workflow_transition_evidence_mcp_requests() -> &'static str {
+        concat!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"emc-test\",\"version\":\"0.0.0\"}}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}\n",
+            "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"remove_workflow_transition_evidence\",\"arguments\":{\"workflow\":\"open-ticket\",\"from\":\"capture-ticket\",\"to\":\"review-ticket\",\"via\":\"navigation\",\"name\":\"review-ticket-screen\",\"source_control\":\"review-ticket-screen\",\"target_view\":\"review-ticket-screen\",\"source_evidence\":\"capture-ticket view owns the review-ticket-screen navigation control\",\"target_evidence\":\"review-ticket workflow step exposes review-ticket-screen as its entry view\"}}}\n",
         )
     }
 

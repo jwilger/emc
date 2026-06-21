@@ -20,14 +20,16 @@ use crate::core::event_commands::{
     RemoveSliceScenarioCommand, RemoveTranslationDefinitionCommand, RemoveViewControlCommand,
     RemoveViewDefinitionCommand, RemoveWorkflowCommand, RemoveWorkflowCommandErrorCommand,
     RemoveWorkflowOutcomeCommand, RemoveWorkflowOwnedDefinitionCommand,
-    RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
-    UpdateAutomationDefinitionCommand, UpdateBitLevelDataFlowCommand, UpdateBoardConnectionCommand,
-    UpdateBoardElementCommand, UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand,
+    RemoveWorkflowTransitionCommand, RemoveWorkflowTransitionEvidenceCommand,
+    ResolveConflictCommand, SliceFactInput, UpdateAutomationDefinitionCommand,
+    UpdateBitLevelDataFlowCommand, UpdateBoardConnectionCommand, UpdateBoardElementCommand,
+    UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand,
     UpdateExternalPayloadDefinitionCommand, UpdateOutcomeDefinitionCommand,
     UpdateReadModelDefinitionCommand, UpdateSliceCommand, UpdateSliceScenarioCommand,
     UpdateTranslationDefinitionCommand, UpdateViewControlCommand, UpdateViewDefinitionCommand,
     UpdateWorkflowCommand, UpdateWorkflowCommandErrorCommand, UpdateWorkflowOutcomeCommand,
-    UpdateWorkflowOwnedDefinitionCommand, UpdateWorkflowTransitionCommand, WorkflowFactInput,
+    UpdateWorkflowOwnedDefinitionCommand, UpdateWorkflowTransitionCommand,
+    UpdateWorkflowTransitionEvidenceCommand, WorkflowFactInput,
 };
 use crate::core::events::{EventDraft, ExportedEventBody};
 
@@ -175,6 +177,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::WorkflowOwnedDefinitionUpdated { .. }
         | ExportedEventBody::WorkflowOwnedDefinitionRemoved { .. }
         | ExportedEventBody::WorkflowTransitionEvidenceAdded { .. }
+        | ExportedEventBody::WorkflowTransitionEvidenceUpdated { .. }
+        | ExportedEventBody::WorkflowTransitionEvidenceRemoved { .. }
         | ExportedEventBody::WorkflowEntryLifecycleCoverageRequired { .. }
         | ExportedEventBody::WorkflowEntryLifecycleStateAdded { .. } => {
             dispatch_workflow_fact(store, body).await
@@ -384,6 +388,10 @@ async fn dispatch_workflow_fact_mutation(
     store: &FileEventStore,
     body: &ExportedEventBody,
 ) -> Result<bool, String> {
+    if dispatch_workflow_transition_evidence_mutation(store, body).await? {
+        return Ok(true);
+    }
+
     match body {
         ExportedEventBody::WorkflowOutcomeUpdated {
             workflow,
@@ -456,6 +464,39 @@ async fn dispatch_workflow_fact_mutation(
             run_command(
                 store,
                 RemoveWorkflowOwnedDefinitionCommand::new(workflow.clone(), definition.clone())?,
+            )
+            .await?;
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
+async fn dispatch_workflow_transition_evidence_mutation(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<bool, String> {
+    match body {
+        ExportedEventBody::WorkflowTransitionEvidenceUpdated {
+            workflow,
+            previous,
+            evidence,
+        } => {
+            run_command(
+                store,
+                UpdateWorkflowTransitionEvidenceCommand::new(
+                    workflow.clone(),
+                    previous.clone(),
+                    evidence.clone(),
+                )?,
+            )
+            .await?;
+            Ok(true)
+        }
+        ExportedEventBody::WorkflowTransitionEvidenceRemoved { workflow, evidence } => {
+            run_command(
+                store,
+                RemoveWorkflowTransitionEvidenceCommand::new(workflow.clone(), evidence.clone())?,
             )
             .await?;
             Ok(true)

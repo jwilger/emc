@@ -139,6 +139,16 @@ pub(crate) enum EmcEvent {
         source_control: Option<TransitionTriggerName>,
         target_view: Option<WorkflowOwnedDefinitionName>,
     },
+    WorkflowTransitionEvidenceUpdated {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        evidence: WorkflowTransitionEvidenceUpdateEvent,
+    },
+    WorkflowTransitionEvidenceRemoved {
+        stream_id: StreamId,
+        #[serde(flatten)]
+        evidence: WorkflowTransitionEvidenceRemovalEvent,
+    },
     WorkflowEntryLifecycleCoverageRequired {
         stream_id: StreamId,
         workflow: WorkflowSlug,
@@ -373,6 +383,8 @@ impl Event for EmcEvent {
             | Self::WorkflowOwnedDefinitionUpdated { stream_id, .. }
             | Self::WorkflowOwnedDefinitionRemoved { stream_id, .. }
             | Self::WorkflowTransitionEvidenceAdded { stream_id, .. }
+            | Self::WorkflowTransitionEvidenceUpdated { stream_id, .. }
+            | Self::WorkflowTransitionEvidenceRemoved { stream_id, .. }
             | Self::WorkflowEntryLifecycleCoverageRequired { stream_id, .. }
             | Self::WorkflowEntryLifecycleStateAdded { stream_id, .. }
             | Self::WorkflowReadinessDeclared { stream_id, .. }
@@ -1549,6 +1561,217 @@ impl<'de> Deserialize<'de> for WorkflowOwnedDefinitionRemovalEvent {
             } => Ok(Self::new(workflow, definition)),
             other => Err(DeserializeError::custom(format!(
                 "expected WorkflowOwnedDefinitionRemoved event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct UpdateWorkflowTransitionEvidenceCommand {
+    #[stream]
+    workflow_stream: StreamId,
+    workflow: WorkflowSlug,
+    previous: WorkflowTransitionEvidenceRecord,
+    replacement: WorkflowTransitionEvidenceRecord,
+}
+
+impl UpdateWorkflowTransitionEvidenceCommand {
+    pub(crate) fn new(
+        workflow: WorkflowSlug,
+        previous: WorkflowTransitionEvidenceRecord,
+        replacement: WorkflowTransitionEvidenceRecord,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            workflow_stream: workflow_stream_id(workflow.as_ref())?,
+            workflow,
+            previous,
+            replacement,
+        })
+    }
+}
+
+impl CommandLogic for UpdateWorkflowTransitionEvidenceCommand {
+    type Event = EmcEvent;
+    type State = WorkflowCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_workflow_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "workflow stream must exist before updating transition evidence"
+        );
+        Ok(vec![EmcEvent::WorkflowTransitionEvidenceUpdated {
+            stream_id: self.workflow_stream.clone(),
+            evidence: WorkflowTransitionEvidenceUpdateEvent::new(
+                self.workflow.clone(),
+                self.previous.clone(),
+                self.replacement.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
+#[derive(Command)]
+pub(crate) struct RemoveWorkflowTransitionEvidenceCommand {
+    #[stream]
+    workflow_stream: StreamId,
+    workflow: WorkflowSlug,
+    evidence: WorkflowTransitionEvidenceRecord,
+}
+
+impl RemoveWorkflowTransitionEvidenceCommand {
+    pub(crate) fn new(
+        workflow: WorkflowSlug,
+        evidence: WorkflowTransitionEvidenceRecord,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            workflow_stream: workflow_stream_id(workflow.as_ref())?,
+            workflow,
+            evidence,
+        })
+    }
+}
+
+impl CommandLogic for RemoveWorkflowTransitionEvidenceCommand {
+    type Event = EmcEvent;
+    type State = WorkflowCommandState;
+
+    fn apply(&self, state: Self::State, event: &Self::Event) -> Self::State {
+        apply_workflow_command_state(state, event)
+    }
+
+    fn handle(&self, state: Self::State) -> Result<NewEvents<Self::Event>, CommandError> {
+        require!(
+            state.added,
+            "workflow stream must exist before removing transition evidence"
+        );
+        Ok(vec![EmcEvent::WorkflowTransitionEvidenceRemoved {
+            stream_id: self.workflow_stream.clone(),
+            evidence: WorkflowTransitionEvidenceRemovalEvent::new(
+                self.workflow.clone(),
+                self.evidence.clone(),
+            ),
+        }]
+        .into())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowTransitionEvidenceUpdateEvent {
+    workflow: WorkflowSlug,
+    previous: WorkflowTransitionEvidenceRecord,
+    replacement: WorkflowTransitionEvidenceRecord,
+}
+
+impl WorkflowTransitionEvidenceUpdateEvent {
+    pub(crate) fn new(
+        workflow: WorkflowSlug,
+        previous: WorkflowTransitionEvidenceRecord,
+        replacement: WorkflowTransitionEvidenceRecord,
+    ) -> Self {
+        Self {
+            workflow,
+            previous,
+            replacement,
+        }
+    }
+
+    pub(crate) fn workflow(&self) -> &WorkflowSlug {
+        &self.workflow
+    }
+
+    pub(crate) fn previous(&self) -> &WorkflowTransitionEvidenceRecord {
+        &self.previous
+    }
+
+    pub(crate) fn replacement(&self) -> &WorkflowTransitionEvidenceRecord {
+        &self.replacement
+    }
+}
+
+impl Serialize for WorkflowTransitionEvidenceUpdateEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::workflow_transition_evidence_updated(
+            &self.workflow,
+            &self.previous,
+            &self.replacement,
+        )
+        .body()
+        .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for WorkflowTransitionEvidenceUpdateEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::WorkflowTransitionEvidenceUpdated {
+                workflow,
+                previous,
+                evidence,
+            } => Ok(Self::new(workflow, previous, evidence)),
+            other => Err(DeserializeError::custom(format!(
+                "expected WorkflowTransitionEvidenceUpdated event body, got {}",
+                other.event_type()
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct WorkflowTransitionEvidenceRemovalEvent {
+    workflow: WorkflowSlug,
+    evidence: WorkflowTransitionEvidenceRecord,
+}
+
+impl WorkflowTransitionEvidenceRemovalEvent {
+    pub(crate) fn new(workflow: WorkflowSlug, evidence: WorkflowTransitionEvidenceRecord) -> Self {
+        Self { workflow, evidence }
+    }
+
+    pub(crate) fn workflow(&self) -> &WorkflowSlug {
+        &self.workflow
+    }
+
+    pub(crate) fn evidence(&self) -> &WorkflowTransitionEvidenceRecord {
+        &self.evidence
+    }
+}
+
+impl Serialize for WorkflowTransitionEvidenceRemovalEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let body = EventDraft::workflow_transition_evidence_removed(&self.workflow, &self.evidence)
+            .body()
+            .clone();
+        serialize_event_body(serializer, &body)
+    }
+}
+
+impl<'de> Deserialize<'de> for WorkflowTransitionEvidenceRemovalEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match deserialize_event_body(deserializer)? {
+            ExportedEventBody::WorkflowTransitionEvidenceRemoved { workflow, evidence } => {
+                Ok(Self::new(workflow, evidence))
+            }
+            other => Err(DeserializeError::custom(format!(
+                "expected WorkflowTransitionEvidenceRemoved event body, got {}",
                 other.event_type()
             ))),
         }

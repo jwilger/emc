@@ -38,7 +38,8 @@ use crate::core::effect::{
     WorkflowEntryLifecycleStateEffect, WorkflowNameUpdateEffect, WorkflowOutcomeEffect,
     WorkflowOutcomeRemovalEffect, WorkflowOutcomeUpdateEffect, WorkflowOwnedDefinitionEffect,
     WorkflowOwnedDefinitionRemovalEffect, WorkflowOwnedDefinitionUpdateEffect,
-    WorkflowTransitionEvidenceEffect,
+    WorkflowTransitionEvidenceEffect, WorkflowTransitionEvidenceRemovalEffect,
+    WorkflowTransitionEvidenceUpdateEffect,
 };
 use crate::core::event_runtime::{
     ProjectRuntimeLock, ensure_event_store, execute_eventcore_command_for_exported_event,
@@ -1477,6 +1478,12 @@ fn interpret_workflow_fact_effect(effect: &Effect) -> Option<Result<Vec<String>,
         Effect::AddWorkflowTransitionEvidenceFromWorkflow(effect) => {
             interpret_workflow_transition_evidence_added(effect)
         }
+        Effect::UpdateWorkflowTransitionEvidenceFromWorkflow(effect) => {
+            interpret_workflow_transition_evidence_updated(effect)
+        }
+        Effect::RemoveWorkflowTransitionEvidenceFromWorkflow(effect) => {
+            interpret_workflow_transition_evidence_removed(effect)
+        }
         Effect::RequireWorkflowEntryLifecycleCoverageFromWorkflow(workflow_slug) => {
             interpret_workflow_entry_lifecycle_coverage_required(workflow_slug)
         }
@@ -1650,6 +1657,42 @@ fn interpret_workflow_transition_evidence_added(
         effect.workflow_slug(),
         reports,
         EventDraft::workflow_transition_evidence_added(effect.workflow_slug(), effect.evidence()),
+    )
+}
+
+fn interpret_workflow_transition_evidence_updated(
+    effect: &WorkflowTransitionEvidenceUpdateEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "updated workflow transition evidence {} {} on workflow {}",
+        effect.previous().kind().as_ref(),
+        effect.previous().trigger().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_transition_evidence_updated(
+            effect.workflow_slug(),
+            effect.previous(),
+            effect.replacement(),
+        ),
+    )
+}
+
+fn interpret_workflow_transition_evidence_removed(
+    effect: &WorkflowTransitionEvidenceRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let reports = vec![projected_report(format!(
+        "removed workflow transition evidence {} {} from workflow {}",
+        effect.evidence().kind().as_ref(),
+        effect.evidence().trigger().as_ref(),
+        effect.workflow_slug().as_ref()
+    ))?];
+    interpret_workflow_addition(
+        effect.workflow_slug(),
+        reports,
+        EventDraft::workflow_transition_evidence_removed(effect.workflow_slug(), effect.evidence()),
     )
 }
 
