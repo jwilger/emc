@@ -1011,11 +1011,51 @@ impl FormalSliceArtifactWriteEffect {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceBitLevelDataFlowUpdateEffect {
+    previous: NewBitLevelDataFlow,
+    replacement: NewBitLevelDataFlow,
+}
+
+impl SliceBitLevelDataFlowUpdateEffect {
+    pub(crate) fn new(previous: NewBitLevelDataFlow, replacement: NewBitLevelDataFlow) -> Self {
+        Self {
+            previous,
+            replacement,
+        }
+    }
+
+    pub(crate) fn previous(&self) -> &NewBitLevelDataFlow {
+        &self.previous
+    }
+
+    pub(crate) fn replacement(&self) -> &NewBitLevelDataFlow {
+        &self.replacement
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SliceBitLevelDataFlowRemovalEffect {
+    data_flow: NewBitLevelDataFlow,
+}
+
+impl SliceBitLevelDataFlowRemovalEffect {
+    pub(crate) fn new(data_flow: NewBitLevelDataFlow) -> Self {
+        Self { data_flow }
+    }
+
+    pub(crate) fn data_flow(&self) -> &NewBitLevelDataFlow {
+        &self.data_flow
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum Effect {
     AddAutomationDefinitionFromSlice(NewAutomationDefinition),
     RemoveAutomationDefinitionFromSlice(SliceAutomationDefinitionRemovalEffect),
     UpdateAutomationDefinitionFromSlice(NewAutomationDefinition),
     AddBitLevelDataFlowFromSlice(NewBitLevelDataFlow),
+    UpdateBitLevelDataFlowFromSlice(SliceBitLevelDataFlowUpdateEffect),
+    RemoveBitLevelDataFlowFromSlice(SliceBitLevelDataFlowRemovalEffect),
     AddBoardConnectionFromSlice(NewBoardConnection),
     UpdateBoardConnectionFromSlice(SliceBoardConnectionUpdateEffect),
     RemoveBoardConnectionFromSlice(SliceBoardConnectionRemovalEffect),

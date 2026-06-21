@@ -97,6 +97,13 @@ enum Command {
     AddBitLevelDataFlow {
         data_flow: NewBitLevelDataFlow,
     },
+    UpdateBitLevelDataFlow {
+        previous: NewBitLevelDataFlow,
+        replacement: NewBitLevelDataFlow,
+    },
+    RemoveBitLevelDataFlow {
+        data_flow: NewBitLevelDataFlow,
+    },
     AddBoardConnection {
         connection: NewBoardConnection,
     },
@@ -336,6 +343,10 @@ fn run(cli: Cli) -> Result<(), ShellError> {
         Command::AddBitLevelDataFlow { data_flow } => {
             interpret(&command::add_bit_level_data_flow(data_flow))
         }
+        Command::UpdateBitLevelDataFlow {
+            previous,
+            replacement,
+        } => interpret(&command::update_bit_level_data_flow(previous, replacement)),
         Command::AddBoardConnection { connection } => {
             interpret(&command::add_board_connection(connection))
         }
@@ -499,6 +510,9 @@ fn run_definition_removal_commands(command: Command) -> Result<(), ShellError> {
         } => interpret(&command::remove_board_element(slice_slug, element_name)),
         Command::RemoveBoardConnection { connection } => {
             interpret(&command::remove_board_connection(connection))
+        }
+        Command::RemoveBitLevelDataFlow { data_flow } => {
+            interpret(&command::remove_bit_level_data_flow(data_flow))
         }
         Command::RemoveEventDefinition {
             slice_slug,
@@ -1186,7 +1200,7 @@ fn parse_cli_data_flow(arguments: &[String]) -> Result<Cli, ShellError> {
             target,
             bit_encoding_flag,
             bit_encoding,
-        ] if (command == "add" || command == "update")
+        ] if (command == "add" || command == "remove")
             && subject == "data-flow"
             && slice_flag == "--slice"
             && datum_flag == "--datum"
@@ -1196,36 +1210,131 @@ fn parse_cli_data_flow(arguments: &[String]) -> Result<Cli, ShellError> {
             && target_flag == "--target"
             && bit_encoding_flag == "--bit-encoding" =>
         {
-            let slice_slug =
-                parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
-            let datum =
-                parse_datum_name(datum).map_err(|error| ShellError::message(error.to_string()))?;
-            let source = parse_data_flow_source(source)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let source_kind = parse_data_flow_source_kind(source_kind)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let transformation = parse_transformation_semantics(transformation)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let target = parse_data_flow_target(target)
-                .map_err(|error| ShellError::message(error.to_string()))?;
-            let bit_encoding = parse_bit_encoding_semantics(bit_encoding)
-                .map_err(|error| ShellError::message(error.to_string()))?;
+            let data_flow = parse_data_flow_cli(
+                slice,
+                datum,
+                source,
+                source_kind,
+                transformation,
+                target,
+                bit_encoding,
+            )?;
+            let command = if command == "add" {
+                Command::AddBitLevelDataFlow { data_flow }
+            } else {
+                Command::RemoveBitLevelDataFlow { data_flow }
+            };
+            Ok(Cli { command })
+        }
+        _ => parse_cli_update_data_flow_or_remove_event(arguments),
+    }
+}
+
+fn parse_cli_update_data_flow_or_remove_event(arguments: &[String]) -> Result<Cli, ShellError> {
+    match arguments {
+        [
+            command,
+            subject,
+            slice_flag,
+            slice,
+            datum_flag,
+            datum,
+            source_flag,
+            source,
+            source_kind_flag,
+            source_kind,
+            transformation_flag,
+            transformation,
+            target_flag,
+            target,
+            bit_encoding_flag,
+            bit_encoding,
+            new_datum_flag,
+            new_datum,
+            new_source_flag,
+            new_source,
+            new_source_kind_flag,
+            new_source_kind,
+            new_transformation_flag,
+            new_transformation,
+            new_target_flag,
+            new_target,
+            new_bit_encoding_flag,
+            new_bit_encoding,
+        ] if command == "update"
+            && subject == "data-flow"
+            && slice_flag == "--slice"
+            && datum_flag == "--datum"
+            && source_flag == "--source"
+            && source_kind_flag == "--source-kind"
+            && transformation_flag == "--transformation"
+            && target_flag == "--target"
+            && bit_encoding_flag == "--bit-encoding"
+            && new_datum_flag == "--new-datum"
+            && new_source_flag == "--new-source"
+            && new_source_kind_flag == "--new-source-kind"
+            && new_transformation_flag == "--new-transformation"
+            && new_target_flag == "--new-target"
+            && new_bit_encoding_flag == "--new-bit-encoding" =>
+        {
             Ok(Cli {
-                command: Command::AddBitLevelDataFlow {
-                    data_flow: NewBitLevelDataFlow::new(
-                        slice_slug,
+                command: Command::UpdateBitLevelDataFlow {
+                    previous: parse_data_flow_cli(
+                        slice,
                         datum,
-                        source_kind,
                         source,
+                        source_kind,
                         transformation,
                         target,
                         bit_encoding,
-                    ),
+                    )?,
+                    replacement: parse_data_flow_cli(
+                        slice,
+                        new_datum,
+                        new_source,
+                        new_source_kind,
+                        new_transformation,
+                        new_target,
+                        new_bit_encoding,
+                    )?,
                 },
             })
         }
         _ => parse_cli_remove_event_or_2(arguments),
     }
+}
+
+fn parse_data_flow_cli(
+    slice: &str,
+    datum: &str,
+    source: &str,
+    source_kind: &str,
+    transformation: &str,
+    target: &str,
+    bit_encoding: &str,
+) -> Result<NewBitLevelDataFlow, ShellError> {
+    let slice_slug =
+        parse_slice_slug(slice).map_err(|error| ShellError::message(error.to_string()))?;
+    let datum = parse_datum_name(datum).map_err(|error| ShellError::message(error.to_string()))?;
+    let source =
+        parse_data_flow_source(source).map_err(|error| ShellError::message(error.to_string()))?;
+    let source_kind = parse_data_flow_source_kind(source_kind)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let transformation = parse_transformation_semantics(transformation)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    let target =
+        parse_data_flow_target(target).map_err(|error| ShellError::message(error.to_string()))?;
+    let bit_encoding = parse_bit_encoding_semantics(bit_encoding)
+        .map_err(|error| ShellError::message(error.to_string()))?;
+    Ok(NewBitLevelDataFlow::new(
+        slice_slug,
+        datum,
+        source_kind,
+        source,
+        transformation,
+        target,
+        bit_encoding,
+    ))
 }
 
 fn parse_cli_remove_event_or_2(arguments: &[String]) -> Result<Cli, ShellError> {
@@ -5561,6 +5670,10 @@ fn help_update_subcommand() -> ClapCommand {
             ClapCommand::new("external-payload")
                 .about("Update an external payload definition and synchronized formal artifacts"),
         )
+        .subcommand(
+            ClapCommand::new("data-flow")
+                .about("Update a bit-level data-flow fact in synchronized formal artifacts"),
+        )
 }
 
 fn help_remove_subcommand() -> ClapCommand {
@@ -5672,6 +5785,7 @@ fn help_after_text() -> &'static str {
   emc add automation --slice <slice> --name <name> --trigger <event-or-signal> --command <command> --handled-errors <error[,error]> --reaction <semantics>
   emc add translation --slice <slice> --name <name> --external-event <event-or-signal> --payload-contract <payload> --command <command>
   emc add data-flow --slice <slice> --datum <name> --source <source> --source-kind <original|modeled_target> --transformation <semantics> --target <target> --bit-encoding <semantics>
+  emc update data-flow --slice <slice> --datum <name> --source <source> --source-kind <original|modeled_target> --transformation <semantics> --target <target> --bit-encoding <semantics> --new-datum <name> --new-source <source> --new-source-kind <original|modeled_target> --new-transformation <semantics> --new-target <target> --new-bit-encoding <semantics>
   emc update slice --slug <slice> --description <text>
   emc update slice --slug <slice> --type <kind>
   emc update slice --slug <slice> --name <name>
@@ -5680,6 +5794,7 @@ fn help_after_text() -> &'static str {
   emc remove scenario --slice <slice> --name <name>
   emc remove command --slice <slice> --name <name>
   emc remove event --slice <slice> --name <name>
+  emc remove data-flow --slice <slice> --datum <name> --source <source> --source-kind <original|modeled_target> --transformation <semantics> --target <target> --bit-encoding <semantics>
   emc connect workflow --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger> [--payload-contract <contract>]
   emc remove transition --workflow <workflow> --from <slice> --to <slice> --via <kind> --name <trigger>
   emc remove transition --workflow <workflow> --from <slice> --to-workflow <workflow> --via outcome --name <trigger>

@@ -24,6 +24,7 @@ use crate::core::effect::{
     Effect, EffectPlan, EventConflictResolution, FileContents, FileWriteEffect, ModelContentDigest,
     ProcessInvocation, ProcessInvocations, ProjectPath, ProjectionFingerprint, ReportLine,
     ReviewEventReference, ReviewRecordRequirement, SliceAutomationDefinitionRemovalEffect,
+    SliceBitLevelDataFlowRemovalEffect, SliceBitLevelDataFlowUpdateEffect,
     SliceBoardConnectionRemovalEffect, SliceBoardConnectionUpdateEffect,
     SliceBoardElementRemovalEffect, SliceCommandDefinitionRemovalEffect,
     SliceDescriptionUpdateEffect, SliceEventDefinitionRemovalEffect,
@@ -335,6 +336,8 @@ fn effect_is_mutation(effect: &Effect) -> bool {
             | Effect::RemoveAutomationDefinitionFromSlice(_)
             | Effect::UpdateAutomationDefinitionFromSlice(_)
             | Effect::AddBitLevelDataFlowFromSlice(_)
+            | Effect::UpdateBitLevelDataFlowFromSlice(_)
+            | Effect::RemoveBitLevelDataFlowFromSlice(_)
             | Effect::AddBoardConnectionFromSlice(_)
             | Effect::RemoveBoardConnectionFromSlice(_)
             | Effect::UpdateBoardConnectionFromSlice(_)
@@ -501,6 +504,12 @@ fn interpret_slice_fact_effect(effect: &Effect) -> Option<Result<Vec<String>, Sh
         }
         Effect::AddBitLevelDataFlowFromSlice(data_flow) => {
             interpret_bit_level_data_flow_added(data_flow)
+        }
+        Effect::UpdateBitLevelDataFlowFromSlice(update) => {
+            interpret_bit_level_data_flow_updated(update)
+        }
+        Effect::RemoveBitLevelDataFlowFromSlice(removal) => {
+            interpret_bit_level_data_flow_removed(removal)
         }
         Effect::AddBoardConnectionFromSlice(connection) => {
             interpret_board_connection_added(connection)
@@ -701,6 +710,51 @@ fn interpret_bit_level_data_flow_added(
         data_flow.slice_slug(),
         reports,
         EventDraft::slice_bit_level_data_flow_added(data_flow),
+    )
+}
+
+fn interpret_bit_level_data_flow_updated(
+    update: &SliceBitLevelDataFlowUpdateEffect,
+) -> Result<Vec<String>, ShellError> {
+    let previous = update.previous();
+    let replacement = update.replacement();
+    let reports = vec![
+        projected_report(format!(
+            "updated bit-level data flow {} on slice {}",
+            previous.datum().as_ref(),
+            previous.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "updated bit-level data flow {} in project root",
+            previous.datum().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        previous.slice_slug(),
+        reports,
+        EventDraft::slice_bit_level_data_flow_updated(previous, replacement),
+    )
+}
+
+fn interpret_bit_level_data_flow_removed(
+    removal: &SliceBitLevelDataFlowRemovalEffect,
+) -> Result<Vec<String>, ShellError> {
+    let data_flow = removal.data_flow();
+    let reports = vec![
+        projected_report(format!(
+            "removed bit-level data flow {} from slice {}",
+            data_flow.datum().as_ref(),
+            data_flow.slice_slug().as_ref()
+        ))?,
+        projected_report(format!(
+            "removed bit-level data flow {} from project root",
+            data_flow.datum().as_ref()
+        ))?,
+    ];
+    interpret_slice_addition(
+        data_flow.slice_slug(),
+        reports,
+        EventDraft::slice_bit_level_data_flow_removed(data_flow),
     )
 }
 

@@ -13,13 +13,14 @@ use tokio::runtime::Builder;
 use crate::core::event_commands::{
     AddSliceCommand, AddSliceFactCommand, AddWorkflowCommand, AddWorkflowFactCommand,
     ConnectWorkflowCommand, DeclareWorkflowReadinessCommand, EmcEvent, InitializeProjectCommand,
-    RecordReviewCommand, RemoveAutomationDefinitionCommand, RemoveBoardConnectionCommand,
-    RemoveBoardElementCommand, RemoveCommandDefinitionCommand, RemoveEventDefinitionCommand,
-    RemoveExternalPayloadDefinitionCommand, RemoveOutcomeDefinitionCommand,
-    RemoveReadModelDefinitionCommand, RemoveSliceCommand, RemoveSliceScenarioCommand,
-    RemoveTranslationDefinitionCommand, RemoveViewControlCommand, RemoveViewDefinitionCommand,
-    RemoveWorkflowCommand, RemoveWorkflowTransitionCommand, ResolveConflictCommand, SliceFactInput,
-    UpdateAutomationDefinitionCommand, UpdateBoardConnectionCommand, UpdateBoardElementCommand,
+    RecordReviewCommand, RemoveAutomationDefinitionCommand, RemoveBitLevelDataFlowCommand,
+    RemoveBoardConnectionCommand, RemoveBoardElementCommand, RemoveCommandDefinitionCommand,
+    RemoveEventDefinitionCommand, RemoveExternalPayloadDefinitionCommand,
+    RemoveOutcomeDefinitionCommand, RemoveReadModelDefinitionCommand, RemoveSliceCommand,
+    RemoveSliceScenarioCommand, RemoveTranslationDefinitionCommand, RemoveViewControlCommand,
+    RemoveViewDefinitionCommand, RemoveWorkflowCommand, RemoveWorkflowTransitionCommand,
+    ResolveConflictCommand, SliceFactInput, UpdateAutomationDefinitionCommand,
+    UpdateBitLevelDataFlowCommand, UpdateBoardConnectionCommand, UpdateBoardElementCommand,
     UpdateCommandDefinitionCommand, UpdateEventDefinitionCommand,
     UpdateExternalPayloadDefinitionCommand, UpdateOutcomeDefinitionCommand,
     UpdateReadModelDefinitionCommand, UpdateSliceCommand, UpdateSliceScenarioCommand,
@@ -196,6 +197,8 @@ async fn dispatch_exported_event(
         | ExportedEventBody::SliceViewControlUpdated { .. }
         | ExportedEventBody::SliceViewControlRemoved { .. }
         | ExportedEventBody::SliceBitLevelDataFlowAdded { .. }
+        | ExportedEventBody::SliceBitLevelDataFlowUpdated { .. }
+        | ExportedEventBody::SliceBitLevelDataFlowRemoved { .. }
         | ExportedEventBody::SliceTranslationAdded { .. }
         | ExportedEventBody::SliceTranslationDefinitionUpdated { .. }
         | ExportedEventBody::SliceTranslationDefinitionRemoved { .. }
@@ -390,15 +393,9 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
         ExportedEventBody::SliceRemoved { slug } => {
             run_command(store, RemoveSliceCommand::from_semantic(slug.clone())?).await
         }
-        ExportedEventBody::SliceScenarioUpdated { scenario } => {
-            run_command(store, UpdateSliceScenarioCommand::new(scenario.clone())?).await
-        }
-        ExportedEventBody::SliceScenarioRemoved { slice, name } => {
-            run_command(
-                store,
-                RemoveSliceScenarioCommand::new(slice.clone(), name.clone())?,
-            )
-            .await
+        ExportedEventBody::SliceScenarioUpdated { .. }
+        | ExportedEventBody::SliceScenarioRemoved { .. } => {
+            dispatch_slice_scenario(store, body).await
         }
         ExportedEventBody::SliceCommandDefinitionUpdated { .. }
         | ExportedEventBody::SliceCommandDefinitionRemoved { .. } => {
@@ -421,6 +418,10 @@ async fn dispatch_slice(store: &FileEventStore, body: &ExportedEventBody) -> Res
         ExportedEventBody::SliceAutomationDefinitionUpdated { .. }
         | ExportedEventBody::SliceAutomationDefinitionRemoved { .. } => {
             dispatch_slice_automation(store, body).await
+        }
+        ExportedEventBody::SliceBitLevelDataFlowUpdated { .. }
+        | ExportedEventBody::SliceBitLevelDataFlowRemoved { .. } => {
+            dispatch_slice_bit_level_data_flow(store, body).await
         }
         ExportedEventBody::SliceBoardElementUpdated { .. }
         | ExportedEventBody::SliceBoardElementRemoved { .. } => {
@@ -474,6 +475,25 @@ async fn dispatch_slice_outcome(
             .await
         }
         _ => Err("dispatch_slice_outcome received a non-outcome body".to_owned()),
+    }
+}
+
+async fn dispatch_slice_scenario(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<(), String> {
+    match body {
+        ExportedEventBody::SliceScenarioUpdated { scenario } => {
+            run_command(store, UpdateSliceScenarioCommand::new(scenario.clone())?).await
+        }
+        ExportedEventBody::SliceScenarioRemoved { slice, name } => {
+            run_command(
+                store,
+                RemoveSliceScenarioCommand::new(slice.clone(), name.clone())?,
+            )
+            .await
+        }
+        _ => Err("dispatch_slice_scenario received a non-scenario body".to_owned()),
     }
 }
 
@@ -585,6 +605,32 @@ async fn dispatch_slice_board_element(
             .await
         }
         _ => Err("dispatch_slice_board_element received a non-board-element body".to_owned()),
+    }
+}
+
+async fn dispatch_slice_bit_level_data_flow(
+    store: &FileEventStore,
+    body: &ExportedEventBody,
+) -> Result<(), String> {
+    match body {
+        ExportedEventBody::SliceBitLevelDataFlowUpdated {
+            previous,
+            data_flow,
+        } => {
+            run_command(
+                store,
+                UpdateBitLevelDataFlowCommand::new(previous.clone(), data_flow.clone())?,
+            )
+            .await
+        }
+        ExportedEventBody::SliceBitLevelDataFlowRemoved { data_flow } => {
+            run_command(
+                store,
+                RemoveBitLevelDataFlowCommand::new(data_flow.clone())?,
+            )
+            .await
+        }
+        _ => Err("dispatch_slice_bit_level_data_flow received a non-data-flow body".to_owned()),
     }
 }
 

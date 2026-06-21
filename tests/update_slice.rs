@@ -1822,6 +1822,130 @@ mod tests {
     }
 
     #[test]
+    fn update_data_flow_rewrites_synchronized_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_ticket_title_data_flow(temp_dir.path(), "actor input title field")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "update",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "actor input title field",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "identity",
+                "--target",
+                "Capture ticket.ticket_title",
+                "--bit-encoding",
+                "UTF-8 string",
+                "--new-datum",
+                "ticket_title",
+                "--new-source",
+                "reviewed title field",
+                "--new-source-kind",
+                "modeled_target",
+                "--new-transformation",
+                "identity",
+                "--new-target",
+                "Capture ticket.reviewed_title",
+                "--new-bit-encoding",
+                "UTF-8 normalized string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "updated bit-level data flow ticket_title on slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            slice_lean.contains("source := \"reviewed title field\""),
+            "updated data-flow source must be represented in Lean slice artifacts"
+        );
+        assert!(
+            slice_quint.contains("source: \"reviewed title field\""),
+            "updated data-flow source must be represented in Quint slice artifacts"
+        );
+        assert!(
+            !slice_lean.contains("source := \"actor input title field\""),
+            "old data-flow source must be absent from Lean slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn remove_data_flow_removes_it_from_synchronized_artifacts() -> Result<(), Box<dyn Error>> {
+        let temp_dir = TempDir::new()?;
+        initialize_project_with_slice(temp_dir.path())?;
+        add_ticket_title_data_flow(temp_dir.path(), "actor input title field")?;
+
+        Command::cargo_bin("emc")?
+            .args([
+                "remove",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                "actor input title field",
+                "--source-kind",
+                "original",
+                "--transformation",
+                "identity",
+                "--target",
+                "Capture ticket.ticket_title",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(temp_dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                "removed bit-level data flow ticket_title from slice capture-ticket",
+            ));
+
+        Command::cargo_bin("emc")?
+            .arg("check")
+            .current_dir(temp_dir.path())
+            .assert()
+            .success();
+
+        let slice_lean =
+            read_to_string(temp_dir.path().join("model/lean/slices/CaptureTicket.lean"))?;
+        let slice_quint =
+            read_to_string(temp_dir.path().join("model/quint/slices/CaptureTicket.qnt"))?;
+        assert!(
+            !slice_lean.contains("datum := \"ticket_title\""),
+            "removed data flow must be absent from Lean slice artifacts"
+        );
+        assert!(
+            !slice_quint.contains("datum: \"ticket_title\""),
+            "removed data flow must be absent from Quint slice artifacts"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn remove_control_definition_removes_it_from_synchronized_artifacts()
     -> Result<(), Box<dyn Error>> {
         let temp_dir = TempDir::new()?;
@@ -2304,6 +2428,33 @@ mod tests {
 
     fn add_event_to_read_model_board_connection(cwd: &Path) -> Result<(), Box<dyn Error>> {
         add_board_connection(cwd, "TicketCaptured", "event", "ticket_state", "read_model")
+    }
+
+    fn add_ticket_title_data_flow(cwd: &Path, source: &str) -> Result<(), Box<dyn Error>> {
+        Command::cargo_bin("emc")?
+            .args([
+                "add",
+                "data-flow",
+                "--slice",
+                "capture-ticket",
+                "--datum",
+                "ticket_title",
+                "--source",
+                source,
+                "--source-kind",
+                "original",
+                "--transformation",
+                "identity",
+                "--target",
+                "Capture ticket.ticket_title",
+                "--bit-encoding",
+                "UTF-8 string",
+            ])
+            .current_dir(cwd)
+            .assert()
+            .success();
+
+        Ok(())
     }
 
     fn add_board_connection(
