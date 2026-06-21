@@ -65,26 +65,24 @@ This ledger tracks #159 across multiple PRs.
   entry lifecycle coverage requirements and update/remove support for workflow
   entry lifecycle state facts. Covers behavior through synchronized Lean4/Quint
   artifact assertions, MCP entry points, and exported-event replay.
-- Current branch: confirms contract scenario update/remove parity through CLI,
-  MCP, and exported-event replay behavior tests.
+- PR #206: fixed CLI contract scenario update parsing and confirmed contract
+  scenario update/remove parity through CLI, MCP, and exported-event replay
+  behavior tests.
 
 ## Current PR boundary
 
-- This PR should add direct completion evidence for contract scenario
-  update/remove parity without changing the shared scenario mutation behavior.
-  Keep #159 open until the final audit confirms every modeled element family
-  listed in the issue has CLI and MCP update/remove coverage.
+- No active PR boundary. The #159 modeled element mutation work is complete.
 
 ## Remaining modeled element targets
 
-- Workflow and slice lifecycle: already have update/remove coverage for primary
-  workflow and slice fields; confirm MCP/CLI parity and any gaps before closing.
+- Workflow and slice lifecycle: primary workflow and slice fields have CLI/MCP
+  update/remove coverage.
 - Workflow transitions: remove is covered by earlier workflow PRs, and update
   is covered by PR #198.
-- Workflow evidence facts: entry lifecycle coverage/state are covered by the
-  current branch. Workflow outcomes are covered by PR #194, command errors are
-  covered by PR #196, owned definitions are covered by PR #200, and transition
-  evidence is covered by PR #202.
+- Workflow evidence facts: entry lifecycle coverage/state are covered by PR
+  #204. Workflow outcomes are covered by PR #194, command errors are covered by
+  PR #196, owned definitions are covered by PR #200, and transition evidence is
+  covered by PR #202.
 - Slice-owned definitions: commands are covered by PR #170, events are covered
   by PR #172, read models are covered by PR #174, views are covered by PR #176,
   controls are covered by PR #178, outcomes are covered by PR #180, automations
@@ -92,8 +90,8 @@ This ledger tracks #159 across multiple PRs.
   payloads are covered by PR #186, board elements are covered by PR #188, board
   connections are covered by PR #190, and data-flow facts are covered by PR
   #192.
-- Scenario follow-up: contract scenario update/remove completion evidence is
-  covered by the current branch.
+- Scenarios: acceptance scenario update/remove is covered by PR #168, and
+  contract scenario update/remove completion evidence is covered by PR #206.
 
 ## Focused verification already run
 
@@ -149,7 +147,7 @@ This ledger tracks #159 across multiple PRs.
 - `cargo test --test mcp_stdio contract_slice_scenario`
 - `cargo test --test event_log_export contract_scenario`
 
-## Next likely increment
+## Closure Status
 
-Confirm workflow/slice lifecycle and contract scenario parity before closing
-#159.
+Close #159 after verifying Forgejo still shows no other open `1.0.0`
+milestone implementation issue.
